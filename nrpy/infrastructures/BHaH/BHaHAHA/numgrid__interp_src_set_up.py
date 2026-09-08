@@ -141,7 +141,237 @@ static const int16_t interp_src_gf_deriv_src_gf[{len(list_of_interp_src_gf_names
     )
 
     # Step 4: Register numgrid__interp_src_set_up().
-    prefunc = ""
+    prefunc = r"""
+/**
+* This function is a substep of bah_numgrid__interp_src_set_up which Initializes the interp_src numerical grid, i.e., the source grid for 1D radial-spoke
+* interpolations during the hyperbolic relaxation.
+*
+* This function initializes coordinate arrays and performs interpolation from external input
+*
+* @param commondata Pointer to the common data structure containing simulation parameters and data.
+*/
+#ifdef __CUDACC__
+__global__
+#endif
+void initialize_and_interpolate(commondata_struct *restrict commondata)
+{
+#ifdef __CUDACC__
+  // Set up cooperative group
+  namespace cg = cooperative_groups;
+  cg::grid_group gpu_grid = cg::this_grid();
+#endif
+
+  // Step 1: Extract grid sizes for use in indexing macros.
+  const int Nxx_plus_2NGHOSTS0 = commondata->interp_src_Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = commondata->interp_src_Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = commondata->interp_src_Nxx_plus_2NGHOSTS2;
+
+  {
+    // Step 2: Populate coordinate arrays for a uniform, cell-centered spherical grid.
+    const REAL xxmin1 = 0.0;
+    const REAL xxmin2 = -M_PI;
+  
+    // Initialize radial coordinates by copying from external input.
+    PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS0) {
+      commondata->interp_src_r_theta_phi[0][j] = commondata->external_input_r_theta_phi[0][j];
+    } END_PARALLEL_1D_LOOP
+    // Initialize theta coordinates with cell-centered values.
+    PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS1) {
+      commondata->interp_src_r_theta_phi[1][j] = xxmin1 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->interp_src_dxx1;
+    } END_PARALLEL_1D_LOOP
+    // Initialize phi coordinates with cell-centered values.
+    PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS2) {
+      commondata->interp_src_r_theta_phi[2][j] = xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->interp_src_dxx2;
+    } END_PARALLEL_1D_LOOP
+  } // END STEP 2: Initialize coordinate arrays for the interpolation source grid.
+#ifdef __CUDACC__
+  gpu_grid.sync();
+#endif
+
+  // Step 3: Interpolate external data to interpolation source grid.
+  bah_interpolation_2d_external_input_to_interp_src_grid(commondata);
+#ifdef __CUDACC__
+  gpu_grid.sync();
+#endif
+  if (commondata->error_flag != BHAHAHA_SUCCESS)
+    return;
+  // Step 4: Transfer interpolated data from external grid functions to interpolation source grid functions.
+  {
+     
+    const REAL *restrict r_theta_phi[3] = {commondata->interp_src_r_theta_phi[0], commondata->interp_src_r_theta_phi[1],
+                                           commondata->interp_src_r_theta_phi[2]};
+    
+    REAL *restrict in_gfs = commondata->interp_src_gfs;
+
+  int i0_min_shift = 0;
+  if (commondata->bhahaha_params_and_data->r_min_external_input == 0)
+    i0_min_shift = NGHOSTS;
+
+#ifdef __CUDACC__
+    PARALLEL_LOOP(i0, i0_min_shift, Nxx_plus_2NGHOSTS0, i1, NGHOSTS, Nxx_plus_2NGHOSTS1 - NGHOSTS, i2, NGHOSTS, Nxx_plus_2NGHOSTS2 - NGHOSTS) {
+      MAYBE_UNUSED const REAL xx2 = r_theta_phi[2][i2];
+      MAYBE_UNUSED const REAL xx1 = r_theta_phi[1][i1];
+      MAYBE_UNUSED const REAL xx0 = r_theta_phi[0][i0];
+#else
+#pragma omp parallel for
+    for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
+      MAYBE_UNUSED const REAL xx2 = r_theta_phi[2][i2];
+      for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {
+        MAYBE_UNUSED const REAL xx1 = r_theta_phi[1][i1];
+        for (int i0 = i0_min_shift; i0 < Nxx_plus_2NGHOSTS0; i0++) {
+          MAYBE_UNUSED const REAL xx0 = r_theta_phi[0][i0];
+#endif
+          // We perform this transformation in place; data read in will be written to the same points.
+          const REAL external_Sph_W = in_gfs[IDX4(EXTERNAL_SPHERICAL_WWGF, i0, i1, i2)];
+          const REAL external_Sph_trK = in_gfs[IDX4(EXTERNAL_SPHERICAL_TRKGF, i0, i1, i2)];
+"""
+    for i in range(3):
+        for j in range(i, 3):
+            prefunc += f"const REAL external_Sph_hDD{i}{j} = in_gfs[IDX4(EXTERNAL_SPHERICAL_HDD{i}{j}GF, i0, i1, i2)];\n"
+    for i in range(3):
+        for j in range(i, 3):
+            prefunc += f"const REAL external_Sph_aDD{i}{j} = in_gfs[IDX4(EXTERNAL_SPHERICAL_ADD{i}{j}GF, i0, i1, i2)];\n"
+    prefunc += """
+            in_gfs[IDX4(SRC_WWGF, i0, i1, i2)] = external_Sph_W;
+            in_gfs[IDX4(SRC_TRKGF, i0, i1, i2)] = external_Sph_trK;
+"""
+    for i in range(3):
+        for j in range(i, 3):
+            prefunc += (
+                f"in_gfs[IDX4(SRC_HDD{i}{j}GF, i0, i1, i2)] = external_Sph_hDD{i}{j};\n"
+            )
+    for i in range(3):
+        for j in range(i, 3):
+            prefunc += (
+                f"in_gfs[IDX4(SRC_ADD{i}{j}GF, i0, i1, i2)] = external_Sph_aDD{i}{j};\n"
+            )
+    prefunc += """
+#ifndef __CUDACC__
+        } // END LOOP over i0
+      } // END LOOP over i1
+    } // END LOOP over i2
+#else
+    } END_PARALLEL_LOOP
+#endif
+  } // END STEP 4: Transfer interpolated data to interpolation source grid functions.
+}
+
+
+#ifdef __CUDACC__
+__constant__ int8_t c_interp_src_gf_parity[35];
+/**
+* This function is a substep of bah_numgrid__interp_src_set_up, which initializes the interp_src numerical grid, i.e., the source grid for 1D radial-spoke
+* interpolations during the hyperbolic relaxation.
+*
+* This function applies boundary conditions, and computes necessary spatial derivatives.
+*
+* @param commondata Pointer to the common data structure containing simulation parameters and data.
+* @param interp_sr_bcstruct Pointer to the bcstruct for the interp_src numerical grid.
+*/
+
+__global__
+#endif
+void apply_bcs_interp_src(commondata_struct *restrict commondata, bc_struct *restrict interp_src_bcstruct)
+{
+#ifdef __CUDACC__
+  // Set interpolation source grid function parity array from device constant memory
+  int8_t *interp_src_gf_parity = c_interp_src_gf_parity;
+
+  //Set up cooperative group
+  namespace cg = cooperative_groups;
+  cg::grid_group gpu_grid = cg::this_grid();
+#endif
+
+  // Extract grid sizes for use in indexing macros.
+  const int Nxx_plus_2NGHOSTS0 = commondata->interp_src_Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = commondata->interp_src_Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = commondata->interp_src_Nxx_plus_2NGHOSTS2;
+
+  // Apply inner boundary conditions to specific grid functions to ensure smoothness.
+  {
+    // Step 1.a: Access boundary condition information from the boundary condition structure.
+    const bc_info_struct *restrict bc_info = &interp_src_bcstruct->bc_info;
+
+    // Step 1.b: Iterate over relevant grid functions and apply inner boundary conditions.
+#ifndef __CUDACC__
+#pragma omp parallel
+#endif
+    for (int which_gf = 0; which_gf < NUM_INTERP_SRC_GFS; which_gf++) {
+      switch (which_gf) {
+      case SRC_WWGF:
+      case SRC_HDD00GF:
+      case SRC_HDD01GF:
+      case SRC_HDD02GF:
+      case SRC_HDD11GF:
+      case SRC_HDD12GF:
+      case SRC_HDD22GF: {
+#ifdef __CUDACC__
+        PARALLEL_1D_LOOP(pt, 0, bc_info->num_inner_boundary_points)
+#else
+#pragma omp for
+        for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) 
+#endif          
+        {
+          const int dstpt = interp_src_bcstruct->inner_bc_array[pt].dstpt;
+          const int srcpt = interp_src_bcstruct->inner_bc_array[pt].srcpt;
+
+          // Apply boundary condition by copying and adjusting with parity.
+          commondata->interp_src_gfs[IDX4pt(which_gf, dstpt)] =
+              interp_src_bcstruct->inner_bc_array[pt].parity[interp_src_gf_parity[which_gf]] * commondata->interp_src_gfs[IDX4pt(which_gf, srcpt)];
+        } // END LOOP over inner boundary points
+        #ifdef __CUDACC__
+        END_PARALLEL_1D_LOOP // END LOOP over inner boundary points
+        #endif
+        break;
+      }
+      default:
+        // No boundary conditions needed for other grid functions.
+        break;
+      } // END SWITCH
+    } // END LOOP over gridfunctions
+  } // END STEP 1: Apply inner boundary conditions to specific grid functions.
+  
+  #ifdef __CUDACC__
+  gpu_grid.sync();
+  #endif
+
+  // Step 2: Compute spatial derivatives of h_{ij} within the interior of the interpolation source grid.
+  bah_hDD_dD_and_W_dD_in_interp_src_grid_interior(commondata);
+
+  // Step 3: Calculate radial derivatives at the outer boundaries using upwinding for stability.
+  // If r_min is non-zero, apply the same procedure at the inner radial boundary.
+  bah_apply_bcs_r_maxmin_partial_r_hDD_upwinding(commondata, commondata->interp_src_r_theta_phi, commondata->interp_src_gfs,
+                                                 commondata->bhahaha_params_and_data->r_min_external_input != 0);
+
+  // Step 4: Enforce boundary conditions on all interpolation source grid functions.
+  {
+    // Step 4.a: Access boundary condition information.
+    const bc_info_struct *restrict bc_info = &interp_src_bcstruct->bc_info;
+
+    // Step 4.b: Apply boundary conditions across all grid functions and boundary points.
+#ifdef __CUDACC__
+    PARALLEL_2D_LOOP(pt, 0, bc_info->num_inner_boundary_points, which_gf, 0, NUM_INTERP_SRC_GFS) {
+#else
+#pragma omp parallel for collapse(2)
+    for (int which_gf = 0; which_gf < NUM_INTERP_SRC_GFS; which_gf++) {
+      for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {
+#endif        
+        const int dstpt = interp_src_bcstruct->inner_bc_array[pt].dstpt;
+        const int srcpt = interp_src_bcstruct->inner_bc_array[pt].srcpt;
+
+        // Apply boundary condition with parity correction for derivative calculations.
+        commondata->interp_src_gfs[IDX4pt(which_gf, dstpt)] =
+            interp_src_bcstruct->inner_bc_array[pt].parity[interp_src_gf_parity[which_gf]] * commondata->interp_src_gfs[IDX4pt(which_gf, srcpt)];
+#ifndef __CUDACC__
+      } // END LOOP over inner boundary points
+    } // END LOOP over gridfunctions
+#else
+    } END_PARALLEL_2D_LOOP // END LOOP over inner boundary points and gridfunctions
+#endif
+  } // END STEP 4: Enforce boundary conditions on all interpolation source grid functions.
+} // END FUNCTION apply_bcs_interp_src
+
+"""
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Initializes the interp_src numerical grid, i.e., the source grid for 1D radial-spoke
 interpolations during the hyperbolic relaxation.
@@ -158,9 +388,11 @@ and computes necessary spatial derivatives.
     name = "numgrid__interp_src_set_up"
     params = "commondata_struct *restrict commondata, const int Nx_evol_grid[3]"
     body = r"""
-  int i0_min_shift = 0;
-  if (commondata->bhahaha_params_and_data->r_min_external_input == 0)
-    i0_min_shift = NGHOSTS;
+#ifdef __CUDACC__
+  //Allocate a device side copy of commondata
+  commondata_struct *d_commondata = NULL;
+  gpuErrchk( cudaMalloc((void**)&d_commondata, sizeof(commondata_struct)) );
+#endif
 
   // Step 1: Configure grid parameters for the interpolation source.
   {
@@ -168,115 +400,79 @@ and computes necessary spatial derivatives.
     commondata->interp_src_Nxx0 = commondata->external_input_Nxx0;
     commondata->interp_src_Nxx1 = Nx_evol_grid[1];
     commondata->interp_src_Nxx2 = Nx_evol_grid[2];
-
+  
     // Calculate grid sizes including ghost zones.
     commondata->interp_src_Nxx_plus_2NGHOSTS0 = commondata->interp_src_Nxx0 + 2 * NGHOSTS;
     commondata->interp_src_Nxx_plus_2NGHOSTS1 = commondata->interp_src_Nxx1 + 2 * NGHOSTS;
     commondata->interp_src_Nxx_plus_2NGHOSTS2 = commondata->interp_src_Nxx2 + 2 * NGHOSTS;
-
+  
     // Set grid spacing based on external input and predefined angular ranges.
     commondata->interp_src_dxx0 = commondata->external_input_dxx0;
     const REAL xxmin1 = 0.0, xxmax1 = M_PI;
     const REAL xxmin2 = -M_PI, xxmax2 = M_PI;
     commondata->interp_src_dxx1 = (xxmax1 - xxmin1) / ((REAL)commondata->interp_src_Nxx1);
     commondata->interp_src_dxx2 = (xxmax2 - xxmin2) / ((REAL)commondata->interp_src_Nxx2);
-
+  
     // Precompute inverse grid spacings for efficiency in derivative calculations.
     commondata->interp_src_invdxx0 = 1.0 / commondata->interp_src_dxx0;
     commondata->interp_src_invdxx1 = 1.0 / commondata->interp_src_dxx1;
     commondata->interp_src_invdxx2 = 1.0 / commondata->interp_src_dxx2;
+  
+  } // END STEP 1: Configure grid parameters for the interpolation source.
 
-    // Allocate memory for interpolation source grid functions.
-    commondata->interp_src_gfs = malloc(sizeof(REAL) * commondata->interp_src_Nxx_plus_2NGHOSTS0 * commondata->interp_src_Nxx_plus_2NGHOSTS1 *
+  // Step 2: Allocate interpolation source grid functions and coordinate arrays for the interpolation source grid.
+  {
+    // Step 2.a: Allocate memory for interpolation source grid functions.
+#ifdef __CUDACC__
+    cudaMalloc((void**)&commondata->interp_src_gfs, sizeof(REAL) * commondata->interp_src_Nxx_plus_2NGHOSTS0 * commondata->interp_src_Nxx_plus_2NGHOSTS1 *
                                         commondata->interp_src_Nxx_plus_2NGHOSTS2 * NUM_INTERP_SRC_GFS);
+#else
+    commondata->interp_src_gfs = (double*)malloc(sizeof(REAL) * commondata->interp_src_Nxx_plus_2NGHOSTS0 * commondata->interp_src_Nxx_plus_2NGHOSTS1 *
+                                        commondata->interp_src_Nxx_plus_2NGHOSTS2 * NUM_INTERP_SRC_GFS);
+#endif
     if (commondata->interp_src_gfs == NULL) {
       // Memory allocation failed for grid functions.
-      return NUMGRID_INTERP_MALLOC_ERROR_GFS;
+      commondata->error_flag = NUMGRID_INTERP_MALLOC_ERROR_GFS;
+      return;
     }
-  } // END BLOCK: Step 1 configure interpolation-source grid parameters
 
-  // Step 2: Initialize coordinate arrays for the interpolation source grid.
-  {
-    // Step 2.a: Allocate memory for radial, theta, and phi coordinate arrays.
+    // Step 2.b: Allocate memory for radial, theta, and phi coordinate arrays.
+#ifdef __CUDACC__
+    cudaMalloc((void**)&commondata->interp_src_r_theta_phi[0], sizeof(REAL) * commondata->interp_src_Nxx_plus_2NGHOSTS0);
+    cudaMalloc((void**)&commondata->interp_src_r_theta_phi[1], sizeof(REAL) * commondata->interp_src_Nxx_plus_2NGHOSTS1);
+    cudaMalloc((void**)&commondata->interp_src_r_theta_phi[2], sizeof(REAL) * commondata->interp_src_Nxx_plus_2NGHOSTS2);
+#else
     commondata->interp_src_r_theta_phi[0] = (REAL *)malloc(sizeof(REAL) * commondata->interp_src_Nxx_plus_2NGHOSTS0);
     commondata->interp_src_r_theta_phi[1] = (REAL *)malloc(sizeof(REAL) * commondata->interp_src_Nxx_plus_2NGHOSTS1);
     commondata->interp_src_r_theta_phi[2] = (REAL *)malloc(sizeof(REAL) * commondata->interp_src_Nxx_plus_2NGHOSTS2);
+#endif
     if (commondata->interp_src_r_theta_phi[0] == NULL || commondata->interp_src_r_theta_phi[1] == NULL ||
         commondata->interp_src_r_theta_phi[2] == NULL) {
       // Free previously allocated grid functions before exiting due to memory allocation failure.
-      free(commondata->interp_src_gfs);
-      return NUMGRID_INTERP_MALLOC_ERROR_RTHETAPHI;
-    } // END IF: memory allocation for coordinate arrays failed
+      FREE(commondata->interp_src_gfs);
+      commondata->error_flag = NUMGRID_INTERP_MALLOC_ERROR_RTHETAPHI;
+      return;
+  } // END IF memory allocation for coordinate arrays failed
+} // END STEP 2: Allocate interpolation source grid functions and coordinate arrays for the interpolation source grid.
 
-    // Step 2.b: Populate coordinate arrays for a uniform, cell-centered spherical grid.
-    const REAL xxmin1 = 0.0;
-    const REAL xxmin2 = -M_PI;
+#ifdef __CUDACC__
+  // Update device side commondata
+  gpuErrchk( cudaMemcpy(d_commondata, commondata, sizeof(commondata_struct), cudaMemcpyHostToDevice) );
+#endif
 
-    // Initialize radial coordinates by copying from external input.
-    for (int j = 0; j < commondata->interp_src_Nxx_plus_2NGHOSTS0; j++)
-      commondata->interp_src_r_theta_phi[0][j] = commondata->external_input_r_theta_phi[0][j];
-
-    // Initialize theta coordinates with cell-centered values.
-    for (int j = 0; j < commondata->interp_src_Nxx_plus_2NGHOSTS1; j++)
-      commondata->interp_src_r_theta_phi[1][j] = xxmin1 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->interp_src_dxx1;
-
-    // Initialize phi coordinates with cell-centered values.
-    for (int j = 0; j < commondata->interp_src_Nxx_plus_2NGHOSTS2; j++)
-      commondata->interp_src_r_theta_phi[2][j] = xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->interp_src_dxx2;
-  } // END BLOCK: Step 2 initialize interpolation-source coordinate arrays
-
-  // Step 2.c: Extract grid sizes for use in indexing macros.
-  const int Nxx_plus_2NGHOSTS0 = commondata->interp_src_Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = commondata->interp_src_Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = commondata->interp_src_Nxx_plus_2NGHOSTS2;
-
-  // Step 3: Perform interpolation from external input to the interpolation source grid.
+  // Step 3: Initialize coordinate arrays and Perform interpolation from external input to the interpolation source grid.
   // This involves multiple 2D interpolations corresponding to the radial grid and ghost zones.
-  bah_interpolation_2d_external_input_to_interp_src_grid(commondata);
-
-  // Step 4: Transfer interpolated data from external grid functions to interpolation source grid functions.
   {
-    const REAL *restrict r_theta_phi[3] = {commondata->interp_src_r_theta_phi[0], commondata->interp_src_r_theta_phi[1],
-                                           commondata->interp_src_r_theta_phi[2]};
-    REAL *restrict in_gfs = commondata->interp_src_gfs;
-
-#pragma omp parallel for
-    for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
-      const MAYBE_UNUSED REAL xx2 = r_theta_phi[2][i2];
-      for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {
-        const MAYBE_UNUSED REAL xx1 = r_theta_phi[1][i1];
-        for (int i0 = i0_min_shift; i0 < Nxx_plus_2NGHOSTS0; i0++) {
-          const MAYBE_UNUSED REAL xx0 = r_theta_phi[0][i0];
-          // We perform this transformation in place; data read in will be written to the same points.
-          const REAL external_Sph_W = in_gfs[IDX4(EXTERNAL_SPHERICAL_WWGF, i0, i1, i2)];
-          const REAL external_Sph_trK = in_gfs[IDX4(EXTERNAL_SPHERICAL_TRKGF, i0, i1, i2)];
-"""
-    for i in range(3):
-        for j in range(i, 3):
-            body += f"const REAL external_Sph_hDD{i}{j} = in_gfs[IDX4(EXTERNAL_SPHERICAL_HDD{i}{j}GF, i0, i1, i2)];\n"
-    for i in range(3):
-        for j in range(i, 3):
-            body += f"const REAL external_Sph_aDD{i}{j} = in_gfs[IDX4(EXTERNAL_SPHERICAL_ADD{i}{j}GF, i0, i1, i2)];\n"
-    body += """
-            in_gfs[IDX4(SRC_WWGF, i0, i1, i2)] = external_Sph_W;
-            in_gfs[IDX4(SRC_TRKGF, i0, i1, i2)] = external_Sph_trK;
-"""
-    for i in range(3):
-        for j in range(i, 3):
-            body += (
-                f"in_gfs[IDX4(SRC_HDD{i}{j}GF, i0, i1, i2)] = external_Sph_hDD{i}{j};\n"
-            )
-    for i in range(3):
-        for j in range(i, 3):
-            body += (
-                f"in_gfs[IDX4(SRC_ADD{i}{j}GF, i0, i1, i2)] = external_Sph_aDD{i}{j};\n"
-            )
-    body += """
-        } // END LOOP: for i0 over radial points in the interpolation-source grid
-      } // END LOOP: for i1 over theta points in the interpolation-source grid
-    } // END LOOP: for i2 over phi points in the interpolation-source grid
-  } // END BLOCK: Step 4 transfer interpolated data into interpolation-source gridfunctions
-
+#ifdef __CUDACC__
+    void *Args[] = {&d_commondata};
+    COOPERATIVE_KERNEL(initialize_and_interpolate, Args);
+    gpuErrchk( cudaMemcpy(commondata, d_commondata, sizeof(commondata_struct), cudaMemcpyDeviceToHost) );
+#else
+    initialize_and_interpolate(commondata);
+#endif 
+    if (commondata->error_flag != BHAHAHA_SUCCESS)
+      return;
+  } 
   // Step 5: Initialize boundary condition structure for the interpolation source grid.
   bc_struct interp_src_bcstruct;
   {
@@ -287,102 +483,58 @@ and computes necessary spatial derivatives.
     commondata->bcstruct_Nxx_plus_2NGHOSTS0 = commondata->interp_src_Nxx_plus_2NGHOSTS0;
     commondata->bcstruct_Nxx_plus_2NGHOSTS1 = commondata->interp_src_Nxx_plus_2NGHOSTS1;
     commondata->bcstruct_Nxx_plus_2NGHOSTS2 = commondata->interp_src_Nxx_plus_2NGHOSTS2;
+#ifdef __CUDACC__
+    // Update device side commondata 
+    gpuErrchk( cudaMemcpy(d_commondata, commondata, sizeof(commondata_struct), cudaMemcpyHostToDevice) );
+#endif
 
     // Set up boundary conditions based on the initialized grid.
+#ifdef __CUDACC__
+    bah_bcstruct_set_up(d_commondata, NULL, commondata->interp_src_r_theta_phi, &interp_src_bcstruct);
+    gpuErrchk( cudaMemcpy(commondata, d_commondata, sizeof(commondata_struct), cudaMemcpyDeviceToHost) );
+#else
     bah_bcstruct_set_up(commondata, NULL, commondata->interp_src_r_theta_phi, &interp_src_bcstruct);
-  } // END BLOCK: Step 5 initialize the interpolation-source boundary-condition structure
+#endif
+    if (commondata->error_flag != BHAHAHA_SUCCESS)
+      return;
+  } // END STEP 5: Initialize boundary condition structure.
 
-  // Step 6: Apply inner boundary conditions to specific grid functions to ensure smoothness.
+
+  // Step 6. Appply boundary conditions and compute necessary spacial derivatives
   {
-    // Step 6.a: Access boundary condition information from the boundary condition structure.
-    const bc_info_struct *restrict bc_info = &interp_src_bcstruct.bc_info;
+#ifdef __CUDACC__
+    // Create a device side copy of interp_src_bcstruct
+    bc_struct *d_interp_src_bcstruct = NULL;
+    cudaMalloc((void**)&d_interp_src_bcstruct, sizeof(bc_struct));
+    cudaMemcpy(d_interp_src_bcstruct, &interp_src_bcstruct, sizeof(bc_struct), cudaMemcpyHostToDevice);
 
-    // Step 6.b: Iterate over relevant grid functions and apply inner boundary conditions.
-#pragma omp parallel
-    for (int which_gf = 0; which_gf < NUM_INTERP_SRC_GFS; which_gf++) {
-      switch (which_gf) {
-      case SRC_WWGF:
-      case SRC_HDD00GF:
-      case SRC_HDD01GF:
-      case SRC_HDD02GF:
-      case SRC_HDD11GF:
-      case SRC_HDD12GF:
-      case SRC_HDD22GF: {
-#pragma omp for
-        for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {
-          const int dstpt = interp_src_bcstruct.inner_bc_array[pt].dstpt;
-          const int srcpt = interp_src_bcstruct.inner_bc_array[pt].srcpt;
-          const innerpt_bc_struct *restrict bc = &interp_src_bcstruct.inner_bc_array[pt];
-          const int base_sign = bc->parity[interp_src_gf_parity[which_gf]];
+    // Set interpolation source grid function parity in device constant memory
+    cudaMemcpyToSymbol(c_interp_src_gf_parity, &interp_src_gf_parity, 35*sizeof(int8_t));
+#endif
 
-          // Apply boundary condition by copying and adjusting with base-field parity.
-          commondata->interp_src_gfs[IDX4pt(which_gf, dstpt)] =
-              (REAL)base_sign * commondata->interp_src_gfs[IDX4pt(which_gf, srcpt)];
-        } // END LOOP: for pt over inner boundary points
-        break;
-      } // END BLOCK: selected gridfunction case with inner boundary updates
-      default:
-        // No boundary conditions needed for other grid functions.
-        break;
-      } // END SWITCH: select gridfunctions requiring inner boundary conditions
-    } // END LOOP: for which_gf over gridfunctions
-  } // END BLOCK: Step 6 apply inner boundary conditions to selected interpolation-source fields
+    // Apply boundary conditions and compute necessary spacial derivatives
+#ifdef __CUDACC__
+    void *Args[] = {&d_commondata, &d_interp_src_bcstruct};
+    COOPERATIVE_KERNEL(apply_bcs_interp_src, Args);
+#else
+    apply_bcs_interp_src(commondata, &interp_src_bcstruct);
+#endif
 
-  // Step 7: Compute spatial derivatives of h_{ij} within the interior of the interpolation source grid.
-  bah_hDD_dD_and_W_dD_in_interp_src_grid_interior(commondata);
 
-  // Step 8: Calculate radial derivatives at the outer boundaries using upwinding for stability.
-  // If r_min is non-zero, apply the same procedure at the inner radial boundary.
-  bah_apply_bcs_r_maxmin_partial_r_hDD_upwinding(commondata, commondata->interp_src_r_theta_phi, commondata->interp_src_gfs,
-                                                 commondata->bhahaha_params_and_data->r_min_external_input != 0);
-
-  // Step 9: Enforce boundary conditions on all interpolation source grid functions.
-  {
-    // Step 9.a: Access boundary condition information.
-    const bc_info_struct *restrict bc_info = &interp_src_bcstruct.bc_info;
-
-    // Step 9.b: Apply boundary conditions across all grid functions and boundary points.
-#pragma omp parallel for collapse(2)
-    for (int which_gf = 0; which_gf < NUM_INTERP_SRC_GFS; which_gf++) {
-      for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {
-        const int deriv_dst_dirn = interp_src_gf_deriv_dst_dirn[which_gf];
-        const bool gf_is_derivative = deriv_dst_dirn >= 0;
-        const int base_parity = interp_src_gf_parity[which_gf];
-        const int dstpt = interp_src_bcstruct.inner_bc_array[pt].dstpt;
-        const int srcpt = interp_src_bcstruct.inner_bc_array[pt].srcpt;
-
-        const innerpt_bc_struct *restrict bc = &interp_src_bcstruct.inner_bc_array[pt];
-        const int base_sign = bc->parity[base_parity];
-
-        if (!gf_is_derivative) {
-          const REAL src_val = commondata->interp_src_gfs[IDX4pt(which_gf, srcpt)];
-          commondata->interp_src_gfs[IDX4pt(which_gf, dstpt)] = (REAL)base_sign * src_val;
-        } // END IF: gridfunction is not a stored coordinate derivative
-        else {
-          // Stored coordinate derivatives transform as the base field times the
-          // coordinate-map Jacobian parity:
-          //   partial_dst(ghost) = base_sign * sum_src deriv_jacobian[dst][src] * partial_src(inbounds).
-          REAL deriv_sum = 0.0;
-          for (int src_dirn = 0; src_dirn < 3; src_dirn++) {
-            const int src_gf = interp_src_gf_deriv_src_gf[which_gf][src_dirn];
-            const int jac_sign = bc->deriv_jacobian[deriv_dst_dirn][src_dirn];
-            if (src_gf >= 0 && jac_sign != 0)
-              deriv_sum += (REAL)jac_sign * commondata->interp_src_gfs[IDX4pt(src_gf, srcpt)];
-          } // END LOOP: for src_dirn over source derivative directions
-          commondata->interp_src_gfs[IDX4pt(which_gf, dstpt)] = (REAL)base_sign * deriv_sum;
-        } // END ELSE: gridfunction is a stored coordinate derivative
-      } // END LOOP: for pt over inner boundary points
-    } // END LOOP: for which_gf over gridfunctions
-  } // END BLOCK: Step 9 enforce boundary conditions on all interpolation-source gridfunctions
-
-  // Step 10: Release allocated memory for boundary condition structures.
-  {
-    free(interp_src_bcstruct.inner_bc_array);
+    // Release allocated memory for boundary condition structures.
+#ifdef __CUDACC__
+    gpuErrchk( cudaFree(d_interp_src_bcstruct) );
+#endif
+    FREE(interp_src_bcstruct.inner_bc_array);
     for (int ng = 0; ng < NGHOSTS * 3; ng++)
-      free(interp_src_bcstruct.pure_outer_bc_array[ng]);
-  } // END BLOCK: Step 10 free interpolation-source boundary-condition structures
+      FREE(interp_src_bcstruct.pure_outer_bc_array[ng]);
+  } //END STEP 6: Appply boundary conditions and compute necessary spacial derivatives
 
-  return BHAHAHA_SUCCESS;
+  //Copy then free device side copy of commondata
+#ifdef __CUDACC__
+  gpuErrchk( cudaFree(d_commondata) );
+#endif
+
 """
     cfc.register_CFunction(
         subdirectory="",

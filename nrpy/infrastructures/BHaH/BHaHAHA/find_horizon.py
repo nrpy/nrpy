@@ -128,6 +128,34 @@ to identify the apparent horizon with progressively refined grid resolutions.
   memcpy(Ntheta, bhahaha_params_and_data->Ntheta_array_multigrid, sizeof(int) * MAX_RESOLUTIONS);
   memcpy(Nphi, bhahaha_params_and_data->Nphi_array_multigrid, sizeof(int) * MAX_RESOLUTIONS);
 
+  // Step 1.d: Set up external grid parameters
+  // Calculate the number of interior (non-ghost) radial points by subtracting ghost zones.
+  // Nr from external includes r ~ r_max NGHOSTS.
+  commondata.external_input_Nxx0 = bhahaha_params_and_data->Nr_external_input - NGHOSTS;
+  if (bhahaha_params_and_data->r_min_external_input > 0) {
+    commondata.external_input_Nxx0 = bhahaha_params_and_data->Nr_external_input - 2 * NGHOSTS;
+  }
+
+  // Set fixed angular resolutions for theta and phi directions.
+  {
+    const int max_resolution_i = bhahaha_params_and_data->num_resolutions_multigrid - 1;
+    commondata.external_input_Nxx1 = bhahaha_params_and_data->Ntheta_array_multigrid[max_resolution_i];
+    commondata.external_input_Nxx2 = bhahaha_params_and_data->Nphi_array_multigrid[max_resolution_i];
+  }
+
+  // Calculate grid spacing in each coordinate direction based on the simulation domain and resolution.
+  // x_i = min_i + (j + 0.5) * dx_i, where dx_i = (max_i - min_i) / N_i
+
+  commondata.external_input_dxx0 = bhahaha_params_and_data->dr_external_input;
+  commondata.external_input_dxx1 = M_PI / ((REAL)commondata.external_input_Nxx1);
+  commondata.external_input_dxx2 = 2 * M_PI / ((REAL)commondata.external_input_Nxx2);
+
+  // Precompute inverse grid spacings for performance optimization in calculations.
+  commondata.external_input_invdxx0 = 1.0 / commondata.external_input_dxx0;
+  commondata.external_input_invdxx1 = 1.0 / commondata.external_input_dxx1;
+  commondata.external_input_invdxx2 = 1.0 / commondata.external_input_dxx2;
+
+
   // Step 1.d: Set up external input grids by adding inner ghost zones and applying boundary conditions.
   commondata.external_input_gfs_Cart_basis_no_gzs = bhahaha_params_and_data->input_metric_data;
   commondata.error_flag = bah_numgrid__external_input_set_up(&commondata, n_resolutions, Ntheta, Nphi);

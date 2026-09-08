@@ -116,6 +116,48 @@ def register_CFunction_numgrid__evol_set_up() -> None:
 
     # Step 4: Register numgrid__evol_set_up().
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    prefunc = r"""
+/**
+ * Kernel to set up numerical grid for BHaHAHA 2D evolution grids; Nxx0 = Nr = 1.
+ */
+#ifdef __CUDACC__
+__global__
+#endif
+void bah_numgrid__evol_set_up_kernel(commondata_struct *restrict commondata, griddata_struct *restrict griddata)
+{
+#ifdef __CUDACC__
+  // Set up cooperative group
+  namespace cg = cooperative_groups;
+  cg::grid_group gpu_grid = cg::this_grid();
+#endif
+
+  // Initialize grid parameters
+  const int grid = 0;
+  params_struct *restrict params = &griddata[grid].params;
+
+  const REAL xxmin0 = 0.0;
+  const REAL xxmin1 = 0.0;
+  const REAL xxmin2 = -M_PI;
+
+  // Arrays for simplifying loops
+  const int Nxx_plus_2NGHOSTS[3] = {params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, params->Nxx_plus_2NGHOSTS2};
+  const REAL xxmin[3] = {xxmin0, xxmin1, xxmin2};
+  const REAL dxx[3] = {params->dxx0, params->dxx1, params->dxx2};
+
+  // Initialize cell-centered grid coordinate arrays xx[0], xx[1], xx[2]
+  for (int dir = 0; dir < 3; dir++) {
+    PARALLEL_1D_LOOP(i, 0, Nxx_plus_2NGHOSTS[dir]) {
+      griddata[grid].xx[dir][i] = xxmin[dir] + ((REAL)(i - NGHOSTS) + (1.0 / 2.0)) * dxx[dir];
+    } END_PARALLEL_1D_LOOP
+  }
+#ifdef __CUDACC__
+  gpu_grid.sync();
+#endif
+
+  // Define reference-metric precompute lookup arrays.
+  bah_rfm_precompute_defines(commondata, params, griddata[grid].rfmstruct, griddata[grid].xx);
+}
+"""
     desc = "Set up numerical grid for BHaHAHA 2D evolution grids; Nxx0 = Nr = 1."
     cfunc_type = "void"
     name = "numgrid__evol_set_up"
@@ -132,7 +174,7 @@ def register_CFunction_numgrid__evol_set_up() -> None:
   params_struct *restrict params = &griddata[grid].params;
 
   snprintf(params->CoordSystemName, 100, "Spherical"); // Must be set, or valgrind will complain about reading this in set_CodeParameters.h
-  params->grid_physical_size = 1.0; // Unused, since h sets the actual radius
+  params->grid_physical_size = 1.0;                    // Unused, since h sets the actual radius
 
   // Set grid sizes from Nx_evol_grid
   params->Nxx0 = Nx_evol_grid[0];
@@ -164,20 +206,44 @@ def register_CFunction_numgrid__evol_set_up() -> None:
 
   // Arrays for simplifying loops
   const int Nxx_plus_2NGHOSTS[3] = {params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, params->Nxx_plus_2NGHOSTS2};
-  const REAL xxmin[3] = {xxmin0, xxmin1, xxmin2};
-  const REAL dxx[3] = {params->dxx0, params->dxx1, params->dxx2};
 
-  // Step 6: Allocate and initialize cell-centered grid coordinate arrays xx[0], xx[1], xx[2]
+  // Step 6: Allocate cell-centered grid coordinate arrays xx[0], xx[1], xx[2]
   for (int dir = 0; dir < 3; dir++) {
-    griddata[grid].xx[dir] = (REAL *restrict)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS[dir]);
-    for (int i = 0; i < Nxx_plus_2NGHOSTS[dir]; i++)
-      griddata[grid].xx[dir][i] = xxmin[dir] + ((REAL)(i - NGHOSTS) + (1.0 / 2.0)) * dxx[dir];
+#ifdef __CUDACC__
+    cudaMalloc((void**)&griddata[grid].xx[dir], sizeof(REAL) * Nxx_plus_2NGHOSTS[dir]);
+#else
+    griddata[grid].xx[dir] = (REAL *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS[dir]);
+#endif
   }
 
-  // Step 7: Allocate and define reference-metric precompute lookup arrays.
+  // Step 7: Allocate reference-metric precompute lookup arrays.
+#ifdef __CUDACC__
+  gpuErrchk( cudaMalloc((void**)&(griddata[grid].rfmstruct),sizeof(rfm_struct)) );
+#else 
   griddata[grid].rfmstruct = (rfm_struct *)malloc(sizeof(rfm_struct));
+#endif
   bah_rfm_precompute_malloc(commondata, params, griddata[grid].rfmstruct);
-  bah_rfm_precompute_defines(commondata, params, griddata[grid].rfmstruct, griddata[grid].xx);
+
+#ifdef __CUDACC__
+  // Create device side copy of commondata and griddata
+  commondata_struct *d_commondata = NULL;
+  cudaMalloc((void**)&d_commondata, sizeof(commondata_struct));
+  cudaMemcpy(d_commondata, commondata, sizeof(commondata_struct), cudaMemcpyHostToDevice);
+
+  griddata_struct *d_griddata = NULL;
+  cudaMalloc((void**)&d_griddata, sizeof(griddata_struct));
+  cudaMemcpy(d_griddata, griddata, sizeof(griddata_struct), cudaMemcpyHostToDevice);
+#endif
+  
+  // Initialize cell-centered grid coordinate arrays and define reference metric precompute lookup arrays.
+  {
+#ifdef __CUDACC__
+    void *Args[] = {&d_commondata, &d_griddata};
+    COOPERATIVE_KERNEL(bah_numgrid__evol_set_up_kernel, Args);
+#else
+    bah_numgrid__evol_set_up_kernel(commondata, griddata);
+#endif
+  }
 
   // Step 8: Set up bcstruct, for setting inner boundary conditions (i.e., BCs in theta & phi ghost zones, like theta < 0).
   {
@@ -187,7 +253,17 @@ def register_CFunction_numgrid__evol_set_up() -> None:
     commondata->bcstruct_Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
     commondata->bcstruct_Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
     commondata->bcstruct_Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-    bah_bcstruct_set_up(commondata, params, griddata[grid].xx, &griddata[grid].bcstruct);
+#ifdef __CUDACC__
+    // Update device side commondata copy
+    cudaMemcpy(d_commondata, commondata, sizeof(commondata_struct), cudaMemcpyHostToDevice);
+#endif
+    
+#ifdef __CUDACC__
+    bah_bcstruct_set_up(d_commondata, &griddata->params, griddata[grid].xx, &griddata[grid].bcstruct);
+    gpuErrchk( cudaMemcpy(commondata, d_commondata, sizeof(commondata_struct), cudaMemcpyDeviceToHost) );
+#else
+    bah_bcstruct_set_up(commondata, &griddata->params, griddata[grid].xx, &griddata[grid].bcstruct);
+#endif
   }
 
   // Step 9: Initialize time-stepping parameters
@@ -195,10 +271,18 @@ def register_CFunction_numgrid__evol_set_up() -> None:
   commondata->nn_0 = 0;
   commondata->t_0 = 0.0;
   commondata->time = 0.0;
+
+  //Free 
+#ifdef __CUDACC__
+  cudaFree(d_commondata);
+  cudaFree(d_griddata);
+#endif
+
 """
     cfc.register_CFunction(
         subdirectory="",
         includes=includes,
+        prefunc=prefunc,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,

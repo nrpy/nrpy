@@ -31,12 +31,18 @@ boundary points ("inner maps to outer").
   // Unpack bc_info from bcstruct
   const bc_info_struct *bc_info = &bcstruct->bc_info;
 
+#ifdef __CUDACC__
+  PARALLEL_2D_LOOP(pt, 0, bc_info->num_inner_boundary_points, which_gf, 0, NUM_EVOL_GFS) {
+    const int parity_idx = evol_gf_parity[which_gf];
+    REAL *restrict gf = &gfs[IDX4pt(which_gf, 0)];
+#else
 #pragma omp parallel for schedule(static)
   for (int which_gf = 0; which_gf < NUM_EVOL_GFS; ++which_gf) {
     const int parity_idx = evol_gf_parity[which_gf];
     REAL *restrict gf = &gfs[IDX4pt(which_gf, 0)];
 
     for (int pt = 0; pt < bc_info->num_inner_boundary_points; ++pt) {
+#endif
       const innerpt_bc_struct *restrict bc = &bcstruct->inner_bc_array[pt];
       const int dstpt = bc->dstpt;
       //  -> idx3 = i0 + Nx0*(i1 + Nx1*i2)
@@ -48,8 +54,12 @@ boundary points ("inner maps to outer").
       const REAL v = gf[bc->srcpt];
       const int8_t p = bc->parity[parity_idx];
       gf[dstpt] = apply_parity_branchless(v, p);
+#ifndef __CUDACC__
     } // END LOOP: for pt over inner boundary points
   } // END LOOP: for which_gf over evolution gridfunctions
+#else
+  } END_PARALLEL_2D_LOOP
+#endif
 """
     cfc.register_CFunction(
         prefunc=APPLY_PARITY_BRANCHLESS_PREFUNC,

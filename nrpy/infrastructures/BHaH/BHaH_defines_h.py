@@ -549,6 +549,12 @@ do { \
 } while(0);
 
 #ifdef __CUDACC__
+#define FREE(a) gpuErrchk( cudaFree((a)) );
+#else
+#define FREE(a) free((a));
+#endif
+
+#ifdef __CUDACC__
   /* Expand to the statement(s) you pass in */
   #define IFCUDARUN(...) do {{ __VA_ARGS__; }} while (0)
 #else
