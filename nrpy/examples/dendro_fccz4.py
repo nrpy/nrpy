@@ -229,6 +229,13 @@ def main() -> None:
         subdirectory="standalone_host",
     )
 
+    copy_files(
+        package="nrpy.infrastructures.Dendro",
+        filenames_list=["block_geometry.h"],
+        project_dir=str(Path(args.project_dir) / layout.root),
+        subdirectory="include",
+    )
+
     EVOL, _AUXEVOL, _DIAG, _AUX = gri.GridFunction.gridfunction_lists()
     print(f"Finished generating {solver_name} in {args.project_dir}.")
     print(f"  profile: {profile_name}")

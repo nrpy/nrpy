@@ -80,8 +80,9 @@ symbolic and emitted-source contracts run as owner doctests in
 generated project registers eleven CTest cases -- ten self-tests and the
 Minkowski lifecycle, whose gates exit nonzero on failure -- so that job runs all
 eleven against the NRPy-supplied standalone host. That establishes that the
-emitted C++ compiles and that its own gates pass; coverage against a real
-Dendro-GR host still waits on a container image with Dendro precompiled; see
+emitted C++ compiles and that its own gates pass. Real-host CI still waits on
+a container image with Dendro precompiled; local pinned-host qualification is
+recorded separately in
 [Validation, Standalone Host, And Deferral Gates](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md).
 
 Claim evidence:

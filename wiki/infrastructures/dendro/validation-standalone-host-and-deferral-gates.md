@@ -5,15 +5,13 @@
 
 ## Summary
 
-The Dendro infrastructure validates in two places with different reach. Owner
-doctests in the emitter modules check emitted text against the registries in
-process. A standalone host vehicle lets the emitted C++ compile and run eleven
-CTest cases, ten generated self-tests and the Minkowski lifecycle, without any
-Dendro-GR checkout. What neither
-establishes is behaviour against the real Dendrolib host. The source pin and
-the capability proof that gated that work are both recorded on this page; what
-remains open is a build against a real Dendro-GR checkout, which is a deliberate
-deferral rather than forgotten work.
+Dendro validation now covers owner checks, the standalone test vehicle, and a
+pinned real-host fCCZ4 qualification. Both standalone formulations retain eleven
+CTest cases. The generated fCCZ4 solver also builds against pinned Dendro-GR and
+Dendrolib, passes distributed transport checks, and completes a checked 100-step
+Minkowski evolution on two active MPI ranks. Real-host coverage is limited to
+fixed mesh, global RK4, double precision, one CPU thread per rank, and analytic
+Minkowski exterior data; the broader gates remain explicit below.
 
 ## Detail
 
@@ -66,12 +64,11 @@ Claim evidence:
 
 ### Standalone host vehicle
 
-The generated solver compiles against standalone host types in `dendro_standalone_host.h`
-rather than the real host. That header is not a test fixture: the examples'
+With `<PREFIX>_STANDALONE_HOST=ON`, the generated solver compiles against
+standalone host types in `dendro_standalone_host.h`. That header is not a test fixture: the examples'
 inline assembly copies it into every generated project through `copy_files`, so
-it is part of the generated solver's build. It is the one emitted header NRPy
-does not run through `clang_format`, exactly as BHaH ships
-`simd_intrinsics.h`. The generated `tests/` directory registers ten CTest cases
+it is part of the generated solver's build. It and the shared `block_geometry.h` are copied assets rather than formatted
+emitter output, as BHaH ships `simd_intrinsics.h`. The generated `tests/` directory registers ten CTest cases
 covering the state registry, parameter registry, padding, memory offsets, upwind
 selection, the right-hand side, initial data, exact-name selection, det/trace
 enforcement, and constraint diagnostics, and the solver's own `CMakeLists.txt`
@@ -79,10 +76,10 @@ registers the Minkowski lifecycle as an eleventh: every gate it prints exits
 nonzero on failure, so the numerical gates are part of the suite rather than a
 demo someone has to remember to run.
 
-Because the solver is compiled against standalone host types, it refuses to configure
-inside a Dendro-GR tree that defines a real `dendro5` target; linking generated
-sources built against the standalone-host types to the real host would be a silent type
-mismatch.
+With the option `OFF`, the generated context includes real Dendrolib headers
+and links the host's `dendro5` and `toml11::toml11` targets. The two build modes
+select separate context implementations; merely finding a real target no longer
+prevents configuration. Duplicate solver executable names are rejected.
 
 The entry point runs a Minkowski lifecycle whose gates are the det/trace
 residual, the maximum constraint violation, the flat-state right-hand side, the
@@ -100,16 +97,23 @@ Claim evidence:
 - Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
 - Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3, OpenMPI 4.1.6; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=1 and 2 MPI ranks; error_path=not-run; options=--fd-order 4 --no-ko; date=09-06-2026`
 
-### The sample parameter file is reference only
+### Runtime parameters
 
-Parameter-file parsing belongs to the Dendro-GR host, which already owns it;
-NRPy emits the parameters and their defaults and does not parse a file. That is
-a decision rather than a gap. The entry point therefore refuses a supplied `-t`
-file, naming the host as the owner, rather than appearing to apply values it
-would ignore, and the emitted parameter table is commented out for the same
-reason. The effective values are printed at startup on rank 0: the generated defaults,
-except the perturbation wavelength, which is a length and so is derived from the
-block extent and spacing the host was given.
+The real entry point accepts `-t FILE`. Rank 0 reads the TOML text and broadcasts
+it; the host TOML library parses it, and registry-derived bindings populate
+`params_struct`. Unknown fields, malformed/nonfinite values, and profile
+mismatch fail through a parent-communicator abort. The standalone vehicle still
+rejects parameter files. The real runner also accepts `--steps` and `--dt`.
+The qualification mesh and initial data are fixed; shared geometry/perturbation
+registry defaults do not select another physical problem.
+
+Claim evidence:
+- Claim: the real entry point binds registered TOML parameters, forwards kernel parameters through registered signatures, and terminates the MPI job on invalid input; its mesh and initial data remain the fixed qualification problem.
+- Role: descriptive behavior
+- Deciding authority: [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py), `_REAL_MAIN`; [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py), `output_toml_bindings`; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), `_codeparameter_tail` and `_REAL_SOURCE`
+- Corroboration: [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), analytic `eta` response check; [README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md), `Generated real-host qualification`
+- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=GCC 13.3.0, Open MPI 4.1.6, CMake 3.28.3; backend=Dendro real host; precision=double; GPU=not-run; restart=not-run; distributed=2 active MPI ranks; error_path=rank-local NaN and invalid TOML/profile; options=FD4, KO off, fixed mesh; date=09-07-2026`
 
 ### CI coverage
 
@@ -118,14 +122,9 @@ which generates both projects, configures and builds them with CMake, and runs
 their `ctest` suites. The symbolic and emitted-source contracts run as owner
 doctests in the static-analysis job.
 
-What that job establishes is that the emitted C++ compiles and that its own
-gates pass against the standalone host: every numerical gate is NRPy's own
-kernels checked against NRPy's own host declarations, which says nothing about
-the real target. The route that would prove something about the real target is a
-container image with Dendro precompiled, generating the solver inside it,
-building against the real host, and evolving a small job whose results are
-checked. That route is unblocked by the pin and capability records below but has
-not been run, so it is recorded as a deferral rather than approximated.
+That job covers the standalone vehicle. The real-host build and numerical
+checks below were run locally against pinned checkouts; no real-host CI job is
+configured by this change. A prebuilt-host CI route remains separate work.
 
 ### Host pin and proven capabilities
 
@@ -177,29 +176,58 @@ Claim evidence:
 - Validation: `inspected=pass; generated=not-applicable; built=pass; run=pass; result_checked=pass`
 - Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=GCC 13.3.0, Open MPI 4.1.6, CMake 3.28.3; backend=Dendrolib; precision=double; GPU=not-applicable; restart=not-run; distributed=1 and 2 MPI ranks; error_path=fault injection on every axis; options=element orders 2, 4, 6, 8 and 10; date=09-06-2026`
 
+### Generated real-host qualification
+
+The generated fCCZ4 context uses actual `ot::Mesh`, `ot::Block`, `ot::DVector`,
+and `ts::Ctx` types. `block_geometry` normalizes the padded allocation, per-
+component offset, physical padded origin, spacing, and boundary flags. Pointer
+arrays retain component bases; the generated block kernel adds the block offset
+exactly once. The real RHS callback exchanges halos, evaluates each generated
+block kernel, and zips the result. The pinned RK4 host calls `post_timestep` on
+four stage states and the accepted state; projection runs there, never on the
+RHS vector passed to `post_stage`. A callback failure aborts `MPI_COMM_WORLD`,
+including inactive ranks, because the pinned integrator ignores return codes.
+
+The generated solver built against Dendro-GR
+`b3261e2a0d3457781b11d63ac5ab38375ffab93b` and Dendrolib
+`246043709e806021fcfc011fe657b8bf964cae4c`. On two active ranks, the transport
+oracle exercised 18 local blocks on one rank, 27 nonzero-offset blocks overall,
+32,796 in-domain halo points, and 3,259 received nodes. Component-distinct affine
+fields and nonconstant zip results agreed within `5.92e-12`. Offset and halo
+faults on rank 1 fail the oracle; a rank-1 NaN aborts the whole job.
+
+The 100-step Minkowski run reached time `0.10000000000000007`, with maximum RHS
+`2.61e-11`, constraints `2.70e-11`, drift `2.76e-13`, and projection residual
+`1.00e-15` (rounded upward). Drift must stay below `1e-11`, projection below
+`1e-13`, and RHS/constraints below `256*epsilon(double)/h_min^2`, here
+`1.31e-10`. The mesh-scaled bound accounts for interpolation roundoff amplified
+by second derivatives. Exact step count, elapsed time, finite values, and
+`1 + 5*steps` projection passes are checked. This is a Minkowski roundoff check,
+not a real-host convergence or general-boundary result.
+
+Claim evidence:
+- Claim: the generated fCCZ4 solver builds against the two stated host pins and passes a two-active-rank fixed-mesh RK4 Minkowski run, with independently checked component offsets, physical padded origins, real halo transport, nonconstant zip, parameter response, and rank-local failure termination; broader runtime profiles are not qualified.
+- Role: descriptive behavior
+- Deciding authority: [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), `_REAL_HEADER` and `_REAL_SOURCE`; [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py), `_REAL_MAIN`
+- Corroboration: [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), transport oracle and fault modes; [README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md), pinned commands and measured results
+- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, SymPy 1.14.0, GCC 13.3.0, CMake 3.28.3, Open MPI 4.1.6; backend=Dendro real host; precision=double; GPU=not-run; restart=not-run; distributed=2 active MPI ranks; error_path=rank-local offset, halo, and NaN injection; options=fCCZ4 chi, FD4, KO off, element order 6, fixed mesh, RK4, OMP_NUM_THREADS=1; date=09-07-2026`
+
 ### Gates that remain open
 
-This page is the capability record, and it records no proof for the axes the
-harness does not exercise. Those stay gates rather than omissions: the boundary flags, the
-zip direction, the `ts::Ctx` right-hand-side contracts, remesh, the checkpoint
-ABI, output selection, and the thread model. Each names the work that would
-close it, and physical boundaries and the checkpoint ABI remain separate
-qualified profiles carried on this page.
-
-One deferred item is named rather than merely open: the `BlockGeometry` adapter
-proof, meaning a single auditable host function that normalizes
-`component_offset` and `pmin_padded` for a block, exercised by a two-block case
-and an offset sentinel. Only the `standalone_host/dendro_standalone_host.h`
-struct exists so far, so the adapter signatures stay frozen until a build
-against a real Dendro-GR checkout runs.
-
-What the pin does not establish is that the generated solver builds against the
-real host. The solver still compiles against `dendro_standalone_host.h` and still refuses
-to configure inside a Dendro-GR tree defining a real `dendro5` target. The
-container route described above is now unblocked by these records, but it has
-not been run.
+General physical boundary conditions and their flag semantics, remeshing and
+state transfer, LTS, checkpoint/restart ABI, output selection, GPU execution,
+and threaded kernels remain open. The adapter copies boundary flags but this
+Minkowski profile prescribes only analytic exterior data by physical position.
+The standalone BSSN checks remain valid; this real-host numerical record is
+specifically for fCCZ4. Real-host CI is not added here.
 
 ## Sources
+
+- [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp) - real context transport, parameter response, and rank-local fault modes
+- [block_geometry.h](../../../nrpy/infrastructures/Dendro/block_geometry.h) - shared `BlockGeometry` contract
+- [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - `_REAL_HEADER`, `_REAL_SOURCE`
+- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `output_toml_bindings`
 
 - [dendrolib_capability_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp) - `run_order`, `CAPTEST_INJECT` fault injection
 - [README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md) - build, run, and checker-exercise instructions

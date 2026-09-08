@@ -4,9 +4,8 @@ Emit the generated solver's sample parameter file.
 
 The profile block carries the generated finite-difference order, padding and
 dissipation switch; the parameter table itself comes from the registered
-CodeParameters.  This profile has no parameter-file binding yet -- the
-generated parser refuses a supplied file -- so the table is emitted commented
-out.  Shipping a live table would invite edits that silently do nothing.
+CodeParameters. The real host binds this table through TOML. The standalone
+host continues to reject supplied parameter files.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -91,10 +90,6 @@ def generate_default_parfile(
     fd_order = int(par.parval_from_str("fd_order"))
     enable_ko = bool(enable_KreissOliger_dissipation)
     sample = output_parfile_sample()
-    commented = "\n".join(
-        f"# {line}" if line.strip() else "#"
-        for line in sample.rstrip("\n").splitlines()
-    )
     return BANNER + f"""#
 # The standalone-host entry point takes the block count, the block extent, the
 # spacing and the output and refinement selections as command-line arguments.
@@ -107,13 +102,9 @@ fd_order = {fd_order}
 required_padding = {int(required_padding)}
 ko_enabled = {"true" if enable_ko else "false"}
 
-# The parameter table below is generated from the registered CodeParameters
-# and is shown for reference only: this profile has no parameter-file binding
-# yet, so the solver refuses a -t argument rather than appear to apply these
-# values.  The effective values are printed at startup: the generated defaults,
-# except smooth_perturbation_wavelength, which is a length and so is derived
-# from the block extent and spacing the host was given.
-""" + commented + "\n"
+# Runtime parameters apply with -t FILE in the real Dendro host build.
+# The standalone host still refuses parameter files.
+""" + sample
 
 
 if __name__ == "__main__":

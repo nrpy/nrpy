@@ -50,7 +50,7 @@ def output_types_h(solver_stem: str, solver_namespace: str) -> str:
 
 #include <type_traits>
 
-#ifndef DENDRO_SCALAR_DEFINED
+#if !defined(DENDRO_SCALAR_DEFINED) && !defined(DendroScalar)
 #define DENDRO_SCALAR_DEFINED
 using {scalar_type} = {fp_type};
 #endif

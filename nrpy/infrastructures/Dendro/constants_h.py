@@ -42,9 +42,8 @@ def output_constants_h(
     wrong in the very configuration both applications ship -- at ``fd_order``
     4 with Kreiss-Oliger off it gives 2, while the emitted kernel's upwinded
     operators reach 3.  Only the coefficients know which families a kernel
-    actually contains.  The ``dfullupD``/``dfulldnD`` families widen the gap
-    further, reaching ``fd_order`` rather than one point past the centered
-    radius.  They have stencils and no C-code path: ``c_codegen`` classifies
+    actually contains.  The ``dfullupD``/``dfulldnD`` families reach
+    ``fd_order``.  They have stencils and no C-code path: ``c_codegen`` classifies
     them as ordinary symbols rather than rejecting them, so a kernel containing
     one would emit an undeclared identifier and fail to compile rather than
     lower incorrectly.

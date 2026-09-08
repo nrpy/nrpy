@@ -350,10 +350,11 @@ def padding_from_derivative_operators(
     >>> padding_from_derivative_operators([cf_dD[0] + cf_dD[1] + cf_dD[2]], "unset", 4)
     2
 
-    The per-order reach is pinned there; what
-    this wrapper owns is the reduction across axes, so the case below mixes a
-    centered axis with an upwinded one: a uniform expression would pass just as
-    well if this returned the minimum.
+    The per-order reach is pinned in
+    :func:`nrpy.finite_difference.stencil_reach_per_axis`.  This wrapper takes
+    the maximum across axes, so the case below mixes a centered axis with an
+    upwinded one: a uniform expression would pass just as well if this returned
+    the minimum.
 
     >>> cf_dupD = ixp.declarerank1("cf_dupD")
     >>> mixed_axes = cf_dD[0] + cf_dupD[1] + cf_dD[2]

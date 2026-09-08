@@ -4,7 +4,7 @@ Generate an NRPy-authored BSSN solver for Dendro-GR.
 This is the second formulation lowered through the Dendro infrastructure. It
 exists as much to test the infrastructure as to produce a solver: adding it
 required the formulation-agnostic lowering to be extracted into
-``block_kernel_helpers``, but no existing emitter changed behaviour and the fCCZ4
+``block_kernel_helpers``, but no existing emitter changed behavior and the fCCZ4
 output is unaffected.
 
 The emitted names follow Dendro-GR's own BSSN solver rather than NRPy's
@@ -228,6 +228,13 @@ def main() -> None:
         filenames_list=["dendro_standalone_host.h"],
         project_dir=str(Path(args.project_dir) / layout.root),
         subdirectory="standalone_host",
+    )
+
+    copy_files(
+        package="nrpy.infrastructures.Dendro",
+        filenames_list=["block_geometry.h"],
+        project_dir=str(Path(args.project_dir) / layout.root),
+        subdirectory="include",
     )
 
     EVOL, _AUXEVOL, _DIAG, _AUX = gri.GridFunction.gridfunction_lists()

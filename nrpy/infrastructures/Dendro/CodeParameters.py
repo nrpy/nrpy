@@ -293,6 +293,42 @@ def register_CFunctions_parameters(solver_stem: str, solver_namespace: str) -> N
     )
 
 
+def output_toml_bindings() -> str:
+    """
+    Emit checked TOML assignments for registered runtime parameters only.
+
+    :return: C++ assignments for the generated parameter table.
+    :raises ValueError: If a character parameter has no supported TOML binding.
+    """
+    lines: List[str] = []
+    for name, parameter in sorted(par.glb_code_params_dict.items()):
+        if not parameter.add_to_parfile or parameter.cparam_type == "#define":
+            continue
+        base, size, is_array = par.parse_cparam_type(parameter.cparam_type)
+        mapped = c_type(parameter.cparam_type)
+        if base == "char":
+            raise ValueError("Dendro TOML character parameters are not supported.")
+        lines.append(f'if (item.first == "{name}") {{')
+        if is_array:
+            lines.append(
+                f"const auto values = toml::get<std::vector<{mapped}>>(item.second);"
+            )
+            lines.append(
+                f'if (values.size() != {size}) throw std::runtime_error("wrong parameter array length: {name}");'
+            )
+            lines.append(f"for (unsigned i = 0; i < {size}; ++i) {{")
+            if base not in ("int", "bool"):
+                lines.append(
+                    'if (!std::isfinite(values[i])) throw std::runtime_error("nonfinite parameter");'
+                )
+            lines.append(f"params.{name}[i] = values[i];")
+            lines.append("} // END LOOP: assign parameter array elements")
+        else:
+            lines.append(f"params.{name} = toml::get<{mapped}>(item.second);")
+        lines += ["continue;", "} // END IF: bind registered runtime parameter"]
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":
     import doctest
     import sys

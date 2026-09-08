@@ -24,8 +24,7 @@ def output_Dendro_defines_h(solver_stem: str, solver_prefix: str) -> str:
     :param solver_stem: Lowercase formulation stem for the generated header
         names, following Dendro's habit of naming solver files for the
         formulation (``bssnCtx.h``).
-    :param solver_prefix: Bare formulation prefix, used to name the CMake
-        option in the real-host diagnostic.
+    :param solver_prefix: Bare formulation prefix; retained for interface compatibility.
     :return: The complete C++ header text.
 
     Doctests:
@@ -40,9 +39,10 @@ def output_Dendro_defines_h(solver_stem: str, solver_prefix: str) -> str:
     ['#include "bssn_types.h"', '#include "bssn_constants.h"', '#include "bssn_parameters.h"', '#include "bssn_state.h"', '#include "bssn_function_prototypes.h"']
     >>> "#define UPWIND_ALG(UpwindVecU) ((UpwindVecU) > 0.0 ? 1.0 : 0.0)" in header
     True
-    >>> "-DBSSN_STANDALONE_HOST=ON" in header
+    >>> '#include "block_geometry.h"' in header
     True
     """
+    del solver_prefix
     opening, closing = header_guard(f"{solver_stem}_defines.h")
     return BANNER + f"""{opening}
 
@@ -55,15 +55,14 @@ def output_Dendro_defines_h(solver_stem: str, solver_prefix: str) -> str:
 #include <string_view>
 
 // clang-format off
-// Two things are protected from the formatter here.  The diagnostic below is
-// one string literal that no column limit can break without a line
-// continuation, and the include order is load-bearing: the prototypes header
+// The include order is load-bearing: the prototypes header
 // declares functions taking params_struct and the state enums, so the types,
 // constants, parameters and state headers must precede it.
 #if defined(NRPY_DENDRO_STANDALONE_HOST)
 #include "dendro_standalone_host.h"  // NRPy-supplied host declarations
 #else
-#error "Not generated for a real Dendro-GR host yet; configure with -D{solver_prefix}_STANDALONE_HOST=ON, or define NRPY_DENDRO_STANDALONE_HOST when compiling a generated source by hand."
+#include "dendro.h"
+#include "block_geometry.h"
 #endif
 #include "{solver_stem}_types.h"
 #include "{solver_stem}_constants.h"

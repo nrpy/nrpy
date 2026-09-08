@@ -1,41 +1,40 @@
 # BSSN Application Wiring
 
-> Explain the Dendro BSSN builders, what they reuse from the fCCZ4 profile, and what adding a second formulation proved about the generic layer. · Status: contested · Last reconciled: 09-07-2026
+> Explain the Dendro BSSN builders, what they reuse from the fCCZ4 profile, and what adding a second formulation proved about the generic layer. · Status: provisional · Last reconciled: 09-07-2026
 > Up: [Dendro](index.md)
 
 ## Summary
 
 BSSN is the second formulation lowered through the Dendro infrastructure, and
 it lives beside the fCCZ4 branch in `general_relativity/`. No module is new: the
-shared right-hand-side and constraint-diagnostic modules each gained a BSSN
-builder beside the fCCZ4 one, and the initial data, the det(gammabar)/tr(Abar)
+shared right-hand-side and constraint-diagnostic modules each use one builder with formulation-specific expression assembly, and the initial data, the det(gammabar)/tr(Abar)
 enforcement and the generic layer are shared with fCCZ4.
 
 The layout follows BHaH. NRPy's established two-formulation infrastructure
 emits BSSN and fCCZ4 from a single `general_relativity/rhs_eval.py` on an
 `enable_fCCZ4` boolean, and Dendro follows it as far as the module layout:
-one module per artifact, taking the same boolean. An earlier draft of this
-branch put the BSSN builders in their own `general_relativity/BSSN/`
-subpackage, on the argument that a single module would branch on formulation in
-every place the two differ: evolved-field count, constraint set, and which
-shared equations module supplies the expressions.
+one module per artifact, taking the same boolean.
 
-Where Dendro departs from BHaH is inside the module. BHaH's
-`general_relativity/rhs_eval.py` is a single public
-`register_CFunction_rhs_eval` that branches inline on `enable_fCCZ4` in the few
-places the formulations differ. Dendro instead holds a private builder and a
-private registrar per formulation, and the public registrar dispatches once on
-the boolean. That arrangement is Dendro's own, and no host requirement drove
-it, so it is a divergence [New Infrastructure
-Conformance](../new-infrastructure-conformance.md) does not permit. It leaves
-the constraint builders sharing a long verbatim tail and the right-hand-side
-builders substantially duplicated. Consolidating them is open.
-
-Claim status: contested; contradiction: CONTR-0011.
-See [CONTR-0011](../../contradictions.md#contr-0011) for the deciding authority
-and the inspection that would resolve it.
+The per-formulation builder and registrar duplication is consolidated. Each
+module now has one public builder and one public registrar, with the
+formulation branch confined to expression assembly and its field-count check.
 
 ## Detail
+
+### Shared assembly and registration
+
+`build_rhs_eval` and `build_constraints_eval` share lowering, wrapper emission,
+and metadata handling across BSSN and fCCZ4. Their public registrars share the
+registration path. The registered interfaces and generated kernels are
+unchanged. This closes [CONTR-0011](../../contradictions.md#contr-0011).
+
+Claim evidence:
+- Claim: each Dendro RHS and constraint module has one builder and one registrar shared across formulations; consolidation preserves the registered interfaces and generated kernels for the shipped BSSN and fCCZ4 profiles.
+- Role: descriptive behavior
+- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `build_rhs_eval` and `register_CFunctions_rhs_eval`; [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), `build_constraints_eval` and `register_CFunctions_constraints_eval`
+- Corroboration: both modules' `__main__` trusted-expression checks; direct before/after comparison of full registered CFunctions and Dendro metadata for both shipped profiles
+- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, SymPy 1.14.0; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=FD4, BSSN W and fCCZ4 chi, KO off; date=09-07-2026`
 
 ### What the builders do
 
@@ -113,7 +112,7 @@ Adding the second formulation required generic-layer work: the
 formulation-agnostic kernel emission was extracted into `block_kernel_helpers`
 and `tensor_family_of` moved into `gridfunction_name_decorations`. No
 formulation-specific content entered the generic layer and no existing emitter
-changed behaviour.
+changed behavior.
 
 The port was the cheap test of whether the abstraction exists, and it found
 defects that a single-formulation tree could not expose:

@@ -1,6 +1,6 @@
 # nrpy/infrastructures/Dendro/solver_context.py
 """
-Emit the standalone-host runtime context for a generated Dendro solver.
+Emit standalone and real Dendro runtime contexts for a generated solver.
 
 The context allocates the generated-count vectors, runs the startup checks and
 invokes the registered generated CFunctions.  It carries no formulation
@@ -578,6 +578,354 @@ double observed_convergence_order(
 """
 
 
+_REAL_HEADER = r"""#include "$STEM_defines.h"
+#include "ctx.h"
+#include "meshUtils.h"
+#include <vector>
+namespace $NAMESPACE {
+using DVec = ot::DVector<DendroScalar, unsigned int>;
+/**
+ * Normalize a real block allocation, component offset, and physical padded origin.
+ *
+ * @param[in] mesh Mesh providing the unzip stride and coordinate transformation.
+ * @param[in] block Local block whose padded allocation is described.
+ * @param[in] minimum Physical domain minimum used to compute spacing.
+ * @param[in] maximum Physical domain maximum used to compute spacing.
+ * @return Validated geometry with an offset relative to each component base.
+ *
+ * @note Throws std::runtime_error for invalid allocation, padding, or geometry.
+ */
+BlockGeometry block_geometry(const ot::Mesh& mesh, const ot::Block& block,
+                             const Point& minimum, const Point& maximum);
+// The fixed-mesh context owns storage. DVector itself is a shallow handle.
+class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {
+ public:
+  generated::params_struct params{};
+  DVec state, unzipped, unzipped_rhs, diagnostics;
+  unsigned long long projection_passes = 0;
+  double projection_residual = 0.0;
+  /**
+   * Allocate owned vectors and communication buffers for a fixed mesh.
+   *
+   * @param[in,out] mesh Borrowed mesh used for storage and communication setup.
+   * @param[in] minimum Physical domain minimum, matching the mesh domain bounds.
+   * @param[in] maximum Physical domain maximum, matching the mesh domain bounds.
+   * @param dt Positive finite timestep used by the host time integrator.
+   *
+   * @note The caller retains mesh ownership and must outlive this context.
+   */
+  Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum, double dt);
+  ~Ctx();
+  Ctx(const Ctx&) = delete;
+  Ctx& operator=(const Ctx&) = delete;
+  DVec& get_evolution_vars() { return state; }
+  /**
+   * Initialize Minkowski data, project it, and save the initial state.
+   *
+   * @return 0 on success or an inactive rank; invalid data aborts MPI_COMM_WORLD.
+   */
+  int initialize();
+  /**
+   * Exchange halos, evaluate generated block RHS kernels, and zip the result.
+   *
+   * @param[in,out] in One packed evolution vector; unzip updates its ghost nodes.
+   * @param[out] out One packed vector receiving the zipped RHS.
+   * @param count Number of packed evolution vectors; must equal one.
+   * @param time Host stage time; unused by this autonomous Minkowski profile.
+   * @return 0 on success or an inactive rank; invalid data aborts MPI_COMM_WORLD.
+   */
+  int rhs(DVec* in, DVec* out, unsigned int count, DendroScalar time);
+  /**
+   * Leave the supplied stage input unchanged.
+   *
+   * @return 0 unconditionally; this hook performs no operation.
+   */
+  int pre_stage(DVec&) { return 0; }
+  /**
+   * Leave the supplied RHS unchanged; it is not an evolved stage state.
+   *
+   * @return 0 unconditionally; this hook performs no operation.
+   */
+  int post_stage(DVec&) { return 0; }
+  /**
+   * Leave the supplied timestep input unchanged.
+   *
+   * @return 0 unconditionally; this hook performs no operation.
+   */
+  int pre_timestep(DVec&) { return 0; }
+  /**
+   * Project a stage or accepted state according to the pinned ETS contract.
+   *
+   * @param[in,out] input Evolved state projected in place through unzip and zip.
+   * @return 0 on success or an inactive rank; failed projection aborts MPI_COMM_WORLD.
+   *
+   * @note ETS calls this on four RK4 stage states and once on the accepted state.
+   */
+  int post_timestep(DVec& input);
+  /**
+   * Evaluate finite constraints on active ranks and reduce their maximum.
+   *
+   * @return Global maximum absolute constraint value over block interiors.
+   *
+   * @note All parent ranks must call; nonfinite output aborts MPI_COMM_WORLD.
+   */
+  double max_constraints();
+  double max_rhs();
+  /**
+   * Compare owned evolved nodes with the initial snapshot and reduce the drift.
+   *
+   * @return Global maximum absolute change from the projected initial state.
+   *
+   * @pre initialize() has completed, and all parent ranks call this function.
+   */
+  double max_drift();
+ private:
+  std::vector<DendroScalar> initial;
+  /**
+   * Prescribe analytic Minkowski values outside the physical domain only.
+   *
+   * @note Updates unzipped exterior points; preserves all in-domain halo values.
+   */
+  void fill_exterior();
+  void require_finite(DVec& value);
+}; // END CLASS: fixed mesh Dendro context
+// clang-format off
+}  // END NAMESPACE: $NAMESPACE
+// clang-format on
+"""
+
+_REAL_SOURCE = r"""#include "$STEMCtx.h"
+#include <algorithm>
+#include <cstdlib>
+#include <limits>
+#include <stdexcept>
+namespace $NAMESPACE {
+namespace {
+[[noreturn]] void fail(const char* reason) {
+  int rank = 0;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  std::fprintf(stderr, "rank %d: %s\n", rank, reason);
+  // ETS ignores callback return codes. Abort the parent communicator, including
+  // inactive ranks, so one failed rank cannot strand peers in a halo exchange.
+  MPI_Abort(MPI_COMM_WORLD, 1);
+  std::abort();
+} // END FUNCTION: abort all parent ranks
+double maximum(double local) {
+  double global = 0.0;
+  MPI_Allreduce(&local, &global, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+  return global;
+} // END FUNCTION: reduce world maximum
+/**
+ * Measure finite generated values over block interiors.
+ *
+ * @param[in] mesh Mesh providing local block interiors and component offsets.
+ * @param[in] values Unzipped generated values inspected without modification.
+ * @return Local maximum absolute value, or zero on an inactive rank.
+ *
+ * @note Nonfinite interior values abort MPI_COMM_WORLD.
+ */
+double interior_max(const ot::Mesh& mesh, DVec& values) {
+  double result = 0.0;
+  if (!mesh.isActive()) return result;
+  std::vector<DendroScalar*> pointers(values.get_dof());
+  values.to_2d(pointers.data());
+  for (const auto& b : mesh.getLocalBlockList()) {
+    const unsigned p = b.get1DPadWidth();
+    const unsigned nx = b.getAllocationSzX(), ny = b.getAllocationSzY();
+    for (unsigned f = 0; f < values.get_dof(); ++f)
+      for (unsigned k = p; k < b.getAllocationSzZ() - p; ++k)
+        for (unsigned j = p; j < ny - p; ++j)
+          for (unsigned i = p; i < nx - p; ++i) {
+            const auto v = pointers[f][b.getOffset() + i + std::size_t(nx) * (j + std::size_t(ny) * k)];
+            if (!std::isfinite(v)) fail("nonfinite generated output");
+            result = std::max(result, std::abs(v));
+          } // END LOOP: inspect interior values
+  } // END LOOP: visit local blocks
+  return result;
+} // END FUNCTION: measure interior maximum
+// clang-format off
+}  // END NAMESPACE: internal linkage
+// clang-format on
+BlockGeometry block_geometry(const ot::Mesh& mesh, const ot::Block& block,
+                             const Point& minimum, const Point& maximum) {
+  BlockGeometry g{};
+  g.nx = block.getAllocationSzX();
+  g.ny = block.getAllocationSzY();
+  g.nz = block.getAllocationSzZ();
+  g.padding = block.get1DPadWidth();
+  g.component_offset = block.getOffset();
+  g.dx[0] = block.computeDx(minimum, maximum);
+  g.dx[1] = block.computeDy(minimum, maximum);
+  g.dx[2] = block.computeDz(minimum, maximum);
+  Point origin;
+  const auto node = block.getBlockNode();
+  mesh.octCoordToDomainCoord(Point(node.minX(), node.minY(), node.minZ()), origin);
+  g.pmin_padded[0] = origin.x() - g.padding * g.dx[0];
+  g.pmin_padded[1] = origin.y() - g.padding * g.dx[1];
+  g.pmin_padded[2] = origin.z() - g.padding * g.dx[2];
+  g.boundary_flags = block.getBlkNodeFlag();
+  const std::size_t volume = std::size_t(g.nx) * g.ny * g.nz;
+  if (g.padding < generated::REQUIRED_PADDING || g.nx <= 2*g.padding ||
+      g.ny <= 2*g.padding || g.nz <= 2*g.padding ||
+      g.component_offset > mesh.getDegOfFreedomUnZip() ||
+      volume > mesh.getDegOfFreedomUnZip() - g.component_offset)
+    throw std::runtime_error("invalid Dendro block allocation or padding");
+  for (unsigned a = 0; a < 3; ++a)
+    if (!(g.dx[a] > 0.0) || !std::isfinite(g.dx[a]) || !std::isfinite(g.pmin_padded[a]))
+      throw std::runtime_error("invalid physical block geometry");
+  return g;
+} // END FUNCTION: normalize real block geometry
+Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum, double dt) {
+  set_mesh(mesh);
+  m_uiElementOrder = mesh->getElementOrder();
+  m_uiMinPt = minimum;
+  m_uiMaxPt = maximum;
+  m_uiTinfo = {};
+  m_uiTinfo._m_uiTh = dt;
+  $PARAMS_STRUCT_SET_TO_DEFAULT(params);
+  state.create_vector(mesh, ot::DVEC_TYPE::OCT_SHARED_NODES, ot::DVEC_LOC::HOST, generated::NUM_EVOL_GFS, true);
+  unzipped.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST, generated::NUM_EVOL_GFS, true);
+  unzipped_rhs.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST, generated::NUM_EVOL_GFS, true);
+  diagnostics.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST, generated::NUM_DIAG_GFS, true);
+  if (mesh->isActive()) {
+    for (DVec* v : {&state, &unzipped, &unzipped_rhs, &diagnostics})
+      std::fill_n(v->get_vec_ptr(), v->get_size(), 0.0);
+    for (const auto& block : mesh->getLocalBlockList())
+      block_geometry(*mesh, block, minimum, maximum);
+  } // END IF: initialize active storage
+  ot::alloc_mpi_ctx<DendroScalar>(mesh, m_mpi_ctx, generated::NUM_EVOL_GFS, 1);
+} // END FUNCTION: construct fixed mesh context
+Ctx::~Ctx() {
+  ot::dealloc_mpi_ctx<DendroScalar>(m_uiMesh, m_mpi_ctx, generated::NUM_EVOL_GFS, 1);
+  for (DVec* v : {&state, &unzipped, &unzipped_rhs, &diagnostics}) v->destroy_vector();
+} // END FUNCTION: release owned host storage
+void Ctx::require_finite(DVec& value) {
+  if (!m_uiMesh->isActive()) return;
+  std::vector<DendroScalar*> pointers(value.get_dof());
+  value.to_2d(pointers.data());
+  for (const auto* ptr : pointers)
+    for (unsigned i = m_uiMesh->getNodeLocalBegin(); i < m_uiMesh->getNodeLocalEnd(); ++i)
+      if (!std::isfinite(ptr[i])) fail("nonfinite evolved state");
+} // END FUNCTION: validate owned evolved values
+int Ctx::initialize() {
+  if (!$VALIDATE(params)) fail("invalid runtime parameters");
+  if (!m_uiMesh->isActive()) return 0;
+  std::vector<DendroScalar*> pointers(generated::NUM_EVOL_GFS);
+  unzipped.to_2d(pointers.data());
+  for (const auto& b : m_uiMesh->getLocalBlockList()) {
+    const auto g = block_geometry(*m_uiMesh, b, m_uiMinPt, m_uiMaxPt);
+    $MINKOWSKI_INITIAL_DATA_BLOCK(g, pointers.data());
+  } // END LOOP: initialize local blocks
+  zip(unzipped, state);
+  post_timestep(state);
+  initial.assign(state.get_vec_ptr(), state.get_vec_ptr() + state.get_size());
+  return 0;
+} // END FUNCTION: initialize Minkowski state
+void Ctx::fill_exterior() {
+  // Fixed Minkowski exterior boundary data. Only points outside the physical
+  // domain are prescribed. Interior halos remain the output of real unzip.
+  std::vector<DendroScalar*> pointers(generated::NUM_EVOL_GFS);
+  unzipped.to_2d(pointers.data());
+  BlockGeometry one{};
+  one.nx = one.ny = one.nz = 1;
+  one.dx[0] = one.dx[1] = one.dx[2] = 1.0;
+  std::vector<DendroScalar> flat(generated::NUM_EVOL_GFS);
+  std::vector<DendroScalar*> fp(flat.size());
+  for (unsigned f = 0; f < flat.size(); ++f) fp[f] = &flat[f];
+  $MINKOWSKI_INITIAL_DATA_BLOCK(one, fp.data());
+  const double low[3] = {m_uiMinPt.x(), m_uiMinPt.y(), m_uiMinPt.z()};
+  const double high[3] = {m_uiMaxPt.x(), m_uiMaxPt.y(), m_uiMaxPt.z()};
+  for (const auto& b : m_uiMesh->getLocalBlockList()) {
+    const auto g = block_geometry(*m_uiMesh, b, m_uiMinPt, m_uiMaxPt);
+    for (unsigned k = 0; k < g.nz; ++k)
+      for (unsigned j = 0; j < g.ny; ++j)
+        for (unsigned i = 0; i < g.nx; ++i) {
+          const double x[3] = {g.pmin_padded[0] + i*g.dx[0], g.pmin_padded[1] + j*g.dx[1], g.pmin_padded[2] + k*g.dx[2]};
+          bool exterior = false;
+          for (unsigned a = 0; a < 3; ++a) exterior |= x[a] < low[a] - 1e-12*g.dx[a] || x[a] > high[a] + 1e-12*g.dx[a];
+          if (exterior)
+            for (unsigned f = 0; f < flat.size(); ++f)
+              pointers[f][g.component_offset + i + std::size_t(g.nx)*(j + std::size_t(g.ny)*k)] = flat[f];
+        } // END LOOP: prescribe exterior points
+  } // END LOOP: visit exterior block padding
+} // END FUNCTION: fill Minkowski exterior
+int Ctx::rhs(DVec* in, DVec* out, unsigned int count, DendroScalar) {
+  if (count != 1) fail("RHS requires one packed evolution vector");
+  if (!m_uiMesh->isActive()) return 0;
+  require_finite(*in);
+  unzip(*in, unzipped, 1);
+  fill_exterior();
+  std::fill_n(unzipped_rhs.get_vec_ptr(), unzipped_rhs.get_size(), 0.0);
+  std::vector<DendroScalar*> input(generated::NUM_EVOL_GFS), output(generated::NUM_EVOL_GFS);
+  unzipped.to_2d(input.data());
+  unzipped_rhs.to_2d(output.data());
+  for (const auto& b : m_uiMesh->getLocalBlockList()) {
+    const auto g = block_geometry(*m_uiMesh, b, m_uiMinPt, m_uiMaxPt);
+    $RHS_EVAL_BLOCK(g, input.data(), output.data()$RHS_EVAL_BLOCK_TAIL);
+  } // END LOOP: evaluate generated block RHS
+  interior_max(*m_uiMesh, unzipped_rhs);
+  zip(unzipped_rhs, *out);
+  require_finite(*out);
+  return 0;
+} // END FUNCTION: unzip evaluate and zip
+int Ctx::post_timestep(DVec& input) {
+  if (!m_uiMesh->isActive()) return 0;
+  require_finite(input);
+  unzip(input, unzipped, 1);
+  std::vector<DendroScalar*> pointers(generated::NUM_EVOL_GFS);
+  unzipped.to_2d(pointers.data());
+  for (const auto& b : m_uiMesh->getLocalBlockList()) {
+    const auto g = block_geometry(*m_uiMesh, b, m_uiMinPt, m_uiMaxPt);
+    generated::detgtrazero_status_struct status{};
+    $ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK(g, pointers.data(), &status);
+    if (status.failed_points || status.nonfinite_points) fail("projection failed");
+    projection_residual = std::max(projection_residual, std::max(status.max_abs_det_minus_one, status.max_abs_trace_residual));
+  } // END LOOP: project local blocks
+  zip(unzipped, input);
+  ++projection_passes;
+  return 0;
+} // END FUNCTION: project evolved stage state
+double Ctx::max_constraints() {
+  double local = 0.0;
+  if (m_uiMesh->isActive()) {
+    unzip(state, unzipped, 1);
+    fill_exterior();
+    std::vector<DendroScalar*> input(generated::NUM_EVOL_GFS), output(generated::NUM_DIAG_GFS);
+    unzipped.to_2d(input.data());
+    diagnostics.to_2d(output.data());
+    for (const auto& b : m_uiMesh->getLocalBlockList()) {
+      const auto g = block_geometry(*m_uiMesh, b, m_uiMinPt, m_uiMaxPt);
+      $CONSTRAINTS_EVAL_BLOCK(g, input.data(), output.data());
+    } // END LOOP: evaluate block constraints
+    local = interior_max(*m_uiMesh, diagnostics);
+  } // END IF: evaluate active rank diagnostics
+  return maximum(local);
+} // END FUNCTION: reduce constraint maximum
+double Ctx::max_rhs() {
+  DVec output;
+  output.create_vector(m_uiMesh, ot::DVEC_TYPE::OCT_SHARED_NODES, ot::DVEC_LOC::HOST, generated::NUM_EVOL_GFS, true);
+  rhs(&state, &output, 1, m_uiTinfo._m_uiT);
+  const double local = interior_max(*m_uiMesh, unzipped_rhs);
+  output.destroy_vector();
+  return maximum(local);
+} // END FUNCTION: measure current RHS
+double Ctx::max_drift() {
+  double local = 0.0;
+  require_finite(state);
+  if (m_uiMesh->isActive()) {
+    const unsigned stride = m_uiMesh->getDegOfFreedom();
+    for (unsigned f = 0; f < generated::NUM_EVOL_GFS; ++f)
+      for (unsigned i = m_uiMesh->getNodeLocalBegin(); i < m_uiMesh->getNodeLocalEnd(); ++i)
+        local = std::max(local, std::abs(state.get_vec_ptr()[std::size_t(f)*stride+i] - initial[std::size_t(f)*stride+i]));
+  } // END IF: compare owned evolved values
+  return maximum(local);
+} // END FUNCTION: measure evolved state drift
+// clang-format off
+}  // END NAMESPACE: $NAMESPACE
+// clang-format on
+"""
+
+
 def _codeparameter_tail(cfunction_name: str, table: str) -> str:
     """
     Render the trailing CodeParameter arguments one host call must forward.
@@ -664,7 +1012,7 @@ def substitute_solver_identifiers(
 
 def output_solver_context_h(solver_stem: str, solver_namespace: str) -> str:
     """
-    Emit the standalone-host context header.
+    Emit the context header with explicit host selection.
 
     :param solver_stem: Lowercase formulation stem for emitted file names.
     :param solver_namespace: Solver namespace.
@@ -684,20 +1032,34 @@ def output_solver_context_h(solver_stem: str, solver_namespace: str) -> str:
     3
     """
     opening, closing = header_guard(f"{solver_stem}Ctx.h")
-    body = substitute_solver_identifiers(_HEADER, solver_stem, solver_namespace)
+    body = substitute_solver_identifiers(
+        "#if defined(NRPY_DENDRO_STANDALONE_HOST)\n"
+        + _HEADER
+        + "\n#else\n"
+        + _REAL_HEADER
+        + "\n#endif\n",
+        solver_stem,
+        solver_namespace,
+    )
     return BANNER + f"{opening}\n\n" + body + f"\n{closing}\n"
 
 
 def output_solver_context_cpp(solver_stem: str, solver_namespace: str) -> str:
     """
-    Emit the standalone-host context implementation.
+    Emit the context implementation with explicit host selection.
 
     :param solver_stem: Lowercase formulation stem for emitted file names.
     :param solver_namespace: Solver namespace.
     :return: The complete C++ source text.
     """
     return BANNER + substitute_solver_identifiers(
-        _SOURCE, solver_stem, solver_namespace
+        "#if defined(NRPY_DENDRO_STANDALONE_HOST)\n"
+        + _SOURCE
+        + "\n#else\n"
+        + _REAL_SOURCE
+        + "\n#endif\n",
+        solver_stem,
+        solver_namespace,
     )
 
 

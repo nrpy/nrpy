@@ -1,6 +1,6 @@
 # New Infrastructure Conformance
 
-> Rules a new NRPy infrastructure must satisfy to match the established ones, each with a right example, a wrong example, and a mechanical test. · Status: confirmed · Last reconciled: 09-06-2026
+> Rules a new NRPy infrastructure must satisfy to match the established ones, each with a right example, a wrong example, and a mechanical test. · Status: confirmed · Last reconciled: 09-07-2026
 > Up: [Infrastructures](index.md)
 
 ## Summary
@@ -128,8 +128,14 @@ the host's own conventions, read from the host's source.
 **Right** — Cactus says thorn, so ETLegacy says `thorn_name`. Dendro's
 `BSSN_GR/CMakeLists.txt` header says "BSSN SOLVER", so Dendro says
 `solver_name`; Dendro namespaces solvers by lowercase formulation
-(`namespace bssn`, 14 occurrences in `BSSN_GR`, alongside `fluid`, `ode`,
-`solver`, `timer`), so a generated Dendro solver does the same.
+(`namespace bssn` in `BSSN_GR`, alongside `fluid`, `ode`, `solver`, `timer`),
+so a generated Dendro solver does the same.
+
+Claim evidence:
+- Claim: Dendro-GR uses the solver name BSSN and lowercase `bssn` namespace; these host conventions govern the generated solver name and namespace, without prescribing an occurrence count.
+- Role: normative rule
+- Deciding authority: this page, `The host's vocabulary governs emitted identifiers`, Rule
+- Corroboration: registered Dendro-GR source, `BSSN_GR/CMakeLists.txt` header and `BSSN_GR` namespace declarations establish the host vocabulary
 
 **Wrong** — replacing the C++ namespace `fccz4::generated` with
 `Dendro::generated` on the reasoning that "fccz4" is a formulation name and

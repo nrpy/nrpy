@@ -35,7 +35,7 @@ Modules are named for what they emit, following BHaH's `BHaH_defines_h.py` and
 
 `main` owns no formulation choice and holds no state: it maps
 emitter output onto project-relative paths and writes it, then copies the
-standalone host header through `nrpy.helpers.generic.copy_files`, exactly as
+standalone host header and shared `block_geometry.h` through `nrpy.helpers.generic.copy_files`, exactly as
 BHaH copies `simd_intrinsics.h`.
 
 ### Names come from the caller, not from a parameter registry
@@ -63,15 +63,34 @@ Two examples drive this layer: `nrpy.examples.dendro_fccz4` and
 `nrpy.examples.dendro_bssn`. The second one exists as the test that the layer
 is generic. Adding it did require generic-layer work — the formulation-agnostic
 lowering moved into `block_kernel_helpers` and `tensor_family_of` into `gridfunction_name_decorations` —
-but no existing emitter changed behaviour.
+but no existing emitter changed behavior.
 
 The solver is emitted at `Dendro-GR/<solver_name>/` inside the project
 directory: `generated/include` and `generated/src` hold the registry-derived
 artifacts, `include/` and `src/` the host context and entry point, `pars/` the
 sample parameter file, `tests/` the generated self-tests, and `standalone_host/`
-the standalone host header the solver compiles against. The project carries no
+the optional standalone host header. Real builds use Dendrolib headers and the
+shared geometry header in `include/`. The project carries no
 generated README: an emitted prose file would restate what this page and the
 generated `CMakeLists.txt` already carry.
+
+### Host selection
+
+`<PREFIX>_STANDALONE_HOST=ON` retains the standalone test vehicle. With it `OFF`,
+the solver must be added to a host CMake tree defining `dendro5` and
+`toml11::toml11`; the generated context uses actual `ot::Mesh`, `ot::Block`,
+`ot::DVector`, and `ts::Ctx` types. Duplicate executable names fail configuration.
+The fCCZ4 example can be added as `FCCZ4_GR` beside upstream `BSSN_GR`.
+Reproduction commands and pinned versions live in the
+[host test README](../../../nrpy/infrastructures/Dendro/tests_infra/README.md#generated-real-host-qualification).
+
+Claim evidence:
+- Claim: disabling the standalone host selects real Dendrolib context types and requires host CMake targets `dendro5` and `toml11::toml11`; duplicate executable names fail configuration.
+- Role: descriptive behavior
+- Deciding authority: [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py), `output_solver_cmake`; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), `_REAL_HEADER`
+- Corroboration: [Dendro_defines_h.py](../../../nrpy/infrastructures/Dendro/Dendro_defines_h.py), `output_Dendro_defines_h`
+- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=not-run`
+- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3; backend=Dendro; precision=double; GPU=not-applicable; restart=not-run; distributed=not-run; error_path=not-run; options=host selection; date=09-07-2026`
 
 ### Source list and padding
 
@@ -117,6 +136,10 @@ evidence. Cite the Python emitters and the registry symbols instead; see
 - [constants_h.py](../../../nrpy/infrastructures/Dendro/constants_h.py) - `output_constants_h`
 - [types_h.py](../../../nrpy/infrastructures/Dendro/types_h.py) - `output_types_h`
 - [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - `output_solver_context_h`, `substitute_solver_identifiers`
+
+- [Dendro_defines_h.py](../../../nrpy/infrastructures/Dendro/Dendro_defines_h.py) - explicit host header selection
+- [block_geometry.h](../../../nrpy/infrastructures/Dendro/block_geometry.h) - shared generated geometry interface
+- [tests_infra/README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md) - pinned real-host build and run procedure
 
 ## See Also
 

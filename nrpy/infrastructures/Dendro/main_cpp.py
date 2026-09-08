@@ -1,10 +1,10 @@
 # nrpy/infrastructures/Dendro/main_cpp.py
 """
-Emit the standalone-host entry point for a generated Dendro solver.
+Emit standalone and real-host entry points for a generated Dendro solver.
 
 The executable drives the registered generated CFunctions through the
-NRPy-supplied standalone host declarations, so the Minkowski lifecycle is
-exercised end to end.  Gates, in order:
+NRPy-supplied standalone host declarations or actual Dendro runtime types.
+The standalone branch checks these gates, in order:
 
     DETGTRAZERO_RESIDUAL  max det/trace residual after initial data        (<= 1e-13)
     MAXCONSTRAINT max |constraint diagnostic| after initial data   (<= 1e-12)
@@ -23,10 +23,15 @@ ORDER is a single-block refinement study and is rank-independent by
 construction.  DETGTRAZERO_PASSES compares the rank-local counter, because every rank
 runs the same schedule and an exact per-rank count is the stronger check.
 
+The real branch checks fixed-mesh Minkowski evolution through Dendro ETS RK4,
+with runtime TOML binding and a roundoff-scaled derivative tolerance. Its
+transport and parameter-response oracles live in tests_infra.
+
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+from nrpy.infrastructures.Dendro.CodeParameters import output_toml_bindings
 from nrpy.infrastructures.Dendro.generated_file_banner import generated_file_banner
 from nrpy.infrastructures.Dendro.solver_context import (
     substitute_solver_identifiers,
@@ -34,9 +39,8 @@ from nrpy.infrastructures.Dendro.solver_context import (
 
 BANNER = generated_file_banner()
 
-_MAIN = """// Standalone-host entry point.  The real Dendro-GR main (parameter file, Dendro
-// mesh, MPI decomposition) lands when the generated solver is built against a
-// real Dendro-GR checkout.
+_MAIN = """// Standalone-host entry point. The real Dendro-GR build selects the separate
+// entry point below, with parameter files and actual distributed mesh types.
 //
 // Usage: $EXEC [-b n_blocks] [-n extent] [-d dx] [-t parfile] [-r name]...
 //    -b number of local blocks per rank
@@ -310,13 +314,153 @@ int main(int argc, char* argv[]) {
 """
 
 
+_REAL_MAIN = r"""#include "$STEMCtx.h"
+#include "ets.h"
+#include "meshUtils.h"
+#include "octUtils.h"
+#include <toml.hpp>
+#include <fstream>
+#include <sstream>
+#include <limits>
+#include <memory>
+#include <stdexcept>
+#include <string>
+/**
+ * Run a fixed-mesh Minkowski qualification through the pinned real ETS host.
+ *
+ * @param argc Number of command-line arguments.
+ * @param[in,out] argv Argument vector parsed by MPI and this entry point.
+ * @return 0 on success, 1 if MPI_Abort unexpectedly returns after a failure.
+ *
+ * @note Detected failures abort MPI_COMM_WORLD, including inactive ranks.
+ */
+int main(int argc, char** argv) {
+  MPI_Init(&argc, &argv);
+  int rank = 0;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  try {
+    unsigned steps = 100;
+    double dt = 0.001;
+    std::string filename;
+    for (int a = 1; a < argc; ++a) {
+      const std::string arg(argv[a]);
+      if (a + 1 >= argc) throw std::runtime_error("expected --steps N, --dt T, or -t FILE");
+      const std::string value(argv[++a]);
+      std::size_t used = 0;
+      if (arg == "--steps") {
+        const auto parsed = std::stoul(value, &used);
+        if (used != value.size() || parsed < 1 || parsed > 1000000) throw std::runtime_error("invalid step count");
+        steps = static_cast<unsigned>(parsed);
+      } // END IF: parse step count
+else if (arg == "--dt") {
+        dt = std::stod(value, &used);
+        if (used != value.size()) throw std::runtime_error("invalid timestep");
+      } // END ELSE IF: parse timestep
+else if (arg == "-t") filename = value;
+      else throw std::runtime_error("unknown command-line option");
+    } // END LOOP: parse runtime arguments
+    if (!(dt > 0.0) || !std::isfinite(dt) || !std::isfinite(dt*steps)) throw std::runtime_error("invalid timestep");
+    m_uiMaxDepth = 8;
+    _InitializeHcurve(m_uiDim);
+    std::vector<ot::TreeNode> octree;
+    std::function<double(double,double,double)> refine = [](double x,double y,double z) {
+      return std::exp(-(x*x+y*y+z*z)/0.5);
+    }; // END LAMBDA: choose initial octree refinement
+    // Build once; no remeshing during this qualified fixed-mesh run.
+    const unsigned order = 2 * $NAMESPACE::generated::REQUIRED_PADDING;
+    function2Octree(refine, octree, 5, 1e-3, order, MPI_COMM_WORLD);
+    std::unique_ptr<ot::Mesh> mesh(ot::createMesh(octree.data(), octree.size(), order, MPI_COMM_WORLD, 0, ot::SM_TYPE::FDM));
+    if (!mesh) throw std::runtime_error("mesh construction failed");
+    const Point minimum(-1.0,-2.0,-4.0), maximum(3.0,2.0,4.0);
+    mesh->setDomainBounds(minimum, maximum);
+    {
+      $NAMESPACE::Ctx context(mesh.get(), minimum, maximum, dt);
+      if (!filename.empty()) {
+        std::string contents;
+        if (rank == 0) {
+          std::ifstream input(filename);
+          if (!input) throw std::runtime_error("cannot open parameter file");
+          contents.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+          if (contents.size() > 1048576) throw std::runtime_error("parameter file exceeds 1 MiB");
+        } // END IF: read file on root
+        int length = static_cast<int>(contents.size());
+        MPI_Bcast(&length, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        contents.resize(length);
+        MPI_Bcast(contents.data(), length, MPI_CHAR, 0, MPI_COMM_WORLD);
+        std::istringstream input(contents);
+        const auto document = toml::parse(input, filename);
+        for (const auto& item : document.as_table())
+          if (item.first != "params" && item.first != "$STEM") throw std::runtime_error("unknown parameter table");
+        if (document.contains("$STEM")) {
+          const auto& app = document.at("$STEM");
+          if (app.as_table().size() != 1 || !app.contains("profile")) throw std::runtime_error("unknown solver table");
+          const auto& profile = app.at("profile");
+          for (const auto& item : profile.as_table())
+            if (item.first != "name" && item.first != "fd_order" && item.first != "required_padding" && item.first != "ko_enabled") throw std::runtime_error("unknown profile key");
+          if (toml::find<unsigned>(profile,"fd_order") != $NAMESPACE::generated::FD_ORDER ||
+              toml::find<unsigned>(profile,"required_padding") != $NAMESPACE::generated::REQUIRED_PADDING ||
+              toml::find<bool>(profile,"ko_enabled") != $NAMESPACE::generated::KO_ENABLED)
+            throw std::runtime_error("parameter profile does not match generated kernels");
+        } // END IF: validate generated profile
+        if (document.contains("params")) {
+          const auto& table = document.at("params");
+          auto& params = context.params;
+          for (const auto& item : table.as_table()) {
+$PARAMETER_BINDINGS
+            throw std::runtime_error("unknown runtime parameter: " + item.first);
+          } // END LOOP: bind registered runtime parameters
+        } // END IF: apply parameter table
+      } // END IF: read requested TOML file
+      if (!$VALIDATE(context.params)) throw std::runtime_error("invalid runtime parameters");
+      if (rank == 0) $PRINT_EFFECTIVE(context.params);
+      ts::ETS<DendroScalar, $NAMESPACE::Ctx> stepper(&context);
+      stepper.set_ets_coefficients(ts::ETSType::RK4);
+      stepper.init();
+      for (unsigned step = 0; step < steps; ++step) stepper.evolve();
+      const double rhs = context.max_rhs(), constraints = context.max_constraints(), drift = context.max_drift();
+      double residual = 0.0;
+      MPI_Allreduce(&context.projection_residual, &residual, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+      double local_spacing = std::numeric_limits<double>::max();
+      if (mesh->isActive())
+        for (const auto& block : mesh->getLocalBlockList()) {
+          const auto geometry = $NAMESPACE::block_geometry(*mesh, block, minimum, maximum);
+          for (double spacing : geometry.dx) local_spacing = std::min(local_spacing, spacing);
+        } // END LOOP: find smallest physical spacing
+      double spacing = 0.0;
+      MPI_Allreduce(&local_spacing, &spacing, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+      // Coarse/fine interpolation introduces roundoff even for constant data.
+      // Second derivatives amplify it by h^-2; bound the normalized residual
+      // by 256 double-precision ulps. The state-drift bound stays independent.
+      const double derivative_tolerance = 256*std::numeric_limits<double>::epsilon()/(spacing*spacing);
+      int local_ok = (!mesh->isActive() || context.projection_passes == 1 + 5ULL*steps) &&
+        stepper.curr_step() == steps && std::abs(stepper.curr_time() - dt*steps) <= 1e-11*std::max(1.0, dt*steps) &&
+        rhs <= derivative_tolerance && constraints <= derivative_tolerance && drift <= 1e-11 && residual <= 1e-13;
+      int global_ok = 0;
+      MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+      int active = mesh->isActive(), active_ranks = 0;
+      MPI_Allreduce(&active, &active_ranks, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+      if (rank == 0) std::printf("REAL_MINKOWSKI %s active_ranks=%d steps=%u time=%.17g rhs=%.17g constraints=%.17g drift=%.17g projection=%.17g hmin=%.17g derivative_tolerance=%.17g\n", global_ok ? "PASS" : "FAIL", active_ranks, steps, stepper.curr_time(), rhs, constraints, drift, residual, spacing, derivative_tolerance);
+      if (!global_ok) throw std::runtime_error("fixed-mesh Minkowski check failed");
+    } // END BLOCK: own context before mesh destruction
+  } // END TRY: run fixed mesh qualification
+catch (const std::exception& error) {
+    std::fprintf(stderr, "rank %d: %s\n", rank, error.what());
+    MPI_Abort(MPI_COMM_WORLD, 1);
+    return 1;
+  } // END CATCH: abort all parent ranks
+  MPI_Finalize();
+  return 0;
+} // END FUNCTION: run real host solver
+"""
+
+
 def output_main_cpp(
     solver_stem: str,
     solver_namespace: str,
     exec_or_library_name: str,
 ) -> str:
     """
-    Emit the standalone-host entry point source.
+    Emit standalone and checked real-host entry points.
 
     :param solver_stem: Lowercase formulation stem for emitted file names.
     :param solver_namespace: Solver namespace.
@@ -333,7 +477,13 @@ def output_main_cpp(
     >>> _MAIN.count("}  // END NAMESPACE:")
     1
     """
-    text = _MAIN.replace("$EXEC", exec_or_library_name)
+    text = (
+        "#if defined(NRPY_DENDRO_STANDALONE_HOST)\n"
+        + _MAIN.replace("$EXEC", exec_or_library_name)
+        + "\n#else\n"
+        + _REAL_MAIN.replace("$PARAMETER_BINDINGS", output_toml_bindings())
+        + "\n#endif\n"
+    )
     return BANNER + substitute_solver_identifiers(text, solver_stem, solver_namespace)
 
 
