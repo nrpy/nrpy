@@ -309,6 +309,14 @@ if separate_Ricci_and_BSSN_RHS:
             host_only_version=True,
         )
 
+if (
+    parallelization == "openmp"
+    and separate_Ricci_and_BSSN_RHS
+    and enable_rfm_precompute
+    and not enable_fCCZ4
+):
+    BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval_with_Ricci(CoordSystem)
+
 BHaH.general_relativity.enforce_detgbar_equals_detghat_trAzero.register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -371,6 +379,15 @@ if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
   apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
                                      gridfunctions_wavespeed,gridfunctions_f_infinity,
                                      RK_INPUT_GFS, RK_OUTPUT_GFS);"""
+if (
+    parallelization == "openmp"
+    and separate_Ricci_and_BSSN_RHS
+    and enable_rfm_precompute
+    and not enable_fCCZ4
+):
+    rhs_string = rhs_string.replace(
+        "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);", ""
+    ).replace("rhs_eval(", "rhs_eval_with_Ricci(")
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
 

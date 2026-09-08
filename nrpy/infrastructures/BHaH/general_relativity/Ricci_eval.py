@@ -96,8 +96,8 @@ def register_CFunction_Ricci_eval(
     for var in Bq.Ricci_varnames:
         diag_prefix = "DIAG_" if host_only_version else ""
         Ricci_access_gfs += [f"out_gfs[IDX4({diag_prefix}{var.upper()}GF, i0, i1, i2)]"]
-    kernel_body = BHaH.simple_loop.simple_loop(
-        loop_body=ccg.c_codegen(
+    point_body = (
+        ccg.c_codegen(
             Bq.Ricci_exprs,
             Ricci_access_gfs,
             enable_fd_codegen=True,
@@ -106,66 +106,97 @@ def register_CFunction_Ricci_eval(
             rational_const_alias=("static constexpr" if is_cuda else "static const"),
         )
         .replace("auxevol_gfs", "out_gfs")
-        .replace("SIMD", "CUDA" if is_cuda else "SIMD"),
-        loop_region="interior",
-        enable_intrinsics=enable_intrinsics,
-        CoordSystem=CoordSystem,
-        enable_rfm_precompute=True,
-        read_xxs=False,
-        OMP_collapse=OMP_collapse,
+        .replace("SIMD", "CUDA" if is_cuda else "SIMD")
     )
-    loop_params = parallel_utils.get_loop_parameters(
-        "cuda" if is_cuda else "openmp", enable_intrinsics=enable_intrinsics
-    )
+    for tiled in (
+        [False, True]
+        if orig_parallelization == "openmp" and not host_only_version
+        else [False]
+    ):
+        kernel_body = BHaH.simple_loop.simple_loop(
+            loop_body=point_body,
+            loop_region="interior",
+            enable_intrinsics=enable_intrinsics,
+            CoordSystem=CoordSystem,
+            enable_rfm_precompute=True,
+            read_xxs=False,
+            OMP_collapse=OMP_collapse,
+            enable_OpenMP=not tiled,
+            loop_bounds=(
+                (
+                    ["lo2", "lo1", "NGHOSTS"],
+                    ["hi2", "hi1", "Nxx_plus_2NGHOSTS0 - NGHOSTS"],
+                )
+                if tiled
+                else None
+            ),
+        )
+        loop_params = parallel_utils.get_loop_parameters(
+            "cuda" if is_cuda else "openmp", enable_intrinsics=enable_intrinsics
+        )
 
-    param_symbols, _ = get_params_commondata_symbols_from_expr_list(Bq.Ricci_exprs)
-    params_definitions = params_definitions = generate_definition_header(
-        param_symbols,
-        enable_intrinsics=enable_intrinsics,
-        var_access=parallel_utils.get_params_access("cuda" if is_cuda else "openmp"),
-    )
-    kernel_body = f"{loop_params}\n{params_definitions}\n{kernel_body}"
+        param_symbols, _ = get_params_commondata_symbols_from_expr_list(Bq.Ricci_exprs)
+        params_definitions = params_definitions = generate_definition_header(
+            param_symbols,
+            enable_intrinsics=enable_intrinsics,
+            var_access=parallel_utils.get_params_access(
+                "cuda" if is_cuda else "openmp"
+            ),
+        )
+        kernel_body = f"{loop_params}\n{params_definitions}\n{kernel_body}"
 
-    kernel, launch_body = parallel_utils.generate_kernel_and_launch_code(
-        name,
-        kernel_body.replace(
-            "SIMD",
-            "CUDA" if is_cuda else "SIMD",
-        ),
-        arg_dict_cuda,
-        arg_dict_host,
-        parallelization="cuda" if is_cuda else "openmp",
-        comments=desc,
-        cfunc_type=f"static {cfunc_type}",
-        launchblock_with_braces=False,
-        launch_dict={
-            **BHaH.parallelization.cuda_utilities.default_launch_dictionary,
-            "threads_per_block": ["64", "1", "1"],
-        },
-        thread_tiling_macro_suffix="RICCI_EVAL",
-    )
+        kernel, launch_body = parallel_utils.generate_kernel_and_launch_code(
+            name + ("_tile" if tiled else ""),
+            kernel_body.replace(
+                "SIMD",
+                "CUDA" if is_cuda else "SIMD",
+            ),
+            arg_dict_cuda,
+            {
+                **arg_dict_host,
+                **(
+                    {key: "const int" for key in ("lo1", "hi1", "lo2", "hi2")}
+                    if tiled
+                    else {}
+                ),
+            },
+            parallelization="cuda" if is_cuda else "openmp",
+            comments=desc,
+            cfunc_type=f"static {cfunc_type}",
+            launchblock_with_braces=False,
+            launch_dict={
+                **BHaH.parallelization.cuda_utilities.default_launch_dictionary,
+                "threads_per_block": ["64", "1", "1"],
+            },
+            thread_tiling_macro_suffix="RICCI_EVAL",
+        )
 
-    prefunc = ""
-    if is_cuda and enable_fd_functions:
-        prefunc += fin.construct_FD_functions_prefunc(
-            cfunc_decorators="__device__ "
-        ).replace("SIMD", "CUDA")
-    elif enable_fd_functions:
-        prefunc += fin.construct_FD_functions_prefunc()
+        prefunc = ""
+        if is_cuda and enable_fd_functions:
+            prefunc += fin.construct_FD_functions_prefunc(
+                cfunc_decorators="__device__ "
+            ).replace("SIMD", "CUDA")
+        elif enable_fd_functions:
+            prefunc += fin.construct_FD_functions_prefunc()
 
+        cfc.register_CFunction(
+            include_CodeParameters_h=False,
+            prefunc=prefunc + kernel,
+            includes=includes,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            CoordSystem_for_wrapper_func=CoordSystem,
+            name=name + ("_tile" if tiled else ""),
+            params=params
+            + (
+                ", const int lo1, const int hi1, const int lo2, const int hi2"
+                if tiled
+                else ""
+            ),
+            body=launch_body,
+            enable_simd=enable_intrinsics,
+        )
     # Restore original parallelization parameter.
     par.set_parval_from_str("parallelization", orig_parallelization)
 
-    cfc.register_CFunction(
-        include_CodeParameters_h=False,
-        prefunc=prefunc + kernel,
-        includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        CoordSystem_for_wrapper_func=CoordSystem,
-        name=name,
-        params=params,
-        body=launch_body,
-        enable_simd=enable_intrinsics,
-    )
     return pcg.NRPyEnv()

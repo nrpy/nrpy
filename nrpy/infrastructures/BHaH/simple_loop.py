@@ -99,6 +99,7 @@ def simple_loop(
     enable_OpenMP: bool = True,
     OMP_custom_pragma: str = "",
     OMP_collapse: int = 1,
+    loop_bounds: Union[Tuple[List[str], List[str]], None] = None,
 ) -> str:
     """
     Generate a simple loop in C (for use inside of a function).
@@ -112,11 +113,19 @@ def simple_loop(
     :param enable_OpenMP: Enable loop parallelization using OpenMP
     :param OMP_custom_pragma: Enable loop parallelization using OpenMP with custom pragma
     :param OMP_collapse: Specifies the number of nested loops to collapse
+    :param loop_bounds: Optional CPU loop minimums and exclusive maximums, in i2/i1/i0 order.
     :return: The complete loop code as a string.
-    :raises ValueError: If `loop_region` is unsupported or if `read_xxs` and `enable_rfm_precompute` are both enabled.
+    :raises ValueError: If the loop region or bounds are unsupported, or if both coordinate read modes are enabled.
 
     Doctests:
     >>> from nrpy.helpers.generic import clang_format
+    >>> bounded = simple_loop("work();", loop_region="interior", enable_OpenMP=False,
+    ...     enable_intrinsics=True,
+    ...     loop_bounds=(["lo2", "lo1", "NGHOSTS"], ["hi2", "hi1", "Nxx_plus_2NGHOSTS0 - NGHOSTS"]))
+    >>> all(part in bounded.replace(" ", "") for part in ("i2=lo2", "i2<hi2", "i1=lo1", "i1<hi1", "i0+=SIMD_WIDTH"))
+    True
+    >>> "#pragma omp" in bounded
+    False
     >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="all points")))
     #pragma omp parallel for
     for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
@@ -214,6 +223,12 @@ def simple_loop(
 
     min_idx_prefix = "tid" if is_cuda else None
     i2i1i0_mins, i2i1i0_maxs = get_loop_region_ranges(loop_region, min_idx_prefix)
+    if loop_bounds is not None:
+        if is_cuda or any(len(bounds) != 3 for bounds in loop_bounds):
+            raise ValueError(
+                "Custom loop bounds require three CPU minimums and maximums."
+            )
+        i2i1i0_mins, i2i1i0_maxs = loop_bounds
 
     rfm_reads = ["", "", ""]
     if enable_rfm_precompute:
