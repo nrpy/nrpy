@@ -619,7 +619,7 @@ EVAL_QNM(4, 4, omega_qnm_l4m4, tau_qnm_l4m4, reomegaqnm_l4m4, imomegaqnm_l4m4);
 EVAL_QNM(4, 3, omega_qnm_l4m3, tau_qnm_l4m3, reomegaqnm_l4m3, imomegaqnm_l4m3);
 EVAL_QNM(5, 5, omega_qnm_l5m5, tau_qnm_l5m5, reomegaqnm_l5m5, imomegaqnm_l5m5);
 
-SEOBNRv5_evaluate_l2m2_qnm(commondata->a_f, commondata->M_f,
+SEOBNRv5_evaluate_l2m2_qnm(a_f_clamped, commondata->M_f,
                            &commondata->omega_qnm_l2m2, &commondata->tau_qnm_l2m2);
 commondata->omega_qnm = commondata->omega_qnm_l2m2;
 commondata->tau_qnm   = commondata->tau_qnm_l2m2;

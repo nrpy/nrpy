@@ -111,14 +111,12 @@ if (acc == NULL) {
   exit(EXIT_FAILURE);
 } // END IF: QNM interpolation accelerator allocation failed
 
-const REAL a_f_clamped = a_f < a_final[0] ? a_final[0] :
-                         (a_f > a_final[106] ? a_final[106] : a_f);
 gsl_spline_init(spline, a_final, reomegaqnm_l2m2, 107);
 gsl_interp_accel_reset(acc);
-*omega_qnm = gsl_spline_eval(spline, a_f_clamped, acc) / M_f;
+*omega_qnm = gsl_spline_eval(spline, a_f, acc) / M_f;
 gsl_spline_init(spline, a_final, imomegaqnm_l2m2, 107);
 gsl_interp_accel_reset(acc);
-*tau_qnm = 1.0 / (gsl_spline_eval(spline, a_f_clamped, acc) / M_f);
+*tau_qnm = 1.0 / (gsl_spline_eval(spline, a_f, acc) / M_f);
 
 gsl_spline_free(spline);
 gsl_interp_accel_free(acc);
@@ -718,7 +716,7 @@ EVAL_QNM(4, 4, omega_qnm_l4m4, tau_qnm_l4m4, reomegaqnm_l4m4, imomegaqnm_l4m4);
 EVAL_QNM(4, 3, omega_qnm_l4m3, tau_qnm_l4m3, reomegaqnm_l4m3, imomegaqnm_l4m3);
 EVAL_QNM(5, 5, omega_qnm_l5m5, tau_qnm_l5m5, reomegaqnm_l5m5, imomegaqnm_l5m5);
 
-SEOBNRv5_evaluate_l2m2_qnm(commondata->a_f, commondata->M_f,
+SEOBNRv5_evaluate_l2m2_qnm(a_f_clamped, commondata->M_f,
                            &commondata->omega_qnm_l2m2, &commondata->tau_qnm_l2m2);
 commondata->omega_qnm = commondata->omega_qnm_l2m2;
 commondata->tau_qnm   = commondata->tau_qnm_l2m2;

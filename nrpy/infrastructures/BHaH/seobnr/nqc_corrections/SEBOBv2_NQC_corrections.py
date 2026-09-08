@@ -128,21 +128,14 @@ SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
 REAL t_peak = commondata->t_attach;
 size_t peak_idx = 0;
 if (commondata->projected_attachment_active) {
-  if (t_peak >= times[commondata->nsteps_fine - 1]) {
-    t_peak = times[commondata->nsteps_fine - 2];
-    peak_idx = commondata->nsteps_fine - 2;
-    commondata->t_attach = t_peak;
-  } // END IF: projected endpoint fallback
-  else {
-    REAL min_abs_dt = fabs(times[0] - t_peak);
-    for (i = 1; i < commondata->nsteps_fine; i++) {
-      const REAL abs_dt = fabs(times[i] - t_peak);
-      if (abs_dt < min_abs_dt) {
-        min_abs_dt = abs_dt;
-        peak_idx = i;
-      } // END IF: sample closer to t_peak
-    } // END LOOP: for i over attachment candidates
-  } // END ELSE: projected peak sample search
+  REAL min_abs_dt = fabs(times[0] - t_peak);
+  for (i = 1; i < commondata->nsteps_fine; i++) {
+    const REAL abs_dt = fabs(times[i] - t_peak);
+    if (abs_dt < min_abs_dt) {
+      min_abs_dt = abs_dt;
+      peak_idx = i;
+    } // END IF: sample closer to t_peak
+  } // END LOOP: projected attachment candidates
 } // END IF: projected attachment selection
 else {
   if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
@@ -186,12 +179,11 @@ else {
   } // END ELSE: scalar r_ISCO spline search
 
   t_peak = commondata->t_ISCO - commondata->Delta_t;
-  // Keep t_peak off the final trajectory sample because natural cubic splines
-  // have zero second derivatives at endpoints, producing a singular system.
-  if (t_peak >= times[commondata->nsteps_fine - 1]){
+  // Preserve the established aligned fallback when the fitted time overshoots.
+  if (t_peak > times[commondata->nsteps_fine - 1]){
     t_peak = times[commondata->nsteps_fine - 2];
     peak_idx = commondata->nsteps_fine - 2;
-  } // END IF: scalar t_peak endpoint fallback
+  } // END IF: aligned t_peak past fine-dynamics endpoint
   else{
     peak_idx = gsl_interp_bsearch(times, t_peak, 0, commondata->nsteps_fine);
   } // END ELSE: scalar peak sample search
