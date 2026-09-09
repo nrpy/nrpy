@@ -270,25 +270,35 @@ __global__ static void rfm_precompute_defines__{symbol_name}(
         launch_setup = _emit_launch_setup_1d("N")
 
         # Host loop + CUDA branch (1D)
+#        self._defines_parts.append(f"""
+#/* {symbol_name}: 1D precompute */
+#if (params->is_host) {{
+#  {{
+#{host_param_copies}    const size_t N = (size_t)params->Nxx_plus_2NGHOSTS{ax};
+#    for (size_t i{ax}=0; i{ax}<N; i{ax}++) {{
+#      const REAL xx{ax} = x{ax}[i{ax}];
+#      rfmstruct->{symbol_name}[i{ax}] = {expr_cc};
+#    }}
+#  }}
+#}} else {{
+#  IFCUDARUN({{
+#    const size_t N = (size_t)params->Nxx_plus_2NGHOSTS{ax};
+#{launch_setup}    size_t sm = 0;
+#    const size_t streamid = params->grid_idx % NUM_STREAMS;
+#    rfm_precompute_defines__{symbol_name}<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(N, rfmstruct, x{ax}{kernel_param_vals});
+#    cudaCheckErrors(cudaKernel, "rfm_precompute_defines__{symbol_name} failure");
+#  }});
+#}}
+#
+#""")
         self._defines_parts.append(f"""
 /* {symbol_name}: 1D precompute */
-if (params->is_host) {{
   {{
-{host_param_copies}    const size_t N = (size_t)params->Nxx_plus_2NGHOSTS{ax};
-    for (size_t i{ax}=0; i{ax}<N; i{ax}++) {{
+    PARALLEL_1D_LOOP(i{ax}, 0, params->Nxx_plus_2NGHOSTS{ax}) {{
       const REAL xx{ax} = x{ax}[i{ax}];
       rfmstruct->{symbol_name}[i{ax}] = {expr_cc};
-    }}
+    }} END_PARALLEL_LOOP
   }}
-}} else {{
-  IFCUDARUN({{
-    const size_t N = (size_t)params->Nxx_plus_2NGHOSTS{ax};
-{launch_setup}    size_t sm = 0;
-    const size_t streamid = params->grid_idx % NUM_STREAMS;
-    rfm_precompute_defines__{symbol_name}<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(N, rfmstruct, x{ax}{kernel_param_vals});
-    cudaCheckErrors(cudaKernel, "rfm_precompute_defines__{symbol_name} failure");
-  }});
-}}
 
 """)
 
@@ -421,26 +431,61 @@ def register_CFunctions_rfm_precompute(set_of_CoordSystems: Set[str]) -> None:
         )
 
         # --- malloc/free bodies from single member-spec list (host/device macro swap) ---
-        host_malloc_lines = "\n".join(
-            f"BHAH_MALLOC__PtrMember(rfmstruct, {m}, sizeof(REAL) * ({sz}));"
+        host_malloc_lines = "#ifdef __CUDACC__\nrfm_struct* tmp_rfmstruct = (rfm_struct *)malloc(sizeof(rfm_struct));\n#endif\n"
+        host_malloc_lines += "\n".join(
+            f"""
+#ifdef __CUDACC__
+REAL* {m} = NULL;
+gpuErrchk( cudaMalloc((void**)&{m}, sizeof(REAL) * ({sz})) );
+tmp_rfmstruct->{m} = {m};
+#else
+BHAH_MALLOC__PtrMember(rfmstruct, {m}, sizeof(REAL) * ({sz}));
+#endif
+"""
             for m, sz in rfm_precompute.member_specs
-        )
+)
+
+#        host_malloc_lines = "\n".join(
+#            f"BHAH_MALLOC__PtrMember(rfmstruct, {m}, sizeof(REAL) * ({sz}));"
+#            for m, sz in rfm_precompute.member_specs
+#        )
+        host_malloc_lines += "#ifdef __CUDACC__\ncudaMemcpy(rfmstruct, tmp_rfmstruct, sizeof(rfm_struct, cudaMemcpyHostToDevice);\nfree(tmp_rfmstruct);\n#endif\n"
         device_malloc_lines = "\n".join(
             f"BHAH_MALLOC_DEVICE__PtrMember(rfmstruct, {m}, sizeof(REAL) * ({sz}));"
             for m, sz in rfm_precompute.member_specs
         )
         malloc_body = f"""
-// rfm_precompute_malloc: allocate rfmstruct arrays on host or device
-if (params->is_host) {{
 {host_malloc_lines}
-}} else {{
-IFCUDARUN({{
-{device_malloc_lines}
-}});
-}} // END IF params->is_host
 """
-        host_free_lines = "\n".join(
-            f"BHAH_FREE__PtrMember(rfmstruct, {m});"
+#        malloc_body = f"""
+#// rfm_precompute_malloc: allocate rfmstruct arrays on host or device
+#if (params->is_host) {{
+#{host_malloc_lines}
+#}} else {{
+#IFCUDARUN({{
+#{device_malloc_lines}
+#}});
+#}} // END IF params->is_host
+#"""
+        
+#        host_free_lines = "\n".join(
+#            f"BHAH_FREE__PtrMember(rfmstruct, {m});"
+#            for m, _ in rfm_precompute.member_specs
+#        )
+        host_free_lines = """
+#ifdef __CUDACC__
+  rfm_struct* tmp_rfmstruct = (rfmstruct *)malloc(sizeof(rfm_struct));
+  cudaMemcpy(tpm_rfmstruct, rfmstruct, sizeof(rfmstruct), cudaMemcpyDeviceToHost);
+#endif
+"""
+        host_free_lines += "\n".join(
+            f"""
+#ifdef __CUDACC__
+  cudaFree(tmp_rfmstruct->{m});
+#else
+BHAH_FREE__PtrMember(rfmstruct, {m});
+#endif
+"""
             for m, _ in rfm_precompute.member_specs
         )
         device_free_lines = "\n".join(
@@ -448,15 +493,18 @@ IFCUDARUN({{
             for m, _ in rfm_precompute.member_specs
         )
         free_body = f"""
-// rfm_precompute_free: free rfmstruct arrays from host or device
-if (params->is_host) {{
 {host_free_lines}
-}} else {{
-IFCUDARUN({{
-{device_free_lines}
-}});
-}} // END IF params->is_host
 """
+#        free_body = f"""
+#// rfm_precompute_free: free rfmstruct arrays from host or device
+#if (params->is_host) {{
+#{host_free_lines}
+#}} else {{
+#IFCUDARUN({{
+#{device_free_lines}
+#}});
+#}} // END IF params->is_host
+#"""
 
         # --- prefuncs ---
         malloc_prefunc = ""

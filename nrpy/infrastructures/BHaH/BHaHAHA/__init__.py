@@ -20,6 +20,7 @@ from . import (
     interpolation_2d_external_input_to_interp_src_grid,
     interpolation_2d_general__uniform_src_grid,
     interpolation_3d_general__uniform_src_grid,
+    main_simulation_loop,
     numgrid__evol_set_up,
     numgrid__external_input_set_up,
     numgrid__interp_src_set_up,

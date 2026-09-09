@@ -86,6 +86,7 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 #########################################################
 # STEP 4: Declare core C functions & register each to cfc.CFunction_dict["function_name"]
 BHaH.BHaHAHA.find_horizon.register_CFunction_find_horizon()
+BHaH.BHaHAHA.main_simulation_loop.register_CFunction_main_simulation_loop()
 BHaH.BHaHAHA.store_horizon.register_CFunction_store_horizon()
 BHaH.BHaHAHA.poisoning_set_inputs.register_CFunction_poisoning_set_inputs()
 BHaH.BHaHAHA.poisoning_check_inputs.register_CFunction_poisoning_check_inputs()
