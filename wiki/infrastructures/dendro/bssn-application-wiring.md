@@ -1,14 +1,17 @@
 # BSSN Application Wiring
 
-> Explain the Dendro BSSN builders, what they reuse from the fCCZ4 profile, and what adding a second formulation proved about the generic layer. · Status: provisional · Last reconciled: 09-07-2026
+> Explain the Dendro BSSN builders, what they reuse from the fCCZ4 profile, and what adding a second formulation proved about the generic layer. · Status: provisional · Last reconciled: 09-09-2026
 > Up: [Dendro](index.md)
 
 ## Summary
 
 BSSN is the second formulation lowered through the Dendro infrastructure, and
-it lives beside the fCCZ4 branch in `general_relativity/`. No module is new: the
-shared right-hand-side and constraint-diagnostic modules each use one builder with formulation-specific expression assembly, and the initial data, the det(gammabar)/tr(Abar)
-enforcement and the generic layer are shared with fCCZ4.
+it lives beside the fCCZ4 branch in `general_relativity/`. The shared
+right-hand-side and constraint-diagnostic modules each use one builder with
+formulation-specific expression assembly. Initial data and the
+det(gammabar)/tr(Abar) enforcement are shared with fCCZ4, while the GR-owned
+assembly modules supply both formulations' scientific content to the generic
+Dendro emitters.
 
 The layout follows BHaH. NRPy's established two-formulation infrastructure
 emits BSSN and fCCZ4 from a single `general_relativity/rhs_eval.py` on an
@@ -20,6 +23,15 @@ module now has one public builder and one public registrar, with the
 formulation branch confined to expression assembly and its field-count check.
 
 ## Detail
+
+The example now assembles GR-owned context policy, lifecycle CTest statements,
+projection status, and scientific self-tests explicitly into generic Dendro
+emitters. BSSN/W FD4 is checked on a nonflat fixed block, component by
+component, for both the block kernel and flat adapter. The expected values use
+the same exactly emitted binary64 samples as the kernels and an independent
+80/100-digit stencil-and-CSE evaluation. KO-off is the configured default;
+KO-on is a separately generated local qualification whose fixture first proves
+that several field families have resolvable KO contributions.
 
 ### Shared assembly and registration
 

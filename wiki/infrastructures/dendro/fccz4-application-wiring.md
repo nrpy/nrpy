@@ -1,6 +1,6 @@
 # fCCZ4 Application Wiring
 
-> Explain the Dendro fCCZ4 builders: the direct finite-difference right-hand side, the det(gammabar)/tr(Abar) enforcement, initial-data conversion, and constraint diagnostics. · Status: provisional · Last reconciled: 09-07-2026
+> Explain the Dendro fCCZ4 builders: the direct finite-difference right-hand side, the det(gammabar)/tr(Abar) enforcement, initial-data conversion, and constraint diagnostics. · Status: provisional · Last reconciled: 09-09-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -23,6 +23,17 @@ returns a frozen dataclass from one. What is Dendro's own is the scale: every
 kernel family is shaped this way.
 
 ## Detail
+
+The example passes GR-owned context, lifecycle, status, and scientific-test
+content into generic Dendro emitters explicitly. fCCZ4/chi FD4 is checked on a
+nonflat fixed block, component by component, against an independent
+high-precision reference for both the block kernel and flat adapter. Kernel and
+reference inputs are the same exactly emitted binary64 samples; the reference
+applies the stencil and actual CSE graph at 80 and 100 digits and derives a
+componentwise roundoff bound from their scale and operation count. KO-off
+remains the configured default; KO-on is exercised as a separate local
+qualification product after proving resolvable KO effects in several field
+families.
 
 ### Right-hand side
 

@@ -2,10 +2,9 @@
 """
 Emit the generated scalar-contract header for a Dendro solver.
 
-The header fixes the generated scalar alias against the registered ``fp_type``
-and carries the structured status record the constraint enforcement reports.
-Neither names a field nor carries a physics default, so both belong to the
-generic scalar contract rather than to a formulation module.
+The header fixes the generated scalar alias against the registered ``fp_type``.
+Application-owned declarations are supplied explicitly by the assembly recipe;
+the generic emitter does not infer a physics contract.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -19,28 +18,34 @@ from nrpy.infrastructures.Dendro.header_guards import header_guard
 BANNER = generated_file_banner()
 
 
-def output_types_h(solver_stem: str, solver_namespace: str) -> str:
+def output_types_h(
+    solver_stem: str, solver_namespace: str, additional_declarations: str
+) -> str:
     """
     Emit the generated scalar-contract header.
 
     :param solver_stem: Lowercase formulation stem for the emitted header name.
     :param solver_namespace: Solver namespace, following Dendro's lowercase
         formulation habit (``namespace bssn``).
+    :param additional_declarations: Application-owned declarations placed in
+        the generated namespace before dependent prototypes.
     :return: The complete C++ header text.
 
     Doctests:
     >>> par.set_parval_from_str("fp_type", "double")
-    >>> header = output_types_h("bssn", "bssn")
+    >>> header = output_types_h("wave", "wave", "struct RunStatus {};")
     >>> "using DendroScalar = double;" in header
     True
-    >>> "#ifndef BSSN_TYPES_H" in header
+    >>> "#ifndef WAVE_TYPES_H" in header
     True
-    >>> header.rstrip().endswith("#endif  // BSSN_TYPES_H")
+    >>> header.rstrip().endswith("#endif  // WAVE_TYPES_H")
     True
-    >>> "namespace bssn::generated {" in header
+    >>> "namespace wave::generated {" in header
     True
     >>> from nrpy.helpers.generic import clang_format
-    >>> "}  // END NAMESPACE: bssn::generated" in clang_format(header)
+    >>> "struct RunStatus {};" in header
+    True
+    >>> "}  // END NAMESPACE: wave::generated" in clang_format(header)
     True
     """
     scalar_type = gri.DENDRO_SCALAR_TYPE
@@ -65,26 +70,7 @@ static_assert(sizeof(TargetScalar) == sizeof(NRPyArithmetic),
 static_assert(std::is_same_v<TargetScalar, NRPyArithmetic>,
               "generated scalar contract: alias must be the registered fp_type");
 
-// Structured status of one det/trace enforcement pass.  The record names no
-// field and carries no physics default, so it belongs to the scalar contract.
-// The kernel never calls exit(): a rank-local failure is reported here and
-// the host owns the global reduction.
-struct detgtrazero_status_struct {{
-  // Largest |det(gammabar)/det(gammahat) - 1| seen before enforcement.
-  double max_abs_det_minus_one = 0.0;
-  // Largest |gammabar^ij Atilde_ij| seen before enforcement.
-  double max_abs_trace_residual = 0.0;
-  // Points projected, points refused, and points with nonfinite diagnostics.
-  unsigned long long projected_points = 0;
-  unsigned long long failed_points = 0;
-  unsigned long long nonfinite_points = 0;
-  // Padded-block index of the first refused point, or -1 when none.  The
-  // index is block-local: under the all-block entry point it locates the
-  // point within its block, not within the whole local vector.
-  long long first_failing_index = -1;
-  // Registry position of the first nonfinite input field there, or -1.
-  int first_failing_field = -1;
-}};  // END STRUCT: detgtrazero_status_struct
+{additional_declarations.rstrip()}
 
 // clang-format off
 }}  // END NAMESPACE: {solver_namespace}::generated

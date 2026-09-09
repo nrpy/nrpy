@@ -1,13 +1,11 @@
-# nrpy/infrastructures/Dendro/generation_parameters.py
+# nrpy/infrastructures/Dendro/general_relativity/generation_parameters.py
 """
-Validation of the Dendro generation choices.
+Validate generation choices required by Dendro GR applications.
 
-Dendro registers no NRPy parameters of its own.  The scalar alias is the core
-constant :data:`nrpy.grid.DENDRO_SCALAR_TYPE`, hardcoded as the three sibling
-gridfunction classes hardcode theirs, and Kreiss-Oliger dissipation is a
-per-call builder argument as it is in BHaH and ETLegacy.  What remains is the
-qualified-value check on the core parameters a Dendro profile depends on, so an
-unqualified configuration fails generation instead of being emitted.
+Dendro registers no NRPy parameters of its own. The scalar alias is the core
+constant :data:`nrpy.grid.DENDRO_SCALAR_TYPE`, and Kreiss-Oliger dissipation is
+a per-call builder argument. This module owns the qualified conformal-factor
+representations required by the current GR initial-data paths.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -28,20 +26,15 @@ _ALLOWED_VALUES: Dict[str, Tuple[object, ...]] = {
 
 def validate_generation_parameters() -> None:
     """
-    Validate the Dendro generation parameters against allowed values.
-
-    Only the qualified profiles are accepted; anything else fails generation
-    instead of silently producing an unqualified configuration.  The scalar
-    alias is not validated here because it is no longer a parameter: it is the
-    constant :data:`nrpy.grid.DENDRO_SCALAR_TYPE`, hardcoded exactly as the
-    three sibling gridfunction classes hardcode theirs.
+    Validate the GR generation parameters against qualified values.
 
     :raises ValueError: If any parameter holds a disallowed value.
 
     Doctests:
     >>> import nrpy.equations.general_relativity.BSSN_quantities  # noqa: F401
-    >>> par.set_parval_from_str("EvolvedConformalFactor_cf", "chi")
-    >>> validate_generation_parameters()
+    >>> for conformal_factor in ("chi", "W"):
+    ...     par.set_parval_from_str("EvolvedConformalFactor_cf", conformal_factor)
+    ...     validate_generation_parameters()
     >>> par.set_parval_from_str("EvolvedConformalFactor_cf", "phi")
     >>> try:
     ...     validate_generation_parameters()

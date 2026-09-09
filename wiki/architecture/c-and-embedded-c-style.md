@@ -1,6 +1,6 @@
 # C And Embedded C Style
 
-> C/H formatting, Doxygen, embedded-C string, and generated-C body rules. · Status: provisional · Last reconciled: 09-07-2026
+> C/H formatting, Doxygen, embedded-C string, and generated-C body rules. · Status: provisional · Last reconciled: 09-09-2026
 > Up: [Architecture](index.md)
 
 ## Summary
@@ -94,7 +94,7 @@ Claim evidence:
 - Claim: Existing clang-format normalization exclusively owns indentation, tabs, spacing, alignment, wrapping, and brace layout for C/CUDA/H strings stored or assembled in Python generators; those raw cosmetics must never be reviewed, enforced, or repaired, Python-only cosmetic formatting routines are prohibited, and no generated-identifier naming style is reviewed or enforced, while mandatory generated semantic C/C++ `//` line-comment `END` marker presence, correct construct keyword, colon separator, accurate meaningful high-signal description of at most five words -- excepting only the loop footer emitted by canonical `nrpy/helpers/loop.py`, whose substituted bound expressions exceed the limit identically across every infrastructure -- and a `// clang-format off` / `// clang-format on` guard around any C++ namespace closer NRPy generates or ships into a host project, without which `FixNamespaceComments` strips the marker, and exact API, registry, prototype, semantic, interface, documentation, syntax, compiler, collision, and runtime requirements remain enforceable.
 - Role: normative rule
 - Deciding authority: `coding_style.md` - `#### Embedded C Code String Conventions`, `## C/H Coding Style`, `### 10. End-Curly-Brace Comments`
-- Corroboration: [loop.py](../../nrpy/helpers/loop.py), whose `loop1D` footer substitutes the loop bounds and so exceeds the word limit identically for every calling infrastructure; [clang_format_guards.py](../../nrpy/infrastructures/Dendro/clang_format_guards.py), `unguarded_end_namespace_markers`, which the Dendro emitters assert against; otherwise none available, and the frozen historical style source conflicts where it applies handwritten layout rules to generated strings.
+- Corroboration: [loop.py](../../nrpy/helpers/loop.py), whose `loop1D` footer substitutes the loop bounds and so exceeds the word limit identically for every calling infrastructure; Dendro template owners directly assert their namespace-marker guards; otherwise none available, and the frozen historical style source conflicts where it applies handwritten layout rules to generated strings.
 
 ### End-Curly-Brace Comments
 
@@ -212,7 +212,6 @@ Common generated-code patterns include:
 ## Sources
 
 - [coding_style.md](../../coding_style.md) - `#### Embedded C Code String Conventions`, `## C/H Coding Style`, `### 10. End-Curly-Brace Comments`, `## Style Comparison Summary`; current authority for formatter ownership and generated naming scope
-- [clang_format_guards.py](../../nrpy/infrastructures/Dendro/clang_format_guards.py) - `unguarded_end_namespace_markers`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - historical `## C/H Style`; current `coding_style.md` decides conflicts
 - [original-agents.md](../../raw/source-docs/original-agents.md) - historical `### Embedded C in Python Strings`, `### C Function Registration from Python`; current `coding_style.md` decides conflicts
 - [original-agents.md](../../raw/source-docs/original-agents.md) - historical `### Preprocessor / Comment Patterns`, `## Additional Project Rules`, `## Quick Reference`

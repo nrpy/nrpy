@@ -188,6 +188,16 @@ def rhs_symbol_to_gridfunction_name(rhs_name: str) -> str:
     'alpha'
     >>> rhs_symbol_to_gridfunction_name("Theta_fCCZ4_rhs")
     'Theta_fCCZ4'
+    >>> [rhs_symbol_to_gridfunction_name(name) for name in ("u_rhs", "v_rhsU0")]
+    ['u', 'vU0']
+    >>> for malformed in ("v_rhsU", "h_rhsDD1", "h_rhsD01"):
+    ...     try:
+    ...         rhs_symbol_to_gridfunction_name(malformed)
+    ...     except ValueError:
+    ...         print(malformed)
+    v_rhsU
+    h_rhsDD1
+    h_rhsD01
     >>> try:
     ...     rhs_symbol_to_gridfunction_name("notarhs")
     ... except ValueError:

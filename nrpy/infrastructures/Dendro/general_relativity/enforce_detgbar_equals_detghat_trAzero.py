@@ -43,9 +43,9 @@ from nrpy.equations.general_relativity.BSSN_algebraic_constraints import (
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import block_kernel_helpers as bkh
-from nrpy.infrastructures.Dendro import generation_parameters
 from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
 from nrpy.infrastructures.Dendro import state_h
+from nrpy.infrastructures.Dendro.general_relativity import generation_parameters
 from nrpy.infrastructures.Dendro.simple_loop import (
     block_loop,
     require_serial_parallelization,
@@ -59,12 +59,36 @@ ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_ALL_BLOCKS_SUFFIX = (
     "enforce_detgbar_equals_detghat_trAzero"
 )
 
-# Generated status record: formulation-neutral (determinant, trace residual,
-# nonfinite counts, first failing field/index, rank-local failure), so
-# it belongs to the generated scalar contract emitted by types_h rather
-# than to a physics builder.  The namespace is threaded from the caller, as
-# every other emitted identifier is.
+# Generated status record used by this GR projection and its host policy.
 STATUS_RECORD = "generated::detgtrazero_status_struct"
+
+
+def status_struct_declaration() -> str:
+    """
+    Return the GR projection status declaration for ``types_h``.
+
+    :return: Complete status structure declaration.
+    """
+    return """// Structured status of one det/trace enforcement pass.
+// The kernel never calls exit(): a rank-local failure is reported here and
+// the host owns the global reduction.
+struct detgtrazero_status_struct {
+  // Largest |det(gammabar)/det(gammahat) - 1| seen before enforcement.
+  double max_abs_det_minus_one = 0.0;
+  // Largest |gammabar^ij Atilde_ij| seen before enforcement.
+  double max_abs_trace_residual = 0.0;
+  // Points projected, points refused, and points with nonfinite diagnostics.
+  unsigned long long projected_points = 0;
+  unsigned long long failed_points = 0;
+  unsigned long long nonfinite_points = 0;
+  // Padded-block index of the first refused point, or -1 when none.  The
+  // index is block-local: under the all-block entry point it locates the
+  // point within its block, not within the whole local vector.
+  long long first_failing_index = -1;
+  // Registry position of the first nonfinite input field there, or -1.
+  int first_failing_field = -1;
+};  // END STRUCT: detgtrazero_status_struct
+"""
 
 
 @dataclass(frozen=True)
@@ -370,8 +394,17 @@ if __name__ == "__main__":
     # Trusted baseline for the emitted enforcement kernel, one file per shipped
     # profile.  general_relativity/initial_data.py's sweep carries the full
     # rationale for the capture object and the axes.
+    from nrpy.equations.general_relativity.BSSN_constraints import (
+        BSSN_constraints as SweepBSSNConstraints,
+    )
+    from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs as SweepBSSNRHSs
+    from nrpy.equations.general_relativity.fCCZ4_constraints import (
+        fCCZ4_constraints as SweepFCCZ4Constraints,
+    )
+    from nrpy.equations.general_relativity.fCCZ4_RHSs import (
+        fCCZ4_RHSs as SweepFCCZ4RHSs,
+    )
     from nrpy.helpers.generic import clang_format, validate_strings
-    from nrpy.infrastructures.Dendro.general_relativity import trusted_capture
 
     par.set_parval_from_str("Infrastructure", "Dendro")
     par.set_parval_from_str("parallelization", "none")
@@ -384,8 +417,18 @@ if __name__ == "__main__":
         rhs_eval as sweep_rhs_eval,
     )
 
-    for sweep_fCCZ4, sweep_cf in trusted_capture.SHIPPED_PROFILES:
-        trusted_capture.reset_generation_state()
+    for sweep_fCCZ4, sweep_cf in ((True, "chi"), (False, "W")):
+        cfc.CFunction_dict.clear()
+        gri.glb_gridfcs_dict.clear()
+        par.glb_extras_dict.pop("Dendro", None)
+        for factory in (
+            BSSN_quantities,
+            SweepBSSNRHSs,
+            SweepBSSNConstraints,
+            SweepFCCZ4RHSs,
+            SweepFCCZ4Constraints,
+        ):
+            factory.clear()
         sweep_stem = "fccz4" if sweep_fCCZ4 else "bssn"
         par.set_parval_from_str("EvolvedConformalFactor_cf", sweep_cf)
         # The right-hand-side registrar is what registers the evolved state

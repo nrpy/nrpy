@@ -38,9 +38,6 @@ from nrpy.infrastructures.Dendro import (
     cmake_helpers,
     cmdline_input_and_parfiles,
     constants_h,
-    main_cpp,
-    self_tests_cpp,
-    solver_context,
     state_h,
     types_h,
 )
@@ -48,7 +45,10 @@ from nrpy.infrastructures.Dendro.general_relativity import (
     constraints_eval,
     enforce_detgbar_equals_detghat_trAzero,
     initial_data,
+    main_cpp,
     rhs_eval,
+    self_tests_cpp,
+    solver_context,
 )
 
 # Dendro-GR's own BSSN solver: directory BSSN_GR, namespace bssn, sources
@@ -119,7 +119,7 @@ def main() -> None:
     #         first: it registers the exact gridfunctions and physics
     #         CodeParameters, and records the ghost points the emitted
     #         operators reach.
-    rhs_eval.register_CFunctions_rhs_eval(
+    rhs_build = rhs_eval.register_CFunctions_rhs_eval(
         solver_stem=solver_stem,
         fd_order=args.fd_order,
         enable_KreissOliger_dissipation=args.ko,
@@ -165,7 +165,9 @@ def main() -> None:
     artifacts: Dict[str, str] = {
         layout.generated_include
         + f"{solver_stem}_types.h": types_h.output_types_h(
-            solver_stem, solver_namespace
+            solver_stem,
+            solver_namespace,
+            enforce_detgbar_equals_detghat_trAzero.status_struct_declaration(),
         ),
         layout.generated_include
         + f"{solver_stem}_constants.h": constants_h.output_constants_h(
@@ -181,7 +183,7 @@ def main() -> None:
         ),
         layout.generated_include
         + f"{solver_stem}_defines.h": Dendro_defines_h.output_Dendro_defines_h(
-            solver_stem, solver_prefix
+            solver_stem
         ),
         layout.include
         + f"{solver_stem}Ctx.h": solver_context.output_solver_context_h(
@@ -199,14 +201,24 @@ def main() -> None:
         + f"{solver_stem}_minkowski.par": cmdline_input_and_parfiles.generate_default_parfile(
             solver_stem, profile_name, required_padding, args.ko
         ),
-        layout.tests
-        + f"{solver_stem}_self_tests.cpp": self_tests_cpp.output_self_tests_cpp(
-            solver_stem, solver_namespace
-        ),
     }
     artifacts.update(
+        {
+            layout.root + relative_path: text
+            for relative_path, text in self_tests_cpp.output_self_test_artifacts(
+                solver_stem, solver_namespace, rhs_build, args.ko
+            ).items()
+        }
+    )
+    artifacts.update(
         cmake_helpers.output_CFunctions_function_prototypes_and_construct_CMakeLists(
-            solver_name, solver_stem, solver_prefix, exec_or_library_name
+            solver_name,
+            solver_stem,
+            solver_prefix,
+            exec_or_library_name,
+            self_tests_cpp.test_sections(),
+            main_cpp.standalone_ctest_statements(solver_stem, exec_or_library_name),
+            main_cpp.real_ctest_statements(solver_stem, exec_or_library_name),
         )
     )
     for relative_path, text in sorted(artifacts.items()):

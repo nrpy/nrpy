@@ -21,10 +21,9 @@ Author: Zachariah B. Etienne
 """
 
 import os
-from typing import Dict, List, NamedTuple, Tuple
+from typing import Dict, List, NamedTuple, Sequence, Tuple
 
 import nrpy.c_function as cfc
-from nrpy.infrastructures.Dendro import self_tests_cpp
 from nrpy.infrastructures.Dendro.generated_file_banner import generated_file_banner
 from nrpy.infrastructures.Dendro.header_guards import header_guard
 
@@ -154,6 +153,9 @@ def output_CFunctions_function_prototypes_and_construct_CMakeLists(
     solver_stem: str,
     solver_prefix: str,
     exec_or_library_name: str,
+    test_sections: Sequence[str],
+    standalone_application_ctest: Sequence[str],
+    real_application_ctest: Sequence[str],
 ) -> Dict[str, str]:
     """
     Emit the CFunction sources, the prototypes header and the CMake files.
@@ -167,6 +169,9 @@ def output_CFunctions_function_prototypes_and_construct_CMakeLists(
     :param solver_stem: Lowercase formulation stem for emitted header names.
     :param solver_prefix: Bare formulation prefix for the CMake variables.
     :param exec_or_library_name: Name of the solver executable target.
+    :param test_sections: Explicit application-owned self-test section names.
+    :param standalone_application_ctest: Standalone application CTest lines.
+    :param real_application_ctest: Real-host application CTest lines.
     :return: Mapping of ``Dendro-GR/<solver_name>/<path>`` to file text.
     """
     layout = module_layout(solver_name)
@@ -191,10 +196,15 @@ def output_CFunctions_function_prototypes_and_construct_CMakeLists(
         output_generated_sources_cmake(solver_prefix)
     )
     artifacts[layout.tests + "CMakeLists.txt"] = output_tests_cmake(
-        solver_prefix, solver_stem
+        solver_prefix, solver_stem, test_sections
     )
     artifacts[layout.root + "CMakeLists.txt"] = output_solver_cmake(
-        solver_name, solver_prefix, solver_stem, exec_or_library_name
+        solver_name,
+        solver_prefix,
+        solver_stem,
+        exec_or_library_name,
+        standalone_application_ctest,
+        real_application_ctest,
     )
     return artifacts
 
@@ -232,7 +242,12 @@ def output_generated_sources_cmake(solver_prefix: str) -> str:
 
 
 def output_solver_cmake(
-    solver_name: str, solver_prefix: str, solver_stem: str, exec_or_library_name: str
+    solver_name: str,
+    solver_prefix: str,
+    solver_stem: str,
+    exec_or_library_name: str,
+    standalone_application_ctest: Sequence[str],
+    real_application_ctest: Sequence[str],
 ) -> str:
     """
     Emit the generated solver's ``CMakeLists.txt``.
@@ -241,21 +256,23 @@ def output_solver_cmake(
     :param solver_prefix: Bare formulation prefix for CMake variables, e.g. ``BSSN`` for Dendro's own ``BSSN_GR``.
     :param solver_stem: Lowercase stem the emitters use for solver file names.
     :param exec_or_library_name: Name of the solver executable target.
+    :param standalone_application_ctest: Standalone application CTest lines.
+    :param real_application_ctest: Real-host application CTest lines.
     :return: The CMake file text.
 
     Doctests:
-    >>> text = output_solver_cmake("BSSN_GR", "BSSN", "bssn", "bssnSolver")
-    >>> "project(BSSN_GR CXX)" in text
+    >>> text = output_solver_cmake("WAVE", "WAVE", "wave", "waveSolver", ("add_test(NAME wave_run COMMAND waveSolver)",), ())
+    >>> "project(WAVE CXX)" in text
     True
-    >>> "add_executable(bssnSolver" in text
+    >>> "add_executable(waveSolver" in text
     True
-    >>> "add_test(NAME bssn_minkowski_lifecycle" in text
+    >>> "add_test(NAME wave_run COMMAND waveSolver)" in text
     True
-    >>> "${BSSN_NRPY_GENERATED_SOURCES}" in text
+    >>> "${WAVE_NRPY_GENERATED_SOURCES}" in text
     True
-    >>> "src/bssnCtx.cpp" in output_solver_cmake("Z_GR", "ZORP", "zrp", "zSolver")
+    >>> "src/bssnCtx.cpp" in output_solver_cmake("Z_GR", "ZORP", "zrp", "zSolver", (), ())
     False
-    >>> "src/zrpCtx.cpp" in output_solver_cmake("Z_GR", "ZORP", "zrp", "zSolver")
+    >>> "src/zrpCtx.cpp" in output_solver_cmake("Z_GR", "ZORP", "zrp", "zSolver", (), ())
     True
     """
     # The file names come from solver_stem, which the examples also use to
@@ -333,24 +350,17 @@ def output_solver_cmake(
         f"if({solver_prefix}_STANDALONE_HOST)",
         "add_subdirectory(tests)",
         "",
-        "# The Minkowski lifecycle is a test, not just a demo: every gate it",
-        "# prints exits nonzero on failure, so registering it makes the numerical",
-        "# gates part of the suite a consumer -- and CI -- runs.  Two blocks are",
-        "# what the rank-agreement and adapter gates need; the extent and spacing",
-        "# restate the entry point's own defaults, so the case keeps working the",
-        "# geometry it was proven on if those defaults ever move.",
-        f"add_test(NAME {stem}_minkowski_lifecycle",
-        f"         COMMAND {exec_or_library_name} -b 2 -n 25 -d 0.25)",
-        "else()",
-        f"add_test(NAME {stem}_real_minkowski COMMAND ${{MPIEXEC_EXECUTABLE}} ${{MPIEXEC_NUMPROC_FLAG}} 2 ${{MPIEXEC_PREFLAGS}} $<TARGET_FILE:{exec_or_library_name}> ${{MPIEXEC_POSTFLAGS}})",
-        f"set_tests_properties({stem}_real_minkowski PROPERTIES TIMEOUT 300)",
-        "endif()",
-        "",
     ]
+    lines.extend(standalone_application_ctest)
+    lines.append("else()")
+    lines.extend(real_application_ctest)
+    lines.extend(("endif()", ""))
     return "\n".join(lines)
 
 
-def output_tests_cmake(solver_prefix: str, solver_stem: str) -> str:
+def output_tests_cmake(
+    solver_prefix: str, solver_stem: str, test_sections: Sequence[str]
+) -> str:
     """
     Emit the generated solver's ``tests/CMakeLists.txt``.
 
@@ -361,17 +371,18 @@ def output_tests_cmake(solver_prefix: str, solver_stem: str) -> str:
 
     :param solver_prefix: Bare formulation prefix for CMake variables, e.g. ``BSSN`` for Dendro's own ``BSSN_GR``.
     :param solver_stem: Lowercase stem the emitters use for solver file names.
+    :param test_sections: Explicit application-owned self-test section names.
     :return: The CMake file text.
 
     Doctests:
-    >>> text = output_tests_cmake("BSSN", "bssn")
+    >>> text = output_tests_cmake("WAVE", "wave", ("state", "rhs"))
     >>> "include(${CMAKE_CURRENT_SOURCE_DIR}/../generated/cmake/nrpy_generated_sources.cmake)" in text
     True
-    >>> "set(BSSN_MODULE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)" in text
+    >>> "set(WAVE_MODULE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)" in text
     True
-    >>> "${BSSN_NRPY_GENERATED_SOURCES}" in text
+    >>> "${WAVE_NRPY_GENERATED_SOURCES}" in text
     True
-    >>> "add_test(NAME bssn_state" in output_tests_cmake("BSSN", "bssn")
+    >>> "add_test(NAME wave_state" in text and "add_test(NAME wave_rhs" in text
     True
     """
     stem = solver_stem
@@ -386,6 +397,7 @@ def output_tests_cmake(solver_prefix: str, solver_stem: str) -> str:
         f"  {SRC}/../standalone_host",
         f"  {SRC}/../include",
         f"  {SRC}/../generated/include",
+        f"  {SRC}",
         ")",
         f"target_compile_features({stem}_self_tests PRIVATE cxx_std_17)",
         "# This target compiles the generated sources directly rather than",
@@ -395,10 +407,11 @@ def output_tests_cmake(solver_prefix: str, solver_stem: str) -> str:
         f"target_compile_options({stem}_self_tests PRIVATE -Wall)",
         "",
     ]
-    for section in self_tests_cpp.SECTIONS:
+    for section in test_sections:
         lines.append(
             f"add_test(NAME {stem}_{section} COMMAND {stem}_self_tests {section})"
         )
+        lines.append(f"set_tests_properties({stem}_{section} PROPERTIES TIMEOUT 120)")
     lines.append("")
     return "\n".join(lines)
 

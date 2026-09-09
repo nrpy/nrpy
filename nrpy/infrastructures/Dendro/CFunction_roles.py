@@ -220,9 +220,9 @@ def set_CFunction_codeparameters(name: str, names: Sequence[str]) -> None:
     >>> cfc.register_CFunction(
     ...     desc="k", name="bssn_k", params="int n", body="(void)n;"
     ... )
-    >>> set_CFunction_codeparameters("bssn_k", ("eta", "kappa1"))
+    >>> set_CFunction_codeparameters("bssn_k", ("eta", "num_steps", "enable_filter"))
     >>> CFunction_codeparameters("bssn_k")
-    ('eta', 'kappa1')
+    ('eta', 'num_steps', 'enable_filter')
     >>> CFunction_codeparameters("bssn_unrecorded")
     ()
     """

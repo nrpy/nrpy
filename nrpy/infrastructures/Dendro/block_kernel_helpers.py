@@ -87,6 +87,22 @@ def used_codeparameters(expressions: Iterable[sp.Expr]) -> Tuple[str, ...]:
 
     :param expressions: The expressions the kernel is generated from.
     :return: Registered CodeParameter names, sorted.
+
+    Doctests:
+    >>> import nrpy.params as par
+    >>> _saved_params = dict(par.glb_code_params_dict)
+    >>> try:
+    ...     _z = par.register_CodeParameter("REAL", __name__, "zz_fixture_used", 1.0)
+    ...     _a = par.register_CodeParameter(
+    ...         "REAL", __name__, "aa_fixture_common", 2.0, commondata=True
+    ...     )
+    ...     used_codeparameters([_z + _a])
+    ... finally:
+    ...     par.glb_code_params_dict.clear()
+    ...     par.glb_code_params_dict.update(_saved_params)
+    ('aa_fixture_common', 'zz_fixture_used')
+    >>> all(par.glb_code_params_dict[name] is value for name, value in _saved_params.items())
+    True
     """
     param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
         list(expressions)
@@ -337,8 +353,7 @@ def padding_from_derivative_operators(
     :param upwind_control_vec: The upwind control vector, or the string sentinel
         when upwinding is not enabled.
     :param fd_order: The finite-difference order.
-    :return: The ghost points required on every axis.
-    :raises ValueError: If the expressions reach no neighbour on some axis.
+    :return: The widest numerical stencil reach over all axes.
 
     Doctests:
     >>> import nrpy.indexedexp as ixp
@@ -360,28 +375,21 @@ def padding_from_derivative_operators(
     >>> mixed_axes = cf_dD[0] + cf_dupD[1] + cf_dD[2]
     >>> padding_from_derivative_operators([mixed_axes], "unset", 4)
     3
-    >>> try:
-    ...     padding_from_derivative_operators([sp.Symbol("cf")], "unset", 4)
-    ... except ValueError as error:
-    ...     print(str(error).split(";")[0])
-    The expressions reach no ghost points ((0, 0, 0))
 
-    One axis reaching nothing is enough to refuse, so the guard reduces with
-    the minimum where the padding reduces with the maximum.
+    Algebraic expressions require no numerical neighbours.  A derivative may
+    use only one axis; Dendro still represents its reach with one uniform
+    number.
 
-    >>> try:
-    ...     padding_from_derivative_operators([cf_dD[0]], "unset", 4)
-    ... except ValueError as error:
-    ...     print(str(error).split(";")[0])
-    The expressions reach no ghost points ((2, 0, 0))
+    >>> padding_from_derivative_operators([sp.Symbol("cf")], "unset", 4)
+    0
+    >>> padding_from_derivative_operators([cf_dD[0]], "unset", 4)
+    2
+    >>> cf_dKOD = ixp.declarerank1("cf_dKOD")
+    >>> padding_from_derivative_operators([cf_dKOD[2]], "unset", 4)
+    3
     >>> gri.glb_gridfcs_dict.clear()
     """
     padding = stencil_reach_per_axis(expressions, upwind_control_vec, fd_order)
-    if min(padding) < 1:
-        raise ValueError(
-            f"The expressions reach no ghost points ({padding}); a direct-FD "
-            "right-hand side must read neighbours on every axis."
-        )
     return max(padding)
 
 

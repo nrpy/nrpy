@@ -40,8 +40,8 @@ from nrpy.equations.general_relativity.kreiss_oliger_terms import (
 )
 from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import block_kernel_helpers as bkh
-from nrpy.infrastructures.Dendro import generation_parameters
 from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
+from nrpy.infrastructures.Dendro.general_relativity import generation_parameters
 from nrpy.infrastructures.Dendro.simple_loop import (
     block_loop,
     require_serial_parallelization,
@@ -264,6 +264,48 @@ def build_rhs_eval(
     >>> roles.required_padding()
     3
 
+    The mapping failure gate is exercised through this public builder before
+    lowering.  The temporary expression owner is restored even if an assertion
+    fails.
+
+    >>> _owner_globals = build_rhs_eval.__globals__
+    >>> _original_bssn_expressions = _owner_globals["BSSN_rhs_expressions"]
+    >>> _good_rhs = OrderedDict(_build.rhs_by_symbol_name)
+    >>> _fake_rhs = _good_rhs
+    >>> def _temporary_bssn_expressions(**_kwargs):
+    ...     return _fake_rhs, tuple(sp.Symbol(name) for name in _build.upwind_control_fields)
+    >>> try:
+    ...     _owner_globals["BSSN_rhs_expressions"] = _temporary_bssn_expressions
+    ...     _missing = OrderedDict(_good_rhs)
+    ...     _ = _missing.pop(next(iter(_missing)))
+    ...     _fake_rhs = _missing
+    ...     try:
+    ...         build_rhs_eval("bssn", fd_order=4, enable_KreissOliger_dissipation=False)
+    ...     except ValueError as error:
+    ...         assert "missing=" in str(error)
+    ...     else:
+    ...         raise AssertionError("missing RHS target was accepted")
+    ...     _extra = OrderedDict(_good_rhs)
+    ...     _extra["not_registered_rhs"] = sp.Integer(0)
+    ...     _fake_rhs = _extra
+    ...     try:
+    ...         build_rhs_eval("bssn", fd_order=4, enable_KreissOliger_dissipation=False)
+    ...     except ValueError as error:
+    ...         assert "extra=['not_registered']" in str(error)
+    ...     else:
+    ...         raise AssertionError("extra RHS target was accepted")
+    ...     _repeated = OrderedDict(_good_rhs)
+    ...     _repeated["aDD00_rhs"] = _repeated["a_rhsDD00"]
+    ...     _fake_rhs = _repeated
+    ...     try:
+    ...         build_rhs_eval("bssn", fd_order=4, enable_KreissOliger_dissipation=False)
+    ...     except ValueError as error:
+    ...         assert "do not map bijectively" in str(error)
+    ...     else:
+    ...         raise AssertionError("repeated RHS target was accepted")
+    ... finally:
+    ...     _owner_globals["BSSN_rhs_expressions"] = _original_bssn_expressions
+
     """
     if par.parval_from_str("Infrastructure") != "Dendro":
         raise ValueError(
@@ -277,16 +319,12 @@ def build_rhs_eval(
             "Dendrolib proves at element order 10; it is outside this "
             "builder's qualified set rather than host-gated."
         )
-    # Single-registry authority: the builder
-    # profile is written into the registered Dendro generation parameters
-    # and validated immediately, so generation parameters, equation hash,
-    # and kernel can never skew.
+    # Current GR initial-data kernels require a conformal-factor representation
+    # whose Minkowski value matches the registered asymptotic field value.
     generation_parameters.validate_generation_parameters()
-    # The qualified (non-nested) threading profile is serial.  The
-    # point kernel runs inside Dendro's own block traversal, so an inner OpenMP
-    # pragma would nest parallelism.  Assert rather than overwrite: silently
-    # discarding a caller's request would produce an unqualified configuration
-    # whose manifest disagrees with the invocation.
+    # Dendro owns the outer block traversal. The qualified point kernel is
+    # serial so it does not introduce nested inner-loop parallelism. Reject a
+    # different request instead of silently generating an unqualified kernel.
     require_serial_parallelization()
     formulation = "fCCZ4" if enable_fCCZ4 else "BSSN"
     expected_evol_count = 25 if enable_fCCZ4 else BSSN_EVOL_COUNT
@@ -459,7 +497,7 @@ def register_CFunctions_rhs_eval(
     CoordSystem: str = "Cartesian",
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant__Hatted",
-) -> None:
+) -> RHSBuild:
     """
     Register the right-hand-side CFunctions for one formulation.
 
@@ -471,6 +509,7 @@ def register_CFunctions_rhs_eval(
     :param CoordSystem: Reference-metric coordinate system.
     :param LapseEvolutionOption: Lapse evolution option.
     :param ShiftEvolutionOption: Shift evolution option.
+    :return: Registered RHS build record with canonical expressions and order.
     """
     build = build_rhs_eval(
         solver_stem,
@@ -526,6 +565,7 @@ def register_CFunctions_rhs_eval(
     )
     roles.set_CFunction_role(flat_block_name, "rhs_eval_flat_block")
     roles.set_CFunction_codeparameters(flat_block_name, build.used_codeparameters)
+    return build
 
 
 if __name__ == "__main__":
@@ -550,15 +590,29 @@ if __name__ == "__main__":
     import os
 
     import nrpy.validate_expressions.validate_expressions as ve
-    from nrpy.infrastructures.Dendro.general_relativity import trusted_capture
+    from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
+    from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
+    from nrpy.equations.general_relativity.fCCZ4_constraints import fCCZ4_constraints
+    from nrpy.equations.general_relativity.fCCZ4_RHSs import fCCZ4_RHSs
 
     par.set_parval_from_str("Infrastructure", "Dendro")
     par.set_parval_from_str("parallelization", "none")
     par.set_parval_from_str("fp_type", "double")
     par.set_parval_from_str("detgbarOverdetghat_equals_one", True)
     par.set_parval_from_str("fd_order", 4)
-    for sweep_fCCZ4, sweep_cf in trusted_capture.SHIPPED_PROFILES:
-        trusted_capture.reset_generation_state()
+    shipped_gauge = "OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted"
+    for sweep_fCCZ4, sweep_cf in ((True, "chi"), (False, "W")):
+        cfc.CFunction_dict.clear()
+        gri.glb_gridfcs_dict.clear()
+        par.glb_extras_dict.pop("Dendro", None)
+        for factory in (
+            BSSN_quantities,
+            BSSN_RHSs,
+            BSSN_constraints,
+            fCCZ4_RHSs,
+            fCCZ4_constraints,
+        ):
+            factory.clear()
         par.set_parval_from_str("EvolvedConformalFactor_cf", sweep_cf)
         sweep_build = build_rhs_eval(
             "fccz4" if sweep_fCCZ4 else "bssn",
@@ -570,7 +624,7 @@ if __name__ == "__main__":
             os.path.abspath(__file__),
             os.getcwd(),
             f"{os.path.splitext(os.path.basename(__file__))[0]}"
-            f"_{trusted_capture.SHIPPED_GAUGE}"
+            f"_{shipped_gauge}"
             f"_Cartesian_{sweep_cf}_fCCZ4{sweep_fCCZ4}_KOFalse",
             ve.process_dictionary_of_expressions(
                 dict(sweep_build.rhs_by_symbol_name), fixed_mpfs_for_free_symbols=True

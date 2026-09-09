@@ -17,18 +17,17 @@ from nrpy.infrastructures.Dendro.header_guards import header_guard
 BANNER = generated_file_banner()
 
 
-def output_Dendro_defines_h(solver_stem: str, solver_prefix: str) -> str:
+def output_Dendro_defines_h(solver_stem: str) -> str:
     """
     Emit ``<stem>_defines.h``, the one header every generated CFunction includes.
 
     :param solver_stem: Lowercase formulation stem for the generated header
         names, following Dendro's habit of naming solver files for the
         formulation (``bssnCtx.h``).
-    :param solver_prefix: Bare formulation prefix; retained for interface compatibility.
     :return: The complete C++ header text.
 
     Doctests:
-    >>> header = output_Dendro_defines_h("bssn", "BSSN")
+    >>> header = output_Dendro_defines_h("bssn")
     >>> "#ifndef BSSN_DEFINES_H" in header
     True
     >>> header.rstrip().endswith("#endif  // BSSN_DEFINES_H")
@@ -42,7 +41,6 @@ def output_Dendro_defines_h(solver_stem: str, solver_prefix: str) -> str:
     >>> '#include "block_geometry.h"' in header
     True
     """
-    del solver_prefix
     opening, closing = header_guard(f"{solver_stem}_defines.h")
     return BANNER + f"""{opening}
 

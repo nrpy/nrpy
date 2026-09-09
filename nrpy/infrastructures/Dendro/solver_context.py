@@ -9,7 +9,7 @@ every kernel name is read back from the Dendro role registry.
 
 SCOPE OF EVIDENCE.  This vehicle establishes lifecycle plumbing -- allocation
 with generated counts, the call path, the block and flat-block entry points
-agreeing, per-rank decomposition, and the Minkowski fixed point.  It cannot
+agreeing, per-rank decomposition, and an application-supplied fixed point.  It cannot
 detect a uniform sign or scale error in the finite-difference coefficients:
 such a kernel approximates a different continuum operator and still converges
 at the requested order.  Pointwise correctness is established against an
@@ -45,13 +45,7 @@ class Ctx {
   // Startup checks: scalar/state contracts, vector component counts, per-block
   // padding, FD order, parameter validation.
   int startup_checks(int rank);
-  // Fill the state through the generated initial-data CFunction.
-  int minkowski_initial_data();
-  // Add a smooth, analytic, spatially varying perturbation to every evolved
-  // component over the whole padded block, so the interior RHS exercises the
-  // generated derivative stencils.  No field is named: the same continuum
-  // profile is applied to every component of the generated state.
-  int perturb_state();
+$STANDALONE_APPLICATION_DECLARATIONS
   // Generated all-block RHS.
   int rhs_eval_all_blocks();
   // RHS magnitude at the current state, maximised over this rank's interior.
@@ -68,22 +62,10 @@ class Ctx {
   // over `ncomp` components.  The count is a parameter so the same reduction
   // serves the evolved and the diagnostic vectors without naming either.
   double max_interior_value(const $SCALAR* const* fields, unsigned ncomp);
-  // Run the generated constraint enforcement over every local block.  Returns
-  // nonzero when the generated status reports a refused point; the enforcement
-  // itself never calls exit().
-  int enforce_detgbar_equals_detghat_trAzero_all_blocks();
-  // Maximum |diagnostic| over every DIAG component and local block, after
-  // recomputing the generated constraint diagnostics.  No diagnostic is named:
-  // the reduction runs over the generated count.
-  double max_constraint_violation();
   // Resolve host-supplied exact NRPy names (output or refinement selection).
   // An unknown name is fatal: this prints every valid generated name and
   // returns nonzero.  No name is written down here.
   int select_variables(const char* const* names, unsigned count);
-  // Copy the current state (bitwise snapshot for the drift gate).
-  int snapshot_state();
-  // Maximum |u - u_snapshot| over all components and blocks.
-  double max_drift_from_snapshot();
 
   // Host mesh and EVOL vectors (in / rhs / out), standalone-host lifecycle.
   // Value-initialized: standalone_host::DVector is an aggregate with no default member
@@ -93,25 +75,10 @@ class Ctx {
   standalone_host::Ctx host{};
   // Generated runtime parameter table, owned by the context.
   $NAMESPACE::generated::params_struct params;
-  // Bitwise snapshot of the state taken before evolution.
-  $SCALAR** u0 = nullptr;
-  // Status of the most recent enforcement pass.
-  $NAMESPACE::generated::detgtrazero_status_struct last_detgtrazero_status;
-  // Number of completed enforcement passes.  A flat state looks the same
-  // whether or not it was projected, so a count the host can check is the
-  // evidence that the hooks ran as configured.
-  unsigned long long detgtrazero_passes = 0;
+$STANDALONE_APPLICATION_MEMBERS
 };  // END CLASS: Ctx
 
-// Observed convergence order of the generated RHS under grid refinement: the
-// same smooth analytic state is evaluated at spacings h, h/2 and h/4 on a
-// single block, and the Richardson ratio of the successive differences at
-// coincident physical points is returned.  A kernel whose stencils are absent,
-// mis-shaped, or applied at the wrong offsets does not exhibit the requested
-// order.  Returns a negative value when the differences are too small to form
-// a ratio.
-double observed_convergence_order(
-    double base_dx, const $NAMESPACE::generated::params_struct& params);
+$STANDALONE_APPLICATION_FREE_DECLARATIONS
 
 // clang-format off
 }  // END NAMESPACE: $NAMESPACE
@@ -164,13 +131,7 @@ Ctx::~Ctx() {
   free_vector(host.rhs);
   free_vector(host.out);
   free_vector(host.diag);
-  if (u0 != nullptr) {
-    for (unsigned f = 0; f < $NAMESPACE::generated::NUM_EVOL_GFS; ++f) {
-      delete[] u0[f];
-    }
-    delete[] u0;
-    u0 = nullptr;
-  }  // END IF: snapshot buffer allocated
+$STANDALONE_APPLICATION_DESTRUCTOR
 }  // END FUNCTION: Ctx::~Ctx
 
 int Ctx::initialize_mesh(int n_blocks, int extent, double dx, int rank,
@@ -228,13 +189,7 @@ int Ctx::initialize_mesh(int n_blocks, int extent, double dx, int rank,
   }  // END LOOP: for v over host vectors
   // The registered parameter CFunctions own the parameter lifecycle.
   $PARAMS_STRUCT_SET_TO_DEFAULT(params);
-  // One default the generator cannot know: the perturbation wavelength is a
-  // length, so it is meaningful only against the grid the host just built.
-  // 0.618 of a block is deliberately incommensurate with the per-rank stride
-  // (rank * n_blocks * extent * dx); a wavelength equal to the stride would
-  // make every rank see an identical field, and the multi-rank gates would
-  // prove nothing beyond a repeated serial run.
-  params.smooth_perturbation_wavelength = 0.618 * extent * dx;
+$STANDALONE_APPLICATION_POST_MESH
   if (parfile_path != nullptr) {
     std::fprintf(stderr,
                  "ERROR: a parameter file was supplied (%s), but parameter-file "
@@ -265,14 +220,7 @@ int Ctx::startup_checks(int rank) {
       return 1;
     }  // END IF: block padding below minimum
   }  // END LOOP: for b over local blocks
-  const unsigned fd_order = $NAMESPACE::generated::FD_ORDER;
-  if (fd_order != 2 && fd_order != 4 && fd_order != 6) {
-    std::fprintf(stderr,
-                 "ERROR: unsupported generated FD order %u; the qualified set "
-                 "is 2, 4, 6\\n",
-                 fd_order);
-    return 1;
-  }  // END IF: unsupported generated FD order
+$STANDALONE_APPLICATION_STARTUP_CHECKS
   if (!$VALIDATE(params)) {
     std::fprintf(stderr, "ERROR: parameter validation failed\\n");
     return 1;
@@ -283,21 +231,7 @@ int Ctx::startup_checks(int rank) {
   return 0;
 }  // END FUNCTION: Ctx::startup_checks
 
-int Ctx::minkowski_initial_data() {
-  $MINKOWSKI_INITIAL_DATA(host.mesh, host.in.comp);
-  return 0;
-}  // END FUNCTION: Ctx::minkowski_initial_data
-
-int Ctx::perturb_state() {
-  // The analytic profile and the loop that applies it are NRPy-authored and
-  // registered; the host only supplies the state and the two scalars.  Those
-  // two come from params, so the values printed as effective are the values
-  // the run perturbs with.
-  $SMOOTH_PERTURBATION(host.mesh, host.in.comp,
-                static_cast<$SCALAR>(params.smooth_perturbation_amplitude),
-                static_cast<$SCALAR>(params.smooth_perturbation_wavelength));
-  return 0;
-}  // END FUNCTION: Ctx::perturb_state
+$STANDALONE_APPLICATION_INITIALIZATION
 
 int Ctx::rhs_eval_all_blocks() {
   $RHS_EVAL(host.mesh, host.in.comp, host.rhs.comp$RHS_EVAL_TAIL);
@@ -397,69 +331,7 @@ double Ctx::max_interior_value(const $SCALAR* const* fields, unsigned ncomp) {
   return worst;
 }  // END FUNCTION: Ctx::max_interior_value
 
-int Ctx::snapshot_state() {
-  const unsigned ncomp = $NAMESPACE::generated::NUM_EVOL_GFS;
-  const unsigned nb = host.in.num_blocks;
-  const unsigned extent = host.mesh.geom[0].nx;
-  const std::size_t total =
-      static_cast<std::size_t>(nb) * extent * extent * extent;
-  if (u0 != nullptr) {
-    for (unsigned f = 0; f < ncomp; ++f) delete[] u0[f];
-    delete[] u0;
-    u0 = nullptr;
-  }  // END IF: snapshot buffer allocated
-  u0 = new $SCALAR*[ncomp];
-  for (unsigned f = 0; f < ncomp; ++f) {
-    u0[f] = new $SCALAR[total];
-    std::memcpy(u0[f], host.in.comp[f], sizeof($SCALAR) * total);
-  }  // END LOOP: for f over evolved components
-  return 0;
-}  // END FUNCTION: Ctx::snapshot_state
-
-double Ctx::max_drift_from_snapshot() {
-  const unsigned ncomp = $NAMESPACE::generated::NUM_EVOL_GFS;
-  const unsigned nb = host.in.num_blocks;
-  const unsigned extent = host.mesh.geom[0].nx;
-  const std::size_t total =
-      static_cast<std::size_t>(nb) * extent * extent * extent;
-  double worst = 0.0;
-  for (unsigned f = 0; f < ncomp; ++f) {
-    for (std::size_t cell = 0; cell < total; ++cell) {
-      const double d = std::fabs(static_cast<double>(host.in.comp[f][cell]) -
-                                 static_cast<double>(u0[f][cell]));
-      if (d > worst) worst = d;
-    }  // END LOOP: for cell over local-block cells
-  }  // END LOOP: for f over evolved components
-  return worst;
-}  // END FUNCTION: Ctx::max_drift_from_snapshot
-
-int Ctx::enforce_detgbar_equals_detghat_trAzero_all_blocks() {
-  // The enforcement is scheduled after initial-data construction and after
-  // every accepted timestep.  The generated kernel never calls exit(); it
-  // reports a structured status, and the host decides.
-  last_detgtrazero_status = $NAMESPACE::generated::detgtrazero_status_struct{};
-  $ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO(host.mesh, host.in.comp, &last_detgtrazero_status);
-  ++detgtrazero_passes;
-  if (last_detgtrazero_status.failed_points != 0) {
-    std::fprintf(stderr,
-                 "ERROR: constraint enforcement refused %llu point(s); first at index "
-                 "%lld, first nonfinite field index %d\\n",
-                 last_detgtrazero_status.failed_points,
-                 last_detgtrazero_status.first_failing_index,
-                 last_detgtrazero_status.first_failing_field);
-    return 1;
-  }  // END IF: enforcement refused a point
-  return 0;
-}  // END FUNCTION: Ctx::enforce_detgbar_equals_detghat_trAzero_all_blocks
-
-double Ctx::max_constraint_violation() {
-  // Recompute the diagnostics from the current evolved state and reduce over
-  // every generated DIAG component.  No diagnostic is named here: the count
-  // and the ordering are generated.
-  $CONSTRAINTS_EVAL(host.mesh, host.in.comp, host.diag.comp);
-  return max_interior_value(host.diag.comp,
-                            $NAMESPACE::generated::NUM_DIAG_GFS);
-}  // END FUNCTION: Ctx::max_constraint_violation
+$STANDALONE_APPLICATION_AFTER_RHS
 
 int Ctx::select_variables(const char* const* names, unsigned count) {
   // Output and refinement candidates are selected by exact NRPy name.
@@ -492,85 +364,7 @@ int Ctx::select_variables(const char* const* names, unsigned count) {
   return rc;
 }  // END FUNCTION: Ctx::select_variables
 
-namespace {
-
-// Evaluate the generated RHS on one block of the given resolution, filled with
-// the same continuum profile, and return the interior values sampled at the
-// coincident physical point (the block centre) for every component.
-void sample_rhs_at_centre(
-    int extent, double dx, int sample_index,
-    const $NAMESPACE::generated::params_struct& params,
-    std::vector<double>& out) {
-  const unsigned ncomp = $NAMESPACE::generated::NUM_EVOL_GFS;
-  const std::size_t vol = static_cast<std::size_t>(extent) * extent * extent;
-  std::vector<std::vector<$SCALAR>> state(
-      ncomp, std::vector<$SCALAR>(vol, 0.0));
-  std::vector<std::vector<$SCALAR>> rhs(
-      ncomp, std::vector<$SCALAR>(vol, 0.0));
-  BlockGeometry g;
-  g.nx = g.ny = g.nz = static_cast<unsigned>(extent);
-  g.padding = $NAMESPACE::generated::REQUIRED_PADDING;
-  g.component_offset = 0;
-  g.pmin_padded[0] = g.pmin_padded[1] = g.pmin_padded[2] = 0.0;
-  g.dx[0] = g.dx[1] = g.dx[2] = dx;
-  g.boundary_flags = 0;
-  std::vector<$SCALAR*> state_ptr(ncomp);
-  std::vector<const $SCALAR*> state_cptr(ncomp);
-  std::vector<$SCALAR*> rhs_ptr(ncomp);
-  for (unsigned f = 0; f < ncomp; ++f) {
-    state_ptr[f] = state[f].data();
-    state_cptr[f] = state[f].data();
-    rhs_ptr[f] = rhs[f].data();
-  }  // END LOOP: for f over evolved components
-  $MINKOWSKI_INITIAL_DATA_BLOCK(g, state_ptr.data());
-  $SMOOTH_PERTURBATION_BLOCK(
-      g, state_ptr.data(),
-      static_cast<$SCALAR>(params.smooth_perturbation_amplitude),
-      static_cast<$SCALAR>(params.smooth_perturbation_wavelength));
-  $RHS_EVAL_BLOCK(g, state_cptr.data(), rhs_ptr.data()$RHS_EVAL_BLOCK_TAIL);
-  // The caller passes the index of the shared physical point: at spacing
-  // dx/2^k that point is index sample_index*2^k, so the three grids sample the
-  // same location and the Richardson ratio is meaningful.
-  const unsigned sample = static_cast<unsigned>(sample_index);
-  out.assign(ncomp, 0.0);
-  for (unsigned f = 0; f < ncomp; ++f) {
-    out[f] = static_cast<double>(
-        rhs[f][sample + g.nx * (sample + g.ny * sample)]);
-  }  // END LOOP: for f over evolved components
-}  // END FUNCTION: sample_rhs_at_centre
-
-double max_abs_difference(const std::vector<double>& a,
-                          const std::vector<double>& b) {
-  double worst = 0.0;
-  for (std::size_t k = 0; k < a.size() && k < b.size(); ++k) {
-    const double d = std::fabs(a[k] - b[k]);
-    if (d > worst) worst = d;
-  }  // END LOOP: for k over paired values
-  return worst;
-}  // END FUNCTION: max_abs_difference
-
-// clang-format off
-}  // END NAMESPACE: internal linkage
-// clang-format on
-
-double observed_convergence_order(
-    double base_dx,
-    const $NAMESPACE::generated::params_struct& params) {
-  const int pad = static_cast<int>($NAMESPACE::generated::REQUIRED_PADDING);
-  const int coarse = 2 * pad + 9;  // odd, so the centre is a grid point
-  const int centre = (coarse - 1) / 2;
-  std::vector<double> r_h;
-  std::vector<double> r_h2;
-  std::vector<double> r_h4;
-  sample_rhs_at_centre(coarse, base_dx, centre, params,
-                       r_h);
-  sample_rhs_at_centre(2 * coarse - 1, base_dx / 2.0, 2 * centre, params, r_h2);
-  sample_rhs_at_centre(4 * coarse - 3, base_dx / 4.0, 4 * centre, params, r_h4);
-  const double d1 = max_abs_difference(r_h, r_h2);
-  const double d2 = max_abs_difference(r_h2, r_h4);
-  if (!(d1 > 0.0) || !(d2 > 0.0)) return -1.0;
-  return std::log2(d1 / d2);
-}  // END FUNCTION: observed_convergence_order
+$STANDALONE_APPLICATION_FREE_DEFINITIONS
 
 // clang-format off
 }  // END NAMESPACE: $NAMESPACE
@@ -602,8 +396,6 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {
  public:
   generated::params_struct params{};
   DVec state, unzipped, unzipped_rhs, diagnostics;
-  unsigned long long projection_passes = 0;
-  double projection_residual = 0.0;
   /**
    * Allocate owned vectors and communication buffers for a fixed mesh.
    *
@@ -619,70 +411,20 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {
   Ctx(const Ctx&) = delete;
   Ctx& operator=(const Ctx&) = delete;
   DVec& get_evolution_vars() { return state; }
-  /**
-   * Initialize Minkowski data, project it, and save the initial state.
-   *
-   * @return 0 on success or an inactive rank; invalid data aborts MPI_COMM_WORLD.
-   */
-  int initialize();
+$REAL_APPLICATION_DECLARATIONS
   /**
    * Exchange halos, evaluate generated block RHS kernels, and zip the result.
    *
    * @param[in,out] in One packed evolution vector; unzip updates its ghost nodes.
    * @param[out] out One packed vector receiving the zipped RHS.
    * @param count Number of packed evolution vectors; must equal one.
-   * @param time Host stage time; unused by this autonomous Minkowski profile.
+   * @param time Host stage time; unused by this autonomous generated profile.
    * @return 0 on success or an inactive rank; invalid data aborts MPI_COMM_WORLD.
    */
   int rhs(DVec* in, DVec* out, unsigned int count, DendroScalar time);
-  /**
-   * Leave the supplied stage input unchanged.
-   *
-   * @return 0 unconditionally; this hook performs no operation.
-   */
-  int pre_stage(DVec&) { return 0; }
-  /**
-   * Leave the supplied RHS unchanged; it is not an evolved stage state.
-   *
-   * @return 0 unconditionally; this hook performs no operation.
-   */
-  int post_stage(DVec&) { return 0; }
-  /**
-   * Leave the supplied timestep input unchanged.
-   *
-   * @return 0 unconditionally; this hook performs no operation.
-   */
-  int pre_timestep(DVec&) { return 0; }
-  /**
-   * Project a stage or accepted state according to the pinned ETS contract.
-   *
-   * @param[in,out] input Evolved state projected in place through unzip and zip.
-   * @return 0 on success or an inactive rank; failed projection aborts MPI_COMM_WORLD.
-   *
-   * @note ETS calls this on four RK4 stage states and once on the accepted state.
-   */
-  int post_timestep(DVec& input);
-  /**
-   * Evaluate finite constraints on active ranks and reduce their maximum.
-   *
-   * @return Global maximum absolute constraint value over block interiors.
-   *
-   * @note All parent ranks must call; nonfinite output aborts MPI_COMM_WORLD.
-   */
-  double max_constraints();
-  double max_rhs();
-  /**
-   * Compare owned evolved nodes with the initial snapshot and reduce the drift.
-   *
-   * @return Global maximum absolute change from the projected initial state.
-   *
-   * @pre initialize() has completed, and all parent ranks call this function.
-   */
-  double max_drift();
  private:
-  std::vector<DendroScalar> initial;
   /**
-   * Prescribe analytic Minkowski values outside the physical domain only.
+   * Prescribe application values outside the physical domain only.
    *
    * @note Updates unzipped exterior points; preserves all in-domain halo values.
    */
@@ -807,32 +549,15 @@ void Ctx::require_finite(DVec& value) {
     for (unsigned i = m_uiMesh->getNodeLocalBegin(); i < m_uiMesh->getNodeLocalEnd(); ++i)
       if (!std::isfinite(ptr[i])) fail("nonfinite evolved state");
 } // END FUNCTION: validate owned evolved values
-int Ctx::initialize() {
-  if (!$VALIDATE(params)) fail("invalid runtime parameters");
-  if (!m_uiMesh->isActive()) return 0;
-  std::vector<DendroScalar*> pointers(generated::NUM_EVOL_GFS);
-  unzipped.to_2d(pointers.data());
-  for (const auto& b : m_uiMesh->getLocalBlockList()) {
-    const auto g = block_geometry(*m_uiMesh, b, m_uiMinPt, m_uiMaxPt);
-    $MINKOWSKI_INITIAL_DATA_BLOCK(g, pointers.data());
-  } // END LOOP: initialize local blocks
-  zip(unzipped, state);
-  post_timestep(state);
-  initial.assign(state.get_vec_ptr(), state.get_vec_ptr() + state.get_size());
-  return 0;
-} // END FUNCTION: initialize Minkowski state
+$REAL_APPLICATION_INITIALIZATION
 void Ctx::fill_exterior() {
-  // Fixed Minkowski exterior boundary data. Only points outside the physical
-  // domain are prescribed. Interior halos remain the output of real unzip.
+  // Only points outside the physical domain are prescribed. Interior halos
+  // remain the output of real unzip. The application supplies field values;
+  // coordinate construction, classification, traversal, and writes stay here.
   std::vector<DendroScalar*> pointers(generated::NUM_EVOL_GFS);
   unzipped.to_2d(pointers.data());
-  BlockGeometry one{};
-  one.nx = one.ny = one.nz = 1;
-  one.dx[0] = one.dx[1] = one.dx[2] = 1.0;
   std::vector<DendroScalar> flat(generated::NUM_EVOL_GFS);
-  std::vector<DendroScalar*> fp(flat.size());
-  for (unsigned f = 0; f < flat.size(); ++f) fp[f] = &flat[f];
-  $MINKOWSKI_INITIAL_DATA_BLOCK(one, fp.data());
+$APPLICATION_EXTERIOR_VALUES
   const double low[3] = {m_uiMinPt.x(), m_uiMinPt.y(), m_uiMinPt.z()};
   const double high[3] = {m_uiMaxPt.x(), m_uiMaxPt.y(), m_uiMaxPt.z()};
   for (const auto& b : m_uiMesh->getLocalBlockList()) {
@@ -848,7 +573,7 @@ void Ctx::fill_exterior() {
               pointers[f][g.component_offset + i + std::size_t(g.nx)*(j + std::size_t(g.ny)*k)] = flat[f];
         } // END LOOP: prescribe exterior points
   } // END LOOP: visit exterior block padding
-} // END FUNCTION: fill Minkowski exterior
+} // END FUNCTION: fill application exterior
 int Ctx::rhs(DVec* in, DVec* out, unsigned int count, DendroScalar) {
   if (count != 1) fail("RHS requires one packed evolution vector");
   if (!m_uiMesh->isActive()) return 0;
@@ -868,58 +593,7 @@ int Ctx::rhs(DVec* in, DVec* out, unsigned int count, DendroScalar) {
   require_finite(*out);
   return 0;
 } // END FUNCTION: unzip evaluate and zip
-int Ctx::post_timestep(DVec& input) {
-  if (!m_uiMesh->isActive()) return 0;
-  require_finite(input);
-  unzip(input, unzipped, 1);
-  std::vector<DendroScalar*> pointers(generated::NUM_EVOL_GFS);
-  unzipped.to_2d(pointers.data());
-  for (const auto& b : m_uiMesh->getLocalBlockList()) {
-    const auto g = block_geometry(*m_uiMesh, b, m_uiMinPt, m_uiMaxPt);
-    generated::detgtrazero_status_struct status{};
-    $ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK(g, pointers.data(), &status);
-    if (status.failed_points || status.nonfinite_points) fail("projection failed");
-    projection_residual = std::max(projection_residual, std::max(status.max_abs_det_minus_one, status.max_abs_trace_residual));
-  } // END LOOP: project local blocks
-  zip(unzipped, input);
-  ++projection_passes;
-  return 0;
-} // END FUNCTION: project evolved stage state
-double Ctx::max_constraints() {
-  double local = 0.0;
-  if (m_uiMesh->isActive()) {
-    unzip(state, unzipped, 1);
-    fill_exterior();
-    std::vector<DendroScalar*> input(generated::NUM_EVOL_GFS), output(generated::NUM_DIAG_GFS);
-    unzipped.to_2d(input.data());
-    diagnostics.to_2d(output.data());
-    for (const auto& b : m_uiMesh->getLocalBlockList()) {
-      const auto g = block_geometry(*m_uiMesh, b, m_uiMinPt, m_uiMaxPt);
-      $CONSTRAINTS_EVAL_BLOCK(g, input.data(), output.data());
-    } // END LOOP: evaluate block constraints
-    local = interior_max(*m_uiMesh, diagnostics);
-  } // END IF: evaluate active rank diagnostics
-  return maximum(local);
-} // END FUNCTION: reduce constraint maximum
-double Ctx::max_rhs() {
-  DVec output;
-  output.create_vector(m_uiMesh, ot::DVEC_TYPE::OCT_SHARED_NODES, ot::DVEC_LOC::HOST, generated::NUM_EVOL_GFS, true);
-  rhs(&state, &output, 1, m_uiTinfo._m_uiT);
-  const double local = interior_max(*m_uiMesh, unzipped_rhs);
-  output.destroy_vector();
-  return maximum(local);
-} // END FUNCTION: measure current RHS
-double Ctx::max_drift() {
-  double local = 0.0;
-  require_finite(state);
-  if (m_uiMesh->isActive()) {
-    const unsigned stride = m_uiMesh->getDegOfFreedom();
-    for (unsigned f = 0; f < generated::NUM_EVOL_GFS; ++f)
-      for (unsigned i = m_uiMesh->getNodeLocalBegin(); i < m_uiMesh->getNodeLocalEnd(); ++i)
-        local = std::max(local, std::abs(state.get_vec_ptr()[std::size_t(f)*stride+i] - initial[std::size_t(f)*stride+i]));
-  } // END IF: compare owned evolved values
-  return maximum(local);
-} // END FUNCTION: measure evolved state drift
+$REAL_APPLICATION_AFTER_RHS
 // clang-format off
 }  // END NAMESPACE: $NAMESPACE
 // clang-format on
@@ -956,8 +630,29 @@ def substitute_solver_identifiers(
     :param solver_stem: Lowercase formulation stem for emitted file names.
     :param solver_namespace: Solver namespace.
     :return: The substituted text.
+
+    Doctests:
+    >>> substitute_solver_identifiers("namespace $NAMESPACE { using T = $SCALAR; }", "wave", "wave")
+    'namespace wave { using T = DendroScalar; }'
+    >>> import nrpy.c_function as cfc
+    >>> import nrpy.params as par
+    >>> _saved_cfuncs = dict(cfc.CFunction_dict)
+    >>> _saved_dendro = par.glb_extras_dict.get("Dendro")
+    >>> cfc.CFunction_dict.clear()
+    >>> par.glb_extras_dict.pop("Dendro", None)
+    >>> cfc.register_CFunction(desc="rhs", name="wave_rhs", params="", body="(void)0;")
+    >>> roles.set_CFunction_role("wave_rhs", "rhs_eval")
+    >>> roles.set_CFunction_codeparameters(
+    ...     "wave_rhs", ("amplitude", "num_steps", "enable_filter")
+    ... )
+    >>> _codeparameter_tail("wave_rhs", "runtime")
+    ', runtime.amplitude, runtime.num_steps, runtime.enable_filter'
+    >>> substitute_solver_identifiers("call $RHS_EVAL$RHS_EVAL_TAIL;", "wave", "wave")
+    'call wave_rhs, params.amplitude, params.num_steps, params.enable_filter;'
+    >>> cfc.CFunction_dict.clear(); cfc.CFunction_dict.update(_saved_cfuncs)
+    >>> _ = par.glb_extras_dict.pop("Dendro", None)
+    >>> _ = par.glb_extras_dict.setdefault("Dendro", _saved_dendro) if _saved_dendro is not None else None
     """
-    rhs_block = roles.CFunction_name_for_role("rhs_eval_block")
     replacements = (
         (
             "$PARAMS_STRUCT_SET_TO_DEFAULT",
@@ -965,99 +660,317 @@ def substitute_solver_identifiers(
         ),
         ("$VALIDATE", f"{solver_stem}_params_validate"),
         ("$PRINT_EFFECTIVE", f"{solver_stem}_params_print_effective"),
-        (
-            "$MINKOWSKI_INITIAL_DATA_BLOCK",
-            roles.CFunction_name_for_role("minkowski_initial_data_block"),
-        ),
-        (
-            "$MINKOWSKI_INITIAL_DATA",
-            roles.CFunction_name_for_role("minkowski_initial_data"),
-        ),
-        (
-            "$SMOOTH_PERTURBATION_BLOCK",
-            roles.CFunction_name_for_role("smooth_perturbation_block"),
-        ),
-        ("$SMOOTH_PERTURBATION", roles.CFunction_name_for_role("smooth_perturbation")),
-        ("$RHS_EVAL_FLAT_BLOCK", roles.CFunction_name_for_role("rhs_eval_flat_block")),
-        ("$RHS_EVAL_BLOCK_TAIL", _codeparameter_tail(rhs_block, "params")),
-        ("$RHS_EVAL_BLOCK", rhs_block),
-        (
-            "$RHS_EVAL_TAIL",
-            _codeparameter_tail(roles.CFunction_name_for_role("rhs_eval"), "params"),
-        ),
-        ("$RHS_EVAL", roles.CFunction_name_for_role("rhs_eval")),
-        (
-            "$ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK",
-            roles.CFunction_name_for_role(
-                "enforce_detgbar_equals_detghat_trAzero_block"
-            ),
-        ),
-        (
-            "$ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO",
-            roles.CFunction_name_for_role("enforce_detgbar_equals_detghat_trAzero"),
-        ),
-        (
-            "$CONSTRAINTS_EVAL_BLOCK",
-            roles.CFunction_name_for_role("constraints_eval_block"),
-        ),
-        ("$CONSTRAINTS_EVAL", roles.CFunction_name_for_role("constraints_eval")),
         ("$NAMESPACE", solver_namespace),
         ("$STEM", solver_stem),
         ("$SCALAR", gri.DENDRO_SCALAR_TYPE),
     )
     for placeholder, value in replacements:
         text = text.replace(placeholder, value)
+
+    role_tokens = (
+        ("$RHS_EVAL_FLAT_BLOCK", "rhs_eval_flat_block", False),
+        ("$RHS_EVAL_BLOCK_TAIL", "rhs_eval_block", True),
+        ("$RHS_EVAL_BLOCK", "rhs_eval_block", False),
+        ("$RHS_EVAL_TAIL", "rhs_eval", True),
+        ("$RHS_EVAL", "rhs_eval", False),
+    )
+    for placeholder, role, is_tail in role_tokens:
+        if placeholder not in text:
+            continue
+        function_name = roles.CFunction_name_for_role(role)
+        value = (
+            _codeparameter_tail(function_name, "params") if is_tail else function_name
+        )
+        text = text.replace(placeholder, value)
     return text
 
 
-def output_solver_context_h(solver_stem: str, solver_namespace: str) -> str:
-    """
+def output_solver_context_h(
+    solver_stem: str,
+    solver_namespace: str,
+    standalone_application_declarations: str,
+    standalone_application_members: str,
+    standalone_application_free_declarations: str,
+    real_application_declarations: str,
+) -> str:
+    r"""
     Emit the context header with explicit host selection.
 
     :param solver_stem: Lowercase formulation stem for emitted file names.
     :param solver_namespace: Solver namespace.
+    :param standalone_application_declarations: Application methods for the
+        standalone context public interface.
+    :param standalone_application_members: Application-owned standalone state.
+    :param standalone_application_free_declarations: Application free-function
+        declarations in the solver namespace.
+    :param real_application_declarations: Real-host application methods and
+        state, inserted before the context's private generic helpers.
     :return: The complete C++ header text.
+    :raises ValueError: If an application declaration remains unresolved.
 
     Doctests:
-    >>> from nrpy.infrastructures.Dendro.clang_format_guards import (
-    ...     unguarded_end_namespace_markers,
-    ... )
-    >>> unguarded_end_namespace_markers(_HEADER)
-    []
+    >>> _HEADER.count("// clang-format off") == _HEADER.count("}  // END NAMESPACE:")
+    True
     >>> _HEADER.count("}  // END NAMESPACE:")
     1
-    >>> unguarded_end_namespace_markers(_SOURCE)
-    []
+    >>> _SOURCE.count("// clang-format off") == _SOURCE.count("}  // END NAMESPACE:")
+    True
     >>> _SOURCE.count("}  // END NAMESPACE:")
-    3
+    2
+    >>> unrelated = output_solver_context_h(
+    ...     "wave", "wave", "  int initialize_scalar();", "", "", "  int initialize();"
+    ... )
+    >>> "initialize_scalar" in unrelated and "detgtrazero" not in unrelated
+    True
     """
     opening, closing = header_guard(f"{solver_stem}Ctx.h")
-    body = substitute_solver_identifiers(
+    body = (
         "#if defined(NRPY_DENDRO_STANDALONE_HOST)\n"
         + _HEADER
         + "\n#else\n"
         + _REAL_HEADER
-        + "\n#endif\n",
-        solver_stem,
-        solver_namespace,
+        + "\n#endif\n"
     )
-    return BANNER + f"{opening}\n\n" + body + f"\n{closing}\n"
+    for token, value in (
+        ("$STANDALONE_APPLICATION_DECLARATIONS", standalone_application_declarations),
+        ("$STANDALONE_APPLICATION_MEMBERS", standalone_application_members),
+        (
+            "$STANDALONE_APPLICATION_FREE_DECLARATIONS",
+            standalone_application_free_declarations,
+        ),
+        ("$REAL_APPLICATION_DECLARATIONS", real_application_declarations),
+    ):
+        body = body.replace(token, value)
+    unresolved = tuple(
+        token
+        for token in (
+            "$STANDALONE_APPLICATION_DECLARATIONS",
+            "$STANDALONE_APPLICATION_MEMBERS",
+            "$STANDALONE_APPLICATION_FREE_DECLARATIONS",
+            "$REAL_APPLICATION_DECLARATIONS",
+        )
+        if token in body
+    )
+    if unresolved:
+        raise ValueError(f"Application declarations were not resolved: {unresolved}")
+    return (
+        BANNER
+        + f"{opening}\n\n"
+        + substitute_solver_identifiers(
+            body,
+            solver_stem,
+            solver_namespace,
+        )
+        + f"\n{closing}\n"
+    )
 
 
-def output_solver_context_cpp(solver_stem: str, solver_namespace: str) -> str:
-    """
+def output_solver_context_cpp(
+    solver_stem: str,
+    solver_namespace: str,
+    standalone_application_destructor: str,
+    standalone_application_post_mesh: str,
+    standalone_application_startup_checks: str,
+    standalone_application_initialization: str,
+    standalone_application_after_rhs: str,
+    standalone_application_free_definitions: str,
+    real_application_initialization: str,
+    real_application_exterior_values: str,
+    real_application_after_rhs: str,
+) -> str:
+    r"""
     Emit the context implementation with explicit host selection.
 
     :param solver_stem: Lowercase formulation stem for emitted file names.
     :param solver_namespace: Solver namespace.
+    :param standalone_application_destructor: Cleanup of application-owned
+        standalone context state.
+    :param standalone_application_post_mesh: Application setup after generic
+        standalone mesh and parameter initialization.
+    :param standalone_application_startup_checks: Additional application
+        qualification checks.
+    :param standalone_application_initialization: Application initialization
+        method definitions before the generic RHS methods.
+    :param standalone_application_after_rhs: Application diagnostics and
+        accepted-step policy definitions after generic reductions.
+    :param standalone_application_free_definitions: Application free-function
+        definitions emitted before the standalone namespace closes.
+    :param real_application_initialization: Application initialization method
+        definitions inserted after generic storage setup.
+    :param real_application_exterior_values: Application statements that fill
+        the existing ``flat`` value vector before generic exterior traversal.
+    :param real_application_after_rhs: Application hook and diagnostic method
+        definitions inserted after the generic RHS callback.
     :return: The complete C++ source text.
+    :raises ValueError: If an application insertion remains unresolved.
+
+    An unrelated scalar/vector application crosses every generic assembly
+    boundary without importing GR policy.  The live registries and sidecars are
+    restored by object identity afterward.
+
+    >>> import nrpy.c_function as cfc
+    >>> import nrpy.params as par
+    >>> from nrpy.infrastructures.Dendro import main_cpp as generic_main
+    >>> from nrpy.infrastructures.Dendro import state_h, types_h
+    >>> _saved_infrastructure = par.parval_from_str("Infrastructure")
+    >>> _saved_fd_order = par.parval_from_str("fd_order")
+    >>> _saved_fields = dict(gri.glb_gridfcs_dict)
+    >>> _saved_parameters = dict(par.glb_code_params_dict)
+    >>> _saved_cfuncs = dict(cfc.CFunction_dict)
+    >>> _saved_extras = dict(par.glb_extras_dict)
+    >>> _saved_dendro_present = "Dendro" in par.glb_extras_dict
+    >>> _saved_dendro = par.glb_extras_dict.pop("Dendro", None)
+    >>> _saved_roles_present = _saved_dendro is not None and "CFunction_roles" in _saved_dendro
+    >>> _saved_roles = None if _saved_dendro is None else _saved_dendro.get("CFunction_roles")
+    >>> _saved_codeparameters_present = _saved_dendro is not None and "CFunction_codeparameters" in _saved_dendro
+    >>> _saved_codeparameters = None if _saved_dendro is None else _saved_dendro.get("CFunction_codeparameters")
+    >>> try:
+    ...     gri.glb_gridfcs_dict.clear()
+    ...     cfc.CFunction_dict.clear()
+    ...     par.set_parval_from_str("Infrastructure", "Dendro")
+    ...     _ = gri.register_gridfunctions("wave_scalar", group="EVOL")
+    ...     _ = gri.register_gridfunctions_for_single_rank1(
+    ...         "waveU", dimension=2, group="EVOL"
+    ...     )
+    ...     roles.set_upwind_control_fields(("waveU0", "waveU1"))
+    ...     _function_specs = (
+    ...         ("wave_rhs", "rhs_eval",
+    ...          "const StandaloneHostMesh& mesh, const DendroScalar* const* in_gfs, DendroScalar* const* rhs_gfs",
+    ...          "(void)mesh; rhs_gfs[0][0] = in_gfs[0][0] + in_gfs[1][0];"),
+    ...         ("wave_rhs_block", "rhs_eval_block",
+    ...          "const BlockGeometry& geom, const DendroScalar* const* in_gfs, DendroScalar* const* rhs_gfs",
+    ...          "const auto p = geom.component_offset; rhs_gfs[0][p] = in_gfs[0][p] + in_gfs[1][p];"),
+    ...         ("wave_rhs_flat", "rhs_eval_flat_block",
+    ...          "const BlockGeometry& geom, const DendroScalar* in_gfs, DendroScalar* rhs_gfs",
+    ...          "const auto v = geom.nx*geom.ny*geom.nz; rhs_gfs[0] = in_gfs[0] + in_gfs[v];"),
+    ...     )
+    ...     for _name, _role, _params, _body in _function_specs:
+    ...         cfc.register_CFunction(
+    ...             desc="wave fixture", name=_name, params=_params, body=_body
+    ...         )
+    ...         roles.set_CFunction_role(_name, _role)
+    ...     _types = types_h.output_types_h(
+    ...         "wave", "wave", "struct wave_status { int accepted = 0; };"
+    ...     )
+    ...     _state = state_h.output_state_h("wave", "wave")
+    ...     _header = output_solver_context_h(
+    ...         "wave", "wave",
+    ...         "  int initialize_scalar_vector();\n  double max_wave_rhs();\n  void apply_wave_boundary();",
+    ...         "  double energy = 0.0;", "", "  double max_wave_rhs();"
+    ...     )
+    ...     _source = output_solver_context_cpp(
+    ...         "wave", "wave", "  energy = 0.0;", "  energy = dx;", "  if (energy < 0.0) return 1;",
+    ...         "int Ctx::initialize_scalar_vector() { energy = 1.0; return 0; }\nvoid Ctx::apply_wave_boundary() { energy += 1.0; }",
+    ...         "double Ctx::max_wave_rhs() { return max_interior_rhs(); }", "", "",
+    ...         "  flat[0] = 1.0; flat[1] = 2.0; flat[2] = 3.0;",
+    ...         "double Ctx::max_wave_rhs() { return interior_max(*m_uiMesh, unzipped_rhs); }"
+    ...     )
+    ...     _main = generic_main.output_main_cpp(
+    ...         "wave", "wave", "waveSolver", "  if (ctx.initialize_scalar_vector()) return 1;",
+    ...         "  const double wave_norm = ctx.max_wave_rhs();", "    ctx.apply_wave_boundary();",
+    ...         "  if (!std::isfinite(wave_norm)) return 1;", "4", "0.25*dx",
+    ...         "      if (!std::isfinite(context.max_wave_rhs())) return 1;"
+    ...     )
+    ...     assert all(name in _state for name in ("wave_scalar", "waveU0", "waveU1"))
+    ...     assert "struct wave_status" in _types
+    ...     assert _header.count("double max_wave_rhs();") == 2
+    ...     assert _source.count("double Ctx::max_wave_rhs()") == 2
+    ...     assert "int Ctx::initialize_scalar_vector()" in _source
+    ...     assert "void Ctx::apply_wave_boundary()" in _source
+    ...     assert "ctx.initialize_scalar_vector()" in _main
+    ...     assert "ctx.apply_wave_boundary()" in _main
+    ...     assert "context.max_wave_rhs()" in _main
+    ...     assert "in_gfs[0][p] + in_gfs[1][p]" in cfc.CFunction_dict["wave_rhs_block"].body
+    ...     assert all(token in _source for token in ("wave_rhs", "wave_rhs_block", "wave_rhs_flat"))
+    ...     assert "flat[0] = 1.0" in _source
+    ...     assert all(token not in (_types + _state + _header + _source + _main)
+    ...                for token in ("minkowski", "detgtrazero", "constraints_eval"))
+    ... finally:
+    ...     gri.glb_gridfcs_dict.clear(); gri.glb_gridfcs_dict.update(_saved_fields)
+    ...     cfc.CFunction_dict.clear(); cfc.CFunction_dict.update(_saved_cfuncs)
+    ...     _ = par.glb_extras_dict.pop("Dendro", None)
+    ...     _ = par.glb_extras_dict.setdefault("Dendro", _saved_dendro) if _saved_dendro is not None else None
+    ...     par.set_parval_from_str("Infrastructure", _saved_infrastructure)
+    >>> set(gri.glb_gridfcs_dict) == set(_saved_fields)
+    True
+    >>> all(gri.glb_gridfcs_dict[name] is value for name, value in _saved_fields.items())
+    True
+    >>> set(par.glb_code_params_dict) == set(_saved_parameters)
+    True
+    >>> all(par.glb_code_params_dict[name] is value for name, value in _saved_parameters.items())
+    True
+    >>> set(cfc.CFunction_dict) == set(_saved_cfuncs)
+    True
+    >>> all(cfc.CFunction_dict[name] is value for name, value in _saved_cfuncs.items())
+    True
+    >>> set(par.glb_extras_dict) == set(_saved_extras)
+    True
+    >>> all(par.glb_extras_dict[name] is value for name, value in _saved_extras.items())
+    True
+    >>> ("Dendro" in par.glb_extras_dict) == _saved_dendro_present
+    True
+    >>> par.glb_extras_dict.get("Dendro") is _saved_dendro
+    True
+    >>> (_saved_dendro is not None and "CFunction_roles" in _saved_dendro) == _saved_roles_present
+    True
+    >>> _saved_dendro is None or _saved_dendro.get("CFunction_roles") is _saved_roles
+    True
+    >>> (_saved_dendro is not None and "CFunction_codeparameters" in _saved_dendro) == _saved_codeparameters_present
+    True
+    >>> _saved_dendro is None or _saved_dendro.get("CFunction_codeparameters") is _saved_codeparameters
+    True
+    >>> par.parval_from_str("Infrastructure") == _saved_infrastructure
+    True
+    >>> par.parval_from_str("fd_order") == _saved_fd_order
+    True
     """
-    return BANNER + substitute_solver_identifiers(
+    text = (
         "#if defined(NRPY_DENDRO_STANDALONE_HOST)\n"
         + _SOURCE
         + "\n#else\n"
         + _REAL_SOURCE
-        + "\n#endif\n",
+        + "\n#endif\n"
+    )
+    for token, value in (
+        ("$STANDALONE_APPLICATION_DESTRUCTOR", standalone_application_destructor),
+        ("$STANDALONE_APPLICATION_POST_MESH", standalone_application_post_mesh),
+        (
+            "$STANDALONE_APPLICATION_STARTUP_CHECKS",
+            standalone_application_startup_checks,
+        ),
+        (
+            "$STANDALONE_APPLICATION_INITIALIZATION",
+            standalone_application_initialization,
+        ),
+        ("$STANDALONE_APPLICATION_AFTER_RHS", standalone_application_after_rhs),
+        (
+            "$STANDALONE_APPLICATION_FREE_DEFINITIONS",
+            standalone_application_free_definitions,
+        ),
+        ("$REAL_APPLICATION_INITIALIZATION", real_application_initialization),
+        ("$APPLICATION_EXTERIOR_VALUES", real_application_exterior_values),
+        ("$REAL_APPLICATION_AFTER_RHS", real_application_after_rhs),
+    ):
+        text = text.replace(token, value)
+    unresolved = tuple(
+        token
+        for token in (
+            "$STANDALONE_APPLICATION_DESTRUCTOR",
+            "$STANDALONE_APPLICATION_POST_MESH",
+            "$STANDALONE_APPLICATION_STARTUP_CHECKS",
+            "$STANDALONE_APPLICATION_INITIALIZATION",
+            "$STANDALONE_APPLICATION_AFTER_RHS",
+            "$STANDALONE_APPLICATION_FREE_DEFINITIONS",
+            "$REAL_APPLICATION_INITIALIZATION",
+            "$APPLICATION_EXTERIOR_VALUES",
+            "$REAL_APPLICATION_AFTER_RHS",
+        )
+        if token in text
+    )
+    if unresolved:
+        raise ValueError(f"Application insertions were not resolved: {unresolved}")
+    return BANNER + substitute_solver_identifiers(
+        text,
         solver_stem,
         solver_namespace,
     )

@@ -1,13 +1,15 @@
 # Validation, Standalone Host, And Deferral Gates
 
-> Explain the standalone host vehicle, the generated self-tests and Minkowski lifecycle gates, the CI coverage, and the Dendrolib pin and proven capability axes. · Status: provisional · Last reconciled: 09-07-2026
+> Explain the standalone host vehicle, the generated self-tests and Minkowski lifecycle gates, the CI coverage, and the Dendrolib pin and proven capability axes. · Status: provisional · Last reconciled: 09-09-2026
 > Up: [Dendro](index.md)
 
 ## Summary
 
 Dendro validation now covers owner checks, the standalone test vehicle, and a
-pinned real-host fCCZ4 qualification. Both standalone formulations retain eleven
-CTest cases. The generated fCCZ4 solver also builds against pinned Dendro-GR and
+pinned real-host fCCZ4 qualification. Both default FD4 formulations now emit
+fourteen CTest cases: eleven retained gates, an address/value fixture, typed
+parameter forwarding, and an independent nonflat GR reference. The generated
+fCCZ4 solver also builds against pinned Dendro-GR and
 Dendrolib, passes distributed transport checks, and completes a checked 100-step
 Minkowski evolution on two active MPI ranks. Real-host coverage is limited to
 fixed mesh, global RK4, double precision, one CPU thread per rank, and analytic
@@ -72,9 +74,49 @@ emitter output, as BHaH ships `simd_intrinsics.h`. The generated `tests/` direct
 covering the state registry, parameter registry, padding, memory offsets, upwind
 selection, the right-hand side, initial data, exact-name selection, det/trace
 enforcement, and constraint diagnostics, and the solver's own `CMakeLists.txt`
-registers the Minkowski lifecycle as an eleventh: every gate it prints exits
+registers the Minkowski lifecycle alongside those sections: every gate it prints exits
 nonzero on failure, so the numerical gates are part of the suite rather than a
 demo someone has to remember to run.
+
+The address/value section is itself generated through `c_codegen`,
+`DendroGridFunction`, the generic pointer bindings, and the production parameter
+call-tail owner. It uses two fields, a 13 by 15 by 17 padded block, unequal
+spacing, a nonzero component offset, sentinel regions, centered and mixed
+derivatives, positive/negative/zero upwinding, nonzero KO response, and a
+separately packed flat layout. The typed-forwarding section fixes the REAL,
+integer, Boolean, and common-data signature and confirms that an unused runtime
+parameter remains in the full parameter structure without entering the kernel
+signature.
+
+The GR-owned `gr_nonflat_reference` section evaluates canonical BSSN or fCCZ4
+symbolic RHS expressions on deterministic binary64 data. The Python generator
+creates each sample once, converts that exact binary64 value to multiprecision
+through its integer ratio, and emits the same value as a hexadecimal C++
+literal. The generated test verifies every emitted sample assignment exactly
+before calling a kernel. Thus the C++ kernel and the Python reference cannot
+silently evaluate different rounded input fields.
+
+The reference uses the canonical finite-difference coefficient and offset
+tables, while independently applying those tables to the sample cache: it uses
+neither a generated address string, the kernel, nor its flat adapter to obtain
+an expected result. Stencil sums, spacing factors, substitutions, and the full
+actual CSE evaluation graph are evaluated at both 80 and 100 decimal digits
+through the shared high-precision evaluator. The componentwise binary64 bound
+is derived before running the C++ test from that graph's operation count, the
+largest input/stencil/CSE-temporary scale, inverse-spacing amplification, and
+the observed 80-versus-100-digit difference. The bound includes a documented
+factor for valid CSE reassociation and coefficient rounding; it is not tuned to
+the measured C++ error.
+
+Every evolved component is checked at three asymmetric points against both the
+block kernel and flat adapter, with named actual, reference, error, and bound
+diagnostics. A separate analytic polynomial exercise reaches the same
+reference pipeline and covers centered, mixed, positive/negative/zero upwind,
+and nonzero KO derivatives. The inputs make the conformal metric positive
+definite with unit determinant and make the conformal curvature trace-free by
+construction. KO-on generation also requires resolvable KO effects in at least
+three components from three scientific field families; a targeted removal of
+one component family's KO terms fails the numerical comparison.
 
 With the option `OFF`, the generated context includes real Dendrolib headers
 and links the host's `dendro5` and `toml11::toml11` targets. The two build modes
@@ -90,12 +132,12 @@ terminal banner rather than a ninth gate. The lifecycle runs as a registered
 CTest case, so a failing gate fails the suite.
 
 Claim evidence:
-- Claim: the generated solver builds warning-free against the standalone host and passes its eleven CTest cases, one of which is the Minkowski lifecycle, which also completes on two MPI ranks with observed convergence order 3.977 for BSSN and 3.976 for fCCZ4 at finite-difference order 4; none of this touches the real Dendro-GR host.
+- Claim: the generated solver builds warning-free against the standalone host and passes fourteen CTest cases for each default FD4/KO-off formulation, including the retained Minkowski lifecycle and the new executable fixtures; none of this renews real Dendro-GR qualification.
 - Role: descriptive behavior
-- Deciding authority: [self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/self_tests_cpp.py), `output_self_tests_cpp`; [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py), `output_main_cpp`
-- Corroboration: [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py), `output_tests_cmake`'s ten `add_test` registrations and `output_solver_cmake`'s `add_test(NAME <stem>_minkowski_lifecycle ...)`
+- Deciding authority: [self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/self_tests_cpp.py), `output_self_test_artifacts`; [general_relativity/self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py), `_nonflat_reference_cpp`; [general_relativity/main_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py), `standalone_ctest_statements`
+- Corroboration: [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py), which registers the explicit application-owned section and lifecycle lists
 - Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3, OpenMPI 4.1.6; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=1 and 2 MPI ranks; error_path=not-run; options=--fd-order 4 --no-ko; date=09-06-2026`
+- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3, OpenMPI 4.1.6; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=1 and 2 MPI ranks; error_path=named fault injections; options=--fd-order 4 with --no-ko and --ko; date=09-09-2026`
 
 ### Runtime parameters
 
@@ -215,6 +257,11 @@ Claim evidence:
 
 ### Gates that remain open
 
+The real-context source was reorganized after the pinned run described above.
+Standalone behavior is rechecked here, but the pinned real-host build/run must
+be repeated before that historical result is treated as qualification of the
+new source layout.
+
 General physical boundary conditions and their flag semantics, remeshing and
 state transfer, LTS, checkpoint/restart ABI, output selection, GPU execution,
 and threaded kernels remain open. The adapter copies boundary flags but this
@@ -233,8 +280,10 @@ specifically for fCCZ4. Real-host CI is not added here.
 - [README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md) - build, run, and checker-exercise instructions
 - [dendro_standalone_host.h](../../../nrpy/infrastructures/Dendro/standalone_host/dendro_standalone_host.h) - standalone host types for the generated solver
 - [initial_data.py](../../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py) - the `__main__` trusted-baseline sweep
-- [self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/self_tests_cpp.py) - `output_self_tests_cpp`
-- [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - `output_main_cpp`
+- [self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/self_tests_cpp.py) - `output_self_test_artifacts`
+- [general_relativity/self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py) - `_nonflat_reference_cpp`
+- [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - generic process-shell `output_main_cpp`
+- [general_relativity/main_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py) - GR lifecycle policy and CTest registrations
 - [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py) - `PROVEN_DENDROLIB_COMMIT`, `output_solver_cmake`, `output_tests_cmake`
 - [cmdline_input_and_parfiles.py](../../../nrpy/infrastructures/Dendro/cmdline_input_and_parfiles.py) - `generate_default_parfile`
 

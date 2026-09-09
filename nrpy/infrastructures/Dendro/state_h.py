@@ -38,14 +38,35 @@ def state_records() -> List[Tuple[str, int, str]]:
 
     Doctests:
     >>> import nrpy.params as par
-    >>> gri.glb_gridfcs_dict.clear()
-    >>> par.set_parval_from_str("Infrastructure", "Dendro")
-    >>> _ = gri.register_gridfunctions(["bXX", "aYY"], group="EVOL")
-    >>> _ = gri.register_gridfunctions("hZZ", group="DIAG")
-    >>> state_records()
-    [('EVOL', 0, 'aYY'), ('EVOL', 1, 'bXX'), ('DIAG', 0, 'hZZ')]
-    >>> group_names("EVOL")
-    ['aYY', 'bXX']
+    >>> _saved_fields = dict(gri.glb_gridfcs_dict)
+    >>> try:
+    ...     gri.glb_gridfcs_dict.clear()
+    ...     par.set_parval_from_str("Infrastructure", "Dendro")
+    ...     _ = gri.register_gridfunctions(["bXX", "aYY"], group="EVOL")
+    ...     _ = gri.register_gridfunctions_for_single_rank1(
+    ...         "vU", dimension=2, group="AUXEVOL"
+    ...     )
+    ...     _ = gri.register_gridfunctions("zAux", group="AUX")
+    ...     _ = gri.register_gridfunctions("hZZ", group="DIAG")
+    ...     assert state_records() == [
+    ...         ('EVOL', 0, 'aYY'), ('EVOL', 1, 'bXX'),
+    ...         ('AUXEVOL', 0, 'vU0'), ('AUXEVOL', 1, 'vU1'),
+    ...         ('AUX', 0, 'zAux'), ('DIAG', 0, 'hZZ')]
+    ...     assert group_names("EVOL") == ['aYY', 'bXX']
+    ...     _bindings = output_component_bindings(
+    ...         group_names("AUXEVOL"), "DendroScalar", array="aux",
+    ...         role=gf_names.input_pointer, const_pointee=True,
+    ...         index_expression=lambda _name, position: str(position),
+    ...         base_offset="offset",
+    ...     ).splitlines()
+    ...     assert _bindings == [
+    ...         'const DendroScalar* const in_vU0 = aux[0] + offset;',
+    ...         'const DendroScalar* const in_vU1 = aux[1] + offset;']
+    ... finally:
+    ...     gri.glb_gridfcs_dict.clear()
+    ...     gri.glb_gridfcs_dict.update(_saved_fields)
+    >>> all(gri.glb_gridfcs_dict[name] is value for name, value in _saved_fields.items())
+    True
     """
     evol, auxevol, diag, aux = gri.GridFunction.gridfunction_lists()
     records: List[Tuple[str, int, str]] = []
@@ -64,10 +85,9 @@ def group_names(group: str) -> List[str]:
     """
     Return the registered gridfunction names in one group, in registry order.
 
-    The four registry accessors in
-    :mod:`nrpy.infrastructures.Dendro.CFunction_roles` are the single reader of
-    ``gri.GridFunction.gridfunction_lists()``, so this dispatches over them
-    rather than deriving the order a second time.
+    Dispatch through the four shared registry accessors in
+    :mod:`nrpy.infrastructures.Dendro.CFunction_roles`, so all consumers use
+    the same group-specific ordering helpers.
 
     :param group: Registry group name, one of ``EVOL``, ``AUXEVOL``, ``AUX``, ``DIAG``.
     :return: The group's gridfunction names, in NRPy registry order.

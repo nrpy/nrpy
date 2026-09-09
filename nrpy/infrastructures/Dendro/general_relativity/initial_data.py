@@ -35,9 +35,9 @@ from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import block_kernel_helpers as bkh
-from nrpy.infrastructures.Dendro import generation_parameters
 from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
 from nrpy.infrastructures.Dendro import state_h
+from nrpy.infrastructures.Dendro.general_relativity import generation_parameters
 from nrpy.infrastructures.Dendro.simple_loop import (
     block_loop,
     require_serial_parallelization,
@@ -687,8 +687,17 @@ if __name__ == "__main__":
     # nrpy/finite_difference.py's own oracles and the generated padding
     # self-test.  Only the small kernels are captured: coding_style.md excludes
     # a right-hand side, Ricci or constraint kernel from golden-output files.
+    from nrpy.equations.general_relativity.BSSN_constraints import (
+        BSSN_constraints as SweepBSSNConstraints,
+    )
+    from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs as SweepBSSNRHSs
+    from nrpy.equations.general_relativity.fCCZ4_constraints import (
+        fCCZ4_constraints as SweepFCCZ4Constraints,
+    )
+    from nrpy.equations.general_relativity.fCCZ4_RHSs import (
+        fCCZ4_RHSs as SweepFCCZ4RHSs,
+    )
     from nrpy.helpers.generic import clang_format, validate_strings
-    from nrpy.infrastructures.Dendro.general_relativity import trusted_capture
 
     par.set_parval_from_str("Infrastructure", "Dendro")
     par.set_parval_from_str("parallelization", "none")
@@ -701,8 +710,18 @@ if __name__ == "__main__":
         rhs_eval as sweep_rhs_eval,
     )
 
-    for sweep_fCCZ4, sweep_cf in trusted_capture.SHIPPED_PROFILES:
-        trusted_capture.reset_generation_state()
+    for sweep_fCCZ4, sweep_cf in ((True, "chi"), (False, "W")):
+        cfc.CFunction_dict.clear()
+        gri.glb_gridfcs_dict.clear()
+        par.glb_extras_dict.pop("Dendro", None)
+        for factory in (
+            BSSN_quantities,
+            SweepBSSNRHSs,
+            SweepBSSNConstraints,
+            SweepFCCZ4RHSs,
+            SweepFCCZ4Constraints,
+        ):
+            factory.clear()
         sweep_stem = "fccz4" if sweep_fCCZ4 else "bssn"
         par.set_parval_from_str("EvolvedConformalFactor_cf", sweep_cf)
         # The right-hand-side registrar is what registers the evolved state

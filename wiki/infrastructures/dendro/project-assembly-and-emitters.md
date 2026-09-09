@@ -1,6 +1,6 @@
 # Project Assembly And Emitters
 
-> Explain how the Dendro infrastructure turns the NRPy registries into a complete generated solver directory, which module emits which artifact, and where the emitted names come from. · Status: provisional · Last reconciled: 09-07-2026
+> Explain how the Dendro infrastructure turns the NRPy registries into a complete generated solver directory, which module emits which artifact, and where the emitted names come from. · Status: provisional · Last reconciled: 09-09-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -21,19 +21,24 @@ Modules are named for what they emit, following BHaH's `BHaH_defines_h.py` and
 
 | Module | Emits |
 | --- | --- |
-| `types_h` | the scalar contract header and the det/trace enforcement status record |
+| `types_h` | the scalar contract plus declarations supplied explicitly by the application owner |
 | `state_h` | the EVOL enum, name array, metadata, and exact-name lookup |
 | `constants_h` | the generated finite-difference order, required padding and Kreiss-Oliger switch |
 | `CodeParameters` | the generated `params_struct` header, the sample parameter table, and the parameter CFunctions |
 | `Dendro_defines_h` | the `<stem>_defines.h` header every generated source includes, playing the role `BHaH_defines.h` plays in BHaH |
 | `cmake_helpers` | one source file per registered CFunction, the `<stem>_function_prototypes.h` header, the CMake source list, and the solver and tests `CMakeLists.txt` |
-| `solver_context` | the host context header and source |
-| `main_cpp` | the entry point and its lifecycle gates |
-| `self_tests_cpp` | the generated CTest sources |
+| `solver_context` | generic host geometry, storage, transport, reductions, and exterior traversal |
+| `general_relativity/solver_context` | GR context declarations, initialization, exterior values, projection, and diagnostics |
+| `main_cpp` | the process, argument, mesh, and time-step shell |
+| `general_relativity/main_cpp` | GR lifecycle registration and application rendering |
+| `self_tests_cpp` | the generic test shell and isolated scalar/vector numerical fixture |
+| `general_relativity/self_tests_cpp` | GR scientific sections and independent nonflat block reference |
 | `cmdline_input_and_parfiles` | the sample parameter file for one profile |
 | `block_kernel_helpers` | the formulation-agnostic pointer bindings, point loop, parameter lists, operator records and padding every builder lowers through |
 
-`main` owns no formulation choice and holds no state: it maps
+The example is the visible assembly recipe. It passes GR declarations, context
+policy, test sections, and lifecycle CTest statements into generic emitters.
+`main` holds no hidden state: it maps
 emitter output onto project-relative paths and writes it, then copies the
 standalone host header and shared `block_geometry.h` through `nrpy.helpers.generic.copy_files`, exactly as
 BHaH copies `simd_intrinsics.h`.
@@ -102,7 +107,9 @@ The ghost points the emitted kernels need are recorded by the right-hand-side
 builder through `CFunction_roles.set_required_padding` and read back by
 `main` through `CFunction_roles.required_padding`. They are not
 `fd_order // 2`: the upwinded and Kreiss-Oliger operator families reach one
-point further than the centered ones.
+point further than the centered ones. Algebraic expressions have numerical
+reach zero, and a derivative restricted to one axis is accepted; the uniform
+host value is the maximum canonical reach over all axes.
 
 ### Determinism
 

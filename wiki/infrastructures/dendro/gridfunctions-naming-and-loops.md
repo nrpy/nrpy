@@ -1,6 +1,6 @@
 # Gridfunctions, Naming, And Loops
 
-> Explain the Dendro gridfunction class, the exact-name role decorations, the CFunction role sidecar, the generation parameters, and the two loop helpers. · Status: provisional · Last reconciled: 09-07-2026
+> Explain the Dendro gridfunction class, the exact-name role decorations, the CFunction role sidecar, the generation parameters, and the two loop helpers. · Status: provisional · Last reconciled: 09-09-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -121,13 +121,18 @@ producing silently wrong output. The runtime parameter default, validation, and
 print CFunctions are registered last, after the scientific CFunctions have put
 every CodeParameter they use into the registry.
 
+The conformal-factor restriction is GR policy and therefore lives under
+`general_relativity/generation_parameters.py`. Generic reach accepts algebraic
+and restricted-axis calculations and delegates coefficients and per-axis reach
+to `nrpy.finite_difference`.
+
 ## Sources
 
 - [grid.py](../../../nrpy/grid.py) - `DendroGridFunction`, `input_pointer`, `access_gf`, `read_gf_from_memory_Ccode_onept`
 - [gridfunction_name_decorations.py](../../../nrpy/infrastructures/Dendro/gridfunction_name_decorations.py) - `input_pointer`, `rhs_pointer`, `out_pointer`, `enum_member`, `rhs_symbol_to_gridfunction_name`, `validate_cpp_identifier`, `tensor_family_of`
 - [CFunction_roles.py](../../../nrpy/infrastructures/Dendro/CFunction_roles.py) - `set_CFunction_role`, `CFunction_name_for_role`, `registered_evol_order`, `set_required_padding`, `set_upwind_control_fields`
 - [simple_loop.py](../../../nrpy/infrastructures/Dendro/simple_loop.py) - `simple_loop`, `block_loop`, `require_serial_parallelization`
-- [generation_parameters.py](../../../nrpy/infrastructures/Dendro/generation_parameters.py) - `validate_generation_parameters`
+- [generation_parameters.py](../../../nrpy/infrastructures/Dendro/general_relativity/generation_parameters.py) - `validate_generation_parameters`
 - [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `register_CFunctions_parameters`
 
 ## See Also

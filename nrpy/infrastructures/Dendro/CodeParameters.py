@@ -73,6 +73,10 @@ def member_declaration(cp_name: str, cparam_type: str) -> str:
     Doctests:
     >>> member_declaration("eta", "REAL")
     'DendroScalar eta;'
+    >>> member_declaration("steps", "int")
+    'int steps;'
+    >>> member_declaration("enable_filter", "bool")
+    'bool enable_filter;'
     >>> member_declaration("CoordSystemName", "char[100]")
     'char CoordSystemName[100];'
     """
