@@ -133,6 +133,19 @@ MoL_method = "RK4"
 fd_order = 8
 radiation_BC_fd_order = 4
 separate_Ricci_and_BSSN_RHS = True
+# Store partial_k h_ij in the hDDdD gridfunctions once per RK substep, so that Ricci_eval
+# rebuilds each mixed second derivative of hDD as a single first derivative of a stored
+# gridfunction instead of a 2D stencil, and reads partial_k h_ij instead of recomputing it.
+# hDDdD is a SCRATCH gridfunction: it is stored in the Method of Lines buffer that rhs_eval
+# overwrites later in the same substep (see rhs_string below), so it costs no memory.
+# CUDA double precision only: on the RTX 4060 Ti the standard 64x64x128 SinhCylindrical
+# benchmark through t_final=0.5 measures 27.80 s -> 25.08 s; on 8 pinned CPU cores the same
+# change measures 56.16 s -> 58.02 s, because there the 18 arrays of producer traffic cost
+# more than the arithmetic they remove. Extending the scheme to vetU, cf and alpha was also
+# measured, and rejected. Measured for SinhCylindrical, fd_order 8, double.
+enable_hDDdD_gridfunctions = (
+    separate_Ricci_and_BSSN_RHS and parallelization == "cuda" and fp_type == "double"
+)
 enable_parallel_codegen = True
 enable_rfm_precompute = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
 enable_intrinsics = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
@@ -293,12 +306,20 @@ if enable_CAHD or enable_YBS_momentum_constraint_adjustment:
     BHaH.general_relativity.dsmin_gf.register_CFunction_dsmin_auxevol_gridfunction(
         {CoordSystem}
     )
+if enable_hDDdD_gridfunctions:
+    BHaH.general_relativity.hDDdD_eval.register_CFunction_hDDdD_eval(
+        CoordSystem=CoordSystem,
+        enable_intrinsics=enable_intrinsics,
+        enable_fd_functions=enable_fd_functions,
+        OMP_collapse=OMP_collapse,
+    )
 if separate_Ricci_and_BSSN_RHS:
     BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
         enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
+        enable_hDDdD_gridfunctions=enable_hDDdD_gridfunctions,
     )
     if parallelization == "cuda":
         BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
@@ -371,7 +392,19 @@ if enable_SSL:
 // Set SSL strength (SSL_Gaussian_prefactor):
 commondata->SSL_Gaussian_prefactor = commondata->SSL_h * exp(-commondata->time * commondata->time / (2 * commondata->SSL_sigma * commondata->SSL_sigma));
 """
-if separate_Ricci_and_BSSN_RHS:
+if enable_hDDdD_gridfunctions:
+    # hDDdD_eval writes the SCRATCH gridfunctions into RK_OUTPUT_GFS and Ricci_eval, its only
+    # consumer, reads them back. This is safe because rhs_eval overwrites every interior point of
+    # RK_OUTPUT_GFS later in this substep and nothing reads that buffer before rhs_eval, so its
+    # contents are dead here; its ghost zones hold stale data either way until the boundary
+    # conditions rewrite them. The SCRATCH set must fit in the evolved-gridfunction buffer.
+    rhs_string += """
+#if NUM_SCRATCH_GFS > NUM_EVOL_GFS
+#error "hDDdD scratch gridfunctions do not fit in the Method of Lines buffer that stores them"
+#endif
+hDDdD_eval(params, RK_INPUT_GFS, RK_OUTPUT_GFS);
+Ricci_eval(params, rfmstruct, RK_INPUT_GFS, RK_OUTPUT_GFS, auxevol_gfs);"""
+elif separate_Ricci_and_BSSN_RHS:
     rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
 rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
@@ -384,6 +417,7 @@ if (
     and separate_Ricci_and_BSSN_RHS
     and enable_rfm_precompute
     and not enable_fCCZ4
+    and not enable_hDDdD_gridfunctions
 ):
     rhs_string = rhs_string.replace(
         "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);", ""

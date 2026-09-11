@@ -13,6 +13,7 @@ from . import (
     dsmin_gf,
     enforce_detgbar_equals_detghat_trAzero,
     geodesics,
+    hDDdD_eval,
     initial_data,
     psi4,
     psi4_spinweightm2_decomposition,

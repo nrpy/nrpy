@@ -131,6 +131,9 @@ typedef struct __MoL_gridfunctions_struct__ {
 // AUX VARIABLES:
 #define NUM_AUX_GFS 0
 
+// SCRATCH VARIABLES:
+#define NUM_SCRATCH_GFS 0
+
 // ----------------------------
 // Indexing macros
 // ----------------------------

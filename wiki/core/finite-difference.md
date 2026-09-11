@@ -1,6 +1,6 @@
 # Finite Difference
 
-> Core route for finite-difference operators in generated C kernels. · Status: confirmed · Last reconciled: 09-07-2026
+> Core route for finite-difference operators in generated C kernels. · Status: confirmed · Last reconciled: 09-09-2026
 > Up: [Core APIs](index.md)
 
 ## Summary
@@ -17,7 +17,7 @@ The codegen pipeline starts from expression free symbols. `symbol_is_gridfunctio
 
 The helper's current `_ddnD` expansion condition is broader than the parameter name suggests: whenever `upwind_control_vec` is not a Python `str`, each `_dupD` also adds the corresponding `_ddnD`. Thus `sp.Symbol("unset")` triggers expansion, while the literal string `"unset"` does not. `c_codegen()` currently passes `sp.Symbol("unset")` to this extraction helper independently of the caller's `CCodeGen.upwind_control_vec`; only a later list-valued control vector activates final upwind selection.
 
-`extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars()` parses derivative names into base gridfunction names and derivative operators. It enforces the naming contract that the number of final numeric suffix digits equals the total number of `U` and `D` characters in the symbol name. It then finds the last underscore, counts contiguous rank markers before it, counts derivative `D` markers after it, and splits names such as `hDD_dDD0112` into the base gridfunction component and operator suffix expected by the finite-difference routines.
+`extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars()` parses derivative names into base gridfunction names and derivative operators. It enforces the naming contract that the number of final numeric suffix digits equals the total number of `U` and `D` characters in the symbol name. It then finds the last underscore, counts derivative `D` markers after it, and takes the differentiated gridfunction's rank as the remaining trailing digits. That subtraction, rather than a count of rank markers adjacent to the underscore, is what lets a gridfunction whose own name records a derivative be differentiated again, as `hDDdD_dD0011` is. It splits names such as `hDD_dDD0112` into the base gridfunction component and operator suffix expected by the finite-difference routines.
 
 `fd_temp_variable_name()` constructs temporary names for stencil-point reads. Offsets become suffixes such as `i0m2`, `i1p4`, or `i2m1`, joined after the gridfunction basename; zero offsets contribute no suffix, so the center point keeps the bare gridfunction name. An empty basename is rejected.
 

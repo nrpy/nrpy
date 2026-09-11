@@ -22,6 +22,10 @@ from nrpy.helpers.expression_utils import (
     get_params_commondata_symbols_from_expr_list,
 )
 from nrpy.infrastructures import BHaH
+from nrpy.infrastructures.BHaH.general_relativity.hDDdD_eval import (
+    hDDdD_substitutions,
+    register_hDDdD_gridfunctions,
+)
 
 
 def register_CFunction_Ricci_eval(
@@ -30,6 +34,7 @@ def register_CFunction_Ricci_eval(
     enable_fd_functions: bool,
     OMP_collapse: int,
     host_only_version: bool = False,
+    enable_hDDdD_gridfunctions: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the Ricci evaluation function.
@@ -40,6 +45,11 @@ def register_CFunction_Ricci_eval(
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :param host_only_version: (default: False) Whether to emit a host-only version, for
                               performing (host-only) diagnostics with CUDA enabled.
+    :param enable_hDDdD_gridfunctions: (default: False) Whether to read the first
+                                       derivatives of hDD from the hDDdD gridfunctions
+                                       that hDDdD_eval stores, and to build each mixed
+                                       second derivative of hDD as a single first
+                                       derivative of them, instead of differencing hDD.
 
     :raises ValueError: If CUDA kernel generation is requested for a GeneralRFM coordinate
                         system, which is unsupported.
@@ -61,6 +71,13 @@ def register_CFunction_Ricci_eval(
         )
 
     Bq = BSSN_quantities[CoordSystem + "_rfm_precompute"]
+    Ricci_exprs = Bq.Ricci_exprs
+    if enable_hDDdD_gridfunctions:
+        # An evaluation choice, not a change to the equations: the symbols the expressions
+        # were built from are renamed to reads of the stored gridfunctions.
+        register_hDDdD_gridfunctions()
+        substitutions = hDDdD_substitutions()
+        Ricci_exprs = [expr.xreplace(substitutions) for expr in Bq.Ricci_exprs]
 
     includes = ["BHaH_defines.h"]
     if enable_intrinsics:
@@ -79,13 +96,13 @@ def register_CFunction_Ricci_eval(
     if host_only_version:
         name += "_host"
     arg_dict_cuda = {
-        "in_gfs": "const REAL *restrict",
-        "out_gfs": "REAL *restrict",
-    }
-    arg_dict_cuda = {
         "rfmstruct": "const rfm_struct *restrict",
-        **arg_dict_cuda,
+        "in_gfs": "const REAL *restrict",
     }
+    if enable_hDDdD_gridfunctions:
+        # The stored first derivatives of hDD are SCRATCH gridfunctions in caller-supplied storage.
+        arg_dict_cuda["scratch_gfs"] = "const REAL *restrict"
+    arg_dict_cuda["out_gfs"] = "REAL *restrict"
     arg_dict_host = {
         "params": "const params_struct *restrict",
         **arg_dict_cuda,
@@ -98,7 +115,7 @@ def register_CFunction_Ricci_eval(
         Ricci_access_gfs += [f"out_gfs[IDX4({diag_prefix}{var.upper()}GF, i0, i1, i2)]"]
     point_body = (
         ccg.c_codegen(
-            Bq.Ricci_exprs,
+            Ricci_exprs,
             Ricci_access_gfs,
             enable_fd_codegen=True,
             enable_simd=enable_intrinsics,
@@ -135,7 +152,7 @@ def register_CFunction_Ricci_eval(
             "cuda" if is_cuda else "openmp", enable_intrinsics=enable_intrinsics
         )
 
-        param_symbols, _ = get_params_commondata_symbols_from_expr_list(Bq.Ricci_exprs)
+        param_symbols, _ = get_params_commondata_symbols_from_expr_list(Ricci_exprs)
         params_definitions = params_definitions = generate_definition_header(
             param_symbols,
             enable_intrinsics=enable_intrinsics,

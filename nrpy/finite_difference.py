@@ -220,6 +220,28 @@ def compute_fdcoeffs_fdstencl(
     This function computes the finite difference coefficients and stencil points for various derivative types
     specified in `derivstring`. The coefficients are determined using the inverse of the finite difference matrix,
     which is constructed and inverted in the `setup_FD_matrix__return_inverse` function.
+
+    DocTests:
+    A mixed second-derivative stencil is exactly the tensor product of the two centered
+    first-derivative stencils it mixes, coefficient by coefficient. Callers rely on this to
+    rebuild a mixed second derivative as one first derivative of a stored first derivative,
+    as dD_eval and the BSSN dD gridfunctions do; unmixed second derivatives have their
+    own stencils and are not tensor products.
+    >>> def tensor_product_matches_mixed(order):
+    ...     for op, (a, b) in {"dDD01": (0, 1), "dDD02": (0, 2), "dDD12": (1, 2)}.items():
+    ...         mixed_coeffs, mixed_points = compute_fdcoeffs_fdstencl(op, order)
+    ...         mixed = {tuple(p): c for c, p in zip(mixed_coeffs, mixed_points)}
+    ...         product: dict = {}
+    ...         for ca, pa in zip(*compute_fdcoeffs_fdstencl(f"dD{a}", order)):
+    ...             for cb, pb in zip(*compute_fdcoeffs_fdstencl(f"dD{b}", order)):
+    ...                 point = tuple(x + y for x, y in zip(pa, pb))
+    ...                 product[point] = product.get(point, sp.sympify(0)) + ca * cb
+    ...         for point in set(product) | set(mixed):
+    ...             if sp.simplify(product.get(point, 0) - mixed.get(point, 0)) != 0:
+    ...                 return False
+    ...     return True
+    >>> [tensor_product_matches_mixed(order) for order in (2, 4, 6, 8, 10)]
+    [True, True, True, True, True]
     """
     # Step 0: Set finite differencing order, stencil size, and up/downwinding
     if "dKOD" in derivstring:
@@ -512,6 +534,14 @@ def extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
     >>> extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
     ...    [c_dD[0], aDD_dD[0][1][2], aDD_dKOD[0][1][2], vetU_dKOD[2][1], hDD_dDD[0][1][1][2]])
     (['c', 'aDD01', 'aDD01', 'vetU2', 'hDD01'], ['dD0', 'dD2', 'dD2', 'dKOD1', 'dDD12'])
+
+    Gridfunctions whose own names record a derivative, such as the reference-metric
+    gridfunction ghatDDdD or the stored first derivatives hDDdD, are differentiated
+    like any other gridfunction; the rank follows from the index digits, not from the
+    letters preceding the final underscore:
+    >>> hDDdD_dD = ixp.declarerank4("hDDdD_dD")
+    >>> extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars([hDDdD_dD[0][1][0][1]])
+    (['hDDdD010'], ['dD1'])
     """
     list_of_base_gridfunction_names_in_derivs = []
     list_of_deriv_operators = []
@@ -537,15 +567,7 @@ def extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
         # Step 2a.2: Based on the variable name, find the rank of
         #            the underlying gridfunction of which we're
         #            trying to take the derivative.
-        # rank = "number of juxtaposed Us and Ds before the underscore in a derivative expression"
-        rank = 0
         underscore_position = varstr.rfind("_")  # Find the last occurrence of "_"
-        if underscore_position != -1:
-            # count contiguous "U"s and "D"s before underscore
-            i = underscore_position - 1
-            while i >= 0 and varstr[i] in ["U", "D"]:
-                rank += 1
-                i -= 1
 
         # Step 2a.3: Based on the variable name, find the order
         #            of the derivative we're trying to take.
@@ -553,6 +575,14 @@ def extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
         for i in range(underscore_position + 1, len(varstr)):
             if varstr[i] == "D":
                 deriv_order += 1
+
+        # rank = "number of indices carried by the differentiated gridfunction".
+        # The check above guarantees that the trailing digits are exactly the
+        # gridfunction's indices followed by the derivative's indices, so the rank
+        # follows by subtraction. Counting juxtaposed Us and Ds before the final
+        # underscore instead would misread a gridfunction whose own name records a
+        # derivative, such as the rank-3 hDDdD storing the first derivatives of hDD.
+        rank = num_digits_at_end - deriv_order
 
         # Step 2a.4: Based on derivative order and rank,
         #            store the base gridfunction name and

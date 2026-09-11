@@ -1,6 +1,6 @@
 # GR Application Wiring
 
-> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 09-04-2026
+> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 09-10-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -95,6 +95,18 @@ diagnostics version, and wraps the interior loop with BHaH kernel/launch code.
 CUDA generation is rejected for `GeneralRFM`; `host_only_version=True`
 temporarily forces OpenMP generation so CUDA applications can still compute
 host-side diagnostic Ricci data as `Ricci_eval_host`.
+
+`register_CFunction_hDDdD_eval` (`hDDdD_eval.py`) stores the first derivatives of
+`hDD` as the `SCRATCH` gridfunctions `hDDdD`, each direction over the interior grown by
+`fd_order/2` points in the directions transverse to its own stencil, and
+`register_CFunction_Ricci_eval(..., enable_hDDdD_gridfunctions=True)` then reads them through
+an extra `scratch_gfs` argument, rebuilding every mixed second derivative of `hDD` as a single
+first derivative of the stored gridfunction (`hDDdD_substitutions()` rewrites the Ricci
+expressions by symbol). No array is allocated for `hDDdD`: `blackhole_spectroscopy.py` calls
+`hDDdD_eval(params, RK_INPUT_GFS, RK_OUTPUT_GFS)` and
+`Ricci_eval(params, rfmstruct, RK_INPUT_GFS, RK_OUTPUT_GFS, auxevol_gfs)` before `rhs_eval`
+overwrites `RK_OUTPUT_GFS` in the same substep, and enables this only for CUDA double
+precision, where it was measured to help.
 
 `register_CFunction_constraints_eval` emits the diagnostics-side Hamiltonian,
 momentum, and conformal connection-constraint evaluator. It temporarily forces
@@ -279,6 +291,7 @@ does not remove `m=+l` cases from emitted BHaH C.
 - [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py) - `register_CFunction_rhs_eval`
 - [dsmin_gf.py](../../../nrpy/infrastructures/BHaH/general_relativity/dsmin_gf.py) - `register_CFunction_dsmin_auxevol_gridfunction`
 - [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py) - `register_CFunction_Ricci_eval`
+- [hDDdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/hDDdD_eval.py) - `register_CFunction_hDDdD_eval`, `hDDdD_substitutions`, `register_hDDdD_gridfunctions`
 - [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py) - `register_CFunction_constraints_eval`
 - [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - [initial_data.py](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py) - `register_CFunction_initial_data`
