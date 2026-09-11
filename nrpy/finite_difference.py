@@ -603,7 +603,7 @@ def extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
 
 
 def select_stored_first_derivatives(
-    deriv_vars: List[sp.Symbol], stored_first_derivatives: Sequence[str]
+    deriv_vars: List[sp.Basic], stored_first_derivatives: Sequence[str]
 ) -> Tuple[List[str], List[str]]:
     """
     Select registered storage for centered derivatives without changing their symbols.

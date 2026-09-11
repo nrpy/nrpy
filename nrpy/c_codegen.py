@@ -1029,7 +1029,7 @@ def gridfunction_management_and_FD_codegen(
             enable_simd=CCGParams.enable_simd,
         )
 
-        FDexprs = []
+        FDexprs: List[sp.Basic] = []
         FDlhsvarnames = []
         for i, deriv_var_symbol in enumerate(list_of_deriv_vars):
             # unpack
