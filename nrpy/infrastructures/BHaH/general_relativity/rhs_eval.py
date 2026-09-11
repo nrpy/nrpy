@@ -557,29 +557,37 @@ def register_CFunction_rhs_eval_with_Ricci(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    cfc.register_CFunction(
-        include_CodeParameters_h=False,
-        includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
-        desc="Evaluate Ricci and BSSN RHSs together on CPU tiles.",
-        cfunc_type="void",
-        CoordSystem_for_wrapper_func=CoordSystem,
-        name="rhs_eval_with_Ricci",
-        params="const commondata_struct *restrict commondata, const params_struct *restrict params, "
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = "Evaluate Ricci and BSSN RHSs together on CPU tiles."
+    cfunc_type = "void"
+    name = "rhs_eval_with_Ricci"
+    params = (
+        "const commondata_struct *restrict commondata, const params_struct *restrict params, "
         "const rfm_struct *restrict rfmstruct, REAL *restrict auxevol_gfs, "
-        "const REAL *restrict in_gfs, REAL *restrict rhs_gfs",
-        body=f"""
+        "const REAL *restrict in_gfs, REAL *restrict rhs_gfs"
+    )
+    body = f"""
 const int end1 = params->Nxx_plus_2NGHOSTS1 - NGHOSTS;
 const int end2 = params->Nxx_plus_2NGHOSTS2 - NGHOSTS;
 #pragma omp parallel for collapse(2)
 for (int lo2 = NGHOSTS; lo2 < end2; lo2 += 8) {{
-for (int lo1 = NGHOSTS; lo1 < end1; lo1 += 16) {{
+  for (int lo1 = NGHOSTS; lo1 < end1; lo1 += 16) {{
     const int hi1 = lo1 + 16 < end1 ? lo1 + 16 : end1;
     const int hi2 = lo2 + 8 < end2 ? lo2 + 8 : end2;
     Ricci_eval_tile__rfm__{CoordSystem}(params, rfmstruct, in_gfs, auxevol_gfs, lo1, hi1, lo2, hi2);
     rhs_eval_tile__rfm__{CoordSystem}(commondata, params, rfmstruct, auxevol_gfs, in_gfs, rhs_gfs, lo1, hi1, lo2, hi2);
-}}
-}}
-""",
+  }} // END LOOP: for lo1 over [NGHOSTS, end1)
+}} // END LOOP: for lo2 over [NGHOSTS, end2)
+"""
+    cfc.register_CFunction(
+        include_CodeParameters_h=False,
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        CoordSystem_for_wrapper_func=CoordSystem,
+        name=name,
+        params=params,
+        body=body,
     )
     return pcg.NRPyEnv()
 

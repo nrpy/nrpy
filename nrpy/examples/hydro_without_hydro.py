@@ -72,10 +72,10 @@ fd_order = 4
 radiation_BC_fd_order = 4
 separate_Ricci_and_BSSN_RHS = True
 # Store the first derivatives of cf, alpha and vetU that the fifteen mixed second derivatives in
-# the BSSN right-hand sides are built from, so that rhs_eval rebuilds each as a nine-point first
-# derivative of a stored AUXEVOL gridfunction instead of a 64-term tensor-product stencil. Ten
-# gridfunctions, so it costs memory; off by default, CUDA builds only. See
-# nrpy/examples/blackhole_spectroscopy.py for the measurements.
+# the BSSN right-hand sides are built from, so that rhs_eval rebuilds each as a single
+# one-dimensional first-derivative stencil of a stored AUXEVOL gridfunction instead of the
+# two-dimensional tensor-product stencil. Ten gridfunctions, so it costs memory; off by default,
+# CUDA builds only. See nrpy/examples/blackhole_spectroscopy.py for the measurements (fd_order 8).
 enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU = False
 if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU and parallelization != "cuda":
     raise ValueError(

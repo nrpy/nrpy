@@ -221,7 +221,7 @@ def compute_fdcoeffs_fdstencl(
     specified in `derivstring`. The coefficients are determined using the inverse of the finite difference matrix,
     which is constructed and inverted in the `setup_FD_matrix__return_inverse` function.
 
-    DocTests:
+    Doctests:
     A mixed second-derivative stencil is exactly the tensor product of the two centered
     first-derivative stencils it mixes, coefficient by coefficient. Callers rely on this to
     rebuild a mixed second derivative as one first derivative of a stored first derivative,
