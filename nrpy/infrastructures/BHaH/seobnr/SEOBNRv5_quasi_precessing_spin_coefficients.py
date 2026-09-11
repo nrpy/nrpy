@@ -321,7 +321,7 @@ commondata->dT = commondata->dt / commondata->total_mass / 4.9254909476412669781
 """
     body += ccg.c_codegen(
         [
-            v5_const.pyseobnr_a6,
+            v5_const.a6,
             v5_const.pyseobnr_dSO,
             v5_const.Delta_t,
             v5_const.M_f,
