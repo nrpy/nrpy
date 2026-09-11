@@ -11,12 +11,11 @@ the stored gridfunction, and read partial_0 f and partial_1 f themselves instead
 recomputing them. The gridfunctions are named cfdD, alphadD and vetUdD after the
 reference-metric convention ghatDDdD.
 
-Three functions share the work. cfdD_alphadD_vetUdD_substitutions() is the contract
-between producer and consumer: it maps each derivative symbol rhs_eval would otherwise
-difference onto the stored gridfunction or a first derivative of it.
-register_cfdD_alphadD_vetUdD_gridfunctions() registers the stored gridfunctions, and
+The FD layer selects stored derivatives while leaving mathematical expressions unchanged.
+cfdD_alphadD_vetUdD_gridfunction_expressions() supplies the producer expressions;
+register_cfdD_alphadD_vetUdD_gridfunctions() registers their output gridfunctions, and
 register_CFunction_cfdD_alphadD_vetUdD_eval() emits the C function that writes them.
-rhs_eval consumes them when registered with enable_cfdD_alphadD_vetUdD_gridfunctions=True.
+rhs_eval selects this storage with enable_cfdD_alphadD_vetUdD_gridfunctions=True.
 The BHaH BSSN examples switch the scheme on with
 enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU, off by default, and then call
 cfdD_alphadD_vetUdD_eval before rhs_eval within each Method of Lines substep.
@@ -48,7 +47,7 @@ Author: Zachariah B. Etienne
 from inspect import currentframe as cfr
 from pathlib import Path
 from types import FrameType as FT
-from typing import Dict, Union, cast
+from typing import Dict, List, Union, cast
 
 import sympy as sp
 
@@ -68,7 +67,7 @@ from nrpy.helpers.expression_utils import (
 from nrpy.infrastructures import BHaH
 
 
-def register_cfdD_alphadD_vetUdD_gridfunctions() -> None:
+def register_cfdD_alphadD_vetUdD_gridfunctions() -> List[str]:
     """
     Register the AUXEVOL gridfunctions cfdD, alphadD and vetUdD if not already registered.
 
@@ -80,80 +79,54 @@ def register_cfdD_alphadD_vetUdD_gridfunctions() -> None:
     computes every point rhs_eval reads, ghost zones included, so these gridfunctions must never
     be added to an inner-boundary synchronization list. Declaring them rank 1 would not fix the
     parity either, since vetUdD is a mixed rank-2 object.
+
+    :return: Stored gridfunction names that RHS kernels may select during FD lowering.
     """
-    # The stored gridfunctions are the substitution values that are not themselves
-    # derivatives, in the order the map lists them.
-    names = [
-        str(gf)
-        for gf in cfdD_alphadD_vetUdD_substitutions().values()
-        if "_dD" not in str(gf)
-    ]
+    names = list(cfdD_alphadD_vetUdD_gridfunction_expressions())
     if names and names[0] not in gri.glb_gridfcs_dict:
         _ = gri.register_gridfunctions(names, group="AUXEVOL", is_basename=False)
+    return names
 
 
-def cfdD_alphadD_vetUdD_substitutions() -> Dict[sp.Symbol, sp.Symbol]:
+def cfdD_alphadD_vetUdD_gridfunction_expressions() -> Dict[str, sp.Expr]:
     """
-    Map cf, alpha and vetU derivative symbols onto reads of the stored gridfunctions.
+    Construct the first derivatives written to the AUXEVOL gridfunctions.
 
-    Each stored first derivative becomes the gridfunction itself, and each mixed second
-    derivative becomes a first derivative of the gridfunction holding its first, lower index.
-    Unmixed second derivatives are not tensor products of first-derivative stencils and are
-    left alone, as are derivatives a symmetry axis has zeroed, which are not symbols.
+    Store only lower directions of nonzero mixed second derivatives. FD lowering
+    selects these names explicitly; unmixed and upwind derivatives retain their
+    original finite-difference stencils.
 
-    :return: Substitution dictionary for sympy xreplace.
+    :return: Stored gridfunction names mapped to the expressions that produce them.
 
     Doctests:
-    >>> subs = cfdD_alphadD_vetUdD_substitutions()
-    >>> subs[sp.Symbol("cf_dD0")], subs[sp.Symbol("vetU_dDD012")]
-    (cfdD0, vetUdD_dD012)
-    >>> len(subs)  # 10 stored first derivatives and 15 mixed second derivatives
-    25
-    >>> sp.Symbol("cf_dDD00") in subs or sp.Symbol("cf_dD2") in subs
-    False
-
-    A symmetry axis zeroes the derivatives along it, so neither the stored direction nor the
-    mixed derivatives that differentiate it survive:
-
     >>> saved_symmetry_axes = par.parval_from_str("symmetry_axes")
     >>> try:
+    ...     par.set_parval_from_str("symmetry_axes", "")
+    ...     full = cfdD_alphadD_vetUdD_gridfunction_expressions()
     ...     par.set_parval_from_str("symmetry_axes", "1")
-    ...     axis1 = cfdD_alphadD_vetUdD_substitutions()
+    ...     axis1 = cfdD_alphadD_vetUdD_gridfunction_expressions()
     ...     par.set_parval_from_str("symmetry_axes", "02")
-    ...     axes02 = cfdD_alphadD_vetUdD_substitutions()
+    ...     axes02 = cfdD_alphadD_vetUdD_gridfunction_expressions()
     ... finally:
     ...     par.set_parval_from_str("symmetry_axes", saved_symmetry_axes)
-    >>> len(axis1), sorted(str(key) for key in axis1)[:2], len(axes02)
-    (10, ['alpha_dD0', 'alpha_dDD02'], 0)
+    >>> full["cfdD0"], full["vetUdD21"], len(full)
+    (cf_dD0, vetU_dD21, 10)
+    >>> sorted(axis1), axes02
+    (['alphadD0', 'cfdD0', 'vetUdD00', 'vetUdD10', 'vetUdD20'], {})
     """
-    fields = [
-        (
-            ixp.declarerank1(f"{scalar}_dD"),
-            ixp.declarerank2(f"{scalar}_dDD", symmetry="sym01"),
-            ixp.declarerank1(f"{scalar}dD"),
-            ixp.declarerank2(f"{scalar}dD_dD"),
-        )
-        for scalar in ("cf", "alpha")
-    ]
+    cf_dDD = ixp.declarerank2("cf_dDD", symmetry="sym01")
     vetU_dD = ixp.declarerank2("vetU_dD")
-    vetU_dDD = ixp.declarerank3("vetU_dDD", symmetry="sym12")
-    vetUdD = ixp.declarerank2("vetUdD")
-    vetUdD_dD = ixp.declarerank3("vetUdD_dD")
-    fields += [(vetU_dD[i], vetU_dDD[i], vetUdD[i], vetUdD_dD[i]) for i in range(3)]
-    subs: Dict[sp.Symbol, sp.Symbol] = {}
-    for f_dD, f_dDD, stored, stored_dD in fields:
+    fields = [(scalar, ixp.declarerank1(f"{scalar}_dD")) for scalar in ("cf", "alpha")]
+    expressions: Dict[str, sp.Expr] = {}
+    for basename, first in fields:
         for j in range(3):
-            # partial_j f is stored only where some non-zero mixed second derivative
-            # differentiates it, so a direction a symmetry axis zeroes is never stored.
-            mixed = {
-                f_dDD[j][k]: stored_dD[j][k]
-                for k in range(j + 1, 3)
-                if f_dDD[j][k] != 0
-            }
-            if mixed:
-                subs[f_dD[j]] = stored[j]
-                subs.update(mixed)
-    return subs
+            if any(cf_dDD[j][k] != 0 for k in range(j + 1, 3)):
+                expressions[f"{basename}dD{j}"] = first[j]
+    for i in range(3):
+        for j in range(3):
+            if any(cf_dDD[j][k] != 0 for k in range(j + 1, 3)):
+                expressions[f"vetUdD{i}{j}"] = vetU_dD[i][j]
+    return expressions
 
 
 def register_CFunction_cfdD_alphadD_vetUdD_eval(
@@ -171,7 +144,7 @@ def register_CFunction_cfdD_alphadD_vetUdD_eval(
     evolved gridfunctions in in_gfs are current and before rhs_eval reads auxevol_gfs
     within the same right-hand-side evaluation, and it pairs with
     register_CFunction_rhs_eval(..., enable_cfdD_alphadD_vetUdD_gridfunctions=True), which
-    rewrites the right-hand sides through cfdD_alphadD_vetUdD_substitutions().
+    selects stored derivatives during finite-difference lowering.
 
     :param CoordSystem: The coordinate system to be used.
     :param enable_intrinsics: Whether to enable SIMD/CUDA intrinsics.
@@ -190,14 +163,9 @@ def register_CFunction_cfdD_alphadD_vetUdD_eval(
     # exactly as rhs_eval states it.
     _ = BSSN_quantities[CoordSystem + "_rfm_precompute"]
     register_cfdD_alphadD_vetUdD_gridfunctions()
-    # The substitution map is the contract with rhs_eval: each stored first derivative is
-    # keyed by the symbol the finite-difference code generator evaluates it from, the stored
-    # gridfunction's last digit is its direction, and the trailing digit pair of each mixed
-    # second derivative names the directions whose halo the stored one must be valid in.
-    subs = cfdD_alphadD_vetUdD_substitutions()
-    first = {sym: gf for sym, gf in subs.items() if "_dDD" not in str(sym)}
-    mixed = [str(sym) for sym in subs if "_dDD" in str(sym)]
-    stored_directions = sorted({int(str(gf)[-1]) for gf in first.values()})
+    expressions = cfdD_alphadD_vetUdD_gridfunction_expressions()
+    stored_directions = sorted({int(name[-1]) for name in expressions})
+    cf_dDD = ixp.declarerank2("cf_dDD", symmetry="sym01")
 
     includes = ["BHaH_defines.h"]
     if enable_intrinsics:
@@ -233,17 +201,19 @@ def register_CFunction_cfdD_alphadD_vetUdD_eval(
         grown = [
             f"i{transverse}"
             for transverse in range(direction + 1, 3)
-            if any(name.endswith(f"{direction}{transverse}") for name in mixed)
+            if cf_dDD[direction][transverse] != 0
         ]
         loop_region = (
             "interior plus stencil halo in " + " ".join(grown) if grown else "interior"
         )
 
-        exprs = [sym for sym, gf in first.items() if str(gf).endswith(str(direction))]
+        exprs = [
+            expr for gf, expr in expressions.items() if gf.endswith(str(direction))
+        ]
         access_gfs = [
             f"auxevol_gfs[IDX4({str(gf).upper()}GF, i0, i1, i2)]"
-            for gf in first.values()
-            if str(gf).endswith(str(direction))
+            for gf in expressions
+            if gf.endswith(str(direction))
         ]
 
         point_body = ccg.c_codegen(

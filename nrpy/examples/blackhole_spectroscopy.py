@@ -294,7 +294,9 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_bhahaha=enable_bhahaha,
 )
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
-    enable_interp_diagnostics=False, enable_psi4=enable_psi4_diagnostics
+    enable_interp_diagnostics=False,
+    enable_psi4=enable_psi4_diagnostics,
+    enable_hDDdD_gridfunctions=enable_hDDdD_gridfunctions,
 )
 BHaH.general_relativity.diagnostics_nearest.register_CFunction_diagnostics_nearest()
 BHaH.general_relativity.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
@@ -365,6 +367,8 @@ if (
     and separate_Ricci_and_BSSN_RHS
     and enable_rfm_precompute
     and not enable_fCCZ4
+    and not enable_hDDdD_gridfunctions
+    and not enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU
 ):
     BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval_with_Ricci(CoordSystem)
 

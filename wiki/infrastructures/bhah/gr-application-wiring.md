@@ -88,7 +88,7 @@ Claim evidence:
 - Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, SymPy 1.14.0; backend=BHaH symbolic RHS registration plus OpenMP/CUDA source generation; precision=30-significant-digit deterministic trusted sampling and exact symbolic source; GPU=generation pass, execution not-run; restart=not-applicable because no new state; distributed=not-run; error_path=pass for unsupported non-fisheye GeneralRFM spacing; options=both YBS Gamma and YBS-MOM enabled jointly in all eight existing BHaH rhs_eval trusted cases; public defaults remain disabled; date=08-30-2026`
 
 `register_CFunction_Ricci_eval` emits `Ricci_eval` from
-`BSSN_quantities[CoordSystem + "_rfm_precompute"].Ricci_exprs`. It always uses
+`BSSN_quantities[CoordSystem + "_rfm_precompute"].Ricci_exprs` by default. It always uses
 the rfm-precompute expression family, stores either ordinary `RBARDD*GF`
 auxiliary gridfunctions or `DIAG_RBARDD*GF` channels for the host-only
 diagnostics version, and wraps the interior loop with BHaH kernel/launch code.
@@ -101,19 +101,49 @@ host-side diagnostic Ricci data as `Ricci_eval_host`.
 `fd_order/2` points in the directions transverse to its own stencil, and
 `register_CFunction_Ricci_eval(..., enable_hDDdD_gridfunctions=True)` then reads them through
 an extra `scratch_gfs` argument, rebuilding every mixed second derivative of `hDD` as a single
-first derivative of the stored gridfunction (`hDDdD_substitutions()` rewrites the Ricci
-expressions by symbol). No array is allocated for `hDDdD`: `blackhole_spectroscopy.py` calls
+first derivative of the stored gridfunction. The registration helper returns the eligible
+gridfunction names, which Ricci passes as `stored_first_derivatives` to `c_codegen()`.
+Finite-difference lowering selects their reads and stencils while retaining the original
+mathematical derivative temporaries. Equation construction and cache keys are unchanged. No additional array is allocated during evolution for `hDDdD`: `blackhole_spectroscopy.py` calls
 `hDDdD_eval(params, RK_INPUT_GFS, RK_OUTPUT_GFS)` and
 `Ricci_eval(params, rfmstruct, RK_INPUT_GFS, RK_OUTPUT_GFS, auxevol_gfs)` before `rhs_eval`
 overwrites `RK_OUTPUT_GFS` in the same substep, and enables this only for CUDA double
 precision, where it was measured to help.
 
+Claim evidence:
+- Claim: Stored-derivative selection belongs to finite-difference lowering. Ricci and RHS consumers explicitly supply the registered fields available to each kernel; centered first derivatives read storage, canonical mixed second derivatives apply a first-derivative stencil to it, and diagonal/upwind/KO derivatives retain their operators. Equations and equation caches do not select storage.
+- Role: descriptive behavior
+- Deciding authority: [finite_difference.py](../../../nrpy/finite_difference.py), `select_stored_first_derivatives`; [c_codegen.py](../../../nrpy/c_codegen.py), `gridfunction_management_and_FD_codegen`
+- Corroboration: [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py) and [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), explicit consumer selections; owner doctests verify selection and polynomial evaluation.
+- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3; backend=BHaH CUDA; precision=double; GPU=RTX 4060 Ti; restart=not-run; distributed=not-applicable; error_path=unregistered selection doctest; options=SinhCylindrical, no symmetry axes, FD8, 64x64x128, both stored options, nearest checkpoint to t=0.4 is t=0.40063545122319866, 18136512 finite values compared with committed option-on build, maximum absolute difference 9.12e-14 within atol=rtol=1e-12; date=09-11-2026`
+
+
+If explicitly enabled for OpenMP,
+`register_CFunction_diagnostic_gfs_set(..., enable_hDDdD_gridfunctions=True)` computes
+fresh derivatives from `y_n_gfs` in temporary scratch storage, passes that storage to
+Ricci, and frees it before evaluating constraints. CUDA diagnostics retain the
+unstored `Ricci_eval_host` path. The example registers the CPU tiled scheduler only
+when neither stored-derivative option is enabled, matching its call-site gate.
+
+Claim evidence:
+- Claim: With stored hDD derivatives explicitly enabled for OpenMP, GR diagnostics computes fresh derivatives from the current solution in temporary scratch, passes scratch to Ricci, and frees it before constraints. CUDA diagnostics retain the unstored host Ricci path. The spectroscopy example excludes both stored-derivative options from tiled-scheduler registration and use. Compilation does not establish runtime numerical correctness.
+- Role: descriptive behavior
+- Deciding authority: [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`; [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), diagnostic option forwarding and tiled-scheduler registration/use gates
+- Corroboration: [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py), `register_CFunction_Ricci_eval`, supplies the scratch-taking signature; [hDDdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/hDDdD_eval.py), `register_CFunction_hDDdD_eval`, supplies fresh derivatives and stencil halos
+- Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=not-run`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0; backend=OpenMP; precision=double; GPU=not-run; restart=not-run; distributed=not-applicable; error_path=allocation failure not-run; options=SinhCylindrical, no symmetry axes, FD order 8, SIMD, both stored options enabled through an isolated example configuration, horizon finder disabled, full executable compiled and linked with -O2 -march=native -fopenmp; date=09-11-2026`
+
 `register_CFunction_cfdD_alphadD_vetUdD_eval` (`cfdD_alphadD_vetUdD_eval.py`) applies the
 same tensor-product identity to the right-hand sides. It stores the first derivatives of `cf`,
 `alpha` and `vetU` that their fifteen mixed second derivatives are built from as the `AUXEVOL`
 gridfunctions `cfdD`, `alphadD` and `vetUdD`, and
-`register_CFunction_rhs_eval(..., enable_cfdD_alphadD_vetUdD_gridfunctions=True)` rewrites the
-right-hand-side expressions by symbol (`cfdD_alphadD_vetUdD_substitutions()`). Only the
+`register_CFunction_rhs_eval(..., enable_cfdD_alphadD_vetUdD_gridfunctions=True)` selects
+the registered storage through the same `c_codegen()` option. BSSN/fCCZ4 RHSs,
+their gauge equations, and CAHD constraints retain their mathematical derivative
+symbols and ordinary cache entries. The producer gets its output expressions from
+`cfdD_alphadD_vetUdD_gridfunction_expressions()`, without rewriting completed equations.
+Unmixed and upwind derivatives keep their original stencils. Only the
 directions a mixed second derivative differentiates are stored, which is `partial_0` and
 `partial_1` with the index pair canonicalized to `j < k`, so ten gridfunctions are registered
 and each is produced over the interior grown by `fd_order/2` points in the directions that
@@ -311,8 +341,9 @@ does not remove `m=+l` cases from emitted BHaH C.
 - [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py) - `register_CFunction_rhs_eval`
 - [dsmin_gf.py](../../../nrpy/infrastructures/BHaH/general_relativity/dsmin_gf.py) - `register_CFunction_dsmin_auxevol_gridfunction`
 - [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py) - `register_CFunction_Ricci_eval`
-- [hDDdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/hDDdD_eval.py) - `register_CFunction_hDDdD_eval`, `hDDdD_substitutions`, `register_hDDdD_gridfunctions`
-- [cfdD_alphadD_vetUdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/cfdD_alphadD_vetUdD_eval.py) - `register_CFunction_cfdD_alphadD_vetUdD_eval`, `cfdD_alphadD_vetUdD_substitutions`, `register_cfdD_alphadD_vetUdD_gridfunctions`
+- [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py) - `BSSNQuantities`, mathematical derivative construction
+- [hDDdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/hDDdD_eval.py) - `register_CFunction_hDDdD_eval`, `register_hDDdD_gridfunctions`
+- [cfdD_alphadD_vetUdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/cfdD_alphadD_vetUdD_eval.py) - `register_CFunction_cfdD_alphadD_vetUdD_eval`, `cfdD_alphadD_vetUdD_gridfunction_expressions`, `register_cfdD_alphadD_vetUdD_gridfunctions`
 - [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py) - `register_CFunction_constraints_eval`
 - [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - [initial_data.py](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py) - `register_CFunction_initial_data`

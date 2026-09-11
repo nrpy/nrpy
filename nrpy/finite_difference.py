@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 """
 
 from operator import itemgetter
-from typing import Any, Dict, List, Tuple, Union, cast
+from typing import Any, Dict, List, Sequence, Tuple, Union, cast
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -600,6 +600,64 @@ def extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
         list_of_deriv_operators.append(deriv_operator)
 
     return list_of_base_gridfunction_names_in_derivs, list_of_deriv_operators
+
+
+def select_stored_first_derivatives(
+    deriv_vars: List[sp.Symbol], stored_first_derivatives: Sequence[str]
+) -> Tuple[List[str], List[str]]:
+    """
+    Select registered storage for centered derivatives without changing their symbols.
+
+    The caller explicitly supplies the stored gridfunction names valid for this kernel.
+    For example, hDD_dD011 reads hDDdD011, and hDD_dDD0112 differentiates
+    hDDdD011 in direction 2. An empty operator denotes a pointwise read. Only
+    canonical mixed pairs (k < l) use storage; diagonal, upwind, KO, and unselected
+    derivatives retain their stencils. The caller owns storage lifetime and halos.
+
+    :param deriv_vars: Original derivative symbols, retained as output temporaries.
+    :param stored_first_derivatives: Registered gridfunctions valid for this kernel.
+    :return: Source gridfunction names and operators, aligned with deriv_vars.
+    :raises ValueError: If selected storage is not registered.
+
+    Doctests:
+    >>> saved = gri.glb_gridfcs_dict.copy()
+    >>> try:
+    ...     _ = gri.register_gridfunctions(["hDDdD011", "cfdD0"], group="AUXEVOL", is_basename=False)
+    ...     variables = list(sp.symbols("hDD_dD011 hDD_dDD0112 hDD_dDD0111 hDD_dupD011 hDD_dKOD011 cf_dD0 cf_dDD02"))
+    ...     selected = select_stored_first_derivatives(variables, ["hDDdD011"])
+    ...     unselected = select_stored_first_derivatives(variables, [])
+    ... finally:
+    ...     gri.glb_gridfcs_dict.clear()
+    ...     gri.glb_gridfcs_dict.update(saved)
+    >>> selected
+    (['hDDdD011', 'hDDdD011', 'hDD01', 'hDD01', 'hDD01', 'cf', 'cf'], ['', 'dD2', 'dDD11', 'dupD1', 'dKOD1', 'dD0', 'dDD02'])
+    >>> unselected == extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(variables)
+    True
+    >>> select_stored_first_derivatives([], ["unregistered_stored_derivative"])
+    Traceback (most recent call last):
+      ...
+    ValueError: Stored first derivative is not registered: unregistered_stored_derivative
+    """
+    selected = set(stored_first_derivatives)
+    for name in sorted(selected):
+        if name not in gri.glb_gridfcs_dict:
+            raise ValueError(f"Stored first derivative is not registered: {name}")
+    bases, operators = extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
+        deriv_vars
+    )
+    for i, (var, operator) in enumerate(zip(deriv_vars, operators)):
+        basename, suffix = str(var).rsplit("_", 1)
+        if operator in ("dD0", "dD1", "dD2"):
+            stored = basename + "dD" + suffix[2:]
+            replacement_operator = ""
+        elif operator in ("dDD01", "dDD02", "dDD12"):
+            stored = basename + "dD" + suffix[3:-1]
+            replacement_operator = "dD" + operator[-1]
+        else:
+            continue
+        if stored in selected:
+            bases[i], operators[i] = stored, replacement_operator
+    return bases, operators
 
 
 def read_gfs_from_memory(

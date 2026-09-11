@@ -23,7 +23,6 @@ from nrpy.helpers.expression_utils import (
 )
 from nrpy.infrastructures import BHaH
 from nrpy.infrastructures.BHaH.general_relativity.hDDdD_eval import (
-    hDDdD_substitutions,
     register_hDDdD_gridfunctions,
 )
 
@@ -70,14 +69,11 @@ def register_CFunction_Ricci_eval(
             f"Unsupported configuration: Ricci_eval CUDA kernel generation is not supported for {CoordSystem}."
         )
 
+    stored_first_derivatives = (
+        register_hDDdD_gridfunctions() if enable_hDDdD_gridfunctions else []
+    )
     Bq = BSSN_quantities[CoordSystem + "_rfm_precompute"]
     Ricci_exprs = Bq.Ricci_exprs
-    if enable_hDDdD_gridfunctions:
-        # An evaluation choice, not a change to the equations: the symbols the expressions
-        # were built from are renamed to reads of the stored gridfunctions.
-        register_hDDdD_gridfunctions()
-        substitutions = hDDdD_substitutions()
-        Ricci_exprs = [expr.xreplace(substitutions) for expr in Bq.Ricci_exprs]
 
     includes = ["BHaH_defines.h"]
     if enable_intrinsics:
@@ -118,6 +114,7 @@ def register_CFunction_Ricci_eval(
             Ricci_exprs,
             Ricci_access_gfs,
             enable_fd_codegen=True,
+            stored_first_derivatives=stored_first_derivatives,
             enable_simd=enable_intrinsics,
             enable_fd_functions=enable_fd_functions,
             rational_const_alias=("static constexpr" if is_cuda else "static const"),

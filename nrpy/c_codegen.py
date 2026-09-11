@@ -95,6 +95,7 @@ class CCodeGen:
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         rational_const_alias: str = "static const",
         enable_clang_format: bool = False,
+        stored_first_derivatives: Optional[Sequence[str]] = None,
     ) -> None:
         """
         Initialize the CCodeGen class with provided options for generating C code.
@@ -127,6 +128,7 @@ class CCodeGen:
         :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
         :param rational_const_alias: Override default alias for specifying rational constness
         :param enable_clang_format: Boolean to enable clang formatting.
+        :param stored_first_derivatives: Registered first-derivative gridfunctions valid for this kernel; the caller supplies current values and required halos.
 
         :raises ValueError: If 'fp_type' is not recognized as a valid floating-point type.
         :raises ValueError: If SIMD optimizations are enabled but the floating-point type is not 'double'.
@@ -188,6 +190,7 @@ class CCodeGen:
         )
         self.enforce_c_parameters_must_be_defined = enforce_c_parameters_must_be_defined
         self.enable_fd_functions = enable_fd_functions
+        self.stored_first_derivatives = tuple(stored_first_derivatives or ())
         self.mem_alloc_style = mem_alloc_style
         self.upwind_control_vec = upwind_control_vec
         self.symbol_to_Rational_dict = symbol_to_Rational_dict
@@ -346,6 +349,37 @@ def c_codegen(
     const REAL_SIMD_ARRAY __RHS_exp_0 = AddSIMD(u_dD0, AddSIMD(u_dDD01, u));
     WriteSIMD(&out[0], __RHS_exp_0);
     <BLANKLINE>
+
+    Stored derivatives are selected per kernel, even when other storage is registered.
+    Evaluate the emitted scalar assignments on independent polynomial data: the
+    selected first derivative is 14, its transverse derivative is 2, and the
+    unselected field's first derivative is 24. The unused storage contains -999.
+
+    >>> import re
+    >>> saved_gfs = gri.glb_gridfcs_dict.copy()
+    >>> saved_fd = fin.FDFunctions_dict.copy()
+    >>> saved_params = {name: par.parval_from_str(name) for name in ("Infrastructure", "parallelization", "finite_difference::fd_order")}
+    >>> try:
+    ...     par.set_parval_from_str("Infrastructure", "BHaH")
+    ...     par.set_parval_from_str("parallelization", "openmp")
+    ...     par.set_parval_from_str("finite_difference::fd_order", 2)
+    ...     gri.glb_gridfcs_dict.clear()
+    ...     _ = gri.register_gridfunctions(["u", "v"], group="EVOL")
+    ...     _ = gri.register_gridfunctions(["udD0", "vdD0"], group="AUXEVOL", is_basename=False)
+    ...     expression = 100 * sp.Symbol("u_dD0") + 10 * sp.Symbol("u_dDD01") + sp.Symbol("v_dD0")
+    ...     code = c_codegen(expression, "result", enable_fd_codegen=True, stored_first_derivatives=["udD0"], verbose=False)
+    ...     values = {"i0": 4, "i1": 5, "i2": 6, "invdxx0": 1, "invdxx1": 1, "UDD0GF": 0, "VDD0GF": 1, "VGF": 1, "IDX4": lambda gf, i, j, k: (gf, i, j, k)}
+    ...     values["auxevol_gfs"] = {(gf, i, j, 6): i + 2*j if gf == 0 else -999 for gf in range(2) for i in range(3, 6) for j in range(4, 7)}
+    ...     values["in_gfs"] = {(1, i, j, 6): 3*i*i for i in range(3, 6) for j in range(4, 7)}
+    ...     for name, rhs in re.findall(r"(?:const REAL )?([A-Za-z_0-9]+) = ([^;]+);", code):
+    ...         values[name] = sp.sympify(rhs, locals=values, rational=True)
+    ...     print(values["result"])
+    ... finally:
+    ...     gri.glb_gridfcs_dict.clear(); gri.glb_gridfcs_dict.update(saved_gfs)
+    ...     fin.FDFunctions_dict.clear(); fin.FDFunctions_dict.update(saved_fd)
+    ...     for name, value in saved_params.items():
+    ...         par.set_parval_from_str(name, value)
+    1444
 
     The upwind/KO coefficient identity holds for every stencil point in all
     three directions. These residuals use the actual FD coefficients.
@@ -525,6 +559,7 @@ def c_codegen(
             mem_alloc_style=CCGParams.mem_alloc_style,
             upwind_control_vec=CCGParams.upwind_control_vec,
             enable_fd_functions=CCGParams.enable_fd_functions,
+            stored_first_derivatives=CCGParams.stored_first_derivatives,
             enable_simd=CCGParams.enable_simd,
             enable_GoldenKernels=CCGParams.enable_GoldenKernels,
             fp_type=CCGParams.fp_type,
@@ -944,6 +979,21 @@ def gridfunction_management_and_FD_codegen(
     """
     CCGParams = CCodeGen(**kwargs)
 
+    # Select evaluation sources before constructing prototypes or planning reads.
+    # Keep the mathematical derivative symbols as the output temporary names.
+    if CCGParams.stored_first_derivatives:
+        (
+            list_of_base_gridfunction_names_in_derivs,
+            list_of_deriv_operators,
+        ) = fin.select_stored_first_derivatives(
+            list_of_deriv_vars, CCGParams.stored_first_derivatives
+        )
+        deriv_operator_dict = {
+            op: fin.compute_fdcoeffs_fdstencl(op, CCGParams.fd_order)
+            for op in superfast_uniq(list_of_deriv_operators)
+            if op
+        }
+
     # Step 5.a.ii: Perform arithmetic needed for finite differences
     #              associated with input expressions provided in
     #              sympyexpr_list[].rhs.
@@ -984,8 +1034,12 @@ def gridfunction_management_and_FD_codegen(
         for i, deriv_var_symbol in enumerate(list_of_deriv_vars):
             # unpack
             operator = list_of_deriv_operators[i]
-            proto_idx = deriv_op_list.index(operator)
             gf_name = list_of_base_gridfunction_names_in_derivs[i]
+            if not operator:
+                FDlhsvarnames += [f"const {CCGParams.fp_type_alias} {deriv_var_symbol}"]
+                FDexprs += [sp.Symbol(gf_name)]
+                continue
+            proto_idx = deriv_op_list.index(operator)
 
             FDlhsvarnames += [
                 proto_FDlhsvarnames[proto_idx].replace(
@@ -1076,7 +1130,7 @@ def gridfunction_management_and_FD_codegen(
                 fin.use_pointer_stride_mixed_derivative(op)
                 or fin.use_pointer_stride_ko_derivative(op)
             )
-            else deriv_operator_dict[op][1]
+            else deriv_operator_dict[op][1] if op else [[0, 0, 0, 0]]
         )
         for op in list_of_deriv_operators
     ]
@@ -1207,7 +1261,11 @@ def gridfunction_management_and_FD_codegen(
                 gf = list_of_base_gridfunction_names_in_derivs[i]
                 deriv_var = str(list_of_deriv_vars[i])
                 func_call_list += [
-                    f"{fin.FDFunctions_dict[op].c_function_call(gf, deriv_var)};\n"
+                    (
+                        f"{fin.FDFunctions_dict[op].c_function_call(gf, deriv_var)};\n"
+                        if op
+                        else f"const {CCGParams.fp_type_alias} {deriv_var} = {gf};\n"
+                    )
                 ]
             for func_call in sorted(func_call_list):
                 Coutput += func_call

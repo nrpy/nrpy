@@ -16,11 +16,10 @@ which Ricci_eval differentiates it: partial_0 h in i1 and i2, partial_1 h in i2,
 partial_2 h is read pointwise only. A direction that a symmetry axis has zeroed is
 neither differentiated nor grown.
 
-Three functions share the work. hDDdD_substitutions() is the contract between producer and
-consumer: it maps each hDD derivative symbol Ricci_eval would otherwise difference onto the
-stored gridfunction or a first derivative of it. register_hDDdD_gridfunctions() registers
-the SCRATCH gridfunctions, and register_CFunction_hDDdD_eval() emits the C function that
-writes them. Ricci_eval consumes them when registered with enable_hDDdD_gridfunctions=True.
+register_hDDdD_gridfunctions() registers the SCRATCH gridfunctions, and
+register_CFunction_hDDdD_eval() emits the C function that writes them. Ricci_eval
+selects these stored gridfunctions during finite-difference lowering when registered
+with enable_hDDdD_gridfunctions=True; its mathematical expressions remain unchanged.
 nrpy/examples/blackhole_spectroscopy.py switches the scheme on with the option of the same
 name, calls hDDdD_eval(params, RK_INPUT_GFS, RK_OUTPUT_GFS) immediately before Ricci_eval
 within each Method of Lines substep, and checks at compile time that NUM_SCRATCH_GFS fits in
@@ -33,9 +32,7 @@ Author: Zachariah B. Etienne
 from inspect import currentframe as cfr
 from pathlib import Path
 from types import FrameType as FT
-from typing import Dict, List, Union, cast
-
-import sympy as sp
+from typing import List, Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -53,12 +50,14 @@ from nrpy.helpers.expression_utils import (
 from nrpy.infrastructures import BHaH
 
 
-def register_hDDdD_gridfunctions() -> None:
+def register_hDDdD_gridfunctions() -> List[str]:
     """
     Register the SCRATCH gridfunctions hDDdD if they are not already registered.
 
     Both the producer and its consumers call this, because parallel code generation runs
     each registration in its own worker.
+
+    :return: Stored gridfunction names that Ricci may select during FD lowering.
 
     SCRATCH gridfunctions receive indices but no allocation, so only the caller can check
     that the storage it supplies to hDDdD_eval and Ricci_eval holds NUM_SCRATCH_GFS arrays.
@@ -71,43 +70,7 @@ def register_hDDdD_gridfunctions() -> None:
             group="SCRATCH",
         )
 
-
-def hDDdD_substitutions() -> Dict[sp.Symbol, sp.Symbol]:
-    """
-    Map hDD derivative symbols onto reads of the stored hDDdD gridfunctions.
-
-    Each first derivative becomes the stored gridfunction, and each mixed second
-    derivative becomes a first derivative of the stored gridfunction, canonicalized to
-    k < l so that h_{ij,kl} and h_{ij,lk} remain one shared value. Unmixed second
-    derivatives are not tensor products of first-derivative stencils and are left alone.
-    A derivative that a symmetry axis has already zeroed is not a symbol, so it is
-    absent from the map and stays zero; hDDdD_eval stores nothing along such an axis.
-
-    :return: Substitution dictionary for sympy xreplace.
-
-    Doctests:
-    >>> subs = hDDdD_substitutions()
-    >>> subs[sp.Symbol("hDD_dD012")], subs[sp.Symbol("hDD_dDD0112")]
-    (hDDdD012, hDDdD_dD0112)
-    >>> len(subs)  # 18 first derivatives and 18 mixed second derivatives of six components
-    36
-    >>> sp.Symbol("hDD_dDD0111") in subs
-    False
-    """
-    hDD_dD = ixp.declarerank3("hDD_dD", symmetry="sym01")
-    hDD_dDD = ixp.declarerank4("hDD_dDD", symmetry="sym01_sym23")
-    hDDdD = ixp.declarerank3("hDDdD", symmetry="sym01")
-    hDDdD_dD = ixp.declarerank4("hDDdD_dD", symmetry="sym01")
-    subs: Dict[sp.Symbol, sp.Symbol] = {}
-    for i in range(3):
-        for j in range(3):
-            for k in range(3):
-                if hDD_dD[i][j][k] != 0:
-                    subs[hDD_dD[i][j][k]] = hDDdD[i][j][k]
-                for l in range(3):
-                    if k != l and hDD_dDD[i][j][k][l] != 0:
-                        subs[hDD_dDD[i][j][k][l]] = hDDdD_dD[i][j][min(k, l)][max(k, l)]
-    return subs
+    return [f"hDDdD{i}{j}{k}" for i in range(3) for j in range(i, 3) for k in range(3)]
 
 
 def register_CFunction_hDDdD_eval(
@@ -124,8 +87,8 @@ def register_CFunction_hDDdD_eval(
     stencil radius in every direction Ricci_eval differentiates that stored derivative in.
     It must run before Ricci_eval reads scratch_gfs within the same right-hand-side
     evaluation, and it pairs with register_CFunction_Ricci_eval(...,
-    enable_hDDdD_gridfunctions=True), which rewrites the Ricci expressions through
-    hDDdD_substitutions() and adds scratch_gfs to Ricci_eval's arguments.
+    enable_hDDdD_gridfunctions=True), which selects stored derivatives during FD
+    lowering and adds scratch_gfs to Ricci_eval's arguments.
 
     :param CoordSystem: The coordinate system to be used.
     :param enable_intrinsics: Whether to enable SIMD/CUDA intrinsics.
@@ -196,7 +159,7 @@ def register_CFunction_hDDdD_eval(
         access_gfs: List[str] = []
         for i in range(3):
             for j in range(i, 3):
-                # Nothing to store along a symmetry axis; hDDdD_substitutions() reads
+                # Nothing to store along a symmetry axis; BSSNQuantities reads
                 # nothing there either.
                 if hDD_dD[i][j][direction] == 0:
                     continue
@@ -284,15 +247,3 @@ def register_CFunction_hDDdD_eval(
     )
 
     return pcg.NRPyEnv()
-
-
-if __name__ == "__main__":
-    import doctest
-    import sys
-
-    results = doctest.testmod()
-    if results.failed > 0:
-        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-        sys.exit(1)
-    else:
-        print(f"Doctest passed: All {results.attempted} test(s) passed")

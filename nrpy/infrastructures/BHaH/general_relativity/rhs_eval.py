@@ -36,7 +36,6 @@ from nrpy.helpers.expression_utils import (
 )
 from nrpy.infrastructures import BHaH
 from nrpy.infrastructures.BHaH.general_relativity.cfdD_alphadD_vetUdD_eval import (
-    cfdD_alphadD_vetUdD_substitutions,
     register_cfdD_alphadD_vetUdD_gridfunctions,
 )
 
@@ -139,6 +138,12 @@ def register_CFunction_rhs_eval(
         **arg_dict_cuda,
     }
     params = ",".join([f"{v} {k}" for k, v in arg_dict_host.items()])
+
+    stored_first_derivatives = (
+        register_cfdD_alphadD_vetUdD_gridfunctions()
+        if enable_cfdD_alphadD_vetUdD_gridfunctions
+        else []
+    )
 
     rhs_cache_key = (
         CoordSystem
@@ -394,13 +399,6 @@ def register_CFunction_rhs_eval(
     # )
 
     expr_list = list(local_RHSs_varname_to_expr_dict.values())
-    if enable_cfdD_alphadD_vetUdD_gridfunctions:
-        # An evaluation choice, not a change to the equations: the symbols the expressions
-        # were built from are renamed to reads of the stored gridfunctions.
-        register_cfdD_alphadD_vetUdD_gridfunctions()
-        substitutions = cfdD_alphadD_vetUdD_substitutions()
-        expr_list = [expr.xreplace(substitutions) for expr in expr_list]
-
     # Find symbols stored in params
     param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
         expr_list, exclude=[f"xx{j}" for j in range(3)]
@@ -428,6 +426,7 @@ def register_CFunction_rhs_eval(
         expr_list,
         RHSs_access_gf,
         enable_fd_codegen=True,
+        stored_first_derivatives=stored_first_derivatives,
         enable_simd=enable_intrinsics,
         upwind_control_vec=betaU,
         enable_fd_functions=enable_fd_functions,

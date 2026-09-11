@@ -1,6 +1,6 @@
 # Finite Difference
 
-> Core route for finite-difference operators in generated C kernels. · Status: confirmed · Last reconciled: 09-09-2026
+> Core route for finite-difference operators in generated C kernels. · Status: confirmed · Last reconciled: 09-11-2026
 > Up: [Core APIs](index.md)
 
 ## Summary
@@ -18,6 +18,16 @@ The codegen pipeline starts from expression free symbols. `symbol_is_gridfunctio
 The helper's current `_ddnD` expansion condition is broader than the parameter name suggests: whenever `upwind_control_vec` is not a Python `str`, each `_dupD` also adds the corresponding `_ddnD`. Thus `sp.Symbol("unset")` triggers expansion, while the literal string `"unset"` does not. `c_codegen()` currently passes `sp.Symbol("unset")` to this extraction helper independently of the caller's `CCodeGen.upwind_control_vec`; only a later list-valued control vector activates final upwind selection.
 
 `extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars()` parses derivative names into base gridfunction names and derivative operators. It enforces the naming contract that the number of final numeric suffix digits equals the total number of `U` and `D` characters in the symbol name. It then finds the last underscore, counts derivative `D` markers after it, and takes the differentiated gridfunction's rank as the remaining trailing digits. That subtraction, rather than a count of rank markers adjacent to the underscore, is what lets a gridfunction whose own name records a derivative be differentiated again, as `hDDdD_dD0011` is. It splits names such as `hDD_dDD0112` into the base gridfunction component and operator suffix expected by the finite-difference routines.
+
+`select_stored_first_derivatives()` returns aligned source-gridfunction and operator lists without changing derivative symbols. It is called by FD codegen before prototype construction and memory-read planning, only when the consumer supplies a nonempty `stored_first_derivatives` selection. For selected, registered storage, `hDD_dD011` keeps its temporary name but reads `hDDdD011`; `hDD_dDD0112` keeps its temporary name but applies `dD2` to `hDDdD011`. An empty operator marks a pointwise read internally. Only centered first derivatives and canonical mixed pairs (`01`, `02`, `12`) select storage. Unregistered selections raise `ValueError`; registered but unselected fields have no effect. Equation symmetry zeros remain zeros, and the caller owns storage validity, array availability, and halos.
+
+Claim evidence:
+- Claim: Explicit per-kernel storage selection changes derivative evaluation sources while preserving mathematical temporary names; an empty selection retains ordinary lowering.
+- Role: descriptive behavior
+- Deciding authority: [nrpy/finite_difference.py](../../nrpy/finite_difference.py) - `select_stored_first_derivatives` and its selection/error doctests.
+- Corroboration: [nrpy/c_codegen.py](../../nrpy/c_codegen.py) - `CCodeGen`, `gridfunction_management_and_FD_codegen`, and the polynomial evaluation doctest; [BHaH GR Application Wiring](../infrastructures/bhah/gr-application-wiring.md) records consumer integration and bounded evolution validation.
+- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=BHaH scalar codegen and SymPy evaluation; precision=exact polynomial reference; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=unregistered selection; options=FD2, selected first and mixed derivatives plus a registered unselected field; date=09-11-2026`
 
 `fd_temp_variable_name()` constructs temporary names for stencil-point reads. Offsets become suffixes such as `i0m2`, `i1p4`, or `i2m1`, joined after the gridfunction basename; zero offsets contribute no suffix, so the center point keeps the bare gridfunction name. An empty basename is rejected.
 

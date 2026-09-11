@@ -1,6 +1,6 @@
 # C Codegen
 
-> Core route for turning SymPy expressions into generated C text. · Status: confirmed · Last reconciled: 09-10-2026
+> Core route for turning SymPy expressions into generated C text. · Status: confirmed · Last reconciled: 09-11-2026
 > Up: [Core APIs](index.md)
 
 ## Summary
@@ -24,6 +24,8 @@ GoldenKernels is a convenience mode layered on the normal options. `enable_Golde
 `nrpyAbs` is an unevaluated SymPy function used to avoid hangs from SymPy `Abs()` evaluation on complicated expressions while still printing the intended C absolute-value function through the custom C printer mappings.
 
 When `automatically_read_gf_data_from_memory` or `enable_fd_codegen` is enabled, `c_codegen()` extracts derivative symbols from expression free symbols, maps derivative symbols to base gridfunctions and derivative operators, computes finite-difference coefficients and stencils, and calls `gridfunction_management_and_FD_codegen()`. `enable_fd_codegen` is stronger than `automatically_read_gf_data_from_memory`: the constructor turns on automatic gridfunction reads, and the public `c_codegen()` entry clears `FDFunctions_dict` at the start of that FD codegen call. `automatically_read_gf_data_from_memory` alone uses the same read/planning route but does not reset the FD helper registry.
+
+`stored_first_derivatives` is an optional sequence of registered gridfunction names that the caller makes available to this kernel. Before constructing FD prototypes and planning reads, the FD path calls `select_stored_first_derivatives()` to select point reads for centered first derivatives and first-derivative stencils for canonical mixed second derivatives. The original derivative temporary names and equation expressions remain unchanged. Merely registering storage does not activate it: the consumer must explicitly select the fields, supply their array, and guarantee current values and stencil halos. An omitted or empty sequence retains ordinary lowering. Diagonal, upwind, KO, and unselected derivatives keep their operators. See [Finite Difference](finite-difference.md) for the naming contract.
 
 Only a list-valued `upwind_control_vec` activates direction selection and control-vector expressions. Current constructor logic does not comprehensively validate list length or every element, so callers must supply an entry for each derivative direction used. Non-list values do not establish an upwind control vector even if accepted by construction.
 
