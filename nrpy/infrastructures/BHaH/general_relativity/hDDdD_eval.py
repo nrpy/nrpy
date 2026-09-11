@@ -16,6 +16,16 @@ which Ricci_eval differentiates it: partial_0 h in i1 and i2, partial_1 h in i2,
 partial_2 h is read pointwise only. A direction that a symmetry axis has zeroed is
 neither differentiated nor grown.
 
+Three functions share the work. hDDdD_substitutions() is the contract between producer and
+consumer: it maps each hDD derivative symbol Ricci_eval would otherwise difference onto the
+stored gridfunction or a first derivative of it. register_hDDdD_gridfunctions() registers
+the SCRATCH gridfunctions, and register_CFunction_hDDdD_eval() emits the C function that
+writes them. Ricci_eval consumes them when registered with enable_hDDdD_gridfunctions=True.
+nrpy/examples/blackhole_spectroscopy.py switches the scheme on with the option of the same
+name, calls hDDdD_eval(params, RK_INPUT_GFS, RK_OUTPUT_GFS) immediately before Ricci_eval
+within each Method of Lines substep, and checks at compile time that NUM_SCRATCH_GFS fits in
+NUM_EVOL_GFS.
+
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
@@ -49,6 +59,9 @@ def register_hDDdD_gridfunctions() -> None:
 
     Both the producer and its consumers call this, because parallel code generation runs
     each registration in its own worker.
+
+    SCRATCH gridfunctions receive indices but no allocation, so only the caller can check
+    that the storage it supplies to hDDdD_eval and Ricci_eval holds NUM_SCRATCH_GFS arrays.
     """
     if "hDDdD000" not in gri.glb_gridfcs_dict:
         _ = gri.register_gridfunctions_for_single_rankN(
@@ -72,7 +85,7 @@ def hDDdD_substitutions() -> Dict[sp.Symbol, sp.Symbol]:
 
     :return: Substitution dictionary for sympy xreplace.
 
-    DocTests:
+    Doctests:
     >>> subs = hDDdD_substitutions()
     >>> subs[sp.Symbol("hDD_dD012")], subs[sp.Symbol("hDD_dDD0112")]
     (hDDdD012, hDDdD_dD0112)
@@ -105,6 +118,14 @@ def register_CFunction_hDDdD_eval(
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the function that stores the first derivatives of hDD.
+
+    The emitted hDDdD_eval(params, in_gfs, scratch_gfs) launches one kernel per direction
+    that some mixed second derivative differentiates, each over the interior grown by the
+    stencil radius in every direction Ricci_eval differentiates that stored derivative in.
+    It must run before Ricci_eval reads scratch_gfs within the same right-hand-side
+    evaluation, and it pairs with register_CFunction_Ricci_eval(...,
+    enable_hDDdD_gridfunctions=True), which rewrites the Ricci expressions through
+    hDDdD_substitutions() and adds scratch_gfs to Ricci_eval's arguments.
 
     :param CoordSystem: The coordinate system to be used.
     :param enable_intrinsics: Whether to enable SIMD/CUDA intrinsics.
@@ -183,6 +204,7 @@ def register_CFunction_hDDdD_eval(
                 access_gfs += [
                     f"scratch_gfs[IDX4(HDDDD{i}{j}{direction}GF, i0, i1, i2)]"
                 ]
+        # Every component of this direction lies along a symmetry axis: no kernel to emit.
         if not exprs:
             continue
 

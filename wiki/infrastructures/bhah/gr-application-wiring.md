@@ -108,6 +108,26 @@ expressions by symbol). No array is allocated for `hDDdD`: `blackhole_spectrosco
 overwrites `RK_OUTPUT_GFS` in the same substep, and enables this only for CUDA double
 precision, where it was measured to help.
 
+`register_CFunction_cfdD_alphadD_vetUdD_eval` (`cfdD_alphadD_vetUdD_eval.py`) applies the
+same tensor-product identity to the right-hand sides. It stores the first derivatives of `cf`,
+`alpha` and `vetU` that their fifteen mixed second derivatives are built from as the `AUXEVOL`
+gridfunctions `cfdD`, `alphadD` and `vetUdD`, and
+`register_CFunction_rhs_eval(..., enable_cfdD_alphadD_vetUdD_gridfunctions=True)` rewrites the
+right-hand-side expressions by symbol (`cfdD_alphadD_vetUdD_substitutions()`). Only the
+directions a mixed second derivative differentiates are stored, which is `partial_0` and
+`partial_1` with the index pair canonicalized to `j < k`, so ten gridfunctions are registered
+and each is produced over the interior grown by `fd_order/2` points in the directions that
+differentiate it. These cannot be `SCRATCH` gridfunctions like `hDDdD`: `rhs_eval` reads them
+with a stencil while writing the Method of Lines buffer, so a pointwise store would overwrite a
+neighbor's stencil point. They therefore cost memory: `NUM_AUXEVOL_GFS` goes 6 to 16, about 61 MB
+and 10% of the run's footprint on the standard grid, in device memory and again in the host
+mirror. The BHaH BSSN examples that build for CUDA (`blackhole_spectroscopy.py`,
+`two_blackholes_collide.py`, `spinning_blackhole.py`, `hydro_without_hydro.py`,
+`kasner_exact_evolution.py`) expose it as `enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU`
+next to their other options; it defaults to off because of the memory cost, requires `--cuda`,
+and when set calls `cfdD_alphadD_vetUdD_eval(params, RK_INPUT_GFS, auxevol_gfs)` before
+`rhs_eval` within each substep.
+
 `register_CFunction_constraints_eval` emits the diagnostics-side Hamiltonian,
 momentum, and conformal connection-constraint evaluator. It temporarily forces
 OpenMP, reads
@@ -292,6 +312,7 @@ does not remove `m=+l` cases from emitted BHaH C.
 - [dsmin_gf.py](../../../nrpy/infrastructures/BHaH/general_relativity/dsmin_gf.py) - `register_CFunction_dsmin_auxevol_gridfunction`
 - [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py) - `register_CFunction_Ricci_eval`
 - [hDDdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/hDDdD_eval.py) - `register_CFunction_hDDdD_eval`, `hDDdD_substitutions`, `register_hDDdD_gridfunctions`
+- [cfdD_alphadD_vetUdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/cfdD_alphadD_vetUdD_eval.py) - `register_CFunction_cfdD_alphadD_vetUdD_eval`, `cfdD_alphadD_vetUdD_substitutions`, `register_cfdD_alphadD_vetUdD_gridfunctions`
 - [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py) - `register_CFunction_constraints_eval`
 - [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - [initial_data.py](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py) - `register_CFunction_initial_data`

@@ -141,11 +141,33 @@ separate_Ricci_and_BSSN_RHS = True
 # CUDA double precision only: on the RTX 4060 Ti the standard 64x64x128 SinhCylindrical
 # benchmark through t_final=0.5 measures 27.80 s -> 25.08 s; on 8 pinned CPU cores the same
 # change measures 56.16 s -> 58.02 s, because there the 18 arrays of producer traffic cost
-# more than the arithmetic they remove. Extending the scheme to vetU, cf and alpha was also
-# measured, and rejected. Measured for SinhCylindrical, fd_order 8, double.
+# more than the arithmetic they remove. An earlier attempt to extend the scheme to vetU, cf and
+# alpha was measured on the tree of 09-09-2026 and rejected: 32.03 s without stored derivatives,
+# 28.91 s with hDDdD alone, 29.85 s with the extension. That attempt stacked the extension on an
+# hDDdD that was itself in AUXEVOL, so it carried twenty-eight arrays where the change below
+# carries ten, and it ran before the register-pressure statement ordering and the inlining of the
+# finite-difference helpers, which is what put rhs_eval at the FP64 issue peak where trading
+# memory traffic for arithmetic pays. Measured for SinhCylindrical, fd_order 8, double.
 enable_hDDdD_gridfunctions = (
     separate_Ricci_and_BSSN_RHS and parallelization == "cuda" and fp_type == "double"
 )
+# The same tensor-product identity for the BSSN right-hand sides: store the first derivatives of
+# cf, alpha and vetU that its fifteen mixed second derivatives are built from, so that each
+# becomes a nine-point first derivative of a stored gridfunction instead of a 64-term
+# tensor-product stencil. These are ordinary AUXEVOL gridfunctions rather than SCRATCH, because
+# rhs_eval reads them with a stencil while writing the Method of Lines buffer, so they cost memory:
+# NUM_AUXEVOL_GFS goes 6 -> 16, about 61 MB and 10% of the run's footprint on the standard grid,
+# in device memory and again in the host mirror (see cfdD_alphadD_vetUdD_eval.py, which also
+# records why ten gridfunctions and not five). Off by default for that reason. CUDA builds only:
+# on the RTX 4060 Ti the standard 64x64x128 SinhCylindrical benchmark through t_final=0.5 measures
+# 24.97 s -> 22.74 s, with rhs_eval itself 16.95 ms -> 13.50 ms per call, because that kernel runs
+# at 85% of the FP64 issue peak and this removes 20.6% of its FP64 instructions. Measured for
+# SinhCylindrical, fd_order 8, double.
+enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU = False
+if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU and parallelization != "cuda":
+    raise ValueError(
+        "enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU requires --cuda."
+    )
 enable_parallel_codegen = True
 enable_rfm_precompute = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
 enable_intrinsics = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
@@ -301,7 +323,15 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
         enable_YBS_momentum_constraint_adjustment
     ),
     OMP_collapse=OMP_collapse,
+    enable_cfdD_alphadD_vetUdD_gridfunctions=enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU,
 )
+if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU:
+    BHaH.general_relativity.cfdD_alphadD_vetUdD_eval.register_CFunction_cfdD_alphadD_vetUdD_eval(
+        CoordSystem=CoordSystem,
+        enable_intrinsics=enable_intrinsics,
+        enable_fd_functions=enable_fd_functions,
+        OMP_collapse=OMP_collapse,
+    )
 if enable_CAHD or enable_YBS_momentum_constraint_adjustment:
     BHaH.general_relativity.dsmin_gf.register_CFunction_dsmin_auxevol_gridfunction(
         {CoordSystem}
@@ -406,6 +436,9 @@ hDDdD_eval(params, RK_INPUT_GFS, RK_OUTPUT_GFS);
 Ricci_eval(params, rfmstruct, RK_INPUT_GFS, RK_OUTPUT_GFS, auxevol_gfs);"""
 elif separate_Ricci_and_BSSN_RHS:
     rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
+if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU:
+    # Must precede rhs_eval, its only consumer, within the substep.
+    rhs_string += "\ncfdD_alphadD_vetUdD_eval(params, RK_INPUT_GFS, auxevol_gfs);"
 rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
@@ -418,6 +451,7 @@ if (
     and enable_rfm_precompute
     and not enable_fCCZ4
     and not enable_hDDdD_gridfunctions
+    and not enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU
 ):
     rhs_string = rhs_string.replace(
         "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);", ""

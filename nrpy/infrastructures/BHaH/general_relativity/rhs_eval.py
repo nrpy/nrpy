@@ -35,6 +35,10 @@ from nrpy.helpers.expression_utils import (
     get_params_commondata_symbols_from_expr_list,
 )
 from nrpy.infrastructures import BHaH
+from nrpy.infrastructures.BHaH.general_relativity.cfdD_alphadD_vetUdD_eval import (
+    cfdD_alphadD_vetUdD_substitutions,
+    register_cfdD_alphadD_vetUdD_gridfunctions,
+)
 
 
 def register_CFunction_rhs_eval(
@@ -57,6 +61,7 @@ def register_CFunction_rhs_eval(
     enable_fCCZ4: bool = False,
     enable_YBS_Gamma_constraint_adjustment: bool = False,
     enable_YBS_momentum_constraint_adjustment: bool = False,
+    enable_cfdD_alphadD_vetUdD_gridfunctions: bool = False,
 ) -> Union[None, Dict[str, Union[mpf, mpc]], pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for BSSN or fCCZ4.
@@ -81,6 +86,13 @@ def register_CFunction_rhs_eval(
     :param enable_YBS_Gamma_constraint_adjustment: Enable the YBS connection-constraint adjustment.
     :param enable_YBS_momentum_constraint_adjustment: Enable the timestep-scaled
         Yo--Lin--Cao momentum-constraint adjustment.
+    :param enable_cfdD_alphadD_vetUdD_gridfunctions: Whether to read the first derivatives of
+        cf, alpha and vetU from the gridfunctions cfdD_alphadD_vetUdD_eval stores, and to
+        build each mixed second derivative of them as a single first derivative of those
+        gridfunctions, instead of differencing the evolved fields twice. The caller must also
+        register cfdD_alphadD_vetUdD_eval and call it before rhs_eval within the same
+        right-hand-side evaluation; rhs_eval registers the gridfunctions either way, so an
+        unpaired caller would compile and read values nobody wrote.
 
     :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
 
@@ -382,6 +394,12 @@ def register_CFunction_rhs_eval(
     # )
 
     expr_list = list(local_RHSs_varname_to_expr_dict.values())
+    if enable_cfdD_alphadD_vetUdD_gridfunctions:
+        # An evaluation choice, not a change to the equations: the symbols the expressions
+        # were built from are renamed to reads of the stored gridfunctions.
+        register_cfdD_alphadD_vetUdD_gridfunctions()
+        substitutions = cfdD_alphadD_vetUdD_substitutions()
+        expr_list = [expr.xreplace(substitutions) for expr in expr_list]
 
     # Find symbols stored in params
     param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(

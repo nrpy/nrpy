@@ -6,6 +6,7 @@ from . import (
     TOVola,
     TwoPunctures,
     basis_transforms,
+    cfdD_alphadD_vetUdD_eval,
     constraints_eval,
     diagnostic_gfs_set,
     diagnostics_nearest,
