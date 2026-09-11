@@ -1,6 +1,6 @@
 # CarpetX GR BSSN RHS, Ricci, Constraints, And Validation
 
-> CarpetX registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 08-28-2026
+> CarpetX registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 09-10-2026
 > Up: [CarpetX](index.md)
 
 ## Summary
@@ -38,8 +38,8 @@ finite-difference helper functions and Golden Kernels inside an interior CarpetX
 requested, the current CarpetX `simple_loop(enable_simd=True)` path raises
 `ValueError`, so this registration path does not currently emit a usable SIMD
 CarpetX loop kernel. The registered
-prefunc rewrites finite-difference helper text from `NO_INLINE` to
-`CCTK_ATTRIBUTE_NOINLINE`. Its schedule is guarded by `if(fd_order == <order>)`
+prefunc is `construct_FD_functions_prefunc()` unchanged; the finite-difference
+helpers carry `CCTK_DEVICE CCTK_HOST` and no inlining attribute. Its schedule is guarded by `if(fd_order == <order>)`
 and places the function in `ODESolvers_RHS as <thorn>_Ricci before
 <thorn>_RHS`, reading `hDD*` and `lambdaU*` and writing `RbarDD*`.
 
@@ -70,8 +70,8 @@ usable with `enable_simd=True`.
 After option handling, the RHS codegen constructs an upwind control vector
 `betaU[i] = vetU[i] * rfm.ReU[i]` and calls `c_codegen()` with finite-difference
 codegen, finite-difference helper functions, Golden Kernels, and
-`upwind_control_vec=betaU`. The registered prefunc uses the same
-`NO_INLINE` to `CCTK_ATTRIBUTE_NOINLINE` rewrite as Ricci. The schedule is
+`upwind_control_vec=betaU`. The registered prefunc is the same unmodified
+`construct_FD_functions_prefunc()` as Ricci. The schedule is
 guarded by the finite-difference order and places the function in
 `ODESolvers_RHS as <thorn>_RHS after <thorn>_Ricci`, reading
 `evol_variables(everywhere)` and `auxevol_variables(interior)` and writing
@@ -96,8 +96,7 @@ reference-metric precompute and `T4munu` suffixes, computes `H`, `MU0`, `MU1`,
 `MU2`, `M = sqrt(gamma_ij M^i M^j)`, and
 `LAMBDA_CONSTRAINT = sqrt(gammabar_ij C^i C^j)`, and writes them through
 CarpetX auxiliary gridfunction accesses. Its generated body uses the same
-finite-difference helper functions, Golden Kernels, and
-`CCTK_ATTRIBUTE_NOINLINE` helper rewrite. As with Ricci and RHS, SIMD-specific
+finite-difference helper functions and Golden Kernels. As with Ricci and RHS, SIMD-specific
 declarations begin when requested, but the downstream CarpetX
 `simple_loop(enable_simd=True)` call raises `ValueError`, so this registration
 path does not currently emit a usable SIMD CarpetX loop kernel. Its schedule is guarded by

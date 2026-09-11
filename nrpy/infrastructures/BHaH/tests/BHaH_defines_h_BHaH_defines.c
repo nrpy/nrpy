@@ -100,15 +100,6 @@ typedef struct __params_struct__ {
 // Note that upwinding in e.g., BSSN requires that NGHOSTS = fd_order/2 + 1 <- Notice the +1.
 #define NGHOSTS 2
 
-// Declare NO_INLINE macro, used in FD functions. GCC v10+ compilations hang on complex RHS expressions (like BSSN) without this.
-#if defined(__GNUC__) || defined(__clang__) || defined(__INTEL_COMPILER)
-#define NO_INLINE __attribute__((noinline))
-#elif defined(_MSC_VER)
-#define NO_INLINE __declspec(noinline)
-#else
-#define NO_INLINE // Fallback for unknown compilers
-#endif            // NO_INLINE definition
-
 #ifndef UPWIND_ALG
 // When enable_intrinsics = False, this is the UPWIND_ALG() macro:
 #define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0

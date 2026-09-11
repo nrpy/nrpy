@@ -24,6 +24,9 @@ from nrpy.helpers.generic import (
     clang_format,
     superfast_uniq,
 )
+from nrpy.helpers.register_pressure_ordering import (
+    order_statements_for_register_pressure,
+)
 from nrpy.helpers.simd import expr_convert_to_simd_intrins
 from nrpy.helpers.type_annotation_utilities import (
     generate_class_representation,
@@ -321,64 +324,26 @@ def c_codegen(
     ...     fin.FDFunctions_dict.clear(); fin.FDFunctions_dict.update(saved_fd)
     ...     for name, value in saved_params.items():
     ...         par.set_parval_from_str(name, value)
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 1 of 2:
-     * Read gridfunction(s) from main memory and compute FD stencils as needed.
-     */
     const REAL u_dDD01 = fd_function_dDD01_fdorder2(&custom_gfs[IDX4(UGF, i0, i1, i2)], Nxx_plus_2NGHOSTS0, invdxx0, invdxx1);
-    <BLANKLINE>
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 2 of 2:
-     * Evaluate SymPy expressions and write to main memory.
-     */
     out[0] = u_dDD01;
     <BLANKLINE>
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 1 of 2:
-     * Read gridfunction(s) from main memory and compute FD stencils as needed.
-     */
     const REAL u_i0m1 = custom_gfs[IDX4(UGF, i0-1, i1, i2)];
     const REAL u = custom_gfs[IDX4(UGF, i0, i1, i2)];
     const REAL u_i0p1 = custom_gfs[IDX4(UGF, i0+1, i1, i2)];
     const REAL u_dD0 = fd_function_dD0_fdorder2(u_i0m1,u_i0p1,invdxx0);
     const REAL u_dDD01 = fd_function_dDD01_fdorder2(&custom_gfs[IDX4(UGF, i0, i1, i2)], Nxx_plus_2NGHOSTS0, invdxx0, invdxx1);
-    <BLANKLINE>
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 2 of 2:
-     * Evaluate SymPy expressions and write to main memory.
-     */
     out[0] = u + u_dD0 + u_dDD01;
     <BLANKLINE>
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 1 of 2:
-     * Read gridfunction(s) from main memory and compute FD stencils as needed.
-     */
     const REAL_SIMD_ARRAY u_dDD01 = SIMD_fd_function_dDD01_fdorder2(&custom_gfs[IDX4(UGF, i0, i1, i2)], Nxx_plus_2NGHOSTS0, invdxx0, invdxx1);
-    <BLANKLINE>
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 2 of 2:
-     * Evaluate SymPy expressions and write to main memory.
-     */
     const REAL_SIMD_ARRAY __RHS_exp_0 = u_dDD01;
-    <BLANKLINE>
     WriteSIMD(&out[0], __RHS_exp_0);
     <BLANKLINE>
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 1 of 2:
-     * Read gridfunction(s) from main memory and compute FD stencils as needed.
-     */
     const REAL_SIMD_ARRAY u_i0m1 = ReadSIMD(&custom_gfs[IDX4(UGF, i0-1, i1, i2)]);
     const REAL_SIMD_ARRAY u = ReadSIMD(&custom_gfs[IDX4(UGF, i0, i1, i2)]);
     const REAL_SIMD_ARRAY u_i0p1 = ReadSIMD(&custom_gfs[IDX4(UGF, i0+1, i1, i2)]);
     const REAL_SIMD_ARRAY u_dD0 = SIMD_fd_function_dD0_fdorder2(u_i0m1,u_i0p1,invdxx0);
     const REAL_SIMD_ARRAY u_dDD01 = SIMD_fd_function_dDD01_fdorder2(&custom_gfs[IDX4(UGF, i0, i1, i2)], Nxx_plus_2NGHOSTS0, invdxx0, invdxx1);
-    <BLANKLINE>
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 2 of 2:
-     * Evaluate SymPy expressions and write to main memory.
-     */
     const REAL_SIMD_ARRAY __RHS_exp_0 = AddSIMD(u_dD0, AddSIMD(u_dDD01, u));
-    <BLANKLINE>
     WriteSIMD(&out[0], __RHS_exp_0);
     <BLANKLINE>
 
@@ -548,8 +513,9 @@ def c_codegen(
                 deriv_op, CCGParams.fd_order
             )
 
-        # This calls outputC as needed to construct a C kernel that does gridfunction management with or without FDs
-        return gridfunction_management_and_FD_codegen(
+        # This calls outputC as needed to construct a C kernel that does gridfunction management with or without FDs,
+        # then re-emits its statements in the register-pressure-aware order.
+        fd_kernel_body = gridfunction_management_and_FD_codegen(
             sympyexpr_list,
             output_varname_str,
             list_of_deriv_vars,
@@ -564,6 +530,7 @@ def c_codegen(
             fp_type=CCGParams.fp_type,
             rational_const_alias=CCGParams.rational_const_alias,
         )
+        return order_statements_for_register_pressure(fd_kernel_body)
 
     # Step 4: If CCGParams.verbose, then output the original SymPy
     #         expression(s) in code comments prior to actual C code

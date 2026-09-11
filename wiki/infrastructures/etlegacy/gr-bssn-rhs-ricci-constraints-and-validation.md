@@ -1,6 +1,6 @@
 # ETLegacy GR BSSN RHS, Ricci, Constraints, And Validation
 
-> ETLegacy registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 08-28-2026
+> ETLegacy registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 09-10-2026
 > Up: [ETLegacy](index.md)
 
 ## Summary
@@ -109,11 +109,10 @@ Claim evidence:
 - Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
 - Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=ETLegacy registration; precision=symbolic code generation; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian, fd_order 4, T4munu False/True, SIMD registration exercised; date=08-28-2026`
 
-All three generated kernels replace the finite-difference helper prefunc text
-`NO_INLINE` with `CCTK_ATTRIBUTE_NOINLINE` before registration. The local
-comment says this avoids a higher-order finite-difference compile hang with
-some GCC versions without changing the shared finite-difference helper for
-other infrastructures.
+All three generated kernels register `construct_FD_functions_prefunc()` unchanged;
+the finite-difference helpers carry no inlining attribute (the former `NO_INLINE`
+rewrite to `CCTK_ATTRIBUTE_NOINLINE`, a workaround for a GCC 10 compile hang, was
+removed together with the macro).
 
 RHS validation remains part of this page because `rhs_eval.py` validates the
 ETLegacy-specific assembled RHS dictionary after ETLegacy option handling and
