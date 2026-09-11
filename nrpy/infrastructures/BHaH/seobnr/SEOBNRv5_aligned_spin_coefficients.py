@@ -23,6 +23,7 @@ import nrpy.params as par
 def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
     calibration_no_spin: bool = False,
     calibration_spin: bool = False,
+    nrpy_calibrated: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register CFunction for evaluating the masses and SEOBNRv5 coefficients.
@@ -36,6 +37,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
                                 pySEOBNR v5 calibration coefficients are used if False.
     :param calibration_spin: If True, the spin-dependent calibration coefficients are added to the parfile.
                                 pySEOBNR v5 calibration coefficients are used if False.
+    :param nrpy_calibrated: If True, the nrpy calibrated coefficients are used in place of the default pySEOBNR ones.
     :raises ValueError: If both calibration_no_spin and calibration_spin are True.
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -47,6 +49,10 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
         raise ValueError(
             "calibration_no_spin and calibration_spin cannot both be True."
         )
+    # Add an error flag if nrpy_calibrated and either of the calibration flags are true
+    # as we can either generated a "calibration" code or a "calibrated" code.
+    if (calibration_no_spin or calibration_spin) and nrpy_calibrated:
+        raise ValueError("cannot use nrpy_calibrated=True values in calibration mode.")
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
@@ -151,7 +157,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
             ["Delta_t_NS", "a6"],
             [0.0, 0.0],
             commondata=True,
-            add_to_parfile=False,
+            add_to_parfile=True,
         )
         par.register_CodeParameters(
             "REAL",
@@ -304,11 +310,11 @@ const REAL Delta_t_NS = commondata->Delta_t_NS;
         )
     elif calibration_spin:
         body += """
+const REAL Delta_t_NS = commondata->Delta_t_NS;
 const REAL Delta_t_S = commondata->Delta_t_S;
 """
         body += ccg.c_codegen(
             [
-                v5_const.pyseobnr_a6,
                 v5_const.Delta_t,
                 v5_const.M_f,
                 v5_const.a_f,
@@ -316,7 +322,6 @@ const REAL Delta_t_S = commondata->Delta_t_S;
                 v5_const.rstop,
             ],
             [
-                "commondata->a6",
                 "commondata->Delta_t",
                 "commondata->M_f",
                 "commondata->a_f",
@@ -329,7 +334,7 @@ const REAL Delta_t_S = commondata->Delta_t_S;
     else:
         body += ccg.c_codegen(
             [
-                v5_const.pyseobnr_a6,
+                v5_const.a6,
                 v5_const.pyseobnr_dSO,
                 v5_const.Delta_t,
                 v5_const.M_f,

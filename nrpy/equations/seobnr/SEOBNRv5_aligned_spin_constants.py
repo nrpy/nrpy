@@ -36,6 +36,7 @@ class SEOBNR_aligned_spin_constants:
         self,
         calibration_no_spin: bool = False,
         calibration_spin: bool = False,
+        nrpy_calibrated: bool = False,
     ) -> None:
         """
         Compute the SEOBNR aligned-spin constants.
@@ -76,6 +77,7 @@ class SEOBNR_aligned_spin_constants:
 
         :param calibration_no_spin: Flag to enable/disable calibration of the non-spinning parameters
         :param calibration_spin: Flag to enable/disable calibration of the spinning parameters
+        :param nrpy_calibrated: Flag to use the nrpy calibrated versions
         :raises ValueError: If both calibration_no_spin and calibration_spin are True
         :return None:
         """
@@ -87,9 +89,31 @@ class SEOBNR_aligned_spin_constants:
             raise ValueError(
                 "calibration_no_spin and calibration_spin cannot both be True."
             )
+        # Add an error flag if nrpy_calibrated and either of the calibration flags are true
+        # as we can either generated a "calibration" code or a "calibrated" code.
+        if (calibration_no_spin or calibration_spin) and nrpy_calibrated:
+            raise ValueError(
+                "cannot use nrpy_calibrated=True values in calibration mode."
+            )
         self.m1, self.m2, self.chi1, self.chi2 = sp.symbols(
             "m1 m2 chi1 chi2", real=True
         )
+        m1 = self.m1
+        m2 = self.m2
+        chi1 = self.chi1
+        chi2 = self.chi2
+        M = m1 + m2
+        nu = m1 * m2 / M**2
+        self.nu = nu
+        delta = (m1 - m2) / (m1 + m2)
+        chiS = (chi1 + chi2) / 2
+        chiA = (chi1 - chi2) / 2
+        chi21A = (chiS / (1 - 1.3 * nu)) * delta + chiA
+        chi33 = chiS * delta + chiA
+        chi44A = (1 - 5 * nu) * chiS + chiA * delta
+        chi = chiS + chiA * (delta / (1 - 2 * nu))
+
+        self.nrpy_calibrated = nrpy_calibrated
         # compute calibration parameters
         if calibration_no_spin:
             # This is the first (non-spinning) calibration stage so we have no precalculated values
@@ -100,9 +124,11 @@ class SEOBNR_aligned_spin_constants:
             self.Delta_t_S = sp.sympify(0)
         elif calibration_spin:
             # This is the second (spinning) calibration stage where we have precalculated values for a6 and Delta_t_NS
-            self.compute_calibration_params()
+            # self.compute_calibration_params()
             # overwrite Delta_t_S and dSO to symbols
+            self.a6, self.Delta_t_NS = sp.symbols("a6 Delta_t_NS", real=True)
             self.dSO, self.Delta_t_S = sp.symbols("dSO Delta_t_S", real=True)
+
         else:
             # This is the post-calibration stage and all values are precalculated
             self.compute_calibration_params()
@@ -127,20 +153,6 @@ class SEOBNR_aligned_spin_constants:
             l, m = mode
             self.hNR.update({f"({l} , {m})": sp.sympify(0)})
             self.omegaNR.update({f"({l} , {m})": sp.sympify(0)})
-
-        m1 = self.m1
-        m2 = self.m2
-        chi1 = self.chi1
-        chi2 = self.chi2
-        M = m1 + m2
-        nu = m1 * m2 / M**2
-        delta = (m1 - m2) / (m1 + m2)
-        chiS = (chi1 + chi2) / 2
-        chiA = (chi1 - chi2) / 2
-        chi21A = (chiS / (1 - 1.3 * nu)) * delta + chiA
-        chi33 = chiS * delta + chiA
-        chi44A = (1 - 5 * nu) * chiS + chiA * delta
-        chi = chiS + chiA * (delta / (1 - 2 * nu))
 
         self.hNR["(2 , 2)"] = sp.Abs(
             0.430147 * chi**3 * nu
@@ -347,20 +359,14 @@ class SEOBNR_aligned_spin_constants:
         nu = m1 * m2 / M**2
         ap = (m1 * chi1 + m2 * chi2) / M**2
         am = (m1 * chi1 - m2 * chi2) / M**2
-        par_a6 = [
+        self.pySEOBNR_par_a6 = [
             f2r(4.17877875e01),
             f2r(-3.02193382e03),
             f2r(3.34144394e04),
             f2r(-1.69019140e05),
             f2r(3.29523262e05),
         ]
-        self.pyseobnr_a6 = (
-            par_a6[0]
-            + par_a6[1] * nu
-            + par_a6[2] * nu**2
-            + par_a6[3] * nu**3
-            + par_a6[4] * nu**4
-        )
+
         self.pyseobnr_dSO = (
             -f2r(7.71251231383957) * am**3
             - f2r(17.2294679794015) * am**2 * ap
@@ -401,16 +407,33 @@ class SEOBNR_aligned_spin_constants:
             - f2r(141.253181790353) * ap * nu
             + f2r(17.5710132409988) * ap
         )
-        par_dtns = [
+        self.pySEOBNR_par_dtns = [
             f2r(1.00513217e01),
             -f2r(5.96231800e01),
             -f2r(1.05687385e03),
             -f2r(9.79317619e03),
             f2r(5.55652392e04),
         ]
-        self.Delta_t_NS = nu ** (sp.Rational(-1, 5) + par_dtns[0] * nu) * (
-            par_dtns[1] + par_dtns[2] * nu + par_dtns[3] * nu**2 + par_dtns[4] * nu**3
-        )
+
+        # nrpy calibrated fits. Will be found in upcoming waveform systematics paper and companion repo.
+        # Sid: will update this once the companion repo goes public.
+        self.nrpy_par_a6 = [
+            f2r(38.42740427568258),
+            f2r(-3045.776059673495),
+            f2r(32619.794221356777),
+            f2r(-163398.03196801365),
+            f2r(322345.94354854507),
+        ]
+        self.nrpy_par_dtns = [
+            f2r(11.070193154716089),
+            f2r(-59.63184230184489),
+            f2r(-1230.330177076144),
+            f2r(-17121.431433093665),
+            f2r(86096.77583093019),
+        ]
+
+        self.delta_t_ns_func()
+        self.a6_func()
 
     def final_spin_non_precessing_HBR2016(
         self,
@@ -541,6 +564,39 @@ class SEOBNR_aligned_spin_constants:
             A_1 * Deltachi + A_2 * Deltachi2 + A_3 * Deltachi * Shat
         )
         self.M_f = 1 - (Erad_nu_Shat + DeltaErad_nu_Shat_Deltachi)
+
+    def delta_t_ns_func(
+        self,
+    ) -> None:
+        """
+        Compute the non spinning Delta_t fit.
+
+        :return None:
+        """
+        par_dt = self.nrpy_par_dtns if self.nrpy_calibrated else self.pySEOBNR_par_dtns
+        self.Delta_t_NS = self.nu ** (-sp.Rational(1, 5) + par_dt[0] * self.nu) * (
+            par_dt[1]
+            + par_dt[2] * self.nu
+            + par_dt[3] * self.nu**2
+            + par_dt[4] * self.nu**3
+        )
+
+    def a6_func(
+        self,
+    ) -> None:
+        """
+        Compute the a_6 fit.
+
+        :return None:
+        """
+        par_a6 = self.nrpy_par_a6 if self.nrpy_calibrated else self.pySEOBNR_par_a6
+        self.a6 = (
+            par_a6[0]
+            + par_a6[1] * self.nu
+            + par_a6[2] * self.nu**2
+            + par_a6[3] * self.nu**3
+            + par_a6[4] * self.nu**4
+        )
 
 
 if __name__ == "__main__":
