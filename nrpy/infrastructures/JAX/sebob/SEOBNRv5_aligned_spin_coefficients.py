@@ -66,7 +66,7 @@ dT = dt / total_mass / 4.925490947641266978197229498498379006e-6
 """
     body += pycg.py_codegen(
         [
-            v5_const.pyseobnr_a6,
+            v5_const.a6,
             v5_const.pyseobnr_dSO,
             v5_const.Delta_t,
             v5_const.M_f,
