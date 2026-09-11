@@ -188,6 +188,11 @@ To learn more about usage options, run: python nrpy/example/seobnrv5_aligned_spi
         action="store_true",
         help="Set up par file and Hamiltonian coefficients for spin-dependent calibration",
     )
+    parser.add_argument(
+        "-nrpy_calibrated",
+        action="store_true",
+        help="Use the nrpy calibrated coefficients",
+    )
     args = parser.parse_args()
     # The SEOBNRv5 calibration process is done in two steps:
     # 1. Calibration of the non-spinning coefficients
@@ -210,6 +215,8 @@ To learn more about usage options, run: python nrpy/example/seobnrv5_aligned_spi
         project_name = f"{project_name}_calibration_no_spin"
     if args.calibration_spin:
         project_name = f"{project_name}_calibration_spin"
+    if args.nrpy_calibrated:
+        project_name = f"{project_name}_nrpy_calibrated"
     project_dir = os.path.join("project", project_name)
 
     # First clean the project directory, if it exists.
@@ -217,7 +224,7 @@ To learn more about usage options, run: python nrpy/example/seobnrv5_aligned_spi
 
     # register SEOBNRv5 coefficients
     BHaH.seobnr.SEOBNRv5_aligned_spin_coefficients.register_CFunction_SEOBNRv5_aligned_spin_coefficients(
-        args.calibration_no_spin, args.calibration_spin
+        args.calibration_no_spin, args.calibration_spin, args.nrpy_calibrated
     )
 
     if args.seobnrv5_nrnqc_bob:
