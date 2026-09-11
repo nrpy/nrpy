@@ -50,7 +50,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
             "calibration_no_spin and calibration_spin cannot both be True."
         )
     # Add an error flag if nrpy_calibrated and either of the calibration flags are true
-    # as we can either generated a "calibration" code or a "calibrated" code.
+    # as we can either generate a "calibration" code or a "calibrated" code.
     if (calibration_no_spin or calibration_spin) and nrpy_calibrated:
         raise ValueError("cannot use nrpy_calibrated=True values in calibration mode.")
     if pcg.pcg_registration_phase():

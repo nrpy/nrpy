@@ -55,8 +55,10 @@ class SEOBNR_aligned_spin_constants:
                             the innermost stable circular orbit (ISCO) of the remnant.
                             Always defined as Delta_t_NS + Delta_t_S.
                             In production mode (calibration_no_spin and calibration_spin are False),
-                            it is evaluated from Equations 79 & 80 of https://arxiv.org/pdf/2303.18039.
-                            In calibration modes either Delta_t_NS or Delta_t_S is
+                            it is evaluated from either
+                            Equations 79 & 80 of https://arxiv.org/pdf/2303.18039 (if nrpy_calibrated is set to False),
+                            or the new calibration results (if nrpy_calibrated is set to True. Currently, this option only applies to the non-spinning coefficients).
+                            In calibration modes, Delta_t_NS and Delta_t_S are
                             treated as an external calibration input.
             - 'd_SO' : the spin-orbit calibration parameter for the SEOBNRv5 model.
                             Equation 81 of https://arxiv.org/pdf/2303.18039.
@@ -90,7 +92,7 @@ class SEOBNR_aligned_spin_constants:
                 "calibration_no_spin and calibration_spin cannot both be True."
             )
         # Add an error flag if nrpy_calibrated and either of the calibration flags are true
-        # as we can either generated a "calibration" code or a "calibrated" code.
+        # as we can either generate a "calibration" code or a "calibrated" code.
         if (calibration_no_spin or calibration_spin) and nrpy_calibrated:
             raise ValueError(
                 "cannot use nrpy_calibrated=True values in calibration mode."
