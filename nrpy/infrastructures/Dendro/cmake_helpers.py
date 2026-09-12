@@ -137,8 +137,8 @@ def output_function_prototypes_h(solver_stem: str) -> str:
     # Host types appear in registered prototypes.  Forward declarations keep the
     # header self-contained; the consuming translation unit includes the host
     # header for the complete types.
-    lines.append("struct BlockGeometry;")
-    lines.append("struct StandaloneHostMesh;")
+    lines.append("struct block_geometry_struct;")
+    lines.append("struct standalone_host_mesh_struct;")
     lines.append("")
     for _name, cfunc in registered_CFunctions():
         lines.append(cfunc.function_prototype)

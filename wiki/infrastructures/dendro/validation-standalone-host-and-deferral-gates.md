@@ -1,6 +1,6 @@
 # Validation, Standalone Host, And Deferral Gates
 
-> Explain the standalone host vehicle, the generated self-tests and Minkowski lifecycle gates, the CI coverage, and the Dendrolib pin and proven capability axes. · Status: provisional · Last reconciled: 09-09-2026
+> Explain the standalone host vehicle, the generated self-tests and Minkowski lifecycle gates, the CI coverage, and the Dendrolib pin and proven capability axes. · Status: provisional · Last reconciled: 09-11-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -159,14 +159,16 @@ Claim evidence:
 
 ### CI coverage
 
-Continuous integration exercises this infrastructure through `codegen-ubuntu`,
-which generates both projects, configures and builds them with CMake, and runs
-their `ctest` suites. The symbolic and emitted-source contracts run as owner
-doctests in the static-analysis job.
+The symbolic and emitted-source contracts run as owner doctests in the
+static-analysis job. Generated standalone and real-host build/runtime commands
+remain local qualification; no GitHub job currently runs them. Adding either
+route requires a separately authorized workflow change.
 
-That job covers the standalone vehicle. The real-host build and numerical
-checks below were run locally against pinned checkouts; no real-host CI job is
-configured by this change. A prebuilt-host CI route remains separate work.
+Claim evidence:
+- Claim: Dendro generated-project build and runtime qualification is local; no configured GitHub job runs either host branch.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../../.github/workflows/main.yml), configured jobs
+- Corroboration: [README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md), local pinned-host commands
 
 ### Host pin and proven capabilities
 
@@ -222,7 +224,7 @@ Claim evidence:
 
 The generated fCCZ4 context uses actual `ot::Mesh`, `ot::Block`, `ot::DVector`,
 and `ts::Ctx` types. `block_geometry` normalizes the padded allocation, per-
-component offset, physical padded origin, spacing, and boundary flags. Pointer
+component offset, physical padded origin, and spacing. Pointer
 arrays retain component bases; the generated block kernel adds the block offset
 exactly once. The real RHS callback exchanges halos, evaluates each generated
 block kernel, and zips the result. The pinned RK4 host calls `post_timestep` on
@@ -255,24 +257,33 @@ Claim evidence:
 - Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
 - Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, SymPy 1.14.0, GCC 13.3.0, CMake 3.28.3, Open MPI 4.1.6; backend=Dendro real host; precision=double; GPU=not-run; restart=not-run; distributed=2 active MPI ranks; error_path=rank-local offset, halo, and NaN injection; options=fCCZ4 chi, FD4, KO off, element order 6, fixed mesh, RK4, OMP_NUM_THREADS=1; date=09-07-2026`
 
-### Gates that remain open
+The pinned real-host build, two-rank transport and parameter checks, and
+100-step Minkowski run were repeated on 09-11-2026 after the context
+reorganization and geometry cleanup. They reproduced the measurements above.
+The real-host fault-injection and invalid-TOML records remain dated 09-07-2026;
+those error paths were not rerun in this repeat.
 
-The real-context source was reorganized after the pinned run described above.
-Standalone behavior is rechecked here, but the pinned real-host build/run must
-be repeated before that historical result is treated as qualification of the
-new source layout.
+Claim evidence:
+- Claim: the current fCCZ4 context and geometry interface pass the pinned two-rank transport, parameter-response, and 100-step Minkowski checks after regeneration and rebuild.
+- Role: descriptive behavior
+- Deciding authority: [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), `_REAL_SOURCE`; [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py), `_REAL_MAIN`
+- Corroboration: [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), transport and parameter oracles; [README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md), pinned commands and repeated measurements
+- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, SymPy 1.14.0, GCC 13.3.0, CMake 3.28.3, Open MPI 4.1.6; backend=Dendro real host; precision=double; GPU=not-run; restart=not-run; distributed=2 active MPI ranks; error_path=not-run; options=fCCZ4 chi, FD4, KO off, element order 6, fixed mesh, RK4, OMP_NUM_THREADS=1; date=09-11-2026`
+
+### Gates that remain open
 
 General physical boundary conditions and their flag semantics, remeshing and
 state transfer, LTS, checkpoint/restart ABI, output selection, GPU execution,
-and threaded kernels remain open. The adapter copies boundary flags but this
-Minkowski profile prescribes only analytic exterior data by physical position.
+and threaded kernels remain open. This Minkowski profile prescribes only
+analytic exterior data by physical position; no boundary-flag interface is exposed.
 The standalone BSSN checks remain valid; this real-host numerical record is
 specifically for fCCZ4. Real-host CI is not added here.
 
 ## Sources
 
 - [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp) - real context transport, parameter response, and rank-local fault modes
-- [block_geometry.h](../../../nrpy/infrastructures/Dendro/block_geometry.h) - shared `BlockGeometry` contract
+- [block_geometry.h](../../../nrpy/infrastructures/Dendro/block_geometry.h) - shared `block_geometry_struct` contract
 - [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - `_REAL_HEADER`, `_REAL_SOURCE`
 - [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `output_toml_bindings`
 

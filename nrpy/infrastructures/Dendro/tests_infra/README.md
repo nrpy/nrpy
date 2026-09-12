@@ -1,9 +1,12 @@
 # Dendrolib capability mini-tests
 
-Last real run: 09-06-2026, Ubuntu 24.04 x86_64, GCC 13.3.0, Open MPI 4.1.6,
+Last real run: 09-11-2026, Ubuntu 24.04 x86_64, GCC 13.3.0, Open MPI 4.1.6,
 CMake 3.28.3, against a Dendrolib clone at
 `246043709e806021fcfc011fe657b8bf964cae4c` (`git -C dendrolib rev-parse HEAD`),
-ending in `CAPABILITY_TESTS_OK`.  Whenever the pinned commit moves, record this
+ending in `CAPABILITY_TESTS_OK` for default orders on one and two ranks and
+order 10 on one rank. Empty/malformed overrides, all seven axis injections,
+and mesh/zipped/unzipped setup injections on rank 1 failed without that
+marker or a timeout. Whenever the pinned commit moves, record this
 paragraph again -- platform, toolchain, the clone's `git rev-parse HEAD`, and the
 closing `CAPABILITY_TESTS_OK` line.  A result without them is not evidence.
 
@@ -44,7 +47,12 @@ mpirun -n 2 ./captest      # same axes across a distributed block list
 CAPTEST_ORDERS=10 mpirun -n 1 ./captest   # padding 5, the eighth-order probe
 ```
 
-A clean run ends with `CAPABILITY_TESTS_OK` and exits zero.
+A clean run completes every requested order, ends with `CAPABILITY_TESTS_OK`,
+and exits zero on every rank. Rank zero selects `CAPTEST_ORDERS`: a nonempty,
+comma-separated list of positive even element orders (for example `2,4` or
+`10`). Empty, nonnumeric, or malformed overrides fail qualification.
+Mesh/vector setup status is checked collectively before halo exchange, so a
+local setup failure fails the MPI-wide result without stranding peer ranks.
 
 ## Exercising the checkers
 
@@ -53,6 +61,9 @@ has a known-bad input, selected through `CAPTEST_INJECT`:
 
 | Value | Defect introduced | Axis that must report `FAILED` |
 | --- | --- | --- |
+| `mesh` | fails mesh setup on rank 1 (rank 0 for a singleton) | `mesh_setup` |
+| `zipped` | clears the zipped allocation on that rank | `vector_setup` |
+| `unzipped` | clears the unzipped allocation on that rank | `vector_setup` |
 | `scalar` | expects a four-byte scalar | `scalar_abi` |
 | `padding` | expects one more ghost point than the element order implies | `padding` |
 | `dimensions` | expects one extra point per axis | `dimensions` |
@@ -64,8 +75,8 @@ has a known-bad input, selected through `CAPTEST_INJECT`:
 Run each before quoting a clean result:
 
 ```bash
-for ax in scalar padding dimensions offsets layout origin ghost; do
-  CAPTEST_INJECT=$ax mpirun -n 1 ./captest | grep FAILED
+for ax in mesh zipped unzipped scalar padding dimensions offsets layout origin ghost; do
+  CAPTEST_INJECT=$ax mpirun -n 2 ./captest | grep FAILED
 done
 ```
 
@@ -175,7 +186,14 @@ in-domain halo points, 3,259 receive nodes, and maximum affine/zip error
 `2.6903897068313774e-11`, drift `2.7544910351229485e-13`, and projection
 residual `9.9920072216264089e-16`; `h_min=0.020833333333333332` gives derivative
 bound `1.3096723705530167e-10`. This was a local pinned-host qualification;
-the repository workflow still runs the standalone vehicle.
+neither standalone nor real-host generated builds run in the repository workflow.
+
+On 09-11-2026, regeneration and a fresh build at both pins repeated the
+two-rank transport, parameter-response, and 100-step Minkowski checks with the
+same toolchain and profile. All passed with the same reported measurements;
+parameter-response error was zero. This repeat covered the reorganized context
+and renamed geometry interface. It did not rerun the real-host fault or
+invalid-TOML cases recorded below.
 
 The same qualification detected rank-local offset, halo, and NaN faults with
 nonzero MPI exits before the 60-second timeout. A nondefault `eta=1.25` file

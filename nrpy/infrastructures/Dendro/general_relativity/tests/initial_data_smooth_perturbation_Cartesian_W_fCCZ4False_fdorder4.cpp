@@ -3,7 +3,7 @@
 /**
  * Per-block smooth analytic perturbation of every evolved field (lifecycle-test state; NRPy-authored profile).
  */
-void bssn_smooth_perturbation_block(const BlockGeometry &geom, DendroScalar *const *out_gfs, const DendroScalar smooth_perturbation_amplitude,
+void bssn_smooth_perturbation_block(const block_geometry_struct &geom, DendroScalar *const *out_gfs, const DendroScalar smooth_perturbation_amplitude,
                                     const DendroScalar smooth_perturbation_wavelength) {
   DendroScalar *const out_aDD00 = out_gfs[0] + geom.component_offset;
   DendroScalar *const out_aDD01 = out_gfs[1] + geom.component_offset;

@@ -13,7 +13,7 @@ namespace app = RUNTIME_NAMESPACE;
 namespace {
 double field(unsigned f, double x, double y, double z) {
     return 101.0 * (f + 1) + (f + 2) * x - (2 * f + 3) * y + (3 * f + 5) * z;
-}  // END FUNCTION: evaluate independent affine field
+}  // END FUNCTION: field
 // clang-format off
 } // END NAMESPACE: independent field oracle
 // clang-format on
@@ -280,4 +280,4 @@ int main(int argc, char **argv) {
     }  // END CATCH: abort all parent ranks
     MPI_Finalize();
     return 0;
-}  // END FUNCTION: qualify generated real context
+}  // END FUNCTION: main

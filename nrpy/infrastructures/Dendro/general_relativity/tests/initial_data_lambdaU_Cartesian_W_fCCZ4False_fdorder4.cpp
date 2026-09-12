@@ -3,7 +3,7 @@
 /**
  * Per-block connection initialization: lambdaU^i = DeltaGamma^i / ReU^i, so the connection constraint C^i vanishes.
  */
-void bssn_initial_data_lambdaU_block(const BlockGeometry &geom, const DendroScalar *const *in_gfs, DendroScalar *const *out_gfs) {
+void bssn_initial_data_lambdaU_block(const block_geometry_struct &geom, const DendroScalar *const *in_gfs, DendroScalar *const *out_gfs) {
   const DendroScalar *const in_hDD00 = in_gfs[11] + geom.component_offset;
   const DendroScalar *const in_hDD01 = in_gfs[12] + geom.component_offset;
   const DendroScalar *const in_hDD02 = in_gfs[13] + geom.component_offset;

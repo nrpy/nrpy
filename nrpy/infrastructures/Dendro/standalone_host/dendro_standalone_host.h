@@ -40,7 +40,7 @@ struct Ctx {
   // Diagnostic vector: recomputed from the evolved state,
   // never checkpoint state, so it is a separate vector from `in`/`out`.
   DVector diag;
-  StandaloneHostMesh mesh;
+  standalone_host_mesh_struct mesh;
 };  // END STRUCT: Ctx
 
 // clang-format off

@@ -158,7 +158,7 @@ int Ctx::initialize_mesh(int n_blocks, int extent, double dx, int rank,
   const double rank_origin =
       static_cast<double>(rank) * static_cast<double>(n_blocks) * extent * dx;
   for (int b = 0; b < n_blocks; ++b) {
-    BlockGeometry& g = host.mesh.geom[b];
+    block_geometry_struct& g = host.mesh.geom[b];
     g.nx = g.ny = g.nz = static_cast<unsigned>(extent);
     g.padding = static_cast<unsigned>(pad);
     g.component_offset =
@@ -167,7 +167,6 @@ int Ctx::initialize_mesh(int n_blocks, int extent, double dx, int rank,
     g.pmin_padded[1] = 0.0;
     g.pmin_padded[2] = 0.0;
     g.dx[0] = g.dx[1] = g.dx[2] = dx;
-    g.boundary_flags = 0;
   }  // END LOOP: for b over local blocks
   const unsigned ncomp = $NAMESPACE::generated::NUM_EVOL_GFS;
   const std::size_t vol = static_cast<std::size_t>(extent) * extent * extent;
@@ -249,7 +248,7 @@ double Ctx::flat_adapter_max_difference() {
   // per-block entry point.  Evaluate both on this rank's first block and
   // compare pointwise.
   const unsigned ncomp = $NAMESPACE::generated::NUM_EVOL_GFS;
-  const BlockGeometry& g = host.mesh.geom[0];
+  const block_geometry_struct& g = host.mesh.geom[0];
   const std::size_t vol = static_cast<std::size_t>(g.nx) * g.ny * g.nz;
   std::vector<$SCALAR> flat_in(static_cast<std::size_t>(ncomp) * vol, 0.0);
   std::vector<$SCALAR> flat_rhs(static_cast<std::size_t>(ncomp) * vol, 0.0);
@@ -258,7 +257,7 @@ double Ctx::flat_adapter_max_difference() {
                 host.in.comp[f] + g.component_offset,
                 sizeof($SCALAR) * vol);
   }  // END LOOP: for f over evolved components
-  BlockGeometry flat_geom = g;
+  block_geometry_struct flat_geom = g;
   flat_geom.component_offset = 0;
   $RHS_EVAL_FLAT_BLOCK(flat_geom, flat_in.data(), flat_rhs.data()$RHS_EVAL_TAIL);
   std::vector<const $SCALAR*> block_in(ncomp);
@@ -313,7 +312,7 @@ int Ctx::euler_step(double dt) {
 double Ctx::max_interior_value(const $SCALAR* const* fields, unsigned ncomp) {
   double worst = 0.0;
   for (unsigned b = 0; b < host.mesh.num_blocks; ++b) {
-    const BlockGeometry& g = host.mesh.geom[b];
+    const block_geometry_struct& g = host.mesh.geom[b];
     const std::size_t base = g.component_offset;
     for (unsigned f = 0; f < ncomp; ++f) {
       const $SCALAR* v = fields[f];
@@ -389,7 +388,7 @@ using DVec = ot::DVector<DendroScalar, unsigned int>;
  *
  * @note Throws std::runtime_error for invalid allocation, padding, or geometry.
  */
-BlockGeometry block_geometry(const ot::Mesh& mesh, const ot::Block& block,
+block_geometry_struct block_geometry(const ot::Mesh& mesh, const ot::Block& block,
                              const Point& minimum, const Point& maximum);
 // The fixed-mesh context owns storage. DVector itself is a shallow handle.
 class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {
@@ -488,9 +487,9 @@ double interior_max(const ot::Mesh& mesh, DVec& values) {
 // clang-format off
 }  // END NAMESPACE: internal linkage
 // clang-format on
-BlockGeometry block_geometry(const ot::Mesh& mesh, const ot::Block& block,
+block_geometry_struct block_geometry(const ot::Mesh& mesh, const ot::Block& block,
                              const Point& minimum, const Point& maximum) {
-  BlockGeometry g{};
+  block_geometry_struct g{};
   g.nx = block.getAllocationSzX();
   g.ny = block.getAllocationSzY();
   g.nz = block.getAllocationSzZ();
@@ -505,7 +504,6 @@ BlockGeometry block_geometry(const ot::Mesh& mesh, const ot::Block& block,
   g.pmin_padded[0] = origin.x() - g.padding * g.dx[0];
   g.pmin_padded[1] = origin.y() - g.padding * g.dx[1];
   g.pmin_padded[2] = origin.z() - g.padding * g.dx[2];
-  g.boundary_flags = block.getBlkNodeFlag();
   const std::size_t volume = std::size_t(g.nx) * g.ny * g.nz;
   if (g.padding < generated::REQUIRED_PADDING || g.nx <= 2*g.padding ||
       g.ny <= 2*g.padding || g.nz <= 2*g.padding ||
@@ -835,13 +833,13 @@ def output_solver_context_cpp(
     ...     roles.set_upwind_control_fields(("waveU0", "waveU1"))
     ...     _function_specs = (
     ...         ("wave_rhs", "rhs_eval",
-    ...          "const StandaloneHostMesh& mesh, const DendroScalar* const* in_gfs, DendroScalar* const* rhs_gfs",
+    ...          "const standalone_host_mesh_struct& mesh, const DendroScalar* const* in_gfs, DendroScalar* const* rhs_gfs",
     ...          "(void)mesh; rhs_gfs[0][0] = in_gfs[0][0] + in_gfs[1][0];"),
     ...         ("wave_rhs_block", "rhs_eval_block",
-    ...          "const BlockGeometry& geom, const DendroScalar* const* in_gfs, DendroScalar* const* rhs_gfs",
+    ...          "const block_geometry_struct& geom, const DendroScalar* const* in_gfs, DendroScalar* const* rhs_gfs",
     ...          "const auto p = geom.component_offset; rhs_gfs[0][p] = in_gfs[0][p] + in_gfs[1][p];"),
     ...         ("wave_rhs_flat", "rhs_eval_flat_block",
-    ...          "const BlockGeometry& geom, const DendroScalar* in_gfs, DendroScalar* rhs_gfs",
+    ...          "const block_geometry_struct& geom, const DendroScalar* in_gfs, DendroScalar* rhs_gfs",
     ...          "const auto v = geom.nx*geom.ny*geom.nz; rhs_gfs[0] = in_gfs[0] + in_gfs[v];"),
     ...     )
     ...     for _name, _role, _params, _body in _function_specs:

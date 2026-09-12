@@ -2,7 +2,6 @@
 #ifndef NRPY_DENDRO_BLOCK_GEOMETRY_H
 #define NRPY_DENDRO_BLOCK_GEOMETRY_H
 #include <cstddef>
-#include <cstdint>
 // The generated scalar contract header (<solver_stem>_types.h) owns the
 // DendroScalar definition under the DENDRO_SCALAR_DEFINED guard, and this
 // header respects the same guard so a translation unit can include both without
@@ -17,8 +16,8 @@ using DendroScalar = double;
 // count the ghost points on both sides, so they size the allocation and set
 // the strides; a point loop subtracts the padding to reach the interior), the
 // padding, the padded origin, the per-axis spacing, the per-component base
-// offset, and the boundary flags.
-struct BlockGeometry {
+// offset.
+struct block_geometry_struct {
   unsigned nx;
   unsigned ny;
   unsigned nz;
@@ -26,8 +25,7 @@ struct BlockGeometry {
   std::size_t component_offset;
   DendroScalar pmin_padded[3];
   DendroScalar dx[3];
-  std::uint32_t boundary_flags;
-}; // END STRUCT: BlockGeometry
+}; // END STRUCT: block_geometry_struct
 
 namespace standalone_host {
 // The standalone-host mesh holds a small fixed number of blocks, and the bound
@@ -48,9 +46,9 @@ inline constexpr unsigned MAX_STANDALONE_HOST_EXTENT = 512;
 
 // A mesh of a few blocks, enough for the NRPy block loop to run.  The real
 // ot::Mesh block list is dynamic and arrives with the pinned Dendrolib gates.
-struct StandaloneHostMesh {
-  BlockGeometry geom[standalone_host::MAX_STANDALONE_HOST_BLOCKS];
+struct standalone_host_mesh_struct {
+  block_geometry_struct geom[standalone_host::MAX_STANDALONE_HOST_BLOCKS];
   unsigned num_blocks;
-}; // END STRUCT: StandaloneHostMesh
+}; // END STRUCT: standalone_host_mesh_struct
 
 #endif // NRPY_DENDRO_BLOCK_GEOMETRY_H

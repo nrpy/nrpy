@@ -283,11 +283,11 @@ def build_constraints_eval(
     block_body += "\n"
     block_body += bkh.point_loop(kernel)
     block_params = (
-        f"const BlockGeometry& geom, const {scalar_type}* const* in_gfs, "
+        f"const block_geometry_struct& geom, const {scalar_type}* const* in_gfs, "
         f"{scalar_type}* const* diagnostic_gfs"
     )
     all_blocks_params = (
-        f"const StandaloneHostMesh& mesh, const {scalar_type}* const* in_gfs, "
+        f"const standalone_host_mesh_struct& mesh, const {scalar_type}* const* in_gfs, "
         f"{scalar_type}* const* diagnostic_gfs"
     )
     all_blocks_body = block_loop(

@@ -253,9 +253,9 @@ double fixture_stencil(const StencilTerm (&terms)[N], Sample sample,
     value += term.coefficient * sample(
         static_cast<int>(a) + term.di, static_cast<int>(b) + term.dj,
         static_cast<int>(c) + term.dk);
-  }}
+  }}  // END LOOP: stencil terms
   return value * scale;
-}}
+}}  // END FUNCTION: fixture_stencil
 
 int test_address_values(bool alternate_parameters = false) {{
   constexpr unsigned nx = 13, ny = 15, nz = 17, pad = 3;
@@ -263,7 +263,7 @@ int test_address_values(bool alternate_parameters = false) {{
   constexpr std::size_t vol = static_cast<std::size_t>(nx) * ny * nz;
   constexpr double sentinel = -9876.25;
   const double dx[3] = {{0.125, 0.25, 0.5}};
-  BlockGeometry geom{{}};
+  block_geometry_struct geom{{}};
   geom.nx = nx; geom.ny = ny; geom.nz = nz; geom.padding = pad;
   geom.component_offset = offset;
   geom.dx[0] = dx[0]; geom.dx[1] = dx[1]; geom.dx[2] = dx[2];
@@ -282,7 +282,7 @@ int test_address_values(bool alternate_parameters = false) {{
       const double z = (static_cast<int>(c) - 8) * dx[2];
       input[0][offset + index(a,b,c)] = fixture_u(x,y,z);
       input[1][offset + index(a,b,c)] = fixture_v(x,y,z);
-    }}
+    }}  // END LOOP: input grid points
   const auto input_before = input;
   const DendroScalar* in_ptr[] = {{input[0].data(), input[1].data()}};
   DendroScalar* out_ptr[] = {{output[0].data(), output[1].data()}};
@@ -340,8 +340,8 @@ int test_address_values(bool alternate_parameters = false) {{
           "u %.17g expected %.17g; v %.17g expected %.17g\\n",
           a,b,c,actual_u,expected_u,actual_v,expected_v);
       return 1;
-    }}
-  }}
+    }}  // END IF: reference mismatch
+  }}  // END LOOP: reference points
   if (input != input_before) return 2;
   for (unsigned f = 0; f < 2; ++f) {{
     for (std::size_t cell = 0; cell < output[f].size(); ++cell) {{
@@ -352,8 +352,8 @@ int test_address_values(bool alternate_parameters = false) {{
           ((cell-offset)/(nx*ny)) >= pad &&
           ((cell-offset)/(nx*ny)) < nz-pad;
       if (!interior && output[f][cell] != sentinel) return 3;
-    }}
-  }}
+    }}  // END LOOP: output cells
+  }}  // END LOOP: output fields
 
   std::vector<DendroScalar> flat_input(offset + 2*vol + 13, sentinel);
   std::vector<DendroScalar> flat_output(offset + 2*vol + 13, sentinel);
@@ -367,8 +367,8 @@ int test_address_values(bool alternate_parameters = false) {{
     for (unsigned f = 0; f < 2; ++f) {{
       if (flat_output[offset + static_cast<std::size_t>(f)*vol + cell] !=
           output[f][offset + cell]) return 4;
-    }}
-  }}
+    }}  // END LOOP: flat output fields
+  }}  // END LOOP: flat reference points
   for (std::size_t cell = 0; cell < flat_output.size(); ++cell) {{
     bool writable = false;
     if (cell >= offset && cell < offset + 2*vol) {{
@@ -376,14 +376,14 @@ int test_address_values(bool alternate_parameters = false) {{
       writable = (local % nx) >= pad && (local % nx) < nx-pad &&
           ((local/nx) % ny) >= pad && ((local/nx) % ny) < ny-pad &&
           (local/(nx*ny)) >= pad && (local/(nx*ny)) < nz-pad;
-    }}
+    }}  // END IF: candidate writable cell
     if (!writable && flat_output[cell] != sentinel) return 5;
-  }}
+  }}  // END LOOP: flat sentinel cells
   return 0;
-}}
+}}  // END FUNCTION: test_address_values
 
 int test_parameter_forwarding() {{
-  using Signature = void (*)(const BlockGeometry&, const DendroScalar* const*,
+  using Signature = void (*)(const block_geometry_struct&, const DendroScalar* const*,
       DendroScalar* const*, const DendroScalar, const int,
       const DendroScalar, const bool);
   static_assert(std::is_same_v<decltype(&{block_name}), Signature>,
@@ -398,7 +398,7 @@ int test_parameter_forwarding() {{
   // A second complete execution changes every forwarded value and flips the
   // Boolean branch.  The same independent stencil oracle checks the result.
   return test_address_values(true);
-}}
+}}  // END FUNCTION: test_parameter_forwarding
 """
 
 
@@ -595,7 +595,7 @@ def output_self_test_artifacts(
             + block_kernel_helpers.point_loop(kernel, "3")
         )
         params = (
-            f"const BlockGeometry& geom, const {gri.DENDRO_SCALAR_TYPE}* const* in_gfs, "
+            f"const block_geometry_struct& geom, const {gri.DENDRO_SCALAR_TYPE}* const* in_gfs, "
             f"{gri.DENDRO_SCALAR_TYPE}* const* rhs_gfs, {declarations}"
         )
         cfc.register_CFunction(
@@ -620,7 +620,7 @@ def output_self_test_artifacts(
             + ");"
         )
         flat_params = (
-            f"const BlockGeometry& geom, const {gri.DENDRO_SCALAR_TYPE}* in_gfs_flat, "
+            f"const block_geometry_struct& geom, const {gri.DENDRO_SCALAR_TYPE}* in_gfs_flat, "
             f"{gri.DENDRO_SCALAR_TYPE}* rhs_gfs_flat, {declarations}"
         )
         cfc.register_CFunction(

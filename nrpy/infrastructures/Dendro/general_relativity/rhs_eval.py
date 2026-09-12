@@ -436,18 +436,18 @@ def build_rhs_eval(
     )
     cparam_args = bkh.cparam_declarations(used_codeparameters)
     block_params = (
-        f"const BlockGeometry& geom, const {scalar_type}* const* in_gfs, "
+        f"const block_geometry_struct& geom, const {scalar_type}* const* in_gfs, "
         f"{scalar_type}* const* rhs_gfs" + (f", {cparam_args}" if cparam_args else "")
     )
     # The all-block wrapper retains its standalone mesh interface. Real host
-    # contexts normalize each ot::Block into the shared BlockGeometry ABI and
+    # contexts normalize each ot::Block into the shared block_geometry_struct ABI and
     # call the registered block kernel directly.
     all_blocks_params = (
-        f"const StandaloneHostMesh& mesh, const {scalar_type}* const* in_gfs, "
+        f"const standalone_host_mesh_struct& mesh, const {scalar_type}* const* in_gfs, "
         f"{scalar_type}* const* rhs_gfs" + (f", {cparam_args}" if cparam_args else "")
     )
     flat_block_params = (
-        f"const BlockGeometry& geom, const {scalar_type}* const in_gfs_flat, "
+        f"const block_geometry_struct& geom, const {scalar_type}* const in_gfs_flat, "
         f"{scalar_type}* const rhs_gfs_flat"
         + (f", {cparam_args}" if cparam_args else "")
     )

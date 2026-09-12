@@ -118,7 +118,7 @@ struct GRTestBlock {
   std::size_t vol;
   std::vector<std::vector<$SCALAR>> state;
   std::vector<std::vector<$SCALAR>> rhs;
-  BlockGeometry geometry{};
+  block_geometry_struct geometry{};
 };  // END STRUCT: GRTestBlock
 
 double gr_interior_rhs_max(const GRTestBlock& block) {
@@ -870,7 +870,7 @@ int test_gr_nonflat_reference() {{
   constexpr std::size_t vol=static_cast<std::size_t>(nx)*ny*nz;
   constexpr double sentinel=-54321.25;
   const double dx[3]={{0.125,0.25,0.5}};
-  BlockGeometry geom{{}}; geom.nx=nx; geom.ny=ny; geom.nz=nz;
+  block_geometry_struct geom{{}}; geom.nx=nx; geom.ny=ny; geom.nz=nz;
   geom.padding=pad; geom.component_offset=offset;
   geom.dx[0]=dx[0]; geom.dx[1]=dx[1]; geom.dx[2]=dx[2];
   std::vector<std::vector<DendroScalar>> input(NUM_EVOL_GFS,

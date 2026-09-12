@@ -123,12 +123,14 @@ def build_minkowski_initial_data(solver_stem: str) -> Tuple[str, str, str, str]:
     block_body = (
         _block_pointer_bindings(evol_order, scalar_type) + "\n" + point_loop_body
     )
-    block_params = f"const BlockGeometry& geom, {scalar_type}* const* out_gfs"
+    block_params = f"const block_geometry_struct& geom, {scalar_type}* const* out_gfs"
     all_blocks_body = block_loop(
         f"{solver_stem}_{MINKOWSKI_BLOCK_SUFFIX}(mesh.geom[blk], out_gfs);",
         num_blocks="mesh.num_blocks",
     )
-    all_blocks_params = f"const StandaloneHostMesh& mesh, {scalar_type}* const* out_gfs"
+    all_blocks_params = (
+        f"const standalone_host_mesh_struct& mesh, {scalar_type}* const* out_gfs"
+    )
     return block_body, block_params, all_blocks_body, all_blocks_params
 
 
@@ -200,8 +202,9 @@ def build_smooth_perturbation(
     )
     used_codeparameters = bkh.used_codeparameters([profile])
     cparam_args = bkh.cparam_declarations(used_codeparameters)
-    block_params = f"const BlockGeometry& geom, {scalar_type}* const* out_gfs" + (
-        f", {cparam_args}" if cparam_args else ""
+    block_params = (
+        f"const block_geometry_struct& geom, {scalar_type}* const* out_gfs"
+        + (f", {cparam_args}" if cparam_args else "")
     )
     forwarded = bkh.cparam_arguments(used_codeparameters)
     all_blocks_body = block_loop(
@@ -210,7 +213,7 @@ def build_smooth_perturbation(
         num_blocks="mesh.num_blocks",
     )
     all_blocks_params = (
-        f"const StandaloneHostMesh& mesh, {scalar_type}* const* out_gfs"
+        f"const standalone_host_mesh_struct& mesh, {scalar_type}* const* out_gfs"
         + (f", {cparam_args}" if cparam_args else "")
     )
     return block_body, block_params, all_blocks_body, all_blocks_params
@@ -509,7 +512,7 @@ def build_ADM_to_BSSN(CoordSystem: str = "Cartesian") -> Tuple[str, str]:
     )
     point_loop_body = bkh.point_loop(kernel, padding="0")
     block_params = (
-        f"const BlockGeometry& geom, const {scalar_type}* const* auxevol_gfs, "
+        f"const block_geometry_struct& geom, const {scalar_type}* const* auxevol_gfs, "
         f"{scalar_type}* const* out_gfs"
     )
     return bindings + "\n" + point_loop_body, block_params
@@ -612,7 +615,7 @@ def build_initial_data_lambdaU(CoordSystem: str = "Cartesian") -> Tuple[str, str
     )
     point_loop_body = bkh.point_loop(kernel)
     block_params = (
-        f"const BlockGeometry& geom, const {scalar_type}* const* in_gfs, "
+        f"const block_geometry_struct& geom, const {scalar_type}* const* in_gfs, "
         f"{scalar_type}* const* out_gfs"
     )
     return bindings + "\n" + point_loop_body, block_params
@@ -683,7 +686,7 @@ if __name__ == "__main__":
     # pinned because Dendro emits block-Cartesian kernels; the conformal factor
     # is not, because the two applications ship different ones and a baseline
     # has to be the text an application emits.  fd_order 4 is what both
-    # examples ship and CI builds, leaving the order axis to
+    # examples ship and local qualification builds, leaving the order axis to
     # nrpy/finite_difference.py's own oracles and the generated padding
     # self-test.  Only the small kernels are captured: coding_style.md excludes
     # a right-hand side, Ricci or constraint kernel from golden-output files.

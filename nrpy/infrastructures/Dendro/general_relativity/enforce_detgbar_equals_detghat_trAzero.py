@@ -311,7 +311,7 @@ status->max_abs_trace_residual = std::fmax(
     block_body = bindings + "\n"
     block_body += bkh.point_loop(point_body, padding="0")
     block_params = (
-        f"const BlockGeometry& geom, {scalar_type}* const* in_gfs, "
+        f"const block_geometry_struct& geom, {scalar_type}* const* in_gfs, "
         f"{solver_namespace}::{STATUS_RECORD}* const status"
     )
     all_blocks_body = block_loop(
@@ -319,7 +319,7 @@ status->max_abs_trace_residual = std::fmax(
         num_blocks="mesh.num_blocks",
     )
     all_blocks_params = (
-        f"const StandaloneHostMesh& mesh, {scalar_type}* const* in_gfs, "
+        f"const standalone_host_mesh_struct& mesh, {scalar_type}* const* in_gfs, "
         f"{solver_namespace}::{STATUS_RECORD}* const status"
     )
     return DetgtrazeroBuild(

@@ -3,7 +3,7 @@
 /**
  * Per-block smooth ADM-to-evolved conversion; the connection components are written by the separate pass.
  */
-void bssn_ADM_to_BSSN_block(const BlockGeometry &geom, const DendroScalar *const *auxevol_gfs, DendroScalar *const *out_gfs) {
+void bssn_ADM_to_BSSN_block(const block_geometry_struct &geom, const DendroScalar *const *auxevol_gfs, DendroScalar *const *out_gfs) {
   const DendroScalar *const in_betaU0 = auxevol_gfs[0] + geom.component_offset;
   const DendroScalar *const in_betaU1 = auxevol_gfs[1] + geom.component_offset;
   const DendroScalar *const in_betaU2 = auxevol_gfs[2] + geom.component_offset;

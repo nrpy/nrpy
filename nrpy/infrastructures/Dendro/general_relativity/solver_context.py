@@ -199,13 +199,12 @@ void sample_rhs_at_centre(
       ncomp, std::vector<$SCALAR>(vol, 0.0));
   std::vector<std::vector<$SCALAR>> rhs(
       ncomp, std::vector<$SCALAR>(vol, 0.0));
-  BlockGeometry g;
+  block_geometry_struct g;
   g.nx = g.ny = g.nz = static_cast<unsigned>(extent);
   g.padding = $NAMESPACE::generated::REQUIRED_PADDING;
   g.component_offset = 0;
   g.pmin_padded[0] = g.pmin_padded[1] = g.pmin_padded[2] = 0.0;
   g.dx[0] = g.dx[1] = g.dx[2] = dx;
-  g.boundary_flags = 0;
   std::vector<$SCALAR*> state_ptr(ncomp);
   std::vector<const $SCALAR*> state_cptr(ncomp);
   std::vector<$SCALAR*> rhs_ptr(ncomp);
@@ -273,7 +272,7 @@ double observed_convergence_order(
   initial.assign(state.get_vec_ptr(), state.get_vec_ptr() + state.get_size());
   return 0;
 } // END FUNCTION: initialize Minkowski state"""
-    exterior_values = """BlockGeometry one{};
+    exterior_values = """block_geometry_struct one{};
   one.nx = one.ny = one.nz = 1;
   one.dx[0] = one.dx[1] = one.dx[2] = 1.0;
   std::vector<DendroScalar*> fp(flat.size());

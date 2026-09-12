@@ -4,7 +4,7 @@
  * Enforce det(gammabar) = det(gammahat) and tr(Abar) = 0 per block: rescale the conformal metric to unit determinant ratio and remove the conformal
  * trace of Atilde (structured status, no exit()).
  */
-void fccz4_enforce_detgbar_equals_detghat_trAzero_block(const BlockGeometry &geom, DendroScalar *const *in_gfs,
+void fccz4_enforce_detgbar_equals_detghat_trAzero_block(const block_geometry_struct &geom, DendroScalar *const *in_gfs,
                                                         fccz4::generated::detgtrazero_status_struct *const status) {
   const DendroScalar *const in_aDD00 = in_gfs[0] + geom.component_offset;
   const DendroScalar *const in_aDD01 = in_gfs[1] + geom.component_offset;

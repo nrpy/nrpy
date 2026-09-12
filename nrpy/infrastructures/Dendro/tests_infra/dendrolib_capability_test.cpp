@@ -7,11 +7,13 @@
 // physical domain, never read back from the same call under test.
 #include <mpi.h>
 
+#include <cerrno>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <functional>
+#include <limits>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -71,6 +73,10 @@ double field(unsigned v, double x, double y, double z) {
 // One element order: build a uniform mesh, unzip three fields, and check
 // every axis against values recomputed from the block record.
 bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
+    int rank = 0, npes = 1;
+    MPI_Comm_rank(comm, &rank);
+    MPI_Comm_size(comm, &npes);
+    const bool faultRank = rank == (npes > 1 ? 1 : 0);
     // A wavelet-adaptive octree, so the block decomposition yields several
     // blocks whose padding is filled from neighbours rather than one block
     // whose padding is entirely outside the domain.
@@ -83,16 +89,20 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
     function2Octree(refine, octree, level + 2, 1e-3, eleOrder, comm);
     ot::Mesh *mesh = ot::createMesh(octree.data(), octree.size(), eleOrder,
                                     comm, 0, ot::SM_TYPE::FDM);
-    if (mesh == nullptr) return false;
+    const int meshFailed = mesh == nullptr || (faultRank && inject("mesh"));
+    int setupFailed = 0;
+    MPI_Allreduce(&meshFailed, &setupFailed, 1, MPI_INT, MPI_MAX, comm);
+    if (setupFailed) {
+        if (meshFailed) report("mesh_setup", false, "mesh creation failed");
+        // A partial mesh cannot be destroyed collectively: a missing mesh
+        // cannot participate in its destructor's communicator free. Reclaim
+        // it at process teardown after every rank reports qualification failure.
+        return false;
+    }  // END IF: mesh setup failed
 
     const Point pmin(kDomainMin[0], kDomainMin[1], kDomainMin[2]);
     const Point pmax(kDomainMax[0], kDomainMax[1], kDomainMax[2]);
     mesh->setDomainBounds(pmin, pmax);
-
-    if (!mesh->isActive()) {
-        delete mesh;
-        return true;
-    }  // END IF: no local work here
 
     const unsigned dof = 3;
     const unsigned unzipSz = mesh->getDegOfFreedomUnZip();
@@ -105,10 +115,28 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
         };
     double *zipped = mesh->createCGVector<double>(fill, dof);
     double *unzipped = mesh->createUnZippedVector<double>(dof);
-    if (zipped == nullptr || unzipped == nullptr) {
+    if (faultRank && inject("zipped")) {
+        delete[] zipped;
+        zipped = nullptr;
+    }  // END IF: inject zipped allocation failure
+    if (faultRank && inject("unzipped")) {
+        delete[] unzipped;
+        unzipped = nullptr;
+    }  // END IF: inject unzipped allocation failure
+    const int vectorFailed = mesh->isActive() &&
+                             (zipped == nullptr || unzipped == nullptr);
+    MPI_Allreduce(&vectorFailed, &setupFailed, 1, MPI_INT, MPI_MAX, comm);
+    if (setupFailed) {
+        if (vectorFailed) report("vector_setup", false, "vector allocation failed");
+        delete[] zipped;
+        delete[] unzipped;
         delete mesh;
         return false;
     }  // END IF: vector allocation failed
+    if (!mesh->isActive()) {
+        delete mesh;
+        return true;
+    }  // END IF: no local work here
     for (std::size_t i = 0; i < static_cast<std::size_t>(unzipSz) * dof; ++i)
         unzipped[i] = 0.0;
 
@@ -332,24 +360,40 @@ int main(int argc, char **argv) {
     // half the element order, so order 10 is the padding-5 probe that an
     // eighth-order finite-difference profile would need.
     std::vector<unsigned> orders = {2, 4, 6, 8};
-    if (const char *env = std::getenv("CAPTEST_ORDERS")) {
+    if (const char *env = std::getenv("CAPTEST_ORDERS"); rank == 0 && env != nullptr) {
         orders.clear();
         for (const char *s = env; *s != '\0';) {
             char *end = nullptr;
+            errno = 0;
             const unsigned long v = std::strtoul(s, &end, 10);
-            if (end == s) break;
+            if (*s < '0' || *s > '9' || end == s || errno == ERANGE ||
+                v < 2 || v % 2 != 0 || v > std::numeric_limits<unsigned>::max() ||
+                (*end != '\0' && (*end != ',' || end[1] == '\0'))) {
+                orders.clear();
+                break;
+            }  // END IF: invalid element order list
             orders.push_back(static_cast<unsigned>(v));
             s = (*end == '\0') ? end : end + 1;
         }  // END LOOP: for s over CAPTEST_ORDERS
+        if (orders.empty())
+            report("orders", false, "CAPTEST_ORDERS requires comma-separated positive even orders");
     }  // END IF: element orders overridden
+    // Rank zero owns the request, so ranks cannot enter different order loops.
+    unsigned orderCount = static_cast<unsigned>(orders.size());
+    MPI_Bcast(&orderCount, 1, MPI_UNSIGNED, 0, comm);
+    orders.resize(orderCount);
+    MPI_Bcast(orders.data(), orderCount, MPI_UNSIGNED, 0, comm);
     for (unsigned o : orders) {
-        if (!run_order(o, 3, comm, rank == 0) && rank == 0)
-            std::printf("eleOrder=%u mesh creation failed\n", o);
+        if (!run_order(o, 3, comm, rank == 0)) {
+            ++g_failures;
+            if (rank == 0) std::printf("eleOrder=%u setup failed\n", o);
+            break;
+        }  // END IF: order did not complete
         MPI_Barrier(comm);
     }  // END LOOP: for o over element orders
 
     int total = 0;
-    MPI_Reduce(&g_failures, &total, 1, MPI_INT, MPI_SUM, 0, comm);
+    MPI_Allreduce(&g_failures, &total, 1, MPI_INT, MPI_SUM, comm);
     if (rank == 0)
         std::printf("%s\n", total == 0 ? "CAPABILITY_TESTS_OK"
                                        : "CAPABILITY_TESTS_FAILED");
