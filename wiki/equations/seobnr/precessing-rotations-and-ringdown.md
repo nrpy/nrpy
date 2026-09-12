@@ -1,6 +1,6 @@
 # SEOBNR Precessing Rotations And Ringdown
 
-> Map co-precessing frame rotations, inertial polarizations, and precessing merger-ringdown frame quantities. · Status: confirmed · Last reconciled: 07-13-2026
+> Map co-precessing frame rotations, inertial polarizations, and precessing merger-ringdown frame quantities. · Status: confirmed
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary

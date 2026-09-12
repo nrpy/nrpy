@@ -1,6 +1,6 @@
 # GR Application Wiring
 
-> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 09-12-2026
+> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed.
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -44,7 +44,7 @@ Claim evidence:
 - Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
 - Corroboration: [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), formulation-selecting call
 - Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP; precision=double; GPU=not-run; restart=not-applicable; distributed=not-run; error_path=not-run; options=default BSSN generation/build, enable_fCCZ4=True generation/build and one-step startup; date=08-28-2026`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP; precision=double; GPU=not-run; restart=not-applicable; distributed=not-run; error_path=not-run; options=default BSSN generation/build, enable_fCCZ4=True generation/build and one-step startup`
 
 The historical YBS Gamma option applies to either formulation. When enabled,
 the registrar leaves the coordinate/options cache string unchanged, registers
@@ -65,7 +65,7 @@ Claim evidence:
 - Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
 - Corroboration: [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py), and [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py), forwarded `enable_YBS_Gamma_constraint_adjustment` constants
 - Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=BHaH and superB source wiring inspected only; precision=not-applicable; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=default-disabled callers plus enabled BSSN and fCCZ4 source branches; date=08-28-2026`
+- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=BHaH and superB source wiring inspected only; precision=not-applicable; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=default-disabled callers plus enabled BSSN and fCCZ4 source branches`
 
 The separate `enable_YBS_momentum_constraint_adjustment` option controls the
 default-disabled timestep-scaled momentum adjustment for either formulation.
@@ -85,7 +85,7 @@ Claim evidence:
 - Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
 - Corroboration: [dsmin_gf.py](../../../nrpy/infrastructures/BHaH/general_relativity/dsmin_gf.py), `register_CFunction_dsmin_auxevol_gridfunction`; [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), shared CAHD/YBS-MOM registration and scheduling gate; [representative BHaH rhs_eval trusted output](../../../nrpy/infrastructures/BHaH/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_SinhSpherical_RbargfsFalse_T4munuFalse_ImprovementsFalse.py), `trusted_dict`
 - Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, SymPy 1.14.0; backend=BHaH symbolic RHS registration plus OpenMP/CUDA source generation; precision=30-significant-digit deterministic trusted sampling and exact symbolic source; GPU=generation pass, execution not-run; restart=not-applicable because no new state; distributed=not-run; error_path=pass for unsupported non-fisheye GeneralRFM spacing; options=both YBS Gamma and YBS-MOM enabled jointly in all eight existing BHaH rhs_eval trusted cases; public defaults remain disabled; date=08-30-2026`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, SymPy 1.14.0; backend=BHaH symbolic RHS registration plus OpenMP/CUDA source generation; precision=30-significant-digit deterministic trusted sampling and exact symbolic source; GPU=generation pass, execution not-run; restart=not-applicable because no new state; distributed=not-run; error_path=pass for unsupported non-fisheye GeneralRFM spacing; options=both YBS Gamma and YBS-MOM enabled jointly in all eight existing BHaH rhs_eval trusted cases; public defaults remain disabled`
 
 `register_CFunction_Ricci_eval` emits `Ricci_eval` from
 `BSSN_quantities[CoordSystem + "_rfm_precompute"].Ricci_exprs` by default. It always uses
@@ -116,7 +116,7 @@ Claim evidence:
 - Deciding authority: [finite_difference.py](../../../nrpy/finite_difference.py), `select_stored_first_derivatives`; [c_codegen.py](../../../nrpy/c_codegen.py), `gridfunction_management_and_FD_codegen`
 - Corroboration: [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py) and [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), explicit consumer selections; owner doctests verify selection and polynomial evaluation.
 - Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3; backend=BHaH CUDA; precision=double; GPU=RTX 4060 Ti; restart=not-run; distributed=not-applicable; error_path=unregistered selection doctest; options=SinhCylindrical, no symmetry axes, FD8, 64x64x128, both stored options, nearest checkpoint to t=0.4 is t=0.40063545122319866, 18136512 finite values compared with committed option-on build, maximum absolute difference 9.12e-14 within atol=rtol=1e-12; date=09-11-2026`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3; backend=BHaH CUDA; precision=double; GPU=RTX 4060 Ti; restart=not-run; distributed=not-applicable; error_path=unregistered selection doctest; options=SinhCylindrical, no symmetry axes, FD8, 64x64x128, both stored options, nearest checkpoint to t=0.4 is t=0.40063545122319866, 18136512 finite values compared with committed option-on build, maximum absolute difference 9.12e-14 within atol=rtol=1e-12`
 
 
 Both `register_CFunction_Ricci_eval` and `register_CFunction_rhs_eval` expose a
@@ -141,7 +141,7 @@ Claim evidence:
 - Deciding authority: [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py), `register_CFunction_Ricci_eval`; [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` and `register_CFunction_rhs_eval_with_Ricci`; [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
 - Corroboration: [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), shared tile/coordinator predicate and call replacement; [hDDdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/hDDdD_eval.py), `register_CFunction_hDDdD_eval`, supplies fresh derivatives and stencil halos
 - Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=not-run`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH and superB OpenMP generation, BHaH OpenMP build; precision=double; GPU=not-run; restart=not-run; distributed=not-applicable; error_path=allocation failure not-run; options=default blackhole spectroscopy tile coordinator, default two-black-hole collision, Ricci-only TOV, default superB collision, plus isolated stored-derivative configuration; date=09-12-2026`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH and superB OpenMP generation, BHaH OpenMP build; precision=double; GPU=not-run; restart=not-run; distributed=not-applicable; error_path=allocation failure not-run; options=default blackhole spectroscopy tile coordinator, default two-black-hole collision, Ricci-only TOV, default superB collision, plus isolated stored-derivative configuration`
 
 `register_CFunction_cfdD_alphadD_vetUdD_eval` (`cfdD_alphadD_vetUdD_eval.py`) applies the
 same tensor-product identity to the right-hand sides. It stores the first derivatives of `cf`,
@@ -185,7 +185,7 @@ Claim evidence:
 - Deciding authority: [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
 - Corroboration: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
 - Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=BHaH OpenMP registration with CUDA rewrite path inspected; precision=symbolic code generation; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian registration contract plus source inspection of optional T4munu and CUDA rewrites; date=08-28-2026`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=BHaH OpenMP registration with CUDA rewrite path inspected; precision=symbolic code generation; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian registration contract plus source inspection of optional T4munu and CUDA rewrites`
 
 `register_CFunction_enforce_detgbar_equals_detghat_trAzero` emits the combined
 algebraic-constraint CFunction. In one all-points loop it loads all independent
@@ -217,7 +217,7 @@ Claim evidence:
 - Deciding authority: [initial_data.py](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [ADM_Initial_Data_Reader__BSSN_Converter.py](../../../nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py), `register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`; [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), formulation and projection registrations; [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), BSSN initial-data and Method of Lines registrations
 - Corroboration: [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP source registration; precision=double; GPU=not-run; restart=source-path-inspected only, no restart run; distributed=not-run; error_path=not-run; options=default BSSN generation/build, opt-in fCCZ4 generation/build and one-step startup, spectroscopy shared projection, collision path inspection only; date=08-28-2026`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP source registration; precision=double; GPU=not-run; restart=source-path-inspected only, no restart run; distributed=not-run; error_path=not-run; options=default BSSN generation/build, opt-in fCCZ4 generation/build and one-step startup, spectroscopy shared projection, collision path inspection only`
 
 `register_CFunction_initial_data` is the application-level initial-data
 assembler. For built-in exact data it instantiates `InitialData_Cartesian` or
@@ -304,7 +304,7 @@ Claim evidence:
 - Deciding authority: [ID_persist_struct.py](../../../nrpy/infrastructures/BHaH/general_relativity/TwoPunctures/ID_persist_struct.py), `register_CFunction_initialize_ID_persist_struct`; [TP_interp.py](../../../nrpy/infrastructures/BHaH/general_relativity/TwoPunctures/TP_interp.py), `register_CFunction_TP_Interp`; [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py) and [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py), `populate_ID_persist_struct_str`
 - Corroboration: [superB_blackhole_spectroscopy_8Mseparation.py](../../../nrpy/examples/superb_paper2/superB_blackhole_spectroscopy_8Mseparation.py) and [superB_blackhole_spectroscopy_last_orbit.py](../../../nrpy/examples/superb_paper2/superB_blackhole_spectroscopy_last_orbit.py), unchanged shared-initializer calls without a lapse override
 - Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=not-run`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP; precision=double; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=top-level standalone W generation/build, top-level superB W generation, paper examples inspected unchanged with shared psi^n default; date=09-04-2026`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP; precision=double; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=top-level standalone W generation/build, top-level superB W generation, paper examples inspected unchanged with shared psi^n default`
 
 If TwoPunctures/TOVola setup detail grows beyond routing and
 dataflow, split it into a future `compact-object-initial-data.md` leaf.

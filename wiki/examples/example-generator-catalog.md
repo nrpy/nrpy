@@ -1,12 +1,12 @@
 # Example Generator Catalog
 
-> Inventory the runnable example generators, companion scripts, output families, prerequisites, validation status, and owning pages. · Status: confirmed · Last reconciled: 09-04-2026
+> Inventory the runnable example generators, companion scripts, output families, prerequisites, validation status, and owning pages. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
 
-This catalog is the inventory leaf for `nrpy/examples`. All 27 non-`__init__.py`
-top-level generators under `nrpy/examples/*.py` appear once below with their
+This catalog is the inventory leaf for `nrpy/examples`. Every non-`__init__.py`
+top-level generator under `nrpy/examples/*.py` appears once below with its
 command shape, output family, prerequisite class, validation route or manual
 status, and owning detail page. Companion files under
 `nrpy/examples/geodesic_visualizations/`, `nrpy/examples/tests/`, and
@@ -66,12 +66,12 @@ Companion groups:
 | `nrpy/examples/geodesic_visualizations/*.py` | Trajectory plotter, light-blueprint schema, lensed-image renderer, image visualizer, and blueprint diagnostics | `trajectory.txt`, PNGs, downloaded textures, and `light_blueprint_*.zip` files stay artifacts | [Geodesic Raytracing](geodesic-raytracing.md) |
 | `nrpy/examples/tests/sebob*_consistency_check.py` | Current-vs-trusted waveform consistency scripts | Trusted/current generated executable directories and waveform stdout are run artifacts | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
 
-Inventory disposition is exact for the current aggregate: 27 generators, five
-ET fixture files, five geodesic companion scripts, two waveform consistency
-helpers, and one excluded `__init__.py` total the registered 40-file aggregate.
-The direct source rows in [Sources](../../raw/SOURCES.md) register the cited
-files. Aggregate status remains `partial` because file-set ownership does not by
-itself prove complete semantic reconciliation or future-file ingestion.
+Inventory disposition is exact for the current aggregate: the table identifies
+the generators, and the companion groups identify ET fixtures, geodesic scripts,
+waveform consistency helpers, and the excluded `__init__.py`. The direct source
+rows in [Sources](../../raw/SOURCES.md) register the cited files. Aggregate status
+remains `partial` because file-set ownership does not by itself prove complete
+semantic reconciliation or future-file ingestion.
 
 Claim status: contested; contradiction: CONTR-0002. The `sebobv1_jax` row
 records generation intent only: current Commondata list truncation omits `a_f`

@@ -1,6 +1,6 @@
 # Equation Setup Style
 
-> Symbolic equation construction, naming, validation, and dependency rules for NRPy equation modules. · Status: provisional · Last reconciled: 07-20-2026
+> Symbolic equation construction, naming, validation, and dependency rules for NRPy equation modules. · Status: provisional
 > Up: [Equations](index.md)
 
 ## Summary

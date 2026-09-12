@@ -1,6 +1,6 @@
 # BHaHAHA Horizon Runtime
 
-> Orient the BHaH BHaHAHA runtime and route detailed apparent-horizon work to the owning leaves. · Status: confirmed · Last reconciled: 06-29-2026
+> Orient the BHaH BHaHAHA runtime and route detailed apparent-horizon work to the owning leaves. · Status: confirmed
 > Up: [BHaH](index.md)
 
 ## Summary

@@ -1,6 +1,6 @@
 # NRPyElliptic Workflow
 
-> BHaH workflow for conformally flat NRPyElliptic hyperbolic relaxation. · Status: confirmed · Last reconciled: 06-29-2026
+> BHaH workflow for conformally flat NRPyElliptic hyperbolic relaxation. · Status: confirmed
 > Up: [BHaH](index.md)
 
 ## Summary

@@ -1,6 +1,6 @@
 # Chare Entrypoints And Runtime
 
-> Structural map of superB Charm++ chares, entry methods, proxies, SDAG, reductions, checkpointing, and PUP contracts. · Status: confirmed · Last reconciled: 07-12-2026
+> Structural map of superB Charm++ chares, entry methods, proxies, SDAG, reductions, checkpointing, and PUP contracts. · Status: confirmed
 > Up: [superB](index.md)
 
 ## Summary
@@ -173,19 +173,19 @@ current configured CI.
 - [horizon_finder_chare.py](../../../nrpy/infrastructures/superB/horizon_finder_chare.py) - `output_horizon_finder_h_cpp_ci`, `Horizon_finder`
 - [superB_pup.py](../../../nrpy/infrastructures/superB/superB/superB_pup.py) - `pup_griddata`, `pup_griddata_chare`, `register_CFunction_superB_pup_routines`
 - [main.yml](../../../.github/workflows/main.yml) - `charmpp-validation`
-- [Charm++ 8.0.0 manual](https://charm.readthedocs.io/en/v8.0.0/charm%2B%2B/manual.html) - `Read-only Data`, `Chare Arrays`, `Structured Control Flow`, `Serialization Using the PUP Framework`, `Checkpoint/Restart-Based Fault Tolerance`; accessed 07-12-2026
-- [Charm++ 8.0.0 xi-Chare.C](https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/xi-Chare.C) - `CBase_*`, `thisProxy`, generated recursive `_sdag_pup`; accessed 07-12-2026
-- [Charm++ 8.0.0 CParsedFile.C](https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/sdag/CParsedFile.C) - `_sdag_pup(PUP::er&)`, `__sdag_pup(PUP::er&)`; accessed 07-12-2026
-- [Charm++ 8.0.0 CEntry.C](https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/sdag/CEntry.C) - SDAG direct-call guard, closure/message buffering, marshalled-entry reference numbers; accessed 07-12-2026
-- [Charm++ 8.0.0 When.C](https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/sdag/constructs/When.C) - `when` buffer matching and continuation registration; accessed 07-12-2026
-- [Charm++ 8.0.0 sdag.h](https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/sdag.h) - `SDAG::Dependency`, `SDAG::Buffer`, `SDAG::Continuation`; accessed 07-12-2026
-- [Charm++ 8.0.0 xi-Parameter.C](https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/xi-Parameter.C) - SDAG callback/message reference-number unmarshalling; accessed 07-12-2026
-- [Charm++ 8.0.0 ckcallback.C](https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckcallback.C) - `CkSetRefNum` callback delivery; accessed 07-12-2026
-- [Charm++ 8.0.0 ckarrayindex.h](https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckarrayindex.h) - `CkIndex3D`, `CkArrayIndex3D`; accessed 07-12-2026
-- [Charm++ 8.0.0 ckarray.h](https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckarray.h) - `ArrayElementT`, `thisIndex`, array reductions; accessed 07-12-2026
-- [Charm++ 8.0.0 ckreduction.h](https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckreduction.h) - `CkReduction::reducerType`, `CkReduction::sum_double`, `CkReductionMsg`; accessed 07-12-2026
-- [Charm++ 8.0.0 cklocation.h](https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/cklocation.h) - `CkArrayMap`, home PE, location manager roles; accessed 07-12-2026
-- [Charm++ 8.0.0 cklocation.C](https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/cklocation.C) - `CkLocMgr::pup` pending-migration abort; accessed 07-12-2026
+- [Charm++ 8.0.0 manual](https://charm.readthedocs.io/en/v8.0.0/charm%2B%2B/manual.html) - `Read-only Data`, `Chare Arrays`, `Structured Control Flow`, `Serialization Using the PUP Framework`, `Checkpoint/Restart-Based Fault Tolerance`
+- [Charm++ 8.0.0 xi-Chare.C](https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/xi-Chare.C) - `CBase_*`, `thisProxy`, generated recursive `_sdag_pup`
+- [Charm++ 8.0.0 CParsedFile.C](https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/sdag/CParsedFile.C) - `_sdag_pup(PUP::er&)`, `__sdag_pup(PUP::er&)`
+- [Charm++ 8.0.0 CEntry.C](https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/sdag/CEntry.C) - SDAG direct-call guard, closure/message buffering, marshalled-entry reference numbers
+- [Charm++ 8.0.0 When.C](https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/sdag/constructs/When.C) - `when` buffer matching and continuation registration
+- [Charm++ 8.0.0 sdag.h](https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/sdag.h) - `SDAG::Dependency`, `SDAG::Buffer`, `SDAG::Continuation`
+- [Charm++ 8.0.0 xi-Parameter.C](https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/xi-Parameter.C) - SDAG callback/message reference-number unmarshalling
+- [Charm++ 8.0.0 ckcallback.C](https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckcallback.C) - `CkSetRefNum` callback delivery
+- [Charm++ 8.0.0 ckarrayindex.h](https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckarrayindex.h) - `CkIndex3D`, `CkArrayIndex3D`
+- [Charm++ 8.0.0 ckarray.h](https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckarray.h) - `ArrayElementT`, `thisIndex`, array reductions
+- [Charm++ 8.0.0 ckreduction.h](https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckreduction.h) - `CkReduction::reducerType`, `CkReduction::sum_double`, `CkReductionMsg`
+- [Charm++ 8.0.0 cklocation.h](https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/cklocation.h) - `CkArrayMap`, home PE, location manager roles
+- [Charm++ 8.0.0 cklocation.C](https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/cklocation.C) - `CkLocMgr::pup` pending-migration abort
 
 ## See Also
 

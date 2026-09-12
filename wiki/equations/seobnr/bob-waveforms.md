@@ -1,6 +1,6 @@
 # BOB Waveforms
 
-> Map Backwards-One-Body waveform, NQC attachment, higher-mode, and BOBv2 symbolic quantities. · Status: confirmed · Last reconciled: 07-13-2026
+> Map Backwards-One-Body waveform, NQC attachment, higher-mode, and BOBv2 symbolic quantities. · Status: confirmed
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary

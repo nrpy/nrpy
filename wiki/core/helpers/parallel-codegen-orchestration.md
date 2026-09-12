@@ -1,6 +1,6 @@
 # Parallel Codegen Orchestration
 
-> Helper leaf for generation-time multiprocessing registration, execution, and global-registry merge behavior. · Status: confirmed · Last reconciled: 07-12-2026
+> Helper leaf for generation-time multiprocessing registration, execution, and global-registry merge behavior. · Status: confirmed
 > Up: [Helper APIs](index.md)
 
 ## Summary

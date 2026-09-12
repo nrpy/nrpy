@@ -1,6 +1,6 @@
 # Generated Backend Comparison
 
-> Compare generated backend families by output shape, build path, validation route, and artifact boundary. · Status: provisional · Last reconciled: 07-12-2026
+> Compare generated backend families by output shape, build path, validation route, and artifact boundary. · Status: provisional
 > Up: [Syntheses](index.md)
 
 ## Summary
@@ -46,8 +46,8 @@ proves configured job shape, never latest successful execution.
 
 ## Sources
 
-- Karpathy LLM Wiki approach - query-output filing principle:
-  `https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md`.
+- [KB instructions](../../raw/source-docs/kb-instructions.md) - Karpathy LLM
+  Wiki query-output filing principle.
 - [README.md](../../README.md) - `## Project Families and Example Generators`, `## What Gets Generated?`
 - [main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`, `einsteintoolkit-validation`, `charmpp-validation`, SEOB/SEBOB consistency jobs
 

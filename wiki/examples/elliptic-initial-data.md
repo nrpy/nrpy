@@ -1,6 +1,6 @@
 # Elliptic Initial Data
 
-> Compare standalone NRPyElliptic and Charm++/superB conformally flat initial-data workflows. · Status: confirmed · Last reconciled: 09-04-2026
+> Compare standalone NRPyElliptic and Charm++/superB conformally flat initial-data workflows. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary

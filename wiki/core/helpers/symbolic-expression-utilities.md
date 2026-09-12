@@ -1,6 +1,6 @@
 # Symbolic Expression Utilities
 
-> Reusable helpers for inspecting, transforming, and composing symbolic expressions. · Status: confirmed · Last reconciled: 06-29-2026
+> Reusable helpers for inspecting, transforming, and composing symbolic expressions. · Status: confirmed
 > Up: [Helper APIs](index.md)
 
 ## Summary

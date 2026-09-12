@@ -1,6 +1,6 @@
 # Code Test Policy
 
-> Prospective placement, meaningfulness, and proof rules for tests of NRPy code. · Status: provisional · Last reconciled: 07-20-2026
+> Prospective placement, meaningfulness, and proof rules for tests of NRPy code. · Status: provisional
 > Up: [Validation](index.md)
 
 ## Summary
@@ -205,8 +205,7 @@ Claim evidence:
 - Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
 - Dimensions: `platform=not-run; tool_version=not-run; backend=not-run;
   precision=not-run; GPU=not-applicable; restart=not-applicable;
-  distributed=not-applicable; error_path=not-run; options=not-run;
-  date=07-13-2026`
+  distributed=not-applicable; error_path=not-run; options=not-run`
 
 ### Static Summary
 
@@ -246,7 +245,7 @@ Claim evidence:
 - Deciding authority: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`; [jax_project_generator.py](../../nrpy/infrastructures/JAX/jax_project_generator.py), `_generate_project_metadata` and `output_PyFunction_files_and_construct_project`; [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `compile_Makefile`
 - Corroboration: [main.yml](../../.github/workflows/main.yml), `codegen-ubuntu` and `codegen-mac`, corroborates that JAX output is generated without executing its scaffold; no independent corroboration for the other two outliers
 - Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=not-run; precision=not-run; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=not-run; date=07-13-2026`
+- Dimensions: `platform=not-run; tool_version=not-run; backend=not-run; precision=not-run; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=not-run`
 
 Do not expand any of those shapes. Whether an unrelated touch must remove a
 legacy empty runner remains maintainer judgment. Meaningful doctest-only

@@ -1,6 +1,6 @@
 # Generated Project CI
 
-> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed · Last reconciled: 07-13-2026
+> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed
 > Up: [Validation](index.md)
 
 ## Summary
@@ -22,7 +22,7 @@ Configured GitHub job map:
 | `codegen-mac` | macOS 14/26 with Python 3.9, 3.10, 3.11, `3.x` | Same 21 default C/library builds and JAX generation as Ubuntu; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
 | `einsteintoolkit-validation` | Ubuntu 24.04, Apptainer 1.3.2, ET 2024-06 beta image | Generates only `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs `Baikal`, `BaikalVacuum`, and `WaveToyNRPy` Cactus testsuites and fails on nonzero reported failures. No `carpetx_*` generation/build/run. |
 | `charmpp-validation` | Ubuntu 24.04, Apptainer image, paths pinned to Charm++ 8.0.0 | Generates and builds `superB_nrpyelliptic_conformally_flat`, `superB_blackhole_spectroscopy`, and `superB_two_blackholes_collide` with `make -j2` | Runs only `./charmrun +p2 ./superB_two_blackholes_collide`; no explicit scientific-output assertion beyond process success. |
-| `sebob-consistency-test` | Ubuntu 22.04/24.04; three matrix cells after one exclusion | Checks out trusted commit `785467615d63669a98fe85c6686c2388a324139e`; generates/builds trusted and current copies of all nine SEOBNRv5 variants | Runs nine helper invocations. Each rebuilds both executables, runs ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed its perturbation-derived baseline. |
+| `sebob-consistency-test` | Ubuntu 22.04/24.04; three matrix cells after one exclusion | Checks out the trusted revision configured in the workflow; generates/builds trusted and current copies of all nine SEOBNRv5 variants | Runs nine helper invocations. Each rebuilds both executables, runs ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed its perturbation-derived baseline. |
 | `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the same trusted commit | Runs one helper invocation with ten deterministic inputs and the same median-error criterion. |
 
 A successful named build can establish only named generation plus toolchain

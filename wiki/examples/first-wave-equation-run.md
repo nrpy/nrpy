@@ -1,6 +1,6 @@
 # First Wave Equation Run
 
-> Describe the first standalone project generation, build, run, and output milestone. · Status: confirmed · Last reconciled: 07-12-2026
+> Describe the first standalone project generation, build, run, and output milestone. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary

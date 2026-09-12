@@ -1,6 +1,6 @@
 # CarpetX GR Poststep Repairs
 
-> CarpetX lapse flooring and combined conformal determinant/trace projection across initial and ODESolvers poststep bins. · Status: confirmed · Last reconciled: 08-26-2026
+> CarpetX lapse flooring and combined conformal determinant/trace projection across initial and ODESolvers poststep bins. · Status: confirmed
 > Up: [CarpetX](index.md)
 
 ## Summary
@@ -43,7 +43,7 @@ Claim evidence:
 - Deciding authority: [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/CarpetX/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - Corroboration: [floor_the_lapse.py](../../../nrpy/infrastructures/CarpetX/general_relativity/floor_the_lapse.py), `register_CFunction_floor_the_lapse`
 - Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=CarpetX generated projection kernel and schedule metadata; precision=exact determinant/trace identities and generated-source structure; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=Cartesian and SinhSpherical reference-metric precompute kernel variants; date=08-26-2026`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=CarpetX generated projection kernel and schedule metadata; precision=exact determinant/trace identities and generated-source structure; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=Cartesian and SinhSpherical reference-metric precompute kernel variants`
 
 ## Sources
 

@@ -1,6 +1,6 @@
 # BHaHAHA Grid, Interpolation, And Boundaries
 
-> Explain how BHaHAHA builds its spherical grids, moves metric data through interpolation layers, and applies local boundary metadata. · Status: confirmed · Last reconciled: 07-19-2026
+> Explain how BHaHAHA builds its spherical grids, moves metric data through interpolation layers, and applies local boundary metadata. · Status: confirmed
 > Up: [BHaH](index.md)
 
 ## Summary

@@ -1,6 +1,6 @@
 # Lifecycle And Project Assembly
 
-> Explain how BHaH standalone applications register runtime functions, assemble generated projects, and split executable and library entrypoints. · Status: confirmed · Last reconciled: 07-23-2026
+> Explain how BHaH standalone applications register runtime functions, assemble generated projects, and split executable and library entrypoints. · Status: confirmed
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -114,7 +114,7 @@ Claim evidence:
 - Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_generate_c_files_and_header`, `_construct_makefile_content`, and `output_CFunctions_function_prototypes_and_construct_Makefile`
 - Corroboration: none available; validation artifacts were temporary and were not registered
 - Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=generated GNU Make; precision=double; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=default BSSN and fCCZ4 OPENMP=1 builds plus seeded single-line bounded clean contract; date=08-28-2026`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=generated GNU Make; precision=double; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=default BSSN and fCCZ4 OPENMP=1 builds plus seeded single-line bounded clean contract`
 
 Compiler selection replaces GNU Make's built-in `cc` only when that default is
 active, preserving environment and command-line choices; CUDA Makefiles select
@@ -139,7 +139,7 @@ Claim evidence:
 - Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_generate_c_files_and_header`, `_construct_makefile_content`, and `output_CFunctions_function_prototypes_and_construct_Makefile`
 - Corroboration: none available; emitted-Makefile assertions live in the same owner module
 - Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=generated GNU Make; precision=double; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=default BSSN and fCCZ4 OPENMP=1 direct-flag builds, OPENMP=0 source inspection only; date=08-28-2026`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=generated GNU Make; precision=double; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=default BSSN and fCCZ4 OPENMP=1 direct-flag builds, OPENMP=0 source inspection only`
 
 The generated `make valgrind` target is executable-oriented. For a CPU
 executable it cleans, rebuilds with the debug C flags and `OPENMP=0`, then runs
@@ -174,7 +174,7 @@ Claim evidence:
 - Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_construct_makefile_content`
 - Corroboration: none available; validation artifacts were temporary and were not registered
 - Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=GCC 13.3.0, NVCC/CUDA 13.2 build cuda_13.2.r13.2/compiler.37953736_0, GNU Make 4.3, Compute Sanitizer=not-run; backend=CUDA missing-library guard; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=missing libsanitizer-collection.so guard passed before clean; options=CC=nvcc, src_code_file_ext=cu, compiler_opt_option=nvcc, use_openmp=False, CUDA_SANITIZER_DIR=/definitely/missing; date=07-23-2026`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=GCC 13.3.0, NVCC/CUDA 13.2 build cuda_13.2.r13.2/compiler.37953736_0, GNU Make 4.3, Compute Sanitizer=not-run; backend=CUDA missing-library guard; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=missing libsanitizer-collection.so guard passed before clean; options=CC=nvcc, src_code_file_ext=cu, compiler_opt_option=nvcc, use_openmp=False, CUDA_SANITIZER_DIR=/definitely/missing`
 
 `compile_Makefile` is the programmatic build wrapper. It autodetects a compiler
 when requested, regenerates the prototype/header/Makefile assets through
