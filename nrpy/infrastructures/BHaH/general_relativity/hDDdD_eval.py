@@ -106,26 +106,6 @@ def register_CFunction_hDDdD_eval(
     # generation runs each registration in its own worker, so the dependency is stated
     # here, exactly as Ricci_eval states it.
     _ = BSSN_quantities[CoordSystem + "_rfm_precompute"]
-    register_hDDdD_gridfunctions()
-    hDD_dD = ixp.declarerank3("hDD_dD", symmetry="sym01")
-    hDD_dDD = ixp.declarerank4("hDD_dDD", symmetry="sym01_sym23")
-    # Each stored direction must be valid wherever Ricci_eval differentiates it: the region is the
-    # interior grown by the stencil radius in every transverse direction that some non-zero mixed
-    # second derivative differentiates it in. Directions zeroed by a symmetry axis need no halo.
-    loop_regions = []
-    for direction in range(3):
-        grown = [
-            f"i{transverse}"
-            for transverse in range(direction + 1, 3)
-            if any(
-                hDD_dDD[i][j][direction][transverse] != 0
-                for i in range(3)
-                for j in range(i, 3)
-            )
-        ]
-        loop_regions += [
-            "interior plus stencil halo in " + " ".join(grown) if grown else "interior"
-        ]
 
     includes = ["BHaH_defines.h"]
     if enable_intrinsics:
@@ -148,6 +128,27 @@ def register_CFunction_hDDdD_eval(
         **arg_dict_cuda,
     }
     params = ",".join([f"{v} {k}" for k, v in arg_dict_host.items()])
+
+    register_hDDdD_gridfunctions()
+    hDD_dD = ixp.declarerank3("hDD_dD", symmetry="sym01")
+    hDD_dDD = ixp.declarerank4("hDD_dDD", symmetry="sym01_sym23")
+    # Each stored direction must be valid wherever Ricci_eval differentiates it: the region is the
+    # interior grown by the stencil radius in every transverse direction that some non-zero mixed
+    # second derivative differentiates it in. Directions zeroed by a symmetry axis need no halo.
+    loop_regions = []
+    for direction in range(3):
+        grown = [
+            f"i{transverse}"
+            for transverse in range(direction + 1, 3)
+            if any(
+                hDD_dDD[i][j][direction][transverse] != 0
+                for i in range(3)
+                for j in range(i, 3)
+            )
+        ]
+        loop_regions += [
+            "interior plus stencil halo in " + " ".join(grown) if grown else "interior"
+        ]
 
     # c_codegen() clears the finite-difference helper registry at the start of every call,
     # so each direction's helpers are collected before the next call and emitted once.

@@ -162,10 +162,6 @@ def register_CFunction_cfdD_alphadD_vetUdD_eval(
     # generation runs each registration in its own worker, so the dependency is stated here,
     # exactly as rhs_eval states it.
     _ = BSSN_quantities[CoordSystem + "_rfm_precompute"]
-    register_cfdD_alphadD_vetUdD_gridfunctions()
-    expressions = cfdD_alphadD_vetUdD_gridfunction_expressions()
-    stored_directions = sorted({int(name[-1]) for name in expressions})
-    cf_dDD = ixp.declarerank2("cf_dDD", symmetry="sym01")
 
     includes = ["BHaH_defines.h"]
     if enable_intrinsics:
@@ -188,6 +184,11 @@ def register_CFunction_cfdD_alphadD_vetUdD_eval(
         **arg_dict_cuda,
     }
     params = ",".join([f"{v} {k}" for k, v in arg_dict_host.items()])
+
+    register_cfdD_alphadD_vetUdD_gridfunctions()
+    expressions = cfdD_alphadD_vetUdD_gridfunction_expressions()
+    stored_directions = sorted({int(name[-1]) for name in expressions})
+    cf_dDD = ixp.declarerank2("cf_dDD", symmetry="sym01")
 
     # c_codegen() clears the finite-difference helper registry at the start of every call,
     # so each direction's helpers are collected before the next call and emitted once.
