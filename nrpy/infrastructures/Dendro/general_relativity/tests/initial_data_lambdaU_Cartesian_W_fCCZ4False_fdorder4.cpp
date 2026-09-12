@@ -28,10 +28,8 @@ void bssn_initial_data_lambdaU_block(const block_geometry_struct &geom, const De
         [[maybe_unused]] const DendroScalar xx0 = geom.pmin_padded[0] + static_cast<DendroScalar>(i0) * geom.dx[0];
         [[maybe_unused]] const DendroScalar xx1 = geom.pmin_padded[1] + static_cast<DendroScalar>(i1) * geom.dx[1];
         [[maybe_unused]] const DendroScalar xx2 = geom.pmin_padded[2] + static_cast<DendroScalar>(i2) * geom.dx[2];
-        /*
-         * NRPy-Generated GF Access/FD Code, Step 1 of 2:
-         * Read gridfunction(s) from main memory and compute FD stencils as needed.
-         */
+        static const DendroScalar FDPart1_Rational_2_3 = 2.0 / 3.0;
+        static const DendroScalar FDPart1_Rational_1_12 = 1.0 / 12.0;
         const DendroScalar hDD00_i2m2 = in_hDD00[pp - 2 * nxy];
         const DendroScalar hDD00_i2m1 = in_hDD00[pp - nxy];
         const DendroScalar hDD00_i1m2 = in_hDD00[pp - 2 * nx];
@@ -39,12 +37,19 @@ void bssn_initial_data_lambdaU_block(const block_geometry_struct &geom, const De
         const DendroScalar hDD00_i0m2 = in_hDD00[pp - 2];
         const DendroScalar hDD00_i0m1 = in_hDD00[pp - 1];
         const DendroScalar hDD00 = in_hDD00[pp];
+        const DendroScalar FDPart3tmp6 = hDD00 + 1;
         const DendroScalar hDD00_i0p1 = in_hDD00[pp + 1];
         const DendroScalar hDD00_i0p2 = in_hDD00[pp + 2];
+        const DendroScalar hDD_dD000 =
+            invdxx0 * (FDPart1_Rational_1_12 * (hDD00_i0m2 - hDD00_i0p2) + FDPart1_Rational_2_3 * (-hDD00_i0m1 + hDD00_i0p1));
         const DendroScalar hDD00_i1p1 = in_hDD00[pp + nx];
         const DendroScalar hDD00_i1p2 = in_hDD00[pp + 2 * nx];
+        const DendroScalar hDD_dD001 =
+            invdxx1 * (FDPart1_Rational_1_12 * (hDD00_i1m2 - hDD00_i1p2) + FDPart1_Rational_2_3 * (-hDD00_i1m1 + hDD00_i1p1));
         const DendroScalar hDD00_i2p1 = in_hDD00[pp + nxy];
         const DendroScalar hDD00_i2p2 = in_hDD00[pp + 2 * nxy];
+        const DendroScalar hDD_dD002 =
+            invdxx2 * (FDPart1_Rational_1_12 * (hDD00_i2m2 - hDD00_i2p2) + FDPart1_Rational_2_3 * (-hDD00_i2m1 + hDD00_i2p1));
         const DendroScalar hDD01_i2m2 = in_hDD01[pp - 2 * nxy];
         const DendroScalar hDD01_i2m1 = in_hDD01[pp - nxy];
         const DendroScalar hDD01_i1m2 = in_hDD01[pp - 2 * nx];
@@ -54,10 +59,17 @@ void bssn_initial_data_lambdaU_block(const block_geometry_struct &geom, const De
         const DendroScalar hDD01 = in_hDD01[pp];
         const DendroScalar hDD01_i0p1 = in_hDD01[pp + 1];
         const DendroScalar hDD01_i0p2 = in_hDD01[pp + 2];
+        const DendroScalar hDD_dD010 =
+            invdxx0 * (FDPart1_Rational_1_12 * (hDD01_i0m2 - hDD01_i0p2) + FDPart1_Rational_2_3 * (-hDD01_i0m1 + hDD01_i0p1));
+        const DendroScalar FDPart3tmp28 = -hDD_dD001 + 2 * hDD_dD010;
         const DendroScalar hDD01_i1p1 = in_hDD01[pp + nx];
         const DendroScalar hDD01_i1p2 = in_hDD01[pp + 2 * nx];
+        const DendroScalar hDD_dD011 =
+            invdxx1 * (FDPart1_Rational_1_12 * (hDD01_i1m2 - hDD01_i1p2) + FDPart1_Rational_2_3 * (-hDD01_i1m1 + hDD01_i1p1));
         const DendroScalar hDD01_i2p1 = in_hDD01[pp + nxy];
         const DendroScalar hDD01_i2p2 = in_hDD01[pp + 2 * nxy];
+        const DendroScalar hDD_dD012 =
+            invdxx2 * (FDPart1_Rational_1_12 * (hDD01_i2m2 - hDD01_i2p2) + FDPart1_Rational_2_3 * (-hDD01_i2m1 + hDD01_i2p1));
         const DendroScalar hDD02_i2m2 = in_hDD02[pp - 2 * nxy];
         const DendroScalar hDD02_i2m1 = in_hDD02[pp - nxy];
         const DendroScalar hDD02_i1m2 = in_hDD02[pp - 2 * nx];
@@ -67,10 +79,17 @@ void bssn_initial_data_lambdaU_block(const block_geometry_struct &geom, const De
         const DendroScalar hDD02 = in_hDD02[pp];
         const DendroScalar hDD02_i0p1 = in_hDD02[pp + 1];
         const DendroScalar hDD02_i0p2 = in_hDD02[pp + 2];
+        const DendroScalar hDD_dD020 =
+            invdxx0 * (FDPart1_Rational_1_12 * (hDD02_i0m2 - hDD02_i0p2) + FDPart1_Rational_2_3 * (-hDD02_i0m1 + hDD02_i0p1));
+        const DendroScalar FDPart3tmp29 = -hDD_dD002 + 2 * hDD_dD020;
         const DendroScalar hDD02_i1p1 = in_hDD02[pp + nx];
         const DendroScalar hDD02_i1p2 = in_hDD02[pp + 2 * nx];
+        const DendroScalar hDD_dD021 =
+            invdxx1 * (FDPart1_Rational_1_12 * (hDD02_i1m2 - hDD02_i1p2) + FDPart1_Rational_2_3 * (-hDD02_i1m1 + hDD02_i1p1));
         const DendroScalar hDD02_i2p1 = in_hDD02[pp + nxy];
         const DendroScalar hDD02_i2p2 = in_hDD02[pp + 2 * nxy];
+        const DendroScalar hDD_dD022 =
+            invdxx2 * (FDPart1_Rational_1_12 * (hDD02_i2m2 - hDD02_i2p2) + FDPart1_Rational_2_3 * (-hDD02_i2m1 + hDD02_i2p1));
         const DendroScalar hDD11_i2m2 = in_hDD11[pp - 2 * nxy];
         const DendroScalar hDD11_i2m1 = in_hDD11[pp - nxy];
         const DendroScalar hDD11_i1m2 = in_hDD11[pp - 2 * nx];
@@ -78,12 +97,20 @@ void bssn_initial_data_lambdaU_block(const block_geometry_struct &geom, const De
         const DendroScalar hDD11_i0m2 = in_hDD11[pp - 2];
         const DendroScalar hDD11_i0m1 = in_hDD11[pp - 1];
         const DendroScalar hDD11 = in_hDD11[pp];
+        const DendroScalar FDPart3tmp4 = hDD11 + 1;
         const DendroScalar hDD11_i0p1 = in_hDD11[pp + 1];
         const DendroScalar hDD11_i0p2 = in_hDD11[pp + 2];
+        const DendroScalar hDD_dD110 =
+            invdxx0 * (FDPart1_Rational_1_12 * (hDD11_i0m2 - hDD11_i0p2) + FDPart1_Rational_2_3 * (-hDD11_i0m1 + hDD11_i0p1));
+        const DendroScalar FDPart3tmp26 = 2 * hDD_dD011 - hDD_dD110;
         const DendroScalar hDD11_i1p1 = in_hDD11[pp + nx];
         const DendroScalar hDD11_i1p2 = in_hDD11[pp + 2 * nx];
+        const DendroScalar hDD_dD111 =
+            invdxx1 * (FDPart1_Rational_1_12 * (hDD11_i1m2 - hDD11_i1p2) + FDPart1_Rational_2_3 * (-hDD11_i1m1 + hDD11_i1p1));
         const DendroScalar hDD11_i2p1 = in_hDD11[pp + nxy];
         const DendroScalar hDD11_i2p2 = in_hDD11[pp + 2 * nxy];
+        const DendroScalar hDD_dD112 =
+            invdxx2 * (FDPart1_Rational_1_12 * (hDD11_i2m2 - hDD11_i2p2) + FDPart1_Rational_2_3 * (-hDD11_i2m1 + hDD11_i2p1));
         const DendroScalar hDD12_i2m2 = in_hDD12[pp - 2 * nxy];
         const DendroScalar hDD12_i2m1 = in_hDD12[pp - nxy];
         const DendroScalar hDD12_i1m2 = in_hDD12[pp - 2 * nx];
@@ -93,10 +120,17 @@ void bssn_initial_data_lambdaU_block(const block_geometry_struct &geom, const De
         const DendroScalar hDD12 = in_hDD12[pp];
         const DendroScalar hDD12_i0p1 = in_hDD12[pp + 1];
         const DendroScalar hDD12_i0p2 = in_hDD12[pp + 2];
+        const DendroScalar hDD_dD120 =
+            invdxx0 * (FDPart1_Rational_1_12 * (hDD12_i0m2 - hDD12_i0p2) + FDPart1_Rational_2_3 * (-hDD12_i0m1 + hDD12_i0p1));
         const DendroScalar hDD12_i1p1 = in_hDD12[pp + nx];
         const DendroScalar hDD12_i1p2 = in_hDD12[pp + 2 * nx];
+        const DendroScalar hDD_dD121 =
+            invdxx1 * (FDPart1_Rational_1_12 * (hDD12_i1m2 - hDD12_i1p2) + FDPart1_Rational_2_3 * (-hDD12_i1m1 + hDD12_i1p1));
+        const DendroScalar FDPart3tmp25 = -hDD_dD112 + 2 * hDD_dD121;
         const DendroScalar hDD12_i2p1 = in_hDD12[pp + nxy];
         const DendroScalar hDD12_i2p2 = in_hDD12[pp + 2 * nxy];
+        const DendroScalar hDD_dD122 =
+            invdxx2 * (FDPart1_Rational_1_12 * (hDD12_i2m2 - hDD12_i2p2) + FDPart1_Rational_2_3 * (-hDD12_i2m1 + hDD12_i2p1));
         const DendroScalar hDD22_i2m2 = in_hDD22[pp - 2 * nxy];
         const DendroScalar hDD22_i2m1 = in_hDD22[pp - nxy];
         const DendroScalar hDD22_i1m2 = in_hDD22[pp - 2 * nx];
@@ -104,84 +138,41 @@ void bssn_initial_data_lambdaU_block(const block_geometry_struct &geom, const De
         const DendroScalar hDD22_i0m2 = in_hDD22[pp - 2];
         const DendroScalar hDD22_i0m1 = in_hDD22[pp - 1];
         const DendroScalar hDD22 = in_hDD22[pp];
+        const DendroScalar FDPart3tmp0 = hDD22 + 1;
         const DendroScalar hDD22_i0p1 = in_hDD22[pp + 1];
         const DendroScalar hDD22_i0p2 = in_hDD22[pp + 2];
-        const DendroScalar hDD22_i1p1 = in_hDD22[pp + nx];
-        const DendroScalar hDD22_i1p2 = in_hDD22[pp + 2 * nx];
-        const DendroScalar hDD22_i2p1 = in_hDD22[pp + nxy];
-        const DendroScalar hDD22_i2p2 = in_hDD22[pp + 2 * nxy];
-        static const DendroScalar FDPart1_Rational_2_3 = 2.0 / 3.0;
-        static const DendroScalar FDPart1_Rational_1_12 = 1.0 / 12.0;
-        const DendroScalar hDD_dD000 =
-            invdxx0 * (FDPart1_Rational_1_12 * (hDD00_i0m2 - hDD00_i0p2) + FDPart1_Rational_2_3 * (-hDD00_i0m1 + hDD00_i0p1));
-        const DendroScalar hDD_dD001 =
-            invdxx1 * (FDPart1_Rational_1_12 * (hDD00_i1m2 - hDD00_i1p2) + FDPart1_Rational_2_3 * (-hDD00_i1m1 + hDD00_i1p1));
-        const DendroScalar hDD_dD002 =
-            invdxx2 * (FDPart1_Rational_1_12 * (hDD00_i2m2 - hDD00_i2p2) + FDPart1_Rational_2_3 * (-hDD00_i2m1 + hDD00_i2p1));
-        const DendroScalar hDD_dD010 =
-            invdxx0 * (FDPart1_Rational_1_12 * (hDD01_i0m2 - hDD01_i0p2) + FDPart1_Rational_2_3 * (-hDD01_i0m1 + hDD01_i0p1));
-        const DendroScalar hDD_dD011 =
-            invdxx1 * (FDPart1_Rational_1_12 * (hDD01_i1m2 - hDD01_i1p2) + FDPart1_Rational_2_3 * (-hDD01_i1m1 + hDD01_i1p1));
-        const DendroScalar hDD_dD012 =
-            invdxx2 * (FDPart1_Rational_1_12 * (hDD01_i2m2 - hDD01_i2p2) + FDPart1_Rational_2_3 * (-hDD01_i2m1 + hDD01_i2p1));
-        const DendroScalar hDD_dD020 =
-            invdxx0 * (FDPart1_Rational_1_12 * (hDD02_i0m2 - hDD02_i0p2) + FDPart1_Rational_2_3 * (-hDD02_i0m1 + hDD02_i0p1));
-        const DendroScalar hDD_dD021 =
-            invdxx1 * (FDPart1_Rational_1_12 * (hDD02_i1m2 - hDD02_i1p2) + FDPart1_Rational_2_3 * (-hDD02_i1m1 + hDD02_i1p1));
-        const DendroScalar hDD_dD022 =
-            invdxx2 * (FDPart1_Rational_1_12 * (hDD02_i2m2 - hDD02_i2p2) + FDPart1_Rational_2_3 * (-hDD02_i2m1 + hDD02_i2p1));
-        const DendroScalar hDD_dD110 =
-            invdxx0 * (FDPart1_Rational_1_12 * (hDD11_i0m2 - hDD11_i0p2) + FDPart1_Rational_2_3 * (-hDD11_i0m1 + hDD11_i0p1));
-        const DendroScalar hDD_dD111 =
-            invdxx1 * (FDPart1_Rational_1_12 * (hDD11_i1m2 - hDD11_i1p2) + FDPart1_Rational_2_3 * (-hDD11_i1m1 + hDD11_i1p1));
-        const DendroScalar hDD_dD112 =
-            invdxx2 * (FDPart1_Rational_1_12 * (hDD11_i2m2 - hDD11_i2p2) + FDPart1_Rational_2_3 * (-hDD11_i2m1 + hDD11_i2p1));
-        const DendroScalar hDD_dD120 =
-            invdxx0 * (FDPart1_Rational_1_12 * (hDD12_i0m2 - hDD12_i0p2) + FDPart1_Rational_2_3 * (-hDD12_i0m1 + hDD12_i0p1));
-        const DendroScalar hDD_dD121 =
-            invdxx1 * (FDPart1_Rational_1_12 * (hDD12_i1m2 - hDD12_i1p2) + FDPart1_Rational_2_3 * (-hDD12_i1m1 + hDD12_i1p1));
-        const DendroScalar hDD_dD122 =
-            invdxx2 * (FDPart1_Rational_1_12 * (hDD12_i2m2 - hDD12_i2p2) + FDPart1_Rational_2_3 * (-hDD12_i2m1 + hDD12_i2p1));
         const DendroScalar hDD_dD220 =
             invdxx0 * (FDPart1_Rational_1_12 * (hDD22_i0m2 - hDD22_i0p2) + FDPart1_Rational_2_3 * (-hDD22_i0m1 + hDD22_i0p1));
+        const DendroScalar FDPart3tmp23 = 2 * hDD_dD022 - hDD_dD220;
+        const DendroScalar hDD22_i1p1 = in_hDD22[pp + nx];
+        const DendroScalar hDD22_i1p2 = in_hDD22[pp + 2 * nx];
         const DendroScalar hDD_dD221 =
             invdxx1 * (FDPart1_Rational_1_12 * (hDD22_i1m2 - hDD22_i1p2) + FDPart1_Rational_2_3 * (-hDD22_i1m1 + hDD22_i1p1));
+        const DendroScalar FDPart3tmp22 = 2 * hDD_dD122 - hDD_dD221;
+        const DendroScalar hDD22_i2p1 = in_hDD22[pp + nxy];
+        const DendroScalar hDD22_i2p2 = in_hDD22[pp + 2 * nxy];
         const DendroScalar hDD_dD222 =
             invdxx2 * (FDPart1_Rational_1_12 * (hDD22_i2m2 - hDD22_i2p2) + FDPart1_Rational_2_3 * (-hDD22_i2m1 + hDD22_i2p1));
-
-        /*
-         * NRPy-Generated GF Access/FD Code, Step 2 of 2:
-         * Evaluate SymPy expressions and write to main memory.
-         */
-        const DendroScalar FDPart3tmp0 = hDD22 + 1;
-        const DendroScalar FDPart3tmp4 = hDD11 + 1;
-        const DendroScalar FDPart3tmp6 = hDD00 + 1;
         const DendroScalar FDPart3tmp12 = hDD_dD012 + hDD_dD021 - hDD_dD120;
         const DendroScalar FDPart3tmp18 = hDD_dD012 - hDD_dD021 + hDD_dD120;
         const DendroScalar FDPart3tmp20 = -hDD_dD012 + hDD_dD021 + hDD_dD120;
-        const DendroScalar FDPart3tmp22 = 2 * hDD_dD122 - hDD_dD221;
-        const DendroScalar FDPart3tmp23 = 2 * hDD_dD022 - hDD_dD220;
-        const DendroScalar FDPart3tmp25 = -hDD_dD112 + 2 * hDD_dD121;
-        const DendroScalar FDPart3tmp26 = 2 * hDD_dD011 - hDD_dD110;
-        const DendroScalar FDPart3tmp28 = -hDD_dD001 + 2 * hDD_dD010;
-        const DendroScalar FDPart3tmp29 = -hDD_dD002 + 2 * hDD_dD020;
         const DendroScalar FDPart3tmp1 = -FDPart3tmp0 * hDD01 + hDD02 * hDD12;
         const DendroScalar FDPart3tmp7 = (1.0 / (FDPart3tmp0 * FDPart3tmp4 * FDPart3tmp6 - FDPart3tmp0 * ((hDD01) * (hDD01)) -
                                                  FDPart3tmp4 * ((hDD02) * (hDD02)) - FDPart3tmp6 * ((hDD12) * (hDD12)) + 2 * hDD01 * hDD02 * hDD12));
         const DendroScalar FDPart3tmp10 = -FDPart3tmp4 * hDD02 + hDD01 * hDD12;
         const DendroScalar FDPart3tmp15 = -FDPart3tmp6 * hDD12 + hDD01 * hDD02;
-        const DendroScalar FDPart3tmp8 = (1.0 / 2.0) * FDPart3tmp7;
         const DendroScalar FDPart3tmp13 = FDPart3tmp7 * (FDPart3tmp0 * FDPart3tmp4 - ((hDD12) * (hDD12)));
-        const DendroScalar FDPart3tmp16 = 2 * FDPart3tmp7;
         const DendroScalar FDPart3tmp24 = FDPart3tmp7 * (FDPart3tmp4 * FDPart3tmp6 - ((hDD01) * (hDD01)));
         const DendroScalar FDPart3tmp27 = FDPart3tmp7 * (FDPart3tmp0 * FDPart3tmp6 - ((hDD02) * (hDD02)));
+        const DendroScalar FDPart3tmp8 = (1.0 / 2.0) * FDPart3tmp7;
+        const DendroScalar FDPart3tmp16 = 2 * FDPart3tmp7;
         const DendroScalar FDPart3tmp9 = FDPart3tmp1 * FDPart3tmp8;
-        const DendroScalar FDPart3tmp11 = FDPart3tmp10 * FDPart3tmp8;
-        const DendroScalar FDPart3tmp14 = (1.0 / 2.0) * FDPart3tmp13;
-        const DendroScalar FDPart3tmp17 = FDPart3tmp15 * FDPart3tmp16;
-        const DendroScalar FDPart3tmp19 = FDPart3tmp10 * FDPart3tmp16;
         const DendroScalar FDPart3tmp21 = FDPart3tmp1 * FDPart3tmp16;
+        const DendroScalar FDPart3tmp11 = FDPart3tmp10 * FDPart3tmp8;
+        const DendroScalar FDPart3tmp19 = FDPart3tmp10 * FDPart3tmp16;
+        const DendroScalar FDPart3tmp17 = FDPart3tmp15 * FDPart3tmp16;
         const DendroScalar FDPart3tmp30 = FDPart3tmp15 * FDPart3tmp8;
+        const DendroScalar FDPart3tmp14 = (1.0 / 2.0) * FDPart3tmp13;
         const DendroScalar FDPart3tmp31 = (1.0 / 2.0) * FDPart3tmp27;
         const DendroScalar FDPart3tmp32 = (1.0 / 2.0) * FDPart3tmp24;
         out_lambdaU0[pp] = FDPart3tmp13 * (FDPart3tmp11 * FDPart3tmp29 + FDPart3tmp14 * hDD_dD000 + FDPart3tmp28 * FDPart3tmp9) +

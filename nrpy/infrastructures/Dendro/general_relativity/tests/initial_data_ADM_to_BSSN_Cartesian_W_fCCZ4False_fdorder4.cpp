@@ -58,10 +58,6 @@ void bssn_ADM_to_BSSN_block(const block_geometry_struct &geom, const DendroScala
         [[maybe_unused]] const DendroScalar xx0 = geom.pmin_padded[0] + static_cast<DendroScalar>(i0) * geom.dx[0];
         [[maybe_unused]] const DendroScalar xx1 = geom.pmin_padded[1] + static_cast<DendroScalar>(i1) * geom.dx[1];
         [[maybe_unused]] const DendroScalar xx2 = geom.pmin_padded[2] + static_cast<DendroScalar>(i2) * geom.dx[2];
-        /*
-         * NRPy-Generated GF Access/FD Code, Step 1 of 2:
-         * Read gridfunction(s) from main memory and compute FD stencils as needed.
-         */
         const DendroScalar BU0 = in_BU0[pp];
         const DendroScalar BU1 = in_BU1[pp];
         const DendroScalar BU2 = in_BU2[pp];
@@ -80,11 +76,6 @@ void bssn_ADM_to_BSSN_block(const block_geometry_struct &geom, const DendroScala
         const DendroScalar gammaDD11 = in_gammaDD11[pp];
         const DendroScalar gammaDD12 = in_gammaDD12[pp];
         const DendroScalar gammaDD22 = in_gammaDD22[pp];
-
-        /*
-         * NRPy-Generated GF Access/FD Code, Step 2 of 2:
-         * Evaluate SymPy expressions and write to main memory.
-         */
         const DendroScalar FDPart3tmp1 = gammaDD00 * ((gammaDD12) * (gammaDD12));
         const DendroScalar FDPart3tmp3 = ((gammaDD01) * (gammaDD01)) * gammaDD22;
         const DendroScalar FDPart3tmp5 = ((gammaDD02) * (gammaDD02)) * gammaDD11;
