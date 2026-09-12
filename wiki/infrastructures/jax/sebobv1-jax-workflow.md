@@ -1,6 +1,6 @@
 # SEBOBv1 JAX Workflow
 
-> Current SEBOBv1 JAX entry workflow and the implemented SEOBNRv5 aligned-spin coefficient surface. · Status: contested · Last reconciled: 07-13-2026
+> Current SEBOBv1 JAX entry workflow and the implemented SEOBNRv5 aligned-spin coefficient surface. · Status: contested
 > Up: [JAX](index.md)
 
 ## Summary

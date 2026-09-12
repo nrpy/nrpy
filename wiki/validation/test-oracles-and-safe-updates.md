@@ -1,6 +1,6 @@
 # Test Oracles And Safe Updates
 
-> Prospective rules for selecting, storing, reviewing, and safely updating NRPy test oracles. · Status: provisional · Last reconciled: 07-20-2026
+> Prospective rules for selecting, storing, reviewing, and safely updating NRPy test oracles. · Status: provisional
 > Up: [Validation](index.md)
 
 ## Summary
@@ -156,7 +156,7 @@ Claim evidence:
 - Deciding authority: [reference_metric.py](../../nrpy/reference_metric.py), `unittest_CoordSystems`
 - Corroboration: none available; the subset is local to its owning module
 - Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=not-applicable; precision=not-run; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=not-run; date=07-13-2026`
+- Dimensions: `platform=not-run; tool_version=not-run; backend=not-applicable; precision=not-run; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=not-run`
 
 That subset is a repository fact, not universal precedent for selecting
 variants.
@@ -240,7 +240,7 @@ Claim evidence:
 - Deciding authority: [generic.py](../../nrpy/helpers/generic.py), `clang_format`
 - Corroboration: none available; the subprocess implementation is local to the helper
 - Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=not-run; date=07-13-2026`
+- Dimensions: `platform=not-run; tool_version=not-run; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=not-run`
 
 Ordinary callers remain allowed, but their enclosing validation command or job
 must be bounded until the helper is hardened.
@@ -259,7 +259,7 @@ Claim evidence:
 - Deciding authority: [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `compile_Makefile`
 - Corroboration: none available; the compile doctest and subprocess implementation share one owner
 - Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=not-run; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=not-run; date=07-13-2026`
+- Dimensions: `platform=not-run; tool_version=not-run; backend=not-run; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=not-run`
 
 It is an unsafe legacy outlier, not a bounded template.
 

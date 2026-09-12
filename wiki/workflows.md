@@ -1,6 +1,6 @@
 # Workflows
 
-> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 07-20-2026
+> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed
 
 ## Summary
 
@@ -30,8 +30,8 @@ Use this order for agent navigation:
 1. Register the source in [raw/SOURCES.md](../raw/SOURCES.md) with provenance,
    `frozen` or `living` status, and ingest state. Exact cited-file rows may
    abbreviate to source and status per [SCHEMA.md](SCHEMA.md); external-source
-   rows may also carry an accessed date and notes. Do not record or compute
-   source-tracking digests or timestamps.
+   rows may also carry notes. Do not record or compute source-tracking
+   checksums, hashes, file counts, date stamps, or timestamps.
 2. Decide which branch owns the compiled facts.
 3. Update the owning leaf in synthesized prose and cite exact files plus stable
    symbols or headings.
@@ -88,7 +88,8 @@ them. Promote an external source to `external-spec` only when the claim needs
 the source as authority and one of these is true:
 
 1. A frozen markdown excerpt or version note exists under `raw/source-docs/`.
-2. The upstream source is stable by version, commit, or immutable URL.
+2. The upstream source is stable by release/tag or immutable URL without a
+   stored commit hash.
 3. A documented exception explains why the live external source is acceptable.
 
 Any external source trust change requires updates to
@@ -103,8 +104,8 @@ When sources disagree, create or update a structured
 `CONTR-0001`-form row in [contradictions.md](contradictions.md) before changing
 the affected claim's status to `contested`. Record exact claim/status,
 competing sources, authority decision, complete affected-page links,
-page-status rationale, owner/trigger, resolution test, opened/resolved dates,
-and notes. Put `Claim status: contested; contradiction: CONTR-0001.` on every
+page-status rationale, owner/trigger, resolution test, and notes. Put `Claim
+status: contested; contradiction: CONTR-0001.` on every
 active affected page; use `stale` in the same form when applicable.
 
 When a living source has moved and reconciliation cannot finish in the same
@@ -121,8 +122,8 @@ affected page is reconciled and the resolution test passes.
 ## Claim Adjudication
 
 The [Claim And Evidence Contract](SCHEMA.md#claim-and-evidence-contract) is
-prospective after its 07-13-2026 adoption change. High-risk claims predating it
-and claims changed in that same adoption change remain baseline-uncovered unless
+prospective after its adoption change. High-risk claims predating it and claims
+changed in that same adoption change remain baseline-uncovered unless
 an exact block is present; that adoption change asserts no completed block
 coverage. When a baseline claim or its deciding source is next materially
 changed after adoption, add the exact block immediately after the claim in its
@@ -137,7 +138,7 @@ agreement is never authority. Navigation, structure, provenance,
 status, symbolic definition, and normative rules do not receive behavioral
 validation lines. In every behavioral dimension, use an exact value when
 exercised, `not-run` when applicable but unexercised, and `not-applicable` only
-when the dimension does not apply; a date value uses `MM-DD-YYYY`.
+when the dimension does not apply.
 
 ## Safe Reproduction
 

@@ -1,6 +1,6 @@
 # Diagnostics And Observables
 
-> Explain superB diagnostics dispatch, nearest-output helpers, CkIO output paths, and reduction-backed observables. · Status: confirmed · Last reconciled: 08-28-2026
+> Explain superB diagnostics dispatch, nearest-output helpers, CkIO output paths, and reduction-backed observables. · Status: confirmed
 > Up: [superB](index.md)
 
 ## Summary
@@ -122,7 +122,7 @@ Claim evidence:
 - Deciding authority: [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py), `output_timestepping_h` and `diags_integration_build_default_recipes`; [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
 - Corroboration: [BHaH diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
 - Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=superB Charm++ header generation; precision=generated double reductions, runtime values not exercised; GPU=not-run; restart=not-applicable; distributed=not-run; error_path=not-run; options=GR and NRPyElliptic recipe branches; date=08-28-2026`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=superB Charm++ header generation; precision=generated double reductions, runtime values not exercised; GPU=not-run; restart=not-applicable; distributed=not-run; error_path=not-run; options=GR and NRPyElliptic recipe branches`
 
 The GR and NRPyElliptic nearest diagnostic variants share the same orchestration
 and helper calls; they differ in the diagnostic gridfunctions selected in their
@@ -138,7 +138,7 @@ Claim evidence:
 - Deciding authority: [GR diagnostics_nearest.py](../../../nrpy/infrastructures/superB/general_relativity/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [NRPyElliptic diagnostics_nearest.py](../../../nrpy/infrastructures/superB/nrpyelliptic/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
 - Corroboration: [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py), generated diagnostic dispatch; [BHaH diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
 - Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=superB Charm++ registration; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-run; error_path=not-run; options=GR and NRPyElliptic 0D/1D/2D selections; date=08-28-2026`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=superB Charm++ registration; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-run; error_path=not-run; options=GR and NRPyElliptic 0D/1D/2D selections`
 
 Current configured CI builds all three superB projects but runs only the
 collision executable. It does not inspect CkIO files, volume-reduction values,
@@ -160,8 +160,8 @@ generator control flow plus Charm++ 8.0.0 API contracts, not observed output.
 - [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py) - `generate_diagnostics_code`, `diagnostics_ckio`, `contribute_localsums_for_diagnostic_volume_integ`, `report_sums_for_volume`
 - [superB.h](../../../nrpy/infrastructures/superB/superB/superB.h) - `diagnostic_struct`, `DIAGNOSTICS_*`
 - [main.yml](../../../.github/workflows/main.yml) - `charmpp-validation`
-- [Charm++ 8.0.0 libraries manual](https://charm.readthedocs.io/en/v8.0.0/libraries/manual.html) - `CkIO`, `Using CkIO`, `Parallel Output API`; accessed 07-12-2026
-- [Charm++ 8.0.0 language manual](https://charm.readthedocs.io/en/v8.0.0/charm%2B%2B/manual.html) - `Reductions on Chare Arrays`, `Built-in Reduction Types`; accessed 07-12-2026
+- [Charm++ 8.0.0 libraries manual](https://charm.readthedocs.io/en/v8.0.0/libraries/manual.html) - `CkIO`, `Using CkIO`, `Parallel Output API`
+- [Charm++ 8.0.0 language manual](https://charm.readthedocs.io/en/v8.0.0/charm%2B%2B/manual.html) - `Reductions on Chare Arrays`, `Built-in Reduction Types`
 
 ## See Also
 

@@ -1,6 +1,6 @@
 # Aligned-Spin Calibration And Remnant
 
-> Map SEOBNR aligned-spin calibration constants, remnant fits, and NR attachment data. · Status: confirmed · Last reconciled: 07-13-2026
+> Map SEOBNR aligned-spin calibration constants, remnant fits, and NR attachment data. · Status: confirmed
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary

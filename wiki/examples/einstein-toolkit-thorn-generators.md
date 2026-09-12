@@ -1,6 +1,6 @@
 # Einstein Toolkit Thorn Generators
 
-> Explain NRPy's Einstein Toolkit thorn-generation examples and checked-in ET fixtures. · Status: confirmed · Last reconciled: 07-12-2026
+> Explain NRPy's Einstein Toolkit thorn-generation examples and checked-in ET fixtures. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary

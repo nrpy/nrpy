@@ -1,6 +1,6 @@
 # Black Hole Evolution
 
-> Route the lightweight single-patch BH@H black-hole evolution example to its generated-application context. · Status: confirmed · Last reconciled: 07-12-2026
+> Route the lightweight single-patch BH@H black-hole evolution example to its generated-application context. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary

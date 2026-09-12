@@ -1,6 +1,6 @@
 # GR ADM/BSSN, Slicing, And Matter Coupling
 
-> ETLegacy initialization, ADMBase export, slicing registration, and stress-energy raising. · Status: confirmed · Last reconciled: 07-06-2026
+> ETLegacy initialization, ADMBase export, slicing registration, and stress-energy raising. · Status: confirmed
 > Up: [ETLegacy](index.md)
 
 ## Summary

@@ -1,6 +1,6 @@
 # Grids, Coordinates, Reference Metrics, And Boundaries
 
-> BHaH route for numerical grid setup, coordinate wrappers, reference-metric precompute, GeneralRFM, fisheye hooks, and curvilinear boundaries. Status: confirmed. Last reconciled: 08-12-2026
+> BHaH route for numerical grid setup, coordinate wrappers, reference-metric precompute, GeneralRFM, fisheye hooks, and curvilinear boundaries. Status: confirmed.
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -96,7 +96,7 @@ Claim evidence:
 - Deciding authority: `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, `register_CFunction_xx_to_Cart`, `_run_generalrfm_fisheye_inverse_roundtrip_check`
 - Corroboration: `nrpy/infrastructures/BHaH/generalrfm_cart_to_xx.py` - `register_CFunction_generalrfm_Cart_to_xx`
 - Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, GCC, clang-format 22.1.8; backend=OpenMP C source plus CUDA source comparison for non-GeneralRFM baselines; precision=float and double for GeneralRFM semantic harness; GPU=not-run; restart=not-run; distributed=not-run; error_path=pass for non-finite GeneralRFM Cartesian input; options=default independent coordinate systems, Cartesian rotating multipatch, GeneralRFM_fisheyeN2; date=08-13-2026`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, GCC, clang-format 22.1.8; backend=OpenMP C source plus CUDA source comparison for non-GeneralRFM baselines; precision=float and double for GeneralRFM semantic harness; GPU=not-run; restart=not-run; distributed=not-run; error_path=pass for non-finite GeneralRFM Cartesian input; options=default independent coordinate systems, Cartesian rotating multipatch, GeneralRFM_fisheyeN2`
 
 GeneralRFM CUDA converters are unsupported in these coordinate conversion
 registrars.
@@ -107,7 +107,7 @@ Claim evidence:
 - Deciding authority: `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, `register_CFunction_xx_to_Cart`
 - Corroboration: `nrpy/infrastructures/BHaH/generalrfm_cart_to_xx.py` - `register_CFunction_generalrfm_Cart_to_xx`
 - Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=CUDA; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=inspected; options=GeneralRFM coordinate systems; date=08-13-2026`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=CUDA; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=inspected; options=GeneralRFM coordinate systems`
 
 `rfm_wrapper_functions.py` creates non-coordinate-specific wrapper functions
 that switch on `params->CoordSystem_hash`, calls the matching
@@ -120,7 +120,7 @@ Claim evidence:
 - Deciding authority: `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, `register_CFunction_xx_to_Cart`
 - Corroboration: none available; owner-derived emitted-source comparisons are not independent evidence.
 - Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, clang-format 22.1.8; backend=OpenMP C and CUDA source; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=15 default independent coordinate systems plus Cartesian rotating multipatch; date=07-20-2026`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, clang-format 22.1.8; backend=OpenMP C and CUDA source; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=15 default independent coordinate systems plus Cartesian rotating multipatch`
 
 Curvilinear boundary registration starts in
 `CurviBoundaryConditions/register_all.py`. It registers `outer_bc_type` with

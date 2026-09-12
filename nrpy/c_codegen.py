@@ -24,6 +24,9 @@ from nrpy.helpers.generic import (
     clang_format,
     superfast_uniq,
 )
+from nrpy.helpers.register_pressure_ordering import (
+    order_statements_for_register_pressure,
+)
 from nrpy.helpers.simd import expr_convert_to_simd_intrins
 from nrpy.helpers.type_annotation_utilities import (
     generate_class_representation,
@@ -92,6 +95,7 @@ class CCodeGen:
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         rational_const_alias: str = "static const",
         enable_clang_format: bool = False,
+        stored_first_derivatives: Optional[Sequence[str]] = None,
     ) -> None:
         """
         Initialize the CCodeGen class with provided options for generating C code.
@@ -124,6 +128,7 @@ class CCodeGen:
         :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
         :param rational_const_alias: Override default alias for specifying rational constness
         :param enable_clang_format: Boolean to enable clang formatting.
+        :param stored_first_derivatives: Registered first-derivative gridfunctions valid for this kernel; the caller supplies current values and required halos.
 
         :raises ValueError: If 'fp_type' is not recognized as a valid floating-point type.
         :raises ValueError: If SIMD optimizations are enabled but the floating-point type is not 'double'.
@@ -185,6 +190,7 @@ class CCodeGen:
         )
         self.enforce_c_parameters_must_be_defined = enforce_c_parameters_must_be_defined
         self.enable_fd_functions = enable_fd_functions
+        self.stored_first_derivatives = tuple(stored_first_derivatives or ())
         self.mem_alloc_style = mem_alloc_style
         self.upwind_control_vec = upwind_control_vec
         self.symbol_to_Rational_dict = symbol_to_Rational_dict
@@ -321,66 +327,59 @@ def c_codegen(
     ...     fin.FDFunctions_dict.clear(); fin.FDFunctions_dict.update(saved_fd)
     ...     for name, value in saved_params.items():
     ...         par.set_parval_from_str(name, value)
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 1 of 2:
-     * Read gridfunction(s) from main memory and compute FD stencils as needed.
-     */
     const REAL u_dDD01 = fd_function_dDD01_fdorder2(&custom_gfs[IDX4(UGF, i0, i1, i2)], Nxx_plus_2NGHOSTS0, invdxx0, invdxx1);
-    <BLANKLINE>
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 2 of 2:
-     * Evaluate SymPy expressions and write to main memory.
-     */
     out[0] = u_dDD01;
     <BLANKLINE>
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 1 of 2:
-     * Read gridfunction(s) from main memory and compute FD stencils as needed.
-     */
     const REAL u_i0m1 = custom_gfs[IDX4(UGF, i0-1, i1, i2)];
     const REAL u = custom_gfs[IDX4(UGF, i0, i1, i2)];
     const REAL u_i0p1 = custom_gfs[IDX4(UGF, i0+1, i1, i2)];
     const REAL u_dD0 = fd_function_dD0_fdorder2(u_i0m1,u_i0p1,invdxx0);
     const REAL u_dDD01 = fd_function_dDD01_fdorder2(&custom_gfs[IDX4(UGF, i0, i1, i2)], Nxx_plus_2NGHOSTS0, invdxx0, invdxx1);
-    <BLANKLINE>
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 2 of 2:
-     * Evaluate SymPy expressions and write to main memory.
-     */
     out[0] = u + u_dD0 + u_dDD01;
     <BLANKLINE>
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 1 of 2:
-     * Read gridfunction(s) from main memory and compute FD stencils as needed.
-     */
     const REAL_SIMD_ARRAY u_dDD01 = SIMD_fd_function_dDD01_fdorder2(&custom_gfs[IDX4(UGF, i0, i1, i2)], Nxx_plus_2NGHOSTS0, invdxx0, invdxx1);
-    <BLANKLINE>
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 2 of 2:
-     * Evaluate SymPy expressions and write to main memory.
-     */
     const REAL_SIMD_ARRAY __RHS_exp_0 = u_dDD01;
-    <BLANKLINE>
     WriteSIMD(&out[0], __RHS_exp_0);
     <BLANKLINE>
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 1 of 2:
-     * Read gridfunction(s) from main memory and compute FD stencils as needed.
-     */
     const REAL_SIMD_ARRAY u_i0m1 = ReadSIMD(&custom_gfs[IDX4(UGF, i0-1, i1, i2)]);
     const REAL_SIMD_ARRAY u = ReadSIMD(&custom_gfs[IDX4(UGF, i0, i1, i2)]);
     const REAL_SIMD_ARRAY u_i0p1 = ReadSIMD(&custom_gfs[IDX4(UGF, i0+1, i1, i2)]);
     const REAL_SIMD_ARRAY u_dD0 = SIMD_fd_function_dD0_fdorder2(u_i0m1,u_i0p1,invdxx0);
     const REAL_SIMD_ARRAY u_dDD01 = SIMD_fd_function_dDD01_fdorder2(&custom_gfs[IDX4(UGF, i0, i1, i2)], Nxx_plus_2NGHOSTS0, invdxx0, invdxx1);
-    <BLANKLINE>
-    /*
-     * NRPy-Generated GF Access/FD Code, Step 2 of 2:
-     * Evaluate SymPy expressions and write to main memory.
-     */
     const REAL_SIMD_ARRAY __RHS_exp_0 = AddSIMD(u_dD0, AddSIMD(u_dDD01, u));
-    <BLANKLINE>
     WriteSIMD(&out[0], __RHS_exp_0);
     <BLANKLINE>
+
+    Stored derivatives are selected per kernel, even when other storage is registered.
+    Evaluate the emitted scalar assignments on independent polynomial data: the
+    selected first derivative is 14, its transverse derivative is 2, and the
+    unselected field's first derivative is 24. The unused storage contains -999.
+
+    >>> import re
+    >>> saved_gfs = gri.glb_gridfcs_dict.copy()
+    >>> saved_fd = fin.FDFunctions_dict.copy()
+    >>> saved_params = {name: par.parval_from_str(name) for name in ("Infrastructure", "parallelization", "finite_difference::fd_order")}
+    >>> try:
+    ...     par.set_parval_from_str("Infrastructure", "BHaH")
+    ...     par.set_parval_from_str("parallelization", "openmp")
+    ...     par.set_parval_from_str("finite_difference::fd_order", 2)
+    ...     gri.glb_gridfcs_dict.clear()
+    ...     _ = gri.register_gridfunctions(["u", "v"], group="EVOL")
+    ...     _ = gri.register_gridfunctions(["udD0", "vdD0"], group="AUXEVOL", is_basename=False)
+    ...     expression = 100 * sp.Symbol("u_dD0") + 10 * sp.Symbol("u_dDD01") + sp.Symbol("v_dD0")
+    ...     code = c_codegen(expression, "result", enable_fd_codegen=True, stored_first_derivatives=["udD0"], verbose=False)
+    ...     values = {"i0": 4, "i1": 5, "i2": 6, "invdxx0": 1, "invdxx1": 1, "UDD0GF": 0, "VDD0GF": 1, "VGF": 1, "IDX4": lambda gf, i, j, k: (gf, i, j, k)}
+    ...     values["auxevol_gfs"] = {(gf, i, j, 6): i + 2*j if gf == 0 else -999 for gf in range(2) for i in range(3, 6) for j in range(4, 7)}
+    ...     values["in_gfs"] = {(1, i, j, 6): 3*i*i for i in range(3, 6) for j in range(4, 7)}
+    ...     for name, rhs in re.findall(r"(?:const REAL )?([A-Za-z_0-9]+) = ([^;]+);", code):
+    ...         values[name] = sp.sympify(rhs, locals=values, rational=True)
+    ...     print(values["result"])
+    ... finally:
+    ...     gri.glb_gridfcs_dict.clear(); gri.glb_gridfcs_dict.update(saved_gfs)
+    ...     fin.FDFunctions_dict.clear(); fin.FDFunctions_dict.update(saved_fd)
+    ...     for name, value in saved_params.items():
+    ...         par.set_parval_from_str(name, value)
+    1444
 
     The upwind/KO coefficient identity holds for every stencil point in all
     three directions. These residuals use the actual FD coefficients.
@@ -404,7 +403,7 @@ def c_codegen(
     10 {0}
 
     Compare complete small generated kernels using the standard trusted-source
-    helper. Cover automatic reuse, scalar/SIMD, and inline/helper emission. Matched
+    helper. Cover automatic reuse, CPU/CUDA dispatch, scalar/SIMD, and inline/helper emission. Matched
     derivatives in all three directions coexist with missing-KO and mismatched-
     direction requests, so shared downwind helpers must remain available. Include
     a mixed derivative to cover the pointer/stride helper path. FD4 exercises a
@@ -419,12 +418,15 @@ def c_codegen(
     ...     u, v, w = gri.register_gridfunctions(["u", "v", "w"], group="AUXEVOL")
     ...     expressions = [sp.Symbol(f"u_dupD{d}") + sp.Symbol(f"u_dKOD{d}") for d in range(3)]
     ...     expressions += [sp.Symbol("v_dupD0"), sp.Symbol("w_dupD1") + sp.Symbol("w_dKOD2"), sp.Symbol("u_dDD01")]
-    ...     for helpers in (False, True):
-    ...         for simd in (False, True):
-    ...             code = c_codegen(expressions, [f"out[{i}]" for i in range(len(expressions))],
-    ...                              enable_fd_codegen=True, enable_fd_functions=helpers, enable_simd=simd,
-    ...                              upwind_control_vec=[u, v, w])
-    ...             validate_strings(clang_format(code), f"upwind_ko__helpers{helpers}__simd{simd}", file_ext="c")
+    ...     for backend in ("openmp", "cuda"):
+    ...         par.set_parval_from_str("parallelization", backend)
+    ...         for helpers in (False, True):
+    ...             for simd in (False, True):
+    ...                 code = c_codegen(expressions, [f"out[{i}]" for i in range(len(expressions))],
+    ...                                  enable_fd_codegen=True, enable_fd_functions=helpers, enable_simd=simd,
+    ...                                  upwind_control_vec=[u, v, w])
+    ...                 suffix = "__cuda" if backend == "cuda" and helpers else ""
+    ...                 validate_strings(clang_format(code), f"upwind_ko__helpers{helpers}__simd{simd}{suffix}", file_ext="c")
     ... finally:
     ...     gri.glb_gridfcs_dict.clear(); gri.glb_gridfcs_dict.update(saved_gfs)
     ...     fin.FDFunctions_dict.clear(); fin.FDFunctions_dict.update(saved_fd)
@@ -545,50 +547,25 @@ def c_codegen(
                 deriv_op, CCGParams.fd_order
             )
 
-        fdcoeffs: List[List[sp.Rational]] = [
-            [] for _ in range(len(list_of_deriv_operators))
-        ]
-        fdstencl: List[List[List[int]]] = [
-            [[] for _ in range(4)] for __ in range(len(list_of_deriv_operators))
-        ]
-        for i, deriv_op in enumerate(list_of_deriv_operators):
-            fdcoeffs[i], fdstencl[i] = deriv_operator_dict[deriv_op]
-
-        # Pointer/stride helpers load their own mixed stencil. Other derivatives and
-        # direct field references still contribute their ordinary caller reads.
-        fdstencl_to_read = [
-            (
-                []
-                if CCGParams.enable_fd_functions
-                and fin.use_pointer_stride_mixed_derivative(op)
-                else stencil
-            )
-            for op, stencil in zip(list_of_deriv_operators, fdstencl)
-        ]
-        read_from_memory_C_code = fin.read_gfs_from_memory(
-            list_of_base_gridfunction_names_in_derivs,
-            fdstencl_to_read,
-            free_symbols_list,
-            mem_alloc_style=CCGParams.mem_alloc_style,
-            enable_simd=CCGParams.enable_simd,
-        )
-
-        # This calls outputC as needed to construct a C kernel that does gridfunction management with or without FDs
-        return gridfunction_management_and_FD_codegen(
+        # This calls outputC as needed to construct a C kernel that does gridfunction management with or without FDs,
+        # then re-emits its statements in the register-pressure-aware order.
+        fd_kernel_body = gridfunction_management_and_FD_codegen(
             sympyexpr_list,
             output_varname_str,
             list_of_deriv_vars,
             list_of_base_gridfunction_names_in_derivs,
             list_of_deriv_operators,
             deriv_operator_dict,
-            read_from_memory_Ccode=read_from_memory_C_code,
+            mem_alloc_style=CCGParams.mem_alloc_style,
             upwind_control_vec=CCGParams.upwind_control_vec,
             enable_fd_functions=CCGParams.enable_fd_functions,
+            stored_first_derivatives=CCGParams.stored_first_derivatives,
             enable_simd=CCGParams.enable_simd,
             enable_GoldenKernels=CCGParams.enable_GoldenKernels,
             fp_type=CCGParams.fp_type,
             rational_const_alias=CCGParams.rational_const_alias,
         )
+        return order_statements_for_register_pressure(fd_kernel_body)
 
     # Step 4: If CCGParams.verbose, then output the original SymPy
     #         expression(s) in code comments prior to actual C code
@@ -898,7 +875,6 @@ def gridfunction_management_and_FD_codegen(
     list_of_base_gridfunction_names_in_derivs: List[str],
     list_of_deriv_operators: List[str],
     deriv_operator_dict: Dict[str, Tuple[List[sp.Rational], List[List[int]]]],
-    read_from_memory_Ccode: str,
     **kwargs: Any,
 ) -> str:
     """
@@ -913,7 +889,6 @@ def gridfunction_management_and_FD_codegen(
     :param list_of_base_gridfunction_names_in_derivs: List of base grid function names used in derivatives.
     :param list_of_deriv_operators: List of derivative operators.
     :param deriv_operator_dict: Dictionary containing derivative operator information.
-    :param read_from_memory_Ccode: C code string to read from memory.
     :param kwargs: Optional additional parameters.
     :return: A string of code generated based on input parameters.
 
@@ -947,24 +922,14 @@ def gridfunction_management_and_FD_codegen(
     >>> list_of_base_gridfunction_names_in_derivs, list_of_deriv_operators = fin.extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(list_of_deriv_vars)
     >>> print(list_of_base_gridfunction_names_in_derivs)
     ['hDD01', 'hDD02', 'hDD02', 'hDD02', 'hDD02']
-    >>> fdcoeffs = [[] for _ in list_of_deriv_operators]
-    >>> fdstencl = [[[] for _ in range(4)] for __ in list_of_deriv_operators]
-    >>> for i, deriv_op in enumerate(list_of_deriv_operators): fdcoeffs[i], fdstencl[i] = fin.compute_fdcoeffs_fdstencl(deriv_op, fd_order)
     >>> deriv_operator_dict = {}
     >>> for deriv_op in superfast_uniq(list_of_deriv_operators):
     ...     deriv_operator_dict[deriv_op] = fin.compute_fdcoeffs_fdstencl(
     ...         deriv_op, fd_order
     ...     )
-    >>> memread_Ccode = fin.read_gfs_from_memory(
-    ...    list_of_base_gridfunction_names_in_derivs,
-    ...    fdstencl,
-    ...    free_symbols_list,
-    ...    mem_alloc_style=mem_alloc_style,
-    ...    enable_simd=enable_simd,
-    ... )
     >>> print(gridfunction_management_and_FD_codegen(exprlist, ["a0", "a1"], list_of_deriv_vars,
     ...          list_of_base_gridfunction_names_in_derivs, list_of_deriv_operators, deriv_operator_dict,
-    ...          memread_Ccode, upwind_control_vec=upwind_control_vec,
+    ...          upwind_control_vec=upwind_control_vec,
     ...          enable_fd_functions=enable_fd_functions, enable_simd=enable_simd))
     /*
      * NRPy-Generated GF Access/FD Code, Step 1 of 3:
@@ -1014,9 +979,20 @@ def gridfunction_management_and_FD_codegen(
     """
     CCGParams = CCodeGen(**kwargs)
 
-    # Step 5.a.i: Read gridfunctions from memory at needed pts.
-    # *** No need to do anything here; already set in
-    #     string "read_from_memory_Ccode". ***
+    # Select evaluation sources before constructing prototypes or planning reads.
+    # Keep the mathematical derivative symbols as the output temporary names.
+    if CCGParams.stored_first_derivatives:
+        (
+            list_of_base_gridfunction_names_in_derivs,
+            list_of_deriv_operators,
+        ) = fin.select_stored_first_derivatives(
+            list_of_deriv_vars, CCGParams.stored_first_derivatives
+        )
+        deriv_operator_dict = {
+            op: fin.compute_fdcoeffs_fdstencl(op, CCGParams.fd_order)
+            for op in superfast_uniq(list_of_deriv_operators)
+            if op
+        }
 
     # Step 5.a.ii: Perform arithmetic needed for finite differences
     #              associated with input expressions provided in
@@ -1053,13 +1029,17 @@ def gridfunction_management_and_FD_codegen(
             enable_simd=CCGParams.enable_simd,
         )
 
-        FDexprs = []
+        FDexprs: List[sp.Basic] = []
         FDlhsvarnames = []
         for i, deriv_var_symbol in enumerate(list_of_deriv_vars):
             # unpack
             operator = list_of_deriv_operators[i]
-            proto_idx = deriv_op_list.index(operator)
             gf_name = list_of_base_gridfunction_names_in_derivs[i]
+            if not operator:
+                FDlhsvarnames += [f"const {CCGParams.fp_type_alias} {deriv_var_symbol}"]
+                FDexprs += [sp.Symbol(gf_name)]
+                continue
+            proto_idx = deriv_op_list.index(operator)
 
             FDlhsvarnames += [
                 proto_FDlhsvarnames[proto_idx].replace(
@@ -1139,6 +1119,28 @@ def gridfunction_management_and_FD_codegen(
         for operator in tuple(fin.FDFunctions_dict):
             if operator.startswith("ddnD") and operator not in list_of_deriv_operators:
                 del fin.FDFunctions_dict[operator]
+    # Plan reads after eliminating reused downwind derivatives. Pointer/stride
+    # helpers load their own stencil; direct fields and other derivatives still
+    # require caller reads.
+    fdstencl_to_read = [
+        (
+            []
+            if CCGParams.enable_fd_functions
+            and (
+                fin.use_pointer_stride_mixed_derivative(op)
+                or fin.use_pointer_stride_ko_derivative(op)
+            )
+            else deriv_operator_dict[op][1] if op else [[0, 0, 0, 0]]
+        )
+        for op in list_of_deriv_operators
+    ]
+    read_from_memory_Ccode = fin.read_gfs_from_memory(
+        list_of_base_gridfunction_names_in_derivs,
+        fdstencl_to_read,
+        [symbol for expr in sympyexpr_list for symbol in expr.free_symbols],
+        mem_alloc_style=CCGParams.mem_alloc_style,
+        enable_simd=CCGParams.enable_simd,
+    )
     upwind_ko_factor = (
         sp.Rational(
             2 ** (CCGParams.fd_order + 3),
@@ -1259,7 +1261,11 @@ def gridfunction_management_and_FD_codegen(
                 gf = list_of_base_gridfunction_names_in_derivs[i]
                 deriv_var = str(list_of_deriv_vars[i])
                 func_call_list += [
-                    f"{fin.FDFunctions_dict[op].c_function_call(gf, deriv_var)};\n"
+                    (
+                        f"{fin.FDFunctions_dict[op].c_function_call(gf, deriv_var)};\n"
+                        if op
+                        else f"const {CCGParams.fp_type_alias} {deriv_var} = {gf};\n"
+                    )
                 ]
             for func_call in sorted(func_call_list):
                 Coutput += func_call

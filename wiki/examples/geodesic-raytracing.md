@@ -1,6 +1,6 @@
 # Geodesic Raytracing
 
-> Explain standalone massive and photon geodesic examples plus batch photon raytracing visualization artifacts. · Status: confirmed · Last reconciled: 07-12-2026
+> Explain standalone massive and photon geodesic examples plus batch photon raytracing visualization artifacts. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary

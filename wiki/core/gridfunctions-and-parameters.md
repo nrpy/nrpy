@@ -1,6 +1,6 @@
 # Gridfunctions And Parameters
 
-> Core route for symbolic gridfunctions, NRPy parameters, code parameters, and generated data structs. · Status: confirmed · Last reconciled: 07-12-2026
+> Core route for symbolic gridfunctions, NRPy parameters, code parameters, and generated data structs. · Status: confirmed
 > Up: [Core APIs](index.md)
 
 ## Summary
@@ -47,7 +47,7 @@ Array `CodeParameter` types are parsed only for C-style `REAL[N]` and `int[N]` s
 
 ### BHaH Access
 
-`BHaHGridFunction` accepts groups `EVOL`, `AUXEVOL`, `DIAG`, and `AUX`, uses C type `REAL`, and maps default arrays by group: `EVOL` to `in_gfs`, `AUXEVOL` to `auxevol_gfs`, `DIAG` to `diagnostic_gfs`, and `AUX` to `aux_gfs`. Memory access has spelling `array[IDX4(<NAME>GF, i0+offset, i1+offset, i2+offset)]`, for example `in_gfs[IDX4(ABCGF, i0+1, i1+2, i2+3)]`; `enable_simd=True` wraps it as `ReadSIMD(&...)`. If `sync_gf_in_superB` is not supplied, it defaults to `True` for `EVOL` and `AUX`. `gridfunction_defines()` emits group `#define` blocks and, for evolved gridfunctions, `gridfunctions_f_infinity` and `gridfunctions_wavespeed` arrays.
+`BHaHGridFunction` accepts groups `EVOL`, `AUXEVOL`, `DIAG`, `AUX`, and `SCRATCH`, uses C type `REAL`, and maps default arrays by group: `EVOL` to `in_gfs`, `AUXEVOL` to `auxevol_gfs`, `DIAG` to `diagnostic_gfs`, `AUX` to `aux_gfs`, and `SCRATCH` to `scratch_gfs`. `SCRATCH` gridfunctions are intermediates produced and consumed within one right-hand-side evaluation: they receive `NUM_SCRATCH_GFS` and `<NAME>GF` indices like the other groups but no allocation, and the caller supplies storage that is dead across that window; only that caller can check capacity, so it guards it itself (the BSSN example stores them in the Method of Lines buffer that `rhs_eval` overwrites later in the same substep and emits `#if NUM_SCRATCH_GFS > NUM_EVOL_GFS #error`). Memory access has spelling `array[IDX4(<NAME>GF, i0+offset, i1+offset, i2+offset)]`, for example `in_gfs[IDX4(ABCGF, i0+1, i1+2, i2+3)]`; `enable_simd=True` wraps it as `ReadSIMD(&...)`. If `sync_gf_in_superB` is not supplied, it defaults to `True` for `EVOL` and `AUX`. `gridfunction_defines()` emits group `#define` blocks and, for evolved gridfunctions, `gridfunctions_f_infinity` and `gridfunctions_wavespeed` arrays.
 
 ### ETLegacy Access
 

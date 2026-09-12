@@ -1,6 +1,6 @@
 # Runtime Data, Parameters, Headers, And CLI
 
-> BHaH route for generated runtime structs, parameter defaults, headers, parfiles, and command-line overrides. Status: confirmed. Last reconciled: 07-13-2026
+> BHaH route for generated runtime structs, parameter defaults, headers, parfiles, and command-line overrides. Status: confirmed.
 > Up: [BHaH](index.md)
 
 ## Summary

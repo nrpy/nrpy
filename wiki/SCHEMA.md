@@ -1,6 +1,6 @@
 # Knowledge Base Schema
 
-> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: 07-20-2026
+> Rules for the self-maintaining markdown KB. · Status: confirmed
 
 ## Summary
 
@@ -40,17 +40,19 @@ or `ingested`. Exact seed rows in [source-map.md](source-map.md) may use the
 `exact seed` ingest state for exact cited files whose dependent-page coverage
 is seeded row-by-row rather than through a covering aggregate.
 
-## Source-Tracking Metadata And Dates
+## Source-Tracking Metadata
 
 A repository source-manifest row records source identity, provenance, status,
 and ingest state as its only source-tracking fields. Exact cited-file rows may
 abbreviate to source and status: the repository path is the provenance, and
 ingest state is tracked through covering aggregate rows and
-[source-map.md](source-map.md). External-source rows may also carry an
-accessed date (`MM-DD-YYYY`) and notes; those are ordinary KB metadata, not
-source-tracking metadata. Manifests and KB docs carry no source-tracking
-hash columns or values of any kind (`sha256` or any other digest algorithm)
-and no `mtime` columns or values; sources are never hashed for tracking.
+[source-map.md](source-map.md). External-source rows may also carry notes.
+Manifests and KB docs carry no source-tracking checksums, hash or digest columns
+or stored values of any kind (`sha256` or any other algorithm), including VCS
+commit or revision identifiers used as pins. Sources are never hashed.
+File and source counts are not KB metadata. Sources and files are never counted
+for tracking, coverage, or freshness. Manifests and KB docs also carry no
+`mtime` columns or values.
 Technical, non-source-tracking hash facts (cache hashing, coordinate hash
 macros) remain allowed as reviewed domain facts, but never as stored digest
 values.
@@ -60,19 +62,25 @@ stored fingerprints: inspect the changed paths, the source's manifest row and
 status, [source-map.md](source-map.md) ownership rows, maintainer signals, and
 the affected compiled pages, then re-ingest and reconcile.
 
-All retained KB dates use the `MM-DD-YYYY` format. Approved placeholders such
-as `n/a` or `-` are allowed where no date applies.
+KB maintenance and source tracking use no date stamps, timestamp fields, or
+timestamp values. Do not record access, audit, check, reconciliation, opening,
+resolution, or validation-run dates. Publication years and date-like
+source/version identifiers remain allowed; full calendar date stamps do not.
+
+This KB lives in a Git repository. Git history already records when content
+changed and what changed; duplicating that information as hashes, file counts,
+or timestamps creates drift-prone maintenance burden without adding authority.
 
 ## Support Pages
 
 Support pages keep the wiki compounding without changing router semantics:
 
 - `wiki/catalog.md` is the global content catalog. It lists pages with type,
-  one-line answer, route, query terms, status, reconciliation date, source
-  count, and concept-hub candidacy. It does not replace reading leaves.
+  one-line answer, route, query terms, status, and concept-hub candidacy. It
+  does not replace reading leaves.
 - `wiki/source-map.md` records source dependencies: source or aggregate,
   source authority tier, ingest status, dependent pages, covered subpaths,
-  known gaps, last check, and next action.
+  known gaps, and next action.
 - `wiki/contradictions.md` records contested or stale claims, competing
   sources, authority decisions, affected pages, and resolution state.
 
@@ -130,8 +138,7 @@ Apply status to page content, not merely to source age:
 A claim may accurately describe stale source-side messaging while its page
 remains `confirmed` under this matrix. Page status and claim status are distinct.
 Catalog status must equal page-header status; routers use catalog status
-`router` and date `n/a`. Status centrality remains arbiter review, not keyword
-lint.
+`router`. Status centrality remains arbiter review, not keyword lint.
 
 ## Citation Rules
 
@@ -172,9 +179,9 @@ generated-output boundaries; CI guarantees; source-authority decisions;
 contradiction decisions; and claims whose nearby source paragraph could
 plausibly be misread.
 
-This contract takes prospective effect after its 07-13-2026 adoption change.
-High-risk claims that predate it, plus claims materially changed in that same
-adoption change, form the initial baseline. Unless an exact block is already
+This contract takes prospective effect after its adoption change. High-risk
+claims that predate it, plus claims materially changed in that same adoption
+change, form the initial baseline. Unless an exact block is already
 present, those baseline claims remain uncovered; the adoption change asserts no
 completed claim-evidence-block coverage. Migrate a baseline claim when it or its
 deciding source is next materially changed after adoption.
@@ -197,7 +204,7 @@ For a behavioral claim, append:
 
 ```text
 - Validation: `inspected=<pass|fail|not-run>; generated=<pass|fail|not-run>; built=<pass|fail|not-run>; run=<pass|fail|not-run>; result_checked=<pass|fail|not-run>`
-- Dimensions: `platform=<value|not-run|not-applicable>; tool_version=<value|not-run|not-applicable>; backend=<value|not-run|not-applicable>; precision=<value|not-run|not-applicable>; GPU=<value|not-run|not-applicable>; restart=<value|not-run|not-applicable>; distributed=<value|not-run|not-applicable>; error_path=<value|not-run|not-applicable>; options=<value|not-run|not-applicable>; date=<MM-DD-YYYY|not-run|not-applicable>`
+- Dimensions: `platform=<value|not-run|not-applicable>; tool_version=<value|not-run|not-applicable>; backend=<value|not-run|not-applicable>; precision=<value|not-run|not-applicable>; GPU=<value|not-run|not-applicable>; restart=<value|not-run|not-applicable>; distributed=<value|not-run|not-applicable>; error_path=<value|not-run|not-applicable>; options=<value|not-run|not-applicable>`
 ```
 
 Do not claim completed block coverage before the exact block is present.
@@ -253,10 +260,10 @@ they do not bypass it.
 
 The register columns are exactly:
 
-`ID | Claim | Claim status | Source A | Source B | Authority decision | Affected pages | Page-status rationale | Owner/trigger | Resolution test | Opened | Resolved | Notes`
+`ID | Claim | Claim status | Source A | Source B | Authority decision | Affected pages | Page-status rationale | Owner/trigger | Resolution test | Notes`
 
 IDs use immutable `CONTR-0001` form. Active claim status is `contested` or
-`stale`; closed rows use `resolved` and a resolution date. Every active affected
+`stale`; closed rows use `resolved`. Every active affected
 page contains an exact marker outside code fences:
 
 ```text
@@ -277,8 +284,9 @@ an identical compatibility alias and must not be described as stronger.
 
 Link and Obsidian-wikilink checks govern `AGENTS.md`, `wiki/**/*.md`, and
 `raw/SOURCES.md`. Preserved `raw/source-docs/**/*.md` snapshots are immutable
-and exempt from link/wikilink rewriting; source-tracking metadata and date bans
-still govern them. Hard failures cover deterministic structure only. Dynamic
+and exempt from link/wikilink and obsolete-template rewriting; populated
+source-tracking values remain forbidden there. Hard failures cover
+deterministic structure only. Dynamic
 symbols, semantic truth, modal wording, generated names, and C/CUDA macros stay
 manual or report-only.
 
