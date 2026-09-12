@@ -1,6 +1,6 @@
 # Einstein Toolkit Thorn Generators
 
-> Explain NRPy's Einstein Toolkit thorn-generation examples and checked-in ET fixtures. · Status: confirmed · Last reconciled: 07-12-2026
+> Explain NRPy's Einstein Toolkit thorn-generation examples and checked-in ET fixtures. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
@@ -95,7 +95,7 @@ an Apptainer ET image, symlinks `project/et_baikal/Baikal*` and
 `project/et_wavetoy/*` into the ET arrangements tree, symlinks the checked-in
 WaveToy tests into `WaveToyNRPy/`, builds ET, and runs the `Baikal`,
 `BaikalVacuum`, and `WaveToyNRPy` testsuites. The local full-CI script also
-runs all four generator scripts and deliberately skips compiling paths whose
+runs all listed generator scripts and deliberately skips compiling paths whose
 script name contains `carpet`, so the CarpetX examples have a checked local
 generation command route but no local ET build route in that script. Neither
 configuration proves a latest successful run. The GitHub job does not invoke

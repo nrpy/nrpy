@@ -1,6 +1,6 @@
 # ETLegacy GR BSSN RHS, Ricci, Constraints, And Validation
 
-> ETLegacy registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 08-28-2026
+> ETLegacy registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed
 > Up: [ETLegacy](index.md)
 
 ## Summary
@@ -59,8 +59,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
 - Corroboration: [expression_utils.py](../../../nrpy/helpers/expression_utils.py), `get_params_commondata_symbols_from_expr_list`; [CodeParameters.py](../../../nrpy/infrastructures/ETLegacy/CodeParameters.py), `read_CodeParameters`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=ETLegacy; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian, fd_order 4, RHS KO enabled, reference-metric precompute disabled, T4munu False/True, SIMD False/True; date=08-18-2026`
 
 Reference-metric precompute is threaded through the BSSN and reference-metric
 lookup keys. Kreiss-Oliger
@@ -106,8 +104,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
 - Corroboration: [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [interface_ccl.py](../../../nrpy/infrastructures/ETLegacy/interface_ccl.py), `construct_interface_ccl`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=ETLegacy registration; precision=symbolic code generation; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian, fd_order 4, T4munu False/True, SIMD registration exercised; date=08-28-2026`
 
 All three generated kernels replace the finite-difference helper prefunc text
 `NO_INLINE` with `CCTK_ATTRIBUTE_NOINLINE` before registration. The local

@@ -1,6 +1,6 @@
 # SEBOBv1 JAX Workflow
 
-> Current SEBOBv1 JAX entry workflow and the implemented SEOBNRv5 aligned-spin coefficient surface. · Status: contested · Last reconciled: 07-13-2026
+> Current SEBOBv1 JAX entry workflow and the implemented SEOBNRv5 aligned-spin coefficient surface. · Status: contested
 > Up: [JAX](index.md)
 
 ## Summary
@@ -38,7 +38,7 @@ coefficient, stop-radius, QNM, final-mass, and final-spin field names. Exact
 batch-registration semantics belong to
 [Commondata And PyFunction Registry](commondata-and-pyfunction-registry.md);
 this workflow page treats the entrypoint's call as generation metadata setup,
-not as evidence that a generated waveform function has been run.
+not as evidence of generated-waveform runtime behavior.
 
 `register_PyFunction_SEOBNRv5_aligned_spin_coefficients()` is written for the
 parallel-codegen registration model. During `pcg_registration_phase()` it
@@ -68,9 +68,8 @@ usable `Commondata` coefficient object.
 
 Claim status: contested; contradiction: CONTR-0002.
 See [CONTR-0002](../../contradictions.md#contr-0002) for authority, affected
-pages, validation limits, and the executable resolution test. This is a
-descriptive contradiction record; it is not yet a migrated claim-evidence
-block.
+pages, validation limits, and the executable resolution test; that contradiction
+record owns the claim evidence.
 
 The symbolic source behind this narrow surface is
 `SEOBNR_aligned_spin_constants`. Its constructor defines symbolic masses and
@@ -90,9 +89,8 @@ generated `project/sebobv1_jax/` files as source evidence unless a maintainer
 deliberately freezes and registers such output.
 
 No generated-package install, generated import, coefficient-function call, or
-returned-field assertion appears in those configured jobs. The generator was
-not executed during this KB audit, and workflow configuration proves job shape,
-not a latest successful run.
+returned-field assertion appears in those configured jobs. Workflow
+configuration proves job shape, not execution outcomes.
 
 ## Sources
 

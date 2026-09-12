@@ -1,6 +1,6 @@
 # Diagnostics Output And Checkpointing
 
-> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed. Last reconciled: 08-31-2026
+> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -64,8 +64,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
 - Corroboration: [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`; [Kasner diagnostics.py](../../../nrpy/infrastructures/BHaH/general_relativity/Kasner/diagnostics.py), `register_CFunction_diagnostic_gfs_set`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=BHaH OpenMP registration; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=generic and Kasner diagnostic registration, interpolation enabled; date=08-28-2026`
 
 Nearest diagnostics are a dispatcher plus three helper samplers. Users select
 `which_gfs_0d`, `which_gfs_1d`, and `which_gfs_2d` in the generated
@@ -89,8 +87,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [generic diagnostics_nearest.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [GRoovy diagnostics_nearest.py](../../../nrpy/infrastructures/BHaH/GRoovy/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [Kasner diagnostics.py](../../../nrpy/infrastructures/BHaH/general_relativity/Kasner/diagnostics.py), `register_CFunction_diagnostics_nearest`
 - Corroboration: [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=BHaH and GRoovy C registration; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=generic, GRoovy constraint diagnostics enabled, and Kasner 0D/1D/2D selections; date=08-28-2026`
 
 `diagnostics_nearest_common.h` supplies the shared text-output contract: time
 comments use `# [time] = ...`, headers list coordinate columns plus diagnostic
@@ -121,8 +117,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [diagnostics_volume_integration.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostics_volume_integration.py), `register_CFunction_diagnostics_volume_integration`; [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
 - Corroboration: [diagnostics_volume_integration_helpers.h](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics_volume_integration_helpers.h), `diags_integration_execute_recipes`; [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=BHaH OpenMP registration; precision=generated REAL arithmetic, runtime precision not exercised; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=whole-domain and outside-radius default GR recipes; date=08-28-2026`
 
 Raytracing output is an optional diagnostics-side stage-1 export.
 `output_raytracing_data` writes a time-stamped binary stage-1 payload through a
@@ -218,19 +212,13 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: registered primary code `nrpy/infrastructures/BHaH/read_checkpoint.py::register_CFunction_read_checkpoint`, `nrpy/infrastructures/BHaH/write_checkpoint.py::register_CFunction_write_checkpoint`, and `nrpy/infrastructures/BHaH/__init__.py` package import list
 - Corroboration: representative `nrpy/examples/blackhole_spectroscopy.py` split registrar calls; no independent registered test exercises malformed-input, allocation-failure, or restart paths
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, clang-format 22.1.8; backend=OpenMP C and CUDA source; precision=not-applicable; GPU=not-run; restart=not-run; distributed=not-applicable; error_path=not-run; options=default reader source baselines plus BHaHAHA reader source inspection; date=08-31-2026`
 
 Validation here is source-inspection scoped. Current Ubuntu/macOS codegen jobs
 generate and build default BHaH examples without running a write/restart/read
-sequence. File integrity, restored values, CUDA restart, multipatch selection,
-malformed-input rejection, allocation failure, and BHaHAHA horizon-history
-restart are therefore `not-run` runtime outcomes in this KB audit. The two
-changed default reader `.c`/`.cu` baselines were regenerated in an isolated
-copy and passed a second fresh-process comparison; retained writer baselines
-were unchanged. That proves normalized emitted-source regression only; it does
-not establish compilation, restart, malformed-input behavior, BHaHAHA source
-variants, GPU execution, or runtime results.
+sequence. The owner generated-source route covers default reader and writer
+variants. Neither route establishes checkpoint file integrity, restored values,
+CUDA restart, multipatch selection, malformed-input rejection, allocation
+failure, BHaHAHA horizon-history restart, GPU execution, or runtime results.
 
 ## Sources
 

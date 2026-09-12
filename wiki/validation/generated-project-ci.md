@@ -1,29 +1,27 @@
 # Generated Project CI
 
-> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed · Last reconciled: 09-11-2026
+> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed
 > Up: [Validation](index.md)
 
 ## Summary
 
-Workflow YAML configures seven jobs. Two generate/build standalone projects on
-Ubuntu and macOS; one builds and regression-tests ETLegacy thorns; one builds
-three Charm++/superB projects and runs one; two build/run trusted/current
-waveforms and compare output; one performs Python static analysis. These are
-configured cells, not latest-pass claims.
+Workflow YAML separates static analysis, Ubuntu/macOS code generation,
+ETLegacy regression, Charm++/superB, and trusted/current waveform consistency
+routes. These are configured routes, not execution-result snapshots.
 
 ## Detail
 
 Configured GitHub job map:
 
-| Job | Matrix/environment | Generate/build scope | Run/result-check scope |
+| Job | Configured context | Generate/build scope | Run/result-check scope |
 | --- | --- | --- | --- |
-| `static-analysis` | Ubuntu 22.04/24.04 and selected Python 3.7.13, 3.8.12, 3.9.19, `3.x` cells | No generated project coverage | Python file execution plus version-dependent static checks; see [Static Analysis](static-analysis.md) |
-| `codegen-ubuntu` | Ubuntu 22.04/24.04; three matrix cells after one exclusion | Installs NRPy, generates in `tmp/`, and builds 21 default C/library projects with `make`: standalone elliptic; three wave projects; collision, spectroscopy, and spinning BH; PN momenta; all nine SEOBNRv5 approximant/calibration variants; TOVola; hydro-without-hydro; BHaHAHA; `sebobv2`. It generates `sebobv1_jax` without package install/build. | The 21 `make` builds run nothing, and `make clean` follows each; MANGA commands are commented out. |
-| `codegen-mac` | macOS 14/26 with Python 3.9, 3.10, 3.11, `3.x` | Same 21 default C/library builds and JAX generation as Ubuntu; no Dendro generation or build; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
-| `einsteintoolkit-validation` | Ubuntu 24.04, Apptainer 1.3.2, ET 2024-06 beta image | Generates only `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs `Baikal`, `BaikalVacuum`, and `WaveToyNRPy` Cactus testsuites and fails on nonzero reported failures. No `carpetx_*` generation/build/run. |
-| `charmpp-validation` | Ubuntu 24.04, Apptainer image, paths pinned to Charm++ 8.0.0 | Generates and builds `superB_nrpyelliptic_conformally_flat`, `superB_blackhole_spectroscopy`, and `superB_two_blackholes_collide` with `make -j2` | Runs only `./charmrun +p2 ./superB_two_blackholes_collide`; no explicit scientific-output assertion beyond process success. |
-| `sebob-consistency-test` | Ubuntu 22.04/24.04; three matrix cells after one exclusion | Checks out trusted commit `785467615d63669a98fe85c6686c2388a324139e`; generates/builds trusted and current copies of all nine SEOBNRv5 variants | Runs nine helper invocations. Each rebuilds both executables, runs ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed its perturbation-derived baseline. |
-| `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the same trusted commit | Runs one helper invocation with ten deterministic inputs and the same median-error criterion. |
+| `static-analysis` | Configured Linux/Python matrix | No generated project coverage | Python file execution plus version-dependent static checks; see [Static Analysis](static-analysis.md) |
+| `codegen-ubuntu` | Configured Ubuntu/Python matrix | Installs NRPy, generates in `tmp/`, and builds the selected default C/library projects with `make`, spanning elliptic, wave, black-hole, PN, SEOBNR, TOV, hydro, BHaHAHA, and `sebobv2` routes. It generates `sebobv1_jax` without package install/build. | The `make` builds run no generated executable, and `make clean` follows each; MANGA commands are commented out. |
+| `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation as Ubuntu; no Dendro generation or build; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
+| `einsteintoolkit-validation` | Configured Ubuntu/Apptainer Einstein Toolkit image | Generates `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs the configured Baikal, BaikalVacuum, and WaveToyNRPy Cactus testsuites and fails on reported failures. No `carpetx_*` generation/build/run. |
+| `charmpp-validation` | Configured Ubuntu/Apptainer Charm++ context | Generates and builds the configured superB elliptic, spectroscopy, and collision projects | Runs the configured collision executable through `charmrun`; no explicit scientific-output assertion beyond process success. |
+| `sebob-consistency-test` | Configured Ubuntu matrix | Checks out the workflow-selected trusted revision; generates/builds trusted and current SEOBNRv5 variants | Helper invocations rebuild both executables, use deterministic inputs, and require median current/trusted amplitude-plus-phase error not exceed the perturbation-derived baseline. |
+| `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the workflow-selected trusted revision | Uses the same deterministic-input and median-error criterion. |
 
 A successful named build can establish only named generation plus toolchain
 compile/link compatibility. Generation completion or file existence is not a
@@ -55,13 +53,13 @@ The Charm++ process-success cell is retained descriptive legacy, not precedent
 for adding another generic status-only build or runtime cell.
 
 The local `.github/full_nrpy_local_ci.sh` helper is separate from GitHub job
-coverage. It installs dependencies, performs broad static analysis, invokes 28
-configured generator commands, and builds 21 non-Carpet/non-superB C/library
-projects. It generates two superB projects without building them and all four
-Carpet/CarpetX families without ET compilation; it omits the superB elliptic,
-Kasner, GRoovy, MANGA, and all geodesic generators. It then configures builds
-with `--cuda` for curvilinear wave, multicoordinate wave, standalone elliptic,
-three black-hole examples, hydro-without-hydro, and TOVola. TOVola has no
+coverage. It installs dependencies, performs broad static analysis, invokes
+its configured generators, and builds selected non-Carpet/non-superB
+C/library projects. It generates superB and Carpet/CarpetX families without
+their external-host builds; it omits other example families documented in the
+helper's source. It then configures selected builds with `--cuda`, including
+curvilinear and multicoordinate wave, standalone elliptic, black-hole,
+hydro-without-hydro, and TOVola routes. TOVola has no
 argument parser or CUDA branch, so its extra `--cuda` token is ignored and that
 cell is an ordinary C build. The helper installs no CUDA toolkit, declares no
 GPU runner, runs no generated executable, and checks no GPU result. Treat it as
@@ -72,22 +70,22 @@ no GitHub workflow job currently generates, builds, or runs either Dendro
 project. Its symbolic and emitted-source contracts run as owner doctests in
 `static-analysis`. Locally, run `python -m nrpy.examples.dendro_fccz4` or
 `python -m nrpy.examples.dendro_bssn`, configure and build the generated solver
-with CMake, then run `ctest`. Each default project registers fourteen cases
-covering the standalone host, Minkowski lifecycle, address/value and typed
-parameter forwarding, and nonflat GR references. These builds require MPI and
-a C++17 compiler. Adding standalone or real-host generated-project CI requires
-a separately authorized workflow change. Pinned-host qualification is recorded
-in [Validation, Standalone Host, And Deferral Gates](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md).
+with CMake, then run `ctest`. Generated cases cover the standalone host,
+Minkowski lifecycle, address/value and typed parameter forwarding, and nonflat
+GR references. These builds require MPI and a C++17 compiler. Adding standalone
+or real-host generated-project CI requires a separately authorized workflow
+change. The durable real-host procedure and proof boundaries live in
+[Validation, Standalone Host, And Deferral Gates](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md).
 
 Claim evidence:
-- Claim: no configured GitHub job generates, builds, or runs Dendro projects. The two default generators emit fourteen CTest cases apiece for local standalone qualification; this does not establish a particular run's outcome or real-host coverage.
+- Claim: no configured GitHub job generates, builds, or runs Dendro projects. The default generators emit CTest cases for local standalone qualification; this does not establish a particular run's outcome or real-host coverage.
 - Role: CI behavior
 - Deciding authority: [main.yml](../../.github/workflows/main.yml), `codegen-ubuntu` and `codegen-mac`, for configured jobs; [cmake_helpers.py](../../nrpy/infrastructures/Dendro/cmake_helpers.py), `output_solver_cmake` and `output_tests_cmake`, for generated cases
 - Corroboration: [main_cpp.py](../../nrpy/infrastructures/Dendro/main_cpp.py), `output_main_cpp`, whose gates the lifecycle case exercises
 
 Explicitly unsupported or unverified by these configurations: CarpetX build or
 runtime; JAX generated-package install/import/basic test or accelerator runtime;
-any CUDA executable/GPU result; standalone BHaH-project evolution runtime, since the 21 `make` builds run nothing; restart behavior;
+any CUDA executable/GPU result; standalone BHaH-project evolution runtime, since the configured `make` builds run nothing; restart behavior;
 geodesic/raytracing projects; GRoovy; active MANGA build; Kasner; and scientific
 correctness beyond stated ET regression and waveform-comparison assertions.
 

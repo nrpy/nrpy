@@ -1,6 +1,6 @@
 # Contribution Style And Static Analysis
 
-> Preserve the practical style, artifact, trusted-value, and static-analysis rules for code changes. · Status: confirmed · Last reconciled: 07-20-2026
+> Preserve the practical style, artifact, trusted-value, and static-analysis rules for code changes. · Status: confirmed
 > Up: [Architecture](index.md)
 
 ## Summary

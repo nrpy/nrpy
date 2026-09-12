@@ -1,6 +1,6 @@
 # Python Coding Style
 
-> Python formatting, naming, imports, docstrings, type hints, comments, and module-shape rules. · Status: provisional · Last reconciled: 09-06-2026
+> Python formatting, naming, imports, docstrings, type hints, comments, and module-shape rules. · Status: provisional
 > Up: [Architecture](index.md)
 
 ## Summary

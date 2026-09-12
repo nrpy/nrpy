@@ -1,6 +1,6 @@
 # C Codegen
 
-> Core route for turning SymPy expressions into generated C text. · Status: confirmed · Last reconciled: 07-12-2026
+> Core route for turning SymPy expressions into generated C text. · Status: confirmed
 > Up: [Core APIs](index.md)
 
 ## Summary

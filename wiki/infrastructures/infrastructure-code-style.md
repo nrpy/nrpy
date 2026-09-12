@@ -1,6 +1,6 @@
 # Infrastructure Code Style
 
-> Infrastructure module structure, C-function registration, generated-code validation, and BHaH generator style rules. · Status: provisional · Last reconciled: 09-06-2026
+> Infrastructure module structure, C-function registration, generated-code validation, and BHaH generator style rules. · Status: provisional
 > Up: [Infrastructures](index.md)
 
 ## Summary
@@ -80,10 +80,10 @@ and constraint diagnostics are pinned symbolically instead, through
 `compare_or_generate_trusted_results` in the same `__main__` sweeps.
 
 Claim evidence:
-- Claim: golden-output baselines are for small, largely structural emitted code; a right-hand side, Ricci or constraint kernel never receives one and is proven symbolically instead. Dendro captures ten small generated-source baselines and four trusted expression dictionaries, and no kernel-scale generated source.
+- Claim: golden-output baselines are for small, largely structural emitted code; a right-hand side, Ricci or constraint kernel never receives one and is proven symbolically instead. Dendro uses small generated-source baselines and trusted expression dictionaries, and no kernel-scale generated source.
 - Role: normative rule
 - Deciding authority: [coding_style.md](../../coding_style.md), `#### validate_strings pattern`, its generated-kernel and size bullets
-- Corroboration: [initial_data.py](../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py), the `__main__` sweep that writes the four small initial-data baselines per formulation
+- Corroboration: [initial_data.py](../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py), the `__main__` sweep that writes the small initial-data baselines for each formulation
 
 BHaH `compile_Makefile()` contains a retained unsafe external-compilation
 doctest. It is not precedent. A substantive touch follows the scoped-CI

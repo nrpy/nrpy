@@ -1,12 +1,12 @@
 # Example Generator Catalog
 
-> Inventory the runnable example generators, companion scripts, output families, prerequisites, validation status, and owning pages. · Status: confirmed · Last reconciled: 09-11-2026
+> Inventory the runnable example generators, companion scripts, output families, prerequisites, validation status, and owning pages. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
 
-This catalog is the inventory leaf for `nrpy/examples`. All 29 non-`__init__.py`
-top-level generators under `nrpy/examples/*.py` appear once below with their
+This catalog is the inventory leaf for `nrpy/examples`. Top-level generators
+under `nrpy/examples/*.py` appear below with their
 command shape, output family, prerequisite class, validation route or manual
 status, and owning detail page. Companion files under
 `nrpy/examples/geodesic_visualizations/`, `nrpy/examples/tests/`, and
@@ -24,21 +24,21 @@ Run module commands from the repository root after installing NRPy or setting
 `PYTHONPATH` to include `.` as described in [Build And Run](../architecture/build-and-run.md).
 Most generators delete and recreate their fixed `project/<project_name>/`
 directory. Preserve any wanted generated output before rerunning one. Evidence
-labels below describe configured workflow/helper steps, not latest CI outcomes;
-`manual/source-supported` means this audit inspected sources but did not
-generate, build, or run the project.
+labels below describe configured workflow/helper steps, not CI outcomes;
+`manual/source-supported` identifies a source-supported manual route, not
+generation, build, or runtime coverage.
 
 | Generator | Command shape | Output family | Prerequisites | Validation route or status | Owning page |
 | --- | --- | --- | --- | --- | --- |
 | `bhahaha.py` | `python -m nrpy.examples.bhahaha [--fdorder N] [--outrootdir DIR] [--cpp] [--no-openmp]` | Static BHaHAHA apparent-horizon library under the chosen output root | Python, C compiler, `make`; OpenMP optional | Configured Ubuntu/macOS CI generation and default library build; no library runtime exists | [Apparent Horizon Library](apparent-horizon-library.md) |
-| `blackhole_spectroscopy.py` | `python -m nrpy.examples.blackhole_spectroscopy [--cuda] [--fccz4] [--floating_point_precision TYPE]` | Standalone BHaH binary-black-hole spectroscopy project, BSSN by default or opt-in fCCZ4 | Python, C or CUDA toolchain, `make`, GSL | Configured Ubuntu/macOS CI generation and default BSSN/OpenMP build; isolated local BSSN/fCCZ4 OpenMP builds and one-step fCCZ4 startup; restart, scientific results, and CUDA remain untested here | [Standalone GR/BHaH](standalone-gr-bhah.md) |
+| `blackhole_spectroscopy.py` | `python -m nrpy.examples.blackhole_spectroscopy [--cuda] [--fccz4] [--floating_point_precision TYPE]` | Standalone BHaH binary-black-hole spectroscopy project, BSSN by default or opt-in fCCZ4 | Python, C or CUDA toolchain, `make`, GSL | Configured Ubuntu/macOS CI generation and default BSSN/OpenMP build; no configured startup, restart, CUDA, or scientific-result check | [Standalone GR/BHaH](standalone-gr-bhah.md) |
 | `carpet_baikal_thorns.py` | `python -m nrpy.examples.carpet_baikal_thorns` | ETLegacy/Carpet Baikal and BaikalVacuum thorns | Python for generation; Einstein Toolkit checkout for build/test | Configured `einsteintoolkit-validation` generation, ET build, and Baikal/BaikalVacuum regression testsuites | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `carpet_wavetoy_thorns.py` | `python -m nrpy.examples.carpet_wavetoy_thorns` | ETLegacy/Carpet WaveToyNRPy, IDWaveToyNRPy, and diagWaveToyNRPy thorns | Python for generation; Einstein Toolkit checkout for build/test | Configured `einsteintoolkit-validation` generation, ET build, and WaveToyNRPy regression testsuite | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `carpetx_baikal_thorns.py` | `python -m nrpy.examples.carpetx_baikal_thorns` | CarpetX BaikalX and BaikalVacuumX thorns | Python for generation; CarpetX/Einstein Toolkit environment for build/test | Local helper invokes generation but skips compile for every `carpet*` script; no configured CarpetX build/run | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `carpetx_wavetoy_thorns.py` | `python -m nrpy.examples.carpetx_wavetoy_thorns` | CarpetX WaveToyNRPyX, IDWaveToyNRPyX, and diagWaveToyNRPyX thorns | Python for generation; CarpetX/Einstein Toolkit environment for build/test | Local helper invokes generation but skips compile for every `carpet*` script; no configured CarpetX build/run | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
-| `dendro_bssn.py` | `python -m nrpy.examples.dendro_bssn [--project-dir DIR] [--fd-order {2,4,6}] [--ko/--no-ko]` | Dendro `BSSN_GR` solver directory under `project/<name>/Dendro-GR/`, emitted through the same infrastructure as the fCCZ4 generator and following Dendro-GR's own BSSN naming (`bssn_common`, `bssnSolver`, `namespace bssn`, `bssnCtx.cpp`) | Python for generation; MPI, a C++17 compiler, and a CMake generator to build the generated solver | Local generation, CMake build, and CTest qualification; no configured generated-project CI; fourteen configured cases cover the lifecycle, ten retained checks, address/parameter execution, and the FD4 nonflat reference. KO-on was qualified locally; BSSN real-host execution remains unqualified. | [Dendro](../infrastructures/dendro/index.md) |
-| `dendro_fccz4.py` | `python -m nrpy.examples.dendro_fccz4 [--project-dir DIR] [--fd-order {2,4,6}] [--ko/--no-ko]` | Dendro `FCCZ4_GR` solver directory under `project/<name>/Dendro-GR/`, with generated state, parameter, constants and `<stem>_defines.h` headers, one source per registered CFunction, solver and tests CMake, the host context and entry point, a sample parameter file, generated self-tests, and the standalone host header | Python for generation; MPI, a C++17 compiler, and a CMake generator to build the generated solver | Local generation, CMake build, and CTest qualification; no configured generated-project CI; fourteen configured cases cover the lifecycle, ten retained checks, address/parameter execution, and the FD4 nonflat reference. KO-on was qualified locally; pinned real-host transport, parameter response, and 100-step Minkowski checks were repeated on 09-11-2026. | [Dendro](../infrastructures/dendro/index.md) |
-| `groovy_TOV_BSSN.py` | `python -m nrpy.examples.groovy_TOV_BSSN` | Standalone BHaH/GRoovy TOV GRHD evolution project | Python, Git and network access, C compiler, `make`, GSL, and GRHayL configure/build prerequisites | Manual/source-supported; generator clones, configures, builds, and installs GRHayL, and inspected CI does not invoke it | [Matter TOV Workflows](matter-tov-workflows.md) |
+| `dendro_bssn.py` | `python -m nrpy.examples.dendro_bssn [--project-dir DIR] [--fd-order {2,4,6}] [--ko/--no-ko]` | Dendro `BSSN_GR` solver directory under `project/<name>/Dendro-GR/`, emitted through the same infrastructure as the fCCZ4 generator and following Dendro-GR's own BSSN naming (`bssn_common`, `bssnSolver`, `namespace bssn`, `bssnCtx.cpp`) | Python for generation; MPI, a C++17 compiler, and a CMake generator to build the generated solver | Local standalone generation/build/CTest route; no configured generated-project CI; real-host execution remains an explicit gate. | [Dendro](../infrastructures/dendro/index.md) |
+| `dendro_fccz4.py` | `python -m nrpy.examples.dendro_fccz4 [--project-dir DIR] [--fd-order {2,4,6}] [--ko/--no-ko]` | Dendro `FCCZ4_GR` solver directory under `project/<name>/Dendro-GR/`, with generated state, parameter, constants and `<stem>_defines.h` headers, one source per registered CFunction, solver and tests CMake, the host context and entry point, a sample parameter file, generated self-tests, and the standalone host header | Python for generation; MPI, a C++17 compiler, and a CMake generator to build the generated solver | Local standalone and real-host qualification routes; no configured generated-project CI; capability claims require a fresh run against the selected host checkout. | [Dendro](../infrastructures/dendro/index.md) |
+| `groovy_TOV_BSSN.py` | `python -m nrpy.examples.groovy_TOV_BSSN` | Standalone BHaH/GRoovy TOV GRHD evolution project | Python, Git and network access, C compiler, `make`, GSL, and GRHayL configure/build prerequisites | Manual/source-supported; generator clones, configures, builds, and installs GRHayL, and configured CI does not invoke it | [Matter TOV Workflows](matter-tov-workflows.md) |
 | `hydro_without_hydro.py` | `python -m nrpy.examples.hydro_without_hydro [--cuda] [--floating_point_precision TYPE]` | Standalone BHaH static-fluid spacetime evolution project | Python, C or CUDA toolchain, `make`, GSL | Configured Ubuntu/macOS CI generation and default OpenMP build; local helper configures a CUDA build, but no runtime/result check | [Matter TOV Workflows](matter-tov-workflows.md) |
 | `kasner_exact_evolution.py` | `python -m nrpy.examples.kasner_exact_evolution [--floating_point_precision TYPE]` | Standalone BHaH Kasner benchmark project | Python, C compiler, `make` | Manual/source-supported default OpenMP route; the parser exposes `--cuda`, but GeneralRFM precompute rejects CUDA during generation | [Standalone GR/BHaH](standalone-gr-bhah.md) |
 | `manga_bhah_lib.py` | `python -m nrpy.examples.manga_bhah_lib` | MANGA-facing `bhah_lib` library project | Python, C compiler, `make`, GSL | Source-supported library route; CI commands are present but commented out | [Matter TOV Workflows](matter-tov-workflows.md) |
@@ -68,11 +68,7 @@ Companion groups:
 | `nrpy/examples/geodesic_visualizations/*.py` | Trajectory plotter, light-blueprint schema, lensed-image renderer, image visualizer, and blueprint diagnostics | `trajectory.txt`, PNGs, downloaded textures, and `light_blueprint_*.zip` files stay artifacts | [Geodesic Raytracing](geodesic-raytracing.md) |
 | `nrpy/examples/tests/sebob*_consistency_check.py` | Current-vs-trusted waveform consistency scripts | Trusted/current generated executable directories and waveform stdout are run artifacts | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
 
-Inventory disposition covers 29 generators, five ET fixture files, five
-geodesic companion scripts, two waveform consistency helpers, and one excluded
-`__init__.py`. The registered aggregate count in [Sources](../../raw/SOURCES.md)
-predates later repository drift and understates the tracked file set, so it is
-not restated as a total here. The direct source rows in
+The companion tables and direct source rows in
 [Sources](../../raw/SOURCES.md) register the cited files. Aggregate status
 remains `partial` because file-set ownership does not by itself prove complete
 semantic reconciliation or future-file ingestion.

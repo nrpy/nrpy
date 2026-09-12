@@ -1,23 +1,22 @@
 # New Infrastructure Conformance
 
-> Rules a new NRPy infrastructure must satisfy to match the established ones, each with a right example, a wrong example, and a mechanical test. · Status: confirmed · Last reconciled: 09-07-2026
+> Rules a new NRPy infrastructure must satisfy to match the established ones, each with a right example, a wrong example, and a mechanical test. · Status: confirmed
 > Up: [Infrastructures](index.md)
 
 ## Summary
 
 Patterns match existing code. Before writing a mechanism into a new
 infrastructure, find its counterpart in
-`nrpy/infrastructures/{BHaH,ETLegacy,CarpetX,superB}` and count the instances.
-Three or more is settled convention, and a new infrastructure ignoring it is
-wrong by default. One instance is weak evidence and should be called out as
-such. A mechanism with **no** instance anywhere is an invention: that absence
-is evidence against it and belongs in the design record, not in a reviewer's
-third-round discovery.
+`nrpy/infrastructures/{BHaH,ETLegacy,CarpetX,superB}` and determine whether its
+requirements apply. Repeated compatible implementations strengthen a
+convention, but no invented occurrence threshold decides authority. A mechanism
+without precedent needs a concrete host or project requirement and belongs in
+the design record.
 
 Every rule below carries the rule, a right example from real NRPy code, a
 wrong example drawn from a mistake actually made in the Dendro effort, and a
-mechanical test where one exists. The wrong examples are real and each passed
-at least one review, which is the argument that the rule is needed.
+mechanical test where one exists. The wrong examples came from the Dendro
+effort and document failure modes the rules prevent.
 
 ## Detail
 
@@ -36,21 +35,21 @@ emit and contain no formulation name. Physics lives under
 `<Infrastructure>/general_relativity/`.
 
 **Right** — BHaH's generic layer: `BHaH_defines_h.py`, `main_c.py`,
-`Makefile_helpers.py`, `CodeParameters.py`, with two incidental formulation
-mentions across the whole layer.
+`Makefile_helpers.py`, `CodeParameters.py`.
 
-**Wrong** — a generic layer with 152 `fccz4` occurrences, nine of twelve
-templates fCCZ4-named, and `Dendro-GR/FCCZ4_GR/` hardcoded into path
-construction. A second formulation could not be lowered through that layer
-without editing it, which means the abstraction did not exist.
+**Wrong** — a generic layer with formulation-named templates and
+`Dendro-GR/FCCZ4_GR/` hardcoded into path construction. A second formulation
+could not be lowered through that layer without editing it, which means the
+abstraction did not exist.
 
 **Test.**
 
 ```bash
-grep -rio "<formulation>" nrpy/infrastructures/<Infrastructure>/*.py | wc -l
+grep -ri "<formulation>" nrpy/infrastructures/<Infrastructure>/*.py
 ```
 
-Expect zero outside `general_relativity/`.
+Any match outside `general_relativity/` needs a demonstrated generic-layer
+reason.
 
 ### Read the registries directly
 
@@ -65,8 +64,8 @@ for cp_name, code_param in par.glb_code_params_dict.items():
 ```
 
 The emitter names the registry it reads. `Makefile_helpers.py` reads
-`cfc.CFunction_dict` the same way, and ETLegacy, CarpetX, and superB all follow
-suit: four infrastructures, one pattern.
+`cfc.CFunction_dict` the same way, and ETLegacy, CarpetX, and superB follow the
+same pattern.
 
 **Wrong** — an emitter that takes a snapshot of the registries as a parameter:
 
@@ -75,11 +74,10 @@ def render_state_header(snapshot: FrozenNRPyDendroSnapshot) -> str:
     for fg in snapshot.gridfunctions:
 ```
 
-This looks disciplined — immutable input, no global reads, easy to test — and
-that is exactly why it survived six independent reviews. It is still wrong: it
-duplicated three registries into `Frozen*` records, threaded a `snapshot=`
-parameter through seven modules, and added 916 lines whose entire job was to
-hand back values `gri.glb_gridfcs_dict` already held.
+This looks disciplined — immutable input, no global reads, easy to test — but it
+is still wrong: it duplicates the authoritative registries into `Frozen*`
+records and threads a `snapshot=` parameter through emitters only to hand back
+values the registries already hold.
 
 Pitfalls worth naming, because each one is what made the invention feel like an
 improvement:
@@ -99,9 +97,13 @@ improvement:
 
 ```bash
 grep -rn "glb_gridfcs_dict\|glb_code_params_dict\|CFunction_dict" \
-  nrpy/infrastructures/<Infrastructure>/ | wc -l    # expect non-zero
-grep -rn "snapshot\|Frozen[A-Z]" nrpy/infrastructures/<Infrastructure>/ | wc -l  # expect zero
+  nrpy/infrastructures/<Infrastructure>/
+grep -rn "snapshot\|Frozen[A-Z]" nrpy/infrastructures/<Infrastructure>/
 ```
+
+The first search must identify each registry the emitter consumes. Every match
+from the second search needs a demonstrated purpose other than duplicating an
+authoritative registry.
 
 ### Names for the generated unit are function arguments
 

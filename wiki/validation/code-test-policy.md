@@ -1,6 +1,6 @@
 # Code Test Policy
 
-> Prospective placement, meaningfulness, and proof rules for tests of NRPy code. · Status: provisional · Last reconciled: 09-06-2026
+> Prospective placement, meaningfulness, and proof rules for tests of NRPy code. · Status: provisional
 > Up: [Validation](index.md)
 
 ## Summary
@@ -104,19 +104,19 @@ harness that measures an external host's behavior, which no owner doctest and no
 NRPy-side CI job can observe, because the host is present in neither. The rule
 is `coding_style.md`, `### External-Host Test Harnesses`: the harness is tracked
 beside the infrastructure that depends on the host, under `tests_infra/`, is
-built and run by hand against that host, and records the platform, the host
-revision and the date of its last real run
-(`nrpy/infrastructures/Dendro/tests_infra` is the only such harness). It is not
-a route for ordinary compile or build coverage, which stays in scoped CI. A
+built and run by hand against that host, and records only durable setup, scope,
+assertions, and reproduction instructions. It does not preserve host revisions,
+dates, environment snapshots, or run results. It is not a route for ordinary
+compile or build coverage, which stays in scoped CI. A
 substantive change to an existing compile doctest must follow the migration or
 tightly bounded fallback in
 [Test Oracles And Safe Updates](test-oracles-and-safe-updates.md#known-gaps-and-non-precedents).
 
 Claim evidence:
-- Claim: new core standalone harnesses and compile doctests are prohibited, with one carve-out: a harness that measures an external host's behavior is tracked under `tests_infra/` beside the infrastructure that depends on that host, is built and run by hand, and records the platform, the host revision and the date of its last real run. The carve-out does not license ordinary compile or build coverage outside scoped CI.
+- Claim: new core standalone harnesses and compile doctests are prohibited, with one carve-out: a harness that measures an external host's behavior is tracked under `tests_infra/` beside the infrastructure that depends on that host, is built and run by hand, and records only durable setup, scope, assertions, and reproduction instructions. The carve-out does not license ordinary compile or build coverage outside scoped CI or volatile KB metadata.
 - Role: normative rule
 - Deciding authority: [coding_style.md](../../coding_style.md), `### External-Host Test Harnesses`
-- Corroboration: [README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md), its recorded last real run and its build and run instructions, the only harness the carve-out admits
+- Corroboration: [README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md), its durable scope and build/run instructions
 
 ### Status-Only Build Or Crash Gate
 
@@ -217,11 +217,6 @@ Claim evidence:
   `run_sebobv2`, `process_input_set`; [main.yml](../../.github/workflows/main.yml),
   `sebob-consistency-test` and `sebobv2-consistency-test`
 - Corroboration: none available; helper and workflow configuration jointly decide the distributed claim
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=not-run;
-  precision=not-run; GPU=not-applicable; restart=not-applicable;
-  distributed=not-applicable; error_path=not-run; options=not-run;
-  date=07-13-2026`
 
 ### Static Summary
 
@@ -260,8 +255,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`; [jax_project_generator.py](../../nrpy/infrastructures/JAX/jax_project_generator.py), `_generate_project_metadata` and `output_PyFunction_files_and_construct_project`; [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `compile_Makefile`
 - Corroboration: [main.yml](../../.github/workflows/main.yml), `codegen-ubuntu` and `codegen-mac`, corroborates that JAX output is generated without executing its scaffold; no independent corroboration for the other two outliers
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=not-run; precision=not-run; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=not-run; date=07-13-2026`
 
 Do not expand any of those shapes. Whether an unrelated touch must remove a
 legacy empty runner remains maintainer judgment. Meaningful doctest-only
@@ -293,7 +286,7 @@ for test count.
 ## Sources
 
 - [coding_style.md](../../coding_style.md) - `### if __name__ == "__main__": Block`, `### Doctest Conventions`, `#### Doctest placeholders`, `### External-Host Test Harnesses`, `## Static Analysis Configuration`
-- [README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md) - the recorded last real run, and the build and run instructions
+- [README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md) - durable scope and build/run instructions
 - [main.yml](../../.github/workflows/main.yml) - `static-analysis`, `codegen-ubuntu`, `codegen-mac`, `sebob-consistency-test`, `sebobv2-consistency-test`
 - [single_file_static_analysis.sh](../../.github/single_file_static_analysis.sh) - `run_test_step`
 - [.pylintrc](../../.pylintrc) - `[MASTER]`; [.pylintrc_python36](../../.pylintrc_python36) - `[MASTER]`

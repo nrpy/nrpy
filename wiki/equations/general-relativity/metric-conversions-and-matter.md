@@ -1,6 +1,6 @@
 # Metric Conversions And Matter
 
-> Track ADM, BSSN, four-metric, four-Christoffel, matter-source, and Lorentz-boost helpers. · Status: confirmed · Last reconciled: 06-29-2026
+> Track ADM, BSSN, four-metric, four-Christoffel, matter-source, and Lorentz-boost helpers. · Status: confirmed
 > Up: [General Relativity](index.md)
 
 ## Summary

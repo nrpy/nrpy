@@ -1,6 +1,6 @@
 # Python Function Registry
 
-> Core route for generated Python/JAX-compatible function objects and registration. · Status: confirmed · Last reconciled: 07-12-2026
+> Core route for generated Python/JAX-compatible function objects and registration. · Status: confirmed
 > Up: [Core APIs](index.md)
 
 ## Summary

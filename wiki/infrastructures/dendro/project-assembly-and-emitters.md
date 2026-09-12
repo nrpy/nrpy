@@ -1,6 +1,6 @@
 # Project Assembly And Emitters
 
-> Explain how the Dendro infrastructure turns the NRPy registries into a complete generated solver directory, which module emits which artifact, and where the emitted names come from. · Status: provisional · Last reconciled: 09-09-2026
+> Explain how the Dendro infrastructure turns the NRPy registries into a complete generated solver directory, which module emits which artifact, and where the emitted names come from. · Status: provisional
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -64,8 +64,8 @@ Claim evidence:
 
 ### Emitted layout
 
-Two examples drive this layer: `nrpy.examples.dendro_fccz4` and
-`nrpy.examples.dendro_bssn`. The second one exists as the test that the layer
+The `nrpy.examples.dendro_fccz4` and `nrpy.examples.dendro_bssn` examples drive
+this layer. The BSSN example exists as the test that the layer
 is generic. Adding it did require generic-layer work — the formulation-agnostic
 lowering moved into `block_kernel_helpers` and `tensor_family_of` into `gridfunction_name_decorations` —
 but no existing emitter changed behavior.
@@ -86,7 +86,7 @@ the solver must be added to a host CMake tree defining `dendro5` and
 `toml11::toml11`; the generated context uses actual `ot::Mesh`, `ot::Block`,
 `ot::DVector`, and `ts::Ctx` types. Duplicate executable names fail configuration.
 The fCCZ4 example can be added as `FCCZ4_GR` beside upstream `BSSN_GR`.
-Reproduction commands and pinned versions live in the
+Reproduction commands and selected-host requirements live in the
 [host test README](../../../nrpy/infrastructures/Dendro/tests_infra/README.md#generated-real-host-qualification).
 
 Claim evidence:
@@ -94,8 +94,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py), `output_solver_cmake`; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), `_REAL_HEADER`
 - Corroboration: [Dendro_defines_h.py](../../../nrpy/infrastructures/Dendro/Dendro_defines_h.py), `output_Dendro_defines_h`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3; backend=Dendro; precision=double; GPU=not-applicable; restart=not-run; distributed=not-run; error_path=not-run; options=host selection; date=09-07-2026`
 
 ### Source list and padding
 
@@ -124,8 +122,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: `nrpy/examples/dendro_fccz4.py`, `main`
 - Corroboration: `nrpy/grid.py`, `GridFunction.gridfunction_lists` case-insensitive sort
-- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=1 and 2 MPI ranks; error_path=not-run; options=--fd-order 4 --no-ko; date=09-06-2026`
 
 ### Artifact boundary
 
@@ -146,7 +142,7 @@ evidence. Cite the Python emitters and the registry symbols instead; see
 
 - [Dendro_defines_h.py](../../../nrpy/infrastructures/Dendro/Dendro_defines_h.py) - explicit host header selection
 - [block_geometry.h](../../../nrpy/infrastructures/Dendro/block_geometry.h) - shared generated geometry interface
-- [tests_infra/README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md) - pinned real-host build and run procedure
+- [tests_infra/README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md) - real-host build and run procedure
 
 ## See Also
 

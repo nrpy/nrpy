@@ -77,15 +77,22 @@ clause when it blocks completion, distinguishing it from your interpretation.
 | Choose test placement or oracle rules, inspect static analysis or expression validation, or review generated-project CI | [Validation](wiki/validation/index.md) |
 | Update KB pages | [Workflows](wiki/workflows.md) |
 
-## Source-Tracking And Date Policy
+## Volatile Information Policy
 
 These rules bind every KB manifest and doc under `AGENTS.md`, `wiki/`, and
 `raw/`:
 
-- No source-tracking hash columns or values of any kind - `sha256` or any
-  other digest - and no hashing of sources at all.
-- No `mtime` columns or values.
-- Retained KB dates use `MM-DD-YYYY`.
+- No maintenance or runtime snapshots: dates, times, timestamps, source
+  revision values or digests, inventory counts, source access/reconciliation/
+  audit/resolution fields, environment tuples, or recorded run results.
+- No source-tracking hash or `mtime` columns or values, and no hashing of
+  sources for KB tracking.
+- Stable scientific and algorithmic values, interface version labels,
+  publication identifiers, technical names such as `CoordSystem_hash`, and
+  opaque components of stable source locators remain valid when they carry
+  identity or domain meaning rather than snapshot metadata.
+- Frozen imported evidence under `raw/source-docs/` remains verbatim; its
+  authored manifest registration obeys this policy.
 - Do not output KB maintenance notes to a separate log file. This KB already
   lives in a git repo: commit history records durable operations, so separate
   logs are redundant and wasteful.

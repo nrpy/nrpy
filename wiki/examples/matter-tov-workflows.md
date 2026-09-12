@@ -1,6 +1,6 @@
 # Matter TOV Workflows
 
-> Route neutron-star, static-fluid, GRoovy, and MANGA-adjacent TOV workflows. · Status: confirmed · Last reconciled: 08-25-2026
+> Route neutron-star, static-fluid, GRoovy, and MANGA-adjacent TOV workflows. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary

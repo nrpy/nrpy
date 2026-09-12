@@ -13,7 +13,6 @@ import re
 import sys
 from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
-from datetime import date as calendar_date
 from pathlib import Path
 from typing import Deque, Dict, List, Match, Optional, Set, Tuple
 from urllib.parse import unquote, urlparse
@@ -38,7 +37,6 @@ SOURCE_MAP_COLUMNS = [
     "Dependent pages",
     "Covered subpaths",
     "Known gaps",
-    "Last checked",
     "Next action",
 ]
 SOURCE_AUTHORITY_TIERS = {
@@ -80,16 +78,68 @@ ROOT_PROHIBITED_ARTIFACT_SEGMENT_RE = re.compile(
     r"(?:$|[._-])",
     re.IGNORECASE,
 )
-# Removed source-tracking metadata bans: no hash digest values of any
-# algorithm, no Mtime/Hash manifest columns, no Mtime values, and no
-# YYYY-MM-DD date literals in governed KB files. Prohibition/supersession
-# statements may still name the removed metadata.
+# Volatile facts do not belong in the KB. Stable scientific cardinalities and
+# identifier names remain valid; inventory counts and source-tracking values do
+# not. Prohibition/supersession statements may name a removed metadata class.
 HASH_DIGEST_VALUE_RE = re.compile(
     r"`?\b(?:sha-?\d+|md-?5|blake-?\d\w*|xxh\d*|crc-?\d+)\b`?"
     r"(?:\s*[:=]\s*|\s+)`?[0-9a-f]{8,}\b`?",
     re.IGNORECASE,
 )
-MTIME_HASH_COLUMN_RE = re.compile(r"\|\s*(Mtime|Hash)\s*\|")
+BARE_HASH_VALUE_RE = re.compile(
+    r"\b(?=[0-9a-f]{7,64}\b)(?=[0-9a-f]*[a-f])[0-9a-f]{7,64}\b",
+    re.IGNORECASE,
+)
+URL_RE = re.compile(r"https?://[^\s)>`]+")
+VOLATILE_DATE_RE = re.compile(
+    r"\b(?:\d{4}-\d{2}-\d{2}|\d{2}-\d{2}-\d{4})\b"
+)
+VOLATILE_TIME_RE = re.compile(
+    r"\b(?:[01]\d|2[0-3]):[0-5]\d"
+    r"(?::[0-5]\d(?:[.]\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?\b",
+    re.IGNORECASE,
+)
+VOLATILE_INVENTORY_COUNT_RE = re.compile(
+    r"(?<![\d.-])\b\d[\d,]*\s+(?:source\s+)?(?:files?|pages?|sources?|"
+    r"generators?|jobs?|cases?|projects?|applications?|builders?|dictionaries?|"
+    r"comparisons?|scripts?|modules?)\b",
+    re.IGNORECASE,
+)
+VOLATILE_CATALOG_COUNT_RE = re.compile(
+    r"\b(?:inventory|catalog|aggregate)\b[^.!?\n|]{0,80}"
+    r"\b\d[\d,]*(?:\s+[A-Za-z][\w-]*){0,3}\s+(?:generators?|jobs?|cases?|"
+    r"projects?|applications?|builders?|dictionaries?|baselines?|comparisons?|"
+    r"scripts?|modules?)\b",
+    re.IGNORECASE,
+)
+VOLATILE_FIELD_RE = re.compile(
+    r"(?:(?i:\bLast\s+(?:reconciled|checked|audited)\s*:)|"
+    r"\|\s*(?:Mtime|Hash|Accessed|Source count|File count|Opened|Resolved|"
+    r"Audit|Resolution|Environment|Run result)\s*\|)",
+)
+VOLATILE_RESULT_TUPLE_RE = re.compile(
+    r"\b(?:inspected|generated|built|run|result_checked)\s*=\s*"
+    r"(?:pass|fail|not-run|not-applicable)\b",
+    re.IGNORECASE,
+)
+ENVIRONMENT_ASSIGNMENT_RE = re.compile(
+    r"\b(?:environment|platform|compiler|runtime|python|os|host)\s*[:=]\s*"
+    r"[^;|,]+",
+    re.IGNORECASE,
+)
+VOLATILE_RUN_PROSE_RE = re.compile(
+    r"(?:\b(?:was|were|remained)\s+(?:not\s+)?"
+    r"(?:done|run|rerun|re-run|executed|exercised|inspected|built|generated|"
+    r"validated)\b|"
+    r"\b(?:has|have)\s+(?:not\s+)?been\s+"
+    r"(?:audited|checked|reviewed|re-reviewed|run|rerun|re-run|executed|"
+    r"exercised|inspected|built|generated|validated)\b|"
+    r"\bnot\s+(?:yet\s+)?(?:audited|checked|reviewed|re-reviewed|reconciled|"
+    r"validated)\b|\bunexecuted\b|"
+    r"\bisolated\s+local\s+(?:[\w/-]+\s+){0,3}(?:builds?|runs?|results?)\b|"
+    r"\bvalidation\s+artifacts?\s+(?:was|were)\s+temporary\b)",
+    re.IGNORECASE,
+)
 MTIME_WORD_RE = re.compile(r"\bmtimes?\b", re.IGNORECASE)
 # A mention is only allowed when a prohibition/supersession keyword precedes
 # it with no sentence boundary in between (e.g. "no `mtime` columns",
@@ -100,7 +150,6 @@ METADATA_PROHIBITION_RE = re.compile(
     r"[^.!?]*\bmtimes?\b",
     re.IGNORECASE,
 )
-ISO_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 ROOT_KB_ARTIFACT_RE = re.compile(r"^kb_audit_.*[.]md$")
 
 
@@ -689,7 +738,7 @@ def _check_source_registration(pages: List[Path], failures: List[str]) -> None:
 
 def _check_catalog(failures: List[str]) -> None:
     """
-    Check catalog target equality and page status/date agreement.
+    Check catalog target equality and page-status agreement.
 
     :param failures: Mutable failure list.
     """
@@ -700,18 +749,17 @@ def _check_catalog(failures: List[str]) -> None:
         page_i = header.index("Page")
         type_i = header.index("Type")
         status_i = header.index("Status")
-        date_i = header.index("Last reconciled")
     except ValueError:
         _fail(
             failures,
             CATALOG,
             None,
-            "catalog lacks Page/Type/Status/Last reconciled columns",
+            "catalog lacks Page/Type/Status columns",
         )
         return
     links: List[Tuple[Path, int, List[str]]] = []
     for line, row in located_rows:
-        if len(row) <= max(page_i, type_i, status_i, date_i):
+        if len(row) <= max(page_i, type_i, status_i):
             _fail(failures, CATALOG, line, "catalog row has too few columns")
             continue
         page_links = list(
@@ -743,16 +791,13 @@ def _check_catalog(failures: List[str]) -> None:
                 f"catalog target is not a live wiki page: {_rel(target)}",
             )
             continue
-        expected_status: Optional[str]
-        expected_date: Optional[str]
         if _is_router(target):
-            expected_status, expected_date = "router", "n/a"
+            expected_status = "router"
             if row[type_i].strip().lower() != "router":
                 _fail(failures, CATALOG, line, "router catalog Type must be router")
         else:
-            expected_status, expected_date = _page_header_metadata(target)
+            expected_status = _page_header_status(target)
         catalog_status = row[status_i].strip().lower()
-        catalog_date = row[date_i].strip()
         if expected_status is None:
             _fail(failures, target, 2, "page header lacks allowed Status")
         elif catalog_status != expected_status:
@@ -762,16 +807,6 @@ def _check_catalog(failures: List[str]) -> None:
                 line,
                 f"catalog status {catalog_status!r} disagrees with "
                 f"{_rel(target)} status {expected_status!r}",
-            )
-        if expected_date is None:
-            _fail(failures, target, 2, "page header lacks Last reconciled/checked date")
-        elif catalog_date.lower() != expected_date.lower():
-            _fail(
-                failures,
-                CATALOG,
-                line,
-                f"catalog date {catalog_date!r} disagrees with "
-                f"{_rel(target)} date {expected_date!r}",
             )
 
 
@@ -956,36 +991,12 @@ def _source_registered(literal: str, registered: Set[str]) -> bool:
     return any(name in registered and matches for name, matches in rules)
 
 
-def _valid_date(value: str, allow_na: bool = False) -> bool:
+def _page_header_status(path: Path) -> Optional[str]:
     """
-    Validate retained KB date syntax.
-
-    Calendar-range validation is deterministic and does not consult the clock.
-
-    :param value: Candidate date.
-    :param allow_na: Whether ``n/a`` or ``-`` is accepted.
-    :return: Whether the value is syntactically valid.
-    """
-    value = value.strip()
-    if allow_na and value.lower() in {"n/a", "-"}:
-        return True
-    match = re.fullmatch(r"(\d{2})-(\d{2})-(\d{4})", value)
-    if not match:
-        return False
-    month, day, year = (int(part) for part in match.groups())
-    try:
-        calendar_date(year, month, day)
-    except ValueError:
-        return False
-    return True
-
-
-def _page_header_metadata(path: Path) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Extract status and reconciliation/check date from page header.
+    Extract status from a page header.
 
     :param path: Wiki page.
-    :return: Lowercase status and date, when present.
+    :return: Lowercase status, when present.
     """
     header = "\n".join(_read(path).splitlines()[:5])
     status_match = re.search(
@@ -993,14 +1004,7 @@ def _page_header_metadata(path: Path) -> Tuple[Optional[str], Optional[str]]:
         header,
         re.IGNORECASE,
     )
-    date_match = re.search(
-        r"\bLast (?:reconciled|checked|audited):\s*(\d{2}-\d{2}-\d{4}|n/a|-)\b",
-        header,
-        re.IGNORECASE,
-    )
-    status = status_match.group(1).lower() if status_match else None
-    date = date_match.group(1) if date_match else None
-    return status, date
+    return status_match.group(1).lower() if status_match else None
 
 
 def _check_glossary_catalog_signal(failures: List[str]) -> None:
@@ -1070,15 +1074,14 @@ def _check_retired_operation_output(failures: List[str]) -> None:
 
 def _governed_kb_files() -> List[Path]:
     """
-    Return KB files governed by source-tracking metadata and date checks.
+    Return authored KB files governed by volatile-data checks.
 
-    :return: Governed markdown files, including ``raw/source-docs/**/*.md``.
+    Frozen source snapshots preserve imported evidence verbatim and are not
+    authored KB claims. Their registration in ``raw/SOURCES.md`` is governed.
+
+    :return: Authored Markdown files in the compiled KB and source manifest.
     """
-    files = set(_iter_md_files())
-    source_docs = RAW / "source-docs"
-    if source_docs.exists():
-        files.update(p.resolve() for p in source_docs.rglob("*.md"))
-    return sorted(files)
+    return _iter_md_files()
 
 
 def _metadata_mention_allowed(lines: List[str], line_index: int) -> bool:
@@ -1089,57 +1092,64 @@ def _metadata_mention_allowed(lines: List[str], line_index: int) -> bool:
     :param line_index: Zero-based index of the line with the mention.
     :return: Whether nearby context permits the mention.
     """
-    context = " ".join(lines[max(0, line_index - 2) : line_index + 1])
-    return METADATA_PROHIBITION_RE.search(context) is not None
+    return METADATA_PROHIBITION_RE.search(lines[line_index]) is not None
+
+
+def _volatile_metadata_issues(line: str) -> List[str]:
+    """Return volatile-data policy violations found in one line."""
+    issues: List[str] = []
+    # Complete stable locators are source identifiers. None of their opaque
+    # path components are maintenance snapshots, even when they resemble a
+    # date or digest.
+    snapshot_scan_line = URL_RE.sub("", line)
+    checks = (
+        (HASH_DIGEST_VALUE_RE, snapshot_scan_line, "hash digest value found"),
+        (BARE_HASH_VALUE_RE, snapshot_scan_line, "hash-like value found"),
+        (VOLATILE_DATE_RE, snapshot_scan_line, "date literal found"),
+        (VOLATILE_TIME_RE, snapshot_scan_line, "timestamp literal found"),
+        (VOLATILE_INVENTORY_COUNT_RE, snapshot_scan_line, "inventory count found"),
+        (VOLATILE_CATALOG_COUNT_RE, snapshot_scan_line, "catalog count found"),
+        (VOLATILE_FIELD_RE, snapshot_scan_line, "volatile metadata field found"),
+        (VOLATILE_RESULT_TUPLE_RE, snapshot_scan_line, "recorded result tuple found"),
+        (VOLATILE_RUN_PROSE_RE, snapshot_scan_line, "recorded run/audit prose found"),
+    )
+    for pattern, subject, message in checks:
+        if pattern.search(subject):
+            issues.append(message)
+    if len(ENVIRONMENT_ASSIGNMENT_RE.findall(snapshot_scan_line)) >= 2:
+        issues.append("recorded environment tuple found")
+    return issues
 
 
 def _check_source_tracking_metadata(failures: List[str]) -> None:
     """
-    Check governed KB files for removed source-tracking metadata and dates.
+    Check governed KB files for volatile metadata and snapshot values.
 
     :param failures: Mutable failure list.
     """
     for path in _governed_kb_files():
         lines = _read(path).splitlines()
         for idx, line in enumerate(lines, start=1):
-            if HASH_DIGEST_VALUE_RE.search(line):
-                _fail(failures, path, idx, "hash digest value found")
-            if MTIME_HASH_COLUMN_RE.search(line):
-                _fail(
-                    failures, path, idx, "source-tracking Mtime/Hash table column found"
-                )
+            for issue in _volatile_metadata_issues(line):
+                _fail(failures, path, idx, issue)
             if MTIME_WORD_RE.search(line) and not _metadata_mention_allowed(
                 lines, idx - 1
             ):
                 _fail(failures, path, idx, "source-tracking Mtime metadata found")
-            if ISO_DATE_RE.search(line):
-                _fail(
-                    failures,
-                    path,
-                    idx,
-                    "YYYY-MM-DD date literal found; KB dates use MM-DD-YYYY",
-                )
 
 
 def _check_status_vocabularies(failures: List[str]) -> None:
     """
-    Check page, manifest, and source-map status/date vocabularies.
+    Check page, manifest, and source-map status vocabularies.
 
     :param failures: Mutable failure list.
     """
     for page in _wiki_pages():
         if _is_router(page):
             continue
-        status, date = _page_header_metadata(page)
+        status = _page_header_status(page)
         if status not in PAGE_STATUSES:
             _fail(failures, page, 2, "page header has missing or invalid Status")
-        if date is None or not _valid_date(date):
-            _fail(
-                failures,
-                page,
-                2,
-                "page header has missing or invalid MM-DD-YYYY date",
-            )
 
     for path in (SOURCES, SOURCE_MAP):
         for header, rows in _parse_tables_with_lines(path):
@@ -1147,8 +1157,6 @@ def _check_status_vocabularies(failures: List[str]) -> None:
                 continue
             status_i = header.index("Status")
             ingest_i = header.index("Ingest") if "Ingest" in header else None
-            date_header = "Accessed" if "Accessed" in header else "Last checked"
-            date_i = header.index(date_header) if date_header in header else None
             for line, row in rows:
                 if len(row) <= status_i:
                     _fail(failures, path, line, "source row lacks Status value")
@@ -1167,15 +1175,6 @@ def _check_status_vocabularies(failures: List[str]) -> None:
                     ):
                         value = row[ingest_i] if len(row) > ingest_i else ""
                         _fail(failures, path, line, f"invalid Ingest state: {value!r}")
-                if date_i is not None:
-                    if len(row) <= date_i or not _valid_date(row[date_i]):
-                        value = row[date_i] if len(row) > date_i else ""
-                        _fail(
-                            failures,
-                            path,
-                            line,
-                            f"invalid {date_header} date: {value!r}",
-                        )
 
 
 def _check_source_map_targets(failures: List[str]) -> None:
@@ -1272,8 +1271,6 @@ def _check_contradictions(failures: List[str]) -> None:
         "Page-status rationale",
         "Owner/trigger",
         "Resolution test",
-        "Opened",
-        "Resolved",
         "Notes",
     ]
     header, rows = _table_with_header(CONTRADICTIONS, "ID")
@@ -1315,8 +1312,6 @@ def _check_contradictions(failures: List[str]) -> None:
             )
         seen.add(identifier)
         for field in required:
-            if field == "Resolved":
-                continue
             if not row[indexes[field]].strip():
                 _fail(
                     failures,
@@ -1327,22 +1322,6 @@ def _check_contradictions(failures: List[str]) -> None:
         status = row[indexes["Claim status"]].strip().lower()
         if status not in {"contested", "stale", "resolved"}:
             _fail(failures, CONTRADICTIONS, line, f"invalid Claim status: {status!r}")
-        opened = row[indexes["Opened"]].strip()
-        resolved = row[indexes["Resolved"]].strip()
-        if not _valid_date(opened):
-            _fail(failures, CONTRADICTIONS, line, f"invalid Opened date: {opened!r}")
-        if status == "resolved":
-            if not _valid_date(resolved):
-                _fail(
-                    failures, CONTRADICTIONS, line, "resolved row needs resolution date"
-                )
-        elif resolved not in {"-", "n/a"}:
-            _fail(
-                failures,
-                CONTRADICTIONS,
-                line,
-                "active row Resolved must be '-' or 'n/a'",
-            )
         affected = set(_affected_page_links(row[indexes["Affected pages"]]))
         if not affected:
             _fail(failures, CONTRADICTIONS, line, "Affected pages has no wiki links")

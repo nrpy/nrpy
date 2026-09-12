@@ -1,6 +1,6 @@
 # Wave Equation Generators
 
-> Compare the Cartesian, curvilinear, and multicoordinate wave-equation example generators. · Status: confirmed · Last reconciled: 07-12-2026
+> Compare the Cartesian, curvilinear, and multicoordinate wave-equation example generators. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary

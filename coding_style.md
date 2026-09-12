@@ -548,9 +548,10 @@ an owner doctest and cannot run in NRPy's own CI, because the host is not
 present in either. Such a harness is allowed, and only such a harness: it lives
 in a `tests_infra/` directory beside the infrastructure that depends on that
 host, it is built and run by hand against the host, and it records the platform,
-the host revision and the date of its last real run beside its results. It is
-not a route for ordinary compile or build coverage, which stays in scoped CI.
-`nrpy/infrastructures/Dendro/tests_infra` is the only such harness today.
+but its repository documentation records only durable setup, scope, assertions,
+and reproduction instructions. Do not store host revisions, dates, environment
+snapshots, or run results in the knowledge base. It is not a route for ordinary
+compile or build coverage, which stays in scoped CI.
 
 Its C/C++ sources are read and edited beside the host's own, so they follow the
 host project's layout: the indent width is the host's four spaces rather than

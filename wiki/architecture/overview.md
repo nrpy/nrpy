@@ -1,6 +1,6 @@
 # Overview
 
-> Map the NRPy project shape from symbolic source to generated artifacts. · Status: confirmed · Last reconciled: 07-12-2026
+> Map the NRPy project shape from symbolic source to generated artifacts. · Status: confirmed
 > Up: [Architecture](index.md)
 
 ## Summary

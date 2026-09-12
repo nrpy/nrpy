@@ -1,6 +1,6 @@
 # CarpetX Thorn Assembly, Configuration, And CCL Files
 
-> Explain how CarpetX writes Cactus CCL files, `make.code.defn`, and thorn-local C++ sources from registered generator state. · Status: confirmed · Last reconciled: 07-12-2026
+> Explain how CarpetX writes Cactus CCL files, `make.code.defn`, and thorn-local C++ sources from registered generator state. · Status: confirmed
 > Up: [CarpetX](index.md)
 
 ## Summary
@@ -80,9 +80,9 @@ emits `.cxx` files.
 No current checked-in workflow command invokes `carpetx_wavetoy_thorns.py` or
 `carpetx_baikal_thorns.py`. The `einsteintoolkit-validation` job invokes the
 similarly named `carpet_*` ETLegacy generators instead. CarpetX generation,
-Einstein Toolkit build, runtime, GPU, and restart outcomes are therefore
-`not-run` in current CI evidence and in this KB audit; local generator code
-decides only the emitted thorn shape described above.
+Einstein Toolkit build, runtime, GPU, and restart behavior are outside the
+configured validation route; local generator code decides only the emitted
+thorn shape described above.
 
 ## Sources
 
@@ -92,9 +92,9 @@ decides only the emitted thorn shape described above.
 - [configuration_ccl.py](../../../nrpy/infrastructures/CarpetX/configuration_ccl.py) - `construct_configuration_ccl`
 - [make_code_defn.py](../../../nrpy/infrastructures/CarpetX/make_code_defn.py) - `output_CFunctions_and_construct_make_code_defn`
 - [main.yml](../../../.github/workflows/main.yml) - `einsteintoolkit-validation` (ETLegacy-only configured commands)
-- [Cactus Users Guide chapter C1](https://www.cactuscode.org/documentation/usersguide/UsersGuidech9.html) - `C1.1.1 Thorns`, `C1.2 Anatomy of a Thorn`, `make.code.defn based thorn building`; accessed 07-12-2026
-- [Cactus Users Guide chapter D2](https://www.cactuscode.org/documentation/usersguide/UsersGuidech12.html) - CCL configuration syntax; accessed 07-12-2026
-- [CarpetX User Manual](https://einsteintoolkit.org/thornguide/CarpetX/CarpetX/documentation.html) - `Introduction` and CCL dependency background; accessed 07-12-2026
+- [Cactus Users Guide chapter C1](https://www.cactuscode.org/documentation/usersguide/UsersGuidech9.html) - `C1.1.1 Thorns`, `C1.2 Anatomy of a Thorn`, `make.code.defn based thorn building`
+- [Cactus Users Guide chapter D2](https://www.cactuscode.org/documentation/usersguide/UsersGuidech12.html) - CCL configuration syntax
+- [CarpetX User Manual](https://einsteintoolkit.org/thornguide/CarpetX/CarpetX/documentation.html) - `Introduction` and CCL dependency background
 
 ## See Also
 

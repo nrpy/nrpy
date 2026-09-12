@@ -1,6 +1,6 @@
 # Gridfunctions, Naming, And Loops
 
-> Explain the Dendro gridfunction class, the exact-name role decorations, the CFunction role sidecar, the generation parameters, and the two loop helpers. · Status: provisional · Last reconciled: 09-09-2026
+> Explain the Dendro gridfunction class, the exact-name role decorations, the CFunction role sidecar, the generation parameters, and the two loop helpers. · Status: provisional
 > Up: [Dendro](index.md)
 
 ## Summary

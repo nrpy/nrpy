@@ -1,11 +1,11 @@
 # fCCZ4 Application Wiring
 
-> Explain the Dendro fCCZ4 builders: the direct finite-difference right-hand side, the det(gammabar)/tr(Abar) enforcement, initial-data conversion, and constraint diagnostics. · Status: provisional · Last reconciled: 09-12-2026
+> Explain the Dendro fCCZ4 builders: the direct finite-difference right-hand side, the det(gammabar)/tr(Abar) enforcement, initial-data conversion, and constraint diagnostics. · Status: provisional
 > Up: [Dendro](index.md)
 
 ## Summary
 
-Four builders lower the shared fCCZ4 expression factory into Dendro kernels.
+The application builders lower the shared fCCZ4 expression factory into Dendro kernels.
 The scientific formulation comes from the shared factory and from established
 NRPy constraint factories and conversions, and every field name is read back from the
 registry rather than written down. What the builders do author is bounded and
@@ -31,7 +31,7 @@ high-precision reference for both the block kernel and flat adapter. Kernel and
 reference inputs are the same exactly emitted binary64 samples; the reference
 applies the stencil and actual CSE graph at 80 and 100 digits and derives a
 componentwise roundoff bound from their scale and operation count. KO-off
-remains the configured default; KO-on is exercised as a separate local
+remains the configured default; KO-on has a separate local
 qualification product after proving resolvable KO effects in several field
 families.
 
@@ -86,8 +86,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/initial_data.py`, `_block_pointer_bindings`
 - Corroboration: `nrpy/infrastructures/Dendro/gridfunction_name_decorations.py`, `out_pointer` docstring recording why `rhs_` was rejected
-- Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=not-run`
-- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=--fd-order 4 --no-ko; date=09-04-2026`
 
 A separate builder emits the smooth analytic perturbation that makes the
 stencils observable. Its profile is authored in NRPy and lowered by `c_codegen`,

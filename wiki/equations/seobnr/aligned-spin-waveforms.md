@@ -1,6 +1,6 @@
 # Aligned-Spin Waveforms
 
-> Map SEOBNRv5 aligned-spin factorized modes, flux, strain, and merger attachment quantities. · Status: confirmed · Last reconciled: 07-13-2026
+> Map SEOBNRv5 aligned-spin factorized modes, flux, strain, and merger attachment quantities. · Status: confirmed
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
@@ -13,7 +13,7 @@ fits.
 
 These are current symbolic ingredients associated with the quasi-circular,
 spinning, nonprecessing binary-black-hole SEOBNRv5HM model. The relationship to
-the unversioned current-latest paper page is unaudited model background;
+the unversioned paper landing page is model background;
 model-wide calibration and accuracy claims neither decide this transcription's
 contract nor validate every generated consumer.
 
@@ -70,7 +70,7 @@ build generated code, integrate dynamics, or measure waveform accuracy.
 - [SEOBNRv5_aligned_spin_merger_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_merger_quantities.py) - `SEOBNRv5_aligned_spin_merger_quantities`
 - [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_waveform_quantities.py) - `trusted_dict`
 - [SEOBNRv5_aligned_spin_merger_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_merger_quantities.py) - `trusted_dict`
-- [SEOBNRv5HM current latest paper page](https://arxiv.org/abs/2303.18039) - background orientation only; aligned-spin waveform/calibration claims are not yet audited to a pinned revision
+- [SEOBNRv5HM paper landing page](https://arxiv.org/abs/2303.18039) - background orientation only; aligned-spin waveform/calibration mapping is not established
 
 ## See Also
 

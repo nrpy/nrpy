@@ -1,6 +1,6 @@
 # Lifecycle And Project Assembly
 
-> Explain how BHaH standalone applications register runtime functions, assemble generated projects, and split executable and library entrypoints. · Status: confirmed · Last reconciled: 07-23-2026
+> Explain how BHaH standalone applications register runtime functions, assemble generated projects, and split executable and library entrypoints. · Status: confirmed
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -60,9 +60,8 @@ registration is commented out, and it does not call the default-parfile writer.
 
 Claim status: stale; contradiction: CONTR-0001.
 See [CONTR-0001](../../contradictions.md#contr-0001) for authority, affected
-pages, validation limits, and the executable resolution test. This is a
-descriptive contradiction record; it is not yet a migrated claim-evidence
-block.
+pages, validation limits, and the executable resolution test; that contradiction
+record owns the claim evidence.
 
 `output_CFunctions_function_prototypes_and_construct_Makefile` turns the
 registered `CFunction_dict` into a buildable generated project. It validates
@@ -98,23 +97,11 @@ runtime-suffix files below the root, and `.o`/`.d` files at depth three or
 deeper. Cleanup uses explicit globs rather than `find`, recursive wildcards, a
 filename manifest, or source-discovery logic.
 
-Bounded isolated validation generated and built the default-BSSN and fCCZ4
-spectroscopy projects with direct `OPENMP=1`. A separate seeded generated
-parent/child Makefile fixture exercised the current cleanup recipe: `make clean`
-printed one expanded root `rm` command to standard output, produced no standard
-error, invoked a silent child cleanup, removed the target, root `.deps/`,
-`.o`/`.d` files through depth two, and all seven runtime suffixes at the root.
-It preserved `.par`, unrelated suffixes, nested runtime files, and depth-three
-`.o`/`.d` files. This cleanup check did not exercise every Makefile target or
-backend.
-
 Claim evidence:
 - Claim: Generated BHaH Makefiles use one explicit `ADD_SOURCE` record per registered C-function source, derive object and dependency inventories without source-discovery commands, make resolved registered project-local headers immediate prerequisites, and use compiler dependency files under `.deps/`; generated `clean` prints one root `rm` command while removing the exact target, root dependency directory, `.o`/`.d` files only through depth two, and seven runtime suffix families only at the project root, delegates silent cleanup to registered subprojects, and preserves `.par`, unrelated suffixes, nested runtime files, and depth-three-or-deeper `.o`/`.d` files.
 - Role: descriptive behavior
 - Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_generate_c_files_and_header`, `_construct_makefile_content`, and `output_CFunctions_function_prototypes_and_construct_Makefile`
-- Corroboration: none available; validation artifacts were temporary and were not registered
-- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=generated GNU Make; precision=double; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=default BSSN and fCCZ4 OPENMP=1 builds plus seeded single-line bounded clean contract; date=08-28-2026`
+- Corroboration: emitted-Makefile assertions in the same owner module
 
 Compiler selection replaces GNU Make's built-in `cc` only when that default is
 active, preserving environment and command-line choices; CUDA Makefiles select
@@ -127,19 +114,13 @@ fallback is emitted. The linker is selected from live source records: host C++ s
 select `CXX`, ordinary CPU C sources select `CC`, and CUDA projects select
 NVCC. Additional generated projects are rechecked before dependent object
 builds and the final link. Static archives are removed before recreation so
-deleted object members cannot survive. These enabled-OpenMP, host-C++,
-additional-project, shared-library, and static-archive behaviors were inspected.
-The direct enabled-OpenMP executable path was also exercised by both isolated
-spectroscopy builds; `OPENMP=0`, host-C++, CUDA, shared-library, and archive
-variants were not rerun for this change.
+deleted object members cannot survive.
 
 Claim evidence:
 - Claim: Generated BHaH Makefiles preserve CPU origin-aware compiler selection and CUDA command-line `CC` overrides, separate build-flag roles, apply direct CPU `-fopenmp` compile/link flags for `OPENMP=1` with no probe or fallback, retain explicit `OPENMP=0` opt-out behavior, choose the linker from live source records, recheck additional projects before dependent builds, and recreate static archives without stale members.
 - Role: descriptive behavior
 - Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_generate_c_files_and_header`, `_construct_makefile_content`, and `output_CFunctions_function_prototypes_and_construct_Makefile`
 - Corroboration: none available; emitted-Makefile assertions live in the same owner module
-- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=generated GNU Make; precision=double; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=default BSSN and fCCZ4 OPENMP=1 direct-flag builds, OPENMP=0 source inspection only; date=08-28-2026`
 
 The generated `make valgrind` target is executable-oriented. For a CPU
 executable it cleans, rebuilds with the debug C flags and `OPENMP=0`, then runs
@@ -159,22 +140,11 @@ cleaning and rebuilding. CUDA library targets reject `make valgrind` because
 they have no executable harness; CPU library targets only perform the debug
 rebuild and do not invoke Valgrind.
 
-A targeted CUDA error-path check first built a minimal fixture, then ran
-`make valgrind CUDA_SANITIZER_DIR=/definitely/missing`. The command failed with
-the generated search and override instructions while preserving the existing
-executable, confirming that the missing-library guard ran before `clean`. No
-post-guard clean, `-lineinfo` rebuild, Compute Sanitizer command, generated
-executable, or GPU workload ran. CPU Valgrind and all library-target branches
-also remained unexecuted. This command had no explicit timeout and retained no
-registered generated evidence.
-
 Claim evidence:
-- Claim: Source inspection shows that generated CPU executable `make valgrind` rebuilds without OpenMP and runs Valgrind, while generated CUDA executable `make valgrind` checks only the configurable injection-library directory before cleaning, adds `-lineinfo` to NVCC `.cu` compilation and final linking, and runs Compute Sanitizer; CUDA libraries reject the target for lack of an executable harness, CPU libraries rebuild without running Valgrind, and targeted execution covered only the CUDA missing-library guard before any sanitizer rebuild or run.
+- Claim: Generated CPU executable `make valgrind` rebuilds without OpenMP and runs Valgrind, while generated CUDA executable `make valgrind` checks only the configurable injection-library directory before cleaning, adds `-lineinfo` to NVCC `.cu` compilation and final linking, and runs Compute Sanitizer; CUDA libraries reject the target for lack of an executable harness, and CPU libraries rebuild without running Valgrind.
 - Role: descriptive behavior
 - Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_construct_makefile_content`
-- Corroboration: none available; validation artifacts were temporary and were not registered
-- Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=GCC 13.3.0, NVCC/CUDA 13.2 build cuda_13.2.r13.2/compiler.37953736_0, GNU Make 4.3, Compute Sanitizer=not-run; backend=CUDA missing-library guard; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=missing libsanitizer-collection.so guard passed before clean; options=CC=nvcc, src_code_file_ext=cu, compiler_opt_option=nvcc, use_openmp=False, CUDA_SANITIZER_DIR=/definitely/missing; date=07-23-2026`
+- Corroboration: none available; emitted-Makefile assertions live in the same owner module
 
 `compile_Makefile` is the programmatic build wrapper. It autodetects a compiler
 when requested, regenerates the prototype/header/Makefile assets through

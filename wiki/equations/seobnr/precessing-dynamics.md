@@ -1,6 +1,6 @@
 # SEOBNR Precessing Dynamics
 
-> Map NRPy's quasi-precessing SEOBNRv5 Hamiltonian and spin/orbital evolution equation builders. · Status: confirmed · Last reconciled: 07-13-2026
+> Map NRPy's quasi-precessing SEOBNRv5 Hamiltonian and spin/orbital evolution equation builders. · Status: confirmed
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
@@ -13,7 +13,7 @@ post-Newtonian right-hand sides for the spin vectors, Newtonian orbital-plane
 unit vector, orbital angular momentum, and orbital frequency.
 
 “Quasi-precessing” is material scope. Its relationship to the unversioned
-current-latest precessing-dynamics paper page is unaudited model background, not
+the precessing-dynamics paper landing page is model background, not
 a versioned intended contract. The implementation orbit-averages in-plane spin
 terms under circular-orbit assumptions and sets non-black-hole multipolar
 coefficients to zero; audit a specific paper revision before asserting an exact
@@ -71,7 +71,7 @@ generated implementation, or establish waveform accuracy.
 - [SEOBNRv5_spin_evolution_equations.py](../../../nrpy/equations/seobnr/SEOBNRv5_spin_evolution_equations.py) - `SEOBNRv5_spin_evolution_equations`, `chi1_dot_x`, `chi2_dot_x`, `ln_dot_x`, `L_x`, `omega_dot`
 - [SEOBNRv5_quasi_precessing_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py) - `trusted_dict`
 - [SEOBNRv5_spin_evolution_equations.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_spin_evolution_equations.py) - `trusted_dict`
-- [SEOBNRv5 dynamics current latest paper page](https://arxiv.org/abs/2303.18143) - background orientation only; cited sections/equations are not yet audited to a pinned revision
+- [SEOBNRv5 dynamics paper landing page](https://arxiv.org/abs/2303.18143) - background orientation only; cited section/equation mapping is not established
 
 ## See Also
 

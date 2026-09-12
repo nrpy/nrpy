@@ -1,6 +1,6 @@
 # Fishbone-Moncrief
 
-> Map Fishbone-Moncrief torus initial data for GRMHD-style consumers. · Status: confirmed · Last reconciled: 06-29-2026
+> Map Fishbone-Moncrief torus initial data for GRMHD-style consumers. · Status: confirmed
 > Up: [General Relativity](index.md)
 
 ## Summary

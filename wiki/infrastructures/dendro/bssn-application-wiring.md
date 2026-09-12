@@ -1,6 +1,6 @@
 # BSSN Application Wiring
 
-> Explain the Dendro BSSN builders, what they reuse from the fCCZ4 profile, and what adding a second formulation proved about the generic layer. · Status: provisional · Last reconciled: 09-09-2026
+> Explain the Dendro BSSN builders, what they reuse from the fCCZ4 profile, and what adding a second formulation proved about the generic layer. · Status: provisional
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -45,8 +45,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `build_rhs_eval` and `register_CFunctions_rhs_eval`; [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), `build_constraints_eval` and `register_CFunctions_constraints_eval`
 - Corroboration: both modules' `__main__` trusted-expression checks; direct before/after comparison of full registered CFunctions and Dendro metadata for both shipped profiles
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, SymPy 1.14.0; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=FD4, BSSN W and fCCZ4 chi, KO off; date=09-07-2026`
 
 ### What the builders do
 
@@ -79,8 +77,8 @@ returning an object constructed under the previous setting.
 
 Dendro's diagnostics contract is the
 **DIAG** group, which is the settled infrastructure convention: BHaH registers
-31 DIAG gridfunctions across its wave-equation, elliptic and GR diagnostics,
-while AUX appears once. Every registration in the factory is guarded by
+DIAG gridfunctions across its wave-equation, elliptic and GR diagnostics,
+while AUX appears in a separate helper role. Every registration in the factory is guarded by
 `if <name> not in gri.glb_gridfcs_dict`, so the Dendro builder registers the
 names it writes as DIAG *before* constructing the factory. That is
 load-bearing for `H`; `MU0`-`MU2` are DIAG simply because this builder is their
@@ -102,8 +100,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), the `group="AUX"` registrations and their `not in gri.glb_gridfcs_dict` guards
 - Corroboration: [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), the `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` save/set/restore around the `BSSN_constraints` construction in the BSSN builder
-- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3, OpenMPI 4.1.6; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=1 and 2 MPI ranks; error_path=not-run; options=--fd-order 4 --no-ko; date=09-07-2026`
 
 ### Dendro's own vocabulary
 
@@ -142,10 +138,10 @@ defects that a single-formulation tree could not expose:
   been deleted as dead code in an earlier review round. It was dead only
   because the tree had one formulation.
 - The shared initial-data and enforcement builders hardcoded `fccz4_` into the
-  CFunction names they registered, so the first BSSN solver shipped eight
+  CFunction names they registered, so the BSSN solver shipped
   `fccz4_`-named sources. The stem is now threaded from the caller.
-- The perturbation added an identical profile to every field, and 22 of 24
-  fields have an asymptotic value of zero, so the probe state carried two
+- The perturbation added an identical profile to every field, and most fields
+  have an asymptotic value of zero, so the probe state carried too few
   distinct component values and the `FLATADAPTER` gate could not see a
   component bound to the wrong flat-layout slab. Each component is now scaled
   by one plus its registry position.

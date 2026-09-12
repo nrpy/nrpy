@@ -1,6 +1,6 @@
 # BHaH Lifecycle
 
-> Compatibility page for the moved BHaH lifecycle content. · Status: confirmed · Last reconciled: 07-06-2026
+> Compatibility page for the moved BHaH lifecycle content. · Status: confirmed
 > Up: [Infrastructures](index.md)
 
 ## Summary

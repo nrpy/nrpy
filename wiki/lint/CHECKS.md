@@ -1,6 +1,6 @@
 # Lint Checks
 
-> Mechanical and review checks for the Markdown KB. · Status: confirmed · Last reconciled: 07-20-2026
+> Mechanical and review checks for the Markdown KB. · Status: confirmed
 
 ## Summary
 
@@ -19,20 +19,19 @@ carry facts and sources, and excluded artifacts stay out of the KB.
 - `rg -n '\[\[' AGENTS.md wiki raw/SOURCES.md` returns no Obsidian-style
   links. Frozen `raw/source-docs/**/*.md` snapshots are immutable exemptions.
 - A marker scan returns no unfilled dates, to-do markers, or template text.
-- No removed source-tracking metadata appears in governed KB files, including
-  `raw/source-docs/**/*.md`: no hash digest values of any algorithm (`sha256`
-  or otherwise), no `Mtime`/`Hash` manifest table columns, and no `mtime`
-  values. Mentions of the removed metadata are allowed only in prohibition or
-  supersession statements.
-- No `YYYY-MM-DD` date literals remain; retained KB dates use `MM-DD-YYYY` or
-  approved placeholders such as `n/a`/`-`.
+- No volatile metadata appears in authored governed KB files: no date or
+  timestamp literals, source revision or digest values, inventory counts,
+  access/reconciliation/audit/resolution fields, environment tuples, or run
+  results. Opaque components inside stable source URLs are identifiers, not
+  tracking hashes. Frozen `raw/source-docs/**/*.md` evidence is verbatim and
+  exempt; its authored manifest row remains governed.
 - Agents are never told to compute, recompute, compare, or lint source-tracking
   digests or timestamps; source drift is dependency-aware review per
   [Workflows](../workflows.md).
 - Relative Markdown links from `AGENTS.md`, `wiki/**/*.md`, and
   `raw/SOURCES.md` resolve within the repository. Frozen snapshots under
-  `raw/source-docs/` are preserved verbatim and exempt from link resolution;
-  their metadata checks still apply.
+  `raw/source-docs/` are preserved verbatim and exempt from link and volatile-
+  content checks.
 - `python tools/kb_lint.py` runs all deterministic checks and prints `KB lint
   passed.` on success. `--all` is an identical compatibility alias, not a
   stronger mode.
@@ -54,8 +53,8 @@ carry facts and sources, and excluded artifacts stay out of the KB.
 
 - Every `wiki/**/*.md` page appears exactly once in [catalog.md](../catalog.md),
   including routers, leaves, and governance/support pages.
-- Catalog targets equal the live wiki page set exactly. Catalog status/date
-  metadata agrees with page headers; router rows use `router` and `n/a`.
+- Catalog targets equal the live wiki page set exactly. Catalog status agrees
+  with page headers; router rows use `router`.
 - Catalog rows are one-line navigation aids only; they do not replace leaf
   reading, leaf `Sources`, or source-backed detail.
 - Every glossary term has an owner page link, an explicit external/background
@@ -82,7 +81,7 @@ carry facts and sources, and excluded artifacts stay out of the KB.
 ## Contradiction Checks
 
 - Contradiction rows use unique `CONTR-0001` IDs and all schema columns. Active
-  rows use `contested`/`stale`, valid dates, linked affected pages, nonempty
+  rows use `contested`/`stale`, linked affected pages, nonempty
   rationale/owner/resolution test, and matching page markers/backlinks.
 
 ## NRPy Baseline

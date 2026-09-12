@@ -1,16 +1,16 @@
 # Generated Backend Comparison
 
-> Compare generated backend families by output shape, build path, validation route, and artifact boundary. · Status: provisional · Last reconciled: 09-11-2026
+> Compare generated backend families by output shape, build path, validation route, and artifact boundary. · Status: provisional
 > Up: [Syntheses](index.md)
 
 ## Summary
 
-NRPy has six routed generated-backend families with different runtime hosts:
+NRPy routes generated-backend families with different runtime hosts:
 BHaH emits standalone C/CUDA-style projects or libraries, ETLegacy and CarpetX
 emit Einstein Toolkit thorns, superB emits Charm++ projects, JAX emits a
 Python/JAX package, and Dendro emits fCCZ4 and BSSN solver modules for a
 Dendro-GR checkout.
-Across all six, generated `project/**` trees are products, not source evidence,
+Across them, generated `project/**` trees are products, not source evidence,
 unless maintainers deliberately freeze and register a selected generated
 artifact.
 
@@ -27,7 +27,7 @@ chat history.
 | CarpetX | CarpetX/Cactus thorn infrastructure using Loop/CarpetX dependencies, C++ source emission, ODESolvers schedule bins, and CarpetX gridfunction metadata. | Generated thorn directory with `interface.ccl`, `param.ccl`, `schedule.ccl`, `configuration.ccl`, `src/make.code.defn`, and thorn-local `src/*.cxx`. | Generate thorns from NRPy, place them in an Einstein Toolkit/CarpetX-capable checkout, then build/run in that host environment. CarpetX thorns require `Loop` and `CarpetX`; schedules use ODESolvers bins. | Current cited CI/validation pages do not establish `carpetx_*` Einstein Toolkit build/test coverage. CarpetX GR RHS has trusted-expression dictionaries; several SIMD/CAHD details are source-observed caveats rather than proven runtime guarantees. | Emitted CCL, configuration, C++ source, and built toolkit outputs are generated products. Cite CarpetX writer modules, Cactus/CarpetX background docs only for terminology, and local validation pages for NRPy facts. |
 | superB | Charm++-based superB infrastructure for distributed-memory generated applications, with `Main`, `Timestepping`, optional interpolation/horizon chares, and PUP support. | Generated Charm++ project under `project/<project_name>/`: `.h`, `.cpp`, `.ci`, PUP routines, copied static headers, parameter/default files, BHaH defines/prototypes, and a Makefile using `charmc`. | Run the Python generator, enter the generated project directory, run `make`, then launch with `./charmrun +pN ./<project_name>`. Optional BHaHAHA and checkpoint paths add service chares and link inputs. | `charmpp-validation` CI generates several superB workflows, builds them in a Charm++ Apptainer image, and runs `superB_two_blackholes_collide` through `charmrun +p2`. | Generated Charm++ projects, translated `.decl.h`/`.def.h`, logs, checkpoints, binaries, and linked service outputs are products. Cite superB generator modules and static source headers. |
 | JAX | Python/JAX infrastructure driven by `PyFunction_dict` and `commondata_params_dict`, currently surfaced through `sebobv1_jax`. | Generated Python package under `project/<name>/src/<name>/`, with one module per registered `PyFunction`, `Commondata.py`, package `__init__.py`, `pyproject.toml`, `setup.cfg`, requirements, README, `.gitignore`, and a minimal import smoke test. | Run `python -m nrpy.examples.sebobv1_jax` or another JAX generator. Current CI generation route does not run a following generated `make` step; runtime use of generated package behavior is narrower than C backend build validation. | Ubuntu and macOS codegen CI run the JAX generator. Current `sebobv1_jax` route is generation-only and has a documented `a_f` Commondata mismatch, so end-to-end waveform runtime validation is provisional. | Generated Python package files and packaging metadata are products. Cite JAX project generator, `PyFunction`/Commondata registry code, example source, and CI workflow rather than generated package files. |
-| Dendro | Dendro infrastructure over the NRPy gridfunction, CodeParameter, and `CFunction` registries, read directly by one emitter per artifact; fCCZ4 and BSSN are the two applications. | Generated solver directory under `project/<name>/Dendro-GR/<solver_name>/`: state and parameter headers, one source per registered CFunction, solver and tests CMake, a sample parameter file, generated self-tests, the host context and entry point, and the standalone host header. | Run the Python generator, configure the solver with CMake, build it, then run the generated executable; it compiles against a standalone host header and needs only MPI and a C++17 compiler. With `<PREFIX>_STANDALONE_HOST=OFF`, the same emitted solver uses real Dendro block/vector/context types and links the host targets; the fCCZ4 path is qualified at pinned Dendro-GR/Dendrolib revisions. | Both projects have local generation, CMake build, and CTest qualification; no generated-project CI is configured. Symbolic and emitted-source contracts run as owner doctests in static analysis; the generated local self-tests and Minkowski lifecycle use the standalone host. A separate pinned real-host fCCZ4 qualification checks distributed transport, parameter response, and a 100-step two-rank Minkowski run; real-host CI remains open. | Generated solver files and binaries are products. Cite the Dendro emitter modules, the registry symbols, and the pin and capability records. |
+| Dendro | Dendro infrastructure over the NRPy gridfunction, CodeParameter, and `CFunction` registries, read directly by one emitter per artifact; fCCZ4 and BSSN are the applications. | Generated solver directory under `project/<name>/Dendro-GR/<solver_name>/`: state and parameter headers, one source per registered CFunction, solver and tests CMake, a sample parameter file, generated self-tests, the host context and entry point, and the standalone host header. | Run the Python generator, configure the solver with CMake, build it, then run the generated executable; it compiles against a standalone host header and needs MPI and a C++17 compiler. With `<PREFIX>_STANDALONE_HOST=OFF`, the same emitted solver uses real Dendro block/vector/context types and links the host targets. | Local procedures cover generation, CMake build, CTest, symbolic contracts, emitted-source contracts, the standalone host, and a real-host fCCZ4 route. No generated-project CI is configured. These procedures define reproducible checks; they do not store an execution result in the KB. | Generated solver files and binaries are products. Cite the Dendro emitter modules, registry symbols, and capability oracles. |
 
 The main backend split is not language alone. BHaH and superB both generate
 standalone project trees, but BHaH's lifecycle is process/library oriented
@@ -38,25 +38,21 @@ requirements, and ODESolvers-oriented schedules. JAX is the outlier: it
 consumes Python-function registries and writes a Python package rather than a
 C/C++ build product. Dendro differs on a different axis: its target is a
 third-party host it does not vendor. Generated solvers support a standalone
-vehicle and a real-host build. The fCCZ4 fixed-mesh path now has a checked
-build and two-rank run against pinned Dendro-GR/Dendrolib revisions; general
-boundaries, remeshing, and real-host CI remain separate gates.
+vehicle and a real-host build. The fCCZ4 real-host route checks fixed-mesh
+Minkowski behavior and distributed transport; general boundaries, remeshing,
+and real-host CI remain separate gates.
 
 Claim evidence:
-- Claim: the Dendro infrastructure has two applications, fCCZ4 and BSSN, each generated by its own top-level example module through the same emitters. Nothing cited here decides how many applications another backend family has.
+- Claim: the Dendro infrastructure supports fCCZ4 and BSSN applications, each generated by its own top-level example module through the same emitters. Nothing cited here decides the application inventory of another backend family.
 - Role: descriptive behavior
 - Deciding authority: [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py), `main`; [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py), `main`
 - Corroboration: [cmake_helpers.py](../../nrpy/infrastructures/Dendro/cmake_helpers.py), `module_layout`, which both examples call with their own solver identifiers; [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py), `main`
-- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3, OpenMPI 4.1.6; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=1 and 2 MPI ranks; error_path=not-run; options=--fd-order 4 --no-ko; date=09-06-2026`
 
 Claim evidence:
-- Claim: the generated Dendro solver has standalone and real-host build branches. The real fCCZ4 branch is qualified for fixed-mesh Minkowski and distributed transport at pinned host revisions; this does not qualify general boundaries, remeshing, BSSN real-host execution, or real-host CI.
+- Claim: the generated Dendro solver has standalone and real-host build branches. The real fCCZ4 procedure checks fixed-mesh Minkowski and distributed transport; this does not qualify general boundaries, remeshing, BSSN real-host execution, or real-host CI.
 - Role: descriptive behavior
 - Deciding authority: [cmake_helpers.py](../../nrpy/infrastructures/Dendro/cmake_helpers.py), `output_solver_cmake`; [solver_context.py](../../nrpy/infrastructures/Dendro/solver_context.py), real `Ctx` template
-- Corroboration: [runtime_integration_test.cpp](../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), independent affine/zip and parameter-response oracles; [tests_infra/README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md), pinned build/run procedure and measured qualification
-- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, SymPy 1.14.0, GCC 13.3.0, CMake 3.28.3, OpenMPI 4.1.6; backend=real Dendro-GR fCCZ4; precision=double; GPU=not-run; restart=not-run; distributed=2 active MPI ranks; error_path=pass for rank-local offset, halo, NaN, invalid TOML values and profile mismatch; options=FD4, KO off, fixed mesh, 100 RK4 steps; date=09-07-2026`
+- Corroboration: [runtime_integration_test.cpp](../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), independent affine/zip and parameter-response oracles; [tests_infra/README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md), real-host build/run procedure
 
 Validation is uneven by backend. Selected standalone C examples and superB have
 configured build or run coverage in generated-project CI; ETLegacy has configured Einstein Toolkit build/test
@@ -69,7 +65,7 @@ proves configured job shape, never latest successful execution.
 
 ## Sources
 
-- Karpathy LLM Wiki approach - query-output filing principle:
+- Karpathy LLM Wiki approach - query-output filing principle, raw gist:
   `https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md`.
 - [README.md](../../README.md) - `## Project Families and Example Generators`, `## What Gets Generated?`
 - [main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`, `einsteintoolkit-validation`, `charmpp-validation`, SEOB/SEBOB consistency jobs
@@ -80,7 +76,7 @@ proves configured job shape, never latest successful execution.
 
 - [solver_context.py](../../nrpy/infrastructures/Dendro/solver_context.py) - real `Ctx` adapter and callbacks
 - [runtime_integration_test.cpp](../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp) - transport and parameter oracles
-- [tests_infra/README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md) - pinned real-host qualification
+- [tests_infra/README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md) - real-host qualification procedure
 
 ## See Also
 

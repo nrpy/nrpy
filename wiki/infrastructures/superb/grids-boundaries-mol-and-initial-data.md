@@ -1,6 +1,6 @@
 # Grids, Boundaries, MoL, And Initial Data
 
-> Chare-local grid setup, boundary exchange, Method of Lines phases, initial-data staging, and NRPyElliptic integration hooks in superB. · Status: confirmed · Last reconciled: 08-28-2026
+> Chare-local grid setup, boundary exchange, Method of Lines phases, initial-data staging, and NRPyElliptic integration hooks in superB. · Status: confirmed
 > Up: [superB](index.md)
 
 ## Summary
@@ -122,16 +122,12 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py) and [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py), `enable_YBS_Gamma_constraint_adjustment` forwarding
 - Corroboration: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=superB/BHaH source wiring inspected only; precision=not-applicable; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=both default-disabled superB black-hole call sites; date=08-28-2026`
 
 Claim evidence:
 - Claim: superB initial-data projection is opt-in with default `False`; the checked collision example enables it and explicitly provides a Method of Lines post-RHS projection hook while using BSSN, not the new fCCZ4 evolution owners.
 - Role: public/scientific contract
 - Deciding authority: [initial_data.py](../../../nrpy/infrastructures/superB/initial_data.py), `register_CFunction_initial_data`; [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py), initial-data and Method of Lines registrations
 - Corroboration: [MoL.py](../../../nrpy/infrastructures/superB/MoL.py), `register_CFunctions`
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=superB source registration; precision=not-applicable; GPU=not-run; restart=source-path-inspected only; distributed=not-run; error_path=not-run; options=opt-in collision example call site inspected; date=08-26-2026`
 
 The generated `post_non_y_n_auxevol_mallocs` hook runs after memory for
 non-`y_n` and auxiliary-evolution gridfunctions has been allocated. In the
@@ -158,9 +154,8 @@ ends through `mainProxy.done()` when `commondata.stop_relaxation` is set.
 Current configured CI builds the elliptic and spectroscopy variants without
 running them, then runs only the collision variant. Thus elliptic residual-stop
 behavior, spectroscopy/Psi4 synchronization, checkpoint/restart, and direct
-payload/result checks remain `not-run`; source inspection establishes emitted
-control flow but not those runtime outcomes. No generator, build, or distributed
-run was performed during this KB audit.
+payload/result checks remain outside the configured validation route. Source
+inspection establishes emitted control flow but not those runtime outcomes.
 
 ## Sources
 

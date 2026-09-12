@@ -1,6 +1,6 @@
 # Gridfunctions And Parameters
 
-> Core route for symbolic gridfunctions, NRPy parameters, code parameters, and generated data structs. · Status: confirmed · Last reconciled: 09-06-2026
+> Core route for symbolic gridfunctions, NRPy parameters, code parameters, and generated data structs. · Status: confirmed
 > Up: [Core APIs](index.md)
 
 ## Summary
