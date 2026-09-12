@@ -11,10 +11,10 @@
 | Source | Provenance | Status | Ingest |
 | --- | --- | --- | --- |
 | `core-top-level-package-modules` | Core top-level package modules from `find nrpy -maxdepth 1 -type f \( -name '*.py' -o -name '*.txt' -o -name 'py.typed' \)`, 12 files. | living | partial |
-| `helpers-package-modules` | Helper package files from `find nrpy/helpers -type f \( -name '*.py' -o -name '*.h' \)`, 21 files. | living | ingested |
-| `helpers-validation-and-reference-metric-tests` | Helpers, validation helpers, and reference metric tests from `nrpy/helpers`, `nrpy/validate_expressions`, and `nrpy/tests`, 38 files. | living | partial |
+| `helpers-package-modules` | Helper package files from `find nrpy/helpers -type f \( -name '*.py' -o -name '*.h' \)`, 22 files. | living | ingested |
+| `helpers-validation-and-reference-metric-tests` | Helpers, validation helpers, and reference metric tests from `nrpy/helpers`, `nrpy/validate_expressions`, and `nrpy/tests`, 39 files. | living | partial |
 | `equation-modules-and-trusted-values` | Equation modules, generated trusted-value files, and BOB test metadata from `nrpy/equations`: 339 Python files and `nrpy/equations/seobnr/tests/BOB_v2_fit_sim_list.md`, 340 files total. | living | partial |
-| `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 365 files. | living | partial |
+| `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 367 files. | living | partial |
 | `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`, 26 files. | living | ingested |
 | `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples`, 40 files. | living | partial |
 | `ci-and-local-automation` | CI and local automation files from `.github`, 3 files. | living | partial |

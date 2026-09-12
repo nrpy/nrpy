@@ -61,6 +61,7 @@ def register_CFunction_rhs_eval(
     enable_YBS_Gamma_constraint_adjustment: bool = False,
     enable_YBS_momentum_constraint_adjustment: bool = False,
     enable_cfdD_alphadD_vetUdD_gridfunctions: bool = False,
+    enable_cpu_tiling: bool = False,
 ) -> Union[None, Dict[str, Union[mpf, mpc]], pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for BSSN or fCCZ4.
@@ -92,6 +93,9 @@ def register_CFunction_rhs_eval(
         register cfdD_alphadD_vetUdD_eval and call it before rhs_eval within the same
         right-hand-side evaluation; rhs_eval registers the gridfunctions either way, so an
         unpaired caller would compile and read values nobody wrote.
+    :param enable_cpu_tiling: Whether to register the tile-bounded OpenMP variant used by
+        rhs_eval_with_Ricci. This requires precomputed reference metrics, RbarDD
+        gridfunctions, and BSSN rather than fCCZ4.
 
     :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
 
@@ -434,13 +438,14 @@ def register_CFunction_rhs_eval(
             "static constexpr" if parallelization == "cuda" else "static const"
         ),
     ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD")
-    enable_cpu_tiling = (
-        parallelization == "openmp"
+    emit_cpu_tile_function = (
+        enable_cpu_tiling
+        and parallelization == "openmp"
         and enable_rfm_precompute
         and enable_RbarDD_gridfunctions
         and not enable_fCCZ4
     )
-    for tiled in ([False, True] if enable_cpu_tiling else [False]):
+    for tiled in ([False, True] if emit_cpu_tile_function else [False]):
         kernel_body = BHaH.simple_loop.simple_loop(
             loop_body=point_body,
             loop_region="interior",

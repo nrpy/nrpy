@@ -7,8 +7,8 @@ derivative, then every common subexpression, then every output. At the end of th
 stencil values are live at once (646 doubles in the BSSN right-hand-side kernel against a 127-double
 CUDA register file), and the compiler does not recover from that order. This module re-emits the
 same statements in a list-schedule order: at each step the ready statement whose operands die is
-emitted first, so a load is issued next to the derivative that consumes it and each output is
-written as soon as it is complete.
+emitted first, so a load is issued next to the derivative that consumes it. After all ready loads
+and definitions, stores remain in their original order at the end for alias safety.
 
 Every statement keeps its exact text, so the arithmetic is unchanged operation for operation. All
 definitions in such a body are single-assignment `const` values, which makes any topological order
@@ -16,9 +16,9 @@ legal. Compile-time constants are kept first and stores last, so no store preced
 array it may alias. On the standard 64x64x128 SinhCylindrical BSSN evolution the reordering alone,
 with the finite-difference helpers still marked noinline, removed about 40% of the CUDA
 right-hand-side kernel's spill instructions and measured 6% (CUDA) and 3% (OpenMP AVX-512)
-faster; with the helpers inlined the combined step measured 13% and 9% faster. Only values that are
-zero to roundoff change, because the compiler contracts different multiply/add pairs into fused
-multiply-adds.
+faster; with the helpers inlined the combined step measured 13% and 9% faster. Reordering can
+change which multiply/add pairs the compiler contracts into fused multiply-adds, altering final
+rounding even for nonzero results.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com

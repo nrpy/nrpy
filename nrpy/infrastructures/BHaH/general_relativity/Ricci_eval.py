@@ -34,6 +34,7 @@ def register_CFunction_Ricci_eval(
     OMP_collapse: int,
     host_only_version: bool = False,
     enable_hDDdD_gridfunctions: bool = False,
+    enable_cpu_tiling: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the Ricci evaluation function.
@@ -49,6 +50,8 @@ def register_CFunction_Ricci_eval(
                                        that hDDdD_eval stores, and to build each mixed
                                        second derivative of hDD as a single first
                                        derivative of them, instead of differencing hDD.
+    :param enable_cpu_tiling: (default: False) Whether to register the tile-bounded
+                              OpenMP variant used by rhs_eval_with_Ricci.
 
     :raises ValueError: If CUDA kernel generation is requested for a GeneralRFM coordinate
                         system, which is unsupported.
@@ -124,7 +127,9 @@ def register_CFunction_Ricci_eval(
     )
     for tiled in (
         [False, True]
-        if orig_parallelization == "openmp" and not host_only_version
+        if enable_cpu_tiling
+        and orig_parallelization == "openmp"
+        and not host_only_version
         else [False]
     ):
         kernel_body = BHaH.simple_loop.simple_loop(

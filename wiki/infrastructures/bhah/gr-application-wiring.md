@@ -1,6 +1,6 @@
 # GR Application Wiring
 
-> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 09-10-2026
+> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 09-12-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -119,6 +119,15 @@ Claim evidence:
 - Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3; backend=BHaH CUDA; precision=double; GPU=RTX 4060 Ti; restart=not-run; distributed=not-applicable; error_path=unregistered selection doctest; options=SinhCylindrical, no symmetry axes, FD8, 64x64x128, both stored options, nearest checkpoint to t=0.4 is t=0.40063545122319866, 18136512 finite values compared with committed option-on build, maximum absolute difference 9.12e-14 within atol=rtol=1e-12; date=09-11-2026`
 
 
+Both `register_CFunction_Ricci_eval` and `register_CFunction_rhs_eval` expose a
+default-false `enable_cpu_tiling` choice. Ordinary registrations therefore emit only
+the full-grid functions. In `blackhole_spectroscopy.py`, one eligibility predicate
+enables both tile producers, registers `rhs_eval_with_Ricci`, and replaces the
+separate full-grid calls with that coordinator; the predicate requires OpenMP,
+separate Ricci/RHS evaluation, reference-metric precompute, BSSN, and neither
+stored-derivative option. The full-grid functions remain registered for diagnostics
+and other callers.
+
 If explicitly enabled for OpenMP,
 `register_CFunction_diagnostic_gfs_set(..., enable_hDDdD_gridfunctions=True)` computes
 fresh derivatives from `y_n_gfs` in temporary scratch storage, passes that storage to
@@ -127,12 +136,12 @@ unstored `Ricci_eval_host` path. The example registers the CPU tiled scheduler o
 when neither stored-derivative option is enabled, matching its call-site gate.
 
 Claim evidence:
-- Claim: With stored hDD derivatives explicitly enabled for OpenMP, GR diagnostics computes fresh derivatives from the current solution in temporary scratch, passes scratch to Ricci, and frees it before constraints. CUDA diagnostics retain the unstored host Ricci path. The spectroscopy example excludes both stored-derivative options from tiled-scheduler registration and use. Compilation does not establish runtime numerical correctness.
+- Claim: Ricci and RHS tile registration is default-disabled; eligible OpenMP spectroscopy uses one predicate for both tile producers, the `rhs_eval_with_Ricci` coordinator, and call replacement while retaining full-grid functions. With stored hDD derivatives explicitly enabled for OpenMP, GR diagnostics computes fresh derivatives from the current solution in temporary scratch, passes scratch to Ricci, and frees it before constraints. CUDA diagnostics retain the unstored host Ricci path. Compilation does not establish runtime numerical correctness.
 - Role: descriptive behavior
-- Deciding authority: [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`; [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), diagnostic option forwarding and tiled-scheduler registration/use gates
-- Corroboration: [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py), `register_CFunction_Ricci_eval`, supplies the scratch-taking signature; [hDDdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/hDDdD_eval.py), `register_CFunction_hDDdD_eval`, supplies fresh derivatives and stencil halos
+- Deciding authority: [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py), `register_CFunction_Ricci_eval`; [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` and `register_CFunction_rhs_eval_with_Ricci`; [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
+- Corroboration: [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), shared tile/coordinator predicate and call replacement; [hDDdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/hDDdD_eval.py), `register_CFunction_hDDdD_eval`, supplies fresh derivatives and stencil halos
 - Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=not-run`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0; backend=OpenMP; precision=double; GPU=not-run; restart=not-run; distributed=not-applicable; error_path=allocation failure not-run; options=SinhCylindrical, no symmetry axes, FD order 8, SIMD, both stored options enabled through an isolated example configuration, horizon finder disabled, full executable compiled and linked with -O2 -march=native -fopenmp; date=09-11-2026`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH and superB OpenMP generation, BHaH OpenMP build; precision=double; GPU=not-run; restart=not-run; distributed=not-applicable; error_path=allocation failure not-run; options=default blackhole spectroscopy tile coordinator, default two-black-hole collision, Ricci-only TOV, default superB collision, plus isolated stored-derivative configuration; date=09-12-2026`
 
 `register_CFunction_cfdD_alphadD_vetUdD_eval` (`cfdD_alphadD_vetUdD_eval.py`) applies the
 same tensor-product identity to the right-hand sides. It stores the first derivatives of `cf`,

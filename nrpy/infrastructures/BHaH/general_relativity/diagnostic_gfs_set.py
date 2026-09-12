@@ -206,7 +206,7 @@ def register_CFunction_diagnostic_gfs_set(
     if (scratch_gfs == NULL) {
         fprintf(stderr, "Failed to allocate diagnostic hDDdD scratch storage.\\n");
         exit(EXIT_FAILURE);
-    }
+    } // END IF: scratch allocation failed
     hDDdD_eval(params, y_n_gfs, scratch_gfs);
     Ricci_eval(params, rfmstruct, y_n_gfs, scratch_gfs, auxevol_gfs);
     free(scratch_gfs);
