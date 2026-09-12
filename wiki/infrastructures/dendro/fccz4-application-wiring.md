@@ -1,6 +1,6 @@
 # fCCZ4 Application Wiring
 
-> Explain the Dendro fCCZ4 builders: the direct finite-difference right-hand side, the det(gammabar)/tr(Abar) enforcement, initial-data conversion, and constraint diagnostics. · Status: provisional · Last reconciled: 09-09-2026
+> Explain the Dendro fCCZ4 builders: the direct finite-difference right-hand side, the det(gammabar)/tr(Abar) enforcement, initial-data conversion, and constraint diagnostics. · Status: provisional · Last reconciled: 09-12-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -127,7 +127,7 @@ the lowering. For the equations themselves see
 
 ## Sources
 
-- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - `build_rhs_eval`, `register_CFunctions_rhs_eval`, `FCCZ4RHSBuild`
+- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - `build_rhs_eval`, `register_CFunctions_rhs_eval`, `RHSBuild`
 - [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/Dendro/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `build_enforce_detgbar_equals_detghat_trAzero`, `register_CFunctions_enforce_detgbar_equals_detghat_trAzero`
 - [initial_data.py](../../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py) - `build_minkowski_initial_data`, `build_ADM_to_BSSN`, `build_initial_data_lambdaU`
 - [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py) - `build_constraints_eval`, `register_CFunctions_constraints_eval`

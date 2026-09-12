@@ -68,11 +68,11 @@ $STANDALONE_APPLICATION_DECLARATIONS
   int select_variables(const char* const* names, unsigned count);
 
   // Host mesh and EVOL vectors (in / rhs / out), standalone-host lifecycle.
-  // Value-initialized: standalone_host::DVector is an aggregate with no default member
+  // Value-initialized: standalone_host::dvector_struct is an aggregate with no default member
   // initializers, and ~Ctx frees all four vectors unconditionally.  When
   // initialize_mesh rejects its inputs it returns before assigning them, so
   // without the braces the destructor would free indeterminate pointers.
-  standalone_host::Ctx host{};
+  standalone_host::ctx_struct host{};
   // Generated runtime parameter table, owned by the context.
   $NAMESPACE::generated::params_struct params;
 $STANDALONE_APPLICATION_MEMBERS
@@ -103,7 +103,7 @@ namespace $NAMESPACE {
 
 namespace {
 
-void swap_vectors(standalone_host::DVector& a, standalone_host::DVector& b) {
+void swap_vectors(standalone_host::dvector_struct& a, standalone_host::dvector_struct& b) {
   $SCALAR** tmp_comp = a.comp;
   unsigned tmp_b = a.num_blocks;
   unsigned tmp_c = a.num_components;
@@ -115,7 +115,7 @@ void swap_vectors(standalone_host::DVector& a, standalone_host::DVector& b) {
   b.num_components = tmp_c;
 }  // END FUNCTION: swap_vectors
 
-void free_vector(standalone_host::DVector& vec) {
+void free_vector(standalone_host::dvector_struct& vec) {
   if (vec.comp == nullptr) return;
   for (unsigned f = 0; f < vec.num_components; ++f) delete[] vec.comp[f];
   delete[] vec.comp;
@@ -170,13 +170,13 @@ int Ctx::initialize_mesh(int n_blocks, int extent, double dx, int rank,
   }  // END LOOP: for b over local blocks
   const unsigned ncomp = $NAMESPACE::generated::NUM_EVOL_GFS;
   const std::size_t vol = static_cast<std::size_t>(extent) * extent * extent;
-  standalone_host::DVector* vectors[] = {&host.in, &host.rhs, &host.out, &host.diag};
+  standalone_host::dvector_struct* vectors[] = {&host.in, &host.rhs, &host.out, &host.diag};
   // The diagnostic vector carries the generated DIAG count, which is a
   // different cardinality from the evolved vectors.
   const unsigned counts[] = {ncomp, ncomp, ncomp,
                              $NAMESPACE::generated::NUM_DIAG_GFS};
   for (unsigned v = 0; v < sizeof(vectors) / sizeof(vectors[0]); ++v) {
-    standalone_host::DVector* vec = vectors[v];
+    standalone_host::dvector_struct* vec = vectors[v];
     vec->num_blocks = static_cast<unsigned>(n_blocks);
     vec->num_components = counts[v];
     vec->comp = new $SCALAR*[counts[v]];

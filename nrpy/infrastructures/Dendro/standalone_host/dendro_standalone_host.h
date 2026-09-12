@@ -23,25 +23,25 @@ namespace standalone_host {
 // Unzipped EVOL vector: one padded variable-major, x-fastest block array per
 // component, in generated NRPy order.  In the standalone-host build unzip and
 // zip are identity copies.
-struct DVector {
+struct dvector_struct {
   DendroScalar** comp;  // [num_components] -> [block][vol]
   unsigned num_blocks;
   unsigned num_components;
-};  // END STRUCT: DVector
+};  // END STRUCT: dvector_struct
 
 // Minimal timestep-context stub: the generated context owns the vectors and
 // the local block list; the host integrator (here: one-stage Euler in the
 // generated context) advances state.  LTS and real Dendro integration are
 // out of scope for the standalone-host build.
-struct Ctx {
-  DVector in;
-  DVector rhs;
-  DVector out;
+struct ctx_struct {
+  dvector_struct in;
+  dvector_struct rhs;
+  dvector_struct out;
   // Diagnostic vector: recomputed from the evolved state,
   // never checkpoint state, so it is a separate vector from `in`/`out`.
-  DVector diag;
+  dvector_struct diag;
   standalone_host_mesh_struct mesh;
-};  // END STRUCT: Ctx
+};  // END STRUCT: ctx_struct
 
 // clang-format off
 }  // END NAMESPACE: standalone_host
