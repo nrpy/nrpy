@@ -211,9 +211,7 @@ def register_CFunction_hDDdD_eval(
             parallelization="cuda" if is_cuda else "openmp",
             comments=f"{desc} Direction {direction}.",
             cfunc_type=f"static {cfunc_type}",
-            # One function launches every direction, so each launch block needs its own
-            # scope for the thread-count locals it declares.
-            launchblock_with_braces=True,
+            launchblock_with_braces=False,
             launch_dict={
                 **BHaH.parallelization.cuda_utilities.default_launch_dictionary,
                 "threads_per_block": ["64", "1", "1"],
@@ -221,7 +219,14 @@ def register_CFunction_hDDdD_eval(
             thread_tiling_macro_suffix="HDDDD_EVAL",
         )
         prefunc += kernel
-        launch_body += direction_launch_body
+        # Keep CUDA launch locals in independent, semantically marked scopes.
+        if is_cuda:
+            launch_body += (
+                f"{{\n{direction_launch_body}\n}} "
+                f"// END BLOCK: Launch {name} direction {direction}\n"
+            )
+        else:
+            launch_body += direction_launch_body
 
     if enable_fd_functions:
         fin.FDFunctions_dict.clear()
