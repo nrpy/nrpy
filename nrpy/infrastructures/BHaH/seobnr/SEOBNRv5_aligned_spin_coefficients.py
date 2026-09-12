@@ -33,11 +33,16 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
     of mass ratio and spins. The Hamiltonian calibration coefficients can be pre-computed
     or added to the parfile for calibrating the SEOBNRv5 approximant.
 
-    :param calibration_no_spin: If True, the non-spinning calibration coefficients are added to the parfile.
-                                pySEOBNR v5/nrpy calibration coefficients are used if False.
-    :param calibration_spin: If True, the non-spinning AND spin-dependent calibration coefficients are added to the parfile.
-                                pySEOBNR v5/nrpy calibration coefficients are used if False.
-    :param nrpy_calibrated: If True, the nrpy calibrated coefficients are used in place of the default pySEOBNR ones.
+    :param calibration_no_spin: If True, expose external `a6` and `Delta_t_NS`
+                            inputs for nonspinning calibration; `dSO` and
+                            `Delta_t_S` are set to zero. If False, use fitted
+                            production values for these coefficients.
+    :param calibration_spin: If True, expose external `a6`, `Delta_t_NS`, `dSO`,
+                            and `Delta_t_S` inputs for spin calibration. If False,
+                            use fitted production values for these coefficients.
+    :param nrpy_calibrated: In production mode, select the NRPy-calibrated fits
+                            instead of the default pySEOBNR fits. This option cannot
+                            be combined with either calibration mode.
     :raises ValueError: If both calibration_no_spin and calibration_spin are True.
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -132,7 +137,12 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
         add_to_parfile=False,
     )
 
-    # Register the calibration coefficients conditionally
+    # Register the calibration coefficients conditionally.
+    # In the case of spin-dependent calibrations,
+    # the values of the corresponding non-spinning calibration coefficients
+    # are supplied by the external calibration algorithm.
+    # Thus, we want to keep the non-spinning calibrations in the parfile
+    # to maintain consistency with the external calibration algorithm.
     if calibration_no_spin:
         par.register_CodeParameters(
             "REAL",
