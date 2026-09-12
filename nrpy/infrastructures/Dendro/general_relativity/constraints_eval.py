@@ -30,7 +30,6 @@ from nrpy.equations.general_relativity.fCCZ4_system import (
 from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import block_kernel_helpers as bkh
 from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
-from nrpy.infrastructures.Dendro import state_h
 from nrpy.infrastructures.Dendro.general_relativity import generation_parameters
 from nrpy.infrastructures.Dendro.gridfunction_name_decorations import tensor_family_of
 from nrpy.infrastructures.Dendro.simple_loop import (
@@ -117,11 +116,11 @@ def build_constraints_eval(
     The first diagnostic set is registered as DIAG, and the
     kernel writes exactly those gridfunctions.
 
-    >>> roles.registered_diag_order()
+    >>> tuple(gri.GridFunction.gridfunction_lists()[2])
     ('H_Z4', 'Z4constraintU0', 'Z4constraintU1', 'Z4constraintU2')
     >>> [
     ...     name
-    ...     for name in roles.registered_diag_order()
+    ...     for name in gri.GridFunction.gridfunction_lists()[2]
     ...     if gf_names.diag_pointer(name) + "[pp] =" in _build.block_body
     ... ]
     ['H_Z4', 'Z4constraintU0', 'Z4constraintU1', 'Z4constraintU2']
@@ -163,7 +162,7 @@ def build_constraints_eval(
     The diagnostics register in DIAG, and the two suppressed AUX names were
     never registered:
 
-    >>> roles.registered_diag_order()
+    >>> tuple(gri.GridFunction.gridfunction_lists()[2])
     ('H', 'MU0', 'MU1', 'MU2')
     >>> [n for n in ("M", "LAMBDA_CONSTRAINT") if n in gri.glb_gridfcs_dict]
     []
@@ -229,7 +228,8 @@ def build_constraints_eval(
         expressions = {"H": constraints.H}
         for i in range(3):
             expressions[f"MU{i}"] = constraints.MU[i]
-    diag_order = roles.registered_diag_order()
+    _evol, _auxevol, diag, _aux = gri.GridFunction.gridfunction_lists()
+    diag_order = tuple(diag)
     missing = sorted(set(expressions) - set(diag_order))
     if missing:
         raise ValueError(
@@ -263,7 +263,7 @@ def build_constraints_eval(
 
     # Step 5: Bind exactly the fields the kernel reads, plus the diagnostic
     # write targets, then wrap the kernel in the NRPy point and block loops.
-    block_body = state_h.output_component_bindings(
+    block_body = bkh.output_component_bindings(
         read_names,
         scalar_type,
         array="in_gfs",
@@ -272,7 +272,7 @@ def build_constraints_eval(
         index_expression=lambda name, _position: str(evol_order.index(name)),
     )
     block_body += "\n"
-    block_body += state_h.output_component_bindings(
+    block_body += bkh.output_component_bindings(
         written,
         scalar_type,
         array="diagnostic_gfs",

@@ -11,7 +11,7 @@ Author: Zachariah B. Etienne
 """
 
 import math
-from typing import Callable, List, Optional, Sequence, Tuple, cast
+from typing import List, Tuple, cast
 
 import sympy as sp
 
@@ -53,15 +53,6 @@ def state_records() -> List[Tuple[str, int, str]]:
     ...         ('AUXEVOL', 0, 'vU0'), ('AUXEVOL', 1, 'vU1'),
     ...         ('AUX', 0, 'zAux'), ('DIAG', 0, 'hZZ')]
     ...     assert group_names("EVOL") == ['aYY', 'bXX']
-    ...     _bindings = output_component_bindings(
-    ...         group_names("AUXEVOL"), "DendroScalar", array="aux",
-    ...         role=gf_names.input_pointer, const_pointee=True,
-    ...         index_expression=lambda _name, position: str(position),
-    ...         base_offset="offset",
-    ...     ).splitlines()
-    ...     assert _bindings == [
-    ...         'const DendroScalar* const in_vU0 = aux[0] + offset;',
-    ...         'const DendroScalar* const in_vU1 = aux[1] + offset;']
     ... finally:
     ...     gri.glb_gridfcs_dict.clear()
     ...     gri.glb_gridfcs_dict.update(_saved_fields)
@@ -85,26 +76,25 @@ def group_names(group: str) -> List[str]:
     """
     Return the registered gridfunction names in one group, in registry order.
 
-    Dispatch through the four shared registry accessors in
-    :mod:`nrpy.infrastructures.Dendro.CFunction_roles`, so all consumers use
-    the same group-specific ordering helpers.
+    Read the core gridfunction registry at the point of use.
 
     :param group: Registry group name, one of ``EVOL``, ``AUXEVOL``, ``AUX``, ``DIAG``.
     :return: The group's gridfunction names, in NRPy registry order.
     :raises ValueError: If the group name is not a registered Dendro group.
     """
-    accessors = {
-        "EVOL": roles.registered_evol_order,
-        "AUXEVOL": roles.registered_auxevol_order,
-        "AUX": roles.registered_aux_order,
-        "DIAG": roles.registered_diag_order,
+    evol, auxevol, diag, aux = gri.GridFunction.gridfunction_lists()
+    names_by_group = {
+        "EVOL": evol,
+        "AUXEVOL": auxevol,
+        "AUX": aux,
+        "DIAG": diag,
     }
-    if group not in accessors:
+    if group not in names_by_group:
         raise ValueError(
             f"Unknown Dendro registry group {group!r}; expected one of "
-            f"{', '.join(sorted(accessors))}."
+            f"{', '.join(sorted(names_by_group))}."
         )
-    return list(accessors[group]())
+    return list(names_by_group[group])
 
 
 def output_state_h(solver_stem: str, solver_namespace: str) -> str:
@@ -366,66 +356,6 @@ def _cxx_scalar_literal(value: str, gf_name: str, field: str) -> str:
     if not math.isfinite(number):
         raise ValueError(f"Gridfunction {gf_name!r} has non-finite {field} {value!r}.")
     return repr(number)
-
-
-def output_component_bindings(
-    names: Sequence[str],
-    scalar_type: str,
-    *,
-    array: str,
-    role: Callable[[str], str],
-    const_pointee: bool,
-    index_expression: Callable[[str, int], str],
-    base_offset: Optional[str] = "geom.component_offset",
-    flat_stride: Optional[str] = None,
-) -> str:
-    """
-    Render one role-prefixed pointer binding per field, in the given order.
-
-    This is the single binding emitter: the state emitter and the
-    per-block/flat-block kernel builders all go through it, so the pointer
-    role, the per-component base offset, and the field ordering cannot drift
-    between them.
-
-    :param names: Exact registered gridfunction names, in NRPy registry order.
-    :param scalar_type: Generated scalar alias (e.g. ``DendroScalar``).
-    :param array: Name of the caller's pointer array (component layout) or of
-        the flat base pointer (flat layout).
-    :param role: Role-prefix function from :mod:`gridfunction_name_decorations` (e.g.
-        :func:`gridfunction_name_decorations.input_pointer`).
-    :param const_pointee: Emit ``const <scalar>* const`` rather than
-        ``<scalar>* const``.
-    :param index_expression: Maps (name, position) to the component index
-        expression, so a caller may use either the generated ``EvolVar`` enum
-        or the registered integer position.
-    :param base_offset: Per-component base offset expression, or ``None`` when
-        the caller's pointers are already rebased and the offset must not be
-        applied again.  A flat-block adapter that forwards its geometry
-        unchanged to the per-block kernel passes ``None``, because that kernel
-        applies the offset itself; applying it in both places would address
-        ``base + f * stride + 2 * offset``.
-    :param flat_stride: When given, field ``f`` lives at
-        ``array + base_offset + f * flat_stride`` (the LTS flat-block layout)
-        instead of ``array[f] + base_offset``.  Both forms drop the
-        ``base_offset`` term when it is ``None``.
-    :return: The C++ binding statements, one per line.
-    """
-    qualifier = (
-        f"const {scalar_type}* const" if const_pointee else f"{scalar_type}* const"
-    )
-    lines: List[str] = []
-    for position, name in enumerate(names):
-        index = index_expression(name, position)
-        offset_term = f" + {base_offset}" if base_offset is not None else ""
-        if flat_stride is None:
-            source = f"{array}[{index}]{offset_term}"
-        else:
-            source = (
-                f"{array}{offset_term}"
-                f" + static_cast<std::ptrdiff_t>({index}) * {flat_stride}"
-            )
-        lines.append(f"{qualifier} {role(name)} = {source};")
-    return "\n".join(lines)
 
 
 if __name__ == "__main__":

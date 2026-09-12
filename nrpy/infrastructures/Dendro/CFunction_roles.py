@@ -12,7 +12,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Any, Dict, Sequence, Tuple, cast
+from typing import Dict, Sequence, Tuple, cast
 
 import nrpy.c_function as cfc
 import nrpy.grid as gri
@@ -53,37 +53,7 @@ def registered_evol_order() -> Tuple[str, ...]:
     return tuple(evol)
 
 
-def registered_auxevol_order() -> Tuple[str, ...]:
-    """
-    Return the registered AUXEVOL gridfunction names in NRPy list order.
-
-    :return: The ordered AUXEVOL names.
-    """
-    _evol, auxevol, _diag, _aux = gri.GridFunction.gridfunction_lists()
-    return tuple(auxevol)
-
-
-def registered_diag_order() -> Tuple[str, ...]:
-    """
-    Return the registered DIAG gridfunction names in NRPy list order.
-
-    :return: The ordered DIAG names.
-    """
-    _evol, _auxevol, diag, _aux = gri.GridFunction.gridfunction_lists()
-    return tuple(diag)
-
-
-def registered_aux_order() -> Tuple[str, ...]:
-    """
-    Return the registered AUX gridfunction names in NRPy list order.
-
-    :return: The ordered AUX names.
-    """
-    _evol, _auxevol, _diag, aux = gri.GridFunction.gridfunction_lists()
-    return tuple(aux)
-
-
-def _extras() -> Dict[str, Any]:
+def _extras() -> Dict[str, object]:
     """
     Return (creating if needed) the Dendro section of the NRPy extras dict.
 

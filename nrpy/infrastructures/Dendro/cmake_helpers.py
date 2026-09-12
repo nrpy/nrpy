@@ -177,14 +177,15 @@ def output_CFunctions_function_prototypes_and_construct_CMakeLists(
     layout = module_layout(solver_name)
     prefix = layout.root
     artifacts: Dict[str, str] = {}
-    # One source file per registered CFunction, written verbatim: the umbrella
+    # One raw source file per registered CFunction; the project writer applies
+    # clang-format once alongside the other C/C++ artifacts.  The umbrella
     # include of ``<stem>_defines.h`` rides on the CFunction's own ``includes``
     # field, which supplies the host types, the generated state and parameter
     # declarations, and the standard headers the body uses -- the role
     # ``BHaH_defines.h`` plays for every BHaH CFunction.
     for name, cfunc in registered_CFunctions():
         artifacts[prefix + derived_source_path(name, cfunc.subdirectory)] = (
-            cfunc.full_function
+            cfunc.raw_function
         )
     artifacts[prefix + f"generated/include/{solver_stem}_function_prototypes.h"] = (
         output_function_prototypes_h(solver_stem)

@@ -973,10 +973,10 @@ class DendroGridFunction(GridFunction):
         :param i1_offset: Offset in the middle (y) direction.
         :param i2_offset: Offset in the slowest (z) direction.
         :param kwargs: Additional keyword arguments; SIMD is rejected because
-            the CPU MVP is not SIMD-qualified.
+            the Dendro CPU profile is not SIMD-qualified.
         :return: C code string reading the gridfunction value at the offsets.
-        :raises ValueError: If SIMD access is requested (not qualified in the
-            CPU MVP).
+        :raises ValueError: If SIMD access is requested for the Dendro CPU
+            profile.
 
         Doctests:
         >>> glb_gridfcs_dict.clear()
@@ -993,7 +993,7 @@ class DendroGridFunction(GridFunction):
         Dendro SIMD rejected. Good.
         """
         if kwargs.get("enable_simd", False):
-            raise ValueError("Dendro SIMD access is not qualified in the CPU MVP.")
+            raise ValueError("Dendro SIMD access is not qualified for the CPU profile.")
         return self.access_gf(self.name, i0_offset, i1_offset, i2_offset)
 
     @staticmethod

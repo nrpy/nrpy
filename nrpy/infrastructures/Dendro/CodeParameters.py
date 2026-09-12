@@ -1,6 +1,6 @@
 # nrpy/infrastructures/Dendro/CodeParameters.py
 """
-Emit the parameter header, the sample parameter file and the parameter CFunctions.
+Emit the parameter header and parameter CFunctions.
 
 Every name, type and default is read from the NRPy CodeParameter registry, as
 BHaH's ``CodeParameters.py`` does.  Every registered parameter whose
@@ -18,7 +18,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Any, List
+from typing import List
 
 import nrpy.c_function as cfc
 import nrpy.grid as gri
@@ -188,8 +188,16 @@ def register_CFunctions_parameters(solver_stem: str, solver_namespace: str) -> N
     set_lines: List[str] = [f"params = {params_type}{{}};"]
     for cp_name in names:
         code_param = par.glb_code_params_dict[cp_name]
-        value: Any = code_param.defaultvalue
+        value = code_param.defaultvalue
         cparam_type = code_param.cparam_type
+        # Core permits "unset" for CodeParameters that a later setup stage
+        # must supply.  Leave those members value-initialized here instead of
+        # trying to coerce the sentinel into a numeric literal.
+        if value == "unset" or (
+            isinstance(value, (list, tuple))
+            and all(element == "unset" for element in value)
+        ):
+            continue
         base_type, size, _is_array = par.parse_cparam_type(cparam_type)
         if size is not None:
             if c_type(cparam_type) == "char":
@@ -197,9 +205,7 @@ def register_CFunctions_parameters(solver_stem: str, solver_namespace: str) -> N
                     f'std::snprintf(params.{cp_name}, {size}, "%s", "{value}");'
                 )
             else:
-                elements = (
-                    value if isinstance(value, (list, tuple)) else [value] * int(size)
-                )
+                elements = value
                 for index, element in enumerate(elements[: int(size)]):
                     if base_type == "int":
                         set_lines.append(f"params.{cp_name}[{index}] = {int(element)};")
@@ -306,7 +312,7 @@ def output_toml_bindings() -> str:
     """
     lines: List[str] = []
     for name, parameter in sorted(par.glb_code_params_dict.items()):
-        if not parameter.add_to_parfile or parameter.cparam_type == "#define":
+        if not parameter.add_to_parfile:
             continue
         base, size, is_array = par.parse_cparam_type(parameter.cparam_type)
         mapped = c_type(parameter.cparam_type)

@@ -12,7 +12,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Iterable, List, Sequence, Set, Tuple, Union
+from typing import Callable, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
 import sympy as sp
 
@@ -27,7 +27,6 @@ from nrpy.finite_difference import (
 from nrpy.helpers.expression_utils import get_params_commondata_symbols_from_expr_list
 from nrpy.infrastructures.Dendro import CodeParameters
 from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
-from nrpy.infrastructures.Dendro import state_h
 from nrpy.infrastructures.Dendro.simple_loop import simple_loop
 
 
@@ -175,14 +174,65 @@ def by_position(_name: str, position: int) -> str:
     return str(position)
 
 
+def output_component_bindings(
+    names: Sequence[str],
+    scalar_type: str,
+    *,
+    array: str,
+    role: Callable[[str], str],
+    const_pointee: bool,
+    index_expression: Callable[[str, int], str],
+    base_offset: Optional[str] = "geom.component_offset",
+    flat_stride: Optional[str] = None,
+) -> str:
+    """
+    Render one role-prefixed pointer binding per field, in the given order.
+
+    :param names: Exact registered gridfunction names, in registry order.
+    :param scalar_type: Generated scalar alias (e.g. ``DendroScalar``).
+    :param array: Pointer-array name or flat base-pointer name.
+    :param role: Function applying the pointer-role prefix.
+    :param const_pointee: Whether the pointed-to scalar is const.
+    :param index_expression: Maps a name and sequence position to an index.
+    :param base_offset: Per-component base offset, or ``None`` for rebased data.
+    :param flat_stride: Optional stride between fields in a flat layout.
+    :return: C++ binding statements, one per line.
+
+    Doctests:
+    >>> output_component_bindings(
+    ...     ("vU0", "vU1"), "DendroScalar", array="aux",
+    ...     role=gf_names.input_pointer, const_pointee=True,
+    ...     index_expression=lambda _name, position: str(position),
+    ...     base_offset="offset",
+    ... ).splitlines()
+    ['const DendroScalar* const in_vU0 = aux[0] + offset;', 'const DendroScalar* const in_vU1 = aux[1] + offset;']
+    """
+    qualifier = (
+        f"const {scalar_type}* const" if const_pointee else f"{scalar_type}* const"
+    )
+    lines: List[str] = []
+    for position, name in enumerate(names):
+        index = index_expression(name, position)
+        offset_term = f" + {base_offset}" if base_offset is not None else ""
+        if flat_stride is None:
+            source = f"{array}[{index}]{offset_term}"
+        else:
+            source = (
+                f"{array}{offset_term}"
+                f" + static_cast<std::ptrdiff_t>({index}) * {flat_stride}"
+            )
+        lines.append(f"{qualifier} {role(name)} = {source};")
+    return "\n".join(lines)
+
+
 def block_pointer_bindings(evol_order: Sequence[str], scalar_type: str) -> str:
     """
     Emit the per-field input and RHS pointer bindings for the block layout.
 
     The bindings are rendered by the single shared emitter
-    (:func:`nrpy.infrastructures.Dendro.state_h.output_component_bindings`)
+    (:func:`nrpy.infrastructures.Dendro.block_kernel_helpers.output_component_bindings`)
     from the registry order, so no field name is hardcoded and the roles and
-    per-component base offset cannot drift from the state-header renderer.
+    per-component base offset stay aligned across the block-layout adapters.
     Every binding adds ``geom.component_offset``: the pointer arrays are
     allocation-relative, so a nonzero per-component base must be applied or
     multi-block layouts read the wrong component.
@@ -192,7 +242,7 @@ def block_pointer_bindings(evol_order: Sequence[str], scalar_type: str) -> str:
     :return: The binding statements.
     """
     return (
-        state_h.output_component_bindings(
+        output_component_bindings(
             evol_order,
             scalar_type,
             array="in_gfs",
@@ -201,7 +251,7 @@ def block_pointer_bindings(evol_order: Sequence[str], scalar_type: str) -> str:
             index_expression=by_position,
         )
         + "\n"
-        + state_h.output_component_bindings(
+        + output_component_bindings(
             evol_order,
             scalar_type,
             array="rhs_gfs",
@@ -242,7 +292,7 @@ def flat_block_pointer_bindings(evol_order: Sequence[str], scalar_type: str) -> 
         [
             "const std::ptrdiff_t vol = static_cast<std::ptrdiff_t>(geom.nx)"
             " * geom.ny * geom.nz;",
-            state_h.output_component_bindings(
+            output_component_bindings(
                 evol_order,
                 scalar_type,
                 array="in_gfs_flat",
@@ -252,7 +302,7 @@ def flat_block_pointer_bindings(evol_order: Sequence[str], scalar_type: str) -> 
                 base_offset=None,
                 flat_stride="vol",
             ),
-            state_h.output_component_bindings(
+            output_component_bindings(
                 evol_order,
                 scalar_type,
                 array="rhs_gfs_flat",

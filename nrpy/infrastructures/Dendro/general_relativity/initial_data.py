@@ -27,7 +27,6 @@ import sympy as sp
 
 import nrpy.c_function as cfc
 import nrpy.grid as gri
-import nrpy.indexedexp as ixp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.c_codegen import c_codegen
@@ -36,7 +35,6 @@ from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import block_kernel_helpers as bkh
 from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
-from nrpy.infrastructures.Dendro import state_h
 from nrpy.infrastructures.Dendro.general_relativity import generation_parameters
 from nrpy.infrastructures.Dendro.simple_loop import (
     block_loop,
@@ -71,7 +69,7 @@ def _block_pointer_bindings(evol_order: Tuple[str, ...], scalar_type: str) -> st
     :param scalar_type: The registered Dendro scalar alias.
     :return: The binding statements.
     """
-    return state_h.output_component_bindings(
+    return bkh.output_component_bindings(
         evol_order,
         scalar_type,
         array="out_gfs",
@@ -333,18 +331,11 @@ def register_ADM_source_gridfunctions() -> (
 
     The physical ADM data (``gammaDD``, ``KDD``, ``betaU``, ``BU``) is supplied
     by the host (Dendro or TwoPunctures) and is not evolved, so it is
-    registered in the AUXEVOL group under exact NRPy names.  Registration is idempotent: a second call returns the symbols of
-    the already-registered fields.
+    registered in the AUXEVOL group under exact NRPy names.  Registration is
+    idempotent: a second call returns the already-registered field symbols.
 
     :return: (gammaDD, KDD, betaU, BU) symbol containers.
     """
-    if "gammaDD00" in gri.glb_gridfcs_dict:
-        return (
-            ixp.declarerank2("gammaDD", symmetry="sym01"),
-            ixp.declarerank2("KDD", symmetry="sym01"),
-            ixp.declarerank1("betaU"),
-            ixp.declarerank1("BU"),
-        )
     gammaDD = gri.register_gridfunctions_for_single_rank2(
         "gammaDD", symmetry="sym01", group="AUXEVOL"
     )
@@ -400,9 +391,9 @@ def build_ADM_to_BSSN(CoordSystem: str = "Cartesian") -> Tuple[str, str]:
 
     The ADM source data is registered as AUXEVOL under exact NRPy names.
 
-    >>> roles.registered_auxevol_order()[:3]
+    >>> tuple(gri.GridFunction.gridfunction_lists()[1])[:3]
     ('betaU0', 'betaU1', 'betaU2')
-    >>> len(roles.registered_auxevol_order())
+    >>> len(gri.GridFunction.gridfunction_lists()[1])
     18
 
     """
@@ -467,7 +458,8 @@ def build_ADM_to_BSSN(CoordSystem: str = "Cartesian") -> Tuple[str, str]:
 
     # Step 3: Lower the conversion.  The fields it reads are the expression
     # free symbols that are registered gridfunctions.
-    auxevol_order = roles.registered_auxevol_order()
+    _evol, auxevol, _diag, _aux = gri.GridFunction.gridfunction_lists()
+    auxevol_order = tuple(auxevol)
     written = tuple(name for name in evol_order if name in targets)
     kernel = c_codegen(
         [targets[name] for name in written],
@@ -492,7 +484,7 @@ def build_ADM_to_BSSN(CoordSystem: str = "Cartesian") -> Tuple[str, str]:
         )
     bindings = "\n".join(
         [
-            state_h.output_component_bindings(
+            bkh.output_component_bindings(
                 read_names,
                 scalar_type,
                 array="auxevol_gfs",
@@ -500,7 +492,7 @@ def build_ADM_to_BSSN(CoordSystem: str = "Cartesian") -> Tuple[str, str]:
                 const_pointee=True,
                 index_expression=lambda name, _p: str(auxevol_order.index(name)),
             ),
-            state_h.output_component_bindings(
+            bkh.output_component_bindings(
                 written,
                 scalar_type,
                 array="out_gfs",
@@ -595,7 +587,7 @@ def build_initial_data_lambdaU(CoordSystem: str = "Cartesian") -> Tuple[str, str
     read_names = tuple(name for name in evol_order if name in accessed)
     bindings = "\n".join(
         [
-            state_h.output_component_bindings(
+            bkh.output_component_bindings(
                 read_names,
                 scalar_type,
                 array="in_gfs",
@@ -603,7 +595,7 @@ def build_initial_data_lambdaU(CoordSystem: str = "Cartesian") -> Tuple[str, str
                 const_pointee=True,
                 index_expression=lambda name, _p: str(evol_order.index(name)),
             ),
-            state_h.output_component_bindings(
+            bkh.output_component_bindings(
                 written,
                 scalar_type,
                 array="out_gfs",

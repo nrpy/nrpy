@@ -70,8 +70,8 @@ role. `set_CFunction_role` registers the CFunction through
 `cfc.register_CFunction` and records the role in
 `par.glb_extras_dict["Dendro"]["CFunction_roles"]`;
 `set_CFunction_codeparameters` records the CodeParameters a kernel took, and
-`CFunction_name_for_role`, `CFunction_codeparameters` and
-`registered_aux_order` read the sidecar back. That is how the host-adapter
+`CFunction_name_for_role` and `CFunction_codeparameters` read the sidecar back.
+That is how the host-adapter
 emitters ask for "the all-block RHS entry point" without taking a dozen name
 arguments.
 The sidecar holds no body, signature, parameter default, field declaration, or

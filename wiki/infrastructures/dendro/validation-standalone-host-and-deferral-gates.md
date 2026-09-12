@@ -146,7 +146,7 @@ real-host owner adds an equivalent qualification.
 - [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - generic process shell
 - [general_relativity/main_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py) - GR lifecycle and CTest registration
 - [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py) - solver/test CMake emission
-- [cmdline_input_and_parfiles.py](../../../nrpy/infrastructures/Dendro/cmdline_input_and_parfiles.py) - default parameter file
+- [parfile.py](../../../nrpy/infrastructures/Dendro/parfile.py) - default parameter file
 
 ## See Also
 

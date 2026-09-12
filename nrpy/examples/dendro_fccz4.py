@@ -24,8 +24,8 @@ from nrpy.infrastructures.Dendro import (
     CodeParameters,
     Dendro_defines_h,
     cmake_helpers,
-    cmdline_input_and_parfiles,
     constants_h,
+    parfile,
     state_h,
     types_h,
 )
@@ -197,7 +197,7 @@ def main() -> None:
             solver_stem, solver_namespace, exec_or_library_name
         ),
         layout.pars
-        + f"{solver_stem}_minkowski.par": cmdline_input_and_parfiles.generate_default_parfile(
+        + f"{solver_stem}_minkowski.par": parfile.generate_default_parfile(
             solver_stem, profile_name, required_padding, args.ko
         ),
     }

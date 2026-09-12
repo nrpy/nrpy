@@ -1,4 +1,4 @@
-# nrpy/infrastructures/Dendro/cmdline_input_and_parfiles.py
+# nrpy/infrastructures/Dendro/parfile.py
 """
 Emit the generated solver's sample parameter file.
 
@@ -32,19 +32,15 @@ def output_parfile_sample() -> str:
     """
     lines: List[str] = ["[params]"]
     for cp_name, code_param in sorted(par.glb_code_params_dict.items()):
-        if not code_param.add_to_parfile or code_param.cparam_type == "#define":
+        if not code_param.add_to_parfile:
             continue
         cparam_type = code_param.cparam_type
         default_value = code_param.defaultvalue
-        base_type, size, is_array = par.parse_cparam_type(cparam_type)
+        base_type, _size, is_array = par.parse_cparam_type(cparam_type)
         if is_array and base_type != "char":
             # Core broadcasts a scalar default across the length, so the
             # registered default is a list; TOML renders it as an array.
-            elements = (
-                default_value
-                if isinstance(default_value, (list, tuple))
-                else [default_value] * int(size or 0)
-            )
+            elements = default_value
             renderer = (
                 (lambda element: str(int(element)))
                 if base_type == "int"

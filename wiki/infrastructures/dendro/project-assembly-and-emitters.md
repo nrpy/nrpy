@@ -24,7 +24,7 @@ Modules are named for what they emit, following BHaH's `BHaH_defines_h.py` and
 | `types_h` | the scalar contract plus declarations supplied explicitly by the application owner |
 | `state_h` | the EVOL enum, name array, metadata, and exact-name lookup |
 | `constants_h` | the generated finite-difference order, required padding and Kreiss-Oliger switch |
-| `CodeParameters` | the generated `params_struct` header, the sample parameter table, and the parameter CFunctions |
+| `CodeParameters` | the generated `params_struct` header and parameter CFunctions |
 | `Dendro_defines_h` | the `<stem>_defines.h` header every generated source includes, playing the role `BHaH_defines.h` plays in BHaH |
 | `cmake_helpers` | one source file per registered CFunction, the `<stem>_function_prototypes.h` header, the CMake source list, and the solver and tests `CMakeLists.txt` |
 | `solver_context` | generic host geometry, storage, transport, reductions, and exterior traversal |
@@ -33,7 +33,7 @@ Modules are named for what they emit, following BHaH's `BHaH_defines_h.py` and
 | `general_relativity/main_cpp` | GR lifecycle registration and application rendering |
 | `self_tests_cpp` | the generic test shell and isolated scalar/vector numerical fixture |
 | `general_relativity/self_tests_cpp` | GR scientific sections and independent nonflat block reference |
-| `cmdline_input_and_parfiles` | the sample parameter file for one profile |
+| `parfile` | the sample parameter file for one profile |
 | `block_kernel_helpers` | the formulation-agnostic pointer bindings, point loop, parameter lists, operator records and padding every builder lowers through |
 
 The example is the visible assembly recipe. It passes GR declarations, context

@@ -44,7 +44,6 @@ from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import block_kernel_helpers as bkh
 from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
-from nrpy.infrastructures.Dendro import state_h
 from nrpy.infrastructures.Dendro.general_relativity import generation_parameters
 from nrpy.infrastructures.Dendro.simple_loop import (
     block_loop,
@@ -287,7 +286,7 @@ status->max_abs_trace_residual = std::fmax(
 
     # Step 6: Bind exactly the fields the kernel reads, plus the twelve
     # write targets.  Binding an unread pointer would trip -Wunused-variable.
-    bindings = state_h.output_component_bindings(
+    bindings = bkh.output_component_bindings(
         read_names,
         scalar_type,
         array="in_gfs",
@@ -296,7 +295,7 @@ status->max_abs_trace_residual = std::fmax(
         index_expression=lambda name, _position: str(evol_order.index(name)),
     )
     bindings += "\n"
-    bindings += state_h.output_component_bindings(
+    bindings += bkh.output_component_bindings(
         projected_names,
         scalar_type,
         array="in_gfs",
