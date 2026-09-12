@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 """
 
 import math
-from typing import Any, Dict, List, NamedTuple, Tuple
+from typing import Any, Dict, List, NamedTuple, Tuple, cast
 
 import sympy as sp
 from mpmath import mp  # type: ignore[import-untyped]
@@ -476,7 +476,8 @@ def _evaluate_reference(
             stencil_scale = mp.mpf(0)
             field_indices = {name: index for index, name in enumerate(evol_order)}
             coordinates = _coordinates(point, spacings)
-            for symbol in expression.free_symbols:
+            for free_symbol in expression.free_symbols:
+                symbol = cast(sp.Symbol, free_symbol)
                 name = str(symbol)
                 if name in field_indices:
                     value = _exact_mpf(
