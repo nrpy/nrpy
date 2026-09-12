@@ -328,6 +328,7 @@ def build_rhs_eval(
     require_serial_parallelization()
     formulation = "fCCZ4" if enable_fCCZ4 else "BSSN"
     expected_evol_count = 25 if enable_fCCZ4 else BSSN_EVOL_COUNT
+    upwind_control_vec: Tuple[sp.Expr, ...]
     if enable_fCCZ4:
         bundle = build_fccz4_expression_bundle(
             CoordSystem=CoordSystem,
