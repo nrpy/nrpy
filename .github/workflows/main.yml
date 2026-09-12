@@ -347,6 +347,9 @@ jobs:
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -calibration_spin && (cd project/seobnrv5_bob_calibration_spin && make && make clean) &&
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -calibration_spin && (cd project/seobnrv5_nrpy_calibration_spin && make && make clean) &&
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -calibration_spin && (cd project/seobnrv5_nrnqc_bob_calibration_spin && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -nrpy_calibrated && (cd project/seobnrv5_nrpy_nrpy_calibrated && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -nrpy_calibrated && (cd project/seobnrv5_bob_nrpy_calibrated && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -nrpy_calibrated && (cd project/seobnrv5_nrnqc_bob_nrpy_calibrated && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
           # python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
@@ -407,6 +410,9 @@ jobs:
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -calibration_spin && (cd project/seobnrv5_bob_calibration_spin && make && make clean) &&
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -calibration_spin && (cd project/seobnrv5_nrpy_calibration_spin && make && make clean) &&
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -calibration_spin && (cd project/seobnrv5_nrnqc_bob_calibration_spin && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -nrpy_calibrated && (cd project/seobnrv5_nrpy_nrpy_calibrated && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -nrpy_calibrated && (cd project/seobnrv5_bob_nrpy_calibrated && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -nrpy_calibrated && (cd project/seobnrv5_nrnqc_bob_nrpy_calibrated && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
           # python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
