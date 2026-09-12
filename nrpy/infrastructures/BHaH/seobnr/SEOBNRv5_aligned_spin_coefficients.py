@@ -35,7 +35,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
 
     :param calibration_no_spin: If True, the non-spinning calibration coefficients are added to the parfile.
                                 pySEOBNR v5/nrpy calibration coefficients are used if False.
-    :param calibration_spin: If True, the spin-dependent calibration coefficients are added to the parfile.
+    :param calibration_spin: If True, the non-spinning AND spin-dependent calibration coefficients are added to the parfile.
                                 pySEOBNR v5/nrpy calibration coefficients are used if False.
     :param nrpy_calibrated: If True, the nrpy calibrated coefficients are used in place of the default pySEOBNR ones.
     :raises ValueError: If both calibration_no_spin and calibration_spin are True.
