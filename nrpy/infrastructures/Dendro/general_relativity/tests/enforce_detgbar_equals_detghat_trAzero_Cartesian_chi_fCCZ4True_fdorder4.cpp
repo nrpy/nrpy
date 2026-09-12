@@ -45,10 +45,6 @@ void fccz4_enforce_detgbar_equals_detghat_trAzero_block(const block_geometry_str
         [[maybe_unused]] const DendroScalar xx0 = geom.pmin_padded[0] + static_cast<DendroScalar>(i0) * geom.dx[0];
         [[maybe_unused]] const DendroScalar xx1 = geom.pmin_padded[1] + static_cast<DendroScalar>(i1) * geom.dx[1];
         [[maybe_unused]] const DendroScalar xx2 = geom.pmin_padded[2] + static_cast<DendroScalar>(i2) * geom.dx[2];
-        /*
-         * NRPy-Generated GF Access/FD Code, Step 1 of 2:
-         * Read gridfunction(s) from main memory and compute FD stencils as needed.
-         */
         const DendroScalar aDD00 = in_aDD00[pp];
         const DendroScalar aDD01 = in_aDD01[pp];
         const DendroScalar aDD02 = in_aDD02[pp];
@@ -61,39 +57,34 @@ void fccz4_enforce_detgbar_equals_detghat_trAzero_block(const block_geometry_str
         const DendroScalar hDD11 = in_hDD11[pp];
         const DendroScalar hDD12 = in_hDD12[pp];
         const DendroScalar hDD22 = in_hDD22[pp];
-
-        /*
-         * NRPy-Generated GF Access/FD Code, Step 2 of 2:
-         * Evaluate SymPy expressions and write to main memory.
-         */
         const DendroScalar FDPart3tmp1 = hDD22 + 1;
         const DendroScalar FDPart3tmp3 = hDD11 + 1;
         const DendroScalar FDPart3tmp5 = hDD00 + 1;
         const DendroScalar FDPart3tmp6 = FDPart3tmp1 * FDPart3tmp3 * FDPart3tmp5 - FDPart3tmp1 * ((hDD01) * (hDD01)) -
                                          FDPart3tmp3 * ((hDD02) * (hDD02)) - FDPart3tmp5 * ((hDD12) * (hDD12)) + 2 * hDD01 * hDD02 * hDD12;
+        const DendroScalar det_ratio = FDPart3tmp6;
         const DendroScalar FDPart3tmp7 = (1.0 / (FDPart3tmp6));
         const DendroScalar FDPart3tmp10 = (1.0 / cbrt(FDPart3tmp6));
-        const DendroScalar FDPart3tmp8 = 2 * FDPart3tmp7;
-        const DendroScalar FDPart3tmp9 =
-            FDPart3tmp7 * aDD00 * (FDPart3tmp1 * FDPart3tmp3 - ((hDD12) * (hDD12))) +
-            FDPart3tmp7 * aDD11 * (FDPart3tmp1 * FDPart3tmp5 - ((hDD02) * (hDD02))) +
-            FDPart3tmp7 * aDD22 * (FDPart3tmp3 * FDPart3tmp5 - ((hDD01) * (hDD01))) + FDPart3tmp8 * aDD01 * (-FDPart3tmp1 * hDD01 + hDD02 * hDD12) +
-            FDPart3tmp8 * aDD02 * (-FDPart3tmp3 * hDD02 + hDD01 * hDD12) + FDPart3tmp8 * aDD12 * (-FDPart3tmp5 * hDD12 + hDD01 * hDD02);
-        const DendroScalar FDPart3tmp11 = (1.0 / 3.0) * FDPart3tmp9;
-        const DendroScalar det_ratio = FDPart3tmp6;
-        const DendroScalar trace_residual = FDPart3tmp9;
         const DendroScalar projected_hDD00 = FDPart3tmp10 * FDPart3tmp5 - 1;
         const DendroScalar projected_hDD01 = FDPart3tmp10 * hDD01;
         const DendroScalar projected_hDD02 = FDPart3tmp10 * hDD02;
         const DendroScalar projected_hDD11 = FDPart3tmp10 * FDPart3tmp3 - 1;
         const DendroScalar projected_hDD12 = FDPart3tmp10 * hDD12;
         const DendroScalar projected_hDD22 = FDPart3tmp1 * FDPart3tmp10 - 1;
+        const DendroScalar FDPart3tmp8 = 2 * FDPart3tmp7;
+        const DendroScalar FDPart3tmp9 =
+            FDPart3tmp7 * aDD00 * (FDPart3tmp1 * FDPart3tmp3 - ((hDD12) * (hDD12))) +
+            FDPart3tmp7 * aDD11 * (FDPart3tmp1 * FDPart3tmp5 - ((hDD02) * (hDD02))) +
+            FDPart3tmp7 * aDD22 * (FDPart3tmp3 * FDPart3tmp5 - ((hDD01) * (hDD01))) + FDPart3tmp8 * aDD01 * (-FDPart3tmp1 * hDD01 + hDD02 * hDD12) +
+            FDPart3tmp8 * aDD02 * (-FDPart3tmp3 * hDD02 + hDD01 * hDD12) + FDPart3tmp8 * aDD12 * (-FDPart3tmp5 * hDD12 + hDD01 * hDD02);
         const DendroScalar projected_aDD00 = -FDPart3tmp9 * ((1.0 / 3.0) * hDD00 + 1.0 / 3.0) + aDD00;
+        const DendroScalar projected_aDD11 = -FDPart3tmp9 * ((1.0 / 3.0) * hDD11 + 1.0 / 3.0) + aDD11;
+        const DendroScalar projected_aDD22 = -FDPart3tmp9 * ((1.0 / 3.0) * hDD22 + 1.0 / 3.0) + aDD22;
+        const DendroScalar trace_residual = FDPart3tmp9;
+        const DendroScalar FDPart3tmp11 = (1.0 / 3.0) * FDPart3tmp9;
         const DendroScalar projected_aDD01 = -FDPart3tmp11 * hDD01 + aDD01;
         const DendroScalar projected_aDD02 = -FDPart3tmp11 * hDD02 + aDD02;
-        const DendroScalar projected_aDD11 = -FDPart3tmp9 * ((1.0 / 3.0) * hDD11 + 1.0 / 3.0) + aDD11;
         const DendroScalar projected_aDD12 = -FDPart3tmp11 * hDD12 + aDD12;
-        const DendroScalar projected_aDD22 = -FDPart3tmp9 * ((1.0 / 3.0) * hDD22 + 1.0 / 3.0) + aDD22;
         if (!(det_ratio > 0) || !std::isfinite(det_ratio) || !std::isfinite(trace_residual)) {
           if (!std::isfinite(det_ratio) || !std::isfinite(trace_residual)) {
             status->nonfinite_points += 1;
