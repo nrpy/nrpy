@@ -49,12 +49,12 @@ def require_serial_parallelization() -> None:
 
 def simple_loop(
     loop_body: str,
-    nx: str = "nx",
-    ny: str = "ny",
-    nz: str = "nz",
-    padding: str = "padding",
-    pmin_padded: str = "pmin_padded",
-    dx: str = "dx",
+    nx: str,
+    ny: str,
+    nz: str,
+    padding: str,
+    pmin_padded: str,
+    dx: str,
 ) -> str:
     """
     Emit a Dendro interior point loop (x-fastest) around a loop body.
@@ -75,7 +75,12 @@ def simple_loop(
     Doctests:
     >>> import nrpy.params as par
     >>> par.set_parval_from_str("parallelization", "none")
-    >>> print(simple_loop("f(xx0, xx1, xx2, invdxx1, invdxx2)", nx="NX", ny="NY", nz="NZ"))  # doctest: +ELLIPSIS
+    >>> try:
+    ...     simple_loop("f(xx0, xx1, xx2)")
+    ... except TypeError:
+    ...     print("Geometry expressions required. Good.")
+    Geometry expressions required. Good.
+    >>> print(simple_loop("f(xx0, xx1, xx2, invdxx1, invdxx2)", nx="NX", ny="NY", nz="NZ", padding="PAD", pmin_padded="PMIN", dx="DX"))  # doctest: +ELLIPSIS
     const std::ptrdiff_t nx = ...
     ...
     for (int i2 = static_cast<int>(padding); i2 < static_cast<int>(nz - padding); i2++) {

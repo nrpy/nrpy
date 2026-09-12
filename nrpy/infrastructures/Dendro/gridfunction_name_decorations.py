@@ -56,31 +56,6 @@ def tensor_family_of(name: str) -> Optional[Tuple[str, int]]:
     return family, index_run
 
 
-def _is_variance_suffix(suffix: str) -> bool:
-    """
-    Return whether a suffix is empty or a variance run plus its index digits.
-
-    :param suffix: The text following ``_rhs`` in an NRPy RHS symbol name.
-    :return: True for ``""``, ``"U0"``, ``"DD12"``; False for ``"x"``, ``"U"``,
-        ``"0"``, ``"DD1"``.
-
-    Doctests:
-    >>> [_is_variance_suffix(s) for s in ("", "U0", "DD12")]
-    [True, True, True]
-    >>> [_is_variance_suffix(s) for s in ("x", "U", "0", "DD1")]
-    [False, False, False, False]
-    """
-    if not suffix:
-        return True
-    variance = suffix.rstrip(_INDEX_DIGITS)
-    digits = suffix[len(variance) :]
-    return (
-        bool(variance)
-        and len(digits) == len(variance)
-        and set(variance) <= _VARIANCE_LETTERS
-    )
-
-
 def validate_cpp_identifier(name: str) -> str:
     """
     Validate that a string is a legal C/C++ identifier.
@@ -190,11 +165,13 @@ def rhs_symbol_to_gridfunction_name(rhs_name: str) -> str:
     'Theta_fCCZ4'
     >>> [rhs_symbol_to_gridfunction_name(name) for name in ("u_rhs", "v_rhsU0")]
     ['u', 'vU0']
-    >>> for malformed in ("v_rhsU", "h_rhsDD1", "h_rhsD01"):
+    >>> for malformed in ("v_rhsx", "v_rhs0", "v_rhsU", "h_rhsDD1", "h_rhsD01"):
     ...     try:
     ...         rhs_symbol_to_gridfunction_name(malformed)
     ...     except ValueError:
     ...         print(malformed)
+    v_rhsx
+    v_rhs0
     v_rhsU
     h_rhsDD1
     h_rhsD01
@@ -213,7 +190,15 @@ def rhs_symbol_to_gridfunction_name(rhs_name: str) -> str:
     while index > 0:
         base = rhs_name[:index]
         suffix = rhs_name[index + len("_rhs") :]
-        if _is_variance_suffix(suffix):
+        if not suffix:
+            return base
+        variance = suffix.rstrip(_INDEX_DIGITS)
+        digits = suffix[len(variance) :]
+        if (
+            variance
+            and len(digits) == len(variance)
+            and set(variance) <= _VARIANCE_LETTERS
+        ):
             return f"{base}{suffix}"
         index = rhs_name.rfind("_rhs", 0, index)
     raise ValueError(f"Unrecognized NRPy RHS symbol: {rhs_name}")

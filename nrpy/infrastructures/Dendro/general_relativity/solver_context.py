@@ -1,5 +1,10 @@
 # nrpy/infrastructures/Dendro/general_relativity/solver_context.py
-"""Assemble GR application policy into the generic Dendro context."""
+"""
+Assemble GR application policy into the generic Dendro context.
+
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
+"""
 
 from typing import Tuple
 
@@ -140,14 +145,14 @@ int Ctx::perturb_state() {
     for (unsigned f = 0; f < ncomp; ++f) delete[] u0[f];
     delete[] u0;
     u0 = nullptr;
-  }
+  }  // END IF: replace snapshot buffer
   u0 = new $SCALAR*[ncomp];
   for (unsigned f = 0; f < ncomp; ++f) {
     u0[f] = new $SCALAR[total];
     std::memcpy(u0[f], host.in.comp[f], sizeof($SCALAR)*total);
-  }
+  }  // END LOOP: copy evolved snapshot
   return 0;
-}
+}  // END FUNCTION: Ctx::snapshot_state
 double Ctx::max_drift_from_snapshot() {
   const unsigned ncomp = $NAMESPACE::generated::NUM_EVOL_GFS;
   const unsigned nb = host.in.num_blocks;
@@ -159,7 +164,7 @@ double Ctx::max_drift_from_snapshot() {
       worst = std::max(worst, std::fabs(static_cast<double>(host.in.comp[f][cell]) -
                                         static_cast<double>(u0[f][cell])));
   return worst;
-}
+}  // END FUNCTION: Ctx::max_drift_from_snapshot
 int Ctx::enforce_detgbar_equals_detghat_trAzero_all_blocks() {
   last_detgtrazero_status = $NAMESPACE::generated::detgtrazero_status_struct{};
   $ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO(
@@ -173,14 +178,14 @@ int Ctx::enforce_detgbar_equals_detghat_trAzero_all_blocks() {
         last_detgtrazero_status.first_failing_index,
         last_detgtrazero_status.first_failing_field);
     return 1;
-  }
+  }  // END IF: constraint enforcement failed
   return 0;
-}
+}  // END FUNCTION: Ctx::enforce_detgbar_equals_detghat_trAzero_all_blocks
 double Ctx::max_constraint_violation() {
   $CONSTRAINTS_EVAL(host.mesh, host.in.comp, host.diag.comp);
   return max_interior_value(host.diag.comp,
                             $NAMESPACE::generated::NUM_DIAG_GFS);
-}"""
+}  // END FUNCTION: Ctx::max_constraint_violation"""
     standalone_free_definitions = """namespace {
 
 // Evaluate the generated RHS on one block at a shared physical point.

@@ -1,5 +1,10 @@
 # nrpy/infrastructures/Dendro/main_cpp.py
-"""Emit generic standalone and real-host Dendro process shells."""
+"""
+Emit generic standalone and real-host Dendro process shells.
+
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
+"""
 
 from nrpy.infrastructures.Dendro.CodeParameters import output_toml_bindings
 from nrpy.infrastructures.Dendro.generated_file_banner import generated_file_banner

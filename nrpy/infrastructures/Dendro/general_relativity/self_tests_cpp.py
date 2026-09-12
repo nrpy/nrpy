@@ -1,5 +1,10 @@
 # nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py
-"""Assemble GR scientific sections into the generated Dendro self tests."""
+"""
+Assemble GR scientific sections into the generated Dendro self tests.
+
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
+"""
 
 import math
 from typing import Any, Dict, List, NamedTuple, Tuple
@@ -87,7 +92,7 @@ struct GRTestBlock {
     geometry.pmin_padded[0] = geometry.pmin_padded[1] =
         geometry.pmin_padded[2] = 0.0;
     geometry.dx[0] = geometry.dx[1] = geometry.dx[2] = 0.1;
-  }
+  }  // END FUNCTION: GRTestBlock::GRTestBlock
   std::size_t index(unsigned i, unsigned j, unsigned k) const {
     return geometry.component_offset + i + extent * (j + extent * k);
   }
@@ -96,25 +101,25 @@ struct GRTestBlock {
     for (unsigned field = 0; field < NUM_EVOL_GFS; ++field)
       result[field] = state[field].data();
     return result;
-  }
+  }  // END FUNCTION: GRTestBlock::state_pointers
   std::vector<const $SCALAR*> const_state_pointers() {
     std::vector<const $SCALAR*> result(NUM_EVOL_GFS);
     for (unsigned field = 0; field < NUM_EVOL_GFS; ++field)
       result[field] = state[field].data();
     return result;
-  }
+  }  // END FUNCTION: GRTestBlock::const_state_pointers
   std::vector<$SCALAR*> rhs_pointers() {
     std::vector<$SCALAR*> result(NUM_EVOL_GFS);
     for (unsigned field = 0; field < NUM_EVOL_GFS; ++field)
       result[field] = rhs[field].data();
     return result;
-  }
+  }  // END FUNCTION: GRTestBlock::rhs_pointers
   unsigned extent;
   std::size_t vol;
   std::vector<std::vector<$SCALAR>> state;
   std::vector<std::vector<$SCALAR>> rhs;
   BlockGeometry geometry{};
-};
+};  // END STRUCT: GRTestBlock
 
 double gr_interior_rhs_max(const GRTestBlock& block) {
   double worst = 0.0;
@@ -126,12 +131,12 @@ double gr_interior_rhs_max(const GRTestBlock& block) {
           worst = std::max(worst, std::fabs(static_cast<double>(
               block.rhs[field][block.index(i, j, k)])));
   return worst;
-}
+}  // END FUNCTION: gr_interior_rhs_max
 
 int test_padding() {
   const unsigned centred_radius = $NAMESPACE::generated::FD_ORDER / 2;
   return $NAMESPACE::generated::REQUIRED_PADDING >= centred_radius ? 0 : 1;
-}
+}  // END FUNCTION: test_padding
 
 int test_offsets() {
   GRTestBlock block(2);
@@ -146,9 +151,9 @@ int test_offsets() {
       if (block.state[field][cell] != sentinel) return 1;
       if (block.state[field][block.vol + cell] !=
           $NAMESPACE::generated::EVOL_GF_F_INFINITY[field]) return 2;
-    }
+    }  // END LOOP: check component offsets
   return 0;
-}
+}  // END FUNCTION: test_offsets
 
 int test_upwind() {
   if ($NAMESPACE::generated::NUM_UPWIND_CONTROL_GFS < 3) return 1;
@@ -177,7 +182,7 @@ int test_upwind() {
                                    : 0.5;
           std::fill(block.state[field].begin(), block.state[field].end(),
                     static_cast<$SCALAR>(value));
-        }
+        }  // END LOOP: set upwind controls
         const unsigned p = block.geometry.padding;
         const unsigned r = $NAMESPACE::generated::REQUIRED_PADDING;
         const unsigned moved = side == 0 ? p + r : p - r;
@@ -199,7 +204,7 @@ int test_upwind() {
               sensitivity[sign_index][side],
               std::fabs(static_cast<double>(block.rhs[field][probe]) -
                         before[field]));
-      }
+      }  // END LOOP: test shifted stencil side
     const double scale = std::max(
         std::max(sensitivity[0][0], sensitivity[0][1]),
         std::max(sensitivity[1][0], sensitivity[1][1]));
@@ -207,9 +212,9 @@ int test_upwind() {
     if (!(scale > 0.0) ||
         !(sensitivity[0][0] - sensitivity[0][1] > margin) ||
         !(sensitivity[1][1] - sensitivity[1][0] > margin)) return 2;
-  }
+  }  // END LOOP: test upwind axes
   return 0;
-}
+}  // END FUNCTION: test_upwind
 
 int test_rhs() {
   $NAMESPACE::generated::params_struct params;
@@ -221,7 +226,7 @@ int test_rhs() {
   std::vector<$SCALAR*> output = block.rhs_pointers();
   $RHS_EVAL_BLOCK(block.geometry, input.data(), output.data()$RHS_EVAL_BLOCK_TAIL);
   return gr_interior_rhs_max(block) <= 1e-13 ? 0 : 1;
-}
+}  // END FUNCTION: test_rhs
 
 int test_init() {
   GRTestBlock block;
@@ -234,9 +239,9 @@ int test_init() {
       norm += std::fabs(value);
       if (std::fabs(value - $NAMESPACE::generated::EVOL_GF_F_INFINITY[field]) >
           1e-15) return 1;
-    }
+    }  // END LOOP: check initialized state
   return norm > 0.0 ? 0 : 2;
-}
+}  // END FUNCTION: test_init
 
 int test_detgtrazero() {
   GRTestBlock block;
@@ -272,7 +277,7 @@ int test_detgtrazero() {
                  second_status.max_abs_trace_residual <= 5e-13 * state_scale
              ? 0
              : 3;
-}
+}  // END FUNCTION: test_detgtrazero
 
 int test_constraints() {
   if ($NAMESPACE::generated::NUM_DIAG_GFS == 0) return 1;
@@ -296,7 +301,7 @@ int test_constraints() {
           worst = std::max(worst, std::fabs(static_cast<double>(
               diagnostics[field][block.index(i, j, k)])));
   return worst <= 1e-13 ? 0 : 2;
-}
+}  // END FUNCTION: test_constraints
 """
 
 _GR_DISPATCH = r"""  if (std::strcmp(section, "padding") == 0) return test_padding();
@@ -841,7 +846,7 @@ def output_self_test_artifacts(
                 "+0.015*std::pow(y,6)+0.01*std::pow(z,6))"
             )
         value_lines.append(f"  if (f == {index}u) return {value};  // {name}")
-    value_lines.extend(("  return 0.0;", "}"))
+    value_lines.extend(("  return 0.0;", "}  // END FUNCTION: gr_reference_value"))
     value_function = "\n".join(value_lines)
     field_indices = {name: index for index, name in enumerate(evol_order)}
     exact_sample_entries = []
@@ -882,8 +887,8 @@ int test_gr_nonflat_reference() {{
       const double z=(static_cast<int>(c)-8)*dx[2];
       for (unsigned f=0;f<NUM_EVOL_GFS;++f)
         input[f][offset+index(a,b,c)]=gr_reference_value(f,x,y,z);
-    }}
-  struct ExactSample {{unsigned f,a,b,c; double value;}};
+    }}  // END LOOP: populate reference input
+  struct ExactSample {{unsigned f,a,b,c; double value;}};  // END STRUCT: ExactSample
   const ExactSample exact_samples[]={{
 {exact_samples}
   }};
@@ -895,11 +900,11 @@ int test_gr_nonflat_reference() {{
     if(input[sample.f][offset+index(sample.a,sample.b,sample.c)]!=sample.value) {{
       std::fprintf(stderr,"FAIL: exact input sample f=%u cell=(%u,%u,%u)\\n",
           sample.f,sample.a,sample.b,sample.c); return 1;
-    }}
+    }}  // END IF: exact input mismatch
   const auto before=input;
   std::vector<const DendroScalar*> in(NUM_EVOL_GFS);
   std::vector<DendroScalar*> out(NUM_EVOL_GFS);
-  for (unsigned f=0;f<NUM_EVOL_GFS;++f) {{in[f]=input[f].data();out[f]=output[f].data();}}
+  for (unsigned f=0;f<NUM_EVOL_GFS;++f) {{in[f]=input[f].data();out[f]=output[f].data();}}  // END LOOP: bind block pointers
   $NAMESPACE::generated::params_struct params;
   $PARAMS_STRUCT_SET_TO_DEFAULT(params);
   {block_name}(geom,in.data(),out.data(){block_tail});
@@ -926,12 +931,12 @@ int test_gr_nonflat_reference() {{
       std::fprintf(stderr,"FAIL: {formulation} FD4 KO={'on' if enable_ko else 'off'} "
           "component %u point %u actual %.17g reference %.17g bound %.17g\\n",
           f,p,actual,reference,bound); return 1;
-    }}
-  }}
+    }}  // END IF: block reference mismatch
+  }}  // END LOOP: check block references
   if (!(actual_norm>1.0e-8) || input!=before) {{
     std::fprintf(stderr,"FAIL: zero output norm or modified {formulation} input\\n");
     return 2;
-  }}
+  }}  // END IF: invalid block output
   for(unsigned f=0;f<NUM_EVOL_GFS;++f) for(std::size_t cell=0;
       cell<output[f].size();++cell) {{
     const bool interior=cell>=offset && cell<offset+vol &&
@@ -941,8 +946,8 @@ int test_gr_nonflat_reference() {{
     if(!interior && output[f][cell]!=sentinel) {{
       std::fprintf(stderr,"FAIL: block sentinel f=%u cell=%zu value=%.17g\\n",
           f,cell,static_cast<double>(output[f][cell])); return 3;
-    }}
-  }}
+    }}  // END IF: block sentinel changed
+  }}  // END LOOP: check block sentinels
   std::vector<DendroScalar> flat_in(offset+NUM_EVOL_GFS*vol+17,sentinel);
   std::vector<DendroScalar> flat_out(offset+NUM_EVOL_GFS*vol+17,sentinel);
   for(unsigned f=0;f<NUM_EVOL_GFS;++f) for(std::size_t cell=0;cell<vol;++cell)
@@ -957,8 +962,8 @@ int test_gr_nonflat_reference() {{
       std::fprintf(stderr,"FAIL: {formulation} flat FD4 KO={'on' if enable_ko else 'off'} "
           "component %u point %u actual %.17g reference %.17g bound %.17g\\n",
           f,p,actual,reference,bound); return 4;
-    }}
-  }}
+    }}  // END IF: flat reference mismatch
+  }}  // END LOOP: check flat references
   for(std::size_t cell=0;cell<flat_out.size();++cell) {{
     bool writable=false;
     if(cell>=offset && cell<offset+NUM_EVOL_GFS*vol) {{
@@ -966,14 +971,14 @@ int test_gr_nonflat_reference() {{
       writable=(local%nx)>=pad && (local%nx)<nx-pad &&
           ((local/nx)%ny)>=pad && ((local/nx)%ny)<ny-pad &&
           (local/(nx*ny))>=pad && (local/(nx*ny))<nz-pad;
-    }}
+    }}  // END IF: identify writable flat cell
     if(!writable && flat_out[cell]!=sentinel) {{
       std::fprintf(stderr,"FAIL: flat sentinel cell=%zu value=%.17g\\n",
           cell,static_cast<double>(flat_out[cell])); return 5;
-    }}
-  }}
+    }}  // END IF: flat sentinel changed
+  }}  // END LOOP: check flat sentinels
   return 0;
-}}
+}}  // END FUNCTION: test_gr_nonflat_reference
 """
     dispatch = (
         '  if (std::strcmp(section, "gr_nonflat_reference") == 0) '
@@ -989,9 +994,3 @@ int test_gr_nonflat_reference() {{
     source_path = f"tests/{solver_stem}_self_tests.cpp"
     artifacts[source_path] = substitute_application_identifiers(artifacts[source_path])
     return artifacts
-
-
-if __name__ == "__main__":
-    import doctest
-
-    raise SystemExit(doctest.testmod().failed)

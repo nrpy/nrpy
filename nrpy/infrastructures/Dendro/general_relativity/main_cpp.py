@@ -1,5 +1,10 @@
 # nrpy/infrastructures/Dendro/general_relativity/main_cpp.py
-"""GR lifecycle policy for generated Dendro entry points and CTest gates."""
+"""
+GR lifecycle policy for generated Dendro entry points and CTest gates.
+
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
+"""
 
 from typing import Tuple
 
@@ -28,7 +33,7 @@ _STANDALONE_BEFORE_STEPS = r"""  if (global_max(ctx.enforce_detgbar_equals_detgh
       std::fprintf(stderr, "FAIL: initial det/trace residual exceeds 1e-13\n");
     MPI_Finalize();
     return 1;
-  }  // END IF: initial projection residual is too large
+  }  // END IF: initial projection residual too large
   const double constraint = global_max(ctx.max_constraint_violation());
   if (rank == 0) std::printf("MAXCONSTRAINT %.3e\n", constraint);
   if (constraint > 1e-12) {
@@ -89,7 +94,7 @@ _STANDALONE_FINAL_CHECKS = r"""  const double drift = global_max(ctx.max_drift_f
     if (rank == 0) std::fprintf(stderr, "FAIL: 100-step drift exceeds 1e-11\n");
     MPI_Finalize();
     return 1;
-  }  // END IF: GR state drift is too large
+  }  // END IF: GR state drift too large
   const int initial_data_constructions = 2;
   if (rank == 0)
     std::printf("DETGTRAZERO_PASSES %llu STEPS %d INITIALDATA %d\n",
@@ -204,9 +209,3 @@ def real_ctest_statements(
         f"add_test(NAME {solver_stem}_real_minkowski COMMAND ${{MPIEXEC_EXECUTABLE}} ${{MPIEXEC_NUMPROC_FLAG}} 2 ${{MPIEXEC_PREFLAGS}} $<TARGET_FILE:{exec_or_library_name}> ${{MPIEXEC_POSTFLAGS}})",
         f"set_tests_properties({solver_stem}_real_minkowski PROPERTIES TIMEOUT 300)",
     )
-
-
-if __name__ == "__main__":
-    import doctest
-
-    raise SystemExit(doctest.testmod().failed)
