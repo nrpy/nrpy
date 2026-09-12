@@ -434,8 +434,22 @@ class SEOBNR_aligned_spin_constants:
             f2r(86096.77583093019),
         ]
 
-        self.delta_t_ns_func()
-        self.a6_func()
+        par_dt = self.nrpy_par_dtns if self.nrpy_calibrated else self.pySEOBNR_par_dtns
+        self.Delta_t_NS = self.nu ** (-sp.Rational(1, 5) + par_dt[0] * self.nu) * (
+            par_dt[1]
+            + par_dt[2] * self.nu
+            + par_dt[3] * self.nu**2
+            + par_dt[4] * self.nu**3
+        )
+
+        par_a6 = self.nrpy_par_a6 if self.nrpy_calibrated else self.pySEOBNR_par_a6
+        self.a6 = (
+            par_a6[0]
+            + par_a6[1] * self.nu
+            + par_a6[2] * self.nu**2
+            + par_a6[3] * self.nu**3
+            + par_a6[4] * self.nu**4
+        )
 
     def final_spin_non_precessing_HBR2016(
         self,
@@ -566,39 +580,6 @@ class SEOBNR_aligned_spin_constants:
             A_1 * Deltachi + A_2 * Deltachi2 + A_3 * Deltachi * Shat
         )
         self.M_f = 1 - (Erad_nu_Shat + DeltaErad_nu_Shat_Deltachi)
-
-    def delta_t_ns_func(
-        self,
-    ) -> None:
-        """
-        Compute the non spinning Delta_t fit.
-
-        :return None:
-        """
-        par_dt = self.nrpy_par_dtns if self.nrpy_calibrated else self.pySEOBNR_par_dtns
-        self.Delta_t_NS = self.nu ** (-sp.Rational(1, 5) + par_dt[0] * self.nu) * (
-            par_dt[1]
-            + par_dt[2] * self.nu
-            + par_dt[3] * self.nu**2
-            + par_dt[4] * self.nu**3
-        )
-
-    def a6_func(
-        self,
-    ) -> None:
-        """
-        Compute the a_6 fit.
-
-        :return None:
-        """
-        par_a6 = self.nrpy_par_a6 if self.nrpy_calibrated else self.pySEOBNR_par_a6
-        self.a6 = (
-            par_a6[0]
-            + par_a6[1] * self.nu
-            + par_a6[2] * self.nu**2
-            + par_a6[3] * self.nu**3
-            + par_a6[4] * self.nu**4
-        )
 
 
 if __name__ == "__main__":

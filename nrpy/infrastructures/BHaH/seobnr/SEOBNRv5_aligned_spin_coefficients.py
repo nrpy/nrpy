@@ -34,9 +34,9 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
     or added to the parfile for calibrating the SEOBNRv5 approximant.
 
     :param calibration_no_spin: If True, the non-spinning calibration coefficients are added to the parfile.
-                                pySEOBNR v5 calibration coefficients are used if False.
+                                pySEOBNR v5/nrpy calibration coefficients are used if False.
     :param calibration_spin: If True, the spin-dependent calibration coefficients are added to the parfile.
-                                pySEOBNR v5 calibration coefficients are used if False.
+                                pySEOBNR v5/nrpy calibration coefficients are used if False.
     :param nrpy_calibrated: If True, the nrpy calibrated coefficients are used in place of the default pySEOBNR ones.
     :raises ValueError: If both calibration_no_spin and calibration_spin are True.
     :return: None if in registration phase, else the updated NRPy environment.
@@ -263,7 +263,7 @@ Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties.
     name = "SEOBNRv5_aligned_spin_coefficients"
     params = "commondata_struct *restrict commondata"
     v5_const = SEOBNRv5_const.SEOBNR_aligned_spin_constants(
-        calibration_no_spin, calibration_spin
+        calibration_no_spin, calibration_spin, nrpy_calibrated
     )
     body = """
 REAL q = commondata->mass_ratio;
