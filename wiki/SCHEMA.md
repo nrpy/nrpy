@@ -49,22 +49,21 @@ ingest state is tracked through covering aggregate rows and
 [source-map.md](source-map.md). External-source rows may add durable notes.
 
 Authored KB files contain no maintenance or runtime snapshots: no dates,
-times, timestamps, source revision values or digests, inventory counts, source
-access dates, reconciliation dates, audit dates, resolution dates, or stored
-environment/result tuples. They also carry no fields for those values. A
-source may be identified by a stable repository, document, publication, path,
-symbol, heading, release label, canonical publication identifier, or complete
-stable source locator. Opaque URL components are source identity, not hash
-tracking. Do not duplicate a source revision value in prose when a stable
-source identity suffices.
+times, timestamps, source revision values or digests, inventory, file, page,
+or job counts, source access/reconciliation/audit/resolution fields, or stored
+environment/result tuples. They also carry no fields for those values. A source
+may be identified by a stable repository, document, publication, path, symbol,
+heading, release label, canonical publication identifier, or complete stable
+source locator. Opaque URL components are source identity, not hash tracking.
+Do not duplicate a source revision value in prose when stable identity suffices.
 
 Stable domain facts remain valid. Examples include scientific constants,
-algorithmic cardinalities, version labels that define an interface, and names
-such as `CoordSystem_hash`; the prohibition targets changing observations and
-stored fingerprints, not technical meaning. Frozen files below
-`raw/source-docs/` preserve imported evidence verbatim and are exempt from
-authored-content rewriting, while their registrations in `raw/SOURCES.md` must
-follow this policy.
+algorithmic cardinalities, interface version labels, canonical publication
+identifiers, and names such as `CoordSystem_hash`; the prohibition targets
+changing observations and stored fingerprints, not technical meaning. Frozen
+files below `raw/source-docs/` preserve imported evidence verbatim and are
+exempt from authored-content rewriting, while their registrations in
+`raw/SOURCES.md` must follow this policy.
 
 Source drift and staleness are resolved by dependency-aware reconciliation, not
 stored fingerprints: inspect the changed paths, the source's manifest row and
@@ -72,6 +71,10 @@ status, [source-map.md](source-map.md) ownership rows, maintainer signals, and
 the affected compiled pages, then re-ingest and reconcile. Git history and
 current check output supply operational evidence without copying it into the
 KB as a snapshot.
+
+This KB lives in a Git repository. Git history already records when content
+changed and what changed; duplicating that information as volatile snapshots
+creates drift-prone maintenance burden without adding authority.
 
 ## Support Pages
 
@@ -181,8 +184,15 @@ generated-output boundaries; CI guarantees; source-authority decisions;
 contradiction decisions; and claims whose nearby source paragraph could
 plausibly be misread.
 
-Place this exact block immediately after each new or materially changed
-high-risk claim in the owning leaf's `Detail` section.
+This contract takes prospective effect after its adoption change. High-risk
+claims that predate it, plus claims materially changed in that same adoption
+change, form the initial baseline. Unless an exact block is already
+present, those baseline claims remain uncovered; the adoption change asserts no
+completed claim-evidence-block coverage. Migrate a baseline claim when it or its
+deciding source is next materially changed after adoption.
+
+After that adoption boundary, place this exact block immediately after each new
+or materially changed high-risk claim in the owning leaf's `Detail` section.
 For an active contradiction, place the block in the matching `### CONTR-*`
 subsection of `wiki/contradictions.md`, never in the fixed-column register
 row:
@@ -196,18 +206,11 @@ Claim evidence:
 ```
 
 Do not claim completed block coverage before the exact block is present.
-Behavioral evidence names a durable validation route, fixture, invariant, or
-oracle when available. It never stores a check result, execution environment,
-tool version, or run date in the KB; those observations belong in the command
-output, CI system, or review record that proves the current change.
 
 Deciding authority depends on role:
 
 - descriptive current behavior: code decides; targeted tests corroborate only
-  exercised conditions. A docstring, module comment, or README is
-  corroboration, never deciding authority, for a claim about behavior: where a
-  docstring and its own code disagree, the code decides and the docstring is a
-  defect;
+  exercised conditions;
 - normative KB or contributor rule: current owning governance or configuration
   decides; implementation divergence opens a contradiction;
 - intended public or scientific contract: owning stable specification and
@@ -217,6 +220,12 @@ Deciding authority depends on role:
   latest successful run;
 - generated evidence: proves only the context encoded by the evidence itself;
 - synthesis or neighboring-page agreement: never independent authority.
+
+Behavioral evidence names a durable validation route, fixture, invariant, or
+oracle when available. It never stores a check result, execution environment,
+tool version, or run date in the KB; those observations belong in command
+output, CI, or active review evidence. Structural, navigation, normative,
+provenance, and symbolic claims use claim-appropriate evidence instead.
 
 ## Query Filing
 
@@ -273,11 +282,10 @@ typed neighbors, and targeted exact/key-phrase wiki hits.
 Default `python tools/kb_lint.py` runs all deterministic checks. `--all` remains
 an identical compatibility alias and must not be described as stronger.
 
-Link and Obsidian-wikilink checks govern `AGENTS.md`, `wiki/**/*.md`, and
-`raw/SOURCES.md`. Preserved `raw/source-docs/**/*.md` snapshots are immutable
-imported evidence and exempt from link, wikilink, and volatile-information
-rewriting. Their manifest registrations remain governed. Hard failures cover
-deterministic structure only. Dynamic
+Link, Obsidian-wikilink, and volatile-information checks govern `AGENTS.md`,
+`wiki/**/*.md`, and `raw/SOURCES.md`. Preserved
+`raw/source-docs/**/*.md` snapshots are immutable, verbatim exemptions. Hard
+failures cover deterministic structure only. Dynamic
 symbols, semantic truth, modal wording, generated names, and C/CUDA macros stay
 manual or report-only.
 
@@ -305,11 +313,10 @@ Never run generators, builds, or blanket formatters in the shared repository
 working tree. Inspect a command for hardcoded output, deletion, network,
 installation, and external-tool effects first. Use an isolated, user-owned
 intended-change worktree or copy with no unrelated modifications, apply only
-scoped changes, choose an owned output root, and impose timeouts or resource
-limits only when an authoritative contract or measured need supplies them. Keep
-the exact command, working directory, assertion, result, limits, and cleanup in
-the active review or CI evidence, not as a KB snapshot. Network, installation,
-remote CI, and external toolchains need user
+scoped changes, choose an owned output root, and impose timeouts/resource
+limits. Keep exact commands, working directories, observed assertions, results,
+limits, and cleanup in active review or CI evidence, not as KB snapshots.
+Network, installation, remote CI, and external toolchains need user
 authority. Never reset or delete shared generated output.
 
 ## Canonical Terms

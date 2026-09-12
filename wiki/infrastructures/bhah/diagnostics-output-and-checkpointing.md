@@ -1,6 +1,6 @@
 # Diagnostics Output And Checkpointing
 
-> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed
+> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed.
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -215,10 +215,9 @@ Claim evidence:
 
 Validation here is source-inspection scoped. Current Ubuntu/macOS codegen jobs
 generate and build default BHaH examples without running a write/restart/read
-sequence. The owner generated-source route covers default reader and writer
-variants. Neither route establishes checkpoint file integrity, restored values,
-CUDA restart, multipatch selection, malformed-input rejection, allocation
-failure, BHaHAHA horizon-history restart, GPU execution, or runtime results.
+sequence. Configured automation therefore does not establish file integrity,
+restored values, CUDA restart, multipatch selection, malformed-input rejection,
+allocation failure, or BHaHAHA horizon-history restart behavior.
 
 ## Sources
 

@@ -12,9 +12,9 @@ pieces, Hamiltonian derivatives, circular-orbit derivatives, and frequency-like
 quantities used by the waveform and orbital-evolution consumers.
 
 Scope is the source's current SEOBNRv5 aligned-spin implementation. The
-the unversioned SEOBNRv5HM paper landing page is model background
-for quasi-circular, spinning, nonprecessing binary black holes; it does not
-define or decide this page's intended contract until a specific revision is
+unversioned SEOBNRv5HM paper landing page is model background for quasi-circular,
+spinning, nonprecessing binary black holes; it does not define or decide this
+page's intended contract until an immutable publication locator is
 audited. This page does not generalize the expressions to eccentric, precessing,
 or matter systems.
 
@@ -50,7 +50,7 @@ runtime-accuracy result.
 - [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py) - `SEOBNRv5_aligned_spin_Hamiltonian_quantities`
 - [validate_expressions.py](../../../nrpy/validate_expressions/validate_expressions.py) - `process_dictionary_of_expressions`, `compare_or_generate_trusted_results`
 - [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_Hamiltonian.py) - `trusted_dict`
-- [SEOBNRv5HM paper landing page](https://arxiv.org/abs/2303.18039) - background orientation only; aligned-spin model equation mapping is not established
+- [SEOBNRv5HM paper landing page](https://arxiv.org/abs/2303.18039) - background orientation only; aligned-spin model equations have no exact revision mapping here
 
 ## See Also
 

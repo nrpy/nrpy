@@ -1,6 +1,6 @@
 # Grids, Coordinates, Reference Metrics, And Boundaries
 
-> BHaH route for numerical grid setup, coordinate wrappers, reference-metric precompute, GeneralRFM, fisheye hooks, and curvilinear boundaries. Status: confirmed
+> BHaH route for numerical grid setup, coordinate wrappers, reference-metric precompute, GeneralRFM, fisheye hooks, and curvilinear boundaries. Status: confirmed.
 > Up: [BHaH](index.md)
 
 ## Summary

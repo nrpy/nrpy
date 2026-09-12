@@ -18,20 +18,19 @@ carry facts and sources, and excluded artifacts stay out of the KB.
   root KB instruction file.
 - `rg -n '\[\[' AGENTS.md wiki raw/SOURCES.md` returns no Obsidian-style
   links. Frozen `raw/source-docs/**/*.md` snapshots are immutable exemptions.
-- A marker scan returns no unfilled dates, to-do markers, or template text.
-- No volatile metadata appears in authored governed KB files: no date or
-  timestamp literals, source revision or digest values, inventory counts,
-  access/reconciliation/audit/resolution fields, environment tuples, or run
-  results. Opaque components inside stable source URLs are identifiers, not
-  tracking hashes. Frozen `raw/source-docs/**/*.md` evidence is verbatim and
-  exempt; its authored manifest row remains governed.
+- A marker scan returns no to-do markers or template text.
+- No volatile snapshots appear in governed authored KB files: no timestamps,
+  no maintenance dates, hashes or digests, mtimes, inventory/file/page/job counts,
+  environment tuples, or recorded run and audit results. Preserve stable domain
+  facts, algorithmic cardinalities, interface versions, publication identifiers,
+  technical names, and complete stable URLs. Mentions are allowed in prohibition
+  or supersession statements.
 - Agents are never told to compute, recompute, compare, or lint source-tracking
-  digests or timestamps; source drift is dependency-aware review per
-  [Workflows](../workflows.md).
+  checksums, hashes, file counts, or timestamps; source drift is
+  dependency-aware review per [Workflows](../workflows.md).
 - Relative Markdown links from `AGENTS.md`, `wiki/**/*.md`, and
   `raw/SOURCES.md` resolve within the repository. Frozen snapshots under
-  `raw/source-docs/` are preserved verbatim and exempt from link and volatile-
-  content checks.
+  `raw/source-docs/` are preserved verbatim and exempt from authored-KB lint.
 - `python tools/kb_lint.py` runs all deterministic checks and prints `KB lint
   passed.` on success. `--all` is an identical compatibility alias, not a
   stronger mode.
@@ -81,8 +80,8 @@ carry facts and sources, and excluded artifacts stay out of the KB.
 ## Contradiction Checks
 
 - Contradiction rows use unique `CONTR-0001` IDs and all schema columns. Active
-  rows use `contested`/`stale`, linked affected pages, nonempty
-  rationale/owner/resolution test, and matching page markers/backlinks.
+  rows use `contested`/`stale`, linked affected pages, nonempty rationale,
+  owner, resolution test, and matching page markers/backlinks.
 
 ## NRPy Baseline
 

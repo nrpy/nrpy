@@ -41,10 +41,10 @@ label immediately before prompts. Keep test-only imports inside the doctest or
 
 The configured `static-analysis` job excludes every `*/tests/*` path and
 directly executes selected non-example source modules; this describes job
-configuration, not a latest successful run.
+configuration, not execution outcomes.
 
 Claim evidence:
-- Claim: The configured `static-analysis` job excludes every `*/tests/*` path and directly executes selected non-example source modules; this describes job configuration, not a latest successful run.
+- Claim: The configured `static-analysis` job excludes every `*/tests/*` path and directly executes selected non-example source modules; this describes job configuration, not execution outcomes.
 - Role: CI behavior
 - Deciding authority: [main.yml](../../.github/workflows/main.yml), `static-analysis`
 - Corroboration: [single_file_static_analysis.sh](../../.github/single_file_static_analysis.sh), `run_test_step`, corroborates direct per-file execution but not CI exclusions
@@ -107,10 +107,9 @@ beside the infrastructure that depends on the host, under `tests_infra/`, is
 built and run by hand against that host, and records only durable setup, scope,
 assertions, and reproduction instructions. It does not preserve host revisions,
 dates, environment snapshots, or run results. It is not a route for ordinary
-compile or build coverage, which stays in scoped CI. A
-substantive change to an existing compile doctest must follow the migration or
-tightly bounded fallback in
-[Test Oracles And Safe Updates](test-oracles-and-safe-updates.md#known-gaps-and-non-precedents).
+compile or build coverage, which stays in scoped CI. A substantive change to an
+existing compile doctest must follow the migration or tightly bounded fallback
+in [Test Oracles And Safe Updates](test-oracles-and-safe-updates.md#known-gaps-and-non-precedents).
 
 Claim evidence:
 - Claim: new core standalone harnesses and compile doctests are prohibited, with one carve-out: a harness that measures an external host's behavior is tracked under `tests_infra/` beside the infrastructure that depends on that host, is built and run by hand, and records only durable setup, scope, assertions, and reproduction instructions. The carve-out does not license ordinary compile or build coverage outside scoped CI or volatile KB metadata.
@@ -217,7 +216,6 @@ Claim evidence:
   `run_sebobv2`, `process_input_set`; [main.yml](../../.github/workflows/main.yml),
   `sebob-consistency-test` and `sebobv2-consistency-test`
 - Corroboration: none available; helper and workflow configuration jointly decide the distributed claim
-
 ### Static Summary
 
 Every modified handwritten Python file follows [Static

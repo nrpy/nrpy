@@ -1,6 +1,6 @@
 # GR Application Wiring
 
-> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed
+> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed.
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -82,13 +82,80 @@ Claim evidence:
 - Corroboration: [dsmin_gf.py](../../../nrpy/infrastructures/BHaH/general_relativity/dsmin_gf.py), `register_CFunction_dsmin_auxevol_gridfunction`; [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), shared CAHD/YBS-MOM registration and scheduling gate; [representative BHaH rhs_eval trusted output](../../../nrpy/infrastructures/BHaH/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_SinhSpherical_RbargfsFalse_T4munuFalse_ImprovementsFalse.py), `trusted_dict`
 
 `register_CFunction_Ricci_eval` emits `Ricci_eval` from
-`BSSN_quantities[CoordSystem + "_rfm_precompute"].Ricci_exprs`. It always uses
+`BSSN_quantities[CoordSystem + "_rfm_precompute"].Ricci_exprs` by default. It always uses
 the rfm-precompute expression family, stores either ordinary `RBARDD*GF`
 auxiliary gridfunctions or `DIAG_RBARDD*GF` channels for the host-only
 diagnostics version, and wraps the interior loop with BHaH kernel/launch code.
 CUDA generation is rejected for `GeneralRFM`; `host_only_version=True`
 temporarily forces OpenMP generation so CUDA applications can still compute
 host-side diagnostic Ricci data as `Ricci_eval_host`.
+
+`register_CFunction_hDDdD_eval` (`hDDdD_eval.py`) stores the first derivatives of
+`hDD` as the `SCRATCH` gridfunctions `hDDdD`, each direction over the interior grown by
+`fd_order/2` points in the directions transverse to its own stencil, and
+`register_CFunction_Ricci_eval(..., enable_hDDdD_gridfunctions=True)` then reads them through
+an extra `scratch_gfs` argument, rebuilding every mixed second derivative of `hDD` as a single
+first derivative of the stored gridfunction. The registration helper returns the eligible
+gridfunction names, which Ricci passes as `stored_first_derivatives` to `c_codegen()`.
+Finite-difference lowering selects their reads and stencils while retaining the original
+mathematical derivative temporaries. Equation construction and cache keys are unchanged. No additional array is allocated during evolution for `hDDdD`: `blackhole_spectroscopy.py` calls
+`hDDdD_eval(params, RK_INPUT_GFS, RK_OUTPUT_GFS)` and
+`Ricci_eval(params, rfmstruct, RK_INPUT_GFS, RK_OUTPUT_GFS, auxevol_gfs)` before `rhs_eval`
+overwrites `RK_OUTPUT_GFS` in the same substep, and enables this only for CUDA double
+precision, where it was measured to help.
+
+Claim evidence:
+- Claim: Stored-derivative selection belongs to finite-difference lowering. Ricci and RHS consumers explicitly supply the registered fields available to each kernel; centered first derivatives read storage, canonical mixed second derivatives apply a first-derivative stencil to it, and diagonal/upwind/KO derivatives retain their operators. Equations and equation caches do not select storage.
+- Role: descriptive behavior
+- Deciding authority: [finite_difference.py](../../../nrpy/finite_difference.py), `select_stored_first_derivatives`; [c_codegen.py](../../../nrpy/c_codegen.py), `gridfunction_management_and_FD_codegen`
+- Corroboration: [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py) and [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), explicit consumer selections; owner doctests verify selection and polynomial evaluation.
+
+
+Both `register_CFunction_Ricci_eval` and `register_CFunction_rhs_eval` expose a
+default-false `enable_cpu_tiling` choice. Ordinary registrations therefore emit only
+the full-grid functions. In `blackhole_spectroscopy.py`, one eligibility predicate
+enables both tile producers, registers `rhs_eval_with_Ricci`, and replaces the
+separate full-grid calls with that coordinator; the predicate requires OpenMP,
+separate Ricci/RHS evaluation, reference-metric precompute, BSSN, and neither
+stored-derivative option. The full-grid functions remain registered for diagnostics
+and other callers.
+
+If explicitly enabled for OpenMP,
+`register_CFunction_diagnostic_gfs_set(..., enable_hDDdD_gridfunctions=True)` computes
+fresh derivatives from `y_n_gfs` in temporary scratch storage, passes that storage to
+Ricci, and frees it before evaluating constraints. CUDA diagnostics retain the
+unstored `Ricci_eval_host` path. The example registers the CPU tiled scheduler only
+when neither stored-derivative option is enabled, matching its call-site gate.
+
+Claim evidence:
+- Claim: Ricci and RHS tile registration is default-disabled; eligible OpenMP spectroscopy uses one predicate for both tile producers, the `rhs_eval_with_Ricci` coordinator, and call replacement while retaining full-grid functions. With stored hDD derivatives explicitly enabled for OpenMP, GR diagnostics computes fresh derivatives from the current solution in temporary scratch, passes scratch to Ricci, and frees it before constraints. CUDA diagnostics retain the unstored host Ricci path. Compilation does not establish runtime numerical correctness.
+- Role: descriptive behavior
+- Deciding authority: [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py), `register_CFunction_Ricci_eval`; [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` and `register_CFunction_rhs_eval_with_Ricci`; [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
+- Corroboration: [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), shared tile/coordinator predicate and call replacement; [hDDdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/hDDdD_eval.py), `register_CFunction_hDDdD_eval`, supplies fresh derivatives and stencil halos
+
+`register_CFunction_cfdD_alphadD_vetUdD_eval` (`cfdD_alphadD_vetUdD_eval.py`) applies the
+same tensor-product identity to the right-hand sides. It stores the first derivatives of `cf`,
+`alpha` and `vetU` that their fifteen mixed second derivatives are built from as the `AUXEVOL`
+gridfunctions `cfdD`, `alphadD` and `vetUdD`, and
+`register_CFunction_rhs_eval(..., enable_cfdD_alphadD_vetUdD_gridfunctions=True)` selects
+the registered storage through the same `c_codegen()` option. BSSN/fCCZ4 RHSs,
+their gauge equations, and CAHD constraints retain their mathematical derivative
+symbols and ordinary cache entries. The producer gets its output expressions from
+`cfdD_alphadD_vetUdD_gridfunction_expressions()`, without rewriting completed equations.
+Unmixed and upwind derivatives keep their original stencils. Only the
+directions a mixed second derivative differentiates are stored, which is `partial_0` and
+`partial_1` with the index pair canonicalized to `j < k`, so ten gridfunctions are registered
+and each is produced over the interior grown by `fd_order/2` points in the directions that
+differentiate it. These cannot be `SCRATCH` gridfunctions like `hDDdD`: `rhs_eval` reads them
+with a stencil while writing the Method of Lines buffer, so a pointwise store would overwrite a
+neighbor's stencil point. They therefore cost memory: `NUM_AUXEVOL_GFS` goes 6 to 16, about 61 MB
+and 10% of the run's footprint on the standard grid, in device memory and again in the host
+mirror. The BHaH BSSN examples that build for CUDA (`blackhole_spectroscopy.py`,
+`two_blackholes_collide.py`, `spinning_blackhole.py`, `hydro_without_hydro.py`,
+`kasner_exact_evolution.py`) expose it as `enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU`
+next to their other options; it defaults to off because of the memory cost, requires `--cuda`,
+and when set calls `cfdD_alphadD_vetUdD_eval(params, RK_INPUT_GFS, auxevol_gfs)` before
+`rhs_eval` within each substep.
 
 `register_CFunction_constraints_eval` emits the diagnostics-side Hamiltonian,
 momentum, and conformal connection-constraint evaluator. It temporarily forces
@@ -267,6 +334,9 @@ does not remove `m=+l` cases from emitted BHaH C.
 - [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py) - `register_CFunction_rhs_eval`
 - [dsmin_gf.py](../../../nrpy/infrastructures/BHaH/general_relativity/dsmin_gf.py) - `register_CFunction_dsmin_auxevol_gridfunction`
 - [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py) - `register_CFunction_Ricci_eval`
+- [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py) - `BSSNQuantities`, mathematical derivative construction
+- [hDDdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/hDDdD_eval.py) - `register_CFunction_hDDdD_eval`, `register_hDDdD_gridfunctions`
+- [cfdD_alphadD_vetUdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/cfdD_alphadD_vetUdD_eval.py) - `register_CFunction_cfdD_alphadD_vetUdD_eval`, `cfdD_alphadD_vetUdD_gridfunction_expressions`, `register_cfdD_alphadD_vetUdD_gridfunctions`
 - [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py) - `register_CFunction_constraints_eval`
 - [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - [initial_data.py](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py) - `register_CFunction_initial_data`

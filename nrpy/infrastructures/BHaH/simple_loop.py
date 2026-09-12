@@ -15,7 +15,15 @@ from typing import List, Tuple, Union
 import nrpy.helpers.loop as lp
 import nrpy.params as par
 
-implemented_loop_regions = ["", "all points", "interior", "interior plus one upper"]
+implemented_loop_regions = [
+    "",
+    "all points",
+    "interior",
+    "interior plus one upper",
+    "interior plus stencil halo in i1",
+    "interior plus stencil halo in i2",
+    "interior plus stencil halo in i1 i2",
+]
 
 
 def implemented_loop_regions_err(loop_region: str) -> str:
@@ -53,12 +61,45 @@ def get_loop_region_ranges(
     interior_max = [f"{m} - NGHOSTS" for m in all_points_max]
     interior_plus_one_max = [f"{m} + 1" for m in interior_max]
 
+    # The stencil halo is the interior grown by one centered-stencil radius, fd_order/2, so
+    # that a gridfunction produced over this region can be differentiated once more at every
+    # interior point. The radius is taken from fd_order rather than from NGHOSTS, because
+    # NGHOSTS carries an extra point only when upwinding is enabled, and the halo must be
+    # exactly the stencil radius under either convention. Growing a direction is legal only
+    # where the producer itself takes no derivative along it, so the halo regions grow only
+    # the transverse directions named after "in".
     # Configuration dictionary maps loop_region to its min/max ranges
     region_map = {
         "all points": (all_points_min, all_points_max),
         "interior": (interior_min, interior_max),
         "interior plus one upper": (interior_min, interior_plus_one_max),
     }
+
+    # Only the halo regions need the finite-difference order, so it is read only for them:
+    # ordinary regions must not require finite_difference to have been imported.
+    if loop_region.startswith("interior plus stencil halo"):
+        stencil_radius = par.parval_from_str("finite_difference::fd_order") // 2
+        halo_min = [
+            (
+                f"{min_idx_prefix}{i}+NGHOSTS-{stencil_radius}"
+                if min_idx_prefix
+                else f"NGHOSTS - {stencil_radius}"
+            )
+            for i in reversed(range(3))
+        ]
+        halo_max = [f"{m} - NGHOSTS + {stencil_radius}" for m in all_points_max]
+        # The directions named after "in" are grown; i0 is never grown, which keeps SIMD rows whole.
+        grown = loop_region.split(" in ")[1].split()
+        region_map[loop_region] = (
+            [
+                halo_min[k] if f"i{2 - k}" in grown else interior_min[k]
+                for k in range(3)
+            ],
+            [
+                halo_max[k] if f"i{2 - k}" in grown else interior_max[k]
+                for k in range(3)
+            ],
+        )
 
     # Default to empty ranges if loop_region is not found (e.g., "").
     return region_map.get(loop_region, (["", "", ""], ["", "", ""]))
@@ -99,6 +140,7 @@ def simple_loop(
     enable_OpenMP: bool = True,
     OMP_custom_pragma: str = "",
     OMP_collapse: int = 1,
+    loop_bounds: Union[Tuple[List[str], List[str]], None] = None,
 ) -> str:
     """
     Generate a simple loop in C (for use inside of a function).
@@ -112,11 +154,43 @@ def simple_loop(
     :param enable_OpenMP: Enable loop parallelization using OpenMP
     :param OMP_custom_pragma: Enable loop parallelization using OpenMP with custom pragma
     :param OMP_collapse: Specifies the number of nested loops to collapse
+    :param loop_bounds: Optional CPU loop minimums and exclusive maximums, in i2/i1/i0 order.
     :return: The complete loop code as a string.
-    :raises ValueError: If `loop_region` is unsupported or if `read_xxs` and `enable_rfm_precompute` are both enabled.
+    :raises ValueError: If the loop region or bounds are unsupported, or if both coordinate read modes are enabled.
 
     Doctests:
     >>> from nrpy.helpers.generic import clang_format
+    >>> bounded = simple_loop("work();", loop_region="interior", enable_OpenMP=False,
+    ...     enable_intrinsics=True,
+    ...     loop_bounds=(["lo2", "lo1", "NGHOSTS"], ["hi2", "hi1", "Nxx_plus_2NGHOSTS0 - NGHOSTS"]))
+    >>> all(part in bounded.replace(" ", "") for part in ("i2=lo2", "i2<hi2", "i1=lo1", "i1<hi1", "i0+=SIMD_WIDTH"))
+    True
+    >>> "#pragma omp" in bounded
+    False
+
+    The halo regions grow the interior by exactly one centered-stencil radius, fd_order/2,
+    in the directions transverse to the derivative being stored, and never along the axis
+    the producer differentiates. The radius follows fd_order, not NGHOSTS, which carries an
+    extra point only when upwinding is enabled:
+    >>> import nrpy.finite_difference  # registers finite_difference::fd_order
+    >>> par.set_parval_from_str("fd_order", 8)
+    >>> halo = simple_loop("work();", loop_region="interior plus stencil halo in i1 i2",
+    ...     enable_OpenMP=False)
+    >>> [line.strip() for line in halo.splitlines() if line.strip().startswith("for")]
+    ['for (int i2 = NGHOSTS - 4; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS + 4; i2++) {', 'for (int i1 = NGHOSTS - 4; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS + 4; i1++) {', 'for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {']
+    >>> halo_i2 = simple_loop("work();", loop_region="interior plus stencil halo in i2",
+    ...     enable_OpenMP=False)
+    >>> [line.strip() for line in halo_i2.splitlines() if line.strip().startswith("for")]
+    ['for (int i2 = NGHOSTS - 4; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS + 4; i2++) {', 'for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {', 'for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {']
+    >>> halo_i1 = simple_loop("work();", loop_region="interior plus stencil halo in i1",
+    ...     enable_OpenMP=False)
+    >>> [line.strip() for line in halo_i1.splitlines() if line.strip().startswith("for")]
+    ['for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {', 'for (int i1 = NGHOSTS - 4; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS + 4; i1++) {', 'for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {']
+    >>> par.set_parval_from_str("fd_order", 4)
+    >>> "NGHOSTS - 2" in simple_loop("work();",
+    ...     loop_region="interior plus stencil halo in i1 i2", enable_OpenMP=False)
+    True
+    >>> par.set_parval_from_str("fd_order", 8)
     >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="all points")))
     #pragma omp parallel for
     for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
@@ -214,6 +288,12 @@ def simple_loop(
 
     min_idx_prefix = "tid" if is_cuda else None
     i2i1i0_mins, i2i1i0_maxs = get_loop_region_ranges(loop_region, min_idx_prefix)
+    if loop_bounds is not None:
+        if is_cuda or any(len(bounds) != 3 for bounds in loop_bounds):
+            raise ValueError(
+                "Custom loop bounds require three CPU minimums and maximums."
+            )
+        i2i1i0_mins, i2i1i0_maxs = loop_bounds
 
     rfm_reads = ["", "", ""]
     if enable_rfm_precompute:

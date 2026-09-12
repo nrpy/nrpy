@@ -20,8 +20,20 @@ Configured GitHub job map:
 | `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation as Ubuntu; no Dendro generation or build; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
 | `einsteintoolkit-validation` | Configured Ubuntu/Apptainer Einstein Toolkit image | Generates `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs the configured Baikal, BaikalVacuum, and WaveToyNRPy Cactus testsuites and fails on reported failures. No `carpetx_*` generation/build/run. |
 | `charmpp-validation` | Configured Ubuntu/Apptainer Charm++ context | Generates and builds the configured superB elliptic, spectroscopy, and collision projects | Runs the configured collision executable through `charmrun`; no explicit scientific-output assertion beyond process success. |
-| `sebob-consistency-test` | Configured Ubuntu matrix | Checks out the workflow-selected trusted revision; generates/builds trusted and current SEOBNRv5 variants | Helper invocations rebuild both executables, use deterministic inputs, and require median current/trusted amplitude-plus-phase error not exceed the perturbation-derived baseline. |
-| `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the workflow-selected trusted revision | Uses the same deterministic-input and median-error criterion. |
+| `sebob-consistency-test` | Configured Ubuntu matrix | Checks out the workflow-selected trusted revision; generates/builds trusted and current SEOBNRv5 variants | Each helper invocation rebuilds both executables, uses exactly ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed the perturbation-derived baseline. |
+| `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the workflow-selected trusted revision | Uses the same ten-input and median-error criterion. |
+
+Claim evidence:
+- Claim: Each `sebob-consistency-test` helper invocation uses exactly ten deterministic input sets.
+- Role: CI behavior
+- Deciding authority: [`sebob_consistency_check.py`](../../nrpy/examples/tests/sebob_consistency_check.py), module `__main__` entry point, `num_sets`
+- Corroboration: `none available`; the workflow invokes the helper but does not independently restate its input count
+
+Claim evidence:
+- Claim: The `sebobv2-consistency-test` helper invocation uses exactly ten deterministic input sets.
+- Role: CI behavior
+- Deciding authority: [`sebobv2_consistency_check.py`](../../nrpy/examples/tests/sebobv2_consistency_check.py), module `__main__` entry point, `num_sets`
+- Corroboration: `none available`; the workflow invokes the helper but does not independently restate its input count
 
 A successful named build can establish only named generation plus toolchain
 compile/link compatibility. Generation completion or file existence is not a
@@ -48,15 +60,15 @@ route instead delegates numerical comparison to its fixture and tolerance
 configuration; the checked-in `WaveToyNRPy` test sets `RELTOL 1e-11`. NRPy's
 workflow parses the testsuite summary and fails on a nonzero failure count.
 Neither regression route proves physical accuracy beyond its stated fixtures or
-inputs, and workflow configuration does not prove the jobs most recently passed.
+inputs, and workflow configuration does not establish execution outcomes.
 The Charm++ process-success cell is retained descriptive legacy, not precedent
 for adding another generic status-only build or runtime cell.
 
 The local `.github/full_nrpy_local_ci.sh` helper is separate from GitHub job
 coverage. It installs dependencies, performs broad static analysis, invokes
-its configured generators, and builds selected non-Carpet/non-superB
-C/library projects. It generates superB and Carpet/CarpetX families without
-their external-host builds; it omits other example families documented in the
+its configured generators, and builds selected non-Carpet/non-superB C/library
+projects. It generates superB and Carpet/CarpetX families without their
+external-host builds; it omits other example families documented in the
 helper's source. It then configures selected builds with `--cuda`, including
 curvilinear and multicoordinate wave, standalone elliptic, black-hole,
 hydro-without-hydro, and TOVola routes. TOVola has no
@@ -85,7 +97,7 @@ Claim evidence:
 
 Explicitly unsupported or unverified by these configurations: CarpetX build or
 runtime; JAX generated-package install/import/basic test or accelerator runtime;
-any CUDA executable/GPU result; standalone BHaH-project evolution runtime, since the configured `make` builds run nothing; restart behavior;
+any CUDA executable/GPU result; standalone evolution runtime; restart behavior;
 geodesic/raytracing projects; GRoovy; active MANGA build; Kasner; and scientific
 correctness beyond stated ET regression and waveform-comparison assertions.
 
@@ -107,8 +119,10 @@ generated file has been deliberately registered as frozen evidence.
 - [../../README.md](../../README.md) - `## What Gets Generated?`
 - [../../nrpy/examples/tests/sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py) - `calculate_rmse`
 - [../../nrpy/examples/tests/sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py) - `process_input_set`
+- [../../nrpy/examples/tests/sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py) - module `__main__` entry point, `num_sets`
 - [../../nrpy/examples/tests/sebobv2_consistency_check.py](../../nrpy/examples/tests/sebobv2_consistency_check.py) - `calculate_rmse`
 - [../../nrpy/examples/tests/sebobv2_consistency_check.py](../../nrpy/examples/tests/sebobv2_consistency_check.py) - `process_input_set`
+- [../../nrpy/examples/tests/sebobv2_consistency_check.py](../../nrpy/examples/tests/sebobv2_consistency_check.py) - module `__main__` entry point, `num_sets`
 
 ## See Also
 

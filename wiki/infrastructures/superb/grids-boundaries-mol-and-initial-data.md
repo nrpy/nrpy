@@ -152,10 +152,10 @@ volume-integration report updates `commondata.log10_current_residual` from the
 ends through `mainProxy.done()` when `commondata.stop_relaxation` is set.
 
 Current configured CI builds the elliptic and spectroscopy variants without
-running them, then runs only the collision variant. Thus elliptic residual-stop
-behavior, spectroscopy/Psi4 synchronization, checkpoint/restart, and direct
-payload/result checks remain outside the configured validation route. Source
-inspection establishes emitted control flow but not those runtime outcomes.
+running them, then runs only the collision variant. Source inspection establishes
+emitted control flow, but configured automation does not establish elliptic
+residual-stop behavior, spectroscopy/Psi4 synchronization, checkpoint/restart,
+direct payload checks, or distributed runtime outcomes.
 
 ## Sources
 

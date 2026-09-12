@@ -12,9 +12,9 @@ Hamiltonian outputs and calibration/remnant quantities but does not own those
 fits.
 
 These are current symbolic ingredients associated with the quasi-circular,
-spinning, nonprecessing binary-black-hole SEOBNRv5HM model. The relationship to
-the unversioned paper landing page is model background;
-model-wide calibration and accuracy claims neither decide this transcription's
+spinning, nonprecessing binary-black-hole SEOBNRv5HM model. The unversioned paper
+landing page is model background; model-wide calibration and accuracy claims
+neither decide this transcription's
 contract nor validate every generated consumer.
 
 ## Detail
@@ -70,7 +70,7 @@ build generated code, integrate dynamics, or measure waveform accuracy.
 - [SEOBNRv5_aligned_spin_merger_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_merger_quantities.py) - `SEOBNRv5_aligned_spin_merger_quantities`
 - [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_waveform_quantities.py) - `trusted_dict`
 - [SEOBNRv5_aligned_spin_merger_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_merger_quantities.py) - `trusted_dict`
-- [SEOBNRv5HM paper landing page](https://arxiv.org/abs/2303.18039) - background orientation only; aligned-spin waveform/calibration mapping is not established
+- [SEOBNRv5HM paper landing page](https://arxiv.org/abs/2303.18039) - background orientation only; aligned-spin waveform/calibration claims have no exact revision mapping here
 
 ## See Also
 

@@ -1,6 +1,6 @@
 # MoL, Boundaries, Symmetry, And RHS Initialization
 
-> ETLegacy leaf for MoL registration, old CartGrid3D symmetry parity, boundary setup, NewRad RHS boundaries, and RHS zeroing. Status: confirmed
+> ETLegacy leaf for MoL registration, old CartGrid3D symmetry parity, boundary setup, NewRad RHS boundaries, and RHS zeroing. Status: confirmed.
 > Up: [ETLegacy](index.md)
 
 ## Summary

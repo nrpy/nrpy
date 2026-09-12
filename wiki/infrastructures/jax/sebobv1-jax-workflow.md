@@ -68,8 +68,9 @@ usable `Commondata` coefficient object.
 
 Claim status: contested; contradiction: CONTR-0002.
 See [CONTR-0002](../../contradictions.md#contr-0002) for authority, affected
-pages, validation limits, and the executable resolution test; that contradiction
-record owns the claim evidence.
+pages, validation limits, and the executable resolution test. This is a
+descriptive contradiction record; it is not yet a migrated claim-evidence
+block.
 
 The symbolic source behind this narrow surface is
 `SEOBNR_aligned_spin_constants`. Its constructor defines symbolic masses and
@@ -90,7 +91,7 @@ deliberately freezes and registers such output.
 
 No generated-package install, generated import, coefficient-function call, or
 returned-field assertion appears in those configured jobs. Workflow
-configuration proves job shape, not execution outcomes.
+configuration proves job shape, not generated-package runtime behavior.
 
 ## Sources
 

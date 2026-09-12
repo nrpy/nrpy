@@ -1,6 +1,6 @@
 # Runtime Data, Parameters, Headers, And CLI
 
-> BHaH route for generated runtime structs, parameter defaults, headers, parfiles, and command-line overrides. Status: confirmed
+> BHaH route for generated runtime structs, parameter defaults, headers, parfiles, and command-line overrides. Status: confirmed.
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -98,7 +98,7 @@ route does not establish compiled-C oversized-array behavior.
 
 ## Sources
 
-- [BHaH_defines_h.py](../../../nrpy/infrastructures/BHaH/BHaH_defines_h.py) - `output_BHaH_defines_h`, `register_BHaH_defines`, `_register_param_structs`, `register_griddata_struct_and_return_griddata_struct_str`
+- [BHaH_defines_h.py](../../../nrpy/infrastructures/BHaH/BHaH_defines_h.py) - `output_BHaH_defines_h`, `register_BHaH_defines`, `parse_cparam_type`, `_register_param_structs`, `register_griddata_struct_and_return_griddata_struct_str`
 - [BHaH_device_defines_h.py](../../../nrpy/infrastructures/BHaH/BHaH_device_defines_h.py) - `CUDA_BHaH_device_defines_h`, `BHaH_CUDA_global_init_h`, `BHaH_CUDA_global_defines_h`, `output_device_headers`
 - [CodeParameters.py](../../../nrpy/infrastructures/BHaH/CodeParameters.py) - `register_CFunctions_params_commondata_struct_set_to_default`, `write_CodeParameters_h_files`
 - [cmdline_input_and_parfiles.py](../../../nrpy/infrastructures/BHaH/cmdline_input_and_parfiles.py) - `_C_PARSE_VALUE_FUNC`, `register_CFunction_cmdline_input_and_parfile_parser` and its `Doctests:`, `generate_default_parfile`

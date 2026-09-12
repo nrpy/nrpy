@@ -83,19 +83,23 @@ These rules bind every KB manifest and doc under `AGENTS.md`, `wiki/`, and
 `raw/`:
 
 - No maintenance or runtime snapshots: dates, times, timestamps, source
-  revision values or digests, inventory counts, source access/reconciliation/
-  audit/resolution fields, environment tuples, or recorded run results.
-- No source-tracking hash or `mtime` columns or values, and no hashing of
-  sources for KB tracking.
+  revision values or digests, inventory, file, page, or job counts, source
+  access/reconciliation/audit/resolution fields, environment tuples, or
+  recorded run results.
+- No source-tracking hash or `mtime` columns or stored values, and no hashing
+  of sources for KB tracking.
 - Stable scientific and algorithmic values, interface version labels,
   publication identifiers, technical names such as `CoordSystem_hash`, and
-  opaque components of stable source locators remain valid when they carry
-  identity or domain meaning rather than snapshot metadata.
+  opaque components of complete stable source locators remain valid when they
+  carry identity or domain meaning rather than snapshot metadata.
 - Frozen imported evidence under `raw/source-docs/` remains verbatim; its
   authored manifest registration obeys this policy.
 - Do not output KB maintenance notes to a separate log file. This KB already
   lives in a git repo: commit history records durable operations, so separate
   logs are redundant and wasteful.
+
+Git history already records when KB content changed and what changed. Duplicate
+snapshots add maintenance burden without authority.
 
 Source drift is handled by dependency-aware review of changed paths, source
 status, [Source Map](wiki/source-map.md) rows, and affected compiled pages -

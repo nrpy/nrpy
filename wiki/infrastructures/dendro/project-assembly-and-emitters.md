@@ -98,8 +98,8 @@ Claim evidence:
 ### Source list and padding
 
 `cmake_helpers.CFunction_cmake_source_list` derives the CMake source list
-from `cfc.CFunction_dict`, so the build can never carry a hand-written source
-inventory: one registered CFunction, one emitted source file, one CMake entry.
+from `cfc.CFunction_dict`, so the build source list is generated: every
+registered CFunction maps to one emitted source file and one CMake entry.
 
 The ghost points the emitted kernels need are recorded by the right-hand-side
 builder through `CFunction_roles.set_required_padding` and read back by

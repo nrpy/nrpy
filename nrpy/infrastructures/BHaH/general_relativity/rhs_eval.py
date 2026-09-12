@@ -39,6 +39,9 @@ from nrpy.helpers.expression_utils import (
     get_params_commondata_symbols_from_expr_list,
 )
 from nrpy.infrastructures import BHaH
+from nrpy.infrastructures.BHaH.general_relativity.cfdD_alphadD_vetUdD_eval import (
+    register_cfdD_alphadD_vetUdD_gridfunctions,
+)
 
 
 def register_CFunction_rhs_eval(
@@ -61,6 +64,8 @@ def register_CFunction_rhs_eval(
     enable_fCCZ4: bool = False,
     enable_YBS_Gamma_constraint_adjustment: bool = False,
     enable_YBS_momentum_constraint_adjustment: bool = False,
+    enable_cfdD_alphadD_vetUdD_gridfunctions: bool = False,
+    enable_cpu_tiling: bool = False,
 ) -> Union[None, Dict[str, Union[mpf, mpc]], pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for BSSN or fCCZ4.
@@ -85,6 +90,16 @@ def register_CFunction_rhs_eval(
     :param enable_YBS_Gamma_constraint_adjustment: Enable the YBS connection-constraint adjustment.
     :param enable_YBS_momentum_constraint_adjustment: Enable the timestep-scaled
         Yo--Lin--Cao momentum-constraint adjustment.
+    :param enable_cfdD_alphadD_vetUdD_gridfunctions: Whether to read the first derivatives of
+        cf, alpha and vetU from the gridfunctions cfdD_alphadD_vetUdD_eval stores, and to
+        build each mixed second derivative of them as a single first derivative of those
+        gridfunctions, instead of differencing the evolved fields twice. The caller must also
+        register cfdD_alphadD_vetUdD_eval and call it before rhs_eval within the same
+        right-hand-side evaluation; rhs_eval registers the gridfunctions either way, so an
+        unpaired caller would compile and read values nobody wrote.
+    :param enable_cpu_tiling: Whether to register the tile-bounded OpenMP variant used by
+        rhs_eval_with_Ricci. This requires precomputed reference metrics, RbarDD
+        gridfunctions, and BSSN rather than fCCZ4.
 
     :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
 
@@ -131,6 +146,12 @@ def register_CFunction_rhs_eval(
         **arg_dict_cuda,
     }
     params = ",".join([f"{v} {k}" for k, v in arg_dict_host.items()])
+
+    stored_first_derivatives = (
+        register_cfdD_alphadD_vetUdD_gridfunctions()
+        if enable_cfdD_alphadD_vetUdD_gridfunctions
+        else []
+    )
 
     rhs_cache_key = (
         CoordSystem
@@ -358,7 +379,6 @@ def register_CFunction_rhs_eval(
     # )
 
     expr_list = list(local_RHSs_varname_to_expr_dict.values())
-
     # Find symbols stored in params
     param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
         expr_list, exclude=[f"xx{j}" for j in range(3)]
@@ -382,82 +402,173 @@ def register_CFunction_rhs_eval(
         **{k.replace("CUDA", "SIMD"): v for k, v in arg_dict_cuda.items()},
     }
 
-    kernel_body = BHaH.simple_loop.simple_loop(
-        loop_body=ccg.c_codegen(
-            expr_list,
-            RHSs_access_gf,
-            enable_fd_codegen=True,
-            enable_simd=enable_intrinsics,
-            upwind_control_vec=betaU,
-            enable_fd_functions=enable_fd_functions,
-            rational_const_alias=(
-                "static constexpr" if parallelization == "cuda" else "static const"
+    point_body = ccg.c_codegen(
+        expr_list,
+        RHSs_access_gf,
+        enable_fd_codegen=True,
+        stored_first_derivatives=stored_first_derivatives,
+        enable_simd=enable_intrinsics,
+        upwind_control_vec=betaU,
+        enable_fd_functions=enable_fd_functions,
+        rational_const_alias=(
+            "static constexpr" if parallelization == "cuda" else "static const"
+        ),
+    ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD")
+    emit_cpu_tile_function = (
+        enable_cpu_tiling
+        and parallelization == "openmp"
+        and enable_rfm_precompute
+        and enable_RbarDD_gridfunctions
+        and not enable_fCCZ4
+    )
+    for tiled in ([False, True] if emit_cpu_tile_function else [False]):
+        kernel_body = BHaH.simple_loop.simple_loop(
+            loop_body=point_body,
+            loop_region="interior",
+            enable_intrinsics=enable_intrinsics,
+            CoordSystem=CoordSystem,
+            enable_rfm_precompute=enable_rfm_precompute,
+            read_xxs=not enable_rfm_precompute,
+            OMP_collapse=OMP_collapse,
+            enable_OpenMP=not tiled,
+            loop_bounds=(
+                (
+                    ["lo2", "lo1", "NGHOSTS"],
+                    ["hi2", "hi1", "Nxx_plus_2NGHOSTS0 - NGHOSTS"],
+                )
+                if tiled
+                else None
             ),
-        ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
-        loop_region="interior",
-        enable_intrinsics=enable_intrinsics,
-        CoordSystem=CoordSystem,
-        enable_rfm_precompute=enable_rfm_precompute,
-        read_xxs=not enable_rfm_precompute,
-        OMP_collapse=OMP_collapse,
-    )
-    loop_params = parallel_utils.get_loop_parameters(
-        parallelization, enable_intrinsics=enable_intrinsics
-    )
-    if enable_intrinsics:
-        for symbol in commondata_symbols:
-            loop_params += f"MAYBE_UNUSED const REAL_SIMD_ARRAY {symbol} = ConstSIMD(NOSIMD{symbol});\n"
-
-    params_definitions = generate_definition_header(
-        param_symbols,
-        enable_intrinsics=enable_intrinsics,
-        var_access=parallel_utils.get_params_access(parallelization),
-    )
-    kernel_body = f"{loop_params}\n{params_definitions}\n{kernel_body}"
-
-    kernel, launch_body = parallel_utils.generate_kernel_and_launch_code(
-        name,
-        kernel_body.replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
-        arg_dict_cuda,
-        arg_dict_host,
-        parallelization=parallelization,
-        comments=desc,
-        cfunc_type=f"static {cfunc_type}",
-        launchblock_with_braces=False,
-        thread_tiling_macro_suffix="BSSN_RHS",
-    )
-
-    for symbol in commondata_symbols:
-        tmp_sym = (
-            f"NOCUDA{symbol}"
-            if parallelization == "cuda" and enable_intrinsics
-            else (
-                f"NOSIMD{symbol}"
-                if enable_intrinsics
-                else symbol if enable_intrinsics else symbol
-            )
         )
-        launch_body = launch_body.replace(tmp_sym, f"commondata->{symbol}")
+        loop_params = parallel_utils.get_loop_parameters(
+            parallelization, enable_intrinsics=enable_intrinsics
+        )
+        if enable_intrinsics:
+            for symbol in commondata_symbols:
+                loop_params += f"MAYBE_UNUSED const REAL_SIMD_ARRAY {symbol} = ConstSIMD(NOSIMD{symbol});\n"
 
-    prefunc = ""
-    if parallelization == "cuda" and enable_fd_functions:
-        prefunc = fin.construct_FD_functions_prefunc(
-            cfunc_decorators="__device__ "
-        ).replace("SIMD", "CUDA")
-    elif enable_fd_functions:
-        prefunc = fin.construct_FD_functions_prefunc()
+        params_definitions = generate_definition_header(
+            param_symbols,
+            enable_intrinsics=enable_intrinsics,
+            var_access=parallel_utils.get_params_access(parallelization),
+        )
+        kernel_body = f"{loop_params}\n{params_definitions}\n{kernel_body}"
 
+        kernel, launch_body = parallel_utils.generate_kernel_and_launch_code(
+            name + ("_tile" if tiled else ""),
+            kernel_body.replace(
+                "SIMD", "CUDA" if parallelization == "cuda" else "SIMD"
+            ),
+            arg_dict_cuda,
+            {
+                **arg_dict_host,
+                **(
+                    {key: "const int" for key in ("lo1", "hi1", "lo2", "hi2")}
+                    if tiled
+                    else {}
+                ),
+            },
+            parallelization=parallelization,
+            comments=desc,
+            cfunc_type=f"static {cfunc_type}",
+            launchblock_with_braces=False,
+            launch_dict={
+                **BHaH.parallelization.cuda_utilities.default_launch_dictionary,
+                "threads_per_block": ["64", "1", "1"],
+            },
+            thread_tiling_macro_suffix="BSSN_RHS",
+        )
+
+        for symbol in commondata_symbols:
+            tmp_sym = (
+                f"NOCUDA{symbol}"
+                if parallelization == "cuda" and enable_intrinsics
+                else (
+                    f"NOSIMD{symbol}"
+                    if enable_intrinsics
+                    else symbol if enable_intrinsics else symbol
+                )
+            )
+            launch_body = launch_body.replace(tmp_sym, f"commondata->{symbol}")
+
+        prefunc = ""
+        if parallelization == "cuda" and enable_fd_functions:
+            prefunc = fin.construct_FD_functions_prefunc(
+                cfunc_decorators="__device__ "
+            ).replace("SIMD", "CUDA")
+        elif enable_fd_functions:
+            prefunc = fin.construct_FD_functions_prefunc()
+
+        cfc.register_CFunction(
+            include_CodeParameters_h=False,
+            includes=includes,
+            prefunc=prefunc + kernel,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            CoordSystem_for_wrapper_func=CoordSystem,
+            name=name + ("_tile" if tiled else ""),
+            params=params
+            + (
+                ", const int lo1, const int hi1, const int lo2, const int hi2"
+                if tiled
+                else ""
+            ),
+            body=launch_body,
+            enable_simd=enable_intrinsics,
+        )
+    return pcg.NRPyEnv()
+
+
+def register_CFunction_rhs_eval_with_Ricci(
+    CoordSystem: str,
+) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register the CPU scheduler for separately registered Ricci and BSSN RHS tiles.
+
+    The caller must register Ricci and BSSN RHSs with precomputed reference metrics
+    and RbarDD gridfunctions for the same coordinate system. Each worker computes
+    Ricci before the pointwise RHS consumer on a fixed 16x8 i1/i2 tile. The final
+    OpenMP barrier completes all tiles before the caller applies boundary conditions.
+    Existing full-grid entry points remain available for diagnostics and other callers.
+
+    :param CoordSystem: Coordinate system of the registered tile functions.
+    :return: None in registration phase, otherwise the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = "Evaluate Ricci and BSSN RHSs together on CPU tiles."
+    cfunc_type = "void"
+    name = "rhs_eval_with_Ricci"
+    params = (
+        "const commondata_struct *restrict commondata, const params_struct *restrict params, "
+        "const rfm_struct *restrict rfmstruct, REAL *restrict auxevol_gfs, "
+        "const REAL *restrict in_gfs, REAL *restrict rhs_gfs"
+    )
+    body = f"""
+const int end1 = params->Nxx_plus_2NGHOSTS1 - NGHOSTS;
+const int end2 = params->Nxx_plus_2NGHOSTS2 - NGHOSTS;
+#pragma omp parallel for collapse(2)
+for (int lo2 = NGHOSTS; lo2 < end2; lo2 += 8) {{
+  for (int lo1 = NGHOSTS; lo1 < end1; lo1 += 16) {{
+    const int hi1 = lo1 + 16 < end1 ? lo1 + 16 : end1;
+    const int hi2 = lo2 + 8 < end2 ? lo2 + 8 : end2;
+    Ricci_eval_tile__rfm__{CoordSystem}(params, rfmstruct, in_gfs, auxevol_gfs, lo1, hi1, lo2, hi2);
+    rhs_eval_tile__rfm__{CoordSystem}(commondata, params, rfmstruct, auxevol_gfs, in_gfs, rhs_gfs, lo1, hi1, lo2, hi2);
+  }} // END LOOP: for lo1 over [NGHOSTS, end1)
+}} // END LOOP: for lo2 over [NGHOSTS, end2)
+"""
     cfc.register_CFunction(
         include_CodeParameters_h=False,
         includes=includes,
-        prefunc=prefunc + kernel,
         desc=desc,
         cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
-        body=launch_body,
-        enable_simd=enable_intrinsics,
+        body=body,
     )
     return pcg.NRPyEnv()
 

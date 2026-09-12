@@ -2,7 +2,7 @@
 
 > Pointer manifest for source material. Root-level documentation sources live
 > under `raw/source-docs/` so `AGENTS.md` is the only root KB document. Code,
-> config, fixtures, registered evidence, and build inputs stay in place. Status is
+> config, fixtures, selected logs, and build inputs stay in place. Status is
 > `frozen` when a source is meant not to change and `living` when drift must
 > trigger re-ingest.
 
@@ -10,15 +10,15 @@
 
 | Source | Provenance | Status | Ingest |
 | --- | --- | --- | --- |
-| `core-top-level-package-modules` | Core top-level package modules under `nrpy/`. | living | partial |
-| `helpers-package-modules` | Python and header helpers under `nrpy/helpers/`. | living | ingested |
-| `helpers-validation-and-reference-metric-tests` | Helpers, validation helpers, and reference-metric tests under `nrpy/helpers/`, `nrpy/validate_expressions/`, and `nrpy/tests/`. | living | partial |
-| `equation-modules-and-trusted-values` | Equation modules, trusted values, and equation-test metadata under `nrpy/equations/`. | living | partial |
-| `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers under `nrpy/infrastructures/`. | living | partial |
-| `carpetx-package-inventory` | Python modules under `nrpy/infrastructures/CarpetX/`. | living | ingested |
+| `core-top-level-package-modules` | Core top-level package modules from `find nrpy -maxdepth 1 -type f \( -name '*.py' -o -name '*.txt' -o -name 'py.typed' \)`. | living | partial |
+| `helpers-package-modules` | Helper package files from `find nrpy/helpers -type f \( -name '*.py' -o -name '*.h' \)`. | living | ingested |
+| `helpers-validation-and-reference-metric-tests` | Helpers, validation helpers, and reference metric tests from `nrpy/helpers`, `nrpy/validate_expressions`, and `nrpy/tests`. | living | partial |
+| `equation-modules-and-trusted-values` | Equation modules, generated trusted-value files, and BOB test metadata from `nrpy/equations`, including `nrpy/equations/seobnr/tests/BOB_v2_fit_sim_list.md`. | living | partial |
+| `infrastructure-modules-and-embedded-headers` | Python modules and embedded headers from `find nrpy/infrastructures -type f \( -name '*.py' -o -name '*.h' \)`. | living | partial |
+| `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`. | living | ingested |
 | `dendro-trusted-generated-source-and-expression-baselines` | Generated-source and trusted-expression baselines under `nrpy/infrastructures/Dendro/general_relativity/tests/`, owned by the emitting modules' direct validation entry points. | living | partial |
-| `example-generators-and-companion-scripts` | Example generators and companion scripts under `nrpy/examples/`. | living | partial |
-| `ci-and-local-automation` | CI and local automation under `.github/`. | living | partial |
+| `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples` inventoried by `wiki/examples/example-generator-catalog.md`. | living | partial |
+| `ci-and-local-automation` | CI and local automation files from `.github`. | living | partial |
 
 ## Source Documents Moved Below Root
 
@@ -196,6 +196,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/superB/timestepping_chare.py` | living |
 | `nrpy/infrastructures/superB/Makefile_helpers.py` | living |
 | `nrpy/infrastructures/superB/numerical_grids.py` | living |
+| `nrpy/infrastructures/superB/chare_communication_maps.py` | living |
 | `nrpy/infrastructures/superB/CurviBoundaryConditions.py` | living |
 | `nrpy/infrastructures/superB/MoL.py` | living |
 | `nrpy/infrastructures/superB/initial_data.py` | living |
@@ -385,7 +386,7 @@ aggregate rows and `wiki/source-map.md`.
 | `https://arxiv.org/pdf/gr-qc/9810065v1` | Version-pinned v1 PDF for Baumgarte and Shapiro, arXiv:gr-qc/9810065. | frozen | ingested | Deciding source for the zero-shift harmonic lapse relation in Eqs. (30)-(32), including the special `C(x)=1` choice. |
 | `https://arxiv.org/pdf/gr-qc/9902024v1` | Version-pinned v1 PDF for Baumgarte, Hughes, and Shapiro, arXiv:gr-qc/9902024. | frozen | ingested | Deciding source for the zero-shift statement that their harmonic slicing reduces to `partial_t(alpha)=partial_t(exp(6*phi))`. |
 | `https://arxiv.org/pdf/1712.07658v2` | Version-pinned v2 PDF for Ruchlin, Etienne, and Baumgarte, arXiv:1712.07658. | frozen | ingested | Deciding source for the StaticTrumpet gauge pairing in Eqs. (65), (67), and (69). |
-| `https://github.com/zachetienne/nrpytutorial` | Historical NRPy tutorial repository. | living | ingested | Background provenance from `Tutorial-BSSN_time_evolution-BSSN_gauge_RHSs.ipynb`, Step 2.b, for the `HarmonicSlicing` name and the `W`/`phi` chain-rule implementation. |
+| `https://github.com/zachetienne/nrpytutorial` | Historical NRPy tutorial repository; `Tutorial-BSSN_time_evolution-BSSN_gauge_RHSs.ipynb`. | living | partial | Background provenance for the `HarmonicSlicing` name and the `W`/`phi` chain-rule implementation in Step 2.b. |
 | `https://arxiv.org/abs/1605.01938` | arXiv abstract page for HBR2016 final-spin paper. | living | partial | Background landing page; exact revision-to-fit mapping is outside this ingest. |
 | `https://arxiv.org/abs/1611.00332` | arXiv abstract page for UIB2016 final-state paper and ancillary implementation. | living | partial | Background landing page; exact revision-to-fit/ancillary mapping is outside this ingest. |
 | `https://arxiv.org/abs/2111.02424` | arXiv abstract page for arXiv:2111.02424. | living | partial | Background landing page; exact revision-to-claim mapping is outside this ingest. |

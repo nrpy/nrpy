@@ -30,8 +30,9 @@ Use this order for agent navigation:
 1. Register the source in [raw/SOURCES.md](../raw/SOURCES.md) with provenance,
    `frozen` or `living` status, and ingest state. Exact cited-file rows may
    abbreviate to source and status per [SCHEMA.md](SCHEMA.md); external-source
-   rows may also carry durable notes. Do not record or compute source-tracking
-   digests, timestamps, access dates, or inventory counts.
+   rows may also carry notes.
+   Do not record checksums, hashes, digests, mtimes, maintenance dates, timestamps,
+   inventory counts, environment tuples, or recorded run and audit results.
 2. Decide which branch owns the compiled facts.
 3. Update the owning leaf in synthesized prose and cite exact files plus stable
    symbols or headings.
@@ -88,7 +89,8 @@ them. Promote an external source to `external-spec` only when the claim needs
 the source as authority and one of these is true:
 
 1. A frozen markdown excerpt or version note exists under `raw/source-docs/`.
-2. The upstream source is stable by version, commit, or immutable URL.
+2. The upstream source is stable by release/tag or immutable URL without a
+   stored commit hash.
 3. A documented exception explains why the live external source is acceptable.
 
 Any external source trust change requires updates to
@@ -103,8 +105,8 @@ When sources disagree, create or update a structured
 `CONTR-0001`-form row in [contradictions.md](contradictions.md) before changing
 the affected claim's status to `contested`. Record exact claim/status,
 competing sources, authority decision, complete affected-page links,
-   page-status rationale, owner/trigger, resolution test, and durable notes. Put
-   `Claim status: contested; contradiction: CONTR-0001.` on every
+page-status rationale, owner/trigger, resolution test, and notes. Put `Claim
+status: contested; contradiction: CONTR-0001.` on every
 active affected page; use `stale` in the same form when applicable.
 
 When a living source has moved and reconciliation cannot finish in the same
@@ -120,19 +122,25 @@ affected page is reconciled and the resolution test passes.
 
 ## Claim Adjudication
 
-The [Claim And Evidence Contract](SCHEMA.md#claim-and-evidence-contract) applies
-to every high-risk claim. When such a claim or its deciding source is materially
-changed, add or update the exact block immediately after the claim in its
+The [Claim And Evidence Contract](SCHEMA.md#claim-and-evidence-contract) is
+prospective after its adoption change. High-risk claims predating it and claims
+changed in that same adoption change remain baseline-uncovered unless
+an exact block is present; that adoption change asserts no completed block
+coverage. When a baseline claim or its deciding source is next materially
+changed after adoption, add the exact block immediately after the claim in its
 owning `Detail` section. For an active contradiction, add it to the matching
-`### CONTR-*` subsection, never the fixed register row. Use code for descriptive
-behavior; owning
+`### CONTR-*` subsection, never the fixed register row. For behavioral claims,
+name durable validation routes, fixtures, invariants, or oracles when available.
+Use code for descriptive behavior; owning
 governance/configuration for normative rules; stable specification plus targeted
 tests for intended public/scientific contracts; workflow/configuration for CI
-job shape; and frozen generated evidence only for its encoded context. Synthesis
+job shape; and frozen generated evidence only for the context encoded by that
+evidence. Synthesis
 agreement is never authority. Navigation, structure, provenance,
 status, symbolic definition, and normative rules do not receive behavioral
-validation lines. Name durable validation routes and acceptance conditions;
-keep execution observations outside the KB.
+validation lines. Keep observed results, execution environments, tool versions,
+and run dates in command output, CI, or active review evidence rather than the
+KB.
 
 ## Safe Reproduction
 
@@ -140,12 +148,12 @@ In the shared repository working tree, run only demonstrably side-effect-free
 scoped checks. Run generators, builds, oracle creation or update, and blanket
 formatters only in an isolated user-owned intended-change worktree or copy with
 no unrelated changes.
-Inspect side effects first, use owned disposable cache and output, and apply
-only limits imposed by the command, environment, project policy, or measured
-need. Retain no incidental output and never clear or overwrite
+Inspect side effects first, use owned disposable cache and output, and impose
+time/resource limits. Retain no incidental output and never clear or overwrite
 ambient or shared cache. No coordination exception permits mutation in the
-shared working tree. Keep transient command output, environment, results, and
-cleanup evidence outside authored KB files. Network, installs, remote CI, and external toolchains need
+shared working tree. Keep commands, working directories, observed assertions,
+results, limits, and cleanup in active review or CI evidence, not as KB
+snapshots. Network, installs, remote CI, and external toolchains need
 user authority. Never reset or clean shared `project/` output.
 
 ## Deterministic Checks
@@ -157,7 +165,7 @@ python tools/kb_lint.py
 git diff --check
 ```
 
-Expected success is exit 0; linter prints `KB lint passed.` `--all` is an
+Expected success is exit 0; the linter prints `KB lint passed.` `--all` is an
 identical compatibility alias, not stronger coverage. Inventory commands are
 diagnostics, never semantic completeness proof.
 

@@ -176,8 +176,9 @@ in the current request.
 For `wiki/**`, KB-maintenance `raw/**`, or KB governance in `AGENTS.md`, root prepares
 one `review` candidate through [Schema](../wiki/SCHEMA.md) and
 [Workflows](../wiki/workflows.md). Seats review, not create competing KBs or vote on
-source authority. Preserve `raw/source-docs/**` and frozen sources; retain
-`MM-DD-YYYY` dates, no source hashing/tracking timestamps, and no separate KB logs.
+source authority. Preserve `raw/source-docs/**` and frozen sources. Do not retain
+maintenance dates, source/file counts, source hashes, tracking timestamps, or
+separate KB logs.
 Complete applicable source registration, claim evidence, source-map/catalog,
 neighbor, and link updates; review affected claims/dependencies only. Run
 `python tools/kb_lint.py` within its governed scope; `--all` is the identical alias,

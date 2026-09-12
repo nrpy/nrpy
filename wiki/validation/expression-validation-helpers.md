@@ -136,7 +136,7 @@ Claim evidence:
 - Claim: `compare_against_trusted()` uses relative error for finite values, accepts matching NaN components and same-signed infinities, and raises `ValueError` for finite/non-finite or differently structured non-finite mismatches.
 - Role: descriptive behavior
 - Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `compare_against_trusted` and `_nonfinite_values_match`
-- Corroboration: [reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py), `trusted_dict`, supplies intentional trusted NaN sentinels for the reference-metric owner oracle
+- Corroboration: [reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py), `trusted_dict`, supplies three intentional trusted NaN sentinels exercised by the reference-metric owner run
 
 All expression checks sample numerical substitutions rather than proving an
 identity over a domain. A sampled point can miss a discrepancy or encounter a

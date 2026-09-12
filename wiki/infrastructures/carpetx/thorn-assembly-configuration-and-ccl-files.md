@@ -79,10 +79,9 @@ emits `.cxx` files.
 
 No current checked-in workflow command invokes `carpetx_wavetoy_thorns.py` or
 `carpetx_baikal_thorns.py`. The `einsteintoolkit-validation` job invokes the
-similarly named `carpet_*` ETLegacy generators instead. CarpetX generation,
-Einstein Toolkit build, runtime, GPU, and restart behavior are outside the
-configured validation route; local generator code decides only the emitted
-thorn shape described above.
+similarly named `carpet_*` ETLegacy generators instead. Local generator code
+decides only the emitted thorn shape described above; workflow configuration
+does not establish CarpetX build, runtime, GPU, or restart behavior.
 
 ## Sources
 

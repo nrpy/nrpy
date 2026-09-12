@@ -78,44 +78,92 @@ ROOT_PROHIBITED_ARTIFACT_SEGMENT_RE = re.compile(
     r"(?:$|[._-])",
     re.IGNORECASE,
 )
-# Volatile facts do not belong in the KB. Stable scientific cardinalities and
-# identifier names remain valid; inventory counts and source-tracking values do
-# not. Prohibition/supersession statements may name a removed metadata class.
+# Volatile facts do not belong in the authored KB. Stable scientific
+# cardinalities and identifier names remain valid; inventory counts and
+# source-tracking values do not. Prohibition statements may name a removed
+# metadata class.
 HASH_DIGEST_VALUE_RE = re.compile(
-    r"`?\b(?:sha-?\d+|md-?5|blake-?\d\w*|xxh\d*|crc-?\d+)\b`?"
-    r"(?:\s*[:=]\s*|\s+)`?[0-9a-f]{8,}\b`?",
+    r"`?\b(?:sha(?:-?3)?-?\d+|md-?5|blake-?\d\w*|xxh\d*|crc-?\d+)\b`?"
+    r"(?:\s*[:=]\s*|\s+)`?[0-9a-f]{8,}\b`?"
+    r"|\b(?:checksum|hash|digest)(?:\s+value)?\s*[:=]\s*`?\S+",
     re.IGNORECASE,
 )
-BARE_HASH_VALUE_RE = re.compile(
-    r"\b(?=[0-9a-f]{7,64}\b)(?=[0-9a-f]*[a-f])[0-9a-f]{7,64}\b",
+STORED_HEX_IDENTIFIER_RE = re.compile(
+    r"(?<![0-9a-f])(?:[0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{56}|"
+    r"[0-9a-f]{64}|[0-9a-f]{96}|[0-9a-f]{128})(?![0-9a-f])",
+    re.IGNORECASE,
+)
+STABLE_HEX_IDENTIFIER_PREFIX_RE = re.compile(
+    r"\b(?:(?:api|interface|publication|release|source|format|schema)\s+)?"
+    r"(?:identifier|id|version|label)\s*[:=]?\s*$",
+    re.IGNORECASE,
+)
+VCS_HASH_VALUE_RE = re.compile(
+    r"\b(?:commit|revision)\s+`?[0-9a-f]{7,40}\b`?|"
+    r"https?://[^\s)]+/(?:commit|blob)/[0-9a-f]{7,40}(?:/|\b)",
     re.IGNORECASE,
 )
 URL_RE = re.compile(r"https?://[^\s)>`]+")
 VOLATILE_DATE_RE = re.compile(
-    r"\b(?:\d{4}-\d{2}-\d{2}|\d{2}-\d{2}-\d{4})\b"
-)
-VOLATILE_TIME_RE = re.compile(
-    r"\b(?:[01]\d|2[0-3]):[0-5]\d"
-    r"(?::[0-5]\d(?:[.]\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?\b",
+    r"(?<![\w./-])(?:\d{4}(?P<ymd_sep>[-/.])\d{2}(?P=ymd_sep)\d{2}|"
+    r"\d{2}(?P<mdy_sep>[-/.])\d{2}(?P=mdy_sep)\d{4})(?![\w./-])|"
+    r"(?<![\w-])(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|"
+    r"Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|"
+    r"Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?[,]?\s+"
+    r"\d{4}(?!\w)|"
+    r"(?<![\w-])\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|"
+    r"Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|"
+    r"Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?[,]?\s+"
+    r"\d{4}(?!\w)",
     re.IGNORECASE,
 )
+STABLE_DATE_IDENTIFIER_RE = re.compile(
+    r"\b(?:api|interface|publication|release|source|format|schema)\s+"
+    r"(?:identifier|id|version|label)\s*[:=]?\s*$",
+    re.IGNORECASE,
+)
+VOLATILE_TIME_RE = re.compile(
+    r"\b(?:[01]?\d|2[0-3]):[0-5]\d"
+    + r"(?::[0-5]\d(?:[.]\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?\b",
+    re.IGNORECASE,
+)
+COUNT_VALUE_PATTERN = (
+    r"(?:\d[\d,]*|zero|one|two|three|four|five|six|seven|eight|nine|ten|"
+    r"eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|"
+    r"nineteen|twenty)"
+)
 VOLATILE_INVENTORY_COUNT_RE = re.compile(
-    r"(?<![\d.-])\b\d[\d,]*\s+(?:source\s+)?(?:files?|pages?|sources?|"
-    r"generators?|jobs?|cases?|projects?|applications?|builders?|dictionaries?|"
-    r"comparisons?|scripts?|modules?)\b",
+    r"(?<![\w.-])\d[\d,]*\s+(?:source\s+)?" + r"(?:files?|pages?|sources?|jobs?)\b",
+    re.IGNORECASE,
+)
+VOLATILE_EXISTENTIAL_INVENTORY_RE = re.compile(
+    rf"\bthere\s+(?:are|is)\s+{COUNT_VALUE_PATTERN}\s+(?:source\s+)?"
+    r"(?:files?|pages?|sources?|jobs?)\b",
     re.IGNORECASE,
 )
 VOLATILE_CATALOG_COUNT_RE = re.compile(
     r"\b(?:inventory|catalog|aggregate)\b[^.!?\n|]{0,80}"
-    r"\b\d[\d,]*(?:\s+[A-Za-z][\w-]*){0,3}\s+(?:generators?|jobs?|cases?|"
+    rf"\b{COUNT_VALUE_PATTERN}(?:\s+[A-Za-z][\w-]*){{0,3}}\s+"
+    r"(?:files?|pages?|sources?|generators?|jobs?|cases?|"
     r"projects?|applications?|builders?|dictionaries?|baselines?|comparisons?|"
     r"scripts?|modules?)\b",
     re.IGNORECASE,
 )
 VOLATILE_FIELD_RE = re.compile(
-    r"(?:(?i:\bLast\s+(?:reconciled|checked|audited)\s*:)|"
-    r"\|\s*(?:Mtime|Hash|Accessed|Source count|File count|Opened|Resolved|"
-    r"Audit|Resolution|Environment|Run result)\s*\|)",
+    r"(?:(?i:\bLast\s+(?:reconciled|checked|audited|reviewed|verified|"
+    r"validated|updated|modified)\s*[:=])|"
+    r"(?i:\b(?:Timestamp|Datestamp|Date stamp|Datetime|Date|Accessed|Created|"
+    r"Updated|Modified|Opened|Resolved|Resolution|Reviewed|Checked|Audited|"
+    r"Audit|Reconciliation|Run date|Validation date|Mtime|Hash|Checksum|Digest|"
+    r"Source count|File count|Page count|Job count|Environment|Run result)"
+    r"(?:\s+(?:at|on|date))?\s*[:=])|"
+    r"(?i:\|\s*(?:Timestamp|Datestamp|Date stamp|Datetime|Date|Mtime|Hash|"
+    r"Checksum|Digest|Accessed|Created|Updated|Modified|Reviewed|Checked|"
+    r"Audited|Audit|Reconciliation|Environment|"
+    r"Run result|Run date|Validation date|Source count|File count|Page count|"
+    r"Job count|Last reconciled|Last checked|Last audited|Last reviewed|"
+    r"Last verified|Last validated|Last updated|Last modified)\s*\|)|"
+    r"\|\s*(?:Opened|Resolved|Resolution)\s*\|)",
 )
 VOLATILE_RESULT_TUPLE_RE = re.compile(
     r"\b(?:inspected|generated|built|run|result_checked)\s*=\s*"
@@ -124,7 +172,7 @@ VOLATILE_RESULT_TUPLE_RE = re.compile(
 )
 ENVIRONMENT_ASSIGNMENT_RE = re.compile(
     r"\b(?:environment|platform|compiler|runtime|python|os|host)\s*[:=]\s*"
-    r"[^;|,]+",
+    + r"[^;|,]+",
     re.IGNORECASE,
 )
 VOLATILE_RUN_PROSE_RE = re.compile(
@@ -137,7 +185,12 @@ VOLATILE_RUN_PROSE_RE = re.compile(
     r"\bnot\s+(?:yet\s+)?(?:audited|checked|reviewed|re-reviewed|reconciled|"
     r"validated)\b|\bunexecuted\b|"
     r"\bisolated\s+local\s+(?:[\w/-]+\s+){0,3}(?:builds?|runs?|results?)\b|"
-    r"\bvalidation\s+artifacts?\s+(?:was|were)\s+temporary\b)",
+    r"\bvalidation\s+artifacts?\s+(?:was|were)\s+temporary\b|"
+    r"^\s*(?:[-*]\s+)?(?:the\s+)?(?:tests?|checks?|audits?|builds?|runs?|"
+    r"validations?)\s+(?:passed|failed|succeeded|completed)"
+    r"(?:\s+(?:on\s+(?:Linux|macOS|Ubuntu|Windows)"
+    r"(?:\s+[0-9][\w.+-]*)*|in\s+(?:CI|continuous\s+integration)))?"
+    r"\s*[.!?]?\s*$)",
     re.IGNORECASE,
 )
 MTIME_WORD_RE = re.compile(r"\bmtimes?\b", re.IGNORECASE)
@@ -738,7 +791,7 @@ def _check_source_registration(pages: List[Path], failures: List[str]) -> None:
 
 def _check_catalog(failures: List[str]) -> None:
     """
-    Check catalog target equality and page-status agreement.
+    Check catalog target equality and page status agreement.
 
     :param failures: Mutable failure list.
     """
@@ -791,6 +844,7 @@ def _check_catalog(failures: List[str]) -> None:
                 f"catalog target is not a live wiki page: {_rel(target)}",
             )
             continue
+        expected_status: Optional[str]
         if _is_router(target):
             expected_status = "router"
             if row[type_i].strip().lower() != "router":
@@ -1090,33 +1144,53 @@ def _metadata_mention_allowed(lines: List[str], line_index: int) -> bool:
 
     :param lines: File lines being checked.
     :param line_index: Zero-based index of the line with the mention.
-    :return: Whether nearby context permits the mention.
+    :return: Whether same-line context permits the mention.
     """
     return METADATA_PROHIBITION_RE.search(lines[line_index]) is not None
 
 
 def _volatile_metadata_issues(line: str) -> List[str]:
-    """Return volatile-data policy violations found in one line."""
+    """
+    Return volatile-data policy violations found in one line.
+
+    :param line: Authored KB line to inspect.
+    :return: Violation messages for the line.
+    """
     issues: List[str] = []
-    # Complete stable locators are source identifiers. None of their opaque
-    # path components are maintenance snapshots, even when they resemble a
-    # date or digest.
-    snapshot_scan_line = URL_RE.sub("", line)
+    # Complete locators are source identifiers. Opaque path components are not
+    # maintenance snapshots even when they resemble dates or digests.
+    snapshot_line = URL_RE.sub("", line)
     checks = (
-        (HASH_DIGEST_VALUE_RE, snapshot_scan_line, "hash digest value found"),
-        (BARE_HASH_VALUE_RE, snapshot_scan_line, "hash-like value found"),
-        (VOLATILE_DATE_RE, snapshot_scan_line, "date literal found"),
-        (VOLATILE_TIME_RE, snapshot_scan_line, "timestamp literal found"),
-        (VOLATILE_INVENTORY_COUNT_RE, snapshot_scan_line, "inventory count found"),
-        (VOLATILE_CATALOG_COUNT_RE, snapshot_scan_line, "catalog count found"),
-        (VOLATILE_FIELD_RE, snapshot_scan_line, "volatile metadata field found"),
-        (VOLATILE_RESULT_TUPLE_RE, snapshot_scan_line, "recorded result tuple found"),
-        (VOLATILE_RUN_PROSE_RE, snapshot_scan_line, "recorded run/audit prose found"),
+        (HASH_DIGEST_VALUE_RE, snapshot_line, "hash digest value found"),
+        (VCS_HASH_VALUE_RE, snapshot_line, "VCS revision value found"),
+        (VOLATILE_TIME_RE, snapshot_line, "timestamp literal found"),
+        (VOLATILE_INVENTORY_COUNT_RE, snapshot_line, "inventory count found"),
+        (
+            VOLATILE_EXISTENTIAL_INVENTORY_RE,
+            snapshot_line,
+            "inventory count found",
+        ),
+        (VOLATILE_CATALOG_COUNT_RE, snapshot_line, "catalog count found"),
+        (VOLATILE_FIELD_RE, snapshot_line, "volatile metadata field found"),
+        (VOLATILE_RESULT_TUPLE_RE, snapshot_line, "recorded result tuple found"),
+        (VOLATILE_RUN_PROSE_RE, snapshot_line, "recorded run/audit prose found"),
     )
     for pattern, subject, message in checks:
         if pattern.search(subject):
             issues.append(message)
-    if len(ENVIRONMENT_ASSIGNMENT_RE.findall(snapshot_scan_line)) >= 2:
+
+    hex_match = STORED_HEX_IDENTIFIER_RE.search(snapshot_line)
+    if hex_match and not STABLE_HEX_IDENTIFIER_PREFIX_RE.search(
+        snapshot_line[: hex_match.start()]
+    ):
+        issues.append("hash-like value found")
+
+    date_match = VOLATILE_DATE_RE.search(snapshot_line)
+    if date_match and not STABLE_DATE_IDENTIFIER_RE.search(
+        snapshot_line[: date_match.start()]
+    ):
+        issues.append("date literal found")
+    if len(ENVIRONMENT_ASSIGNMENT_RE.findall(snapshot_line)) >= 2:
         issues.append("recorded environment tuple found")
     return issues
 

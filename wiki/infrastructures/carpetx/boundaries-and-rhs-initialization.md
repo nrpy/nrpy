@@ -47,8 +47,8 @@ imports `nrpy.infrastructures.ETLegacy.simple_loop as lp` and uses
 `gri.ETLegacyGridFunction.access_gf()` for RHS accesses. This page documents
 that source behavior only; it is not a code-fix task.
 
-A scoped inspection of `nrpy/infrastructures/CarpetX/` shows no local CarpetX
-modules named for MoL registration, Symmetry registration, Driver
+A scoped inventory of `nrpy/infrastructures/CarpetX/` shows no
+local CarpetX files named for MoL registration, Symmetry registration, Driver
 boundary selection, or separate Boundary registration beyond
 `boundary_conditions.py`. The local CarpetX boundary-specific source in this
 scope is the NewRadX-oriented `boundary_conditions.py` file described above.

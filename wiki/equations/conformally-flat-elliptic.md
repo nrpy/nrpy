@@ -73,7 +73,7 @@ belong to [BHaH GR Application Wiring](../infrastructures/bhah/gr-application-wi
 - [ConformallyFlat_RHSs_Spherical.py](../../nrpy/equations/nrpyelliptic/tests/ConformallyFlat_RHSs_Spherical.py) - `trusted_dict`
 - [ConformallyFlat_SourceTerms_Cartesian.py](../../nrpy/equations/nrpyelliptic/tests/ConformallyFlat_SourceTerms_Cartesian.py) - `trusted_dict`
 - [ConformallyFlat_SourceTerms_Spherical.py](../../nrpy/equations/nrpyelliptic/tests/ConformallyFlat_SourceTerms_Spherical.py) - `trusted_dict`
-- [NRPyElliptic paper landing page](https://arxiv.org/abs/2111.02424) - background orientation only; exact equation-to-claim mapping is not established
+- [NRPyElliptic paper landing page](https://arxiv.org/abs/2111.02424) - background orientation only; exact claim mapping is not established here
 
 ## See Also
 

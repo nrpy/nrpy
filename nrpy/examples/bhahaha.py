@@ -64,7 +64,7 @@ CoordSystem = "Spherical"
 
 OMP_collapse = 1
 enable_rfm_precompute = True
-enable_fd_functions = False
+enable_fd_functions = True
 MoL_method = "SSPRK33"
 enable_simd = False  # Does not work, as the SIMD vector would be in the radial direction, where only a single point is sampled.
 enable_parallel_codegen = True

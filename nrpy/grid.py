@@ -362,12 +362,15 @@ class GridFunction:
 class BHaHGridFunction(GridFunction):
     """The subclass for BlackHoles@Home grid functions."""
 
-    VALID_GROUPS: Tuple[str, ...] = ("EVOL", "AUXEVOL", "DIAG", "AUX")
+    VALID_GROUPS: Tuple[str, ...] = ("EVOL", "AUXEVOL", "DIAG", "AUX", "SCRATCH")
     GROUP_DESCRIPTIONS: str = (
         '    "EVOL": for evolved quantities (i.e., quantities stepped forward in time),\n'
         '    "AUXEVOL": for auxiliary quantities needed at all points by evolved quantities,\n'
         '    "DIAG": for diagnostic quantities needed at all points (e.g., volume integration, interpolation, etc),\n'
         '    "AUX": for all other quantities needed at all gridpoints.\n'
+        '    "SCRATCH": for intermediates produced and consumed within one right-hand-side evaluation;\n'
+        "             never allocated, the caller supplies storage that is dead across that window\n"
+        "             and must check that NUM_SCRATCH_GFS fits in the storage it supplies.\n"
     )
 
     def __init__(
@@ -405,6 +408,8 @@ class BHaHGridFunction(GridFunction):
                 self.gf_array_name = "diagnostic_gfs"
             elif group == "AUX":
                 self.gf_array_name = "aux_gfs"
+            elif group == "SCRATCH":
+                self.gf_array_name = "scratch_gfs"
         else:
             self.gf_array_name = gf_array_name
 
@@ -416,12 +421,16 @@ class BHaHGridFunction(GridFunction):
         """
         Validate the gridfunction group.
 
-        The valid groups are 'EVOL', 'AUXEVOL', 'DIAG', and 'AUX'.
+        The valid groups are 'EVOL', 'AUXEVOL', 'DIAG', 'AUX', and 'SCRATCH'.
 
         'EVOL': for evolved quantities (i.e., quantities stepped forward in time),
         'AUXEVOL': for auxiliary quantities needed at all points by evolved quantities,
         'DIAG': for diagnostic quantities needed at all points (e.g., volume integration, interpolation, etc),
-        'AUX': for all other quantities needed at all gridpoints.
+        'AUX': for all other quantities needed at all gridpoints,
+        'SCRATCH': for intermediates produced and consumed within one right-hand-side evaluation;
+        no array is allocated for them, the caller supplies storage (such as the Method of Lines
+        buffer the right-hand sides are about to overwrite) that is dead across that window,
+        and only the caller can check that NUM_SCRATCH_GFS fits in the storage it supplies.
 
         :raises ValueError: If the group is not valid.
 
@@ -549,6 +558,12 @@ class BHaHGridFunction(GridFunction):
         # Append AUXEVOL and AUX group defines; DIAG group is defined in diagnostic_gfs.h
         outstr += BHaHGridFunction.define_gfs_group("AUXEVOL", auxevol)
         outstr += BHaHGridFunction.define_gfs_group("AUX", aux)
+        # SCRATCH gridfunctions get indices but no allocation: the caller supplies their storage.
+        scratch = sorted(
+            [gf.name for gf in glb_gridfcs_dict.values() if gf.group == "SCRATCH"],
+            key=str.lower,
+        )
+        outstr += BHaHGridFunction.define_gfs_group("SCRATCH", scratch)
 
         return outstr
 

@@ -105,11 +105,10 @@ Claim evidence:
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
 - Corroboration: [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [interface_ccl.py](../../../nrpy/infrastructures/ETLegacy/interface_ccl.py), `construct_interface_ccl`
 
-All three generated kernels replace the finite-difference helper prefunc text
-`NO_INLINE` with `CCTK_ATTRIBUTE_NOINLINE` before registration. The local
-comment says this avoids a higher-order finite-difference compile hang with
-some GCC versions without changing the shared finite-difference helper for
-other infrastructures.
+All three generated kernels register `construct_FD_functions_prefunc()` unchanged;
+the finite-difference helpers carry no inlining attribute (the former `NO_INLINE`
+rewrite to `CCTK_ATTRIBUTE_NOINLINE`, a workaround for a GCC 10 compile hang, was
+removed together with the macro).
 
 RHS validation remains part of this page because `rhs_eval.py` validates the
 ETLegacy-specific assembled RHS dictionary after ETLegacy option handling and

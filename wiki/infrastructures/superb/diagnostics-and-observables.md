@@ -138,10 +138,9 @@ Claim evidence:
 
 Current configured CI builds all three superB projects but runs only the
 collision executable. It does not inspect CkIO files, volume-reduction values,
-NRPyElliptic residual stopping, checkpoint/restart, or error paths. Those
-behaviors remain outside the configured validation route; prose above describes
-local generator control flow plus Charm++ 8.0.0 API contracts, not observed
-output.
+NRPyElliptic residual stopping, checkpoint/restart, or error paths. The prose
+above describes local generator control flow plus Charm++ 8.0.0 API contracts,
+not observed runtime output.
 
 ## Sources
 
