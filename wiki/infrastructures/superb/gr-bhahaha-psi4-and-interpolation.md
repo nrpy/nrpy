@@ -132,8 +132,8 @@ Validation is asymmetric. Configured CI runs the default collision project,
 which exercises a distributed superB/BHaHAHA program path, but does not assert
 horizon files or interpolation payload values. It builds but does not run the
 spectroscopy project, so Psi4 shell interpolation and decomposition are not
-runtime-proven there. No distributed run or result check was performed during
-this KB audit, and workflow configuration does not prove latest success.
+runtime-proven there. Workflow configuration defines coverage but does not
+establish execution outcomes.
 
 ## Sources
 

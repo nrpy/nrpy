@@ -19,7 +19,7 @@ owns standalone BHaH infrastructure assembly.
 
 Both generators delete and recreate their fixed project directories. Preserve
 prior generated output before rerunning. Build/run commands below are generated
-workflow instructions; they were not executed during this KB audit.
+workflow instructions, not recorded execution evidence.
 
 ## Detail
 

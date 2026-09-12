@@ -109,8 +109,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/infrastructures/CarpetX/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
 - Corroboration: [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [interface_ccl.py](../../../nrpy/infrastructures/CarpetX/interface_ccl.py), `construct_interface_ccl`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=CarpetX registration; precision=symbolic code generation; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian, fd_order 4, scalar registration; SIMD limitation retained and inspected`
 
 RHS trusted-expression validation belongs here because `rhs_eval.py` validates
 the CarpetX-specific assembled RHS dictionary after CarpetX option handling and

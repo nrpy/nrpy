@@ -121,8 +121,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py), `output_timestepping_h` and `diags_integration_build_default_recipes`; [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
 - Corroboration: [BHaH diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=superB Charm++ header generation; precision=generated double reductions, runtime values not exercised; GPU=not-run; restart=not-applicable; distributed=not-run; error_path=not-run; options=GR and NRPyElliptic recipe branches`
 
 The GR and NRPyElliptic nearest diagnostic variants share the same orchestration
 and helper calls; they differ in the diagnostic gridfunctions selected in their
@@ -137,14 +135,12 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [GR diagnostics_nearest.py](../../../nrpy/infrastructures/superB/general_relativity/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [NRPyElliptic diagnostics_nearest.py](../../../nrpy/infrastructures/superB/nrpyelliptic/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
 - Corroboration: [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py), generated diagnostic dispatch; [BHaH diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=superB Charm++ registration; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-run; error_path=not-run; options=GR and NRPyElliptic 0D/1D/2D selections`
 
 Current configured CI builds all three superB projects but runs only the
 collision executable. It does not inspect CkIO files, volume-reduction values,
-NRPyElliptic residual stopping, checkpoint/restart, or error paths. Those
-runtime outcomes are `not-run` in this KB audit; prose above describes local
-generator control flow plus Charm++ 8.0.0 API contracts, not observed output.
+NRPyElliptic residual stopping, checkpoint/restart, or error paths. The prose
+above describes local generator control flow plus Charm++ 8.0.0 API contracts,
+not observed runtime output.
 
 ## Sources
 

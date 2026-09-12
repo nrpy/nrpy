@@ -30,8 +30,9 @@ Use this order for agent navigation:
 1. Register the source in [raw/SOURCES.md](../raw/SOURCES.md) with provenance,
    `frozen` or `living` status, and ingest state. Exact cited-file rows may
    abbreviate to source and status per [SCHEMA.md](SCHEMA.md); external-source
-   rows may also carry notes. Do not record or compute source-tracking
-   checksums, hashes, file counts, date stamps, or timestamps.
+   rows may also carry notes.
+   Do not record checksums, hashes, digests, mtimes, maintenance dates, timestamps,
+   inventory counts, environment tuples, or recorded run and audit results.
 2. Decide which branch owns the compiled facts.
 3. Update the owning leaf in synthesized prose and cite exact files plus stable
    symbols or headings.
@@ -128,17 +129,18 @@ an exact block is present; that adoption change asserts no completed block
 coverage. When a baseline claim or its deciding source is next materially
 changed after adoption, add the exact block immediately after the claim in its
 owning `Detail` section. For an active contradiction, add it to the matching
-`### CONTR-*` subsection, never the fixed register row. Add validation and
-dimensions only for behavioral claims. Use code for descriptive behavior;
-owning
+`### CONTR-*` subsection, never the fixed register row. For behavioral claims,
+name durable validation routes, fixtures, invariants, or oracles when available.
+Use code for descriptive behavior; owning
 governance/configuration for normative rules; stable specification plus targeted
 tests for intended public/scientific contracts; workflow/configuration for CI
-job shape; and frozen generated evidence only for its pinned context. Synthesis
+job shape; and frozen generated evidence only for the context encoded by that
+evidence. Synthesis
 agreement is never authority. Navigation, structure, provenance,
 status, symbolic definition, and normative rules do not receive behavioral
-validation lines. In every behavioral dimension, use an exact value when
-exercised, `not-run` when applicable but unexercised, and `not-applicable` only
-when the dimension does not apply.
+validation lines. Keep observed results, execution environments, tool versions,
+and run dates in command output, CI, or active review evidence rather than the
+KB.
 
 ## Safe Reproduction
 
@@ -149,9 +151,9 @@ no unrelated changes.
 Inspect side effects first, use owned disposable cache and output, and impose
 time/resource limits. Retain no incidental output and never clear or overwrite
 ambient or shared cache. No coordination exception permits mutation in the
-shared working tree. Record command,
-working directory, observed assertion, result, limits, cleanup, and behavioral
-tuple when relevant. Network, installs, remote CI, and external toolchains need
+shared working tree. Keep commands, working directories, observed assertions,
+results, limits, and cleanup in active review or CI evidence, not as KB
+snapshots. Network, installs, remote CI, and external toolchains need
 user authority. Never reset or clean shared `project/` output.
 
 ## Deterministic Checks
@@ -163,7 +165,7 @@ python tools/kb_lint.py
 git diff --check
 ```
 
-Expected success is exit 0; linter prints `KB lint passed.` `--all` is an
+Expected success is exit 0; the linter prints `KB lint passed.` `--all` is an
 identical compatibility alias, not stronger coverage. Inventory commands are
 diagnostics, never semantic completeness proof.
 

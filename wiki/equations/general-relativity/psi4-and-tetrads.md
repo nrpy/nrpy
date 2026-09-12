@@ -59,8 +59,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [psi4_tetrads.py](../../../nrpy/equations/general_relativity/psi4_tetrads.py), `Psi4Tetrads`
 - Corroboration: [psi4.py](../../../nrpy/equations/general_relativity/psi4.py), `Psi4`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux x86_64; tool_version=Python 3.12.3; backend=SymPy expression construction and BHaH OpenMP C generation; precision=symbolic; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=Cartesian doctest and Spherical code generation with BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad`
 
 The cited validation evidence covers representative `Spherical` trusted files
 for the BCL arXiv v3 Eq. (5.6) tetrad, symbolic-tetrad Psi4, and direct tetrad

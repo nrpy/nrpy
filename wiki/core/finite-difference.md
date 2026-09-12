@@ -26,8 +26,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [nrpy/finite_difference.py](../../nrpy/finite_difference.py) - `select_stored_first_derivatives` and its selection/error doctests.
 - Corroboration: [nrpy/c_codegen.py](../../nrpy/c_codegen.py) - `CCodeGen`, `gridfunction_management_and_FD_codegen`, and the polynomial evaluation doctest; [BHaH GR Application Wiring](../infrastructures/bhah/gr-application-wiring.md) records consumer integration and bounded evolution validation.
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=BHaH scalar codegen and SymPy evaluation; precision=exact polynomial reference; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=unregistered selection; options=FD2, selected first and mixed derivatives plus a registered unselected field`
 
 `fd_temp_variable_name()` constructs temporary names for stencil-point reads. Offsets become suffixes such as `i0m2`, `i1p4`, or `i2m1`, joined after the gridfunction basename; zero offsets contribute no suffix, so the center point keeps the bare gridfunction name. An empty basename is rejected.
 
@@ -42,8 +40,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [nrpy/finite_difference.py](../../nrpy/finite_difference.py) - `use_pointer_stride_mixed_derivative`, `use_pointer_stride_ko_derivative`, `FDFunction.c_function_call`, `FDFunction.CFunction_fd_function`, `FDFunction.pointer_stride_mixed_params_body`
 - Corroboration: [nrpy/c_codegen.py](../../nrpy/c_codegen.py) - `c_codegen` scalar/SIMD mixed-helper doctest examples, including custom-array and ordinary-read cases (inspected, not executed).
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=BHaH; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=enable_fd_functions=True, enable_simd=False/True`
 
 `construct_FD_functions_prefunc()` walks `FDFunctions_dict`, applies any requested C-function decorators, regenerates each helper's full function text, and concatenates those functions for use in a generated C function `prefunc`.
 

@@ -77,26 +77,20 @@ Maintenance rule: coordinate-admission checks are request-gated by
 [Contribution Style And Static Analysis](../../architecture/contribution-style-and-static-analysis.md);
 the nullable coordinates-only path does not authorize adding them.
 
-The 28 current full-source `Cart_to_xx_and_nearest_i0i1i2_assume_valid` and
-29 current full-source `xx_to_Cart` default independent-grid baselines, four
-explicitly named Cartesian multipatch OpenMP/CUDA baselines, and the OpenMP
-GeneralRFM fisheye inverse semantic compile/run doctest passed isolated
-candidate generation, review, byte comparison where a full-source oracle
-exists, and a second fresh-process source comparison. The GeneralRFM fisheye
-inverse is intentionally excluded from full-source golden comparison; its
-semantic doctest compiles generated OpenMP C harnesses with `REAL=float` and
-`REAL=double`, checks finite round-trip fixtures, and checks recoverable failure
-for non-finite Cartesian input. No broader application build, CUDA GeneralRFM
-runtime, GPU run, restart run, distributed run, or production numerical-result
-guarantee was established.
+Owner full-source baselines cover the default independent-grid inverse and
+forward converters plus explicitly named Cartesian multipatch OpenMP/CUDA
+variants. The OpenMP GeneralRFM fisheye inverse is intentionally excluded from
+full-source golden comparison; its semantic doctest compiles generated OpenMP C
+harnesses with `REAL=float` and `REAL=double`, checks finite round-trip fixtures,
+and checks recoverable failure for non-finite Cartesian input. No broader
+application build, CUDA GeneralRFM runtime, GPU run, restart run, distributed
+run, or production numerical-result guarantee follows.
 
 Claim evidence:
-- Claim: The 28 current full-source `Cart_to_xx_and_nearest_i0i1i2_assume_valid` and 29 current full-source `xx_to_Cart` default independent-grid baselines, four explicitly named Cartesian multipatch OpenMP/CUDA baselines, and the OpenMP GeneralRFM fisheye inverse semantic compile/run doctest passed isolated candidate generation, review, byte comparison where a full-source oracle exists, and a second fresh-process source comparison. The GeneralRFM fisheye inverse is intentionally excluded from full-source golden comparison; its semantic doctest compiles generated OpenMP C harnesses with `REAL=float` and `REAL=double`, checks finite round-trip fixtures, and checks recoverable failure for non-finite Cartesian input. No broader application build, CUDA GeneralRFM runtime, GPU run, restart run, distributed run, or production numerical-result guarantee was established.
+- Claim: Owner full-source baselines cover the default independent-grid inverse and forward converters plus explicitly named Cartesian multipatch OpenMP/CUDA variants. The GeneralRFM fisheye inverse is intentionally excluded from full-source golden comparison; its semantic doctest compiles generated OpenMP C harnesses with `REAL=float` and `REAL=double`, checks finite round-trip fixtures, and checks recoverable failure for non-finite Cartesian input. No broader application build, CUDA GeneralRFM runtime, GPU run, restart run, distributed run, or production numerical-result guarantee follows.
 - Role: generated evidence
 - Deciding authority: `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, `register_CFunction_xx_to_Cart`, `_run_generalrfm_fisheye_inverse_roundtrip_check`
 - Corroboration: `nrpy/infrastructures/BHaH/generalrfm_cart_to_xx.py` - `register_CFunction_generalrfm_Cart_to_xx`
-- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, GCC, clang-format 22.1.8; backend=OpenMP C source plus CUDA source comparison for non-GeneralRFM baselines; precision=float and double for GeneralRFM semantic harness; GPU=not-run; restart=not-run; distributed=not-run; error_path=pass for non-finite GeneralRFM Cartesian input; options=default independent coordinate systems, Cartesian rotating multipatch, GeneralRFM_fisheyeN2`
 
 GeneralRFM CUDA converters are unsupported in these coordinate conversion
 registrars.
@@ -106,8 +100,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, `register_CFunction_xx_to_Cart`
 - Corroboration: `nrpy/infrastructures/BHaH/generalrfm_cart_to_xx.py` - `register_CFunction_generalrfm_Cart_to_xx`
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=CUDA; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=inspected; options=GeneralRFM coordinate systems`
 
 `rfm_wrapper_functions.py` creates non-coordinate-specific wrapper functions
 that switch on `params->CoordSystem_hash`, calls the matching
@@ -119,8 +111,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, `register_CFunction_xx_to_Cart`
 - Corroboration: none available; owner-derived emitted-source comparisons are not independent evidence.
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, clang-format 22.1.8; backend=OpenMP C and CUDA source; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=15 default independent coordinate systems plus Cartesian rotating multipatch`
 
 Curvilinear boundary registration starts in
 `CurviBoundaryConditions/register_all.py`. It registers `outer_bc_type` with

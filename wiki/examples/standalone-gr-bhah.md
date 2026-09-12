@@ -58,8 +58,6 @@ Claim evidence:
 - Role: public/scientific contract
 - Deciding authority: [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py), `parser`, `enable_fCCZ4`, initial-data/RHS/Method of Lines registrations
 - Corroboration: [initial_data.py](../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [ADM_Initial_Data_Reader__BSSN_Converter.py](../../nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py), `register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`; [enforce_detgbar_equals_detghat_trAzero.py](../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), combined projector
-- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP; precision=double; GPU=not-applicable; restart=not-run; distributed=not-run; error_path=not-run; options=default BSSN generation/build, opt-in fCCZ4 generation/build and t_final=0.1 startup through iteration 1`
 
 `python -m nrpy.examples.spinning_blackhole` generates
 `project/spinning_blackhole/`. It evolves `IDtype = "UIUCBlackHole"` in
@@ -88,15 +86,13 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [kasner_exact_evolution.py](../../nrpy/examples/kasner_exact_evolution.py), `parser`, `parallelization`, `CoordSystem`, `enable_rfm_precompute`, `BHaH.general_relativity.initial_data.register_CFunction_initial_data`, and `BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval`
 - Corroboration: [initial_data.py](../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [generalrfm_precompute.py](../../nrpy/infrastructures/BHaH/generalrfm_precompute.py), `register_CFunctions_generalrfm_support` and `register_CFunction_generalrfm_precompute`
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=Linux; tool_version=not-run; backend=default OpenMP source path, CUDA rejected during registration; precision=double default; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=inspected; options=default, --floating_point_precision, --cuda`
 
-All four generators default to OpenMP. The three black-hole generators switch
+The listed generators default to OpenMP. The black-hole generators switch
 to CUDA when `--cuda` is present; the Kasner parser selects CUDA but fails at
 the GeneralRFM precompute gate described above. For the usable CUDA routes,
 generators register CUDA host/device helpers, use `nvcc`, choose `.cu` source
 output, copy `cuda_intrinsics.h`, and relax generated pointer qualifiers from
-`*restrict` to `*`. In OpenMP mode, the three black-hole examples generate or
+`*restrict` to `*`. In OpenMP mode, the black-hole examples generate or
 link a BHaHAHA static library subdirectory and require double precision for
 that integration; non-double OpenMP BHaHAHA generation raises an error. The
 Kasner benchmark does not generate BHaHAHA.

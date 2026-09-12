@@ -22,8 +22,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [nrpy/helpers/register_pressure_ordering.py](../../../nrpy/helpers/register_pressure_ordering.py), `order_statements_for_register_pressure`; [nrpy/c_codegen.py](../../../nrpy/c_codegen.py), `gridfunction_management_and_FD_codegen`
 - Corroboration: none available; the owning implementations and targeted local validation decide the claim.
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, glibc 2.39; backend=not-applicable; precision=binary64; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=enable_fd_codegen plus libm fma rounding check`
 
 `custom_functions_for_SymPy_ccode` maps selected SymPy printer function names by floating-point mode. For `double`, `float`, and `long double`, it maps `nrpyAbs` and `fabs` to the matching absolute-value functions and rewrites common powers to `sqrt`, `cbrt`, repeated multiplication, or reciprocal forms before falling back to `pow`, `powf`, or `powl`. For `double complex`, it maps absolute value and common transcendental functions to C99 complex forms and maps powers to `csqrt`, `cpow`, repeated multiplication, or reciprocal forms. `c_codegen()` passes the table to `sp.ccode()` for ordinary assignments and CSE temporaries.
 

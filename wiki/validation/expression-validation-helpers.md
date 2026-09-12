@@ -55,8 +55,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `assert_equal` and `_nonfinite_values_match`
 - Corroboration: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`, exercises direct dictionary comparison across scalar, vector, and matrix expression values; filter and error-path tests remain colocated with the deciding helper
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0 and 1.15.0.dev, mpmath 1.3.0, mypy 2.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=68 validator doctests, strict BSSN type checks, explicit funcform collision and leaf-type probes, and BSSN cross-representation runs`
 
 `check_zero()` sends one expression through `convert_one_expression_to_mpfmpc()`
 and returns whether the final numerical result is exactly `mp.mpf("0.0")`.
@@ -94,8 +92,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `inject_mpfs_into_cse_expression`
 - Corroboration: none available; direct signed-infinity and `assert_equal()` doctests are colocated with the deciding helper, and no separate source exercises every conversion branch
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=direct signed-infinity fallback doctests plus aggregate NaN and complex-fallback cases in 68 total validator doctests`
 
 Near-zero handling is a retry, not symbolic simplification. If a nonzero result
 has magnitude below `10 ** (-4.0 / 5.0 * mp.dps)`, the helper reruns the same
@@ -141,8 +137,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `compare_against_trusted` and `_nonfinite_values_match`
 - Corroboration: [reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py), `trusted_dict`, supplies three intentional trusted NaN sentinels exercised by the reference-metric owner run
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=full reference_metric validation plus both trusted-NaN mismatch doctests`
 
 All expression checks sample numerical substitutions rather than proving an
 identity over a domain. A sampled point can miss a discrepancy or encounter a

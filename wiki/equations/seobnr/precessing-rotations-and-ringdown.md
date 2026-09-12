@@ -81,7 +81,7 @@ for all inputs, generated branch correctness, or waveform accuracy.
 - [SEOBNRv5_coprecessing_rotations_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_coprecessing_rotations_quantities.py) - `trusted_dict`
 - [SEOBNRv5_merger_ringdown.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_merger_ringdown.py) - `trusted_dict`
 - [Min_Max_and_Piecewise_Expressions.py](../../../nrpy/equations/grhd/Min_Max_and_Piecewise_Expressions.py) - `coord_greater_bound`, `coord_less_bound`
-- [SEOBNRv5PHM current latest paper page](https://arxiv.org/abs/2303.18046) - background orientation only; cited rotation/ringdown equations are not yet audited to a pinned revision
+- [SEOBNRv5PHM paper landing page](https://arxiv.org/abs/2303.18046) - background orientation only; cited rotation/ringdown equations have no exact revision mapping here
 
 ## See Also
 

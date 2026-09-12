@@ -44,8 +44,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/BHaH/rotation/so3_build_R_from_hats.py`, `so3_apply_R_to_vector.py`, and `so3_apply_RT_to_vector.py` - their public registrars
 - Corroboration: none available; owner doctests and emitted-source inspection are not independent evidence.
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=OpenMP C and CUDA source; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=three converter-facing helpers, five unchanged host-only helpers`
 
 The common convention is that `R` maps rotating-frame components to fixed-frame
 components. Thus `v_fixed = R v_rot`, while `R^T` maps fixed-frame components

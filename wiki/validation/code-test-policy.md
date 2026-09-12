@@ -41,10 +41,10 @@ label immediately before prompts. Keep test-only imports inside the doctest or
 
 The configured `static-analysis` job excludes every `*/tests/*` path and
 directly executes selected non-example source modules; this describes job
-configuration, not a latest successful run.
+configuration, not execution outcomes.
 
 Claim evidence:
-- Claim: The configured `static-analysis` job excludes every `*/tests/*` path and directly executes selected non-example source modules; this describes job configuration, not a latest successful run.
+- Claim: The configured `static-analysis` job excludes every `*/tests/*` path and directly executes selected non-example source modules; this describes job configuration, not execution outcomes.
 - Role: CI behavior
 - Deciding authority: [main.yml](../../.github/workflows/main.yml), `static-analysis`
 - Corroboration: [single_file_static_analysis.sh](../../.github/single_file_static_analysis.sh), `run_test_step`, corroborates direct per-file execution but not CI exclusions
@@ -202,11 +202,6 @@ Claim evidence:
   `run_sebobv2`, `process_input_set`; [main.yml](../../.github/workflows/main.yml),
   `sebob-consistency-test` and `sebobv2-consistency-test`
 - Corroboration: none available; helper and workflow configuration jointly decide the distributed claim
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=not-run;
-  precision=not-run; GPU=not-applicable; restart=not-applicable;
-  distributed=not-applicable; error_path=not-run; options=not-run`
-
 ### Static Summary
 
 Every modified handwritten Python file follows [Static
@@ -244,8 +239,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`; [jax_project_generator.py](../../nrpy/infrastructures/JAX/jax_project_generator.py), `_generate_project_metadata` and `output_PyFunction_files_and_construct_project`; [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `compile_Makefile`
 - Corroboration: [main.yml](../../.github/workflows/main.yml), `codegen-ubuntu` and `codegen-mac`, corroborates that JAX output is generated without executing its scaffold; no independent corroboration for the other two outliers
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=not-run; precision=not-run; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=not-run`
 
 Do not expand any of those shapes. Whether an unrelated touch must remove a
 legacy empty runner remains maintainer judgment. Meaningful doctest-only

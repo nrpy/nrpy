@@ -36,8 +36,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [nrpy/c_codegen.py](../../nrpy/c_codegen.py) - `gridfunction_management_and_FD_codegen`, `upwind_ko_symbols` eligibility/filtering and final upwind selection; `c_codegen` scalar/SIMD and inline/helper doctest examples (inspected, not executed).
 - Corroboration: [nrpy/finite_difference.py](../../nrpy/finite_difference.py) - `compute_fdcoeffs_fdstencl` defines the shifted upwind/downwind and raw KO stencils used by the identity.
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=BHaH; precision=double; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=list-valued upwind_control_vec, enable_fd_functions=False/True, enable_simd=False/True`
 
 SIMD Step 3 assigns each RHS to a temporary `REAL_SIMD_ARRAY __RHS_exp_*` and emits `WriteSIMD(&output, __RHS_exp_*)`.
 

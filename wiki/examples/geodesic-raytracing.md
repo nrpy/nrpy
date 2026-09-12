@@ -16,8 +16,8 @@ lensed-image renderer and diagnostic scripts.
 
 All generation, build, executable, trajectory, and rendering commands on this
 page are manual/source-supported. Neither GitHub workflow nor the local full-CI
-helper invokes these three generators. No runtime or numerical result was
-reproduced during this KB audit.
+helper invokes these generators, so configured validation does not cover their
+runtime or numerical results.
 
 ## Detail
 

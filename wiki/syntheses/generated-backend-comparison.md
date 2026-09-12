@@ -46,8 +46,8 @@ proves configured job shape, never latest successful execution.
 
 ## Sources
 
-- [KB instructions](../../raw/source-docs/kb-instructions.md) - Karpathy LLM
-  Wiki query-output filing principle.
+- Karpathy LLM Wiki approach - query-output filing principle, raw gist:
+  `https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md`.
 - [README.md](../../README.md) - `## Project Families and Example Generators`, `## What Gets Generated?`
 - [main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`, `einsteintoolkit-validation`, `charmpp-validation`, SEOB/SEBOB consistency jobs
 

@@ -89,14 +89,12 @@ to device storage.
 These CUDA statements describe emitted source paths and checked-in generated
 string evidence. Current `codegen-ubuntu` and `codegen-mac` workflow commands
 generate and build default example paths without `--cuda`; they do not prove a
-CUDA build or runtime result. No CUDA generator path, CUDA compilation, CUDA
-toolchain, or CUDA runtime was exercised for these statements. Source inspection
-of `_C_PARSE_VALUE_FUNC` shows that the array bound is checked before
+CUDA build or runtime result. Source inspection of `_C_PARSE_VALUE_FUNC` shows
+that the array bound is checked before
 `values[count]` is written. The registration-function doctest is configured to
 format generated C and compare it through `validate_strings` against caller-
-relative golden text; configuration alone does not prove that comparison ran or
-passed. No C parser was compiled or run, and no oversized-array runtime error
-path was exercised.
+relative golden text; configuration alone does not prove execution. The owner
+route does not establish compiled-C oversized-array behavior.
 
 ## Sources
 

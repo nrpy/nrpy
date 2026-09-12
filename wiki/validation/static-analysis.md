@@ -75,8 +75,8 @@ against their own floors. None compares an existing file with its pre-change
 rating or distinguishes a newly added file. Therefore the wrapper can reject a
 grandfathered legacy score below `9.91`, the workflow can reject one below
 `9.5`, and either can accept a new file below `10.00`; propagated config failure
-would also reject grandfathered legacy files. Workflow YAML proves configured
-matrix and command shape, not a latest successful run.
+would also reject grandfathered legacy files. Workflow YAML defines configured
+matrix and command shape, not execution outcomes.
 
 Claim status: stale; contradiction: CONTR-0003.
 See [CONTR-0003](../contradictions.md#contr-0003) for the enforcement gap.

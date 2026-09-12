@@ -10,9 +10,7 @@ in `MoL_PostStep` and emits combined-projection entries for `CCTK_INITIAL`,
 `MoL_PostStep`, and `MoL_PseudoEvolution`. For finite, nonsingular states where
 the projection expressions are defined, those entries restore
 `det(gammabar)=det(gammahat)` and `tr(Abar)=0` to roundoff. Registration emits
-no determinant-only ETLegacy repair entry. No generated thorn build,
-initial/recovery run, restart validation, or singular/nonfinite error-path test
-was done.
+no determinant-only ETLegacy repair entry.
 
 These functions are repair kernels around the evolved state. They do not own
 the symbolic BSSN equations; see
@@ -59,8 +57,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - Corroboration: [floor_the_lapse.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/floor_the_lapse.py), `register_CFunction_floor_the_lapse`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=ETLegacy generated projection kernel and schedule metadata; precision=exact determinant/trace identities and generated-source structure; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=Cartesian, SinhSpherical reference-metric precompute, and GeneralRFM kernel variants`
 
 ## Sources
 

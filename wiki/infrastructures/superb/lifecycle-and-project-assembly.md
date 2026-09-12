@@ -111,8 +111,7 @@ the NRPyElliptic, spectroscopy, and collision projects, but runs only
 `superB_two_blackholes_collide` with `+p2`. The workflow does not run the other
 two executables or assert restart, Psi4 output, diagnostic-file contents, GPU
 behavior, or performance/scaling. Workflow configuration proves this job shape,
-not a latest successful run. No generator, Charm++ build, or distributed runtime
-was executed during this KB audit.
+not execution outcomes.
 
 Top-level PUP support is registered before the final Makefile is emitted.
 `register_CFunction_superB_pup_routines` registers

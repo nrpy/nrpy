@@ -77,27 +77,29 @@ clause when it blocks completion, distinguishing it from your interpretation.
 | Choose test placement or oracle rules, inspect static analysis or expression validation, or review generated-project CI | [Validation](wiki/validation/index.md) |
 | Update KB pages | [Workflows](wiki/workflows.md) |
 
-## Source-Tracking Metadata Policy
+## Volatile Information Policy
 
 These rules bind every KB manifest and doc under `AGENTS.md`, `wiki/`, and
 `raw/`:
 
-- No source-tracking checksums, hash or digest columns or stored values of any
-  kind (`sha256` or any other algorithm), including VCS commit or revision
-  identifiers used as pins. Do not hash sources.
-- No file or source counts as KB metadata. Do not count sources or files for
-  tracking, coverage, or freshness.
-- No `mtime` columns or values.
-- No maintenance or source-tracking date stamps, timestamp fields, or values.
-  Do not record access, audit, check, reconciliation, opening, or resolution
-  dates. Publication years and date-like source/version identifiers remain
-  allowed; full calendar date stamps do not.
+- No maintenance or runtime snapshots: dates, times, timestamps, source
+  revision values or digests, inventory, file, page, or job counts, source
+  access/reconciliation/audit/resolution fields, environment tuples, or
+  recorded run results.
+- No source-tracking hash or `mtime` columns or stored values, and no hashing
+  of sources for KB tracking.
+- Stable scientific and algorithmic values, interface version labels,
+  publication identifiers, technical names such as `CoordSystem_hash`, and
+  opaque components of complete stable source locators remain valid when they
+  carry identity or domain meaning rather than snapshot metadata.
+- Frozen imported evidence under `raw/source-docs/` remains verbatim; its
+  authored manifest registration obeys this policy.
 - Do not output KB maintenance notes to a separate log file. This KB already
   lives in a git repo: commit history records durable operations, so separate
   logs are redundant and wasteful.
 
 Git history already records when KB content changed and what changed. Duplicate
-hashes, counts, and timestamps add maintenance burden without authority.
+snapshots add maintenance burden without authority.
 
 Source drift is handled by dependency-aware review of changed paths, source
 status, [Source Map](wiki/source-map.md) rows, and affected compiled pages -

@@ -24,14 +24,14 @@ Run module commands from the repository root after installing NRPy or setting
 `PYTHONPATH` to include `.` as described in [Build And Run](../architecture/build-and-run.md).
 Most generators delete and recreate their fixed `project/<project_name>/`
 directory. Preserve any wanted generated output before rerunning one. Evidence
-labels below describe configured workflow/helper steps, not latest CI outcomes;
-`manual/source-supported` means this audit inspected sources but did not
-generate, build, or run the project.
+labels below describe configured workflow/helper steps, not CI outcomes;
+`manual/source-supported` identifies a source-supported manual route, not
+generation, build, or runtime coverage.
 
 | Generator | Command shape | Output family | Prerequisites | Validation route or status | Owning page |
 | --- | --- | --- | --- | --- | --- |
 | `bhahaha.py` | `python -m nrpy.examples.bhahaha [--fdorder N] [--outrootdir DIR] [--cpp] [--no-openmp]` | Static BHaHAHA apparent-horizon library under the chosen output root | Python, C compiler, `make`; OpenMP optional | Configured Ubuntu/macOS CI generation and default library build; no library runtime exists | [Apparent Horizon Library](apparent-horizon-library.md) |
-| `blackhole_spectroscopy.py` | `python -m nrpy.examples.blackhole_spectroscopy [--cuda] [--fccz4] [--floating_point_precision TYPE]` | Standalone BHaH binary-black-hole spectroscopy project, BSSN by default or opt-in fCCZ4 | Python, C or CUDA toolchain, `make`, GSL | Configured Ubuntu/macOS CI generation and default BSSN/OpenMP build; isolated local BSSN/fCCZ4 OpenMP builds and one-step fCCZ4 startup; restart, scientific results, and CUDA remain untested here | [Standalone GR/BHaH](standalone-gr-bhah.md) |
+| `blackhole_spectroscopy.py` | `python -m nrpy.examples.blackhole_spectroscopy [--cuda] [--fccz4] [--floating_point_precision TYPE]` | Standalone BHaH binary-black-hole spectroscopy project, BSSN by default or opt-in fCCZ4 | Python, C or CUDA toolchain, `make`, GSL | Configured Ubuntu/macOS CI generation and default BSSN/OpenMP build; no configured startup, restart, CUDA, or scientific-result check | [Standalone GR/BHaH](standalone-gr-bhah.md) |
 | `carpet_baikal_thorns.py` | `python -m nrpy.examples.carpet_baikal_thorns` | ETLegacy/Carpet Baikal and BaikalVacuum thorns | Python for generation; Einstein Toolkit checkout for build/test | Configured `einsteintoolkit-validation` generation, ET build, and Baikal/BaikalVacuum regression testsuites | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `carpet_wavetoy_thorns.py` | `python -m nrpy.examples.carpet_wavetoy_thorns` | ETLegacy/Carpet WaveToyNRPy, IDWaveToyNRPy, and diagWaveToyNRPy thorns | Python for generation; Einstein Toolkit checkout for build/test | Configured `einsteintoolkit-validation` generation, ET build, and WaveToyNRPy regression testsuite | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `carpetx_baikal_thorns.py` | `python -m nrpy.examples.carpetx_baikal_thorns` | CarpetX BaikalX and BaikalVacuumX thorns | Python for generation; CarpetX/Einstein Toolkit environment for build/test | Local helper invokes generation but skips compile for every `carpet*` script; no configured CarpetX build/run | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |

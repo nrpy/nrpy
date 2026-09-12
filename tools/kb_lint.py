@@ -78,10 +78,10 @@ ROOT_PROHIBITED_ARTIFACT_SEGMENT_RE = re.compile(
     r"(?:$|[._-])",
     re.IGNORECASE,
 )
-# Bans on removed source-tracking metadata: no hash/checksum digest values of
-# any algorithm, no source-tracking metadata columns, no source file-count
-# values, no Mtime values, and no date stamps in governed KB files.
-# Prohibition/supersession statements may still name the removed metadata.
+# Volatile facts do not belong in the authored KB. Stable scientific
+# cardinalities and identifier names remain valid; inventory counts and
+# source-tracking values do not. Prohibition statements may name a removed
+# metadata class.
 HASH_DIGEST_VALUE_RE = re.compile(
     r"`?\b(?:sha(?:-?3)?-?\d+|md-?5|blake-?\d\w*|xxh\d*|crc-?\d+)\b`?"
     r"(?:\s*[:=]\s*|\s+)`?[0-9a-f]{8,}\b`?"
@@ -93,37 +93,20 @@ STORED_HEX_IDENTIFIER_RE = re.compile(
     r"[0-9a-f]{64}|[0-9a-f]{96}|[0-9a-f]{128})(?![0-9a-f])",
     re.IGNORECASE,
 )
+STABLE_HEX_IDENTIFIER_PREFIX_RE = re.compile(
+    r"\b(?:(?:api|interface|publication|release|source|format|schema)\s+)?"
+    r"(?:identifier|id|version|label)\s*[:=]?\s*$",
+    re.IGNORECASE,
+)
 VCS_HASH_VALUE_RE = re.compile(
     r"\b(?:commit|revision)\s+`?[0-9a-f]{7,40}\b`?|"
     r"https?://[^\s)]+/(?:commit|blob)/[0-9a-f]{7,40}(?:/|\b)",
     re.IGNORECASE,
 )
-SOURCE_TRACKING_COLUMN_RE = re.compile(
-    r"\|\s*(?:Mtime|Hash|Checksum|Digest|SHA(?:-?3)?-?\d+|MD-?5|"
-    r"BLAKE-?\d\w*|XXH\d*|CRC-?\d+|File count|Source count)\s*\|",
-    re.IGNORECASE,
-)
-FILE_COUNT_VALUE_RE = re.compile(
-    r"(?<![\w.-])\d[\d,]*(?![\d.])(?:"
-    r"(?:\s+[A-Za-z][\w+.-]*)*\s+|(?:-[A-Za-z][\w+.-]*)*-)files?\b|"
-    r"\b(?:file|source)\s+count\s*[:=]\s*\d[\d,]*\b",
-    re.IGNORECASE,
-)
-MTIME_WORD_RE = re.compile(r"\bmtimes?\b", re.IGNORECASE)
-# A mention is only allowed when a prohibition/supersession keyword precedes
-# it with no sentence boundary in between (e.g. "no `mtime` columns",
-# "supersedes ... mtime source-tracking instructions"). Positive instructions
-# such as "record mtime values" must fail.
-METADATA_PROHIBITION_RE = re.compile(
-    r"\b(?:no|not|never|without|removed?|supersed\w*|prohibit\w*|banned|bans?)\b"
-    r"[^.!?]*\bmtimes?\b",
-    re.IGNORECASE,
-)
-DATE_STAMP_RE = re.compile(
-    r"(?<![\w./-])(?:"
-    r"\d{4}(?P<ymd_sep>[-/.])\d{2}(?P=ymd_sep)\d{2}|"
-    r"\d{2}(?P<mdy_sep>[-/.])\d{2}(?P=mdy_sep)\d{4}"
-    r")(?![\w./-])|"
+URL_RE = re.compile(r"https?://[^\s)>`]+")
+VOLATILE_DATE_RE = re.compile(
+    r"(?<![\w./-])(?:\d{4}(?P<ymd_sep>[-/.])\d{2}(?P=ymd_sep)\d{2}|"
+    r"\d{2}(?P<mdy_sep>[-/.])\d{2}(?P=mdy_sep)\d{4})(?![\w./-])|"
     r"(?<![\w-])(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|"
     r"Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|"
     r"Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?[,]?\s+"
@@ -134,25 +117,90 @@ DATE_STAMP_RE = re.compile(
     r"\d{4}(?!\w)",
     re.IGNORECASE,
 )
-TIMESTAMP_VALUE_RE = re.compile(
-    r"(?<![\w./-])\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}"
-    r"(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?(?!\w)"
+STABLE_DATE_IDENTIFIER_RE = re.compile(
+    r"\b(?:api|interface|publication|release|source|format|schema)\s+"
+    r"(?:identifier|id|version|label)\s*[:=]?\s*$",
+    re.IGNORECASE,
 )
-DATE_METADATA_RE = re.compile(
-    r"\b(?:Timestamp|Datestamp|Date stamp|Datetime|"
-    r"Last (?:reconciled|checked|audited|reviewed|verified|validated|updated|modified)|"
-    r"(?:Accessed|Created|Updated|Modified|Opened|Resolved|Reviewed|Checked|Audited)"
-    r"(?:\s+(?:at|on|date))?|(?:run|validation) date)\s*[:=]"
-    r"|\|\s*(?:Timestamp|Datestamp|Date stamp|Datetime|Accessed|"
-    r"(?:Created|Updated|Modified|Opened|Resolved|Reviewed|Checked|Audited)"
-    r"\s+(?:at|on|date)|Last reconciled|Last checked|Last audited|"
-    r"Last reviewed|Last verified|Last validated|Last updated|Last modified|"
-    r"Run date|Validation date)\s*\|"
-    r"|\|\s*Opened\s*\|\s*Resolved\s*\|"
-    r"|\b(?:time[-_]?stamp(?:[-_]?(?:ms|ns|s))?|date[-_]?stamp|date[-_]?time|"
-    r"last[-_]?(?:reconciled|checked|audited|reviewed|verified|validated|updated|modified)|"
-    r"(?:accessed|created|updated|modified|opened|resolved|reviewed|checked|audited)"
-    r"[-_]?(?:at|on|date)|(?:run|validation)[-_]?date|date)\s*[:=]",
+VOLATILE_TIME_RE = re.compile(
+    r"\b(?:[01]?\d|2[0-3]):[0-5]\d"
+    + r"(?::[0-5]\d(?:[.]\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?\b",
+    re.IGNORECASE,
+)
+COUNT_VALUE_PATTERN = (
+    r"(?:\d[\d,]*|zero|one|two|three|four|five|six|seven|eight|nine|ten|"
+    r"eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|"
+    r"nineteen|twenty)"
+)
+VOLATILE_INVENTORY_COUNT_RE = re.compile(
+    r"(?<![\w.-])\d[\d,]*\s+(?:source\s+)?" + r"(?:files?|pages?|sources?|jobs?)\b",
+    re.IGNORECASE,
+)
+VOLATILE_EXISTENTIAL_INVENTORY_RE = re.compile(
+    rf"\bthere\s+(?:are|is)\s+{COUNT_VALUE_PATTERN}\s+(?:source\s+)?"
+    r"(?:files?|pages?|sources?|jobs?)\b",
+    re.IGNORECASE,
+)
+VOLATILE_CATALOG_COUNT_RE = re.compile(
+    r"\b(?:inventory|catalog|aggregate)\b[^.!?\n|]{0,80}"
+    rf"\b{COUNT_VALUE_PATTERN}(?:\s+[A-Za-z][\w-]*){{0,3}}\s+"
+    r"(?:files?|pages?|sources?|generators?|jobs?|cases?|"
+    r"projects?|applications?|builders?|dictionaries?|baselines?|comparisons?|"
+    r"scripts?|modules?)\b",
+    re.IGNORECASE,
+)
+VOLATILE_FIELD_RE = re.compile(
+    r"(?:(?i:\bLast\s+(?:reconciled|checked|audited|reviewed|verified|"
+    r"validated|updated|modified)\s*[:=])|"
+    r"(?i:\b(?:Timestamp|Datestamp|Date stamp|Datetime|Date|Accessed|Created|"
+    r"Updated|Modified|Opened|Resolved|Resolution|Reviewed|Checked|Audited|"
+    r"Audit|Reconciliation|Run date|Validation date|Mtime|Hash|Checksum|Digest|"
+    r"Source count|File count|Page count|Job count|Environment|Run result)"
+    r"(?:\s+(?:at|on|date))?\s*[:=])|"
+    r"(?i:\|\s*(?:Timestamp|Datestamp|Date stamp|Datetime|Date|Mtime|Hash|"
+    r"Checksum|Digest|Accessed|Created|Updated|Modified|Reviewed|Checked|"
+    r"Audited|Audit|Reconciliation|Environment|"
+    r"Run result|Run date|Validation date|Source count|File count|Page count|"
+    r"Job count|Last reconciled|Last checked|Last audited|Last reviewed|"
+    r"Last verified|Last validated|Last updated|Last modified)\s*\|)|"
+    r"\|\s*(?:Opened|Resolved|Resolution)\s*\|)",
+)
+VOLATILE_RESULT_TUPLE_RE = re.compile(
+    r"\b(?:inspected|generated|built|run|result_checked)\s*=\s*"
+    r"(?:pass|fail|not-run|not-applicable)\b",
+    re.IGNORECASE,
+)
+ENVIRONMENT_ASSIGNMENT_RE = re.compile(
+    r"\b(?:environment|platform|compiler|runtime|python|os|host)\s*[:=]\s*"
+    + r"[^;|,]+",
+    re.IGNORECASE,
+)
+VOLATILE_RUN_PROSE_RE = re.compile(
+    r"(?:\b(?:was|were|remained)\s+(?:not\s+)?"
+    r"(?:done|run|rerun|re-run|executed|exercised|inspected|built|generated|"
+    r"validated)\b|"
+    r"\b(?:has|have)\s+(?:not\s+)?been\s+"
+    r"(?:audited|checked|reviewed|re-reviewed|run|rerun|re-run|executed|"
+    r"exercised|inspected|built|generated|validated)\b|"
+    r"\bnot\s+(?:yet\s+)?(?:audited|checked|reviewed|re-reviewed|reconciled|"
+    r"validated)\b|\bunexecuted\b|"
+    r"\bisolated\s+local\s+(?:[\w/-]+\s+){0,3}(?:builds?|runs?|results?)\b|"
+    r"\bvalidation\s+artifacts?\s+(?:was|were)\s+temporary\b|"
+    r"^\s*(?:[-*]\s+)?(?:the\s+)?(?:tests?|checks?|audits?|builds?|runs?|"
+    r"validations?)\s+(?:passed|failed|succeeded|completed)"
+    r"(?:\s+(?:on\s+(?:Linux|macOS|Ubuntu|Windows)"
+    r"(?:\s+[0-9][\w.+-]*)*|in\s+(?:CI|continuous\s+integration)))?"
+    r"\s*[.!?]?\s*$)",
+    re.IGNORECASE,
+)
+MTIME_WORD_RE = re.compile(r"\bmtimes?\b", re.IGNORECASE)
+# A mention is only allowed when a prohibition/supersession keyword precedes
+# it with no sentence boundary in between (e.g. "no `mtime` columns",
+# "supersedes ... mtime source-tracking instructions"). Positive instructions
+# such as "record mtime values" must fail.
+METADATA_PROHIBITION_RE = re.compile(
+    r"\b(?:no|not|never|without|removed?|supersed\w*|prohibit\w*|banned|bans?)\b"
+    r"[^.!?]*\bmtimes?\b",
     re.IGNORECASE,
 )
 ROOT_KB_ARTIFACT_RE = re.compile(r"^kb_audit_.*[.]md$")
@@ -1080,15 +1128,14 @@ def _check_retired_operation_output(failures: List[str]) -> None:
 
 def _governed_kb_files() -> List[Path]:
     """
-    Return KB files governed by source-tracking metadata and date checks.
+    Return authored KB files governed by volatile-data checks.
 
-    :return: Governed markdown files, including ``raw/source-docs/**/*.md``.
+    Frozen source snapshots preserve imported evidence verbatim and are not
+    authored KB claims. Their registration in ``raw/SOURCES.md`` is governed.
+
+    :return: Authored Markdown files in the compiled KB and source manifest.
     """
-    files = {AGENTS.resolve()}
-    for root in (WIKI, RAW):
-        if root.exists():
-            files.update(p.resolve() for p in root.rglob("*.md"))
-    return sorted(files)
+    return _iter_md_files()
 
 
 def _metadata_mention_allowed(lines: List[str], line_index: int) -> bool:
@@ -1097,45 +1144,72 @@ def _metadata_mention_allowed(lines: List[str], line_index: int) -> bool:
 
     :param lines: File lines being checked.
     :param line_index: Zero-based index of the line with the mention.
-    :return: Whether nearby context permits the mention.
+    :return: Whether same-line context permits the mention.
     """
-    context = " ".join(lines[max(0, line_index - 2) : line_index + 1])
-    return METADATA_PROHIBITION_RE.search(context) is not None
+    return METADATA_PROHIBITION_RE.search(lines[line_index]) is not None
+
+
+def _volatile_metadata_issues(line: str) -> List[str]:
+    """
+    Return volatile-data policy violations found in one line.
+
+    :param line: Authored KB line to inspect.
+    :return: Violation messages for the line.
+    """
+    issues: List[str] = []
+    # Complete locators are source identifiers. Opaque path components are not
+    # maintenance snapshots even when they resemble dates or digests.
+    snapshot_line = URL_RE.sub("", line)
+    checks = (
+        (HASH_DIGEST_VALUE_RE, snapshot_line, "hash digest value found"),
+        (VCS_HASH_VALUE_RE, snapshot_line, "VCS revision value found"),
+        (VOLATILE_TIME_RE, snapshot_line, "timestamp literal found"),
+        (VOLATILE_INVENTORY_COUNT_RE, snapshot_line, "inventory count found"),
+        (
+            VOLATILE_EXISTENTIAL_INVENTORY_RE,
+            snapshot_line,
+            "inventory count found",
+        ),
+        (VOLATILE_CATALOG_COUNT_RE, snapshot_line, "catalog count found"),
+        (VOLATILE_FIELD_RE, snapshot_line, "volatile metadata field found"),
+        (VOLATILE_RESULT_TUPLE_RE, snapshot_line, "recorded result tuple found"),
+        (VOLATILE_RUN_PROSE_RE, snapshot_line, "recorded run/audit prose found"),
+    )
+    for pattern, subject, message in checks:
+        if pattern.search(subject):
+            issues.append(message)
+
+    hex_match = STORED_HEX_IDENTIFIER_RE.search(snapshot_line)
+    if hex_match and not STABLE_HEX_IDENTIFIER_PREFIX_RE.search(
+        snapshot_line[: hex_match.start()]
+    ):
+        issues.append("hash-like value found")
+
+    date_match = VOLATILE_DATE_RE.search(snapshot_line)
+    if date_match and not STABLE_DATE_IDENTIFIER_RE.search(
+        snapshot_line[: date_match.start()]
+    ):
+        issues.append("date literal found")
+    if len(ENVIRONMENT_ASSIGNMENT_RE.findall(snapshot_line)) >= 2:
+        issues.append("recorded environment tuple found")
+    return issues
 
 
 def _check_source_tracking_metadata(failures: List[str]) -> None:
     """
-    Check governed KB files for removed source-tracking metadata and dates.
+    Check governed KB files for volatile metadata and snapshot values.
 
     :param failures: Mutable failure list.
     """
     for path in _governed_kb_files():
         lines = _read(path).splitlines()
         for idx, line in enumerate(lines, start=1):
-            if HASH_DIGEST_VALUE_RE.search(line):
-                _fail(failures, path, idx, "hash digest value found")
-            if STORED_HEX_IDENTIFIER_RE.search(line):
-                _fail(failures, path, idx, "stored hash-like identifier found")
-            if VCS_HASH_VALUE_RE.search(line):
-                _fail(failures, path, idx, "stored VCS hash value found")
-            if SOURCE_TRACKING_COLUMN_RE.search(line):
-                _fail(
-                    failures, path, idx, "source-tracking metadata table column found"
-                )
-            if FILE_COUNT_VALUE_RE.search(line):
-                _fail(failures, path, idx, "source file-count value found")
+            for issue in _volatile_metadata_issues(line):
+                _fail(failures, path, idx, issue)
             if MTIME_WORD_RE.search(line) and not _metadata_mention_allowed(
                 lines, idx - 1
             ):
                 _fail(failures, path, idx, "source-tracking Mtime metadata found")
-            if DATE_STAMP_RE.search(line):
-                _fail(failures, path, idx, "date stamp found")
-            if TIMESTAMP_VALUE_RE.search(line):
-                _fail(failures, path, idx, "timestamp value found")
-            if DATE_METADATA_RE.search(line) and not _is_relative_to(
-                path, RAW / "source-docs"
-            ):
-                _fail(failures, path, idx, "date-tracking metadata found")
 
 
 def _check_status_vocabularies(failures: List[str]) -> None:

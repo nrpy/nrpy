@@ -38,8 +38,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`
 - Corroboration: [test_parse_BSSN.py](../../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`
-- Validation: `inspected=pass; generated=not-applicable; built=not-applicable; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=fixed sampled trusted-expression and cross-representation comparisons; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=six BSSN RHS coordinate variants and nine BSSN quantity variants`
 
 BHaH and ETLegacy provide one combined all-points projector for the determinant
 and trace constraints. The GeneralRFM branch explicitly forms the
@@ -65,8 +63,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [BHaH algebraic constraint projection](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`; [BHaH initial data](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), Method of Lines registration; [ETLegacy algebraic constraint projection](../../../nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - Corroboration: none available; BHaH and ETLegacy own separate backend behavior
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=ETLegacy generated C plus BHaH source inspection; precision=exact determinant/trace identities and generated-source structure; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=ETLegacy Cartesian, SinhSpherical reference-metric precompute, and GeneralRFM projector variants; BHaH Spherical collision wiring inspected only`
 
 `BSSN_gauge_RHSs` handles lapse and shift choices separately from the main RHS
 class. It returns `alpha_rhs`, `vet_rhsU`, and `bet_rhsU`, validates supported
@@ -95,8 +91,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`
 - Corroboration: [legacy NRPy tutorial repository](https://github.com/zachetienne/nrpytutorial), `Tutorial-BSSN_time_evolution-BSSN_gauge_RHSs.ipynb`, Steps 2.b and 2.d
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=exact symbolic equality and trusted-expression comparison; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass for chi and the removed HarmonicSlicing string; options=BHSHarmonicSlicing and OnePlusLogAlt across the module validation matrix, with W, phi, and chi checked for the BHS branch`
 
 General Bona-Masso harmonic slicing is
 `(partial_t-beta^i*partial_i)alpha=-alpha**2*K`. At zero shift, Baumgarte and
@@ -128,8 +122,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`; [ETLegacy BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`; [CarpetX BSSN_constraints.py](../../../nrpy/infrastructures/CarpetX/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
 - Corroboration: [BSSN_constraints_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py), `trusted_dict`; [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints_dict.__getitem__` physical-ADM-norm doctest; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), existing code-generation doctest
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction plus BHaH, ETLegacy, and CarpetX registration; precision=symbolic comparison and 30-significant-digit deterministic trusted sampling; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=W, chi, and phi physical-norm checks plus six trusted coordinate variants`
 
 Its covariant conformal connection constraint vector is
 `LambdaConstraintU = LambdabarU - DGammaU`.
@@ -202,8 +194,6 @@ Claim evidence:
 - Role: public/scientific contract
 - Deciding authority: [Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066v2](https://arxiv.org/pdf/gr-qc/0209066v2), Eq. (45); [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (47)
 - Corroboration: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`; [BSSN_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py), representative jointly enabled `trusted_dict`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=exact source plus 30-significant-digit deterministic trusted sampling; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=both YBS Gamma and YBS-MOM enabled jointly in all six BSSN RHS coordinate cases, with public defaults disabled`
 
 For local diagnostics, `BSSNconstraints` also stores the direct conformal-metric
 contraction `LambdaConstraintSquared` and its plain square root
@@ -214,8 +204,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`
 - Corroboration: [BSSN_constraints_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py), `trusted_dict`; [BSSN_constraints_Spherical.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Spherical.py), `trusted_dict`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction and BHaH OpenMP C generation; precision=symbolic construction and 30-decimal-digit trusted sampling; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian and Spherical symbolic checks through the owner doctest plus six trusted-expression coordinate variants`
 
 Representative trusted files pin the core RHS, quantity, and constraint
 dictionaries. All six BSSN RHS trusted cases jointly enable YBS Gamma and
@@ -246,8 +234,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [test_parse_BSSN.py](../../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`
 - Corroboration: none available; compatibility handling is local harness behavior, and the validation result below exercises only the installed tuple-result path
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, NRPyLaTeX 1.4.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=tuple-result module-globals path run, returned-object namespace branch inspected only`
 
 The style contract for these modules is part of their interface: tensor
 construction uses explicit loops, established suffixes such as `U`, `D`, `DD`,

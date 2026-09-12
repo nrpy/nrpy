@@ -50,9 +50,9 @@ or UIB2016 calibration data and not a remnant-fit accuracy test.
 - [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py) - `compute_calibration_params`, `Kerr_ISCO_radius`
 - [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py) - `final_spin_non_precessing_HBR2016`, `final_mass_non_precessing_UIB2016`
 - [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_constants.py) - `trusted_dict`
-- [SEOBNRv5HM current latest paper page](https://arxiv.org/abs/2303.18039) - background orientation only; Equations 78-81 and calibration context are not yet audited to a pinned revision
-- [HBR2016 current latest paper page](https://arxiv.org/abs/1605.01938) - background orientation only; final-spin fit mapping is not yet audited to a pinned revision
-- [UIB2016 current latest paper page](https://arxiv.org/abs/1611.00332) - background orientation only; final-state fit and ancillary mapping are not yet audited to a pinned revision
+- [SEOBNRv5HM paper landing page](https://arxiv.org/abs/2303.18039) - background orientation only; Equations 78-81 and calibration context have no exact revision mapping here
+- [HBR2016 paper landing page](https://arxiv.org/abs/1605.01938) - background orientation only; final-spin fit has no exact revision mapping here
+- [UIB2016 paper landing page](https://arxiv.org/abs/1611.00332) - background orientation only; final-state fit and ancillary dependency have no exact revision mapping here
 
 ## See Also
 

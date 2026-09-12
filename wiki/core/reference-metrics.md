@@ -35,8 +35,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py), `trusted_dict`, and [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `compare_against_trusted` and `_nonfinite_values_match`
 - Corroboration: [reference_metric.py](../../nrpy/reference_metric.py), `general_rfm_like`, assigns unavailable analytic inverse-map entries to `nan`
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=full reference_metric validation including both trusted-NaN mismatch doctests`
 
 When precompute is enabled for non-`GeneralRFM` systems, hatted quantities are first expressed through generic function forms such as `f0_of_xx0_funcform`. The replacement pass rewrites functions and derivatives into rigid NRPy variable names such as base function names plus `__D...` derivative suffixes, folds derivatives that evaluate to coordinate-independent values, and skips creating a separate precompute object for `GeneralRFM`.
 

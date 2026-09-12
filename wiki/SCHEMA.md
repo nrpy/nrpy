@@ -40,36 +40,41 @@ or `ingested`. Exact seed rows in [source-map.md](source-map.md) may use the
 `exact seed` ingest state for exact cited files whose dependent-page coverage
 is seeded row-by-row rather than through a covering aggregate.
 
-## Source-Tracking Metadata
+## Volatile Information Policy
 
 A repository source-manifest row records source identity, provenance, status,
 and ingest state as its only source-tracking fields. Exact cited-file rows may
 abbreviate to source and status: the repository path is the provenance, and
 ingest state is tracked through covering aggregate rows and
-[source-map.md](source-map.md). External-source rows may also carry notes.
-Manifests and KB docs carry no source-tracking checksums, hash or digest columns
-or stored values of any kind (`sha256` or any other algorithm), including VCS
-commit or revision identifiers used as pins. Sources are never hashed.
-File and source counts are not KB metadata. Sources and files are never counted
-for tracking, coverage, or freshness. Manifests and KB docs also carry no
-`mtime` columns or values.
-Technical, non-source-tracking hash facts (cache hashing, coordinate hash
-macros) remain allowed as reviewed domain facts, but never as stored digest
-values.
+[source-map.md](source-map.md). External-source rows may add durable notes.
+
+Authored KB files contain no maintenance or runtime snapshots: no dates,
+times, timestamps, source revision values or digests, inventory, file, page,
+or job counts, source access/reconciliation/audit/resolution fields, or stored
+environment/result tuples. They also carry no fields for those values. A source
+may be identified by a stable repository, document, publication, path, symbol,
+heading, release label, canonical publication identifier, or complete stable
+source locator. Opaque URL components are source identity, not hash tracking.
+Do not duplicate a source revision value in prose when stable identity suffices.
+
+Stable domain facts remain valid. Examples include scientific constants,
+algorithmic cardinalities, interface version labels, canonical publication
+identifiers, and names such as `CoordSystem_hash`; the prohibition targets
+changing observations and stored fingerprints, not technical meaning. Frozen
+files below `raw/source-docs/` preserve imported evidence verbatim and are
+exempt from authored-content rewriting, while their registrations in
+`raw/SOURCES.md` must follow this policy.
 
 Source drift and staleness are resolved by dependency-aware reconciliation, not
 stored fingerprints: inspect the changed paths, the source's manifest row and
 status, [source-map.md](source-map.md) ownership rows, maintainer signals, and
-the affected compiled pages, then re-ingest and reconcile.
-
-KB maintenance and source tracking use no date stamps, timestamp fields, or
-timestamp values. Do not record access, audit, check, reconciliation, opening,
-resolution, or validation-run dates. Publication years and date-like
-source/version identifiers remain allowed; full calendar date stamps do not.
+the affected compiled pages, then re-ingest and reconcile. Git history and
+current check output supply operational evidence without copying it into the
+KB as a snapshot.
 
 This KB lives in a Git repository. Git history already records when content
-changed and what changed; duplicating that information as hashes, file counts,
-or timestamps creates drift-prone maintenance burden without adding authority.
+changed and what changed; duplicating that information as volatile snapshots
+creates drift-prone maintenance burden without adding authority.
 
 ## Support Pages
 
@@ -189,7 +194,7 @@ deciding source is next materially changed after adoption.
 After that adoption boundary, place this exact block immediately after each new
 or materially changed high-risk claim in the owning leaf's `Detail` section.
 For an active contradiction, place the block in the matching `### CONTR-*`
-subsection of `wiki/contradictions.md`, never in the fixed 13-column register
+subsection of `wiki/contradictions.md`, never in the fixed-column register
 row:
 
 ```text
@@ -198,13 +203,6 @@ Claim evidence:
 - Role: descriptive behavior, normative rule, public/scientific contract, CI behavior, or generated evidence
 - Deciding authority: registered source plus stable symbol or heading
 - Corroboration: separate source plus stable locator, or `none available` plus a reason
-```
-
-For a behavioral claim, append:
-
-```text
-- Validation: `inspected=<pass|fail|not-run>; generated=<pass|fail|not-run>; built=<pass|fail|not-run>; run=<pass|fail|not-run>; result_checked=<pass|fail|not-run>`
-- Dimensions: `platform=<value|not-run|not-applicable>; tool_version=<value|not-run|not-applicable>; backend=<value|not-run|not-applicable>; precision=<value|not-run|not-applicable>; GPU=<value|not-run|not-applicable>; restart=<value|not-run|not-applicable>; distributed=<value|not-run|not-applicable>; error_path=<value|not-run|not-applicable>; options=<value|not-run|not-applicable>`
 ```
 
 Do not claim completed block coverage before the exact block is present.
@@ -220,12 +218,14 @@ Deciding authority depends on role:
   contradiction;
 - CI behavior: workflow/configuration proves configured job shape, never a
   latest successful run;
-- generated evidence: proves only its pinned generation context;
+- generated evidence: proves only the context encoded by the evidence itself;
 - synthesis or neighboring-page agreement: never independent authority.
 
-Only a behavioral claim receives the validation and dimensions lines.
-Structural, navigation, normative, provenance, and symbolic claims use
-claim-appropriate evidence instead.
+Behavioral evidence names a durable validation route, fixture, invariant, or
+oracle when available. It never stores a check result, execution environment,
+tool version, or run date in the KB; those observations belong in command
+output, CI, or active review evidence. Structural, navigation, normative,
+provenance, and symbolic claims use claim-appropriate evidence instead.
 
 ## Query Filing
 
@@ -282,11 +282,10 @@ typed neighbors, and targeted exact/key-phrase wiki hits.
 Default `python tools/kb_lint.py` runs all deterministic checks. `--all` remains
 an identical compatibility alias and must not be described as stronger.
 
-Link and Obsidian-wikilink checks govern `AGENTS.md`, `wiki/**/*.md`, and
-`raw/SOURCES.md`. Preserved `raw/source-docs/**/*.md` snapshots are immutable
-and exempt from link/wikilink and obsolete-template rewriting; populated
-source-tracking values remain forbidden there. Hard failures cover
-deterministic structure only. Dynamic
+Link, Obsidian-wikilink, and volatile-information checks govern `AGENTS.md`,
+`wiki/**/*.md`, and `raw/SOURCES.md`. Preserved
+`raw/source-docs/**/*.md` snapshots are immutable, verbatim exemptions. Hard
+failures cover deterministic structure only. Dynamic
 symbols, semantic truth, modal wording, generated names, and C/CUDA macros stay
 manual or report-only.
 
@@ -315,9 +314,9 @@ working tree. Inspect a command for hardcoded output, deletion, network,
 installation, and external-tool effects first. Use an isolated, user-owned
 intended-change worktree or copy with no unrelated modifications, apply only
 scoped changes, choose an owned output root, and impose timeouts/resource
-limits. Record the exact command, working directory,
-assertion, result, limits, cleanup, and behavioral tuple where behavior was
-tested. Network, installation, remote CI, and external toolchains need user
+limits. Keep exact commands, working directories, observed assertions, results,
+limits, and cleanup in active review or CI evidence, not as KB snapshots.
+Network, installation, remote CI, and external toolchains need user
 authority. Never reset or delete shared generated output.
 
 ## Canonical Terms

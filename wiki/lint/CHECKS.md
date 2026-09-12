@@ -19,21 +19,18 @@ carry facts and sources, and excluded artifacts stay out of the KB.
 - `rg -n '\[\[' AGENTS.md wiki raw/SOURCES.md` returns no Obsidian-style
   links. Frozen `raw/source-docs/**/*.md` snapshots are immutable exemptions.
 - A marker scan returns no to-do markers or template text.
-- No removed source-tracking metadata appears in governed KB files, including
-  `raw/**/*.md`: no checksum, hash, or digest values of any algorithm (`sha256`
-  or otherwise); no VCS commit/revision hashes used as pins; no file or source
-  counts; no `Mtime`/`Hash` manifest table columns or `mtime` values; and no
-  maintenance or source-tracking date stamps, timestamp fields, or timestamp
-  values. Mentions of removed metadata are allowed only in prohibition or
-  supersession statements. Frozen source snapshots may retain obsolete field
-  templates but not populated forbidden values.
+- No volatile snapshots appear in governed authored KB files: no timestamps,
+  no maintenance dates, hashes or digests, mtimes, inventory/file/page/job counts,
+  environment tuples, or recorded run and audit results. Preserve stable domain
+  facts, algorithmic cardinalities, interface versions, publication identifiers,
+  technical names, and complete stable URLs. Mentions are allowed in prohibition
+  or supersession statements.
 - Agents are never told to compute, recompute, compare, or lint source-tracking
   checksums, hashes, file counts, or timestamps; source drift is
   dependency-aware review per [Workflows](../workflows.md).
 - Relative Markdown links from `AGENTS.md`, `wiki/**/*.md`, and
   `raw/SOURCES.md` resolve within the repository. Frozen snapshots under
-  `raw/source-docs/` are preserved verbatim and exempt from link resolution;
-  their metadata checks still apply.
+  `raw/source-docs/` are preserved verbatim and exempt from authored-KB lint.
 - `python tools/kb_lint.py` runs all deterministic checks and prints `KB lint
   passed.` on success. `--all` is an identical compatibility alias, not a
   stronger mode.

@@ -132,5 +132,5 @@ map so agents can route through compiled pages before broad search. Router
 ## Sources
 
 - [Knowledge Base Schema](SCHEMA.md) - support page and catalog rules.
-- [KB instructions](../raw/source-docs/kb-instructions.md) - Karpathy LLM Wiki
-  content-index and catalog concept.
+- Karpathy LLM Wiki approach - content index/catalog concept, raw gist:
+  `https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md`.
