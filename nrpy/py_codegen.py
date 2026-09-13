@@ -5,9 +5,7 @@ This module is a stripped down version of c_codegen.py
 for the case of JAX-optimized applications for SEBOB,
 which does not use FD-based kernels.
 
-Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
-         Ken Sible; ksible **at** outlook **dot* com
-         Siddharth Mahesh; sm0193 **at** mix **dot* wvu **dot* edu
+Author: Siddharth Mahesh; sm0193 **at** mix **dot* wvu **dot* edu
 """
 
 import sys

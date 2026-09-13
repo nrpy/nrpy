@@ -2,7 +2,8 @@
 """
 Mechanical lint checks for the markdown knowledge base.
 
-Author: NRPy contributors
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
 """
 
 import argparse

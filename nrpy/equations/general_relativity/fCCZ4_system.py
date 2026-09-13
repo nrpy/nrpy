@@ -13,7 +13,8 @@ The factory returns expressions and semantic relationships only: it does not
 emit a state order, infrastructure-specific names, parameter default table,
 stencil plan, loop, or CFunction.
 
-Author: NRPy Dendro fCCZ4 infrastructure (PR 4)
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
 """
 
 from collections import OrderedDict as ODict

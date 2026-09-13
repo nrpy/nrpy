@@ -10,7 +10,8 @@ curvature-aware factor, a new field) is made once instead of twice.
 The registering module is a parameter, so each caller keeps registering the
 strengths under its own module name and no caller's generated output moves.
 
-Author: NRPy Dendro fCCZ4 infrastructure (PR 4)
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
 """
 
 from typing import Dict
