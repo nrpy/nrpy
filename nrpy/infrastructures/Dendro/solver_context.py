@@ -435,6 +435,7 @@ $REAL_APPLICATION_DECLARATIONS
 """
 
 _REAL_SOURCE = r"""#include "$STEMCtx.h"
+$REAL_APPLICATION_INCLUDES
 #include <algorithm>
 #include <cstdlib>
 #include <limits>
@@ -774,6 +775,7 @@ def output_solver_context_cpp(
     real_application_initialization: str,
     real_application_exterior_values: str,
     real_application_after_rhs: str,
+    real_application_includes: str,
 ) -> str:
     r"""
     Emit the context implementation with explicit host selection.
@@ -798,6 +800,8 @@ def output_solver_context_cpp(
         the existing ``flat`` value vector before generic exterior traversal.
     :param real_application_after_rhs: Application hook and diagnostic method
         definitions inserted after the generic RHS callback.
+    :param real_application_includes: Real-host-only application headers,
+        inserted before the solver namespace opens.
     :return: The complete C++ source text.
     :raises ValueError: If an application insertion remains unresolved.
 
@@ -860,10 +864,11 @@ def output_solver_context_cpp(
     ...         "int Ctx::initialize_scalar_vector() { energy = 1.0; return 0; }\nvoid Ctx::apply_wave_boundary() { energy += 1.0; }",
     ...         "double Ctx::max_wave_rhs() { return max_interior_rhs(); }", "", "",
     ...         "  flat[0] = 1.0; flat[1] = 2.0; flat[2] = 3.0;",
-    ...         "double Ctx::max_wave_rhs() { return interior_max(*m_uiMesh, unzipped_rhs); }"
+    ...         "double Ctx::max_wave_rhs() { return interior_max(*m_uiMesh, unzipped_rhs); }", ""
     ...     )
     ...     _main = generic_main.output_main_cpp(
-    ...         "wave", "wave", "waveSolver", "  if (ctx.initialize_scalar_vector()) return 1;",
+    ...         "wave", "wave", "waveSolver", "wave_cartesian_vacuum",
+    ...         "  if (ctx.initialize_scalar_vector()) return 1;",
     ...         "  const double wave_norm = ctx.max_wave_rhs();", "    ctx.apply_wave_boundary();",
     ...         "  if (!std::isfinite(wave_norm)) return 1;", "4", "0.25*dx",
     ...         "      if (!std::isfinite(context.max_wave_rhs())) return 1;"
@@ -929,6 +934,7 @@ def output_solver_context_cpp(
         + "\n#endif\n"
     )
     for token, value in (
+        ("$REAL_APPLICATION_INCLUDES", real_application_includes),
         ("$STANDALONE_APPLICATION_DESTRUCTOR", standalone_application_destructor),
         ("$STANDALONE_APPLICATION_POST_MESH", standalone_application_post_mesh),
         (
@@ -961,6 +967,7 @@ def output_solver_context_cpp(
             "$REAL_APPLICATION_INITIALIZATION",
             "$APPLICATION_EXTERIOR_VALUES",
             "$REAL_APPLICATION_AFTER_RHS",
+            "$REAL_APPLICATION_INCLUDES",
         )
         if token in text
     )

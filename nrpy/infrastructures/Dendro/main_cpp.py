@@ -102,6 +102,7 @@ _REAL_MAIN = r"""#include "$STEMCtx.h"
 #include "meshUtils.h"
 #include "octUtils.h"
 #include <toml.hpp>
+#include <cmath>
 #include <fstream>
 #include <limits>
 #include <sstream>
@@ -111,8 +112,9 @@ _REAL_MAIN = r"""#include "$STEMCtx.h"
 
 int main(int argc, char** argv) {
   MPI_Init(&argc, &argv);
-  int rank = 0;
+  int rank = 0, size = 1;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &size);
   try {
     unsigned steps = 100;
     double dt = 0.001;
@@ -184,7 +186,8 @@ int main(int argc, char** argv) {
             if (item.first != "name" && item.first != "fd_order" &&
                 item.first != "required_padding" && item.first != "ko_enabled")
               throw std::runtime_error("unknown profile key");
-          if (toml::find<unsigned>(profile, "fd_order") != $NAMESPACE::generated::FD_ORDER ||
+          if (toml::find<std::string>(profile, "name") != "$PROFILE_NAME" ||
+              toml::find<unsigned>(profile, "fd_order") != $NAMESPACE::generated::FD_ORDER ||
               toml::find<unsigned>(profile, "required_padding") != $NAMESPACE::generated::REQUIRED_PADDING ||
               toml::find<bool>(profile, "ko_enabled") != $NAMESPACE::generated::KO_ENABLED)
             throw std::runtime_error("parameter profile does not match generated kernels");
@@ -223,6 +226,7 @@ def output_main_cpp(
     solver_stem: str,
     solver_namespace: str,
     exec_or_library_name: str,
+    profile_name: str,
     standalone_application_initialization: str,
     standalone_application_before_steps: str,
     standalone_application_after_step: str,
@@ -237,6 +241,7 @@ def output_main_cpp(
     :param solver_stem: Lowercase formulation stem used in emitted names.
     :param solver_namespace: Namespace containing the generated solver.
     :param exec_or_library_name: Executable name used in standalone help.
+    :param profile_name: Exact generated-kernel profile identity.
     :param standalone_application_initialization: Application initialization
         statements after generic context setup.
     :param standalone_application_before_steps: Application checks and setup
@@ -254,7 +259,7 @@ def output_main_cpp(
 
     Doctests:
     >>> wave = output_main_cpp(
-    ...     "wave", "wave", "waveSolver",
+    ...     "wave", "wave", "waveSolver", "wave_cartesian_vacuum",
     ...     "  if (ctx.initialize_scalar_vector()) return 1;",
     ...     "  const double wave_norm = ctx.max_wave_rhs();",
     ...     "    ctx.apply_wave_boundary();",
@@ -269,6 +274,8 @@ def output_main_cpp(
     >>> all(token not in wave for token in (
     ...     "minkowski", "detgtrazero", "max_constraints"
     ... ))
+    True
+    >>> 'toml::find<std::string>(profile, "name") != "wave_cartesian_vacuum"' in wave
     True
     """
     text = (
@@ -289,6 +296,7 @@ def output_main_cpp(
         ("$STANDALONE_STEP_COUNT", standalone_step_count),
         ("$STANDALONE_TIMESTEP", standalone_timestep),
         ("$REAL_APPLICATION_FINAL_CHECKS", real_application_final_checks),
+        ("$PROFILE_NAME", profile_name),
     )
     for token, value in replacements:
         text = text.replace(token, value)

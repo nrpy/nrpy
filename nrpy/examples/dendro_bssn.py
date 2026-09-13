@@ -191,11 +191,14 @@ def main() -> None:
         ),
         layout.src
         + f"{solver_stem}Ctx.cpp": solver_context.output_solver_context_cpp(
-            solver_stem, solver_namespace
+            solver_stem, solver_namespace, enable_fCCZ4=False
         ),
         layout.src
         + f"{solver_stem}_main.cpp": main_cpp.output_main_cpp(
-            solver_stem, solver_namespace, exec_or_library_name
+            solver_stem,
+            solver_namespace,
+            exec_or_library_name,
+            profile_name,
         ),
         layout.pars
         + f"{solver_stem}_minkowski.par": parfile.generate_default_parfile(

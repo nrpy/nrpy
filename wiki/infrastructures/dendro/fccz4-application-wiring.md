@@ -30,10 +30,9 @@ nonflat fixed block, component by component, against an independent
 high-precision reference for both the block kernel and flat adapter. Kernel and
 reference inputs are the same exactly emitted binary64 samples; the reference
 applies the stencil and actual CSE graph at 80 and 100 digits and derives a
-componentwise roundoff bound from their scale and operation count. KO-off
-remains the configured default; KO-on has a separate local
-qualification product after proving resolvable KO effects in several field
-families.
+componentwise roundoff bound from their scale and operation count. KO is enabled
+by default; `--no-ko` retains the nondissipative generation profile. The
+KO-enabled reference proves resolvable KO effects in several field families.
 
 ### Right-hand side
 

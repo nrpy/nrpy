@@ -48,12 +48,12 @@ the generated kernels.
 
 Generated CTest fixtures exercise registry consistency, parameter forwarding,
 padding and offsets, derivative selection, RHS and initial-data calls,
-algebraic enforcement, constraint diagnostics, and a Minkowski lifecycle. An
-independent nonflat reference evaluates the canonical symbolic expressions on
-deterministic binary64 samples and computes expected values without calling the
-generated kernel or its flat adapter. Its bound is derived from the expression
-graph, scales, spacing amplification, and valid rounding/reassociation effects,
-not from a measured C++ error.
+algebraic enforcement, constraint diagnostics, and a Minkowski lifecycle. A
+nonflat reference evaluates the canonical RHS expressions with multiprecision
+arithmetic on deterministic binary64 samples and computes expected values
+independently of generated C++ execution. Its bound is derived from the
+expression graph, scales, spacing amplification, and valid
+rounding/reassociation effects, not from a measured C++ error.
 
 The address fixture uses unequal spacing, component offsets, sentinel regions,
 centered and mixed derivatives, both upwind directions, zero-speed upwinding,
@@ -120,10 +120,14 @@ Claim evidence:
 
 ### CI and open gates
 
-Owner doctests route through static analysis. Generated standalone and real-host
-build/runtime commands are local qualification routes; the configured GitHub
-workflow does not run them. Adding either route requires explicit authorization
-to change the protected workflow.
+Owner doctests route through static analysis. The configured
+`dendro-validation` GitHub job generates default fourth-order, KO-enabled
+fCCZ4. It runs the generated nonflat multiprecision reference check, then links
+the same solver into a checksum-verified real host and runs one Minkowski step
+on exactly two MPI ranks. The real state is initialized through Dendro-GR's
+Minkowski routine. The job is capped at 30 minutes; the real run is capped at
+five minutes and uses one OpenMP thread per rank. These are configured gates,
+not a stored execution result.
 
 General application boundary semantics, remeshing and state transfer, local time
 stepping, checkpoint/restart ABI, output selection, GPU execution, and threaded
@@ -133,9 +137,17 @@ application boundary-condition interface. Its application qualification is
 fCCZ4-specific; BSSN retains the standalone route until a real-host owner adds
 an equivalent qualification.
 
+The numerical checks use analytic or property oracles rather than a frozen
+runtime output: multiprecision evaluation of the canonical RHS expressions,
+resolvable KO contributions, and roundoff-scaled Minkowski bounds. The
+configured generation does not establish nondefault finite-difference orders,
+convergence, distributed transport, long-time or nonlinear evolution, or broad
+physics validation.
+
 ## Sources
 
 - [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp) - real-context transport, parameter, lifecycle, and fault checks
+- [main.yml](../../../.github/workflows/main.yml) - configured `dendro-validation` job
 - [dendrolib_capability_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp) - host capability checks and fault injection
 - [README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md) - reproduction procedure
 - [block_geometry.h](../../../nrpy/infrastructures/Dendro/block_geometry.h) - shared `block_geometry_struct` contract

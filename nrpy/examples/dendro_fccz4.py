@@ -4,7 +4,7 @@ Generate an NRPy-authored fCCZ4 solver for Dendro-GR.
 Run as a module:
 
     python -m nrpy.examples.dendro_fccz4 \
-        --project-dir project/dendro_fccz4 --fd-order 4 --no-ko
+        --project-dir project/dendro_fccz4 --fd-order 4
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -83,7 +83,7 @@ def parse_args() -> argparse.Namespace:
     # 3.7, so the two flags are declared explicitly.
     parser.add_argument("--ko", dest="ko", action="store_true")
     parser.add_argument("--no-ko", dest="ko", action="store_false")
-    parser.set_defaults(ko=False)
+    parser.set_defaults(ko=True)
     # No --parallelization flag: the qualified CPU profile is serial point
     # loops (the kernel runs inside Dendro's own block traversal), and the
     # builders assert that.  Offering a flag the generator discards would
@@ -190,11 +190,14 @@ def main() -> None:
         ),
         layout.src
         + f"{solver_stem}Ctx.cpp": solver_context.output_solver_context_cpp(
-            solver_stem, solver_namespace
+            solver_stem, solver_namespace, enable_fCCZ4=True
         ),
         layout.src
         + f"{solver_stem}_main.cpp": main_cpp.output_main_cpp(
-            solver_stem, solver_namespace, exec_or_library_name
+            solver_stem,
+            solver_namespace,
+            exec_or_library_name,
+            profile_name,
         ),
         layout.pars
         + f"{solver_stem}_minkowski.par": parfile.generate_default_parfile(

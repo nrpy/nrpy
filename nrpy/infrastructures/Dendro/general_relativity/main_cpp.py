@@ -129,8 +129,16 @@ _REAL_FINAL_CHECKS = r"""      const double rhs = context.max_rhs();
                     MPI_COMM_WORLD);
       const double derivative_tolerance =
           256 * std::numeric_limits<double>::epsilon() / (spacing * spacing);
+      unsigned long long initial_data_calls = 0;
+      MPI_Allreduce(&context.dendrogr_initial_data_calls, &initial_data_calls,
+                    1, MPI_UNSIGNED_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+      int active = mesh->isActive(), active_ranks = 0;
+      MPI_Allreduce(&active, &active_ranks, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
       int local_ok =
-          (!mesh->isActive() || context.projection_passes == 1 + 5ULL * steps) &&
+          size == 2 && active_ranks == 2 &&
+          (!mesh->isActive() ||
+           (context.projection_passes == 1 + 5ULL * steps &&
+            context.dendrogr_initial_data_calls > 0)) &&
           stepper.curr_step() == steps &&
           std::abs(stepper.curr_time() - dt * steps) <=
               1e-11 * std::max(1.0, dt * steps) &&
@@ -138,21 +146,23 @@ _REAL_FINAL_CHECKS = r"""      const double rhs = context.max_rhs();
           drift <= 1e-11 && residual <= 1e-13;
       int global_ok = 0;
       MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-      int active = mesh->isActive(), active_ranks = 0;
-      MPI_Allreduce(&active, &active_ranks, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
       if (rank == 0)
         std::printf("REAL_MINKOWSKI %s active_ranks=%d steps=%u "
+                    "initial_data=dendrogr_minkowski initial_data_calls=%llu "
                     "time=%.17g rhs=%.17g constraints=%.17g drift=%.17g "
                     "projection=%.17g hmin=%.17g derivative_tolerance=%.17g\n",
                     global_ok ? "PASS" : "FAIL", active_ranks, steps,
-                    stepper.curr_time(), rhs, constraints, drift, residual,
-                    spacing, derivative_tolerance);
+                    initial_data_calls, stepper.curr_time(), rhs, constraints,
+                    drift, residual, spacing, derivative_tolerance);
       if (!global_ok)
         throw std::runtime_error("fixed-mesh Minkowski check failed");"""
 
 
 def output_main_cpp(
-    solver_stem: str, solver_namespace: str, exec_or_library_name: str
+    solver_stem: str,
+    solver_namespace: str,
+    exec_or_library_name: str,
+    profile_name: str,
 ) -> str:
     """
     Emit the generic process shell with explicit GR lifecycle policy.
@@ -160,12 +170,14 @@ def output_main_cpp(
     :param solver_stem: Lowercase formulation stem used in emitted names.
     :param solver_namespace: Namespace containing the generated solver.
     :param exec_or_library_name: Generated executable target name.
+    :param profile_name: Exact generated-kernel profile identity.
     :return: Complete generated C++ entry-point source.
     """
     text = generic_main.output_main_cpp(
         solver_stem,
         solver_namespace,
         exec_or_library_name,
+        profile_name,
         _STANDALONE_INITIALIZATION,
         _STANDALONE_BEFORE_STEPS,
         _STANDALONE_AFTER_STEP,
