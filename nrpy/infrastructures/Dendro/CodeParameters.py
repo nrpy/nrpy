@@ -173,6 +173,8 @@ def register_CFunctions_parameters(solver_stem: str, solver_namespace: str) -> N
         formulation.
     :param solver_namespace: Solver namespace, following Dendro's lowercase
         formulation habit (``namespace bssn``).
+    :raises ValueError: If a ``char[N]`` default is not a string or contains an
+        embedded null.
     """
     params_type = f"{solver_namespace}::generated::params_struct"
     names = emitted_parameter_names()
@@ -201,8 +203,21 @@ def register_CFunctions_parameters(solver_stem: str, solver_namespace: str) -> N
         base_type, size, _is_array = par.parse_cparam_type(cparam_type)
         if size is not None:
             if c_type(cparam_type) == "char":
+                if not isinstance(value, str) or "\x00" in value:
+                    raise ValueError(
+                        f"char array CodeParameter {cp_name!r} needs a string "
+                        "default without embedded nulls"
+                    )
+                cpp_default = "".join(
+                    (
+                        chr(byte)
+                        if 32 <= byte <= 126 and byte not in (ord('"'), ord("\\"))
+                        else f"\\{byte:03o}"
+                    )
+                    for byte in value.encode("utf-8")
+                )
                 set_lines.append(
-                    f'std::snprintf(params.{cp_name}, {size}, "%s", "{value}");'
+                    f'std::snprintf(params.{cp_name}, {size}, "%s", "{cpp_default}");'
                 )
             else:
                 elements = value

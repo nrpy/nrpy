@@ -66,7 +66,8 @@ constraint and the three momentum constraint components from the established
 
 `BSSN_constraints` registers `H`, `M` and `LAMBDA_CONSTRAINT` into the **AUX**
 group when it is constructed, each guarded by an existence check. Two
-CodeParameters gate those registrations. `M` and `LAMBDA_CONSTRAINT` are gated
+Generation-time NRPy parameters gate those registrations. `M` and
+`LAMBDA_CONSTRAINT` are gated
 by `register_M_and_LAMBDA_CONSTRAINT_gridfunctions`, which defaults to `True`,
 so a caller that wants neither must ask; `H` is unconditional. `MU` is
 different again: the factory registers it only under
@@ -96,7 +97,7 @@ variables no kernel writes and no vector backs. No change to the shared
 equations module.
 
 Claim evidence:
-- Claim: `BSSN_constraints` registers `H`, `M` and `LAMBDA_CONSTRAINT` into the AUX group, each guarded by an existence check, so a caller that registers `H` first determines its group; `M` and `LAMBDA_CONSTRAINT` are additionally gated by the `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` CodeParameter, which defaults to `True`, and `MU` by `register_MU_gridfunctions`, which defaults to `False` and which no Dendro module sets. Both gates are keys of the `BSSNconstraints_dict` construction-parameter memo, so flipping either forces a rebuild. The Dendro BSSN builder pre-registers the names it writes as DIAG and suppresses the two AUX names it does not write by setting `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` to `False` across the factory construction and restoring it afterwards, rather than deleting anything from `gri.glb_gridfcs_dict`, leaving `NUM_AUX_GFS = 0` in the emitted state header.
+- Claim: `BSSN_constraints` registers `H`, `M` and `LAMBDA_CONSTRAINT` into the AUX group, each guarded by an existence check, so a caller that registers `H` first determines its group; `M` and `LAMBDA_CONSTRAINT` are additionally gated by the generation-time NRPy parameter `register_M_and_LAMBDA_CONSTRAINT_gridfunctions`, which defaults to `True`, and `MU` by the generation-time NRPy parameter `register_MU_gridfunctions`, which defaults to `False` and which no Dendro module sets. Both gates are keys of the `BSSNconstraints_dict` construction-parameter memo, so flipping either forces a rebuild. The Dendro BSSN builder pre-registers the names it writes as DIAG and suppresses the two AUX names it does not write by setting `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` to `False` across the factory construction and restoring it afterwards, rather than deleting anything from `gri.glb_gridfcs_dict`, leaving `NUM_AUX_GFS = 0` in the emitted state header.
 - Role: descriptive behavior
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), the `group="AUX"` registrations and their `not in gri.glb_gridfcs_dict` guards
 - Corroboration: [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), the `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` save/set/restore around the `BSSN_constraints` construction in the BSSN builder

@@ -125,12 +125,13 @@ build/runtime commands are local qualification routes; the configured GitHub
 workflow does not run them. Adding either route requires explicit authorization
 to change the protected workflow.
 
-Physical boundary semantics, remeshing and state transfer, local time stepping,
-checkpoint/restart ABI, output selection, GPU execution, and threaded kernels
-remain open. The real-host vehicle prescribes analytic exterior data by physical
-position and does not expose a general boundary-flag interface. Its application
-qualification is fCCZ4-specific; BSSN retains the standalone route until a
-real-host owner adds an equivalent qualification.
+General application boundary semantics, remeshing and state transfer, local time
+stepping, checkpoint/restart ABI, output selection, GPU execution, and threaded
+kernels remain open. The real-host vehicle uses Dendrolib block-boundary flags
+to prescribe constant analytic exterior data; it does not expose a general
+application boundary-condition interface. Its application qualification is
+fCCZ4-specific; BSSN retains the standalone route until a real-host owner adds
+an equivalent qualification.
 
 ## Sources
 

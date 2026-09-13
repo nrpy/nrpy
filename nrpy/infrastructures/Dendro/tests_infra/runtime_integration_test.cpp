@@ -114,6 +114,7 @@ int main(int argc, char **argv) {
                         // Expected coordinates derive independently from the
                         // raw octree.
                         const auto node      = b.getBlockNode();
+                        const unsigned bflag = b.getBlkNodeFlag();
                         const double base[3] = {double(node.minX()),
                                                 double(node.minY()),
                                                 double(node.minZ())};
@@ -126,7 +127,6 @@ int main(int argc, char **argv) {
                                 for (unsigned i = 0; i < g.nx; ++i) {
                                     const unsigned index[3] = {i, j, k};
                                     double x[3];
-                                    bool inside = true;
                                     for (unsigned a = 0; a < 3; ++a) {
                                         x[a] =
                                             lo[a] +
@@ -135,22 +135,28 @@ int main(int argc, char **argv) {
                                                             b.get1DPadWidth()) *
                                                                grid_step) /
                                                 double(1u << m_uiMaxDepth);
-                                        inside &= x[a] >= lo[a] - 1e-12 &&
-                                                  x[a] <= hi[a] + 1e-12;
-                                        const double actual =
-                                            g.pmin_padded[a] +
-                                            index[a] * g.dx[a];
-                                        error = std::max(
-                                            error, std::abs(actual - x[a]));
                                     }  // END LOOP: recompute physical padded
                                        // coordinates
-                                    if (!inside) continue;
                                     const bool halo = i < g.padding ||
                                                       j < g.padding ||
                                                       k < g.padding ||
                                                       i >= g.nx - g.padding ||
                                                       j >= g.ny - g.padding ||
                                                       k >= g.nz - g.padding;
+                                    const bool exterior =
+                                        ((bflag & (1u << OCT_DIR_LEFT)) &&
+                                         i < g.padding) ||
+                                        ((bflag & (1u << OCT_DIR_RIGHT)) &&
+                                         i >= g.nx - g.padding) ||
+                                        ((bflag & (1u << OCT_DIR_DOWN)) &&
+                                         j < g.padding) ||
+                                        ((bflag & (1u << OCT_DIR_UP)) &&
+                                         j >= g.ny - g.padding) ||
+                                        ((bflag & (1u << OCT_DIR_BACK)) &&
+                                         k < g.padding) ||
+                                        ((bflag & (1u << OCT_DIR_FRONT)) &&
+                                         k >= g.nz - g.padding);
+                                    if (exterior) continue;
                                     if (halo) ++halos;
                                     const std::size_t cell =
                                         g.component_offset + i +

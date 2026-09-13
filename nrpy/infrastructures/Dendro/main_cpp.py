@@ -59,7 +59,8 @@ int main(int argc, char* argv[]) {
         MPI_Finalize();
         return 2;
       }  // END ELSE: selection table full
-    } else {
+    }  // END ELSE IF: select requested result
+    else {
       if (rank == 0)
         std::fprintf(stderr,
                      "usage: $EXEC [-b n_blocks] [-n extent] [-d dx] "
@@ -206,7 +207,8 @@ $PARAMETER_BINDINGS
       for (unsigned step = 0; step < steps; ++step) stepper.evolve();
 $REAL_APPLICATION_FINAL_CHECKS
     }  // END BLOCK: destroy context before borrowed mesh
-  } catch (const std::exception& error) {
+  }  // END TRY: run real host solver
+  catch (const std::exception& error) {
     std::fprintf(stderr, "rank %d: %s\n", rank, error.what());
     MPI_Abort(MPI_COMM_WORLD, 1);
     return 1;

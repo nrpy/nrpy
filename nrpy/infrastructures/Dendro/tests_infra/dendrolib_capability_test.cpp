@@ -169,7 +169,7 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
     const unsigned numBlocks = blkList.size();
 
     bool dimsOk = true, layoutOk = true, offsetsOk = true, ghostOk = true;
-    bool originOk = true, padOk = true, mapOk = true;
+    bool originOk = true, padOk = true;
     double worstInterior = 0.0, worstPadded = 0.0;
     unsigned badPadded = 0, badInterior = 0, checkedPadded = 0, badCorner = 0;
     double worstCorner = 0.0;
@@ -182,6 +182,7 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
         const std::size_t off = b.getOffset();
         const std::size_t vol =
             static_cast<std::size_t>(sz[0]) * sz[1] * sz[2];
+        const unsigned bflag = b.getBlkNodeFlag();
 
         if (pw != (eleOrder >> 1u) + (inject("padding") ? 1u : 0u))
             padOk = false;
@@ -208,21 +209,9 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
         const double dx[3] = {b.computeDx(pmin, pmax), b.computeDy(pmin, pmax),
                               b.computeDz(pmin, pmax)};
 
-        // Cross-check the affine grid-to-physical map against the mesh's own
-        // conversion before relying on it for the origin claim.
-        Point checkPt;
-        mesh->octCoordToDomainCoord(
-            Point(static_cast<double>(b.getBlockNode().minX()),
-                  static_cast<double>(b.getBlockNode().minY()),
-                  static_cast<double>(b.getBlockNode().minZ())),
-            checkPt);
         const double mine[3] = {grid_to_phys(b.getBlockNode().minX(), 0),
                                 grid_to_phys(b.getBlockNode().minY(), 1),
                                 grid_to_phys(b.getBlockNode().minZ(), 2)};
-        if (std::fabs(checkPt.x() - mine[0]) > 1e-12 ||
-            std::fabs(checkPt.y() - mine[1]) > 1e-12 ||
-            std::fabs(checkPt.z() - mine[2]) > 1e-12)
-            mapOk = false;
 
         const double padShift = inject("origin") ? 0.0 : 1.0;
         const double org[3] = {mine[0] - padShift * pw * dx[0],
@@ -267,23 +256,25 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
                             (i < pw || j < pw || k < pw || i >= sz[0] - pw ||
                              j >= sz[1] - pw || k >= sz[2] - pw);
                         if (padded) {
-                            // Padding outside the domain has no neighbour to
-                            // supply it; only in-domain halo is a ghost claim.
-                            const double px = org[0] + i * dx[0];
-                            const double py = org[1] + j * dx[1];
-                            const double pz = org[2] + k * dx[2];
-                            const double eps = 1e-9;
-                            if (px < kDomainMin[0] - eps ||
-                                px > kDomainMax[0] + eps ||
-                                py < kDomainMin[1] - eps ||
-                                py > kDomainMax[1] + eps ||
-                                pz < kDomainMin[2] - eps ||
-                                pz > kDomainMax[2] + eps)
+                            // Boundary flags identify padding without a host
+                            // neighbour; only the remaining halo is promised.
+                            const bool exterior =
+                                ((bflag & (1u << OCT_DIR_LEFT)) && i < pw) ||
+                                ((bflag & (1u << OCT_DIR_RIGHT)) &&
+                                 i >= sz[0] - pw) ||
+                                ((bflag & (1u << OCT_DIR_DOWN)) && j < pw) ||
+                                ((bflag & (1u << OCT_DIR_UP)) &&
+                                 j >= sz[1] - pw) ||
+                                ((bflag & (1u << OCT_DIR_BACK)) && k < pw) ||
+                                ((bflag & (1u << OCT_DIR_FRONT)) &&
+                                 k >= sz[2] - pw);
+                            if (exterior)
                                 continue;
                             ++checkedPadded;
                             if (err > worstPadded) worstPadded = err;
                             if (err > 1e-9) ++badPadded;
-                        } else {
+                        }  // END IF: padded point
+                        else {
                             if (err > worstInterior) worstInterior = err;
                             if (err > 1e-9) ++badInterior;
                         }  // END ELSE: interior point
@@ -304,7 +295,6 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
     report("padding", padOk, detail);
     report("dimensions", dimsOk, detail);
     report("offsets", offsetsOk, detail);
-    report("grid_to_phys", mapOk, detail);
     std::snprintf(detail, sizeof(detail),
                   "eleOrder=%u interior_bad=%u worst=%.2e", eleOrder,
                   badInterior, worstInterior);

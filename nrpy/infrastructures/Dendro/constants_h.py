@@ -62,10 +62,10 @@ def output_constants_h(
     :param enable_KreissOliger_dissipation: Whether the emitted kernel carries
         Kreiss-Oliger dissipation, passed by the caller that built the kernels.
         It is recorded as ``KO_ENABLED`` so a reader of the generated header
-        can tell which dissipation the kernel was lowered with.  Nothing reads
-        it today -- no emitted code, no self-test and no host -- and no emitted
-        code derives a stencil reach from it.  The emitted parameter file
-        records the same switch as ``ko_enabled``.
+        can tell which dissipation the kernel was lowered with.  Real-host
+        profile validation compares ``ko_enabled`` with this constant, but no
+        emitted numerical code reads it or derives a stencil reach from it.
+        The emitted parameter file records the same switch as ``ko_enabled``.
     :return: The complete C++ header text.
 
     Doctests:

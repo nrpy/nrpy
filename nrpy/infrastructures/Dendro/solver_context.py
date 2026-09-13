@@ -139,11 +139,10 @@ int Ctx::initialize_mesh(int n_blocks, int extent, double dx, int rank,
   const int pad = static_cast<int>($NAMESPACE::generated::REQUIRED_PADDING);
   if (n_blocks < 1 || n_blocks > static_cast<int>(standalone_host::MAX_STANDALONE_HOST_BLOCKS) ||
       extent < 2 * pad + 1 ||
-      extent > static_cast<int>(standalone_host::MAX_STANDALONE_HOST_EXTENT) ||
-      !(dx > 0.0) || !std::isfinite(dx)) {
+      extent > static_cast<int>(standalone_host::MAX_STANDALONE_HOST_EXTENT)) {
     std::fprintf(stderr,
                  "ERROR: standalone-host mesh needs 1..%d blocks, extent in "
-                 "[2*padding+1 (%d), %d] and a finite dx > 0; got n_blocks=%d "
+                 "[2*padding+1 (%d), %d]; got n_blocks=%d "
                  "extent=%d dx=%g\\n",
                  static_cast<int>(standalone_host::MAX_STANDALONE_HOST_BLOCKS), 2 * pad + 1,
                  static_cast<int>(standalone_host::MAX_STANDALONE_HOST_EXTENT),
@@ -386,7 +385,7 @@ using DVec = ot::DVector<DendroScalar, unsigned int>;
  * @param[in] maximum Physical domain maximum used to compute spacing.
  * @return Validated geometry with an offset relative to each component base.
  *
- * @note Throws std::runtime_error for invalid allocation, padding, or geometry.
+ * @note Throws std::runtime_error for invalid allocation or padding.
  */
 block_geometry_struct block_geometry(const ot::Mesh& mesh, const ot::Block& block,
                              const Point& minimum, const Point& maximum);
@@ -510,9 +509,6 @@ block_geometry_struct block_geometry(const ot::Mesh& mesh, const ot::Block& bloc
       g.component_offset > mesh.getDegOfFreedomUnZip() ||
       volume > mesh.getDegOfFreedomUnZip() - g.component_offset)
     throw std::runtime_error("invalid Dendro block allocation or padding");
-  for (unsigned a = 0; a < 3; ++a)
-    if (!(g.dx[a] > 0.0) || !std::isfinite(g.dx[a]) || !std::isfinite(g.pmin_padded[a]))
-      throw std::runtime_error("invalid physical block geometry");
   return g;
 } // END FUNCTION: normalize real block geometry
 Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum, double dt) {
@@ -551,21 +547,24 @@ $REAL_APPLICATION_INITIALIZATION
 void Ctx::fill_exterior() {
   // Only points outside the physical domain are prescribed. Interior halos
   // remain the output of real unzip. The application supplies field values;
-  // coordinate construction, classification, traversal, and writes stay here.
+  // host boundary flags and padded storage indices select exterior points.
   std::vector<DendroScalar*> pointers(generated::NUM_EVOL_GFS);
   unzipped.to_2d(pointers.data());
   std::vector<DendroScalar> flat(generated::NUM_EVOL_GFS);
 $APPLICATION_EXTERIOR_VALUES
-  const double low[3] = {m_uiMinPt.x(), m_uiMinPt.y(), m_uiMinPt.z()};
-  const double high[3] = {m_uiMaxPt.x(), m_uiMaxPt.y(), m_uiMaxPt.z()};
   for (const auto& b : m_uiMesh->getLocalBlockList()) {
     const auto g = block_geometry(*m_uiMesh, b, m_uiMinPt, m_uiMaxPt);
+    const unsigned bflag = b.getBlkNodeFlag();
     for (unsigned k = 0; k < g.nz; ++k)
       for (unsigned j = 0; j < g.ny; ++j)
         for (unsigned i = 0; i < g.nx; ++i) {
-          const double x[3] = {g.pmin_padded[0] + i*g.dx[0], g.pmin_padded[1] + j*g.dx[1], g.pmin_padded[2] + k*g.dx[2]};
-          bool exterior = false;
-          for (unsigned a = 0; a < 3; ++a) exterior |= x[a] < low[a] - 1e-12*g.dx[a] || x[a] > high[a] + 1e-12*g.dx[a];
+          const bool exterior =
+              ((bflag & (1u << OCT_DIR_LEFT)) && i < g.padding) ||
+              ((bflag & (1u << OCT_DIR_RIGHT)) && i >= g.nx - g.padding) ||
+              ((bflag & (1u << OCT_DIR_DOWN)) && j < g.padding) ||
+              ((bflag & (1u << OCT_DIR_UP)) && j >= g.ny - g.padding) ||
+              ((bflag & (1u << OCT_DIR_BACK)) && k < g.padding) ||
+              ((bflag & (1u << OCT_DIR_FRONT)) && k >= g.nz - g.padding);
           if (exterior)
             for (unsigned f = 0; f < flat.size(); ++f)
               pointers[f][g.component_offset + i + std::size_t(g.nx)*(j + std::size_t(g.ny)*k)] = flat[f];

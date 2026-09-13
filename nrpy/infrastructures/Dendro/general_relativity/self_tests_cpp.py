@@ -7,10 +7,10 @@ Author: Zachariah B. Etienne
 """
 
 import math
-from typing import Any, Dict, List, NamedTuple, Tuple, cast
+from typing import Dict, List, NamedTuple, Tuple, Union, cast
 
 import sympy as sp
-from mpmath import mp  # type: ignore[import-untyped]
+from mpmath import mp, mpf  # type: ignore[import-untyped]
 
 import nrpy.grid as gri
 import nrpy.params as par
@@ -423,7 +423,7 @@ def _sample_value(
     return samples[key]
 
 
-def _exact_mpf(value: Any) -> Any:
+def _exact_mpf(value: Union[float, int, str, sp.Rational, mpf]) -> mpf:
     """
     Convert a binary64, integer, or exact SymPy rational to ``mpf`` exactly.
 
@@ -466,8 +466,8 @@ def _evaluate_reference(
         sum(int(sp.count_ops(rhs)) for _lhs, rhs in replaced)
         + sum(int(sp.count_ops(rhs)) for rhs in reduced),
     )
-    values: List[Any] = []
-    scales: List[Any] = []
+    values: List[mpf] = []
+    scales: List[mpf] = []
     previous_dps = mp.dps
     try:
         for precision in (80, 100):
