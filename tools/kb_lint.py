@@ -1142,6 +1142,11 @@ def _metadata_mention_allowed(lines: List[str], line_index: int) -> bool:
     """
     Return whether a removed-metadata mention is prohibition/supersession text.
 
+    Doctests:
+    >>> lines = ["Never store mtime values.", "Record mtime values."]
+    >>> [_metadata_mention_allowed(lines, index) for index in range(2)]
+    [True, False]
+
     :param lines: File lines being checked.
     :param line_index: Zero-based index of the line with the mention.
     :return: Whether same-line context permits the mention.
@@ -1152,6 +1157,43 @@ def _metadata_mention_allowed(lines: List[str], line_index: int) -> bool:
 def _volatile_metadata_issues(line: str) -> List[str]:
     """
     Return volatile-data policy violations found in one line.
+
+    Doctests:
+    >>> rejected = (
+    ...     "Last reconciled: 09-12-2026",
+    ...     "checked at 2026-09-12T14:03:22Z",
+    ...     "Checked at 12:34.",
+    ...     "commit 246043709e806021fcfc011fe657b8bf964cae4c",
+    ...     "revision deadbee",
+    ...     "sha256: 0123456789abcdef",
+    ...     "inventory contains 390 files",
+    ...     "The inventory covers 29 generators",
+    ...     "The inventory configures 74 trusted comparisons.",
+    ...     "| Source count | Last checked |",
+    ...     "inspected=pass; generated=not-run",
+    ...     "platform=linux; compiler=gcc-12",
+    ...     "| Audit | Resolution |",
+    ...     "No generated thorn build or restart validation was done.",
+    ...     "Isolated local OpenMP builds and one-step startup were performed.",
+    ...     "Validation artifacts were temporary and were not registered.",
+    ... )
+    >>> all(_volatile_metadata_issues(value) for value in rejected)
+    True
+    >>> allowed = (
+    ...     "The state vector has 24 evolved components.",
+    ...     "Finite-difference order 4 needs two centered halo points.",
+    ...     "Compare CoordSystem_hash before restoring a checkpoint.",
+    ...     "Brown, arXiv:0902.3652v2.",
+    ...     (
+    ...         "https://gist.githubusercontent.com/karpathy/"
+    ...         "442a6bf555914893e9891c11519de94f/raw/"
+    ...         "ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md"
+    ...     ),
+    ...     "https://example.org/archive/2026-09-12/report",
+    ...     "Never store dates, timestamps, hashes, or file counts in KB prose.",
+    ... )
+    >>> [_volatile_metadata_issues(value) for value in allowed]
+    [[], [], [], [], [], [], []]
 
     :param line: Authored KB line to inspect.
     :return: Violation messages for the line.
@@ -1552,4 +1594,8 @@ def _main() -> int:
 
 
 if __name__ == "__main__":
+    import doctest
+
+    if doctest.testmod().failed:
+        sys.exit(1)
     sys.exit(_main())
