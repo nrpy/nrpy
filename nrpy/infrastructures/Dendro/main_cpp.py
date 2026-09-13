@@ -255,28 +255,47 @@ def output_main_cpp(
     :param real_application_final_checks: Application acceptance checks after
         real-host ETS stepping.
     :return: Complete generated C++ source.
-    :raises ValueError: If a known application insertion remains unresolved.
+    :raises ValueError: If no unique block-RHS CFunction is registered or a
+        known application insertion remains unresolved.
 
     Doctests:
-    >>> wave = output_main_cpp(
-    ...     "wave", "wave", "waveSolver", "wave_cartesian_vacuum",
-    ...     "  if (ctx.initialize_scalar_vector()) return 1;",
-    ...     "  const double wave_norm = ctx.max_wave_rhs();",
-    ...     "    ctx.apply_wave_boundary();",
-    ...     "  if (!std::isfinite(wave_norm)) return 1;",
-    ...     "8", "0.25 * dx",
-    ...     "      if (!std::isfinite(context.max_wave_rhs())) return 1;",
-    ... )
-    >>> all(token in wave for token in (
-    ...     "initialize_scalar_vector", "apply_wave_boundary", "max_wave_rhs"
-    ... ))
-    True
-    >>> all(token not in wave for token in (
-    ...     "minkowski", "detgtrazero", "max_constraints"
-    ... ))
-    True
-    >>> 'toml::find<std::string>(profile, "name") != "wave_cartesian_vacuum"' in wave
-    True
+    >>> import nrpy.c_function as cfc
+    >>> import nrpy.params as par
+    >>> from nrpy.infrastructures.Dendro import CFunction_roles as roles
+    >>> _saved_functions = dict(cfc.CFunction_dict)
+    >>> _saved_extras = dict(par.glb_extras_dict)
+    >>> try:
+    ...     cfc.CFunction_dict.clear()
+    ...     par.glb_extras_dict.clear()
+    ...     cfc.register_CFunction(
+    ...         desc="fixture block RHS", name="wave_rhs_block", body="(void)0;"
+    ...     )
+    ...     roles.set_CFunction_role("wave_rhs_block", "rhs_eval_block")
+    ...     wave = output_main_cpp(
+    ...         "wave", "wave", "waveSolver", "wave_cartesian_vacuum",
+    ...         "  if (ctx.initialize_scalar_vector()) return 1;",
+    ...         "  const double wave_norm = ctx.max_wave_rhs();",
+    ...         "    ctx.apply_wave_boundary();",
+    ...         "  if (!std::isfinite(wave_norm)) return 1;",
+    ...         "8", "0.25 * dx",
+    ...         "      if (!std::isfinite(context.max_wave_rhs())) return 1;",
+    ...     )
+    ...     _observed = (
+    ...         all(token in wave for token in (
+    ...             "initialize_scalar_vector", "apply_wave_boundary", "max_wave_rhs"
+    ...         )),
+    ...         all(token not in wave for token in (
+    ...             "minkowski", "detgtrazero", "max_constraints"
+    ...         )),
+    ...         'toml::find<std::string>(profile, "name") != "wave_cartesian_vacuum"' in wave,
+    ...     )
+    ... finally:
+    ...     cfc.CFunction_dict.clear()
+    ...     cfc.CFunction_dict.update(_saved_functions)
+    ...     par.glb_extras_dict.clear()
+    ...     par.glb_extras_dict.update(_saved_extras)
+    >>> _observed
+    (True, True, True)
     """
     text = (
         "#if defined(NRPY_DENDRO_STANDALONE_HOST)\n"
