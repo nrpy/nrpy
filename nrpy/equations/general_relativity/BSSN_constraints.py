@@ -21,6 +21,14 @@ from nrpy.equations.general_relativity import T4munu
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 
 par.register_param(bool, __name__, "register_MU_gridfunctions", False)
+# The scalar momentum-constraint magnitude M and the Lambda-constraint magnitude
+# are registered by default, which is what every infrastructure has always
+# received.  An infrastructure that emits its own momentum diagnostics, and so
+# would otherwise have to delete these from the gridfunction registry after the
+# fact, sets this False instead.
+par.register_param(
+    bool, __name__, "register_M_and_LAMBDA_CONSTRAINT_gridfunctions", True
+)
 
 
 class BSSNconstraints:
@@ -42,6 +50,9 @@ class BSSNconstraints:
         :param enable_T4munu: Whether to enable T4munu (stress-energy terms), defaults to False.
         """
         register_MU_gridfunctions = par.parval_from_str("register_MU_gridfunctions")
+        register_M_and_LAMBDA_CONSTRAINT = par.parval_from_str(
+            "register_M_and_LAMBDA_CONSTRAINT_gridfunctions"
+        )
 
         # Step 1.b: Given the chosen coordinate system, set up
         #           corresponding reference metric and needed
@@ -64,16 +75,17 @@ class BSSNconstraints:
             _ = gri.register_gridfunctions(
                 "H", group="AUX", gf_array_name="diagnostic_output_gfs"
             )
-        if "M" not in gri.glb_gridfcs_dict:
-            _ = gri.register_gridfunctions(
-                "M", group="AUX", gf_array_name="diagnostic_output_gfs"
-            )
-        if "LAMBDA_CONSTRAINT" not in gri.glb_gridfcs_dict:
-            _ = gri.register_gridfunctions(
-                "LAMBDA_CONSTRAINT",
-                group="AUX",
-                gf_array_name="diagnostic_output_gfs",
-            )
+        if register_M_and_LAMBDA_CONSTRAINT:
+            if "M" not in gri.glb_gridfcs_dict:
+                _ = gri.register_gridfunctions(
+                    "M", group="AUX", gf_array_name="diagnostic_output_gfs"
+                )
+            if "LAMBDA_CONSTRAINT" not in gri.glb_gridfcs_dict:
+                _ = gri.register_gridfunctions(
+                    "LAMBDA_CONSTRAINT",
+                    group="AUX",
+                    gf_array_name="diagnostic_output_gfs",
+                )
         if register_MU_gridfunctions and "MU0" not in gri.glb_gridfcs_dict:
             _ = gri.register_gridfunctions_for_single_rank1(
                 "MU", group="AUX", gf_array_name="diagnostic_output_gfs"
@@ -215,7 +227,7 @@ class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
     def __init__(self) -> None:
         """Initialize an empty cache and its construction-parameter metadata."""
         super().__init__()
-        self._construction_parameters: Dict[str, Tuple[str, bool, bool]] = {}
+        self._construction_parameters: Dict[str, Tuple[str, bool, bool, bool]] = {}
 
     def __getitem__(self, CoordSystem_in: str) -> BSSNconstraints:
         """
@@ -424,11 +436,34 @@ class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
         ...     positive_magnitude_matches,
         ... )
         (True, True, True, True, True, True, True, True)
+
+        The M / LAMBDA_CONSTRAINT gate defaults True, and flipping it forces a
+        rebuild rather than returning the memoized object registered under the
+        old setting:
+        >>> import contextlib, io
+        >>> import nrpy.grid as _gri
+        >>> _default = par.parval_from_str("register_M_and_LAMBDA_CONSTRAINT_gridfunctions")
+        >>> _default
+        True
+        >>> _gri.glb_gridfcs_dict.clear()
+        >>> with contextlib.redirect_stdout(io.StringIO()):
+        ...     _ = BSSN_constraints["Cartesian"]
+        >>> sorted(n for n in _gri.glb_gridfcs_dict if n in ("H", "M", "LAMBDA_CONSTRAINT"))
+        ['H', 'LAMBDA_CONSTRAINT', 'M']
+        >>> par.set_parval_from_str("register_M_and_LAMBDA_CONSTRAINT_gridfunctions", False)
+        >>> _gri.glb_gridfcs_dict.clear()
+        >>> with contextlib.redirect_stdout(io.StringIO()):
+        ...     _ = BSSN_constraints["Cartesian"]
+        >>> sorted(n for n in _gri.glb_gridfcs_dict if n in ("H", "M", "LAMBDA_CONSTRAINT"))
+        ['H']
+        >>> par.set_parval_from_str("register_M_and_LAMBDA_CONSTRAINT_gridfunctions", _default)
+        >>> _gri.glb_gridfcs_dict.clear()
         """
         construction_parameters = (
             par.parval_from_str("EvolvedConformalFactor_cf"),
             par.parval_from_str("detgbarOverdetghat_equals_one"),
             par.parval_from_str("register_MU_gridfunctions"),
+            par.parval_from_str("register_M_and_LAMBDA_CONSTRAINT_gridfunctions"),
         )
         if (
             CoordSystem_in not in self
@@ -466,6 +501,7 @@ class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
             par.parval_from_str("EvolvedConformalFactor_cf"),
             par.parval_from_str("detgbarOverdetghat_equals_one"),
             par.parval_from_str("register_MU_gridfunctions"),
+            par.parval_from_str("register_M_and_LAMBDA_CONSTRAINT_gridfunctions"),
         )
 
     def __delitem__(self, CoordSystem: str) -> None:

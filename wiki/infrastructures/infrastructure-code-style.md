@@ -14,6 +14,16 @@ per-grid or per-point kernels.
 
 ## Detail
 
+### Patterns Match Existing Code
+
+Before writing a mechanism into an infrastructure, find its counterpart in
+`nrpy/infrastructures/{BHaH,ETLegacy,CarpetX,superB}`. Three or more instances
+is settled convention; a mechanism with no instance anywhere is an invention,
+and that absence is evidence against it. Conformance is one-way: a new
+infrastructure conforms to the established ones, never the reverse. [New
+Infrastructure Conformance](new-infrastructure-conformance.md) owns the
+individual rules, their right and wrong examples, and their mechanical tests.
+
 ### Module Organization
 
 Generic Python module, import, header, and helper rules follow [Python Coding
@@ -59,6 +69,21 @@ validation rather than exact generated text or incidental substrings. [Test
 Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md) owns
 oracle mechanics, selection, focused assertions, variant coverage, state, and
 safe updates.
+
+Size is part of that rule. A right-hand side or a Ricci or constraint
+evaluation never gets a trusted generated-source file: those run to hundreds of
+kilobytes, and no tracked oracle file in this repository is larger than about
+eighty. Dendro follows the rule on both sides: its initial-data, connection and
+algebraic-constraint-enforcement builders capture small `.cpp` baselines through
+`validate_strings` on the registered `full_function`, while its right-hand side
+and constraint diagnostics are pinned symbolically instead, through
+`compare_or_generate_trusted_results` in the same `__main__` sweeps.
+
+Claim evidence:
+- Claim: golden-output baselines are for small, largely structural emitted code; a right-hand side, Ricci or constraint kernel never receives one and is proven symbolically instead. Dendro uses small generated-source baselines and trusted expression dictionaries, and no kernel-scale generated source.
+- Role: normative rule
+- Deciding authority: [coding_style.md](../../coding_style.md), `#### validate_strings pattern`, its generated-kernel and size bullets
+- Corroboration: [initial_data.py](../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py), the `__main__` sweep that writes the small initial-data baselines for each formulation
 
 BHaH `compile_Makefile()` contains a retained unsafe external-compilation
 doctest. It is not precedent. A substantive touch follows the scoped-CI
@@ -161,10 +186,13 @@ checks integer return codes immediately, and returns early when
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### C Function Registration from Python`, `### BHaH Symbolic Codegen Rules`, `### Inlining Rules`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### Standard Struct Pointer Params`, `### Gridfunction Naming / Grouping`, `### Memory / Error Handling`
 - [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `compile_Makefile`
+- [coding_style.md](../../coding_style.md) - `#### validate_strings pattern`, its generated-kernel and size bullets
+- [initial_data.py](../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py) - the `__main__` generated-source baseline sweep
 
 ## See Also
 
 - Parent: [Infrastructures](index.md)
+- Depends on: [New Infrastructure Conformance](new-infrastructure-conformance.md)
 - Depends on: [C Function Registry](../core/c-function-registry.md)
 - Depends on: [Gridfunctions And Parameters](../core/gridfunctions-and-parameters.md)
 - Depends on: [Parallel Codegen Orchestration](../core/helpers/parallel-codegen-orchestration.md)

@@ -1,0 +1,749 @@
+# nrpy/infrastructures/Dendro/general_relativity/initial_data.py
+"""
+Initial-data CFunctions for the Dendro infrastructure.
+
+The generated Minkowski fill writes every EVOL field to its asymptotic value
+through exact-name ``out_<name>`` bindings derived from the registered EVOL
+gridfunctions.  No field name, count, or
+asymptotic value is hardcoded in the builder: all three come from the
+registered gridfunction records.
+
+A second builder emits the smooth ADM-to-evolved conversion and
+the separate connection (``lambdaU``) initialization pass.
+The conversion reuses the established
+:class:`nrpy.equations.general_relativity.ADM_to_BSSN.ADM_to_BSSN` map, so
+the registered ``EvolvedConformalFactor_cf`` choice governs the conformal
+convention in exactly one place; the connection pass writes
+``lambdaU^i = DeltaGamma^i / ReU^i``, which is the statement that the
+connection constraint ``C^i = 0`` holds.
+
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
+"""
+
+from typing import Dict, List, Tuple
+
+import sympy as sp
+
+import nrpy.c_function as cfc
+import nrpy.grid as gri
+import nrpy.params as par
+import nrpy.reference_metric as refmetric
+from nrpy.c_codegen import c_codegen
+from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
+from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
+from nrpy.infrastructures.Dendro import CFunction_roles as roles
+from nrpy.infrastructures.Dendro import block_kernel_helpers as bkh
+from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
+from nrpy.infrastructures.Dendro.general_relativity import generation_parameters
+from nrpy.infrastructures.Dendro.simple_loop import (
+    block_loop,
+    require_serial_parallelization,
+)
+
+# CFunction name suffixes.  The solver stem is threaded from the caller, as
+# Dendro names solver sources for the formulation, so these modules are shared
+# by every formulation without carrying one formulation's name.
+MINKOWSKI_BLOCK_SUFFIX = "minkowski_initial_data_block"
+MINKOWSKI_ALL_BLOCKS_SUFFIX = "minkowski_initial_data"
+
+# Smooth analytic perturbation used by the lifecycle gates: a spatially varying
+# state is what makes the generated derivative stencils observable at all.
+SMOOTH_PERTURBATION_BLOCK_SUFFIX = "smooth_perturbation_block"
+SMOOTH_PERTURBATION_ALL_BLOCKS_SUFFIX = "smooth_perturbation"
+
+ADM_TO_BSSN_BLOCK_SUFFIX = "ADM_to_BSSN_block"
+INITIAL_DATA_LAMBDAU_BLOCK_SUFFIX = "initial_data_lambdaU_block"
+
+
+def _block_pointer_bindings(evol_order: Tuple[str, ...], scalar_type: str) -> str:
+    """
+    Emit the per-field output pointer bindings for the block layout.
+
+    The bindings are rendered by the single shared emitter from the registry
+    order, so no field name is hardcoded; every binding adds
+    ``geom.component_offset``.  The role is ``out_`` because
+    this writer produces *state*, not a right-hand side.
+
+    :param evol_order: The EVOL names, in registry order.
+    :param scalar_type: The registered Dendro scalar alias.
+    :return: The binding statements.
+    """
+    return bkh.output_component_bindings(
+        evol_order,
+        scalar_type,
+        array="out_gfs",
+        role=gf_names.out_pointer,
+        const_pointee=False,
+        index_expression=bkh.by_position,
+    )
+
+
+def build_minkowski_initial_data(solver_stem: str) -> Tuple[str, str, str, str]:
+    """
+    Build the Minkowski initial data block and all-block CFunction bodies.
+
+    Each EVOL field is written to its registered asymptotic value
+    (``f_infinity``) at every cell of the padded block.  The point loop is
+    emitted through the NRPy Dendro loop helper; the all-block entry point
+    wraps it in the NRPy numerical block loop.
+
+    :param solver_stem: Lowercase stem for the emitted CFunction names.
+    :return: (block_body, block_params, all_blocks_body, all_blocks_params).
+    :raises ValueError: If Infrastructure is not Dendro.
+    """
+    if par.parval_from_str("Infrastructure") != "Dendro":
+        raise ValueError(
+            "Infrastructure must be 'Dendro' to build the Minkowski initial "
+            f"data, got {par.parval_from_str('Infrastructure')!r}."
+        )
+    require_serial_parallelization()
+    scalar_type = gri.DENDRO_SCALAR_TYPE
+    evol_order = roles.registered_evol_order()
+
+    # The fill writes every EVOL field to its registered asymptotic value.
+    fill_lines: List[str] = []
+    for name in evol_order:
+        gf = gri.glb_gridfcs_dict[name]
+        value = str(gf.f_infinity)
+        # Render a double literal (registered values are float).
+        fill_lines.append(
+            f"{gf_names.out_pointer(name)}[pp] = {scalar_type}{{{value}}};"
+        )
+    fill_body = "\n".join(fill_lines)
+
+    # Minkowski is spatially constant: every cell of the padded block (ghost
+    # cells included) equals the registered asymptotic value.  Filling the
+    # whole block (padding 0) makes the state a true fixed point, so the
+    # finite-difference RHS vanishes everywhere, including the interior
+    # cells adjacent to a block boundary that read ghost cells.
+    point_loop_body = bkh.point_loop(fill_body, padding="0")
+    block_body = (
+        _block_pointer_bindings(evol_order, scalar_type) + "\n" + point_loop_body
+    )
+    block_params = f"const block_geometry_struct& geom, {scalar_type}* const* out_gfs"
+    all_blocks_body = block_loop(
+        f"{solver_stem}_{MINKOWSKI_BLOCK_SUFFIX}(mesh.geom[blk], out_gfs);",
+        num_blocks="mesh.num_blocks",
+    )
+    all_blocks_params = (
+        f"const standalone_host_mesh_struct& mesh, {scalar_type}* const* out_gfs"
+    )
+    return block_body, block_params, all_blocks_body, all_blocks_params
+
+
+def build_smooth_perturbation(
+    solver_stem: str, amplitude: sp.Expr, wavelength: sp.Expr
+) -> Tuple[str, str, str, str]:
+    """
+    Build the smooth analytic perturbation CFunction bodies.
+
+    The perturbation adds one bounded, infinitely differentiable analytic
+    profile to every evolved component, so a lifecycle test can exercise the
+    generated derivative stencils on a state that is not spatially constant
+    (a Minkowski state has an identically vanishing RHS whatever the stencil
+    coefficients).  The profile is authored in NRPy and lowered by
+    ``c_codegen``: it is formulation content, so it belongs in a registered
+    CFunction and never in a fixed template.
+
+    Each component is scaled by ``1 + its registry position``.  Without that
+    the perturbed state carries only two distinct component values, because
+    every field but the lapse and the conformal factor has an asymptotic value
+    of zero and receives an identical increment.  A flat-layout adapter that
+    bound a component to the wrong slab would then read a numerically
+    identical field, and the ``FLATADAPTER`` lifecycle gate could not see it.
+
+    :param solver_stem: Lowercase stem for the emitted CFunction names.
+    :param amplitude: The registered ``smooth_perturbation_amplitude``
+        CodeParameter symbol, supplied by the registrar that registers it.
+    :param wavelength: The registered ``smooth_perturbation_wavelength``
+        CodeParameter symbol, supplied by the same registrar.
+    :return: (block_body, block_params, all_blocks_body, all_blocks_params).
+    :raises ValueError: If Infrastructure is not Dendro.
+    """
+    if par.parval_from_str("Infrastructure") != "Dendro":
+        raise ValueError(
+            "Infrastructure must be 'Dendro' to build the Dendro perturbation, "
+            f"got {par.parval_from_str('Infrastructure')!r}."
+        )
+    require_serial_parallelization()
+    scalar_type = gri.DENDRO_SCALAR_TYPE
+    evol_order = roles.registered_evol_order()
+    xx0, xx1, xx2 = sp.symbols("xx0 xx1 xx2", real=True)
+    wavenumber = 2 * sp.pi / wavelength
+    profile = (
+        amplitude
+        * sp.sin(wavenumber * xx0)
+        * sp.cos(wavenumber * xx1)
+        * sp.sin(wavenumber * xx2)
+    )
+    profile_code = c_codegen(
+        [profile],
+        [f"const {scalar_type} smooth_profile"],
+        include_braces=False,
+        enable_simd=False,
+        fp_type=str(par.parval_from_str("fp_type")),
+        fp_type_alias=scalar_type,
+        verbose=False,
+    )
+    fill_lines: List[str] = [profile_code.strip()]
+    for position, name in enumerate(evol_order):
+        fill_lines.append(
+            f"{gf_names.out_pointer(name)}[pp] += "
+            f"{scalar_type}{{{position + 1}}} * smooth_profile;"
+        )
+    # The perturbation is applied over the whole padded block, ghost cells
+    # included, so the interior RHS sees a consistent field on every stencil.
+    point_loop_body = bkh.point_loop("\n".join(fill_lines), padding="0")
+    block_body = (
+        _block_pointer_bindings(evol_order, scalar_type) + "\n" + point_loop_body
+    )
+    used_codeparameters = bkh.used_codeparameters([profile])
+    cparam_args = bkh.cparam_declarations(used_codeparameters)
+    block_params = (
+        f"const block_geometry_struct& geom, {scalar_type}* const* out_gfs"
+        + (f", {cparam_args}" if cparam_args else "")
+    )
+    forwarded = bkh.cparam_arguments(used_codeparameters)
+    all_blocks_body = block_loop(
+        f"{solver_stem}_{SMOOTH_PERTURBATION_BLOCK_SUFFIX}"
+        "(mesh.geom[blk], out_gfs" + (f", {forwarded}" if forwarded else "") + ");",
+        num_blocks="mesh.num_blocks",
+    )
+    all_blocks_params = (
+        f"const standalone_host_mesh_struct& mesh, {scalar_type}* const* out_gfs"
+        + (f", {cparam_args}" if cparam_args else "")
+    )
+    return block_body, block_params, all_blocks_body, all_blocks_params
+
+
+def register_CFunctions_smooth_perturbation(solver_stem: str) -> None:
+    """
+    Register the smooth-perturbation CFunctions (with Dendro roles).
+
+    The writer touches only the current point, so it needs no ghost points.
+
+    :param solver_stem: Lowercase stem for the emitted CFunction names.
+    """
+    # Registered CodeParameters, not bare symbols: a tunable the host must
+    # supply belongs in params_struct with a default, a validation entry and a
+    # parfile line, exactly as eta and the kappas are.  They are registered
+    # here, in the principal registration routine, and handed to the builder.
+    amplitude = par.register_CodeParameter(
+        "REAL",
+        __name__,
+        "smooth_perturbation_amplitude",
+        1e-3,
+        description="Amplitude of the smooth analytic perturbation applied to the evolved state.",
+        commondata=False,
+        add_to_set_CodeParameters_h=False,
+    )
+    wavelength = par.register_CodeParameter(
+        "REAL",
+        __name__,
+        "smooth_perturbation_wavelength",
+        1.0,
+        description="Wavelength of the smooth analytic perturbation applied to the evolved state; the host overwrites this default with a grid-derived value once it knows the block extent and spacing.",
+        commondata=False,
+        add_to_set_CodeParameters_h=False,
+    )
+    block_body, block_params, all_blocks_body, all_blocks_params = (
+        build_smooth_perturbation(solver_stem, amplitude, wavelength)
+    )
+    subdirectory = "generated/src/initial_data"
+    includes = [f"{solver_stem}_defines.h"]
+    cfunc_type = "void"
+    block_name = f"{solver_stem}_{SMOOTH_PERTURBATION_BLOCK_SUFFIX}"
+    block_desc = (
+        "Per-block smooth analytic perturbation of every evolved field "
+        "(lifecycle-test state; NRPy-authored profile)."
+    )
+    cfc.register_CFunction(
+        subdirectory=subdirectory,
+        includes=includes,
+        desc=block_desc,
+        cfunc_type=cfunc_type,
+        name=block_name,
+        params=block_params,
+        body=block_body,
+    )
+    roles.set_CFunction_role(block_name, "smooth_perturbation_block")
+    all_blocks_name = f"{solver_stem}_{SMOOTH_PERTURBATION_ALL_BLOCKS_SUFFIX}"
+    all_blocks_desc = "All-block smooth analytic perturbation (NRPy block loop)."
+    cfc.register_CFunction(
+        subdirectory=subdirectory,
+        includes=includes,
+        desc=all_blocks_desc,
+        cfunc_type=cfunc_type,
+        name=all_blocks_name,
+        params=all_blocks_params,
+        body=all_blocks_body,
+    )
+    roles.set_CFunction_role(all_blocks_name, "smooth_perturbation")
+
+
+def register_CFunctions_minkowski_initial_data(solver_stem: str) -> None:
+    """
+    Register the Minkowski initial data CFunctions (with Dendro roles).
+
+    The block writer reads no neighbors, so it is registered with an explicit
+    no ghost points: the fill touches only the current point.
+
+    :param solver_stem: Lowercase stem for the emitted CFunction names.
+    """
+    block_body, block_params, all_blocks_body, all_blocks_params = (
+        build_minkowski_initial_data(solver_stem)
+    )
+    subdirectory = "generated/src/initial_data"
+    includes = [f"{solver_stem}_defines.h"]
+    cfunc_type = "void"
+    block_name = f"{solver_stem}_{MINKOWSKI_BLOCK_SUFFIX}"
+    block_desc = "Per-block Minkowski initial data fill (all EVOL fields to their asymptotic values)."
+    cfc.register_CFunction(
+        subdirectory=subdirectory,
+        includes=includes,
+        desc=block_desc,
+        cfunc_type=cfunc_type,
+        name=block_name,
+        params=block_params,
+        body=block_body,
+    )
+    roles.set_CFunction_role(block_name, "minkowski_initial_data_block")
+    all_blocks_name = f"{solver_stem}_{MINKOWSKI_ALL_BLOCKS_SUFFIX}"
+    all_blocks_desc = "All-block Minkowski initial data fill (NRPy block loop)."
+    cfc.register_CFunction(
+        subdirectory=subdirectory,
+        includes=includes,
+        desc=all_blocks_desc,
+        cfunc_type=cfunc_type,
+        name=all_blocks_name,
+        params=all_blocks_params,
+        body=all_blocks_body,
+    )
+    roles.set_CFunction_role(all_blocks_name, "minkowski_initial_data")
+
+
+def register_ADM_source_gridfunctions() -> (
+    Tuple[List[List[sp.Expr]], List[List[sp.Expr]], List[sp.Expr], List[sp.Expr]]
+):
+    """
+    Register the ADM source fields the converter reads, as AUXEVOL.
+
+    The physical ADM data (``gammaDD``, ``KDD``, ``betaU``, ``BU``) is supplied
+    by the host (Dendro or TwoPunctures) and is not evolved, so it is
+    registered in the AUXEVOL group under exact NRPy names.  Registration is
+    idempotent: a second call returns the already-registered field symbols.
+
+    :return: (gammaDD, KDD, betaU, BU) symbol containers.
+    """
+    gammaDD = gri.register_gridfunctions_for_single_rank2(
+        "gammaDD", symmetry="sym01", group="AUXEVOL"
+    )
+    KDD = gri.register_gridfunctions_for_single_rank2(
+        "KDD", symmetry="sym01", group="AUXEVOL"
+    )
+    betaU = gri.register_gridfunctions_for_single_rank1("betaU", group="AUXEVOL")
+    BU = gri.register_gridfunctions_for_single_rank1("BU", group="AUXEVOL")
+    return gammaDD, KDD, betaU, BU
+
+
+def build_ADM_to_BSSN(CoordSystem: str = "Cartesian") -> Tuple[str, str]:
+    """
+    Build the smooth ADM-to-evolved conversion CFunction body.
+
+    The conversion is pointwise (no neighbour reads), so it runs over the whole
+    padded block and its padding is zero.  The three connection components are
+    deliberately absent: they depend on metric derivatives and are written by
+    the separate pass below.
+
+    :param CoordSystem: Reference-metric coordinate system.
+    :return: (block_body, block_params).
+    :raises ValueError: If Infrastructure is not Dendro, if the conversion
+        leaves an evolved field undefined, or if it reads outside the
+        registered ADM source set.
+
+    Doctests:
+    >>> import contextlib
+    >>> import io
+    >>> from nrpy.equations.general_relativity.fCCZ4_system import (
+    ...     build_fccz4_expression_bundle,
+    ... )
+    >>> par.set_parval_from_str("Infrastructure", "Dendro")
+    >>> par.set_parval_from_str("parallelization", "none")
+    >>> par.set_parval_from_str("fd_order", 4)
+    >>> par.set_parval_from_str("EvolvedConformalFactor_cf", "chi")
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     _bundle = build_fccz4_expression_bundle()
+    >>> _body, _params = build_ADM_to_BSSN()
+
+    The conversion defines every evolved field except the three
+    connection components, which the separate pass below owns.
+
+    >>> _written = [
+    ...     name
+    ...     for name in roles.registered_evol_order()
+    ...     if gf_names.out_pointer(name) + "[pp] =" in _body
+    ... ]
+    >>> len(_written)
+    22
+    >>> [n for n in ("lambdaU0", "lambdaU1", "lambdaU2") if n in _written]
+    []
+
+    The ADM source data is registered as AUXEVOL under exact NRPy names.
+
+    >>> tuple(gri.GridFunction.gridfunction_lists()[1])[:3]
+    ('betaU0', 'betaU1', 'betaU2')
+    >>> len(gri.GridFunction.gridfunction_lists()[1])
+    18
+
+    """
+    if par.parval_from_str("Infrastructure") != "Dendro":
+        raise ValueError(
+            "Infrastructure must be 'Dendro' to build the ADM conversion, got "
+            f"{par.parval_from_str('Infrastructure')!r}."
+        )
+    require_serial_parallelization()
+    generation_parameters.validate_generation_parameters()
+    scalar_type = gri.DENDRO_SCALAR_TYPE
+    fp_type = str(par.parval_from_str("fp_type"))
+    evol_order = roles.registered_evol_order()
+
+    # Step 1: Map every evolved field the conversion defines to its expression,
+    # reading each target name back from the registered BSSN gridfunction
+    # symbols so no field name is spelled out.
+    Bq = BSSN_quantities[CoordSystem]
+    gammaDD, KDD, betaU, BU = register_ADM_source_gridfunctions()
+    adm = ADM_to_BSSN(
+        gammaDD, KDD, betaU, BU, CoordSystem=CoordSystem, enable_rfm_precompute=False
+    )
+    # Insertion order is the emission order; Python dicts preserve it.
+    targets: Dict[str, sp.Expr] = {}
+    # The lapse is not part of the ADM source set this profile registers, so it
+    # takes its registered asymptotic value (the same single authority the
+    # Minkowski fill reads).
+    targets[str(Bq.alpha)] = sp.sympify(gri.glb_gridfcs_dict[str(Bq.alpha)].f_infinity)
+    targets[str(Bq.cf)] = adm.cf
+    targets[str(Bq.trK)] = adm.trK
+    for i in range(3):
+        for j in range(i, 3):
+            targets[str(Bq.hDD[i][j])] = adm.hDD[i][j]
+    for i in range(3):
+        for j in range(i, 3):
+            targets[str(Bq.aDD[i][j])] = adm.aDD[i][j]
+    for i in range(3):
+        targets[str(Bq.vetU[i])] = adm.vetU[i]
+        targets[str(Bq.betU[i])] = adm.betU[i]
+
+    # Step 2: Any evolved field the conversion neither defines nor leaves to
+    # the connection pass is a constraint quantity that constraint-satisfying
+    # source data sets to zero -- the Z4 scalar in the fCCZ4 profile, and
+    # nothing at all in BSSN.  The residual is identified by set difference
+    # rather than by name, so a formulation with a different constraint set
+    # needs no change here.
+    connection = {str(Bq.lambdaU[i]) for i in range(3)}
+    residual = [
+        name for name in evol_order if name not in targets and name not in connection
+    ]
+    if len(residual) > 1:
+        raise ValueError(
+            "The ADM conversion left more than one evolved field undefined; a "
+            "constraint-satisfying conversion zeroes at most the formulation's "
+            f"constraint scalar, but found {residual}."
+        )
+    for name in residual:
+        targets[name] = sp.sympify(0)
+    missing = sorted(set(evol_order) - set(targets) - connection)
+    if missing:
+        raise ValueError(f"ADM conversion leaves evolved fields undefined: {missing}.")
+
+    # Step 3: Lower the conversion.  The fields it reads are the expression
+    # free symbols that are registered gridfunctions.
+    _evol, auxevol, _diag, _aux = gri.GridFunction.gridfunction_lists()
+    auxevol_order = tuple(auxevol)
+    written = tuple(name for name in evol_order if name in targets)
+    kernel = c_codegen(
+        [targets[name] for name in written],
+        [f"{gf_names.out_pointer(name)}[pp]" for name in written],
+        include_braces=False,
+        enable_fd_codegen=True,
+        enable_fd_functions=False,
+        enable_simd=False,
+        fp_type=fp_type,
+        fp_type_alias=scalar_type,
+        verbose=False,
+    )
+    # The canonical reader resolves a field read only through a derivative,
+    # which raw free symbols would miss.
+    accessed = bkh.accessed_gridfunctions([targets[name] for name in written])
+    read_names = tuple(name for name in auxevol_order if name in accessed)
+    unexpected = sorted(accessed - set(auxevol_order))
+    if unexpected:
+        raise ValueError(
+            "The ADM conversion may read only registered ADM source fields, "
+            f"but it also read {unexpected}."
+        )
+    bindings = "\n".join(
+        [
+            bkh.output_component_bindings(
+                read_names,
+                scalar_type,
+                array="auxevol_gfs",
+                role=gf_names.input_pointer,
+                const_pointee=True,
+                index_expression=lambda name, _p: str(auxevol_order.index(name)),
+            ),
+            bkh.output_component_bindings(
+                written,
+                scalar_type,
+                array="out_gfs",
+                role=gf_names.out_pointer,
+                const_pointee=False,
+                index_expression=lambda name, _p: str(evol_order.index(name)),
+            ),
+        ]
+    )
+    point_loop_body = bkh.point_loop(kernel, padding="0")
+    block_params = (
+        f"const block_geometry_struct& geom, const {scalar_type}* const* auxevol_gfs, "
+        f"{scalar_type}* const* out_gfs"
+    )
+    return bindings + "\n" + point_loop_body, block_params
+
+
+def build_initial_data_lambdaU(CoordSystem: str = "Cartesian") -> Tuple[str, str]:
+    """
+    Build the separate connection-initialization CFunction body.
+
+    ``lambdaU^i = DeltaGamma^i / ReU^i`` is exactly the statement that the
+    connection constraint ``C^i = LambdatildeU^i - DeltaGamma^i`` vanishes, so
+    the pass is initialization rather than a copy of a BSSN slot by position.
+    It reads metric derivatives, so it runs over the interior and its input and
+    output arrays are distinct.
+
+    :param CoordSystem: Reference-metric coordinate system.
+    :return: (block_body, block_params).
+    :raises ValueError: If Infrastructure is not Dendro or the pass is circular.
+
+    Doctests:
+    >>> import contextlib
+    >>> import io
+    >>> from nrpy.equations.general_relativity.fCCZ4_system import (
+    ...     build_fccz4_expression_bundle,
+    ... )
+    >>> par.set_parval_from_str("Infrastructure", "Dendro")
+    >>> par.set_parval_from_str("parallelization", "none")
+    >>> par.set_parval_from_str("fd_order", 4)
+    >>> par.set_parval_from_str("EvolvedConformalFactor_cf", "chi")
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     _bundle = build_fccz4_expression_bundle()
+    >>> _body, _params = build_initial_data_lambdaU()
+
+    The pass writes exactly the three connection components, and
+    reads a distinct input array.
+
+    >>> [
+    ...     name
+    ...     for name in roles.registered_evol_order()
+    ...     if gf_names.out_pointer(name) + "[pp] =" in _body
+    ... ]
+    ['lambdaU0', 'lambdaU1', 'lambdaU2']
+    >>> "const DendroScalar* const* in_gfs" in _params
+    True
+
+    """
+    if par.parval_from_str("Infrastructure") != "Dendro":
+        raise ValueError(
+            "Infrastructure must be 'Dendro' to build the connection pass, got "
+            f"{par.parval_from_str('Infrastructure')!r}."
+        )
+    require_serial_parallelization()
+    scalar_type = gri.DENDRO_SCALAR_TYPE
+    fp_type = str(par.parval_from_str("fp_type"))
+    Bq = BSSN_quantities[CoordSystem]
+    rfm = refmetric.reference_metric[CoordSystem]
+    written = tuple(str(Bq.lambdaU[i]) for i in range(3))
+    exprs = [Bq.DGammaU[i] / rfm.ReU[i] for i in range(3)]
+    # The pass must not read what it writes: DeltaGamma^i is built from the
+    # conformal metric and its first derivatives only.
+    # Derivative reads count here: DeltaGamma^i is built from first
+    # derivatives, so the naive free-symbol set would be blind to exactly the
+    # reads this guard exists to catch.
+    circular = sorted(bkh.accessed_gridfunctions(exprs) & set(written))
+    if circular:
+        raise ValueError(f"The connection pass reads the fields it writes: {circular}.")
+    evol_order = roles.registered_evol_order()
+    kernel = c_codegen(
+        exprs,
+        [f"{gf_names.out_pointer(name)}[pp]" for name in written],
+        include_braces=False,
+        enable_fd_codegen=True,
+        enable_fd_functions=False,
+        enable_simd=False,
+        fp_type=fp_type,
+        fp_type_alias=scalar_type,
+        verbose=False,
+    )
+    accessed = bkh.accessed_gridfunctions(exprs)
+    read_names = tuple(name for name in evol_order if name in accessed)
+    bindings = "\n".join(
+        [
+            bkh.output_component_bindings(
+                read_names,
+                scalar_type,
+                array="in_gfs",
+                role=gf_names.input_pointer,
+                const_pointee=True,
+                index_expression=lambda name, _p: str(evol_order.index(name)),
+            ),
+            bkh.output_component_bindings(
+                written,
+                scalar_type,
+                array="out_gfs",
+                role=gf_names.out_pointer,
+                const_pointee=False,
+                index_expression=lambda name, _p: str(evol_order.index(name)),
+            ),
+        ]
+    )
+    point_loop_body = bkh.point_loop(kernel)
+    block_params = (
+        f"const block_geometry_struct& geom, const {scalar_type}* const* in_gfs, "
+        f"{scalar_type}* const* out_gfs"
+    )
+    return bindings + "\n" + point_loop_body, block_params
+
+
+def register_CFunctions_ADM_to_BSSN(
+    solver_stem: str, *, CoordSystem: str = "Cartesian"
+) -> None:
+    """
+    Register the ADM conversion and the connection-initialization CFunctions.
+
+    :param solver_stem: Lowercase stem for the emitted CFunction names.
+    :param CoordSystem: Reference-metric coordinate system.
+    """
+    subdirectory = "generated/src/initial_data"
+    includes = [f"{solver_stem}_defines.h"]
+    cfunc_type = "void"
+    adm_body, adm_params = build_ADM_to_BSSN(CoordSystem=CoordSystem)
+    adm_name = f"{solver_stem}_{ADM_TO_BSSN_BLOCK_SUFFIX}"
+    adm_desc = (
+        "Per-block smooth ADM-to-evolved conversion; the "
+        "connection components are written by the separate pass."
+    )
+    cfc.register_CFunction(
+        subdirectory=subdirectory,
+        includes=includes,
+        desc=adm_desc,
+        cfunc_type=cfunc_type,
+        name=adm_name,
+        params=adm_params,
+        body=adm_body,
+    )
+    roles.set_CFunction_role(adm_name, "ADM_to_BSSN_block")
+    lam_body, lam_params = build_initial_data_lambdaU(CoordSystem=CoordSystem)
+    lam_name = f"{solver_stem}_{INITIAL_DATA_LAMBDAU_BLOCK_SUFFIX}"
+    lam_desc = (
+        "Per-block connection initialization: lambdaU^i = DeltaGamma^i / "
+        "ReU^i, so the connection constraint C^i vanishes."
+    )
+    cfc.register_CFunction(
+        subdirectory=subdirectory,
+        includes=includes,
+        desc=lam_desc,
+        cfunc_type=cfunc_type,
+        name=lam_name,
+        params=lam_params,
+        body=lam_body,
+    )
+    roles.set_CFunction_role(lam_name, "initial_data_lambdaU_block")
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
+
+    # Trusted baselines for the small emitted kernels: one file per shipped
+    # profile under tests/, captured from the registered CFunction as
+    # BHaH/main_c.py captures its own, with the <Name><Value> axis spelling
+    # BHaH/general_relativity/rhs_eval.py uses for its own sweep.  Cartesian is
+    # pinned because Dendro emits block-Cartesian kernels; the conformal factor
+    # is not, because the two applications ship different ones and a baseline
+    # has to be the text an application emits.  fd_order 4 is what both
+    # examples ship and local qualification builds, leaving the order axis to
+    # nrpy/finite_difference.py's own oracles and the generated padding
+    # self-test.  Only the small kernels are captured: coding_style.md excludes
+    # a right-hand side, Ricci or constraint kernel from golden-output files.
+    from nrpy.equations.general_relativity.BSSN_constraints import (
+        BSSN_constraints as SweepBSSNConstraints,
+    )
+    from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs as SweepBSSNRHSs
+    from nrpy.equations.general_relativity.fCCZ4_constraints import (
+        fCCZ4_constraints as SweepFCCZ4Constraints,
+    )
+    from nrpy.equations.general_relativity.fCCZ4_RHSs import (
+        fCCZ4_RHSs as SweepFCCZ4RHSs,
+    )
+    from nrpy.helpers.generic import clang_format, validate_strings
+
+    par.set_parval_from_str("Infrastructure", "Dendro")
+    par.set_parval_from_str("parallelization", "none")
+    par.set_parval_from_str("fp_type", "double")
+    par.set_parval_from_str("detgbarOverdetghat_equals_one", True)
+    TRUSTED_FD_ORDER = 4
+    par.set_parval_from_str("fd_order", TRUSTED_FD_ORDER)
+
+    from nrpy.infrastructures.Dendro.general_relativity import (
+        rhs_eval as sweep_rhs_eval,
+    )
+
+    for sweep_fCCZ4, sweep_cf in ((True, "chi"), (False, "W")):
+        cfc.CFunction_dict.clear()
+        gri.glb_gridfcs_dict.clear()
+        par.glb_extras_dict.pop("Dendro", None)
+        for factory in (
+            BSSN_quantities,
+            SweepBSSNRHSs,
+            SweepBSSNConstraints,
+            SweepFCCZ4RHSs,
+            SweepFCCZ4Constraints,
+        ):
+            factory.clear()
+        sweep_stem = "fccz4" if sweep_fCCZ4 else "bssn"
+        par.set_parval_from_str("EvolvedConformalFactor_cf", sweep_cf)
+        # The right-hand-side registrar is what registers the evolved state
+        # these builders fill.
+        sweep_rhs_eval.register_CFunctions_rhs_eval(
+            enable_fCCZ4=sweep_fCCZ4,
+            fd_order=TRUSTED_FD_ORDER,
+            enable_KreissOliger_dissipation=False,
+            solver_stem=sweep_stem,
+        )
+        register_CFunctions_minkowski_initial_data(solver_stem=sweep_stem)
+        register_CFunctions_smooth_perturbation(solver_stem=sweep_stem)
+        register_CFunctions_ADM_to_BSSN(solver_stem=sweep_stem)
+        # One file per builder, labelled for the builder rather than for the
+        # role, so the file name does not repeat this module's own stem.
+        for builder_label, builder_role in (
+            ("minkowski", "minkowski_initial_data_block"),
+            ("smooth_perturbation", "smooth_perturbation_block"),
+            ("ADM_to_BSSN", "ADM_to_BSSN_block"),
+            ("lambdaU", "initial_data_lambdaU_block"),
+        ):
+            trusted_kernel = cfc.CFunction_dict[
+                roles.CFunction_name_for_role(builder_role)
+            ]
+            validate_strings(
+                clang_format(trusted_kernel.full_function),
+                f"{builder_label}_Cartesian_{sweep_cf}_fCCZ4{sweep_fCCZ4}"
+                f"_fdorder{TRUSTED_FD_ORDER}",
+                file_ext="cpp",
+            )

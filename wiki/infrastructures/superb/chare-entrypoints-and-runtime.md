@@ -109,7 +109,7 @@ optional service chares PUP their SDAG-visible state and owned buffers. The
 shared C-function registration in `superB_pup.py` emits struct-level PUP
 routines for commondata, params, boundary, MoL, chare communication,
 diagnostics, nonlocal-inner-boundary, temporary-buffer, `griddata`, and
-`griddata_chare` state. In inspected Charm++ 8.0.0 translator/runtime source,
+`griddata_chare` state. In Charm++ 8.0.0 translator/runtime source,
 `_sdag_pup(PUP::er&)` is the SDAG serializer through the generated recursive PUP
 path and PUPs `__dep`; generated `__sdag_pup(PUP::er&)` is an empty
 compatibility stub. This upstream implementation observation is version-scoped;
@@ -160,7 +160,7 @@ disk checkpointing writes to the directory argument passed to
 checkpoint/restart risk remains unresolved. The generated migration constructor
 also writes `mainProxy = thisProxy`; treat that as part of the unresolved
 checkpoint caveat, not as a validated post-startup readonly update pattern.
-`CkLocMgr::pup` also has a migration-buffer checkpoint risk: inspected Charm++
+`CkLocMgr::pup` also has a migration-buffer checkpoint risk: Charm++
 8.0.0 source aborts if the location manager is pupped while pending migration
 messages are buffered. Neither restart nor this error path is exercised by
 current configured CI.

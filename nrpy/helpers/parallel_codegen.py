@@ -53,6 +53,7 @@ NRPyEnv_type = Tuple[
             gri.BHaHGridFunction,
             gri.ETLegacyGridFunction,
             gri.CarpetXGridFunction,
+            gri.DendroGridFunction,
         ],
     ],
     Dict[str, Dict[str, Any]],

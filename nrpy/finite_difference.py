@@ -199,6 +199,26 @@ def setup_FD_matrix__return_inverse(
     return FD_Matrix_dict[(stencil_width, UPDOWNWIND_stencil_shift)]
 
 
+# Derivative-operator families compute_fdcoeffs_fdstencl() supplies coefficients
+# and stencils for.  All six have stencils, but only the four in
+# C_CODEGEN_DERIVATIVE_FAMILIES can be turned into C code: the dispatch in
+# proto_FD_operators_to_sympy_expressions() reads that same list and raises on
+# the two full-upwind families.  Keeping the two lists distinct is what lets
+# stencil_reach_per_axis() size a ghost zone for every family that has a stencil,
+# without changing what the shared extraction -- which every infrastructure runs
+# -- classifies as a derivative.
+C_CODEGEN_DERIVATIVE_FAMILIES: Tuple[str, ...] = (
+    "_dD",
+    "_dKOD",
+    "_dupD",
+    "_ddnD",
+)
+DERIVATIVE_FAMILIES: Tuple[str, ...] = C_CODEGEN_DERIVATIVE_FAMILIES + (
+    "_dfullupD",
+    "_dfulldnD",
+)
+
+
 def compute_fdcoeffs_fdstencl(
     derivstring: str, fd_order: int
 ) -> Tuple[List[sp.Rational], List[List[int]]]:
@@ -396,18 +416,120 @@ def symbol_is_gridfunction_Cparameter_or_other(var: sp.Basic) -> str:
     raise ValueError("grid.py: Could not find variable_type.")
 
 
+def stencil_reach_per_axis(
+    expressions: Sequence[sp.Expr],
+    upwind_control_vec: Union[List[sp.Basic], sp.Basic, str],
+    fd_order: int,
+) -> Tuple[int, int, int]:
+    """
+    Return the per-axis ghost-point reach the expressions' derivatives require.
+
+    An infrastructure that lays its data out in blocks or patches must size its
+    ghost zone to the widest stencil any emitted derivative reads.  That is not
+    ``fd_order // 2``: the single-point upwinded and Kreiss-Oliger families reach
+    one point further than the centered ones and the full-upwind families reach
+    ``fd_order``, so a radius derived from the order alone reads past the end of
+    a block.  The reach is therefore taken from the same coefficient source the
+    kernel is lowered with, per axis, because a stencil is one-dimensional and
+    only the axis it differentiates grows.
+
+    :param expressions: The expressions the kernel is generated from.
+    :param upwind_control_vec: Upwind control vector, or the string sentinel
+        used when upwinding is not enabled.
+    :param fd_order: Finite-difference order; ``dKOD`` adds its own two orders
+        internally, exactly as the kernel's C code is generated.
+    :return: The (x, y, z) ghost points required.
+    :raises ValueError: If a free symbol carries a derivative token whose
+        family is not one of :data:`DERIVATIVE_FAMILIES`, which would otherwise
+        be skipped silently and understate the reach.
+
+    DocTests:
+    >>> import nrpy.indexedexp as ixp
+    >>> gri.glb_gridfcs_dict.clear()
+    >>> _ = gri.register_gridfunctions("uu")
+    >>> uu_dD = ixp.declarerank1("uu_dD")
+    >>> stencil_reach_per_axis([uu_dD[0]], "unset", 4)
+    (2, 0, 0)
+    >>> uu_dupD = ixp.declarerank1("uu_dupD")
+    >>> stencil_reach_per_axis([uu_dupD[1]], "unset", 4)
+    (0, 3, 0)
+
+    Pinning more than one order is what catches an order-dependent regression
+    rather than only a family-blind one.
+
+    >>> stencil_reach_per_axis([uu_dupD[1]], "unset", 2)
+    (0, 2, 0)
+    >>> stencil_reach_per_axis([uu_dupD[1]], "unset", 6)
+    (0, 4, 0)
+    >>> uu_dfullupD = ixp.declarerank1("uu_dfullupD")
+    >>> stencil_reach_per_axis([uu_dfullupD[1]], "unset", 4)
+    (0, 4, 0)
+    >>> uu_dfulldnD = ixp.declarerank1("uu_dfulldnD")
+    >>> stencil_reach_per_axis([uu_dfulldnD[1]], "unset", 4)
+    (0, 4, 0)
+    >>> try:
+    ...     stencil_reach_per_axis([sp.Symbol("uu_dbogusD0")], "unset", 4)
+    ... except ValueError as error:
+    ...     print(error)
+    Unrecognized derivative family in uu_dbogusD0; known families: _dD, _dKOD, _dupD, _ddnD, _dfullupD, _dfulldnD.
+    """
+    free_symbols: List[sp.Basic] = []
+    for expr in expressions:
+        free_symbols.extend(expr.free_symbols)
+
+    for symbol in free_symbols:
+        name = str(symbol)
+        if symbol_is_gridfunction_Cparameter_or_other(symbol) != "other":
+            continue
+        # A derivative symbol is "<base>_d<operator>D<indices>": "_d", then an
+        # operator ending in an uppercase "D", then the index digits.  A name
+        # that merely contains "_d" and ends in a digit -- "eta_damp0",
+        # "xx_dim2" -- is an ordinary unregistered symbol, and the extraction
+        # below is deliberately permissive about those.
+        if "_d" not in name or name.rstrip("0123456789") == name:
+            continue
+        if "D" not in name[name.find("_d") + 2 :]:
+            continue
+        if not any(family in name for family in DERIVATIVE_FAMILIES):
+            raise ValueError(
+                f"Unrecognized derivative family in {name}; known families: "
+                + ", ".join(DERIVATIVE_FAMILIES)
+                + "."
+            )
+
+    deriv_vars = extract_list_of_deriv_var_strings_from_sympyexpr_list(
+        free_symbols, upwind_control_vec, families=DERIVATIVE_FAMILIES
+    )
+    _base_gfs, deriv_operators = (
+        extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(deriv_vars)
+    )
+
+    reach = [0, 0, 0]
+    for operator in superfast_uniq(deriv_operators):
+        _coeffs, stencils = compute_fdcoeffs_fdstencl(operator, fd_order)
+        for stencil in stencils:
+            for axis, step in enumerate(stencil):
+                reach[axis] = max(reach[axis], abs(step))
+    return (reach[0], reach[1], reach[2])
+
+
 #########################################
 # Step 1: Extract derivatives to compute
 #         from list of SymPy expressions
 def extract_list_of_deriv_var_strings_from_sympyexpr_list(
     list_of_free_symbols: List[sp.Basic],
-    upwind_control_vec: Union[List[sp.Basic], sp.Basic],
+    upwind_control_vec: Union[List[sp.Basic], sp.Basic, str],
+    families: Tuple[str, ...] = C_CODEGEN_DERIVATIVE_FAMILIES,
 ) -> List[sp.Basic]:
     """
     Extract derivative expressions from SymPy expressions' free symbols.
 
     :param list_of_free_symbols: List of free symbols from SymPy expressions.
     :param upwind_control_vec: Upwind control vector.
+    :param families: Derivative-operator families to classify as derivatives.
+        Defaults to the four ``c_codegen()`` can generate C code for, which is
+        what every caller of it needs; pass ``DERIVATIVE_FAMILIES`` to include
+        the two full-upwind families, which have stencils but no C-code path.
 
     :returns: List of derivative variables, creating _ddnD in case upwinding is enabled with control vector.
 
@@ -430,7 +552,7 @@ def extract_list_of_deriv_var_strings_from_sympyexpr_list(
     for var in list_of_free_symbols:
         vartype = symbol_is_gridfunction_Cparameter_or_other(var)
         if vartype == "other":
-            if any(s in str(var) for s in ["_dD", "_dKOD", "_dupD", "_ddnD"]):
+            if any(s in str(var) for s in families):
                 list_of_deriv_vars_with_duplicates.append(var)
             else:
                 # At one time this raised a ValueError that
@@ -1446,7 +1568,9 @@ def proto_FD_operators_to_sympy_expressions(
             direction2 = direction
             FDexprs[i] *= invdxx[direction1] * invdxx[direction2]
         # First-order or Kreiss-Oliger derivatives:
-        elif operator.startswith(("dKOD", "dD", "dupD", "ddnD")):
+        elif operator.startswith(
+            tuple(family[1:] for family in C_CODEGEN_DERIVATIVE_FAMILIES)
+        ):
             FDexprs[i] *= invdxx[direction]
         else:
             raise ValueError(

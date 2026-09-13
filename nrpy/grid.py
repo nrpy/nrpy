@@ -878,9 +878,183 @@ class CarpetXGridFunction(GridFunction):
         return access_str
 
 
+# The C++ alias every generated Dendro artifact spells for its floating-point
+# scalar.  Hardcoded here exactly as BHaHGridFunction hardcodes "REAL" and
+# ETLegacyGridFunction "CCTK_REAL"; the Dendro types emitter emits the matching
+# `using DendroScalar = double;`.
+DENDRO_SCALAR_TYPE = "DendroScalar"
+
+
+class DendroGridFunction(GridFunction):
+    """
+    The subclass for Dendro grid functions.
+
+    Dendro stores every gridfunction in one padded, variable-major, x-fastest
+    block array.  A one-point memory read therefore resolves to a role-prefixed
+    input pointer ``in_<exact NRPy name>`` indexed by the base interior index
+    ``pp`` plus signed offsets in the ``nx``/``nxy`` strides.
+    """
+
+    VALID_GROUPS: Tuple[str, ...] = ("EVOL", "AUXEVOL", "DIAG", "AUX")
+    GROUP_DESCRIPTIONS: str = (
+        '    "EVOL": for evolved quantities (i.e., quantities stepped forward in time),\n'
+        '    "AUXEVOL": for auxiliary quantities needed at all points by evolved quantities,\n'
+        '    "DIAG": for diagnostic quantities needed at all points (e.g., volume integration, interpolation, etc),\n'
+        '    "AUX": for all other quantities needed at all gridpoints.\n'
+    )
+
+    def __init__(
+        self,
+        name: str,
+        group: str = "EVOL",
+        desc: str = "gf_desc_unset",
+        rank: int = 0,
+        dimension: int = 3,
+        f_infinity: float = 0.0,
+        wavespeed: float = 1.0,
+        is_basename: bool = True,
+        gf_array_name: Optional[str] = None,
+    ) -> None:
+        super().__init__(
+            name=name,
+            group=group,
+            desc=desc,
+            rank=rank,
+            dimension=dimension,
+            gf_type=DENDRO_SCALAR_TYPE,
+            f_infinity=f_infinity,
+            wavespeed=wavespeed,
+            is_basename=is_basename,
+        )
+        if group not in self.VALID_GROUPS:
+            raise ValueError(
+                f"Unsupported Dendro gridfunction group {group}. Supported groups include:\n"
+                f"{self.GROUP_DESCRIPTIONS}"
+            )
+        # `gf_array_name` is accepted and retained for compatibility with
+        # shared infrastructure-agnostic checks, but it is intentionally
+        # ignored: the exact role-prefixed pointer below is the only Dendro
+        # memory-access form.  BHaH array-selector semantics do not transfer.
+        self.gf_array_name = gf_array_name
+
+    @staticmethod
+    def _term(offset: int, basis: str) -> str:
+        """
+        Format one signed offset term of a Dendro x-fastest interior index.
+
+        :param offset: Signed integer offset along one grid direction.
+        :param basis: Index expression for one step in that direction
+            ("1" for the fastest direction, "nx", "nxy", ...).
+        :return: Empty string for a zero offset, otherwise a string such as
+            " + 1", " - nx", or " + 2 * nxy".
+        """
+        if offset == 0:
+            return ""
+        sign = "+" if offset > 0 else "-"
+        magnitude = abs(offset)
+        if basis == "1":
+            term = str(magnitude)
+        elif magnitude == 1:
+            term = basis
+        else:
+            term = f"{magnitude} * {basis}"
+        return f" {sign} {term}"
+
+    def read_gf_from_memory_Ccode_onept(
+        self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
+    ) -> str:
+        """
+        Retrieve a one-point Dendro gridfunction read as C code.
+
+        The result is a role-prefixed input pointer (``in_<name>``) indexed by
+        the base interior index ``pp`` plus the signed x-fastest offsets.
+
+        :param i0_offset: Offset in the fastest (x) direction.
+        :param i1_offset: Offset in the middle (y) direction.
+        :param i2_offset: Offset in the slowest (z) direction.
+        :param kwargs: Additional keyword arguments; SIMD is rejected because
+            the Dendro CPU profile is not SIMD-qualified.
+        :return: C code string reading the gridfunction value at the offsets.
+        :raises ValueError: If SIMD access is requested for the Dendro CPU
+            profile.
+
+        Doctests:
+        >>> glb_gridfcs_dict.clear()
+        >>> par.set_parval_from_str("Infrastructure", "Dendro")
+        >>> abc = register_gridfunctions("abc")
+        >>> glb_gridfcs_dict["abc"].read_gf_from_memory_Ccode_onept(1, 2, 3)
+        'in_abc[pp + 1 + 2 * nx + 3 * nxy]'
+        >>> glb_gridfcs_dict["abc"].read_gf_from_memory_Ccode_onept(0, -1, 0)
+        'in_abc[pp - nx]'
+        >>> try:
+        ...     glb_gridfcs_dict["abc"].read_gf_from_memory_Ccode_onept(0, 0, 0, enable_simd=True)
+        ... except ValueError:
+        ...     print("Dendro SIMD rejected. Good.")
+        Dendro SIMD rejected. Good.
+        """
+        if kwargs.get("enable_simd", False):
+            raise ValueError("Dendro SIMD access is not qualified for the CPU profile.")
+        return self.access_gf(self.name, i0_offset, i1_offset, i2_offset)
+
+    @staticmethod
+    def input_pointer(gf_name: str) -> str:
+        """
+        Return the Dendro input-role pointer name for a gridfunction.
+
+        This class owns the ``in_`` spelling: the Dendro infrastructure's
+        decoration helpers call here rather than formatting it themselves, so
+        the emitted pointer name has one source.
+
+        :param gf_name: Exact registered NRPy gridfunction name.
+        :return: ``in_<gf_name>``.
+
+        Doctests:
+        >>> DendroGridFunction.input_pointer("cf")
+        'in_cf'
+        """
+        return f"in_{gf_name}"
+
+    @staticmethod
+    def access_gf(
+        gf_name: str,
+        i0_offset: int = 0,
+        i1_offset: int = 0,
+        i2_offset: int = 0,
+    ) -> str:
+        """
+        Retrieve a Dendro gridfunction value from memory for a given offset.
+
+        Dendro binds one pointer per gridfunction, so the array name follows
+        from the gridfunction name and there is no array selector to pass.
+
+        :param gf_name: The gridfunction name.
+        :param i0_offset: Offset in the fastest (x) direction.
+        :param i1_offset: Offset in the middle (y) direction.
+        :param i2_offset: Offset in the slowest (z) direction.
+        :return: Formatted string.
+
+        Doctests:
+        >>> DendroGridFunction.access_gf("abc", 1, 2, 3)
+        'in_abc[pp + 1 + 2 * nx + 3 * nxy]'
+        >>> DendroGridFunction.access_gf("abc", 0, -1, 0)
+        'in_abc[pp - nx]'
+        """
+        index = (
+            "pp"
+            + DendroGridFunction._term(i0_offset, "1")
+            + DendroGridFunction._term(i1_offset, "nx")
+            + DendroGridFunction._term(i2_offset, "nxy")
+        )
+        return f"{DendroGridFunction.input_pointer(gf_name)}[{index}]"
+
+
 # Type alias for grid function objects.
 GridFunctionType = Union[
-    GridFunction, BHaHGridFunction, ETLegacyGridFunction, CarpetXGridFunction
+    GridFunction,
+    BHaHGridFunction,
+    ETLegacyGridFunction,
+    CarpetXGridFunction,
+    DendroGridFunction,
 ]
 
 # Global dictionary of registered grid functions.
@@ -891,6 +1065,7 @@ GF_CLASS_MAP: Dict[str, Type[GridFunctionType]] = {
     "BHaH": BHaHGridFunction,
     "ETLegacy": ETLegacyGridFunction,
     "CarpetX": CarpetXGridFunction,
+    "Dendro": DendroGridFunction,
 }
 
 # Factory mapping for ixp rank-N declaration functions.

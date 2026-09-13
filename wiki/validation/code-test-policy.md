@@ -99,9 +99,23 @@ Static quality gates remain mandatory and separate.
 External compiler, build, runtime, and numerical-product validation belongs in
 scoped CI, not ordinary owner doctests. Repository-configured `clang-format`
 remains an allowed dependency for owner emitted-source normalization. New core
-standalone harnesses and compile doctests are prohibited. A substantive change
-to an existing compile doctest must follow the migration or tightly bounded
-fallback in [Test Oracles And Safe Updates](test-oracles-and-safe-updates.md#known-gaps-and-non-precedents).
+standalone harnesses and compile doctests are prohibited. The one carve-out is a
+harness that measures an external host's behavior, which no owner doctest and no
+NRPy-side CI job can observe, because the host is present in neither. The rule
+is `coding_style.md`, `### External-Host Test Harnesses`: the harness is tracked
+beside the infrastructure that depends on the host, under `tests_infra/`, is
+built and run by hand against that host, and records only durable setup, scope,
+assertions, and reproduction instructions. It does not preserve host revisions,
+dates, environment snapshots, or run results. It is not a route for ordinary
+compile or build coverage, which stays in scoped CI. A substantive change to an
+existing compile doctest must follow the migration or tightly bounded fallback
+in [Test Oracles And Safe Updates](test-oracles-and-safe-updates.md#known-gaps-and-non-precedents).
+
+Claim evidence:
+- Claim: new core standalone harnesses and compile doctests are prohibited, with one carve-out: a harness that measures an external host's behavior is tracked under `tests_infra/` beside the infrastructure that depends on that host, is built and run by hand, and records only durable setup, scope, assertions, and reproduction instructions. The carve-out does not license ordinary compile or build coverage outside scoped CI or volatile KB metadata.
+- Role: normative rule
+- Deciding authority: [coding_style.md](../../coding_style.md), `### External-Host Test Harnesses`
+- Corroboration: [README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md), its durable scope and build/run instructions
 
 ### Status-Only Build Or Crash Gate
 
@@ -269,7 +283,8 @@ for test count.
 
 ## Sources
 
-- [coding_style.md](../../coding_style.md) - `### if __name__ == "__main__": Block`, `### Doctest Conventions`, `#### Doctest placeholders`, `## Static Analysis Configuration`
+- [coding_style.md](../../coding_style.md) - `### if __name__ == "__main__": Block`, `### Doctest Conventions`, `#### Doctest placeholders`, `### External-Host Test Harnesses`, `## Static Analysis Configuration`
+- [README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md) - durable scope and build/run instructions
 - [main.yml](../../.github/workflows/main.yml) - `static-analysis`, `codegen-ubuntu`, `codegen-mac`, `sebob-consistency-test`, `sebobv2-consistency-test`
 - [single_file_static_analysis.sh](../../.github/single_file_static_analysis.sh) - `run_test_step`
 - [.pylintrc](../../.pylintrc) - `[MASTER]`; [.pylintrc_python36](../../.pylintrc_python36) - `[MASTER]`

@@ -17,7 +17,7 @@ Configured GitHub job map:
 | --- | --- | --- | --- |
 | `static-analysis` | Configured Linux/Python matrix | No generated project coverage | Python file execution plus version-dependent static checks; see [Static Analysis](static-analysis.md) |
 | `codegen-ubuntu` | Configured Ubuntu/Python matrix | Installs NRPy, generates in `tmp/`, and builds the selected default C/library projects with `make`, spanning elliptic, wave, black-hole, PN, SEOBNR, TOV, hydro, BHaHAHA, and `sebobv2` routes. It generates `sebobv1_jax` without package install/build. | The `make` builds run no generated executable, and `make clean` follows each; MANGA commands are commented out. |
-| `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation as Ubuntu; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
+| `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation as Ubuntu; no Dendro generation or build; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
 | `einsteintoolkit-validation` | Configured Ubuntu/Apptainer Einstein Toolkit image | Generates `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs the configured Baikal, BaikalVacuum, and WaveToyNRPy Cactus testsuites and fails on reported failures. No `carpetx_*` generation/build/run. |
 | `charmpp-validation` | Configured Ubuntu/Apptainer Charm++ context | Generates and builds the configured superB elliptic, spectroscopy, and collision projects | Runs the configured collision executable through `charmrun`; no explicit scientific-output assertion beyond process success. |
 | `sebob-consistency-test` | Configured Ubuntu matrix | Checks out the workflow-selected trusted revision; generates/builds trusted and current SEOBNRv5 variants | Each helper invocation rebuilds both executables, uses exactly ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed the perturbation-derived baseline. |
@@ -77,6 +77,24 @@ cell is an ordinary C build. The helper installs no CUDA toolkit, declares no
 GPU runner, runs no generated executable, and checks no GPU result. Treat it as
 a local command recipe requiring a prepared environment, not CI pass evidence.
 
+Dendro generated builds and runtime tests are local qualification commands;
+no GitHub workflow job currently generates, builds, or runs either Dendro
+project. Its symbolic and emitted-source contracts run as owner doctests in
+`static-analysis`. Locally, run `python -m nrpy.examples.dendro_fccz4` or
+`python -m nrpy.examples.dendro_bssn`, configure and build the generated solver
+with CMake, then run `ctest`. Generated cases cover the standalone host,
+Minkowski lifecycle, address/value and typed parameter forwarding, and nonflat
+GR references. These builds require MPI and a C++17 compiler. Adding standalone
+or real-host generated-project CI requires a separately authorized workflow
+change. The durable real-host procedure and proof boundaries live in
+[Validation, Standalone Host, And Deferral Gates](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md).
+
+Claim evidence:
+- Claim: no configured GitHub job generates, builds, or runs Dendro projects. The default generators emit CTest cases for local standalone qualification; this does not establish a particular run's outcome or real-host coverage.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), `codegen-ubuntu` and `codegen-mac`, for configured jobs; [cmake_helpers.py](../../nrpy/infrastructures/Dendro/cmake_helpers.py), `output_solver_cmake` and `output_tests_cmake`, for generated cases
+- Corroboration: [main_cpp.py](../../nrpy/infrastructures/Dendro/main_cpp.py), `output_main_cpp`, whose gates the lifecycle case exercises
+
 Explicitly unsupported or unverified by these configurations: CarpetX build or
 runtime; JAX generated-package install/import/basic test or accelerator runtime;
 any CUDA executable/GPU result; standalone evolution runtime; restart behavior;
@@ -91,6 +109,7 @@ generated file has been deliberately registered as frozen evidence.
 
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`; [.github/full_nrpy_local_ci.sh](../../.github/full_nrpy_local_ci.sh) - `example_scripts`, `cuda_example_scripts`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-mac`
+- [cmake_helpers.py](../../nrpy/infrastructures/Dendro/cmake_helpers.py) - `output_solver_cmake`, `output_tests_cmake`, their `add_test` registrations
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `einsteintoolkit-validation`; official Einstein Toolkit [Adding a test case](https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case) - `A test case is...`
 - [test.ccl](../../nrpy/examples/et_WaveToyfiles/test/test.ccl) - `TEST WaveToyNRPy_test`, `RELTOL 1e-11`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `charmpp-validation`; official Charm++ [Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html) - `Compiling the Example`, `Running the Example`

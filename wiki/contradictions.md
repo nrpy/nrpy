@@ -16,6 +16,10 @@ source-side truth and containment; it does not imply that NRPy source was fixed.
 | CONTR-0005 | Mewes et al.'s prose around its conformal-factor alternatives reverses the signs implied by its displayed evolution equations and used by NRPy's established BSSN variables. | resolved | [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), Eqs. (33)-(34) and surrounding prose | [`BSSN_quantities.py`](../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities.__init__` | NRPy retains its established `W=exp(-2 phi)` and `chi=exp(-4 phi)` definitions, whose chain rules agree with the displayed evolution equations; sign-reversed prose is not adopted. | [Fully Covariant Conformal Z4](equations/general-relativity/fccz4.md) | Page remains `confirmed`: definitions and authority choice are explicit and owner validation covers all three conformal-factor options. | BSSN/fCCZ4 equation owners; trigger when conformal-factor definitions, source crosswalk, or option validation changes. | Run fCCZ4 constraint/RHS owner validation across `W`, `phi`, and `chi`; verify exact chain-rule definitions and trusted expressions. | This resolves a source-internal prose/equation mismatch without changing NRPy's established variables. |
 | CONTR-0006 | Mewes et al.'s displayed advective 1+log equation omits the lapse factor present in Alic et al.'s exact advective form; Sanchis-Gual et al. corroborates the lapse factor only in a nonadvective form. | resolved | [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), Eq. (35) | [Alic et al., arXiv:1106.2254v2](https://arxiv.org/pdf/1106.2254v2), Eq. (20) | NRPy adopts `partial_0 alpha=-2 alpha(K-2 Theta)` by reusing BSSN 1+log and adding `4 alpha Theta`; the missing lapse in Mewes Eq. (35) is treated as a typographical omission. | [Fully Covariant Conformal Z4](equations/general-relativity/fccz4.md) | Page remains `confirmed`: the adopted gauge formula and source decision are explicit and validated across Cartesian and curved reference metrics. | fCCZ4 gauge owners; trigger when lapse options, 1+log correction, source authority, or gauge validation changes. | Run all twelve fCCZ4 gauge trusted variants and verify the 1+log correction is exactly `4 alpha Theta`. | Sanchis-Gual et al. Eq. (2.25) corroborates the lapse factor but not the advective operator; frozen lapse is unaffected. |
 | CONTR-0007 | The frozen commissioned YBS-MOM source proposes an auxiliary hyperbolic-relaxation field, but the corrected implementation contract requires the Yo--Lin--Cao term directly with CAHD-style timestep scaling and no new evolved state. | resolved | [preserved YBS-MOM specification](../raw/source-docs/ybs-momentum-damping-spec.md), `Proposed system` and auxiliary-field analysis | [`BSSN_RHSs.py`](../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS momentum branch; commissioned user clarification | The user clarification controls the commissioned design: apply the direct covariant STF momentum gradient with `C_YBS_mom*CFL_FACTOR*DSMINGF`, exactly analogous to CAHD's timestep-scaled parabolic coefficient. Retain the frozen source as historical provenance; do not add `qD` or any other evolved cleaner field. | [YBS-MOM Timestep-Scaled Momentum Adjustment](equations/general-relativity/ybs-momentum-damping.md); [BSSN Family](equations/general-relativity/bssn-family.md); [Fully Covariant Conformal Z4](equations/general-relativity/fccz4.md); [BHaH GR Application Wiring](infrastructures/bhah/gr-application-wiring.md) | Pages remain `confirmed`: code and compiled pages now agree on the direct no-state contract; the superseded proposal is explicitly bounded. | BSSN/fCCZ4/BHaH owners; trigger when YBS-MOM variables, coefficient, momentum residual, STF projection, shared spacing, defaults, or source authority changes. | Verify no `qD`/`q_rhsD` gridfunction or output exists; compare the lower residual with canonical `BSSNconstraints.MU`; run all existing jointly YBS-enabled trusted dictionaries; generate ordinary and fisheye OpenMP/CUDA spacing paths; run static analysis and KB lint. | Resolution rejects auxiliary-state hyperbolization. The term remains parabolic in principal character; CAHD-style local timestep scaling satisfies the intended CFL compatibility. |
+| CONTR-0008 | The Dendro BSSN leaf claimed the emitted `bssn_constraints*` kernels matched Dendro-GR's `bssn_constraints.cpp`. Upstream, that file's `enforce_bssn_constraints` is the det(gammabar)/tr(Abar) *enforcement*, and the Hamiltonian/momentum diagnostics live in `physcon.cpp` as `physical_constraints`; the claimed precedent named the wrong operation. | resolved | [`bssn-application-wiring.md`](infrastructures/dendro/bssn-application-wiring.md), "Dendro's own vocabulary" (superseded wording) | Dendro-GR `BSSN_GR/include/bssn_constraints.h`, `enforce_bssn_constraints`; `BSSN_GR/src/physcon.cpp`, `physical_constraints` | Host vocabulary governs host-side identifiers only; NRPy-emitted kernels take the BHaH/ETLegacy operation names with the stem prefix. The constraint-diagnostics kernel is `<stem>_constraints_eval`, the enforcement kernel `<stem>_enforce_detgbar_equals_detghat_trAzero`. | [BSSN Application Wiring](infrastructures/dendro/bssn-application-wiring.md); [fCCZ4 Application Wiring](infrastructures/dendro/fccz4-application-wiring.md); [New Infrastructure Conformance](infrastructures/new-infrastructure-conformance.md) | Pages stay `provisional`/`confirmed`: the false sentence is rewritten and the conformance page now scopes host vocabulary explicitly. | Dendro owner; trigger when an emitted Dendro kernel is named for an upstream source file. | Require `rg bssn_constraints nrpy/infrastructures/Dendro` to find no CFunction name; generate and build both projects, then require CTest success under the renamed kernels. | The host and NRPy operation vocabularies are intentionally distinct. |
+| CONTR-0009 | The Dendro BSSN leaf claimed the BSSN constraint builder "removes"/"deletes" the newly added AUX gridfunction names it does not write. The builder deletes nothing; it suppresses the two registrations at the source by setting `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` to `False` across the factory construction and restoring it in a `finally` block. | resolved | [`bssn-application-wiring.md`](infrastructures/dendro/bssn-application-wiring.md), "The DIAG-before-factory ordering, and why" and its claim-evidence block (superseded wording) | [`constraints_eval.py`](../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), the gate save/set/restore around the `BSSN_constraints` construction | For descriptive current behavior the code decides. No Dendro builder deletes a registered name from `glb_gridfcs_dict`. Owner-local `__main__` sweeps clear registries only between validation profiles; the production builders do not. The gate is a construction-parameter memo key, so setting it forces a rebuild that never registers the two names. The `NUM_AUX_GFS = 0` outcome the leaf reports is unaffected. | [BSSN Application Wiring](infrastructures/dendro/bssn-application-wiring.md) | The page stays `provisional`: one bounded mechanism sentence and its claim-evidence block are rewritten, and the page's routed answer about what the BSSN builders do is unchanged. | Dendro owner; trigger when the AUX suppression mechanism, the `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` gate, or the emitted `NUM_AUX_GFS` changes. | Inspect `glb_gridfcs_dict` mutations in Dendro owners; distinguish `__main__` validation resets from production builders; generate BSSN and verify `NUM_AUX_GFS = 0`; build and run its CTests. | The superseded wording attested only the outcome, not the mechanism. |
+| CONTR-0010 | The Dendro BSSN leaf called the private-builder-per-formulation layout "BHaH's own arrangement". BHaH's module holding both formulations' RHS systems holds no private builder and no private registrar. | resolved | [`bssn-application-wiring.md`](infrastructures/dendro/bssn-application-wiring.md), the Summary's layout paragraph (superseded wording) | [BHaH rhs_eval.py](../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` | The code decides. BHaH's module holding both formulations' RHS systems uses public `register_CFunction_rhs_eval`, branches inline on `enable_fCCZ4`, and holds no private builder or registrar. Dendro's module layout does follow BHaH; the split inside the module does not. | [BSSN Application Wiring](infrastructures/dendro/bssn-application-wiring.md) | The page stayed `provisional` for this row: the layout paragraph is rewritten to separate the conforming module layout from the Dendro-only intra-module split, and the rest of the page is unaffected. CONTR-0011 subsequently opened and was resolved by consolidation. | Dendro owner; trigger when either Dendro leaf describes the intra-module layout, or when BHaH's `rhs_eval.py` gains a private per-formulation builder. | Require `rg '^def ' nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py` to identify only `register_CFunction_rhs_eval`, and require the Dendro BSSN leaf to attribute the per-formulation split to no peer. | The superseded Dendro wording conflated module layout with intra-module structure. |
+| CONTR-0011 | The Dendro RHS and constraint modules duplicated private builders and registrars per formulation without a host requirement. | resolved | [New Infrastructure Conformance](infrastructures/new-infrastructure-conformance.md), `### Conformance is one-way` and `## Summary` | [rhs_eval.py](../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `build_rhs_eval` and `register_CFunctions_rhs_eval`; [constraints_eval.py](../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), `build_constraints_eval` and `register_CFunctions_constraints_eval` | Consolidated each pair into one public builder and registrar. Formulation-specific expressions remain separate; shared lowering and registration follow established conventions. | [BSSN Application Wiring](infrastructures/dendro/bssn-application-wiring.md) | The affected page returns to provisional: this conflict is closed, while broader runtime qualification remains explicitly scoped. | Dendro owner; trigger when either module's per-formulation builder or registrar structure changes, when a host requirement for the split is identified, or when the two pairs are consolidated. | Inspect for private per-formulation builder or registrar pairs. Run both trusted-expression sweeps and compare registered full functions and Dendro metadata exactly across shipped profiles. | Resolved by the bounded consolidation; pure builder-plus-registrar pairing remains established convention |
 
 ### CONTR-0001
 
@@ -125,3 +129,74 @@ Claim evidence:
 - Resolve a row only after its resolution test passes and all affected pages,
   reverse dependents, aliases, typed neighbors, and targeted wiki hits are
   reconciled.
+
+### CONTR-0008
+
+The Dendro BSSN leaf recorded that the emitted `bssn_constraints*` CFunctions
+matched `bssn_constraints.cpp` in Dendro-GR's own BSSN solver. Reading that
+source shows the match was in name only: upstream's `enforce_bssn_constraints`
+rescales the conformal metric and removes the trace of the conformal extrinsic
+curvature — the operation BHaH and ETLegacy call
+`enforce_detgbar_equals_detghat_trAzero` — while the Hamiltonian and momentum
+constraint diagnostics are computed in `physcon.cpp`. The kernels are now named
+for their operation with the NRPy vocabulary, and the host vocabulary is scoped
+to host-side identifiers.
+
+Claim evidence:
+- Claim: Dendro-GR's `bssn_constraints.cpp` implements the algebraic det/trace enforcement, not the Hamiltonian/momentum constraint diagnostics; NRPy-emitted Dendro kernels are named `<stem>_constraints_eval` and `<stem>_enforce_detgbar_equals_detghat_trAzero`.
+- Role: descriptive behavior
+- Deciding authority: Dendro-GR `BSSN_GR/include/bssn_constraints.h`, `enforce_bssn_constraints`; `BSSN_GR/src/physcon.cpp`, `physical_constraints`; [BHaH enforce_detgbar_equals_detghat_trAzero.py](../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `name`
+- Corroboration: [constraints_eval.py](../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), `CONSTRAINTS_EVAL_ALL_BLOCKS_SUFFIX`; [enforce_detgbar_equals_detghat_trAzero.py](../nrpy/infrastructures/Dendro/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_ALL_BLOCKS_SUFFIX`
+
+### CONTR-0009
+
+The Dendro BSSN leaf described the constraint builder as removing, and in its
+claim-evidence block as deleting, the newly added AUX gridfunction names the
+kernel does not write. The builder does no such thing. It reads
+`register_M_and_LAMBDA_CONSTRAINT_gridfunctions`, sets it to `False`, constructs
+`BSSN_constraints` inside a `try`, and restores the previous value in a
+`finally` block, so `M` and `LAMBDA_CONSTRAINT` are never registered in the
+first place. The code comment at that site says exactly this. Suppressing the
+registration is also what makes a deletion pass unnecessary: the same
+construction pulls in the evolved state, so a pass that deleted newly added
+names would have to tell the two constraint names apart from it.
+
+Claim evidence:
+- Claim: the Dendro BSSN constraint builder suppresses the `M` and `LAMBDA_CONSTRAINT` registrations by setting `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` to `False` across the `BSSN_constraints` construction and restoring the previous value afterwards; no Dendro production builder deletes registered fields, while owner-local validation sweeps clear registries only between profiles.
+- Role: descriptive behavior
+- Deciding authority: [constraints_eval.py](../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), the gate save/set/restore around the `BSSN_constraints` construction in the BSSN builder
+- Corroboration: [BSSN_constraints.py](../nrpy/equations/general_relativity/BSSN_constraints.py), the `group="AUX"` registrations gated on that CodeParameter
+
+### CONTR-0010
+
+The Dendro BSSN leaf attributed the private-builder-per-formulation layout to
+BHaH. BHaH's `general_relativity/rhs_eval.py` defines the public
+`register_CFunction_rhs_eval` and branches inline on `enable_fCCZ4`
+at two sites. What Dendro does take from BHaH is the module layout -- one
+module per artifact, both formulations behind one boolean -- and that half of
+the sentence stands; the private builder and private registrar per formulation
+inside the module were Dendro's own. CONTR-0011 subsequently removed that
+duplication; this entry preserves the attribution correction.
+
+Claim evidence:
+- Claim: `BHaH/general_relativity/rhs_eval.py` holds one public registration function and no private per-formulation builder or registrar; the former private-builder-per-formulation split inside a Dendro module was Dendro's own, not BHaH's arrangement.
+- Role: descriptive behavior
+- Deciding authority: [BHaH rhs_eval.py](../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` and its two `enable_fCCZ4` branches
+- Corroboration: none available; BHaH's own module is the whole of the evidence, and no Dendro leaf records the per-formulation split as a peer practice
+
+### CONTR-0011
+
+Resolved. Both modules now contain one public builder and one
+public registrar. Only expression assembly and formulation-specific validation
+branch on `enable_fCCZ4`; lowering, wrappers, metadata, and registration share
+one path. The previous duplication had no host requirement and was removed.
+
+The pure `build_*` plus `register_CFunctions_*` pairing is unchanged: established
+infrastructures already use both forms. This row concerned duplication within
+each pair, not the separation between building and registration.
+
+Claim evidence:
+- Claim: the unsupported per-formulation builder and registrar duplication is removed in both Dendro modules, resolving CONTR-0011.
+- Role: normative rule
+- Deciding authority: [new-infrastructure-conformance.md](infrastructures/new-infrastructure-conformance.md), `Conformance is one-way`; [rhs_eval.py](../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `build_rhs_eval` and `register_CFunctions_rhs_eval`; [constraints_eval.py](../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), `build_constraints_eval` and `register_CFunctions_constraints_eval`
+- Corroboration: [BHaH rhs_eval.py](../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), inline formulation branching; both Dendro trusted-expression sweeps and direct before/after full-function and metadata comparisons

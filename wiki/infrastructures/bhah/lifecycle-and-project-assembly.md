@@ -60,9 +60,8 @@ registration is commented out, and it does not call the default-parfile writer.
 
 Claim status: stale; contradiction: CONTR-0001.
 See [CONTR-0001](../../contradictions.md#contr-0001) for authority, affected
-pages, validation limits, and the executable resolution test. This is a
-descriptive contradiction record; it is not yet a migrated claim-evidence
-block.
+pages, validation limits, and the executable resolution test; that contradiction
+record owns the claim evidence.
 
 `output_CFunctions_function_prototypes_and_construct_Makefile` turns the
 registered `CFunction_dict` into a buildable generated project. It validates

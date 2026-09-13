@@ -48,7 +48,7 @@ Outside the narrow generated-product examples exception, sibling
 stores, not runner roots. They may contain only:
 
 - generated trusted numerical dictionaries;
-- generated exact C or CUDA source baselines;
+- generated exact C, C++, or CUDA source baselines;
 - required empty package markers; and
 - narrowly admitted scientific provenance or support text.
 
@@ -120,13 +120,30 @@ generator.
 The owner must establish clean explicit registry and parameter state, generate
 through the public path, capture complete output, normalize every new or
 regenerated full text with `clang_format()`, and call `validate_strings()` with
-a stable whitespace-free description and correct `file_ext="c"` or
-`file_ext="cu"`. Untouched raw baselines are not bulk-normalized.
+a stable whitespace-free description and correct `file_ext="c"`,
+`file_ext="cpp"`, or `file_ext="cu"`. Untouched raw baselines are not
+bulk-normalized.
 
 Do not golden-test a large SymPy/codegen-dominated kernel. Validate upstream
 expressions, dimensions, key sets, semantic invariants, or a small stable
 wrapper instead. Incidental generated assignments are not contracts, and exact
 source comparison neither compiles nor executes output.
+
+Size is part of that rule and it is absolute: a right-hand side, a Ricci
+evaluation or a constraint evaluation never receives a trusted generated-source
+baseline, and a task document asking for one does not override this. Prove
+those symbolically, with `process_dictionary_of_expressions` and
+`compare_or_generate_trusted_results`. A generated-source baseline is for
+small, largely structural emitted code -- initial-data fills,
+algebraic-constraint enforcement, pointer bindings and loop scaffolding,
+headers, parameter files -- on the scale of the rest of this store, a few
+kilobytes to about eighty.
+
+Claim evidence:
+- Claim: a right-hand side, Ricci or constraint kernel never receives a trusted generated-source baseline regardless of what a task document asks; those are proven symbolically, and generated-source baselines are reserved for small, largely structural emitted code on the scale of the rest of the oracle store.
+- Role: normative rule
+- Deciding authority: [coding_style.md](../../coding_style.md), `#### validate_strings pattern`, its generated-kernel and size bullets
+- Corroboration: [rhs_eval.py](../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), whose `__main__` pins the two shipped Dendro right-hand sides symbolically and writes no generated-source baseline
 
 ### Focused Assertions
 
@@ -312,6 +329,7 @@ tree; never reset or delete shared generated output.
 
 - [coding_style.md](../../coding_style.md) - `### Expression Validation via Trusted Dictionaries`, `### Trusted Vector File Contract`, `### CodeParameter Registration Scope`, `#### validate_strings pattern`
 - [generic.py](../../nrpy/helpers/generic.py) - `clang_format`, `validate_strings`
+- [rhs_eval.py](../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - the `__main__` symbolic sweep that pins a kernel too large for a generated-source baseline
 - [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `assert_equal`, `check_zero`, `process_dictionary_of_expressions`, `compare_or_generate_trusted_results`
 - [WaveEquation_RHSs.py](../../nrpy/equations/wave_equation/WaveEquation_RHSs.py) - `WaveEquation_RHSs`, module `__main__` path
 - [reference_metric.py](../../nrpy/reference_metric.py) - `unittest_CoordSystems`
