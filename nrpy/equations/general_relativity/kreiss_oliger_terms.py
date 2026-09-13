@@ -137,7 +137,7 @@ if __name__ == "__main__":
 
     # Exercise every evolved-field family, the second-order shift branch, the
     # fCCZ4 Theta branch, and curvature-aware scaling in one expression set.
-    validation_rhs = {
+    validation_rhs: Dict[str, sp.Expr] = {
         name: sp.Symbol(f"{name}_input", real=True)
         for name in ("alpha_rhs", "cf_rhs", "trK_rhs", "Theta_fCCZ4_rhs")
     }
