@@ -16,7 +16,7 @@
 | `equation-modules-and-trusted-values` | Equation modules, generated trusted-value files, and BOB test metadata from `nrpy/equations`, including `nrpy/equations/seobnr/tests/BOB_v2_fit_sim_list.md`. | living | partial |
 | `infrastructure-modules-and-embedded-headers` | Python modules and embedded headers from `find nrpy/infrastructures -type f \( -name '*.py' -o -name '*.h' \)`. | living | partial |
 | `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`. | living | ingested |
-| `dendro-trusted-generated-source-and-expression-baselines` | Generated-source and trusted-expression baselines under `nrpy/infrastructures/Dendro/general_relativity/tests/`, owned by the emitting modules' direct validation entry points. | living | partial |
+| `dendro-trusted-generated-source-baselines` | Generated-source baselines under `nrpy/infrastructures/Dendro/general_relativity/tests/`, owned by the emitting modules' direct validation entry points. Symbolic-expression baselines remain with their equation owners. | living | partial |
 | `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples` inventoried by `wiki/examples/example-generator-catalog.md`. | living | partial |
 | `ci-and-local-automation` | CI and local automation files from `.github`. | living | partial |
 

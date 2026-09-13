@@ -143,7 +143,7 @@ Claim evidence:
 - Claim: a right-hand side, Ricci or constraint kernel never receives a trusted generated-source baseline regardless of what a task document asks; those are proven symbolically, and generated-source baselines are reserved for small, largely structural emitted code on the scale of the rest of the oracle store.
 - Role: normative rule
 - Deciding authority: [coding_style.md](../../coding_style.md), `#### validate_strings pattern`, its generated-kernel and size bullets
-- Corroboration: [rhs_eval.py](../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), whose `__main__` pins the two shipped Dendro right-hand sides symbolically and writes no generated-source baseline
+- Corroboration: [fCCZ4_constraints.py](../../nrpy/equations/general_relativity/fCCZ4_constraints.py) and [kreiss_oliger_terms.py](../../nrpy/equations/general_relativity/kreiss_oliger_terms.py), whose owner validation pins symbolic expressions without writing kernel-scale generated-source baselines
 
 ### Focused Assertions
 
@@ -329,7 +329,8 @@ tree; never reset or delete shared generated output.
 
 - [coding_style.md](../../coding_style.md) - `### Expression Validation via Trusted Dictionaries`, `### Trusted Vector File Contract`, `### CodeParameter Registration Scope`, `#### validate_strings pattern`
 - [generic.py](../../nrpy/helpers/generic.py) - `clang_format`, `validate_strings`
-- [rhs_eval.py](../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - the `__main__` symbolic sweep that pins a kernel too large for a generated-source baseline
+- [fCCZ4_constraints.py](../../nrpy/equations/general_relativity/fCCZ4_constraints.py) - equation-owner symbolic validation of the Hamiltonian and spatial Z4 constraints
+- [kreiss_oliger_terms.py](../../nrpy/equations/general_relativity/kreiss_oliger_terms.py) - equation-owner symbolic validation of Kreiss-Oliger terms
 - [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `assert_equal`, `check_zero`, `process_dictionary_of_expressions`, `compare_or_generate_trusted_results`
 - [WaveEquation_RHSs.py](../../nrpy/equations/wave_equation/WaveEquation_RHSs.py) - `WaveEquation_RHSs`, module `__main__` path
 - [reference_metric.py](../../nrpy/reference_metric.py) - `unittest_CoordSystems`

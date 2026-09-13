@@ -75,12 +75,12 @@ evaluation never gets a trusted generated-source file: those run to hundreds of
 kilobytes, and no tracked oracle file in this repository is larger than about
 eighty. Dendro follows the rule on both sides: its initial-data, connection and
 algebraic-constraint-enforcement builders capture small `.cpp` baselines through
-`validate_strings` on the registered `full_function`, while its right-hand side
-and constraint diagnostics are pinned symbolically instead, through
-`compare_or_generate_trusted_results` in the same `__main__` sweeps.
+`validate_strings` on the registered `full_function`. Equation owners pin the
+upstream right-hand-side and constraint expressions; complete generated C++
+product tests check Dendro lowering and numerical behavior.
 
 Claim evidence:
-- Claim: golden-output baselines are for small, largely structural emitted code; a right-hand side, Ricci or constraint kernel never receives one and is proven symbolically instead. Dendro uses small generated-source baselines and trusted expression dictionaries, and no kernel-scale generated source.
+- Claim: golden-output baselines are for small, largely structural emitted code; a right-hand side, Ricci or constraint kernel never receives one and is proven through equation-owner symbolic validation plus complete generated-product checks instead. Dendro uses small generated-source baselines, equation-owner trusted expressions, and no kernel-scale generated source.
 - Role: normative rule
 - Deciding authority: [coding_style.md](../../coding_style.md), `#### validate_strings pattern`, its generated-kernel and size bullets
 - Corroboration: [initial_data.py](../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py), the `__main__` sweep that writes the small initial-data baselines for each formulation

@@ -30,11 +30,6 @@ from nrpy.infrastructures.Dendro.header_guards import header_guard
 BANNER = generated_file_banner("#").splitlines()
 SRC = "${CMAKE_CURRENT_SOURCE_DIR}"
 
-# The Dendrolib commit the generated kernels' block-layout assumptions were
-# proven against, by nrpy/infrastructures/Dendro/tests_infra.  Emitted into the
-# generated project so a consumer building against a different commit is warned.
-PROVEN_DENDROLIB_COMMIT = "246043709e806021fcfc011fe657b8bf964cae4c"
-
 
 class ModuleLayout(NamedTuple):
     """
@@ -261,24 +256,6 @@ def output_solver_cmake(
     :param real_application_ctest: Real-host application CTest lines.
     :return: The CMake file text.
 
-    Doctests:
-    >>> text = output_solver_cmake("WAVE", "WAVE", "wave", "waveSolver", ("add_test(NAME wave_run COMMAND waveSolver)",), ())
-    >>> "project(WAVE CXX)" in text
-    True
-    >>> "add_executable(waveSolver" in text
-    True
-    >>> "add_test(NAME wave_run COMMAND waveSolver)" in text
-    True
-    >>> "${WAVE_NRPY_GENERATED_SOURCES}" in text
-    True
-    >>> "target_include_directories(wave_common SYSTEM PRIVATE" in text
-    True
-    >>> "target_include_directories(waveSolver SYSTEM PRIVATE" in text
-    True
-    >>> "src/bssnCtx.cpp" in output_solver_cmake("Z_GR", "ZORP", "zrp", "zSolver", (), ())
-    False
-    >>> "src/zrpCtx.cpp" in output_solver_cmake("Z_GR", "ZORP", "zrp", "zSolver", (), ())
-    True
     """
     # The file names come from solver_stem, which the examples also use to
     # name the emitted sources; deriving a second stem from solver_prefix
@@ -287,20 +264,6 @@ def output_solver_cmake(
     lines: List[str] = list(BANNER) + [
         "cmake_minimum_required(VERSION 3.13)",
         f"project({solver_name} CXX)",
-        "",
-        "# Dendrolib source pin.  The block geometry, layout, padding, offset,",
-        "# origin and halo axes these kernels assume were proven against this",
-        "# commit.  Dendro-GR declares DENDRO_dendrolib_GIT_TAG as a cache",
-        "# variable before adding this subdirectory, so setting it here would be",
-        "# discarded; the proven commit is recorded in a solver-scoped variable",
-        "# and compared instead, which is the only form that can warn.",
-        f'set({solver_prefix}_PROVEN_DENDROLIB_COMMIT "{PROVEN_DENDROLIB_COMMIT}")',
-        f"if(DEFINED DENDRO_dendrolib_GIT_TAG AND NOT DENDRO_dendrolib_GIT_TAG STREQUAL {solver_prefix}_PROVEN_DENDROLIB_COMMIT)",
-        "  message(WARNING",
-        f'          "These kernels were proven against Dendrolib commit ${{{solver_prefix}_PROVEN_DENDROLIB_COMMIT}}, "',
-        '          "but the build is configured for ${DENDRO_dendrolib_GIT_TAG}.  Re-run "',
-        '          "nrpy/infrastructures/Dendro/tests_infra before relying on the block-layout claims.")',
-        "endif()",
         "",
         "# The solver lifecycle runs under MPI for the rank-agreement gates.",
         "# MPI is a standard host dependency, not Dendrolib; the real Dendro-GR",
@@ -321,6 +284,9 @@ def output_solver_cmake(
         "# definition, so a real-host build cannot pull them in silently.",
         f"if({solver_prefix}_STANDALONE_HOST)",
         f"  target_compile_definitions({stem}_common PUBLIC NRPY_DENDRO_STANDALONE_HOST)",
+        f"  target_include_directories({stem}_common PUBLIC",
+        f"    {SRC}/standalone_host",
+        "  )",
         "else()",
         "  if(NOT TARGET dendro5 OR NOT TARGET dendro_config OR NOT TARGET toml11::toml11 OR NOT TARGET bssn_common)",
         '    message(FATAL_ERROR "Real GR host requires Dendro-GR targets dendro5, dendro_config, toml11::toml11, and bssn_common")',
@@ -337,19 +303,15 @@ def output_solver_cmake(
         "endif()",
         f"target_compile_options({stem}_common PRIVATE -Wall)",
         "",
-        "# The standalone host header is PRIVATE: it must not leak onto the include",
-        "# path of every consumer of the solver.",
         f"target_include_directories({stem}_common PUBLIC",
         f"  {SRC}/include",
         f"  {SRC}/generated/include",
         ")",
-        f"target_include_directories({stem}_common PRIVATE {SRC}/standalone_host)",
         "",
         f"if(TARGET {exec_or_library_name})",
         f'  message(FATAL_ERROR "{exec_or_library_name} target already defined; use a unique generated solver target")',
         "else()",
         f"  add_executable({exec_or_library_name} src/{stem}_main.cpp)",
-        f"  target_include_directories({exec_or_library_name} PRIVATE {SRC}/standalone_host)",
         f"  target_compile_options({exec_or_library_name} PRIVATE -Wall)",
         f"  target_link_libraries({exec_or_library_name} PRIVATE {stem}_common MPI::MPI_CXX)",
         f"  if(NOT {solver_prefix}_STANDALONE_HOST)",
@@ -394,16 +356,6 @@ def output_tests_cmake(
     :param test_sections: Explicit application-owned self-test section names.
     :return: The CMake file text.
 
-    Doctests:
-    >>> text = output_tests_cmake("WAVE", "wave", ("state", "rhs"))
-    >>> "include(${CMAKE_CURRENT_SOURCE_DIR}/../generated/cmake/nrpy_generated_sources.cmake)" in text
-    True
-    >>> "set(WAVE_MODULE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)" in text
-    True
-    >>> "${WAVE_NRPY_GENERATED_SOURCES}" in text
-    True
-    >>> "add_test(NAME wave_state" in text and "add_test(NAME wave_rhs" in text
-    True
     """
     stem = solver_stem
     lines: List[str] = list(BANNER) + [

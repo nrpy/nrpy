@@ -21,23 +21,21 @@ selection, GPU execution, and threaded kernels remain outside that route.
 
 ### Owner checks and durable oracles
 
-Emitter modules keep doctests beside production code and use the normal module
-`__main__` runner. Emitters containing whole-file C++ templates inspect required
-markers and clang-format guards without requiring a registered solver.
+Small owner doctests stay beside production code. Generated headers, sources,
+and CMake interfaces are validated by generating and building complete C++
+projects instead of by matching fragments of emitted text.
 
-The initial-data and algebraic-constraint emitters compare registered
-`CFunction.full_function` text with owner-local trusted generated-source
-fixtures. RHS and constraint diagnostics use trusted symbolic-expression
-dictionaries instead: their generated kernels are large products of common
-lowering, while the expressions are the formulation-owned contract. Finite-
-difference stencil behavior remains owned by the finite-difference validation
-route.
+Equation modules keep trusted symbolic-expression dictionaries under
+`nrpy/equations`; VE supplies numerical values for their free symbols. Dendro
+RHS and constraint assembly is instead covered by the complete generated C++
+project: the nonflat reference checks the large FD kernels numerically, while
+the remaining executable sections exercise their host-facing contracts.
 
 Claim evidence:
-- Claim: Dendro emitter owners validate small stable artifacts as generated source and validate RHS/constraint systems at the symbolic-expression boundary.
+- Claim: equation-level VE stays with equation owners, while Dendro emitter integration is validated through complete generated C++ projects.
 - Role: generated evidence
-- Deciding authority: [initial_data.py](../../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py), [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/Dendro/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), and [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), their `__main__` validation routes
-- Corroboration: [generic.py](../../../nrpy/helpers/generic.py), `validate_strings`; [validate_expressions.py](../../../nrpy/validate_expressions/validate_expressions.py), `compare_or_generate_trusted_results`
+- Deciding authority: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py) and [kreiss_oliger_terms.py](../../../nrpy/equations/general_relativity/kreiss_oliger_terms.py), their VE owner routes; [general_relativity/self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py), `output_self_test_artifacts`
+- Corroboration: [validate_expressions.py](../../../nrpy/validate_expressions/validate_expressions.py), `compare_or_generate_trusted_results`; [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py), generated CTest registration
 
 ### Generated standalone vehicle
 
@@ -47,18 +45,20 @@ With `<PREFIX>_STANDALONE_HOST=ON`, a generated solver compiles against
 the generated kernels.
 
 Generated CTest fixtures exercise registry consistency, parameter forwarding,
-padding and offsets, derivative selection, RHS and initial-data calls,
+offsets, derivative selection and reach, RHS and initial-data calls,
 algebraic enforcement, constraint diagnostics, and a Minkowski lifecycle. A
-nonflat reference evaluates the canonical RHS expressions with multiprecision
-arithmetic on deterministic binary64 samples and computes expected values
-independently of generated C++ execution. Its bound is derived from the
-expression graph, scales, spacing amplification, and valid
+nonflat reference evaluates the canonical RHS and constraint-diagnostic
+expressions with multiprecision arithmetic on deterministic binary64 samples
+and computes expected values independently of generated C++ execution. Its
+bound is derived from each expression graph, scales, spacing amplification, and valid
 rounding/reassociation effects, not from a measured C++ error.
 
 The address fixture uses unequal spacing, component offsets, sentinel regions,
 centered and mixed derivatives, both upwind directions, zero-speed upwinding,
-and Kreiss-Oliger response. Fault variants must make the checker reject the
-corresponding bad address, halo, or derivative behavior. The lifecycle gates
+and Kreiss-Oliger response. The GR upwind fixture perturbs cells at the recorded
+reach and one point beyond it, proving the generated RHS both uses the declared
+outer point and ignores anything outside it. Fault variants must make the checker
+reject the corresponding bad address, halo, or derivative behavior. The lifecycle gates
 check algebraic residuals, constraints, flat-state RHS, adapter agreement,
 perturbation response, convergence, drift, and enforcement invocation. Any
 failed gate exits nonzero and therefore fails CTest.
@@ -66,7 +66,7 @@ failed gate exits nonzero and therefore fails CTest.
 Claim evidence:
 - Claim: generated Dendro projects contain standalone executable checks for registry, addressing, numerical-kernel, and lifecycle contracts for both formulations.
 - Role: descriptive behavior
-- Deciding authority: [self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/self_tests_cpp.py), `output_self_test_artifacts`; [general_relativity/self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py), `_nonflat_reference_cpp`; [general_relativity/main_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py), `standalone_ctest_statements`
+- Deciding authority: [self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/self_tests_cpp.py), `output_self_test_artifacts`; [general_relativity/self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py), `output_self_test_artifacts`; [general_relativity/main_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py), `standalone_ctest_statements`
 - Corroboration: [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py), generated solver/test CMake registration
 
 ### Runtime parameters
@@ -85,7 +85,7 @@ owns the parameter-closure and geometry rationale.
 Claim evidence:
 - Claim: the real entry point binds the opted-in parameters used by its block-RHS CFunction, forwards them through that registered signature, rejects other parameter keys, and terminates the MPI job on invalid input.
 - Role: descriptive behavior
-- Deciding authority: [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py), `_REAL_MAIN`; [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py), `output_toml_bindings`; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), `_codeparameter_tail` and `_REAL_SOURCE`
+- Deciding authority: [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py), `_REAL_MAIN`; [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py), `output_toml_bindings`; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), `codeparameter_tail` and `_REAL_SOURCE`
 - Corroboration: [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), analytic parameter-response check
 
 ### Real-host qualification
@@ -125,7 +125,7 @@ Claim evidence:
 
 Owner doctests route through static analysis. The configured
 `dendro-validation` GitHub job generates default fourth-order, KO-enabled
-fCCZ4. It runs the generated nonflat multiprecision reference check, then links
+fCCZ4. It runs the generated nonflat RHS-and-diagnostics multiprecision reference check, then links
 the same solver into a checksum-verified real host and runs one Minkowski step
 on exactly two MPI ranks. The real state is initialized through Dendro-GR's
 Minkowski routine. The job is capped at 30 minutes; the real run is capped at

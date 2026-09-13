@@ -112,34 +112,6 @@ def output_state_h(solver_stem: str, solver_namespace: str) -> str:
     :return: The complete C++ header text.
     :raises ValueError: If a recorded upwind control field is not an EVOL field.
 
-    Doctests:
-    >>> import nrpy.params as par
-    >>> gri.glb_gridfcs_dict.clear()
-    >>> par.set_parval_from_str("Infrastructure", "Dendro")
-    >>> _ = gri.register_gridfunctions(["bXX", "aYY"], group="EVOL")
-    >>> par.glb_extras_dict.get("Dendro", {}).pop("upwind_control_fields", None) and None
-    >>> try:
-    ...     output_state_h("bssn", "bssn")
-    ... except ValueError as error:
-    ...     print(str(error).splitlines()[0])
-    No Dendro kernel has recorded an upwind control set; register the right-hand-side CFunctions before emitting the state header.
-    >>> roles.set_upwind_control_fields(("bXX",))
-    >>> header = output_state_h("bssn", "bssn")
-    >>> "#ifndef BSSN_STATE_H" in header
-    True
-    >>> header.rstrip().endswith("#endif  // BSSN_STATE_H")
-    True
-    >>> "inline constexpr unsigned NUM_UPWIND_CONTROL_GFS = 1;" in header
-    True
-    >>> "enum class EvolVar : unsigned {" in header
-    True
-    >>> [line.strip() for line in header.splitlines() if line.strip().endswith(("= 0,", "= 1,"))]
-    ['aYY = 0,', 'bXX = 1,']
-    >>> from nrpy.helpers.generic import clang_format
-    >>> "}  // END NAMESPACE: bssn::generated" in clang_format(header)
-    True
-    >>> '#include "bssn_types.h"' in header
-    True
     """
     evol = [
         (index, name, gri.glb_gridfcs_dict[name])

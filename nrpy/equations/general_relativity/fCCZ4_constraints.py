@@ -299,8 +299,12 @@ if __name__ == "__main__":
             )
         finally:
             par.set_parval_from_str("EvolvedConformalFactor_cf", original_cf)
+        expressions = {"H_Z4": constraints.H_Z4}
+        expressions.update(
+            {f"Z4constraintU{i}": constraints.Z4constraintU[i] for i in range(3)}
+        )
         processed = ve.process_dictionary_of_expressions(
-            {"H_Z4": constraints.H_Z4}, fixed_mpfs_for_free_symbols=True
+            expressions, fixed_mpfs_for_free_symbols=True
         )
         ve.compare_or_generate_trusted_results(
             os.path.abspath(__file__),

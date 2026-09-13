@@ -22,6 +22,9 @@ from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
 from nrpy.infrastructures.Dendro import self_tests_cpp as generic_tests
 from nrpy.infrastructures.Dendro import solver_context as generic_context
+from nrpy.infrastructures.Dendro.general_relativity.constraints_eval import (
+    ConstraintsEvalBuild,
+)
 from nrpy.infrastructures.Dendro.general_relativity.rhs_eval import RHSBuild
 from nrpy.infrastructures.Dendro.general_relativity.solver_context import (
     substitute_application_identifiers,
@@ -63,14 +66,12 @@ def test_sections() -> Tuple[str, ...]:
     sections: Tuple[str, ...] = (
         "state",
         "params",
-        "padding",
         "offsets",
         "upwind",
         "rhs",
         "init",
         "names",
         "detgtrazero",
-        "constraints",
     )
     if int(par.parval_from_str("fd_order")) == 4:
         sections += ("address_values", "parameter_forwarding", "gr_nonflat_reference")
@@ -81,13 +82,15 @@ def test_sections() -> Tuple[str, ...]:
 
 _GR_SCIENTIFIC_TESTS = r"""
 struct GRTestBlock {
-  explicit GRTestBlock(unsigned blocks = 1)
-      : extent(2 * $NAMESPACE::generated::REQUIRED_PADDING + 3),
+  explicit GRTestBlock(
+      unsigned blocks = 1,
+      unsigned padding = $NAMESPACE::generated::REQUIRED_PADDING)
+      : extent(2 * padding + 3),
         vol(static_cast<std::size_t>(extent) * extent * extent),
         state(NUM_EVOL_GFS, std::vector<$SCALAR>(vol * blocks, $SCALAR{0})),
         rhs(NUM_EVOL_GFS, std::vector<$SCALAR>(vol * blocks, $SCALAR{0})) {
     geometry.nx = geometry.ny = geometry.nz = extent;
-    geometry.padding = $NAMESPACE::generated::REQUIRED_PADDING;
+    geometry.padding = padding;
     geometry.component_offset = 0;
     geometry.pmin_padded[0] = geometry.pmin_padded[1] =
         geometry.pmin_padded[2] = 0.0;
@@ -133,11 +136,6 @@ double gr_interior_rhs_max(const GRTestBlock& block) {
   return worst;
 }  // END FUNCTION: gr_interior_rhs_max
 
-int test_padding() {
-  const unsigned centred_radius = $NAMESPACE::generated::FD_ORDER / 2;
-  return $NAMESPACE::generated::REQUIRED_PADDING >= centred_radius ? 0 : 1;
-}  // END FUNCTION: test_padding
-
 int test_offsets() {
   GRTestBlock block(2);
   block.geometry.component_offset = block.vol;
@@ -159,11 +157,19 @@ int test_upwind() {
   if ($NAMESPACE::generated::NUM_UPWIND_CONTROL_GFS < 3) return 1;
   $NAMESPACE::generated::params_struct params;
   $PARAMS_STRUCT_SET_TO_DEFAULT(params);
+  const unsigned reach = $NAMESPACE::generated::REQUIRED_PADDING;
+  // Centered FD reaches FD_ORDER/2 cells; upwind and KO add one.  One more
+  // cell is needed to probe that the declared reach is not exceeded.
+  const unsigned generated_family_reach =
+      $NAMESPACE::generated::FD_ORDER / 2 + 1;
+  const unsigned safe_padding =
+      std::max(reach, generated_family_reach) + 1;
   for (unsigned axis = 0; axis < 3; ++axis) {
     double sensitivity[2][2] = {{0.0, 0.0}, {0.0, 0.0}};
+    double outside_sensitivity = 0.0;
     for (int sign_index = 0; sign_index < 2; ++sign_index)
       for (int side = 0; side < 2; ++side) {
-        GRTestBlock block;
+        GRTestBlock block(1, safe_padding);
         std::vector<$SCALAR*> state = block.state_pointers();
         $MINKOWSKI_INITIAL_DATA_BLOCK(block.geometry, state.data());
         for (unsigned field = 0; field < NUM_EVOL_GFS; ++field)
@@ -184,8 +190,7 @@ int test_upwind() {
                     static_cast<$SCALAR>(value));
         }  // END LOOP: set upwind controls
         const unsigned p = block.geometry.padding;
-        const unsigned r = $NAMESPACE::generated::REQUIRED_PADDING;
-        const unsigned moved = side == 0 ? p + r : p - r;
+        const unsigned moved = side == 0 ? p + reach : p - reach;
         std::size_t moved_cell = block.index(moved, p, p);
         if (axis == 1) moved_cell = block.index(p, moved, p);
         if (axis == 2) moved_cell = block.index(p, p, moved);
@@ -196,12 +201,31 @@ int test_upwind() {
         std::vector<double> before(NUM_EVOL_GFS);
         for (unsigned field = 0; field < NUM_EVOL_GFS; ++field)
           before[field] = block.rhs[field][probe];
+        std::vector<$SCALAR> moved_values(NUM_EVOL_GFS);
         for (unsigned field = 0; field < NUM_EVOL_GFS; ++field)
-          block.state[field][moved_cell] += static_cast<$SCALAR>(0.25);
+          moved_values[field] = block.state[field][moved_cell];
+        for (unsigned field = 0; field < NUM_EVOL_GFS; ++field)
+          block.state[field][moved_cell] =
+              moved_values[field] + static_cast<$SCALAR>(0.25);
         $RHS_EVAL_BLOCK(block.geometry, input.data(), output.data()$RHS_EVAL_BLOCK_TAIL);
         for (unsigned field = 0; field < NUM_EVOL_GFS; ++field)
           sensitivity[sign_index][side] = std::max(
               sensitivity[sign_index][side],
+              std::fabs(static_cast<double>(block.rhs[field][probe]) -
+                        before[field]));
+        for (unsigned field = 0; field < NUM_EVOL_GFS; ++field)
+          block.state[field][moved_cell] = moved_values[field];
+        const unsigned outside =
+            side == 0 ? p + reach + 1 : p - reach - 1;
+        std::size_t outside_cell = block.index(outside, p, p);
+        if (axis == 1) outside_cell = block.index(p, outside, p);
+        if (axis == 2) outside_cell = block.index(p, p, outside);
+        for (unsigned field = 0; field < NUM_EVOL_GFS; ++field)
+          block.state[field][outside_cell] += static_cast<$SCALAR>(0.25);
+        $RHS_EVAL_BLOCK(block.geometry, input.data(), output.data()$RHS_EVAL_BLOCK_TAIL);
+        for (unsigned field = 0; field < NUM_EVOL_GFS; ++field)
+          outside_sensitivity = std::max(
+              outside_sensitivity,
               std::fabs(static_cast<double>(block.rhs[field][probe]) -
                         before[field]));
       }  // END LOOP: test shifted stencil side
@@ -209,7 +233,7 @@ int test_upwind() {
         std::max(sensitivity[0][0], sensitivity[0][1]),
         std::max(sensitivity[1][0], sensitivity[1][1]));
     const double margin = 1e-6 * scale;
-    if (!(scale > 0.0) ||
+    if (!(scale > 0.0) || outside_sensitivity != 0.0 ||
         !(sensitivity[0][0] - sensitivity[0][1] > margin) ||
         !(sensitivity[1][1] - sensitivity[1][0] > margin)) return 2;
   }  // END LOOP: test upwind axes
@@ -279,43 +303,18 @@ int test_detgtrazero() {
              : 3;
 }  // END FUNCTION: test_detgtrazero
 
-int test_constraints() {
-  if ($NAMESPACE::generated::NUM_DIAG_GFS == 0) return 1;
-  GRTestBlock block;
-  std::vector<$SCALAR*> state = block.state_pointers();
-  $MINKOWSKI_INITIAL_DATA_BLOCK(block.geometry, state.data());
-  std::vector<std::vector<$SCALAR>> diagnostics(
-      $NAMESPACE::generated::NUM_DIAG_GFS,
-      std::vector<$SCALAR>(block.vol, $SCALAR{0}));
-  std::vector<$SCALAR*> output(diagnostics.size());
-  for (unsigned field = 0; field < output.size(); ++field)
-    output[field] = diagnostics[field].data();
-  std::vector<const $SCALAR*> input = block.const_state_pointers();
-  $CONSTRAINTS_EVAL_BLOCK(block.geometry, input.data(), output.data());
-  const unsigned padding = block.geometry.padding;
-  double worst = 0.0;
-  for (unsigned field = 0; field < diagnostics.size(); ++field)
-    for (unsigned k = padding; k < block.extent - padding; ++k)
-      for (unsigned j = padding; j < block.extent - padding; ++j)
-        for (unsigned i = padding; i < block.extent - padding; ++i)
-          worst = std::max(worst, std::fabs(static_cast<double>(
-              diagnostics[field][block.index(i, j, k)])));
-  return worst <= 1e-13 ? 0 : 2;
-}  // END FUNCTION: test_constraints
 """
 
-_GR_DISPATCH = r"""  if (std::strcmp(section, "padding") == 0) return test_padding();
-  if (std::strcmp(section, "offsets") == 0) return test_offsets();
+_GR_DISPATCH = r"""  if (std::strcmp(section, "offsets") == 0) return test_offsets();
   if (std::strcmp(section, "upwind") == 0) return test_upwind();
   if (std::strcmp(section, "rhs") == 0) return test_rhs();
   if (std::strcmp(section, "init") == 0) return test_init();
   if (std::strcmp(section, "detgtrazero") == 0) return test_detgtrazero();
-  if (std::strcmp(section, "constraints") == 0) return test_constraints();
 """
 
 _GR_ALL = (
-    "+ test_padding() + test_offsets() + test_upwind() + test_rhs() "
-    "+ test_init() + test_detgtrazero() + test_constraints()"
+    "+ test_offsets() + test_upwind() + test_rhs() "
+    "+ test_init() + test_detgtrazero()"
 )
 
 
@@ -602,6 +601,7 @@ def output_self_test_artifacts(
     solver_stem: str,
     solver_namespace: str,
     rhs_build: RHSBuild,
+    constraints_build: ConstraintsEvalBuild,
     enable_ko: bool,
 ) -> Dict[str, str]:
     """
@@ -610,6 +610,8 @@ def output_self_test_artifacts(
     :param solver_stem: Lowercase formulation stem used in emitted paths.
     :param solver_namespace: Namespace containing the production solver.
     :param rhs_build: Canonical scientific RHS expressions and field order.
+    :param constraints_build: Canonical diagnostic expressions registered for
+        the generated solver.
     :param enable_ko: Whether this generation profile includes KO dissipation.
     :return: Solver-root-relative paths mapped to complete artifact text.
     :raises ValueError: If configuration or reference validation is invalid.
@@ -731,6 +733,14 @@ def output_self_test_artifacts(
         gf_names.rhs_symbol_to_gridfunction_name(name): expression
         for name, expression in rhs_build.rhs_by_symbol_name.items()
     }
+    diag_order = tuple(gri.GridFunction.gridfunction_lists()[2])
+    diagnostic_expressions = dict(constraints_build.diagnostics_by_name)
+    if set(diag_order) != set(diagnostic_expressions):
+        raise ValueError(
+            "GR nonflat reference diagnostic order does not match the "
+            f"registered expressions: order={diag_order}, "
+            f"expressions={tuple(diagnostic_expressions)}."
+        )
     samples: SampleMap = {}
     references: List[ReferenceValue] = []
     reference_by_field_point: Dict[Tuple[str, Tuple[int, int, int]], ReferenceValue] = (
@@ -749,6 +759,20 @@ def output_self_test_artifacts(
             )
             references.append(reference)
             reference_by_field_point[(name, point)] = reference
+    diagnostic_references: List[ReferenceValue] = []
+    for point in points:
+        for name in diag_order:
+            diagnostic_references.append(
+                _evaluate_reference(
+                    diagnostic_expressions[name],
+                    point,
+                    spacings,
+                    evol_order,
+                    upwind_controls,
+                    fd_order,
+                    samples,
+                )
+            )
     ko_discriminators = 0
     minimum_ko_ratio = math.inf
     if enable_ko:
@@ -811,14 +835,26 @@ def output_self_test_artifacts(
     expected_bounds = ",\n      ".join(
         f"{reference.bound:.17g}" for reference in references
     )
-    maximum_operation_count = max(reference.operation_count for reference in references)
-    maximum_evaluation_scale = max(
-        reference.evaluation_scale for reference in references
+    expected_diagnostic_values = ",\n      ".join(
+        f"{reference.value:.17g}" for reference in diagnostic_references
     )
-    maximum_precision_delta = max(reference.precision_delta for reference in references)
+    expected_diagnostic_bounds = ",\n      ".join(
+        f"{reference.bound:.17g}" for reference in diagnostic_references
+    )
+    all_references = references + diagnostic_references
+    maximum_operation_count = max(
+        reference.operation_count for reference in all_references
+    )
+    maximum_evaluation_scale = max(
+        reference.evaluation_scale for reference in all_references
+    )
+    maximum_precision_delta = max(
+        reference.precision_delta for reference in all_references
+    )
     block_name = roles.CFunction_name_for_role("rhs_eval_block")
     flat_name = roles.CFunction_name_for_role("rhs_eval_flat_block")
-    block_tail = generic_context._codeparameter_tail(block_name, "params")
+    constraints_name = roles.CFunction_name_for_role("constraints_eval_block")
+    block_tail = generic_context.codeparameter_tail(block_name, "params")
     value_lines = [
         "double gr_reference_value(unsigned f, double x, double y, double z) {",
         "  const double q = 1.0e-3*(x + 0.5*y*y - 0.25*z + 0.1*x*y);",
@@ -915,6 +951,12 @@ int test_gr_nonflat_reference() {{
   const double expected_bounds[]={{
       {expected_bounds}
   }};
+  const double expected_diagnostics[]={{
+      {expected_diagnostic_values}
+  }};
+  const double expected_diagnostic_bounds[]={{
+      {expected_diagnostic_bounds}
+  }};
   const unsigned points[][3]={{{{3,3,3}},{{6,7,8}},{{9,11,13}}}};
   // Per-component bounds were fixed before execution from each actual CSE DAG,
   // its exact scaled stencil sums, all inputs and CSE temporaries. Across this
@@ -922,22 +964,54 @@ int test_gr_nonflat_reference() {{
   // max 80/100-digit delta={maximum_precision_delta:.17g}; KO discriminators={ko_discriminators},
   // families={','.join(resolved_families) if enable_ko else 'none'},
   // minimum KO difference/bound ratio={minimum_ko_ratio if enable_ko else 0.0:.17g}.
-  double actual_norm=0.0;
   for (unsigned p=0;p<3;++p) for (unsigned f=0;f<NUM_EVOL_GFS;++f) {{
     const double actual=output[f][offset+index(points[p][0],points[p][1],points[p][2])];
     const double reference=expected[p*NUM_EVOL_GFS+f];
     const double bound=expected_bounds[p*NUM_EVOL_GFS+f];
-    actual_norm=std::max(actual_norm,std::fabs(actual));
     if (!std::isfinite(actual) || std::fabs(actual-reference)>bound) {{
       std::fprintf(stderr,"FAIL: {formulation} FD4 KO={'on' if enable_ko else 'off'} "
           "component %u point %u actual %.17g reference %.17g bound %.17g\\n",
           f,p,actual,reference,bound); return 1;
     }}  // END IF: block reference mismatch
   }}  // END LOOP: check block references
-  if (!(actual_norm>1.0e-8) || input!=before) {{
-    std::fprintf(stderr,"FAIL: zero output norm or modified {formulation} input\\n");
+  if (input!=before) {{
+    std::fprintf(stderr,"FAIL: modified {formulation} input\\n");
     return 2;
   }}  // END IF: invalid block output
+  std::vector<std::vector<DendroScalar>> diagnostics(
+      $NAMESPACE::generated::NUM_DIAG_GFS,
+      std::vector<DendroScalar>(offset+vol+17,sentinel));
+  std::vector<DendroScalar*> diagnostic_out(
+      $NAMESPACE::generated::NUM_DIAG_GFS);
+  for(unsigned f=0;f<$NAMESPACE::generated::NUM_DIAG_GFS;++f)
+    diagnostic_out[f]=diagnostics[f].data();
+  {constraints_name}(geom,in.data(),diagnostic_out.data());
+  for(unsigned p=0;p<3;++p)
+    for(unsigned f=0;f<$NAMESPACE::generated::NUM_DIAG_GFS;++f) {{
+    const double actual=diagnostics[f][offset+index(
+        points[p][0],points[p][1],points[p][2])];
+    const double reference=expected_diagnostics[
+        p*$NAMESPACE::generated::NUM_DIAG_GFS+f];
+    const double bound=expected_diagnostic_bounds[
+        p*$NAMESPACE::generated::NUM_DIAG_GFS+f];
+    if(!std::isfinite(actual) || std::fabs(actual-reference)>bound) {{
+      std::fprintf(stderr,"FAIL: {formulation} FD4 diagnostic component %u "
+          "point %u actual %.17g reference %.17g bound %.17g\\n",
+          f,p,actual,reference,bound); return 6;
+    }}  // END IF: diagnostic reference mismatch
+  }}  // END LOOP: check diagnostic references
+  for(unsigned f=0;f<$NAMESPACE::generated::NUM_DIAG_GFS;++f)
+    for(std::size_t cell=0;
+      cell<diagnostics[f].size();++cell) {{
+    const bool interior=cell>=offset && cell<offset+vol &&
+        ((cell-offset)%nx)>=pad && ((cell-offset)%nx)<nx-pad &&
+        (((cell-offset)/nx)%ny)>=pad && (((cell-offset)/nx)%ny)<ny-pad &&
+        ((cell-offset)/(nx*ny))>=pad && ((cell-offset)/(nx*ny))<nz-pad;
+    if(!interior && diagnostics[f][cell]!=sentinel) {{
+      std::fprintf(stderr,"FAIL: diagnostic sentinel f=%u cell=%zu value=%.17g\\n",
+          f,cell,static_cast<double>(diagnostics[f][cell])); return 7;
+    }}  // END IF: diagnostic sentinel changed
+  }}  // END LOOP: check diagnostic sentinels
   for(unsigned f=0;f<NUM_EVOL_GFS;++f) for(std::size_t cell=0;
       cell<output[f].size();++cell) {{
     const bool interior=cell>=offset && cell<offset+vol &&

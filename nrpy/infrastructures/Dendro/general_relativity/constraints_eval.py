@@ -55,7 +55,7 @@ class ConstraintsEvalBuild:
     :param all_blocks_body: The all-block CFunction body (NRPy block loop).
     :param all_blocks_params: The all-block CFunction parameter list.
     :param diagnostics_by_name: The assembled symbolic diagnostics, kept
-        so the module's ``__main__`` can pin them against trusted values
+        so generated-project tests can independently evaluate every diagnostic
         without reassembling them.
     """
 
@@ -312,7 +312,7 @@ def register_CFunctions_constraints_eval(
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant__Hatted",
     enable_KreissOliger_dissipation: bool = False,
-) -> None:
+) -> ConstraintsEvalBuild:
     """
     Register the constraint-diagnostic CFunctions for one formulation.
 
@@ -323,6 +323,7 @@ def register_CFunctions_constraints_eval(
     :param LapseEvolutionOption: Lapse evolution option.
     :param ShiftEvolutionOption: Shift evolution option.
     :param enable_KreissOliger_dissipation: Forwarded to the fCCZ4 builder.
+    :return: The expressions and emitted bodies used for registration.
     """
     build = build_constraints_eval(
         solver_stem,
@@ -373,6 +374,7 @@ def register_CFunctions_constraints_eval(
         body=build.all_blocks_body,
     )
     roles.set_CFunction_role(all_blocks_name, "constraints_eval")
+    return build
 
 
 if __name__ == "__main__":
@@ -386,65 +388,3 @@ if __name__ == "__main__":
         sys.exit(1)
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
-
-    # Symbolic pinning of the two shipped diagnostic sets; rhs_eval.py's sweep
-    # carries the rationale.  What is local here: the evolved state these
-    # diagnostics read is registered by the right-hand-side builder, exactly as
-    # in the generated projects, so that runs first.
-    import os
-
-    import nrpy.validate_expressions.validate_expressions as ve
-    from nrpy.equations.general_relativity.BSSN_quantities import (
-        BSSN_quantities as SweepBSSNQuantities,
-    )
-    from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs as SweepBSSNRHSs
-    from nrpy.equations.general_relativity.fCCZ4_constraints import (
-        fCCZ4_constraints as SweepFCCZ4Constraints,
-    )
-    from nrpy.equations.general_relativity.fCCZ4_RHSs import (
-        fCCZ4_RHSs as SweepFCCZ4RHSs,
-    )
-    from nrpy.infrastructures.Dendro.general_relativity import (
-        rhs_eval as sweep_rhs_eval,
-    )
-
-    par.set_parval_from_str("Infrastructure", "Dendro")
-    par.set_parval_from_str("parallelization", "none")
-    par.set_parval_from_str("fp_type", "double")
-    par.set_parval_from_str("detgbarOverdetghat_equals_one", True)
-    par.set_parval_from_str("fd_order", 4)
-    shipped_gauge = "OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted"
-    for sweep_fCCZ4, sweep_cf in ((True, "chi"), (False, "W")):
-        cfc.CFunction_dict.clear()
-        gri.glb_gridfcs_dict.clear()
-        par.glb_extras_dict.pop("Dendro", None)
-        for factory in (
-            SweepBSSNQuantities,
-            SweepBSSNRHSs,
-            BSSN_constraints,
-            SweepFCCZ4RHSs,
-            SweepFCCZ4Constraints,
-        ):
-            factory.clear()
-        par.set_parval_from_str("EvolvedConformalFactor_cf", sweep_cf)
-        _ = sweep_rhs_eval.build_rhs_eval(
-            "fccz4" if sweep_fCCZ4 else "bssn",
-            enable_fCCZ4=sweep_fCCZ4,
-            fd_order=4,
-            enable_KreissOliger_dissipation=False,
-        )
-        sweep_build = build_constraints_eval(
-            "fccz4" if sweep_fCCZ4 else "bssn",
-            enable_fCCZ4=sweep_fCCZ4,
-            enable_KreissOliger_dissipation=False,
-        )
-        ve.compare_or_generate_trusted_results(
-            os.path.abspath(__file__),
-            os.getcwd(),
-            f"{os.path.splitext(os.path.basename(__file__))[0]}"
-            f"_{shipped_gauge}"
-            f"_Cartesian_{sweep_cf}_fCCZ4{sweep_fCCZ4}",
-            ve.process_dictionary_of_expressions(
-                dict(sweep_build.diagnostics_by_name), fixed_mpfs_for_free_symbols=True
-            ),
-        )

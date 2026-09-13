@@ -82,7 +82,7 @@ rather than forwarding them as physics parameters.
 Claim evidence:
 - Claim: the Dendro parameter struct is the registered-CFunction use closure, while its real-host TOML/sample/print interface is the `add_to_parfile` subset used by the block-RHS CFunction.
 - Role: descriptive behavior
-- Deciding authority: [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py), `emitted_parameter_names` and `runtime_parameter_names`; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), `_codeparameter_tail` and `_REAL_SOURCE`
+- Deciding authority: [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py), `emitted_parameter_names` and `runtime_parameter_names`; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), `codeparameter_tail` and `_REAL_SOURCE`
 - Corroboration: [CFunction_roles.py](../../../nrpy/infrastructures/Dendro/CFunction_roles.py), `set_CFunction_codeparameters` and `CFunction_name_for_role`; [parfile.py](../../../nrpy/infrastructures/Dendro/parfile.py), `output_parfile_sample`
 
 This uses the same ownership principle as [ETLegacy parameter assembly](../etlegacy/thorn-assembly-and-ccl-files.md): expose the parameters attributed to

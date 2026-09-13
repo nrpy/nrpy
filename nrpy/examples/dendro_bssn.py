@@ -148,7 +148,7 @@ def main() -> None:
 
     # The constraint diagnostics: the Hamiltonian constraint and the three
     # momentum constraint components, registered as DIAG gridfunctions.
-    constraints_eval.register_CFunctions_constraints_eval(
+    constraints_build = constraints_eval.register_CFunctions_constraints_eval(
         solver_stem=solver_stem, CoordSystem=CoordSystem
     )
 
@@ -209,7 +209,11 @@ def main() -> None:
         {
             layout.root + relative_path: text
             for relative_path, text in self_tests_cpp.output_self_test_artifacts(
-                solver_stem, solver_namespace, rhs_build, args.ko
+                solver_stem,
+                solver_namespace,
+                rhs_build,
+                constraints_build,
+                args.ko,
             ).items()
         }
     )

@@ -1,22 +1,22 @@
 # Dendrolib capability mini-tests
 
-`dendrolib_capability_test.cpp` proves, against Dendrolib commit
-`246043709e806021fcfc011fe657b8bf964cae4c`, the host contract the generated
-Dendro solver assumes: the scalar ABI, the padded block dimensions, the padding
-rule, the unzip offsets, the variable-major x-fastest layout, the padded origin,
-and halo validity.
+`dendrolib_capability_test.cpp` proves, against the selected Dendrolib checkout,
+the host contract the generated Dendro solver assumes: the scalar ABI, the
+padded block dimensions, the padding rule, the unzip offsets, the variable-major
+x-fastest layout, the padded origin, and halo validity.
 
 The harness is not built by NRPy and is not part of any generated project. It
-is run by hand when the pin changes.
+is run by hand when the selected host changes.
 
 ## Build
 
-Clone and build the pinned Dendrolib, then compile the harness with that
-build's own definitions and include paths:
+Clone Dendrolib, select the revision under qualification, and build it. Then
+compile the harness with that build's own definitions and include paths. Record
+the selected revision with the active qualification evidence, not in this
+durable procedure.
 
 ```bash
 git clone https://github.com/paralab/Dendro-5.01 dendrolib
-git -C dendrolib checkout 246043709e806021fcfc011fe657b8bf964cae4c
 cmake -S dendrolib -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target dendro5 -j "$(nproc)"
 
@@ -73,7 +73,7 @@ done
 
 The generated fCCZ4 solver has a separate real-host build selected by
 `FCCZ4_STANDALONE_HOST=OFF`. It uses actual blocks and vectors, synchronous
-Dendrolib halo exchange, and the pinned `ts::ETS` RK4 lifecycle. This is a
+Dendrolib halo exchange, and the selected host's `ts::ETS` RK4 lifecycle. This is a
 fixed-mesh, serial-CPU-per-rank Minkowski qualification with analytic exterior
 data. It does not qualify general physical boundaries, remeshing, LTS,
 checkpoint/restart, output pipelines, GPU execution, or threaded kernels.
@@ -87,9 +87,7 @@ export NRPY_SOURCE=/absolute/path/to/NRPy
 mkdir nrpy-real-host
 cd nrpy-real-host
 git clone https://github.com/paralab/Dendro-GR host
-git -C host checkout b3261e2a0d3457781b11d63ac5ab38375ffab93b
 git clone https://github.com/paralab/Dendro-5.01 dendrolib
-git -C dendrolib checkout 246043709e806021fcfc011fe657b8bf964cae4c
 export XDG_CACHE_HOME="$PWD/cache"
 PYTHONPATH="$NRPY_SOURCE" python -m nrpy.examples.dendro_fccz4 \
   --project-dir "$PWD/generated"
@@ -103,8 +101,7 @@ target_compile_definitions(nrpy_runtime_test PRIVATE
 CMAKE
 cmake -S host -B build -DWITH_CUDA=OFF -DFCCZ4_STANDALONE_HOST=OFF \
   -DNRPY_SOURCE="$NRPY_SOURCE" -DNRPY_GENERATED="$PWD/generated" \
-  -DDENDRO_dendrolib_DIR="$PWD/dendrolib" \
-  -DDENDRO_dendrolib_GIT_TAG=246043709e806021fcfc011fe657b8bf964cae4c
+  -DDENDRO_dendrolib_DIR="$PWD/dendrolib"
 cmake --build build --target fccz4Solver nrpy_runtime_test -j2
 OMP_NUM_THREADS=1 timeout 300 mpiexec -n 2 build/nrpy_runtime_test
 OMP_NUM_THREADS=1 timeout 300 mpiexec -n 2 build/nrpy_fccz4/fccz4Solver

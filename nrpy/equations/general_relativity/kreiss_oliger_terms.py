@@ -117,3 +117,55 @@ def add_KreissOliger_dissipation_terms(
                 rhs_by_symbol_name[f"h_rhsDD{i}{j}"] += (
                     diss_strength_nongauge * hDD_dKOD[i][j][k] * rfm.ReU[k]
                 )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+
+
+if __name__ == "__main__":
+    import doctest
+    import os
+    import sys
+
+    import nrpy.validate_expressions.validate_expressions as ve
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
+
+    # Exercise every evolved-field family, the second-order shift branch, the
+    # fCCZ4 Theta branch, and curvature-aware scaling in one expression set.
+    validation_rhs = {
+        name: sp.Symbol(f"{name}_input", real=True)
+        for name in ("alpha_rhs", "cf_rhs", "trK_rhs", "Theta_fCCZ4_rhs")
+    }
+    for validation_i in range(3):
+        for validation_stem in ("bet_rhsU", "vet_rhsU", "lambda_rhsU"):
+            name = f"{validation_stem}{validation_i}"
+            validation_rhs[name] = sp.Symbol(f"{name}_input", real=True)
+        for validation_j in range(validation_i, 3):
+            for validation_stem in ("a_rhsDD", "h_rhsDD"):
+                name = f"{validation_stem}{validation_i}{validation_j}"
+                validation_rhs[name] = sp.Symbol(f"{name}_input", real=True)
+
+    add_KreissOliger_dissipation_terms(
+        validation_rhs,
+        CoordSystem="Cartesian",
+        enable_rfm_precompute=False,
+        registering_module=__name__,
+        ShiftEvolutionOption="GammaDriving2ndOrder_Covariant",
+        KreissOliger_strength_gauge=0.3,
+        KreissOliger_strength_nongauge=0.2,
+        enable_CAKO=True,
+        W=sp.Symbol("W", real=True),
+        include_Theta_fCCZ4=True,
+    )
+    ve.compare_or_generate_trusted_results(
+        os.path.abspath(__file__),
+        os.getcwd(),
+        f"{os.path.splitext(os.path.basename(__file__))[0]}_Cartesian_CAKO",
+        ve.process_dictionary_of_expressions(
+            validation_rhs, fixed_mpfs_for_free_symbols=True
+        ),
+    )

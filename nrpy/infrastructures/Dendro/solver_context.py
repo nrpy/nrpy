@@ -598,7 +598,7 @@ $REAL_APPLICATION_AFTER_RHS
 """
 
 
-def _codeparameter_tail(cfunction_name: str, table: str) -> str:
+def codeparameter_tail(cfunction_name: str, table: str) -> str:
     """
     Render the trailing CodeParameter arguments one host call must forward.
 
@@ -643,7 +643,7 @@ def substitute_solver_identifiers(
     >>> roles.set_CFunction_codeparameters(
     ...     "wave_rhs", ("amplitude", "num_steps", "enable_filter")
     ... )
-    >>> _codeparameter_tail("wave_rhs", "runtime")
+    >>> codeparameter_tail("wave_rhs", "runtime")
     ', runtime.amplitude, runtime.num_steps, runtime.enable_filter'
     >>> substitute_solver_identifiers("call $RHS_EVAL$RHS_EVAL_TAIL;", "wave", "wave")
     'call wave_rhs, params.amplitude, params.num_steps, params.enable_filter;'
@@ -677,7 +677,7 @@ def substitute_solver_identifiers(
             continue
         function_name = roles.CFunction_name_for_role(role)
         value = (
-            _codeparameter_tail(function_name, "params") if is_tail else function_name
+            codeparameter_tail(function_name, "params") if is_tail else function_name
         )
         text = text.replace(placeholder, value)
     return text

@@ -27,9 +27,9 @@ formulation branch confined to expression assembly and its field-count check.
 The example now assembles GR-owned context policy, lifecycle CTest statements,
 projection status, and scientific self-tests explicitly into generic Dendro
 emitters. BSSN/W FD4 is checked on a nonflat fixed block, component by
-component, for both the block kernel and flat adapter. The expected values use
-the same exactly emitted binary64 samples as the kernels and an independent
-80/100-digit stencil-and-CSE evaluation. KO-off is the configured default;
+component, for the RHS block kernel, flat adapter, and constraint diagnostics.
+The expected values use the same exactly emitted binary64 samples as the kernels
+and an independent 80/100-digit stencil-and-CSE evaluation. KO-off is the configured default;
 KO-on is a separately generated local qualification whose fixture first proves
 that several field families have resolvable KO contributions.
 
@@ -44,7 +44,7 @@ Claim evidence:
 - Claim: each Dendro RHS and constraint module has one builder and one registrar shared across formulations; consolidation preserves the registered interfaces and generated kernels for the shipped BSSN and fCCZ4 profiles.
 - Role: descriptive behavior
 - Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `build_rhs_eval` and `register_CFunctions_rhs_eval`; [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), `build_constraints_eval` and `register_CFunctions_constraints_eval`
-- Corroboration: both modules' `__main__` trusted-expression checks; direct before/after comparison of full registered CFunctions and Dendro metadata for both shipped profiles
+- Corroboration: complete generated BSSN and fCCZ4 C++ project tests, including independent nonflat RHS and diagnostic references, exercise both shared registration paths
 
 ### What the builders do
 

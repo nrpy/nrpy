@@ -26,7 +26,7 @@ from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import CodeParameters, block_kernel_helpers, types_h
 from nrpy.infrastructures.Dendro.generated_file_banner import generated_file_banner
 from nrpy.infrastructures.Dendro.solver_context import (
-    _codeparameter_tail,
+    codeparameter_tail,
     substitute_solver_identifiers,
 )
 
@@ -634,8 +634,8 @@ def output_self_test_artifacts(
         function_source = "\n".join(
             cfc.CFunction_dict[name].full_function for name in function_names
         )
-        block_tail = _codeparameter_tail(function_names[0], "fixture_params")
-        flat_tail = _codeparameter_tail(function_names[1], "fixture_params")
+        block_tail = codeparameter_tail(function_names[0], "fixture_params")
+        flat_tail = codeparameter_tail(function_names[1], "fixture_params")
         if block_tail != flat_tail:
             raise ValueError(
                 "Fixture block and flat adapters must forward identical parameters."

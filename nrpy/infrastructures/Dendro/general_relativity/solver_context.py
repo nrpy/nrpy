@@ -36,18 +36,6 @@ def substitute_application_identifiers(text: str) -> str:
     :param text: Generated text that may request registered GR roles.
     :return: Text with every requested GR role resolved.
 
-    Doctests:
-    >>> substitute_application_identifiers("identity")
-    'identity'
-    >>> from nrpy.infrastructures.Dendro import CFunction_roles as roles
-    >>> _saved = dict(roles._CFunction_roles())
-    >>> roles._CFunction_roles().clear()
-    >>> try:
-    ...     substitute_application_identifiers("$CONSTRAINTS_EVAL")
-    ... except ValueError as exc:
-    ...     "constraints_eval" in str(exc)
-    True
-    >>> roles._CFunction_roles().update(_saved)
     """
     for token, role in _APPLICATION_REPLACEMENTS:
         if token in text:

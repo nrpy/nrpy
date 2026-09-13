@@ -71,7 +71,7 @@ proves configured job shape, never latest successful execution.
 - [main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`, `einsteintoolkit-validation`, `charmpp-validation`, SEOB/SEBOB consistency jobs
 - [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - `main`, and the `copy_files` call that ships the standalone host header
 - [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) - `main`
-- [cmake_helpers.py](../../nrpy/infrastructures/Dendro/cmake_helpers.py) - `module_layout`, `output_solver_cmake` and its `PROVEN_DENDROLIB_COMMIT` comparison
+- [cmake_helpers.py](../../nrpy/infrastructures/Dendro/cmake_helpers.py) - `module_layout` and `output_solver_cmake`
 - [dendrolib_capability_test.cpp](../../nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp) - `run_order`
 
 - [solver_context.py](../../nrpy/infrastructures/Dendro/solver_context.py) - real `Ctx` adapter and callbacks

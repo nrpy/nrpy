@@ -142,7 +142,7 @@ def main() -> None:
     # The constraint diagnostics.  H_Z4 and the connection constraint are
     # registered as DIAG gridfunctions: they are recomputed from the evolved
     # state and are never checkpoint state.
-    constraints_eval.register_CFunctions_constraints_eval(
+    constraints_build = constraints_eval.register_CFunctions_constraints_eval(
         solver_stem=solver_stem,
         enable_fCCZ4=True,
         CoordSystem=CoordSystem,
@@ -208,7 +208,11 @@ def main() -> None:
         {
             layout.root + relative_path: text
             for relative_path, text in self_tests_cpp.output_self_test_artifacts(
-                solver_stem, solver_namespace, rhs_build, args.ko
+                solver_stem,
+                solver_namespace,
+                rhs_build,
+                constraints_build,
+                args.ko,
             ).items()
         }
     )

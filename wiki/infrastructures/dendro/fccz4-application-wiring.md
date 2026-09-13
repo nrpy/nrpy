@@ -27,12 +27,13 @@ kernel family is shaped this way.
 The example passes GR-owned context, lifecycle, status, and scientific-test
 content into generic Dendro emitters explicitly. fCCZ4/chi FD4 is checked on a
 nonflat fixed block, component by component, against an independent
-high-precision reference for both the block kernel and flat adapter. Kernel and
-reference inputs are the same exactly emitted binary64 samples; the reference
-applies the stencil and actual CSE graph at 80 and 100 digits and derives a
-componentwise roundoff bound from their scale and operation count. KO is enabled
-by default; `--no-ko` retains the nondissipative generation profile. The
-KO-enabled reference proves resolvable KO effects in several field families.
+high-precision reference for the RHS block kernel, flat adapter, and constraint
+diagnostics. Kernel and reference inputs are the same exactly emitted binary64
+samples; the reference applies the stencil and actual CSE graph at 80 and 100
+digits and derives a componentwise roundoff bound from their scale and operation
+count. KO is enabled by default; `--no-ko` retains the nondissipative generation
+profile. The KO-enabled reference proves resolvable KO effects in several field
+families.
 
 ### Right-hand side
 

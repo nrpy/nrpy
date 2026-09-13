@@ -94,6 +94,20 @@ A narrow status-only compile, link, or crash regression is allowed only under
 the next gate. If no cheap meaningful assertion exists, add no behavioral test.
 Static quality gates remain mandatory and separate.
 
+Doctests do not relax this gate. Do not use incidental substring, shape,
+existence, returned-without-error, or setup-did-not-throw checks merely to
+manufacture coverage, whether as bare Boolean prompts or bundled Python
+`assert` statements. Each prompt must prove a durable API or semantic contract.
+When compilation or full-product execution is the contract, prove it there
+instead of mirroring generated fragments in a doctest.
+
+Trusted validation of symbolic equations belongs under `nrpy/equations/`, where
+the validation machinery supplies values for free symbols. Scientific or
+numerical infrastructure tests must exercise complete generated C or C++
+products. If a generated finite-difference kernel is too large for such an
+oracle, validate its upstream expressions in the owning equation module rather
+than creating an infrastructure-local expression oracle.
+
 ### Integration Boundary
 
 External compiler, build, runtime, and numerical-product validation belongs in
