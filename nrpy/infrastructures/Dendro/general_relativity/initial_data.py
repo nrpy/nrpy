@@ -225,10 +225,10 @@ def register_CFunctions_smooth_perturbation(solver_stem: str) -> None:
 
     :param solver_stem: Lowercase stem for the emitted CFunction names.
     """
-    # Registered CodeParameters, not bare symbols: a tunable the host must
-    # supply belongs in params_struct with a default, a validation entry and a
-    # parfile line, exactly as eta and the kappas are.  They are registered
-    # here, in the principal registration routine, and handed to the builder.
+    # Registered CodeParameters, not bare symbols: standalone kernels receive
+    # these controls through params_struct with generated defaults and finite
+    # validation.  They are intentionally absent from the real-host parfile,
+    # because that lifecycle does not call this qualification kernel.
     amplitude = par.register_CodeParameter(
         "REAL",
         __name__,
@@ -268,6 +268,8 @@ def register_CFunctions_smooth_perturbation(solver_stem: str) -> None:
         body=block_body,
     )
     roles.set_CFunction_role(block_name, "smooth_perturbation_block")
+    used_codeparameters = bkh.used_codeparameters([amplitude, wavelength])
+    roles.set_CFunction_codeparameters(block_name, used_codeparameters)
     all_blocks_name = f"{solver_stem}_{SMOOTH_PERTURBATION_ALL_BLOCKS_SUFFIX}"
     all_blocks_desc = "All-block smooth analytic perturbation (NRPy block loop)."
     cfc.register_CFunction(
@@ -280,6 +282,7 @@ def register_CFunctions_smooth_perturbation(solver_stem: str) -> None:
         body=all_blocks_body,
     )
     roles.set_CFunction_role(all_blocks_name, "smooth_perturbation")
+    roles.set_CFunction_codeparameters(all_blocks_name, used_codeparameters)
 
 
 def register_CFunctions_minkowski_initial_data(solver_stem: str) -> None:

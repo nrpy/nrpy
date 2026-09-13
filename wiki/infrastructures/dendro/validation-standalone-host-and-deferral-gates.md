@@ -72,15 +72,18 @@ Claim evidence:
 ### Runtime parameters
 
 The real entry point accepts `-t FILE`. Rank zero reads the TOML text and
-broadcasts it; the host TOML library parses it, and registry-derived bindings
-populate `params_struct`. Unknown fields, malformed or nonfinite values, and
-profile mismatch terminate through the parent communicator. The standalone
-vehicle rejects parameter files. The real runner also accepts `--steps` and
-`--dt`; its mesh and initial-data profile remain fixed by the qualification
-vehicle.
+broadcasts it; the host TOML library parses it, and use-derived bindings
+populate the block-RHS members of `params_struct`. Unknown fields, malformed or
+nonfinite values, and profile mismatch terminate through the parent
+communicator. Parameters belonging only to standalone qualification kernels
+are not accepted TOML keys. The standalone vehicle rejects parameter files.
+The real runner also accepts `--steps` and `--dt`; its mesh and initial-data
+profile remain fixed by the qualification vehicle. [Project Assembly And
+Emitters](project-assembly-and-emitters.md#parameter-ownership-and-host-geometry)
+owns the parameter-closure and geometry rationale.
 
 Claim evidence:
-- Claim: the real entry point binds registered TOML parameters, forwards kernel parameters through registered signatures, and terminates the MPI job on invalid input.
+- Claim: the real entry point binds the opted-in parameters used by its block-RHS CFunction, forwards them through that registered signature, rejects other parameter keys, and terminates the MPI job on invalid input.
 - Role: descriptive behavior
 - Deciding authority: [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py), `_REAL_MAIN`; [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py), `output_toml_bindings`; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), `_codeparameter_tail` and `_REAL_SOURCE`
 - Corroboration: [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), analytic parameter-response check

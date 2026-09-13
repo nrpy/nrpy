@@ -7,10 +7,9 @@
 
 A Dendro run has two halves. Builders register gridfunctions, CodeParameters,
 and CFunctions into NRPy's registries; then `main` walks a fixed map
-of project-relative paths to emitter output and writes it. Every emitter reads
-`gri.glb_gridfcs_dict`, `par.glb_code_params_dict`, and `cfc.CFunction_dict`
-directly at the point of use, as BHaH's emitters do. There is no snapshot
-record set, no manifest, no installer, and no generation transaction.
+of project-relative paths to emitter output and writes it. Emitters read the
+registries and Dendro CFunction-role metadata at the point of use. There is no
+snapshot record set, manifest, installer, or generation transaction.
 
 ## Detail
 
@@ -61,6 +60,53 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py), the emitter call arguments in `main`
 - Corroboration: [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py), `module_layout`, which takes the solver name as an argument and registers no parameter for it
+
+### Parameter ownership and host geometry
+
+The generated parameter struct is the union of non-`#define` CodeParameters
+recorded beside registered CFunctions. This retains parameters needed only by
+generated standalone tests, including the smooth-perturbation amplitude and
+wavelength, but excludes unrelated entries left in NRPy's process-global
+registry.
+
+The real-host TOML surface is narrower. The real context forwards parameter
+members only when it calls the CFunction with role `rhs_eval_block`; therefore
+the sample file, TOML bindings, and effective-parameter printout contain only
+that CFunction's recorded parameters which also opt in through
+`add_to_parfile`. Smooth-perturbation controls are not real-host inputs because
+the real lifecycle does not call that standalone qualification kernel.
+`name`, `fd_order`, `required_padding`, and `ko_enabled` remain meaningful
+profile assertions: the parser compares them with the generated kernel profile
+rather than forwarding them as physics parameters.
+
+Claim evidence:
+- Claim: the Dendro parameter struct is the registered-CFunction use closure, while its real-host TOML/sample/print interface is the `add_to_parfile` subset used by the block-RHS CFunction.
+- Role: descriptive behavior
+- Deciding authority: [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py), `emitted_parameter_names` and `runtime_parameter_names`; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), `_codeparameter_tail` and `_REAL_SOURCE`
+- Corroboration: [CFunction_roles.py](../../../nrpy/infrastructures/Dendro/CFunction_roles.py), `set_CFunction_codeparameters` and `CFunction_name_for_role`; [parfile.py](../../../nrpy/infrastructures/Dendro/parfile.py), `output_parfile_sample`
+
+This uses the same ownership principle as [ETLegacy parameter assembly](../etlegacy/thorn-assembly-and-ccl-files.md): expose the parameters attributed to
+the generated functions, not every global registration. The host adapters are
+different, so their closures are different. ETLegacy constructs a thorn's
+`param.ccl` from all matching thorn CFunctions; this Dendro real host currently
+forwards parameters only at its block-RHS call.
+
+Domain geometry is host-owned. `grid_physical_size` is NRPy's
+reference-metric shorthand; for Cartesian reference metrics it supplies one
+symmetric half-width for all three axes. It cannot express the generated real
+host's independent, asymmetric axis bounds. The host sets its `Point` bounds,
+and `block_geometry()` obtains spacing and padded origins from the Dendro mesh
+and block. Consequently `grid_physical_size`, `grid_hole_radius`, Cartesian
+origin entries, `xmin`/`xmax` axis entries, `NUMGRIDS`, `grid_rotates`, and
+`CoordSystemName` are not Dendro real-host runtime controls merely because
+other NRPy setup registered them; absent CFunction use keeps them out of the
+generated parameter struct.
+
+Claim evidence:
+- Claim: Dendro domain bounds and block spacing are host-owned; NRPy's Cartesian `grid_physical_size` is a symmetric reference-metric shorthand and is not wired to that host geometry.
+- Role: descriptive behavior
+- Deciding authority: [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py), `_REAL_MAIN`; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), `block_geometry`; [reference_metric.py](../../../nrpy/reference_metric.py), `ReferenceMetric.cartesian_like`
+- Corroboration: [Dendro-GR](https://github.com/paralab/Dendro-GR), which uses independent per-axis domain bounds and Dendro block spacing
 
 ### Emitted layout
 
@@ -137,7 +183,11 @@ evidence. Cite the Python emitters and the registry symbols instead; see
 - [generated_file_banner.py](../../../nrpy/infrastructures/Dendro/generated_file_banner.py) - `generated_file_banner`
 - [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - `main`, the inline project-assembly block and command-line profile
 - [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py) - `module_layout`, `ModuleLayout`, `output_CFunctions_function_prototypes_and_construct_CMakeLists`, `CFunction_cmake_source_list`, `derived_source_path`, `output_solver_cmake`, `output_generated_sources_cmake`, `output_tests_cmake`
-- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `output_parameters_h`
+- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `output_parameters_h`, `emitted_parameter_names`, `runtime_parameter_names`, `output_toml_bindings`
+- [CFunction_roles.py](../../../nrpy/infrastructures/Dendro/CFunction_roles.py) - CFunction roles and CodeParameter sidecars
+- [parfile.py](../../../nrpy/infrastructures/Dendro/parfile.py) - `output_parfile_sample`
+- [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - real-host profile checks and domain bounds
+- [reference_metric.py](../../../nrpy/reference_metric.py) - `ReferenceMetric.cartesian_like`
 - [state_h.py](../../../nrpy/infrastructures/Dendro/state_h.py) - `state_records`, `output_state_h`
 - [constants_h.py](../../../nrpy/infrastructures/Dendro/constants_h.py) - `output_constants_h`
 - [types_h.py](../../../nrpy/infrastructures/Dendro/types_h.py) - `output_types_h`

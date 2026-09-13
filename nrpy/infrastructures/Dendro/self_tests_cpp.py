@@ -392,9 +392,6 @@ int test_parameter_forwarding() {{
       $NAMESPACE_fixture::generated::params_struct::nrpy_fixture_count), int>);
   static_assert(std::is_same_v<decltype(
       $NAMESPACE_fixture::generated::params_struct::nrpy_fixture_toggle), bool>);
-  $NAMESPACE_fixture::generated::params_struct params{{}};
-  params.nrpy_fixture_unused = 19.0;
-  if (params.nrpy_fixture_unused != 19.0) return 1;
   // A second complete execution changes every forwarded value and flips the
   // Boolean branch.  The same independent stencil oracle checks the result.
   return test_address_values(true);
@@ -446,6 +443,7 @@ def output_self_test_artifacts(
     ...     par.set_parval_from_str("fp_type", "double")
     ...     _artifacts = output_self_test_artifacts("probe", "probe", "", "", "")
     ...     assert sorted(_artifacts) == ["tests/probe_fixture_parameters.h", "tests/probe_fixture_types.h", "tests/probe_self_tests.cpp"]
+    ...     assert "nrpy_fixture_unused" not in _artifacts["tests/probe_fixture_parameters.h"]
     ...     assert set(gri.glb_gridfcs_dict) == set(_saved_fields)
     ...     assert all(gri.glb_gridfcs_dict[name] is value for name, value in _saved_fields.items())
     ...     assert set(par.glb_code_params_dict) == set(_saved_parameters)

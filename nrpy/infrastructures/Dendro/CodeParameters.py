@@ -3,11 +3,10 @@
 Emit the parameter header and parameter CFunctions.
 
 Every name, type and default is read from the NRPy CodeParameter registry, as
-BHaH's ``CodeParameters.py`` does.  Every registered parameter whose
-``cparam_type`` is not ``#define`` is emitted -- there is no use closure, so the
-generated struct is the whole registry and a caller that registers a parameter
-gets it in the table; no physics parameter table is authored here and no
-equation module is imported.
+BHaH's ``CodeParameters.py`` does.  The generated struct is the use closure
+recorded by the registered CFunctions; its real-host runtime interface is the
+narrower set forwarded to the block RHS.  No physics parameter table is
+authored here and no equation module is imported.
 
 The parameter CFunctions (set defaults, parse a file, validate, print) are
 registered from here as well, as BHaH registers ``params_struct_set_to_default``
@@ -23,6 +22,7 @@ from typing import List
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.params as par
+from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro.generated_file_banner import generated_file_banner
 from nrpy.infrastructures.Dendro.header_guards import header_guard
 
@@ -89,10 +89,10 @@ def output_parameters_h(solver_stem: str, solver_namespace: str) -> str:
     """
     Emit the generated parameter struct header.
 
-    One member per registered CodeParameter in sorted name order, as BHaH's
-    ``BHaH_defines_h`` iterates ``par.glb_code_params_dict``.  No default is
-    baked into the struct: defaults live in the registered parameter-defaults
-    CFunction and in the sample parameter file.
+    One member per CodeParameter used by a registered CFunction, in sorted
+    name order.  No default is baked into the struct: defaults live in the
+    registered parameter-defaults CFunction; the real-host subset is repeated
+    in the sample parameter file.
 
     :param solver_stem: Lowercase formulation stem for emitted header names.
     :param solver_namespace: Solver namespace, following Dendro's lowercase
@@ -117,9 +117,8 @@ def output_parameters_h(solver_stem: str, solver_namespace: str) -> str:
     lines.append(f"namespace {solver_namespace}::generated {{")
     lines += ["", "struct params_struct {"]
     emitted = 0
-    for cp_name, code_param in sorted(par.glb_code_params_dict.items()):
-        if code_param.cparam_type == "#define":
-            continue
+    for cp_name in emitted_parameter_names():
+        code_param = par.glb_code_params_dict[cp_name]
         lines.append("    " + member_declaration(cp_name, code_param.cparam_type))
         emitted += 1
     lines += ["};  // END STRUCT: params_struct", ""]
@@ -141,7 +140,7 @@ PARAMETERS_SUBDIRECTORY = "generated/src/parameters"
 
 def emitted_parameter_names() -> List[str]:
     """
-    Return the registered CodeParameter names the generated struct carries.
+    Return the CodeParameter names used by registered CFunctions.
 
     The order and the ``#define`` exclusion match
     :func:`nrpy.infrastructures.Dendro.CodeParameters.output_parameters_h`,
@@ -150,10 +149,35 @@ def emitted_parameter_names() -> List[str]:
 
     :return: Sorted CodeParameter names, ``#define`` parameters excluded.
     """
+    used_names = {
+        cp_name
+        for cfunction_name in cfc.CFunction_dict
+        for cp_name in roles.CFunction_codeparameters(cfunction_name)
+    }
     return [
         cp_name
-        for cp_name, code_param in sorted(par.glb_code_params_dict.items())
-        if code_param.cparam_type != "#define"
+        for cp_name in sorted(used_names)
+        if par.glb_code_params_dict[cp_name].cparam_type != "#define"
+    ]
+
+
+def runtime_parameter_names() -> List[str]:
+    """
+    Return the parameters configurable through the generated real host.
+
+    The real host forwards generated parameters only to its per-block RHS call,
+    so only that CFunction's recorded use can be effective there.
+    ``add_to_parfile`` remains the parameter owner's explicit opt-in.
+
+    :return: Sorted runtime CodeParameter names.
+    """
+    rhs_name = roles.CFunction_name_for_role("rhs_eval_block")
+    used_names = roles.CFunction_codeparameters(rhs_name)
+    return [
+        cp_name
+        for cp_name in sorted(used_names)
+        if par.glb_code_params_dict[cp_name].add_to_parfile
+        and par.glb_code_params_dict[cp_name].cparam_type != "#define"
     ]
 
 
@@ -285,7 +309,7 @@ def register_CFunctions_parameters(solver_stem: str, solver_namespace: str) -> N
     )
 
     print_lines: List[str] = [f'std::printf("{solver_stem} effective parameters:\\n");']
-    for cp_name in names:
+    for cp_name in runtime_parameter_names():
         cparam_type = par.glb_code_params_dict[cp_name].cparam_type
         base = c_type(cparam_type)
         if par.parse_cparam_type(cparam_type)[2]:
@@ -324,11 +348,56 @@ def output_toml_bindings() -> str:
 
     :return: C++ assignments for the generated parameter table.
     :raises ValueError: If a character parameter has no supported TOML binding.
+
+    Doctests:
+    >>> from nrpy.infrastructures.Dendro import CFunction_roles as roles
+    >>> _saved_parameters = dict(par.glb_code_params_dict)
+    >>> _saved_functions = dict(cfc.CFunction_dict)
+    >>> _saved_extras = dict(par.glb_extras_dict)
+    >>> try:
+    ...     par.glb_code_params_dict.clear()
+    ...     cfc.CFunction_dict.clear()
+    ...     par.glb_extras_dict.clear()
+    ...     _ = par.register_CodeParameter("REAL", __name__, "fixture_runtime", 1.0)
+    ...     _ = par.register_CodeParameter("REAL", __name__, "fixture_standalone", 1.5)
+    ...     _ = par.register_CodeParameter("REAL", __name__, "fixture_registry_only", 2.0)
+    ...     cfc.register_CFunction(
+    ...         desc="runtime fixture", name="fixture_rhs", body="(void)0;"
+    ...     )
+    ...     roles.set_CFunction_role("fixture_rhs", "rhs_eval_block")
+    ...     roles.set_CFunction_codeparameters("fixture_rhs", ("fixture_runtime",))
+    ...     cfc.register_CFunction(
+    ...         desc="standalone fixture", name="fixture_initial_data", body="(void)0;"
+    ...     )
+    ...     roles.set_CFunction_role(
+    ...         "fixture_initial_data", "smooth_perturbation_block"
+    ...     )
+    ...     roles.set_CFunction_codeparameters(
+    ...         "fixture_initial_data", ("fixture_standalone",)
+    ...     )
+    ...     _header = output_parameters_h("fixture", "fixture")
+    ...     _bindings = output_toml_bindings()
+    ...     _observed = (
+    ...         "DendroScalar fixture_runtime;" in _header,
+    ...         "DendroScalar fixture_standalone;" in _header,
+    ...         "DendroScalar fixture_registry_only;" in _header,
+    ...         'item.first == "fixture_runtime"' in _bindings,
+    ...         'item.first == "fixture_standalone"' in _bindings,
+    ...         'item.first == "fixture_registry_only"' in _bindings,
+    ...     )
+    ... finally:
+    ...     par.glb_code_params_dict.clear()
+    ...     par.glb_code_params_dict.update(_saved_parameters)
+    ...     cfc.CFunction_dict.clear()
+    ...     cfc.CFunction_dict.update(_saved_functions)
+    ...     par.glb_extras_dict.clear()
+    ...     par.glb_extras_dict.update(_saved_extras)
+    >>> _observed
+    (True, True, False, True, False, False)
     """
     lines: List[str] = []
-    for name, parameter in sorted(par.glb_code_params_dict.items()):
-        if not parameter.add_to_parfile:
-            continue
+    for name in runtime_parameter_names():
+        parameter = par.glb_code_params_dict[name]
         base, size, is_array = par.parse_cparam_type(parameter.cparam_type)
         mapped = c_type(parameter.cparam_type)
         if base == "char":

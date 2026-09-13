@@ -151,10 +151,12 @@ those values. `-t FILE` reads TOML on rank 0, broadcasts its contents, binds
 registered `[params]` values, and validates the optional generated profile.
 Unknown keys, profile mismatch, malformed values, and nonfinite values fail
 collectively. The sample file under `generated/Dendro-GR/FCCZ4_GR/pars/` is
-usable by the real build. Parameters used by generated kernels, including
-`eta`, `kappa1`, and `kappa2`, are forwarded through their registered signatures.
-The qualification mesh/domain and Minkowski initial data remain fixed; geometry
-and perturbation defaults in the shared registry do not select another problem.
+usable by the real build. Parameters used by the generated block RHS, including
+`eta`, `kappa1`, and `kappa2`, are forwarded through its registered signature.
+Parameters used only by standalone qualification kernels remain generated
+struct members but are not real-host TOML keys. The qualification mesh/domain
+and Minkowski initial data remain fixed; geometry and perturbation defaults in
+the shared registry do not select another problem.
 The standalone executable still rejects `-t`.
 
 The checked solver result requires finite output, the exact RK4 step/time and

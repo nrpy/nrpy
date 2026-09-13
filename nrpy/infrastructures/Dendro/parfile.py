@@ -15,6 +15,7 @@ from typing import List
 
 import nrpy.grid as gri
 import nrpy.params as par
+from nrpy.infrastructures.Dendro import CodeParameters
 from nrpy.infrastructures.Dendro.generated_file_banner import generated_file_banner
 
 BANNER = generated_file_banner("#")
@@ -24,16 +25,15 @@ def output_parfile_sample() -> str:
     """
     Emit the sample parameter-file section for the runtime parameters.
 
-    Only parameters with ``add_to_parfile`` appear; every value is the
-    registered default.
+    Only parameters used by the real host's block-RHS CFunction and marked
+    ``add_to_parfile`` appear; every value is the registered default.
 
     :return: Parameter-file text with a trailing newline.
     :raises ValueError: If a registered ``cparam_type`` has no TOML mapping.
     """
     lines: List[str] = ["[params]"]
-    for cp_name, code_param in sorted(par.glb_code_params_dict.items()):
-        if not code_param.add_to_parfile:
-            continue
+    for cp_name in CodeParameters.runtime_parameter_names():
+        code_param = par.glb_code_params_dict[cp_name]
         cparam_type = code_param.cparam_type
         default_value = code_param.defaultvalue
         base_type, _size, is_array = par.parse_cparam_type(cparam_type)
@@ -78,8 +78,26 @@ def generate_default_parfile(
 
     Doctests:
     >>> import nrpy.finite_difference  # noqa: F401
+    >>> import nrpy.c_function as cfc
+    >>> from nrpy.infrastructures.Dendro import CFunction_roles as roles
     >>> par.set_parval_from_str("fd_order", 4)
-    >>> text = generate_default_parfile("bssn", "vacuum", 3, False)
+    >>> _saved_functions = dict(cfc.CFunction_dict)
+    >>> _saved_extras = dict(par.glb_extras_dict)
+    >>> try:
+    ...     cfc.CFunction_dict.clear()
+    ...     _ = par.glb_extras_dict.pop("Dendro", None)
+    ...     cfc.register_CFunction(desc="fixture", name="fixture_rhs", body="(void)0;")
+    ...     roles.set_CFunction_role("fixture_rhs", "rhs_eval_block")
+    ...     text = generate_default_parfile("bssn", "vacuum", 3, False)
+    ... finally:
+    ...     cfc.CFunction_dict.clear()
+    ...     cfc.CFunction_dict.update(_saved_functions)
+    ...     _ = par.glb_extras_dict.pop("Dendro", None)
+    ...     _ = (
+    ...         par.glb_extras_dict.setdefault("Dendro", _saved_extras["Dendro"])
+    ...         if "Dendro" in _saved_extras
+    ...         else None
+    ...     )
     >>> [line for line in text.splitlines() if not line.startswith("#")][1:6]
     ['[bssn.profile]', 'name = "vacuum"', 'fd_order = 4', 'required_padding = 3', 'ko_enabled = false']
     """

@@ -152,6 +152,12 @@ def set_CFunction_role(name: str, role: str) -> None:
     >>> set_CFunction_role("bssn_rhs_eval_block", "rhs_eval_block")
     >>> CFunction_name_for_role("rhs_eval_block")
     'bssn_rhs_eval_block'
+    >>> del cfc.CFunction_dict["bssn_rhs_eval_block"]
+    >>> try:
+    ...     CFunction_name_for_role("rhs_eval_block")
+    ... except ValueError as error:
+    ...     print(error)
+    Expected exactly one registered CFunction with Dendro role 'rhs_eval_block', found [].
     >>> try:
     ...     set_CFunction_role("not_registered", "rhs_eval_block")
     ... except ValueError as error:
@@ -249,7 +255,9 @@ def CFunction_name_for_role(role: str) -> str:
         the role.
     """
     matches = sorted(
-        name for name, recorded in _CFunction_roles().items() if recorded == role
+        name
+        for name, recorded in _CFunction_roles().items()
+        if recorded == role and name in cfc.CFunction_dict
     )
     if len(matches) != 1:
         raise ValueError(
