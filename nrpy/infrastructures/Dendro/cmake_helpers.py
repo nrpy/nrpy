@@ -271,6 +271,10 @@ def output_solver_cmake(
     True
     >>> "${WAVE_NRPY_GENERATED_SOURCES}" in text
     True
+    >>> "target_include_directories(wave_common SYSTEM PRIVATE" in text
+    True
+    >>> "target_include_directories(waveSolver SYSTEM PRIVATE" in text
+    True
     >>> "src/bssnCtx.cpp" in output_solver_cmake("Z_GR", "ZORP", "zrp", "zSolver", (), ())
     False
     >>> "src/zrpCtx.cpp" in output_solver_cmake("Z_GR", "ZORP", "zrp", "zSolver", (), ())
@@ -318,10 +322,18 @@ def output_solver_cmake(
         f"if({solver_prefix}_STANDALONE_HOST)",
         f"  target_compile_definitions({stem}_common PUBLIC NRPY_DENDRO_STANDALONE_HOST)",
         "else()",
-        "  if(NOT TARGET dendro5 OR NOT TARGET toml11::toml11 OR NOT TARGET bssn_common)",
-        '    message(FATAL_ERROR "Real GR host requires Dendro-GR targets dendro5, toml11::toml11, and bssn_common")',
+        "  if(NOT TARGET dendro5 OR NOT TARGET dendro_config OR NOT TARGET toml11::toml11 OR NOT TARGET bssn_common)",
+        '    message(FATAL_ERROR "Real GR host requires Dendro-GR targets dendro5, dendro_config, toml11::toml11, and bssn_common")',
         "  endif()",
         f"  target_link_libraries({stem}_common PUBLIC dendro5 toml11::toml11 bssn_common)",
+        "  get_target_property(NRPY_DENDRO_INCLUDE_DIRS dendro_config INTERFACE_INCLUDE_DIRECTORIES)",
+        "  get_target_property(NRPY_BSSN_INCLUDE_DIRS bssn_common INTERFACE_INCLUDE_DIRECTORIES)",
+        "  # Keep -Wall useful for generated sources without diagnosing the",
+        "  # fixed external host's headers as though NRPy owned them.",
+        f"  target_include_directories({stem}_common SYSTEM PRIVATE",
+        "    ${NRPY_DENDRO_INCLUDE_DIRS}",
+        "    ${NRPY_BSSN_INCLUDE_DIRS}",
+        "  )",
         "endif()",
         f"target_compile_options({stem}_common PRIVATE -Wall)",
         "",
@@ -342,6 +354,10 @@ def output_solver_cmake(
         f"  target_link_libraries({exec_or_library_name} PRIVATE {stem}_common MPI::MPI_CXX)",
         f"  if(NOT {solver_prefix}_STANDALONE_HOST)",
         f"    target_link_libraries({exec_or_library_name} PRIVATE bssn_common)",
+        f"    target_include_directories({exec_or_library_name} SYSTEM PRIVATE",
+        "      ${NRPY_DENDRO_INCLUDE_DIRS}",
+        "      ${NRPY_BSSN_INCLUDE_DIRS}",
+        "    )",
         "  endif()",
         "endif()",
         "",

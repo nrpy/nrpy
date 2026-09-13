@@ -82,15 +82,18 @@ generated `CMakeLists.txt` already carry.
 ### Host selection
 
 `<PREFIX>_STANDALONE_HOST=ON` retains the standalone test vehicle. With it `OFF`,
-the solver must be added to a host CMake tree defining `dendro5` and
-`toml11::toml11`; the generated context uses actual `ot::Mesh`, `ot::Block`,
-`ot::DVector`, and `ts::Ctx` types. Duplicate executable names fail configuration.
+the solver must be added to a host CMake tree defining `dendro5`,
+`dendro_config`, `toml11::toml11`, and `bssn_common`; the generated context uses
+actual `ot::Mesh`, `ot::Block`, `ot::DVector`, and `ts::Ctx` types. The external
+host include directories are system includes for generated targets, keeping
+generated-source warnings distinct from diagnostics owned by the host. Duplicate
+executable names fail configuration.
 The fCCZ4 example can be added as `FCCZ4_GR` beside upstream `BSSN_GR`.
 Reproduction commands and selected-host requirements live in the
 [host test README](../../../nrpy/infrastructures/Dendro/tests_infra/README.md#generated-real-host-qualification).
 
 Claim evidence:
-- Claim: disabling the standalone host selects real Dendrolib context types and requires host CMake targets `dendro5` and `toml11::toml11`; duplicate executable names fail configuration.
+- Claim: disabling the standalone host selects real Dendrolib context types, requires host CMake targets `dendro5`, `dendro_config`, `toml11::toml11`, and `bssn_common`, and treats those targets' external include directories as system includes for generated compilation; duplicate executable names fail configuration.
 - Role: descriptive behavior
 - Deciding authority: [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py), `output_solver_cmake`; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), `_REAL_HEADER`
 - Corroboration: [Dendro_defines_h.py](../../../nrpy/infrastructures/Dendro/Dendro_defines_h.py), `output_Dendro_defines_h`
