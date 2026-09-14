@@ -55,11 +55,11 @@ BHaH callers opt in. Its `two_blackholes_collide` example enables projection
 for initial data and calls the same combined projector after boundary handling
 in its Method of Lines hook. ETLegacy schedules its combined projector in
 `CCTK_INITIAL`, after evolved-variable boundary conditions in `MoL_PostStep`,
-and before constraints in `MoL_PseudoEvolution`. The inspected ETLegacy
+and before constraints in `MoL_PseudoEvolution`. The ETLegacy
 projector registration emits no determinant-only repair entry.
 
 Claim evidence:
-- Claim: BHaH and ETLegacy use a combined determinant/trace projector; the inspected BHaH collision caller applies it after boundary handling, while the inspected ETLegacy projector registration assigns the same combined projector to all three repair schedules and emits no determinant-only repair entry.
+- Claim: BHaH and ETLegacy use a combined determinant/trace projector; the BHaH collision caller applies it after boundary handling, while the ETLegacy projector registration assigns the same combined projector to all three repair schedules and emits no determinant-only repair entry.
 - Role: descriptive behavior
 - Deciding authority: [BHaH algebraic constraint projection](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`; [BHaH initial data](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), Method of Lines registration; [ETLegacy algebraic constraint projection](../../../nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - Corroboration: none available; BHaH and ETLegacy own separate backend behavior

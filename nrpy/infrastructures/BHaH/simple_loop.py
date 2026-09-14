@@ -62,11 +62,11 @@ def get_loop_region_ranges(
     interior_plus_one_max = [f"{m} + 1" for m in interior_max]
 
     # The stencil halo is the interior grown by one centered-stencil radius, fd_order/2, so
-    # that a gridfunction produced over this region can be differentiated once more at every
+    # that a gridfunction evaluated over this region can be differentiated once more at every
     # interior point. The radius is taken from fd_order rather than from NGHOSTS, because
     # NGHOSTS carries an extra point only when upwinding is enabled, and the halo must be
     # exactly the stencil radius under either convention. Growing a direction is legal only
-    # where the producer itself takes no derivative along it, so the halo regions grow only
+    # where its defining expression takes no derivative along it, so the halo regions grow only
     # the transverse directions named after "in".
     # Configuration dictionary maps loop_region to its min/max ranges
     region_map = {
@@ -170,7 +170,7 @@ def simple_loop(
 
     The halo regions grow the interior by exactly one centered-stencil radius, fd_order/2,
     in the directions transverse to the derivative being stored, and never along the axis
-    the producer differentiates. The radius follows fd_order, not NGHOSTS, which carries an
+    its defining expression differentiates. The radius follows fd_order, not NGHOSTS, which carries an
     extra point only when upwinding is enabled:
     >>> import nrpy.finite_difference  # registers finite_difference::fd_order
     >>> par.set_parval_from_str("fd_order", 8)

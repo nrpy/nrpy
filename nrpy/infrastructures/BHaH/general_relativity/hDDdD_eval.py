@@ -54,8 +54,8 @@ def register_hDDdD_gridfunctions() -> List[str]:
     """
     Register the SCRATCH gridfunctions hDDdD if they are not already registered.
 
-    Both the producer and its consumers call this, because parallel code generation runs
-    each registration in its own worker.
+    Both hDDdD_eval and the Ricci routines call this because parallel code generation
+    runs each registration in its own worker.
 
     :return: Stored gridfunction names that Ricci may select during FD lowering.
 

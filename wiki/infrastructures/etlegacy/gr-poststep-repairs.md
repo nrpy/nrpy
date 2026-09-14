@@ -53,7 +53,7 @@ schedules invoke this combined projector; none invokes a determinant-only
 repair.
 
 Claim evidence:
-- Claim: The inspected ETLegacy projector registration assigns the combined determinant/trace projector to `CCTK_INITIAL`, after evolved-variable boundary conditions in `MoL_PostStep`, and before constraints without an auxiliary-boundary dependency in `MoL_PseudoEvolution`; that registration emits no determinant-only repair entry, and source inspection does not prove fresh-data, recovery, restart, or singular/nonfinite error-path behavior.
+- Claim: The ETLegacy projector registration assigns the combined determinant/trace projector to `CCTK_INITIAL`, after evolved-variable boundary conditions in `MoL_PostStep`, and before constraints without an auxiliary-boundary dependency in `MoL_PseudoEvolution`; that registration emits no determinant-only repair entry, and its source structure does not establish fresh-data, recovery, restart, or singular/nonfinite error-path behavior.
 - Role: descriptive behavior
 - Deciding authority: [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - Corroboration: [floor_the_lapse.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/floor_the_lapse.py), `register_CFunction_floor_the_lapse`

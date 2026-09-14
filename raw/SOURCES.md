@@ -16,6 +16,7 @@
 | `equation-modules-and-trusted-values` | Equation modules, generated trusted-value files, and BOB test metadata from `nrpy/equations`, including `nrpy/equations/seobnr/tests/BOB_v2_fit_sim_list.md`. | living | partial |
 | `infrastructure-modules-and-embedded-headers` | Python modules and embedded headers from `find nrpy/infrastructures -type f \( -name '*.py' -o -name '*.h' \)`. | living | partial |
 | `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`. | living | ingested |
+| `dendro-trusted-generated-source-baselines` | Generated-source baselines under `nrpy/infrastructures/Dendro/general_relativity/tests/`, owned by the emitting modules' direct validation entry points. Symbolic-expression baselines remain with their equation owners. | living | partial |
 | `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples` inventoried by `wiki/examples/example-generator-catalog.md`. | living | partial |
 | `ci-and-local-automation` | CI and local automation files from `.github`. | living | partial |
 
@@ -36,6 +37,7 @@ aggregate rows and `wiki/source-map.md`.
 
 | Source | Status |
 | --- | --- |
+| `AGENTS.md` | living |
 | `README.md` | living |
 | `CITATION.md` | living |
 | `setup.py` | living |
@@ -212,6 +214,11 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/superB/superB/superB_pup.py` | living |
 | `nrpy/infrastructures/superB/superB/superB.h` | living |
 | `nrpy/infrastructures/superB/superB/superB_pup_function_prototypes.h` | living |
+| `nrpy/infrastructures/Dendro/standalone_host/dendro_standalone_host.h` | living |
+| `nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp` | living |
+| `nrpy/infrastructures/Dendro/tests_infra/README.md` | living |
+| `nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp` | living |
+| `nrpy/infrastructures/Dendro/block_geometry.h` | living |
 | `nrpy/tests/reference_metric_Cartesian.py` | living |
 | `nrpy/tests/reference_metric_Spherical.py` | living |
 | `nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py` | living |
@@ -254,6 +261,8 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/examples/geodesic_visualizations/blueprint_analysis.py` | living |
 | `nrpy/examples/tests/sebob_consistency_check.py` | living |
 | `nrpy/examples/tests/sebobv2_consistency_check.py` | living |
+| `nrpy/examples/dendro_fccz4.py` | living |
+| `nrpy/examples/dendro_bssn.py` | living |
 | `nrpy/equations/basis_transforms/jacobians.py` | living |
 | `nrpy/equations/basis_transforms/tests/jacobians_Cartesian.py` | living |
 | `nrpy/equations/basis_transforms/tests/jacobians_GeneralRFM_fisheyeN2.py` | living |
@@ -364,6 +373,8 @@ aggregate rows and `wiki/source-map.md`.
 | Source | Provenance | Status | Ingest | Notes |
 | --- | --- | --- | --- | --- |
 | `https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md` | Andrej Karpathy gist raw note, `LLM Wiki`; the full URL is its stable source locator. | frozen | partial | Background approach source for persistent LLM-maintained wiki governance: raw/wiki/schema layers and ingest/query/lint workflows. |
+| `https://github.com/paralab/Dendro-5.01` | Dendrolib upstream repository used by Dendro-GR as its host-library dependency. | living | partial | Deciding source for the host-side block contract the generated Dendro solver assumes: `ot::Block` allocation sizes and pad width, and the unzip layout. Only cited interfaces are ingested. |
+| `https://github.com/paralab/Dendro-GR` | Dendro-GR upstream application repository and its Dendrolib integration. | living | partial | Source for host conventions used beside generated solvers: padded-origin arithmetic, block reads, constraint interfaces, solver build structure, and namespace declarations. Only cited interfaces are ingested. |
 | `https://arxiv.org/pdf/gr-qc/0104063v3` | Version-pinned v3 PDF for Baker, Campanelli, and Lousto, arXiv:gr-qc/0104063. | frozen | ingested | Primary deciding source for the Psi4 tetrad contract in Sec. V.A: Eqs. (5.6)-(5.7), the following unnumbered Gram-Schmidt procedure, and the later Eq. (5.9) rotation. |
 | `https://arxiv.org/pdf/0902.3652v2` | Version-pinned v2 PDF for Brown, arXiv:0902.3652. | frozen | ingested | Deciding source for the covariant conformal connection constraint in Eqs. (12a), (12b), and (15); it does not prescribe the local conformal-metric norm diagnostic. |
 | `https://arxiv.org/pdf/gr-qc/0209066v2` | Version-pinned v2 PDF for Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066. | frozen | ingested | Deciding source for the full Gamma-constraint adjustment coefficient in Eq. (45); current NRPy already owns the baseline `2/3` contribution and therefore adds only the incremental `chi` term. |
@@ -376,7 +387,7 @@ aggregate rows and `wiki/source-map.md`.
 | `https://arxiv.org/pdf/gr-qc/9810065v1` | Version-pinned v1 PDF for Baumgarte and Shapiro, arXiv:gr-qc/9810065. | frozen | ingested | Deciding source for the zero-shift harmonic lapse relation in Eqs. (30)-(32), including the special `C(x)=1` choice. |
 | `https://arxiv.org/pdf/gr-qc/9902024v1` | Version-pinned v1 PDF for Baumgarte, Hughes, and Shapiro, arXiv:gr-qc/9902024. | frozen | ingested | Deciding source for the zero-shift statement that their harmonic slicing reduces to `partial_t(alpha)=partial_t(exp(6*phi))`. |
 | `https://arxiv.org/pdf/1712.07658v2` | Version-pinned v2 PDF for Ruchlin, Etienne, and Baumgarte, arXiv:1712.07658. | frozen | ingested | Deciding source for the StaticTrumpet gauge pairing in Eqs. (65), (67), and (69). |
-| `https://github.com/zachetienne/nrpytutorial` | Historical NRPy tutorial repository; `Tutorial-BSSN_time_evolution-BSSN_gauge_RHSs.ipynb`. | living | partial | Background provenance for the `HarmonicSlicing` name and the `W`/`phi` chain-rule implementation in Step 2.b. |
+| `https://github.com/zachetienne/nrpytutorial` | Historical NRPy tutorial repository; selected overview, scalar-wave, and BSSN notebooks. | living | partial | Background for NRPy's computational-physics vocabulary and explanatory style, plus provenance for the `HarmonicSlicing` name and the `W`/`phi` chain-rule implementation in Step 2.b. |
 | `https://arxiv.org/abs/1605.01938` | arXiv abstract page for HBR2016 final-spin paper. | living | partial | Background landing page; exact revision-to-fit mapping is outside this ingest. |
 | `https://arxiv.org/abs/1611.00332` | arXiv abstract page for UIB2016 final-state paper and ancillary implementation. | living | partial | Background landing page; exact revision-to-fit/ancillary mapping is outside this ingest. |
 | `https://arxiv.org/abs/2111.02424` | arXiv abstract page for arXiv:2111.02424. | living | partial | Background landing page; exact revision-to-claim mapping is outside this ingest. |

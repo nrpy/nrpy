@@ -2,8 +2,8 @@
 """
 Define C helpers for numerical-spacetime time-window mmap management.
 
-The NumericalTimeWindowManager owns the active mapped group of adjacent 3D-grid
-payloads in one trusted combined numerical-spacetime binary container. It
+The NumericalTimeWindowManager maintains the active mapped group of adjacent
+3D-grid slices in one trusted combined numerical-spacetime binary container. It
 depends on shared TimeSlotManager definitions for slot time bounds, but keeps
 mmap and numerical file state out of analytic builds.
 
@@ -32,7 +32,7 @@ def time_window_manager_numerical() -> None:
     """
     Register NumericalTimeWindowManager helpers in BHaH_defines.h.
 
-    This registration owns the `rkf45_max_delta_t` CodeParameter consumed by
+    This function registers the `rkf45_max_delta_t` CodeParameter used by
     the generated time-window C helpers. It also ensures the shared
     TimeSlotManager helper is registered first so the emitted code sees
     `TimeSlotManager`, `slot_lower_time()`, and `slot_upper_time()`, and so
@@ -78,7 +78,7 @@ def time_window_manager_numerical() -> None:
     // Time slices are assumed ordered by increasing coordinate time, while
     // reverse ray tracing moves from larger t toward smaller t. The manager
     // maps one contiguous slot-derived time window so many photons can reuse
-    // the same numerical 3D-grid payloads. The mapped window is wider than
+    // the same numerical 3D-grid slices. The mapped window is wider than
     // the slot itself because it includes temporal-interpolation halo slices
     // and lower-time RKF45 lookahead.
 #include <fcntl.h>
@@ -115,17 +115,17 @@ def time_window_manager_numerical() -> None:
 #define TIME_WINDOW_MANAGER_NUMERICAL_ERROR 1
 #define TIME_WINDOW_MANAGER_NUMERICAL_MAX_TEMPORAL_INTERP_HALF_WIDTH 32
 
-    // Owns the currently mapped group of adjacent 3D-grid payloads.
+    // Maintains the currently mapped group of adjacent 3D-grid slices.
     typedef struct {
       int fd; // Open read-only file descriptor for the combined numerical .bin file.
       long int page_size; // Runtime page size used for mmap offset alignment.
 
       uint64_t num_time_slices; // Number of stored 3D grids.
       uint64_t slice_table_offset; // Absolute byte offset of the slice table.
-      uint64_t first_payload_offset; // Absolute byte offset of slice 0 payload.
-      uint64_t payload_bytes_per_slice; // Valid bytes in one 3D-grid payload.
-      uint64_t payload_stride_bytes; // Byte stride between adjacent slice payloads.
-      uint64_t point_record_count; // Number of point records in one payload.
+      uint64_t first_payload_offset; // Absolute byte offset of slice 0 point records.
+      uint64_t payload_bytes_per_slice; // Valid bytes in one 3D-grid slice.
+      uint64_t payload_stride_bytes; // Byte stride between adjacent time-slice data blocks.
+      uint64_t point_record_count; // Number of point records in one time slice.
       uint32_t point_record_bytes; // Bytes in one point record.
       uint32_t num_grids; // Writer-side grid count stored in the combined header.
       uint32_t nghosts; // Writer-side NGHOSTS stored in the combined header.
@@ -150,7 +150,7 @@ def time_window_manager_numerical() -> None:
       uint64_t mapped_file_offset; // Page-aligned file offset passed to mmap().
       size_t mapped_length_bytes; // Length passed to mmap()/munmap().
       const unsigned char *mapped_base; // Pointer returned by mmap(), or NULL.
-      const unsigned char *active_payload_base; // Pointer to mapped_first_slice payload.
+      const unsigned char *active_payload_base; // Pointer to the data block for mapped_first_slice.
     } NumericalTimeWindowManager; // END STRUCT: NumericalTimeWindowManager
 
     //==========================================
@@ -357,7 +357,7 @@ def time_window_manager_numerical() -> None:
      *
      * Only the grid fields serialized by the numerical-data writer are
      * overwritten here. Higher-level caller-owned params metadata unrelated to
-     * the spatial lookup contract remains untouched.
+     * the spatial lookup requirement remains untouched.
      *
      * @param[in] ntwm Initialized numerical time-window manager.
      * @param[out] params Destination params_struct to populate.
@@ -509,7 +509,7 @@ def time_window_manager_numerical() -> None:
           ntwm->point_record_count > UINT64_MAX / expected_point_record_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted file payload metadata could not describe interpolation records
+      } // END IF: trusted file point-record metadata could not describe interpolation records
 
       uint64_t expected_point_record_count = 1ULL;
       for (int dirn = 0; dirn < 3; dirn++) {
@@ -537,7 +537,7 @@ def time_window_manager_numerical() -> None:
       if (ntwm->payload_bytes_per_slice != expected_payload_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted payload length disagreed with point-record metadata
+      } // END IF: trusted time-slice data length disagreed with point-record metadata
 
       const off_t file_size = lseek(ntwm->fd, 0, SEEK_END);
       if (file_size < (off_t)TIME_WINDOW_MANAGER_NUMERICAL_FIXED_HEADER_BYTES) {
@@ -569,19 +569,19 @@ def time_window_manager_numerical() -> None:
       if (ntwm->num_time_slices > UINT64_MAX / ntwm->payload_stride_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted payload-region byte count would overflow
+      } // END IF: trusted data-region byte count would overflow
       const uint64_t payload_region_bytes =
           ntwm->num_time_slices * ntwm->payload_stride_bytes;
       if (ntwm->first_payload_offset > UINT64_MAX - payload_region_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted payload-region end offset would overflow
+      } // END IF: trusted data-region end offset would overflow
       const uint64_t payload_region_end =
           ntwm->first_payload_offset + payload_region_bytes;
       if (payload_region_end > file_size_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted payload region exceeded the combined container
+      } // END IF: trusted time-slice data exceeded the combined container
 
       const uint64_t first_time_offset =
           ntwm->slice_table_offset +
@@ -715,7 +715,7 @@ def time_window_manager_numerical() -> None:
     } // END FUNCTION: time_window_manager_numerical_required_grid_range
 
     /**
-     * Map exactly one slot's required contiguous time-slice payload window.
+     * Map exactly one slot's required contiguous window of time-slice data.
      *
      * @param[in,out] ntwm Numerical time-window manager.
      * @param[in] tsm Base time-slot manager.
@@ -793,11 +793,11 @@ def time_window_manager_numerical() -> None:
     } // END FUNCTION: time_window_manager_numerical_mmap_for_slot
 
     /**
-     * Return a pointer to one mapped 3D-grid payload.
+     * Return a pointer to one mapped 3D-grid slice.
      *
      * @param[in] ntwm Numerical time-window manager.
      * @param slice_index Global slice index.
-     * @return Pointer to the slice payload.
+     * @return Pointer to the time-slice data.
      *
      * @pre slice_index is inside the currently mapped window.
      */
@@ -817,7 +817,7 @@ def time_window_manager_numerical() -> None:
      * @param temporal_interp_half_width Centered temporal interpolation half-width n.
      * @param[out] slice_indices Global slice indices for the temporal stencil.
      * @param[out] slice_times Physical coordinate times for the temporal stencil.
-     * @param[out] slice_payloads Pointers to mapped 3D-grid payloads for the stencil.
+     * @param[out] slice_payloads Pointers to mapped 3D-grid slices for the stencil.
      * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
      *
      * @pre The caller provides arrays of length at least `2*temporal_interp_half_width + 1`.

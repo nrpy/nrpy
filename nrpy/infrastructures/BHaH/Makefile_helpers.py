@@ -341,7 +341,7 @@ endef
     if cc == "nvcc":
         if create_lib:
             valgrind_rule = """valgrind:
-\t@echo "Compute Sanitizer requires an executable test harness."
+\t@echo "Compute Sanitizer requires an executable test program."
 \t@false"""
         else:
             valgrind_rule = f"""valgrind:

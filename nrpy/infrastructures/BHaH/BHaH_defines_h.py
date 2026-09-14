@@ -8,7 +8,7 @@ Author: Zachariah B. Etienne
 
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import nrpy.grid as gri
 import nrpy.helpers.parallelization.utilities as parallel_utils
@@ -78,41 +78,6 @@ typedef struct __griddata__ {
     griddata_struct_def += "} griddata_struct;\n"
 
     return griddata_struct_def
-
-
-def parse_cparam_type(cparam_type: str) -> Tuple[str, Optional[str], bool]:
-    """
-    Parse a cparam_type string into its base type, size, and array status.
-
-    :param cparam_type: The raw CParam type string, e.g., "REAL[8]".
-    :return: A tuple (base, size, is_array).
-    :raises ValueError: If the array size is not a numeric string.
-
-    Doctests:
-    >>> parse_cparam_type("int")
-    ('int', None, False)
-    >>> parse_cparam_type("REAL[8]")
-    ('REAL', '8', True)
-    >>> parse_cparam_type("char[100]")
-    ('char', '100', True)
-    >>> parse_cparam_type("  REAL[ 16 ] ")
-    ('REAL', '16', True)
-    >>> parse_cparam_type("char[NAME]")  # doctest: +IGNORE_EXCEPTION_DETAIL
-    Traceback (most recent call last):
-    ...
-    ValueError: Invalid array size 'NAME'
-    """
-    if "[" not in cparam_type or "]" not in cparam_type:
-        return cparam_type.strip(), None, False
-
-    base, after = cparam_type.split("[", 1)
-    size_str, _ = after.split("]", 1)
-    size = size_str.strip()
-
-    if not size.isdigit():
-        raise ValueError(f"Invalid array size '{size}'")
-
-    return base.strip(), size, True
 
 
 def register_BHaH_defines(module: str, bhah_defines_str: str) -> None:
@@ -229,7 +194,7 @@ def _register_param_structs() -> None:
         :param description: The description of the variable.
         :return: A formatted C declaration string with comments.
         """
-        base, size, is_array = parse_cparam_type(c_type)
+        base, size, is_array = par.parse_cparam_type(c_type)
         decl = (
             f"  char {var_name}[{size}];"
             if is_array and base.startswith("char")

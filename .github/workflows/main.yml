@@ -242,6 +242,78 @@ jobs:
           fi
           "
 
+  dendro-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install verified Apptainer
+        run: |
+          curl --fail --location \
+            --output "$RUNNER_TEMP/apptainer.deb" \
+            https://github.com/apptainer/apptainer/releases/download/v1.3.2/apptainer_1.3.2_amd64.deb
+          echo "f9da880012b39809c2198240e1d46e2615dbf9b041d5d7f9e78b791af9ac0fb5  $RUNNER_TEMP/apptainer.deb" \
+            | sha256sum --check --strict
+          sudo apt-get install -y "$RUNNER_TEMP/apptainer.deb"
+
+      - name: Download verified Dendro image
+        run: |
+          curl --fail --location \
+            --output "$RUNNER_TEMP/dendro-ubuntu24.04.5.sif" \
+            https://github.com/nrpy/dendro_ci_images/releases/download/1.0.0/dendro-ubuntu24.04.5.sif
+          echo "75c38524c4685d3cf45946b8897505ba0d2a6a8b5c4d41fecc22092bbbf420c8  $RUNNER_TEMP/dendro-ubuntu24.04.5.sif" \
+            | sha256sum --check --strict
+
+      - name: Disable AppArmor restriction on unprivileged user namespaces, needed for 24.04 compatibility.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Check generated fCCZ4 numerics and run the real two-rank host
+        run: |
+          mkdir -p "$RUNNER_TEMP/dendro-validation"
+          apptainer exec --cleanenv \
+            --bind "$GITHUB_WORKSPACE:/nrpy:ro" \
+            --bind "$RUNNER_TEMP/dendro-validation:/ci-work" \
+            "$RUNNER_TEMP/dendro-ubuntu24.04.5.sif" bash -s <<'BASH'
+          set -euo pipefail
+          export OMP_NUM_THREADS=1
+          export PYTHONPATH=/nrpy
+
+          python -u -m nrpy.examples.dendro_fccz4 --project-dir /ci-work/fccz4
+          cmake -S /ci-work/fccz4/Dendro-GR/nrpy_fccz4 -B /ci-work/build-fccz4 \
+            -DCMAKE_BUILD_TYPE=Release -DFCCZ4_STANDALONE_HOST=ON
+          cmake --build /ci-work/build-fccz4 --target fccz4_self_tests --parallel
+          ctest --test-dir /ci-work/build-fccz4 \
+            --tests-regex '^fccz4_gr_nonflat_reference$' \
+            --no-tests=error --output-on-failure
+
+          cp -a "$DENDRO_GR_SOURCE" /ci-work/host
+          cp -a "$DENDROLIB_SOURCE" /ci-work/dendrolib
+          cat >> /ci-work/host/CMakeLists.txt <<'CMAKE_EOF'
+          add_subdirectory("${NRPY_GENERATED}/Dendro-GR/nrpy_fccz4" nrpy_fccz4)
+          CMAKE_EOF
+
+          cmake -S /ci-work/host -B /ci-work/real-build \
+            -DCMAKE_BUILD_TYPE=Release -DWITH_CUDA=OFF -DCPU_ARCH=native \
+            -DFCCZ4_STANDALONE_HOST=OFF \
+            -DNRPY_GENERATED=/ci-work/fccz4 \
+            -DDENDRO_dendrolib_DIR=/ci-work/dendrolib \
+            -DDENDRO_dendrolib_GIT_TAG=246043709e806021fcfc011fe657b8bf964cae4c \
+            -DFETCHCONTENT_SOURCE_DIR_TOML11="$TOML11_SOURCE" \
+            -DFETCHCONTENT_SOURCE_DIR_SPDLOG="$SPDLOG_SOURCE"
+          GIT_DIR=/ci-work/host/.git GIT_WORK_TREE=/ci-work/host \
+            cmake --build /ci-work/real-build --target fccz4Solver --parallel
+
+          parfile=/ci-work/fccz4/Dendro-GR/nrpy_fccz4/pars/fccz4_minkowski.par
+          timeout --signal=KILL 300 mpiexec --oversubscribe -n 2 \
+            /ci-work/real-build/nrpy_fccz4/fccz4Solver \
+            --steps 1 --dt 0.001 -t "$parfile"
+          BASH
+
   charmpp-validation:
     runs-on: ubuntu-24.04
 
@@ -571,4 +643,3 @@ jobs:
         run: |
           (cd trusted_code/project/sebobv2 && make clean) &&
           (cd project/sebobv2 && make clean)
-

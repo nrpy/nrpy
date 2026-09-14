@@ -6,8 +6,9 @@
 ## Summary
 
 Workflow YAML separates static analysis, Ubuntu/macOS code generation,
-ETLegacy regression, Charm++/superB, and trusted/current waveform consistency
-routes. These are configured routes, not execution-result snapshots.
+ETLegacy regression, Dendro qualification, Charm++/superB, and trusted/current
+waveform consistency routes. These are configured routes, not execution-result
+snapshots.
 
 ## Detail
 
@@ -17,8 +18,9 @@ Configured GitHub job map:
 | --- | --- | --- | --- |
 | `static-analysis` | Configured Linux/Python matrix | No generated project coverage | Python file execution plus version-dependent static checks; see [Static Analysis](static-analysis.md) |
 | `codegen-ubuntu` | Configured Ubuntu/Python matrix | Installs NRPy, generates in `tmp/`, and builds the selected default C/library projects with `make`, spanning elliptic, wave, black-hole, PN, SEOBNR, TOV, hydro, BHaHAHA, and `sebobv2` routes. It generates `sebobv1_jax` without package install/build. | The `make` builds run no generated executable, and `make clean` follows each; MANGA commands are commented out. |
-| `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation as Ubuntu; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
+| `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation as Ubuntu; no Dendro generation or build; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
 | `einsteintoolkit-validation` | Configured Ubuntu/Apptainer Einstein Toolkit image | Generates `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs the configured Baikal, BaikalVacuum, and WaveToyNRPy Cactus testsuites and fails on reported failures. No `carpetx_*` generation/build/run. |
+| `dendro-validation` | Configured Ubuntu/Apptainer image, digest-verified before use; 30-minute job limit, five-minute real-run limit, and one OpenMP thread per rank | Generates default fourth-order, KO-enabled fCCZ4; builds its standalone self-test target; then links the same generated solver into the image's real Dendro-GR host | Runs one nonflat generated RHS-and-diagnostics check against its multiprecision oracle, then runs one two-rank, one-step Minkowski evolution initialized through Dendro-GR. The real solver enforces rank count, finite values, flat-state bounds, projection schedule, and bounded drift. |
 | `charmpp-validation` | Configured Ubuntu/Apptainer Charm++ context | Generates and builds the configured superB elliptic, spectroscopy, and collision projects | Runs the configured collision executable through `charmrun`; no explicit scientific-output assertion beyond process success. |
 | `sebob-consistency-test` | Configured Ubuntu matrix | Checks out the workflow-selected trusted revision; generates/builds trusted and current SEOBNRv5 variants | Each helper invocation rebuilds both executables, uses exactly ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed the perturbation-derived baseline. |
 | `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the workflow-selected trusted revision | Uses the same ten-input and median-error criterion. |
@@ -77,11 +79,33 @@ cell is an ordinary C build. The helper installs no CUDA toolkit, declares no
 GPU runner, runs no generated executable, and checks no GPU result. Treat it as
 a local command recipe requiring a prepared environment, not CI pass evidence.
 
+Dendro has a dedicated configured job on every workflow invocation. It uses
+default fourth-order, KO-enabled fCCZ4. One standalone case compares the
+generated nonflat RHS and constraint diagnostics against multiprecision
+evaluations of the canonical expressions and verifies resolvable KO
+contributions. The same generated
+solver then links into the real host and runs one Minkowski step on exactly two
+MPI ranks. Dendro-GR's Minkowski initial-data routine supplies the real-host
+state; the solver checks rank count, finite values, flat-state numerical bounds,
+projection schedule, and drift before returning success. The image checksum
+fixes the consumed image bytes. The durable proof boundaries and local
+reproduction route live in [Validation,
+Standalone Host, And Deferred Tests](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md).
+
+Claim evidence:
+- Claim: the configured Dendro job runs one nonflat fCCZ4 RHS-and-diagnostics numerical oracle and one bounded two-rank real-host Minkowski evolution; configuration does not establish a particular run's outcome.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), `dendro-validation`
+- Corroboration: [general_relativity/self_tests_cpp.py](../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py), nonflat reference oracle; [general_relativity/main_cpp.py](../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py), real-host acceptance checks
+
 Explicitly unsupported or unverified by these configurations: CarpetX build or
 runtime; JAX generated-package install/import/basic test or accelerator runtime;
-any CUDA executable/GPU result; standalone evolution runtime; restart behavior;
+any CUDA executable/GPU result; Dendro general boundaries, distributed
+transport qualification, remeshing, local time stepping, restart, output,
+threaded kernels, or BSSN real-host execution;
+long-time or nonlinear Dendro evolution; Dendro convergence;
 geodesic/raytracing projects; GRoovy; active MANGA build; Kasner; and scientific
-correctness beyond stated ET regression and waveform-comparison assertions.
+correctness beyond the stated regression, property, and waveform assertions.
 
 These jobs intentionally create generated `project/` outputs. Treat those as CI
 products, not committed documentation or hand-authored source, unless a selected
@@ -91,7 +115,11 @@ generated file has been deliberately registered as frozen evidence.
 
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`; [.github/full_nrpy_local_ci.sh](../../.github/full_nrpy_local_ci.sh) - `example_scripts`, `cuda_example_scripts`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-mac`
+- [cmake_helpers.py](../../nrpy/infrastructures/Dendro/cmake_helpers.py) - `output_solver_cmake`, `output_tests_cmake`, their `add_test` registrations
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `einsteintoolkit-validation`; official Einstein Toolkit [Adding a test case](https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case) - `A test case is...`
+- [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `dendro-validation`
+- [general_relativity/self_tests_cpp.py](../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py) - nonflat RHS, diagnostics, and KO multiprecision oracle
+- [general_relativity/main_cpp.py](../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py) - real-host Minkowski acceptance checks
 - [test.ccl](../../nrpy/examples/et_WaveToyfiles/test/test.ccl) - `TEST WaveToyNRPy_test`, `RELTOL 1e-11`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `charmpp-validation`; official Charm++ [Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html) - `Compiling the Example`, `Running the Example`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `sebob-consistency-test`

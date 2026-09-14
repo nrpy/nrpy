@@ -45,7 +45,7 @@ everywhere. Its schedule runs in `ODESolvers_PostStep` after
 trace-projected conformal tensors.
 
 Claim evidence:
-- Claim: CarpetX emits `BSSN_to_ADM` schedule text placing ADM export after the combined determinant/trace projection in `ODESolvers_PostStep`; this audit did not build or run a generated thorn.
+- Claim: CarpetX emits `BSSN_to_ADM` schedule text placing ADM export after the combined determinant/trace projection in `ODESolvers_PostStep`; source registration alone does not establish generated-thorn build or runtime behavior.
 - Role: generated evidence
 - Deciding authority: [BSSN_to_ADM.py](../../../nrpy/infrastructures/CarpetX/general_relativity/BSSN_to_ADM.py), `register_CFunction_BSSN_to_ADM`
 - Corroboration: [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/CarpetX/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`

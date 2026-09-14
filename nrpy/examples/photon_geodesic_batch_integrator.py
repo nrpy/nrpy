@@ -1,5 +1,5 @@
 r"""
-Orchestrator for the Split-Pipeline Photon Geodesic Integrator.
+Generate the Split-Pipeline Photon Geodesic Integrator.
 
 This module constructs a high-performance C project for simulating photon trajectories
 in curved spacetimes.
@@ -67,7 +67,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 # ##############################################################################
 
 if __name__ == "__main__":
-    # Step 1: Configure command-line arguments for the generation pipeline
+    # Step 1: Configure command-line arguments for code generation.
     parser = argparse.ArgumentParser(
         description="Generate the Split-Pipeline Photon Geodesic Integrator (Kerr-Schild)."
     )
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     # Instruct NRPy to use the BHaH infrastructure for macro expansions and SoA layouts
     par.set_parval_from_str("Infrastructure", "BHaH")
 
-    # Map the new boolean flag to the string values your pipeline expects
+    # Map the boolean flag to the strings accepted by the generated code.
     parallelization_mode = "cuda" if args.cuda else "openmp"
     par.set_parval_from_str("parallelization", parallelization_mode)
 
@@ -132,7 +132,7 @@ if __name__ == "__main__":
         geodesic_data.norm_constraint_expr, PARTICLE
     )
 
-    # --- Core Pipeline Kernels (The RKF45 Modular Loop) ---
+    # --- RKF45 stage kernels ---
     interpolation_kernel.interpolation_kernel(SPACETIME)
     calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
         geodesic_data.geodesic_rhs, geodesic_data.xx

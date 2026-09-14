@@ -57,7 +57,7 @@ def bhah_axis_configs() -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
     :return: Dictionary mapping AXIS ("y" or "z") and FAMILY to a list of LINE_SPEC dictionaries.
     """
     # -------------------------------------------------------------------------
-    # axis_configs schema (dict of dicts):
+    # axis_configs field layout (dict of dicts):
     # axis_configs[AXIS][FAMILY] -> list[LINE_SPEC], where:
     #   AXIS   : "y" or "z" (the physical axis we will output as the first column)
     #   FAMILY : one of {"Cartesian","Spherical","Cylindrical","SymTP","Wedge","Spherical_Ring"}

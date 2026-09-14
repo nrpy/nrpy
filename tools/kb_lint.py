@@ -2,7 +2,8 @@
 """
 Mechanical lint checks for the markdown knowledge base.
 
-Author: NRPy contributors
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
 """
 
 import argparse
@@ -50,6 +51,7 @@ SOURCE_AUTHORITY_TIERS = {
 ROUTER_NAMES = {"index.md"}
 SUPPORT_PAGES = {
     WIKI / "SCHEMA.md",
+    WIKI / "computational-physics-language.md",
     WIKI / "workflows.md",
     WIKI / "glossary.md",
     WIKI / "catalog.md",
@@ -64,6 +66,7 @@ SOURCE_STATUSES = {"frozen", "living"}
 INGEST_STATES = {"registered", "partial", "ingested", "exact seed"}
 GLOBAL_HUB_NAMES = {
     "SCHEMA.md",
+    "computational-physics-language.md",
     "workflows.md",
     "glossary.md",
     "catalog.md",
@@ -81,7 +84,7 @@ ROOT_PROHIBITED_ARTIFACT_SEGMENT_RE = re.compile(
 # Volatile facts do not belong in the authored KB. Stable scientific
 # cardinalities and identifier names remain valid; inventory counts and
 # source-tracking values do not. Prohibition statements may name a removed
-# metadata class.
+# maintenance-field category.
 HASH_DIGEST_VALUE_RE = re.compile(
     r"`?\b(?:sha(?:-?3)?-?\d+|md-?5|blake-?\d\w*|xxh\d*|crc-?\d+)\b`?"
     r"(?:\s*[:=]\s*|\s+)`?[0-9a-f]{8,}\b`?"
@@ -208,7 +211,7 @@ ROOT_KB_ARTIFACT_RE = re.compile(r"^kb_audit_.*[.]md$")
 
 @dataclass(frozen=True)
 class _Link:
-    """Markdown link with resolved local target metadata."""
+    """Markdown link with its source location, local path, anchor, and section flag."""
 
     source: Path
     line: int
@@ -492,7 +495,7 @@ def _extract_links(path: Path) -> List[_Link]:
     Extract Markdown links outside fenced code blocks and HTML comments.
 
     :param path: Markdown file to scan.
-    :return: Links with local resolution metadata.
+    :return: Links with source locations, resolved paths, anchors, and section flags.
     """
     text = _read(path)
     search_text = _mask_inline_code(_mask_nonprose(text))
@@ -623,7 +626,7 @@ def _check_router_detail(files: List[Path], failures: List[str]) -> None:
 
 def _check_leaf_contract(pages: List[Path], failures: List[str]) -> None:
     """
-    Check normal leaves satisfy the page contract.
+    Check normal leaves satisfy the required page layout.
 
     :param pages: Wiki pages to scan.
     :param failures: Mutable failure list.
@@ -986,7 +989,7 @@ def _source_registered(literal: str, registered: Set[str]) -> bool:
     """
     Return whether a source path is exact-registered or aggregate-covered.
 
-    Aggregate coverage follows the finite path contracts named in the source
+    Aggregate coverage follows the explicit path rules named in the source
     manifest. It does not infer coverage from prose or arbitrary prefixes.
 
     :param literal: Repository-relative source path.
@@ -1063,7 +1066,7 @@ def _page_header_status(path: Path) -> Optional[str]:
 
 def _check_glossary_catalog_signal(failures: List[str]) -> None:
     """
-    Check glossary terms have owner or concept-candidate signals.
+    Check glossary terms link a defining page, name external background, or have a catalog candidate.
 
     :param failures: Mutable failure list.
     """
@@ -1106,7 +1109,7 @@ def _check_glossary_catalog_signal(failures: List[str]) -> None:
                 failures,
                 GLOSSARY,
                 None,
-                f"glossary term lacks owner/external/catalog candidate signal: {term}",
+                f"glossary term lacks a defining-page link, external/background designation, or catalog candidate: {term}",
             )
 
 
@@ -1140,7 +1143,12 @@ def _governed_kb_files() -> List[Path]:
 
 def _metadata_mention_allowed(lines: List[str], line_index: int) -> bool:
     """
-    Return whether a removed-metadata mention is prohibition/supersession text.
+    Return whether a removed maintenance-field mention is prohibition/supersession text.
+
+    Doctests:
+    >>> lines = ["Never store mtime values.", "Record mtime values."]
+    >>> [_metadata_mention_allowed(lines, index) for index in range(2)]
+    [True, False]
 
     :param lines: File lines being checked.
     :param line_index: Zero-based index of the line with the mention.
@@ -1152,6 +1160,43 @@ def _metadata_mention_allowed(lines: List[str], line_index: int) -> bool:
 def _volatile_metadata_issues(line: str) -> List[str]:
     """
     Return volatile-data policy violations found in one line.
+
+    Doctests:
+    >>> rejected = (
+    ...     "Last reconciled: 09-12-2026",
+    ...     "checked at 2026-09-12T14:03:22Z",
+    ...     "Checked at 12:34.",
+    ...     "commit 246043709e806021fcfc011fe657b8bf964cae4c",
+    ...     "revision deadbee",
+    ...     "sha256: 0123456789abcdef",
+    ...     "inventory contains 390 files",
+    ...     "The inventory covers 29 generators",
+    ...     "The inventory configures 74 trusted comparisons.",
+    ...     "| Source count | Last checked |",
+    ...     "inspected=pass; generated=not-run",
+    ...     "platform=linux; compiler=gcc-12",
+    ...     "| Audit | Resolution |",
+    ...     "No generated thorn build or restart validation was done.",
+    ...     "Isolated local OpenMP builds and one-step startup were performed.",
+    ...     "Validation artifacts were temporary and were not registered.",
+    ... )
+    >>> all(_volatile_metadata_issues(value) for value in rejected)
+    True
+    >>> allowed = (
+    ...     "The state vector has 24 evolved components.",
+    ...     "Finite-difference order 4 needs two centered halo points.",
+    ...     "Compare CoordSystem_hash before restoring a checkpoint.",
+    ...     "Brown, arXiv:0902.3652v2.",
+    ...     (
+    ...         "https://gist.githubusercontent.com/karpathy/"
+    ...         "442a6bf555914893e9891c11519de94f/raw/"
+    ...         "ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md"
+    ...     ),
+    ...     "https://example.org/archive/2026-09-12/report",
+    ...     "Never store dates, timestamps, hashes, or file counts in KB prose.",
+    ... )
+    >>> [_volatile_metadata_issues(value) for value in allowed]
+    [[], [], [], [], [], [], []]
 
     :param line: Authored KB line to inspect.
     :return: Violation messages for the line.
@@ -1171,7 +1216,7 @@ def _volatile_metadata_issues(line: str) -> List[str]:
             "inventory count found",
         ),
         (VOLATILE_CATALOG_COUNT_RE, snapshot_line, "catalog count found"),
-        (VOLATILE_FIELD_RE, snapshot_line, "volatile metadata field found"),
+        (VOLATILE_FIELD_RE, snapshot_line, "volatile maintenance field found"),
         (VOLATILE_RESULT_TUPLE_RE, snapshot_line, "recorded result tuple found"),
         (VOLATILE_RUN_PROSE_RE, snapshot_line, "recorded run/audit prose found"),
     )
@@ -1197,7 +1242,7 @@ def _volatile_metadata_issues(line: str) -> List[str]:
 
 def _check_source_tracking_metadata(failures: List[str]) -> None:
     """
-    Check governed KB files for volatile metadata and snapshot values.
+    Check governed KB files for forbidden maintenance fields and snapshot values.
 
     :param failures: Mutable failure list.
     """
@@ -1209,7 +1254,7 @@ def _check_source_tracking_metadata(failures: List[str]) -> None:
             if MTIME_WORD_RE.search(line) and not _metadata_mention_allowed(
                 lines, idx - 1
             ):
-                _fail(failures, path, idx, "source-tracking Mtime metadata found")
+                _fail(failures, path, idx, "source-tracking Mtime value found")
 
 
 def _check_status_vocabularies(failures: List[str]) -> None:
@@ -1268,7 +1313,12 @@ def _check_source_map_targets(failures: List[str]) -> None:
     registered = _manifest_literals()
     for header, rows in source_tables:
         if header != SOURCE_MAP_COLUMNS:
-            _fail(failures, SOURCE_MAP, None, "source-map columns do not match schema")
+            _fail(
+                failures,
+                SOURCE_MAP,
+                None,
+                "source-map column headings differ from SOURCE_MAP_COLUMNS",
+            )
             continue
         source_i = header.index("Source or aggregate")
         authority_i = header.index("Authority tier")
@@ -1353,7 +1403,7 @@ def _check_contradictions(failures: List[str]) -> None:
             failures,
             CONTRADICTIONS,
             None,
-            "contradiction table columns do not match schema",
+            "contradiction table headings differ from the required headings",
         )
         return
     indexes = {name: header.index(name) for name in required}
@@ -1460,7 +1510,7 @@ def _check_contradictions(failures: List[str]) -> None:
 
 def _check_excluded_artifacts(failures: List[str]) -> None:
     """
-    Check KB trees contain Markdown prose only and no retired artifacts.
+    Check KB trees contain Markdown prose only and no retired maintenance files.
 
     :param failures: Mutable failure list.
     """
@@ -1469,18 +1519,18 @@ def _check_excluded_artifacts(failures: List[str]) -> None:
             continue
         for path in sorted(base.rglob("*")):
             if path.is_file() and path.suffix.lower() != ".md":
-                _fail(failures, path, None, "non-Markdown artifact in KB tree")
+                _fail(failures, path, None, "non-Markdown file in KB tree")
             if path.is_file() and re.search(
                 r"(?:^|[-_])(audit|scan|report|latest|token|plan|rank|log)(?:[-_.]|$)",
                 path.name,
                 re.IGNORECASE,
             ):
-                _fail(failures, path, None, "excluded maintenance/planning artifact")
+                _fail(failures, path, None, "excluded maintenance/planning file")
 
 
 def _check_root_artifacts(failures: List[str]) -> None:
     """
-    Check root maintenance artifacts.
+    Check for prohibited root-level maintenance files.
 
     :param failures: Mutable failure list.
     """
@@ -1489,7 +1539,7 @@ def _check_root_artifacts(failures: List[str]) -> None:
         if path.name in allowed_root_docs:
             continue
         if ROOT_PROHIBITED_ARTIFACT_SEGMENT_RE.search(path.name):
-            _fail(failures, path, None, "root-level KB maintenance artifact")
+            _fail(failures, path, None, "root-level prohibited maintenance file")
             continue
         if ROOT_COORDINATION_RE.fullmatch(path.name):
             continue
@@ -1502,7 +1552,7 @@ def _check_root_artifacts(failures: List[str]) -> None:
                 re.IGNORECASE,
             )
         ):
-            _fail(failures, path, None, "root-level KB maintenance artifact")
+            _fail(failures, path, None, "root-level prohibited maintenance file")
 
 
 def _main() -> int:
@@ -1552,4 +1602,8 @@ def _main() -> int:
 
 
 if __name__ == "__main__":
+    import doctest
+
+    if doctest.testmod().failed:
+        sys.exit(1)
     sys.exit(_main())

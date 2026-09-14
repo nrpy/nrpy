@@ -82,7 +82,7 @@ GeneralRFM precompute rejects CUDA before later Ricci registration can help.
 Use the default OpenMP route; `--floating_point_precision` remains available.
 
 Claim evidence:
-- Claim: `kasner_exact_evolution.py` defaults to a source-supported OpenMP path and exposes `--floating_point_precision`; it also exposes `--cuda`, but CUDA generation fails while initial-data registration requests support for its fixed GeneralRFM coordinate because GeneralRFM precompute rejects CUDA before later Ricci registration. Source inspection did not generate, build, run, or check results for either path.
+- Claim: `kasner_exact_evolution.py` defaults to a source-supported OpenMP path and exposes `--floating_point_precision`; it also exposes `--cuda`, but CUDA generation fails while initial-data registration requests support for its fixed GeneralRFM coordinate because GeneralRFM precompute rejects CUDA before later Ricci registration.
 - Role: descriptive behavior
 - Deciding authority: [kasner_exact_evolution.py](../../nrpy/examples/kasner_exact_evolution.py), `parser`, `parallelization`, `CoordSystem`, `enable_rfm_precompute`, `BHaH.general_relativity.initial_data.register_CFunction_initial_data`, and `BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval`
 - Corroboration: [initial_data.py](../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [generalrfm_precompute.py](../../nrpy/infrastructures/BHaH/generalrfm_precompute.py), `register_CFunctions_generalrfm_support` and `register_CFunction_generalrfm_precompute`

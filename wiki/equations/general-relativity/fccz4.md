@@ -560,7 +560,7 @@ Claim evidence:
 
 ### Explicit conventions and resolved source discrepancies
 
-Five source-resolution statements are explicit:
+The source-resolution statements are explicit:
 
 1. NRPy uses `W=exp(-2 phi)` and `chi=exp(-4 phi)`, matching its BSSN
    variables. Sign-reversed conformal-factor prose in Mewes et al. is not
@@ -642,15 +642,10 @@ Claim evidence:
 
 ### Validation boundary
 
-The three equation owners contain no doctest examples but run the canonical
+The equation owners contain no doctest examples but run the canonical
 `doctest.testmod()` gate before trusted comparisons. Their `__main__` paths
-configure 74 final-output comparisons:
-
-- six evolution dictionaries, each with 18 mapped RHS outputs and both YBS
-  options enabled jointly;
-- ten constraint dictionaries, each with the single final `H_Z4` output; and
-- 58 gauge dictionaries, each with seven final lapse/shift outputs and the YBS
-  options disabled.
+cover evolution with both YBS options enabled jointly, constraint outputs,
+and lapse/shift gauge outputs with the YBS options disabled.
 
 Evolution covers SinhCartesian baseline and external-Ricci cases,
 SinhSpherical baseline, external-Ricci, and precompute-with-matter cases, plus
@@ -671,7 +666,7 @@ implementation and do not establish generated C/CUDA compilation, long-time
 stability, convergence order, waveform validity, or scientific accuracy.
 
 Claim evidence:
-- Claim: The three equation owners configure 74 trusted final-output comparisons—six 18-output evolution dictionaries with both YBS options enabled jointly, ten one-output constraint dictionaries, and 58 default-YBS seven-output gauge dictionaries—while eight BHaH `rhs_eval` dictionaries jointly cover the YBS-driven downstream expressions; this validation does not establish generated backend builds, numerical stability, convergence, waveform validity, or scientific accuracy.
+- Claim: The equation owners configure trusted final-output comparisons for evolution with both YBS options enabled jointly, constraints, and default-YBS gauge expressions, while BHaH `rhs_eval` dictionaries jointly cover the YBS-driven downstream expressions; this validation does not establish generated backend builds, numerical stability, convergence, waveform validity, or scientific accuracy.
 - Role: descriptive behavior
 - Deciding authority: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), module `__main__`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), module `__main__`; [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), module `__main__`; [validate_expressions.py](../../../nrpy/validate_expressions/validate_expressions.py), `process_dictionary_of_expressions` and `compare_or_generate_trusted_results`
 - Corroboration: [fCCZ4_constraints_SinhSpherical_phi.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_constraints_SinhSpherical_phi.py), `trusted_dict`; [fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py), `trusted_dict`; [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py), `trusted_dict`; [fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py), `trusted_dict`

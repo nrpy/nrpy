@@ -9,6 +9,10 @@ answer from sourced pages. Durable answers are filed back into the wiki when
 they should compound. Maintenance work registers sources first, updates the
 owning leaf, then fixes nearby links, catalog entries, source-map rows, and
 glossary terms.
+Every passage added or revised during that work follows [Language For
+Computational Physicists](computational-physics-language.md) and names the
+equation, quantity, numerical method, file, result, or required behavior
+directly.
 NRPy code changes keep their normal project workflow: direct example runs need
 `PYTHONPATH=.` when there is no editable install. Modified handwritten Python
 follows [Static Analysis](validation/static-analysis.md); the generated
@@ -208,7 +212,8 @@ registered as frozen evidence.
 
 ## See Also
 
-- Depends on: [Schema](SCHEMA.md)
+- Depends on: [KB Page Format](SCHEMA.md)
+- Depends on: [Language For Computational Physicists](computational-physics-language.md)
 - See also: [Lint Checks](lint/CHECKS.md)
 - See also: [Contribution Style And Static Analysis](architecture/contribution-style-and-static-analysis.md)
 - See also: [Static Analysis](validation/static-analysis.md)

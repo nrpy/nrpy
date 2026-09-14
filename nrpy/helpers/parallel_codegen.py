@@ -53,6 +53,7 @@ NRPyEnv_type = Tuple[
             gri.BHaHGridFunction,
             gri.ETLegacyGridFunction,
             gri.CarpetXGridFunction,
+            gri.DendroGridFunction,
         ],
     ],
     Dict[str, Dict[str, Any]],
@@ -207,8 +208,8 @@ def wrapper_func(args: Tuple[Dict[str, Any], str, Any]) -> Any:
     """
     Execute a given function in parallel, wrapping its call for error-handling and performance logging.
 
-    This function serves as a bridge for parallel processing, ensuring that each task
-    reports its completion time and handles any potential exceptions that may arise during execution.
+    This wrapper calls one generated-code task in a worker process, records its
+    completion time, and reports exceptions from that task.
 
     :param args: A tuple containing the shared dictionary, key, and value for each task.
     :return: The key and the result of the parallel_function_call.
