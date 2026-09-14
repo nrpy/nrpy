@@ -33,8 +33,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py), `SEOBNR_aligned_spin_constants.__init__`, `compute_calibration_params`
 - Corroboration: [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_constants.py), `trusted_dict` (`a6_nrpy_calibrated`, `Delta_t_NS_nrpy_calibrated` keys)
-- Validation: `inspected=pass; generated=not-applicable; built=not-applicable; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=fixed sampled trusted-expression comparison; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=default post-calibration mode sampled with nrpy_calibrated=False and nrpy_calibrated=True; calibration_no_spin and calibration_spin modes not sampled by this test; date=09-14-2026`
 
 For all modes, `Delta_t` is defined as `Delta_t_NS + Delta_t_S`. The class then
 computes remnant properties through `final_spin_non_precessing_HBR2016()` and
@@ -64,8 +62,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py), `__main__` block
 - Corroboration: none available; this script is the sole registered source for its own sampled-dictionary construction
-- Validation: `inspected=pass; generated=not-applicable; built=not-applicable; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction plus trusted-expression comparison pipeline; precision=fixed sampled trusted-expression comparison; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=default post-calibration mode only, both nrpy_calibrated arms; date=09-14-2026`
 
 ## Sources
 
