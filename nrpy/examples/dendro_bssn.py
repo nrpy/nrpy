@@ -7,16 +7,22 @@ required the formulation-agnostic lowering to be extracted into
 ``block_kernel_helpers``, but no existing emitter changed behavior and the fCCZ4
 output is unaffected.
 
-The emitted names follow Dendro-GR's own BSSN solver rather than NRPy's
-vocabulary: the solver directory is ``BSSN_GR``, CMake variables carry the
+The module-level names identify NRPy as the source: the solver directory and
+CMake project are ``nrpy_bssn``, and the C++ namespace is ``nrpy::bssn``.
+Names inside that module follow the formulation: CMake variables carry the
 ``BSSN_`` prefix, the object library is ``bssn_common``, the executable is
-``bssnSolver``, the namespace is ``bssn``, and the context source is
-``bssnCtx.cpp``.
+``bssnSolver``, and the context source is ``bssnCtx.cpp``.
 
 Run as a module:
 
     python -m nrpy.examples.dendro_bssn \
         --project-dir project/dendro_bssn --fd-order 4 --no-ko
+
+Doctests:
+>>> (solver_name, solver_namespace)
+('nrpy_bssn', 'nrpy::bssn')
+>>> (solver_stem, exec_or_library_name)
+('bssn', 'bssnSolver')
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -51,14 +57,13 @@ from nrpy.infrastructures.Dendro.general_relativity import (
     solver_context,
 )
 
-# Dendro-GR's own BSSN solver: directory BSSN_GR, namespace bssn, sources
-# bssnCtx.cpp / bssn_constraints.cpp, object library bssn_common, executable
-# bssnSolver.  These are arguments to the infrastructure, not registered
-# CodeParameters.
-solver_name = "BSSN_GR"
+# NRPy authors the module directory, CMake project, and C++ namespace.  Names
+# inside that module retain the conventional BSSN stem and Dendro target names.
+# These are arguments to the infrastructure, not registered CodeParameters.
+solver_name = "nrpy_bssn"
 solver_prefix = "BSSN"
 solver_stem = "bssn"
-solver_namespace = "bssn"
+solver_namespace = "nrpy::bssn"
 exec_or_library_name = "bssnSolver"
 profile_name = "bssn_cartesian_vacuum"
 
@@ -129,7 +134,7 @@ def main() -> None:
     )
 
     # Minkowski initial data and the smooth analytic perturbation the
-    # lifecycle gates evolve.  Both are formulation-agnostic: they write every
+    # evolution tests advance.  Both are formulation-agnostic: they write every
     # registered EVOL field to its registered asymptotic value.
     initial_data.register_CFunctions_minkowski_initial_data(solver_stem=solver_stem)
     initial_data.register_CFunctions_smooth_perturbation(solver_stem=solver_stem)
@@ -225,13 +230,14 @@ def main() -> None:
             exec_or_library_name,
             self_tests_cpp.test_sections(),
             main_cpp.standalone_ctest_statements(solver_stem, exec_or_library_name),
-            main_cpp.real_ctest_statements(solver_stem, exec_or_library_name),
+            (),
+            real_host_available=False,
         )
     )
     for relative_path, text in sorted(artifacts.items()):
         target = Path(args.project_dir) / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
-        # C and C++ artifacts are clang-formatted, as every other NRPy
+        # Generated C and C++ source files are clang-formatted, as every other NRPy
         # infrastructure formats what it emits; CMake and TOML are left as
         # written.
         with ConditionalFileUpdater(

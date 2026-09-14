@@ -7,9 +7,9 @@ invokes the registered generated CFunctions.  It carries no formulation
 content: every count, name and constant comes from a generated header, and
 every kernel name is read back from the Dendro role registry.
 
-SCOPE OF EVIDENCE.  This vehicle establishes lifecycle plumbing -- allocation
-with generated counts, the call path, the block and flat-block entry points
-agreeing, per-rank decomposition, and an application-supplied fixed point.  It cannot
+SCOPE OF EVIDENCE.  This test program checks allocation with generated counts,
+the registered CFunction calls, agreement between the block and flat-block entry
+points, per-rank decomposition, and an application-supplied fixed point.  It cannot
 detect a uniform sign or scale error in the finite-difference coefficients:
 such a kernel approximates a different continuum operator and still converges
 at the requested order.  Pointwise correctness is established against an
@@ -35,39 +35,68 @@ namespace $NAMESPACE {
 
 class Ctx {
  public:
+  /**
+   * Release the standalone vectors and application-owned storage.
+   *
+   */
   ~Ctx();
-  // Allocate this rank's standalone host mesh (n_blocks padded blocks of the given
-  // extent and spacing) and the generated-count EVOL vectors, then run the
-  // registered parameter CFunctions.  `rank` shifts this rank's subdomain so
-  // that ranks own disjoint physical blocks rather than duplicating one.
+  /**
+   * Allocate this rank's standalone mesh and generated-count vectors.
+   *
+   * The rank shifts its subdomain so ranks own disjoint physical blocks.
+   *
+   * @param n_blocks Number of padded blocks owned by this rank.
+   * @param extent Number of points per block axis, including padding.
+   * @param dx Positive uniform grid spacing.
+   * @param rank MPI rank used to place this rank's subdomain.
+   * @param[in] parfile_path Optional parameter-file path; unsupported standalone.
+   * @return 0 on success; 1 for invalid mesh bounds or a supplied parameter file.
+   */
   int initialize_mesh(int n_blocks, int extent, double dx, int rank,
                        const char* parfile_path);
-  // Startup checks: scalar/state contracts, vector component counts, per-block
-  // padding, FD order, parameter validation.
+  /**
+   * Check generated state, padding, finite-difference, and parameter requirements.
+   *
+   * @param rank MPI rank; only rank zero prints effective parameters.
+   * @return 0 when every startup check passes; 1 otherwise.
+   */
   int startup_checks(int rank);
 $STANDALONE_APPLICATION_DECLARATIONS
   // Generated all-block RHS.
   int rhs_eval_all_blocks();
   // RHS magnitude at the current state, maximised over this rank's interior.
   double max_interior_rhs();
-  // Largest difference between the per-block entry point and the LTS
-  // flat-block adapter on the same state (one numerical body).
+  /**
+   * Compare the per-block and flat-block RHS adapters on the same state.
+   *
+   * @return Largest absolute interior difference over all evolved components.
+   */
   double flat_adapter_max_difference();
-  // Host-owned explicit-Euler lifecycle step: u += dt * f(u).  The host
-  // integrator owns this loop exactly as the real Dendro integrator would; it
-  // evaluates no formulation -- every derivative and every equation term comes
-  // from the registered generated CFunctions.
+  /**
+   * Advance the host-owned state by one explicit-Euler step.
+   *
+   * @param dt Timestep multiplying the generated RHS.
+   * @return 0 after completing the step.
+   */
   int euler_step(double dt);
-  // Host reduction: maximum |field| over the interior of every local block,
-  // over `ncomp` components.  The count is a parameter so the same reduction
-  // serves the evolved and the diagnostic vectors without naming either.
+  /**
+   * Reduce the maximum absolute field value over local block interiors.
+   *
+   * @param[in] fields Component pointers spanning every local block.
+   * @param ncomp Number of components to inspect.
+   * @return Maximum absolute interior value.
+   */
   double max_interior_value(const $SCALAR* const* fields, unsigned ncomp);
-  // Resolve host-supplied exact NRPy names (output or refinement selection).
-  // An unknown name is fatal: this prints every valid generated name and
-  // returns nonzero.  No name is written down here.
+  /**
+   * Resolve host-supplied exact NRPy variable names.
+   *
+   * @param[in] names Case-sensitive variable names to resolve.
+   * @param count Number of supplied names.
+   * @return 0 if every name resolves; 1 after reporting any unknown name.
+   */
   int select_variables(const char* const* names, unsigned count);
 
-  // Host mesh and EVOL vectors (in / rhs / out), standalone-host lifecycle.
+  // Host mesh and EVOL vectors (in / rhs / out) for standalone evolution.
   // Value-initialized: standalone_host::dvector_struct is an aggregate with no default member
   // initializers, and ~Ctx frees all four vectors unconditionally.  When
   // initialize_mesh rejects its inputs it returns before assigning them, so
@@ -85,7 +114,7 @@ $STANDALONE_APPLICATION_FREE_DECLARATIONS
 // clang-format on
 """
 
-_SOURCE = """// Host-owned lifecycle only.  Loops here are host reductions and integrator
+_SOURCE = """// Host allocation, reductions, and time integration only.  Loops here are
 // sweeps; they carry their own index names (`bx`, `by`, `bz`, `cell`) because
 // `i0`/`i1`/`i2`/`blk_id` are reserved for NRPy-emitted numerical loops, which
 // never appear in this emitter.
@@ -103,6 +132,12 @@ namespace $NAMESPACE {
 
 namespace {
 
+/**
+ * Exchange two standalone vectors without moving their component storage.
+ *
+ * @param[in,out] a First vector, receiving the second vector's storage.
+ * @param[in,out] b Second vector, receiving the first vector's storage.
+ */
 void swap_vectors(standalone_host::dvector_struct& a, standalone_host::dvector_struct& b) {
   $SCALAR** tmp_comp = a.comp;
   unsigned tmp_b = a.num_blocks;
@@ -185,7 +220,7 @@ int Ctx::initialize_mesh(int n_blocks, int extent, double dx, int rank,
                   sizeof($SCALAR) * static_cast<std::size_t>(n_blocks) * vol);
     }  // END LOOP: for f over vector components
   }  // END LOOP: for v over host vectors
-  // The registered parameter CFunctions own the parameter lifecycle.
+  // The registered parameter CFunctions set and update the parameters.
   $PARAMS_STRUCT_SET_TO_DEFAULT(params);
 $STANDALONE_APPLICATION_POST_MESH
   if (parfile_path != nullptr) {
@@ -201,8 +236,8 @@ $STANDALONE_APPLICATION_POST_MESH
 }  // END FUNCTION: Ctx::initialize_mesh
 
 int Ctx::startup_checks(int rank) {
-  // The generated scalar/state/padding/FD contracts hold for every local block
-  // and vector.
+  // Check the generated scalar type, state counts, padding, and finite-difference
+  // requirements for every local block and vector.
   if (host.in.num_components != $NAMESPACE::generated::NUM_EVOL_GFS ||
       host.rhs.num_components != $NAMESPACE::generated::NUM_EVOL_GFS ||
       host.out.num_components != $NAMESPACE::generated::NUM_EVOL_GFS ||
@@ -224,7 +259,7 @@ $STANDALONE_APPLICATION_STARTUP_CHECKS
     return 1;
   }  // END IF: parameter validation failed
   // Rank-0 only, as every other diagnostic in the entry point is: an N-rank
-  // run printing N identical parameter tables buries the gate output.
+  // run printing N identical parameter tables buries the check output.
   if (rank == 0) $PRINT_EFFECTIVE(params);
   return 0;
 }  // END FUNCTION: Ctx::startup_checks
@@ -847,7 +882,7 @@ def output_solver_context_cpp(
     ...     )
     ...     for _name, _role, _params, _body in _function_specs:
     ...         cfc.register_CFunction(
-    ...             desc="wave fixture", name=_name, params=_params, body=_body
+    ...             desc="wave-equation test function", name=_name, params=_params, body=_body
     ...         )
     ...         roles.set_CFunction_role(_name, _role)
     ...     _types = types_h.output_types_h(

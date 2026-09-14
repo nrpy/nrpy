@@ -47,7 +47,7 @@ from nrpy.infrastructures.Dendro.simple_loop import (
 MINKOWSKI_BLOCK_SUFFIX = "minkowski_initial_data_block"
 MINKOWSKI_ALL_BLOCKS_SUFFIX = "minkowski_initial_data"
 
-# Smooth analytic perturbation used by the lifecycle gates: a spatially varying
+# Smooth analytic perturbation used by the evolution tests: a spatially varying
 # state is what makes the generated derivative stencils observable at all.
 SMOOTH_PERTURBATION_BLOCK_SUFFIX = "smooth_perturbation_block"
 SMOOTH_PERTURBATION_ALL_BLOCKS_SUFFIX = "smooth_perturbation"
@@ -139,7 +139,7 @@ def build_smooth_perturbation(
     Build the smooth analytic perturbation CFunction bodies.
 
     The perturbation adds one bounded, infinitely differentiable analytic
-    profile to every evolved component, so a lifecycle test can exercise the
+    profile to every evolved component, so an evolution test can exercise the
     generated derivative stencils on a state that is not spatially constant
     (a Minkowski state has an identically vanishing RHS whatever the stencil
     coefficients).  The profile is authored in NRPy and lowered by
@@ -151,7 +151,7 @@ def build_smooth_perturbation(
     every field but the lapse and the conformal factor has an asymptotic value
     of zero and receives an identical increment.  A flat-layout adapter that
     bound a component to the wrong slab would then read a numerically
-    identical field, and the ``FLATADAPTER`` lifecycle gate could not see it.
+    identical field, and the ``FLATADAPTER`` comparison could not see it.
 
     :param solver_stem: Lowercase stem for the emitted CFunction names.
     :param amplitude: The registered ``smooth_perturbation_amplitude``
@@ -228,7 +228,7 @@ def register_CFunctions_smooth_perturbation(solver_stem: str) -> None:
     # Registered CodeParameters, not bare symbols: standalone kernels receive
     # these controls through params_struct with generated defaults and finite
     # validation.  They are intentionally absent from the real-host parfile,
-    # because that lifecycle does not call this qualification kernel.
+    # because the real-host run does not call this qualification kernel.
     amplitude = par.register_CodeParameter(
         "REAL",
         __name__,
@@ -256,7 +256,7 @@ def register_CFunctions_smooth_perturbation(solver_stem: str) -> None:
     block_name = f"{solver_stem}_{SMOOTH_PERTURBATION_BLOCK_SUFFIX}"
     block_desc = (
         "Per-block smooth analytic perturbation of every evolved field "
-        "(lifecycle-test state; NRPy-authored profile)."
+        "(evolution-test state; NRPy-authored profile)."
     )
     cfc.register_CFunction(
         subdirectory=subdirectory,

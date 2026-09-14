@@ -878,7 +878,7 @@ class CarpetXGridFunction(GridFunction):
         return access_str
 
 
-# The C++ alias every generated Dendro artifact spells for its floating-point
+# The C++ alias every generated Dendro source file uses for its floating-point
 # scalar.  Hardcoded here exactly as BHaHGridFunction hardcodes "REAL" and
 # ETLegacyGridFunction "CCTK_REAL"; the Dendro types emitter emits the matching
 # `using DendroScalar = double;`.
@@ -1001,7 +1001,7 @@ class DendroGridFunction(GridFunction):
         """
         Return the Dendro input-role pointer name for a gridfunction.
 
-        This class owns the ``in_`` spelling: the Dendro infrastructure's
+        This class defines the ``in_`` spelling: the Dendro infrastructure's
         decoration helpers call here rather than formatting it themselves, so
         the emitted pointer name has one source.
 

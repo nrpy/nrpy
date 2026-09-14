@@ -1,8 +1,8 @@
 // Dendrolib capability mini-tests for the NRPy Dendro infrastructure.
 //
-// Each check proves one of the host-contract axes recorded on the Dendro
+// Each check proves one host-interface requirement recorded on the Dendro
 // validation page in the NRPy knowledge base.  Every check is
-// written so that a host that does not honour the assumed contract fails it:
+// written so that a host that does not meet the assumed requirements fails it:
 // the expected values are recomputed here from the block record and the
 // physical domain, never read back from the same call under test.
 #include <mpi.h>
@@ -70,8 +70,17 @@ double field(unsigned v, double x, double y, double z) {
     }  // END SWITCH: field component
 }  // END FUNCTION: field
 
-// One element order: build a uniform mesh, unzip three fields, and check
-// every axis against values recomputed from the block record.
+/**
+ * Check one element order against Dendrolib mesh and unzip layouts.
+ *
+ * Builds a mesh, unzips three fields, and recomputes values from block records.
+ *
+ * @param eleOrder Dendrolib element order under test.
+ * @param level Base octree refinement level.
+ * @param comm Communicator participating in the collective checks.
+ * @param verbose Whether rank zero prints per-order details.
+ * @return True after completing the checks; false for collective setup failure.
+ */
 bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
     int rank = 0, npes = 1;
     MPI_Comm_rank(comm, &rank);
@@ -322,6 +331,13 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
 }  // END NAMESPACE: internal linkage
 // clang-format on
 
+/**
+ * Run the collective Dendrolib capability matrix.
+ *
+ * @param argc Command-line argument count.
+ * @param[in,out] argv Command-line arguments, also forwarded to MPI.
+ * @return 0 when every capability axis passes; 1 otherwise.
+ */
 int main(int argc, char **argv) {
     MPI_Init(&argc, &argv);
     MPI_Comm comm = MPI_COMM_WORLD;
@@ -336,7 +352,7 @@ int main(int argc, char **argv) {
 
     if (rank == 0) {
         std::printf("Dendrolib capability mini-tests, %d rank(s)\n", npes);
-        // Axis: scalar ABI.  The generated solver's DendroScalar contract.
+        // Axis: scalar ABI.  The generated solver's required DendroScalar type.
         const bool scalarOk = sizeof(DendroScalar) == (inject("scalar") ? 4u : 8u) &&
                               std::is_same<DendroScalar, double>::value;
         char detail[128];

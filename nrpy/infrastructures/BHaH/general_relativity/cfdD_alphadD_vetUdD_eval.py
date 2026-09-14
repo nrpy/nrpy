@@ -12,7 +12,7 @@ recomputing them. The gridfunctions are named cfdD, alphadD and vetUdD after the
 reference-metric convention ghatDDdD.
 
 The FD layer selects stored derivatives while leaving mathematical expressions unchanged.
-cfdD_alphadD_vetUdD_gridfunction_expressions() supplies the producer expressions;
+cfdD_alphadD_vetUdD_gridfunction_expressions() supplies the derivative expressions;
 register_cfdD_alphadD_vetUdD_gridfunctions() registers their output gridfunctions, and
 register_CFunction_cfdD_alphadD_vetUdD_eval() emits the C function that writes them.
 rhs_eval selects this storage with enable_cfdD_alphadD_vetUdD_gridfunctions=True.
@@ -20,7 +20,7 @@ The BHaH BSSN examples switch the scheme on with
 enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU, off by default, and then call
 cfdD_alphadD_vetUdD_eval before rhs_eval within each Method of Lines substep.
 
-Unlike hDDdD, which Ricci_eval consumes (hDDdD_eval.py), these gridfunctions cannot live in
+Unlike hDDdD, which Ricci_eval reads (hDDdD_eval.py), these gridfunctions cannot live in
 the SCRATCH group: rhs_eval reads them with a stencil while writing its own output to the
 Method of Lines buffer, so a pointwise store there would overwrite a neighbor's stencil
 point. They are ordinary AUXEVOL gridfunctions, which rhs_eval already receives, and so
@@ -71,11 +71,11 @@ def register_cfdD_alphadD_vetUdD_gridfunctions() -> List[str]:
     """
     Register the AUXEVOL gridfunctions cfdD, alphadD and vetUdD if not already registered.
 
-    Both the producer and its consumer call this, because parallel code generation runs each
-    registration in its own worker.
+    Both cfdD_alphadD_vetUdD_eval and rhs_eval call this because parallel code
+    generation runs each registration in its own worker.
 
     The components are registered by name, so each carries rank 0 and therefore scalar parity.
-    That is correct only because nothing ever applies boundary conditions to them: the producer
+    That is correct only because nothing ever applies boundary conditions to them: cfdD_alphadD_vetUdD_eval
     computes every point rhs_eval reads, ghost zones included, so these gridfunctions must never
     be added to an inner-boundary synchronization list. Declaring them rank 1 would not fix the
     parity either, since vetUdD is a mixed rank-2 object.

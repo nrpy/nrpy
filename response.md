@@ -9,13 +9,13 @@ post-edit review concluded `ACCEPT` from both seats.
 
 1. **Coordinate-admission control flow** — Removed floating coordinate
    finiteness, range, tolerance, and domain-membership predicates from mesh
-   admission, block geometry, exterior writes, and the two host harnesses.
-   Exterior ownership now uses Dendrolib's discrete block-boundary flags and
+   admission, block geometry, exterior writes, and the two host test programs.
+   Exterior point selection now uses Dendrolib's discrete block-boundary flags and
    padded storage indices. Coordinate arithmetic remains only where it computes
    numerical reference values, not where it admits, rejects, skips, or writes
    points. The affected validation page now describes this boundary mechanism
    accurately while retaining general application boundary conditions as an
-   open gate.
+   remaining required test.
 
 2. **Unsafe `char[N]` defaults** — Dendro's CodeParameter emitter now requires
    a string without embedded nulls and emits its UTF-8 bytes using safe literal
@@ -24,7 +24,7 @@ post-edit review concluded `ACCEPT` from both seats.
    characters, and non-ASCII input.
 
 3. **Missing semantic `END` markers** — Added markers for the enclosing
-   standalone `-r` branch, the real-host `try`, and the capability harness's
+   standalone `-r` branch, the real-host `try`, and the capability test program's
    padded-point branch. The previously present inner-block markers did not mark
    the two enclosing constructs, so those two template changes were necessary.
 
@@ -50,20 +50,22 @@ post-edit review concluded `ACCEPT` from both seats.
 
 ## Verification
 
-- Affected Python owners pass the repository single-file static-analysis gate
+- Affected Python files pass the required repository single-file static analysis
   under Python 3.12.3 and mypy 2.3.1.
 - Repository-wide `black --check .` passes: 875 files unchanged.
 - `python tools/kb_lint.py` and `git diff --check` pass.
-- Generated default BSSN and fCCZ4 projects build and pass 28/28 CTests,
+- Generated default BSSN and fCCZ4 projects each build and pass 12/12 CTests
+  (24/24 combined),
   including both non-flat GR reference tests.
-- The pinned Dendrolib capability harness passes on one rank, two ranks, and
+- The pinned Dendrolib capability test program passes on one rank, two ranks, and
   order 10 with padding 5.
 - The pinned real Dendro host builds and passes two-rank transport, parameter,
   and 100-step Minkowski checks.
 - Deliberate offset, halo, and nonfinite-state corruptions each produce a
   nonzero failure.
-- No new test files were added. Existing harnesses were adjusted where required.
-- `raw/source-docs/` and `.github/workflows/main.yml` are unchanged.
+- No new test files were added. Existing test programs were adjusted where required.
+- `raw/source-docs/` is unchanged. The author-requested Dendro CI job remains in
+  `.github/workflows/main.yml` under the explicit permission for that file.
 
 ## Rejected ancillary candidates
 
@@ -72,7 +74,7 @@ current-tree defects:
 
 - `_codeparameter_tail` and `_term` have multiple production calls;
   `gf_array_name`, ADM conversion, role metadata, and the cited public helpers
-  have active consumers or supported direct use.
+  have active calling functions or supported direct use.
 - Generic and GR Dendro emitters have separate backend and formulation
   responsibilities. Dendro consumes the canonical CodeParameter and finite-
   difference registries rather than replacing them.
@@ -87,7 +89,7 @@ current-tree defects:
   not promises of the reviewed interface.
 - The profile label, projection diagnostic, standalone maximum extent, upstream
   revision handling, and direct-header preferences have no demonstrated harmful
-  behavior under the governing contract.
+  behavior under the governing requirements.
 - Blanket marker claims are overbroad: trivial braces, helper-emitted loop
   footers, the short refinement lambda, and the compact one-line `StencilTerm`
   aggregate are not established violations. Only the three published closers
@@ -104,7 +106,7 @@ current-tree defects:
   corrected in the current tree.
 
 Coverage ideas such as same-process registry reuse, Python 3.7 execution,
-real-host FD2/FD6, optional host modes, the complete capability fault matrix,
+real-host FD2/FD6, optional host modes, all capability-test failure cases,
 multiprocessing, and nonlinear evolution remain unproven extensions rather than
-review findings. Under the minimal-sufficient-work contract, they were not
+review findings. Under the simplest-sufficient-implementation rule, they were not
 pursued as fixes.

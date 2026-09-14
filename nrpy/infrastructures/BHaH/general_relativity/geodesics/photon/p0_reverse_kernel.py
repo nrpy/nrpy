@@ -1,16 +1,15 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/p0_reverse_kernel.py
 r"""
-Defines the temporal momentum evaluation kernel and provides the host-side orchestrator.
+Defines the temporal momentum evaluation kernel and provides the host-side driver.
 
-This module provides the computational kernel that evaluates the quadratic Hamiltonian
+This module provides the CUDA or OpenMP function that evaluates the quadratic Hamiltonian
 constraint to enforce physical null trajectories for a batch of photons. It operates to
 find the negative root of the constraint equation for the temporal momentum component by
 dynamically compiling a provided SymPy expression representing the analytical root
 directly into the C code. Spatial momenta and independent metric components are unpacked
 from memory directly into explicit local variables. The code generation process
-dynamically formats read and write macros, access patterns, and mathematical
-instructions based on the target architecture, mapping SIMD operations to native
-hardware intrinsics where applicable.
+dynamically formats read and write macros for the selected CUDA or OpenMP target,
+mapping SIMD operations to native hardware intrinsics where applicable.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -26,11 +25,11 @@ import nrpy.params as par
 
 def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
     r"""
-    Orchestrate the global kernel for the initial temporal momentum calculation.
+    Generate the CUDA or OpenMP function for the initial temporal momentum calculation.
 
-    The kernel loads the photon's spatial momenta and metric components
-    from global memory, executes the Hamiltonian constraint solver,
-    and writes the resulting temporal momentum $p^0$ back to the state vector bundle.
+    The function loads each photon's spatial momenta and metric components
+    from the state and metric arrays, evaluates the Hamiltonian constraint,
+    and writes the resulting temporal momentum $p^0$ back to the state vector array.
 
     :param p0_expr: The SymPy expression representing the negative root of the Hamiltonian constraint.
     :raises ValueError: If the symbolic expression fails to parse during code generation.
@@ -46,7 +45,7 @@ def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
         "chunk_size": "const int",
     }
 
-    # Dynamically format read/write macros and SIMD generation based on target architecture.
+    # Select read/write macros and SIMD generation for CUDA or OpenMP.
     if parallelization == "cuda":
         read_fmt = "ReadCUDA(&{0})"
         write_fmt = "WriteCUDA(&{0}, {1})"
@@ -68,7 +67,7 @@ def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
         enable_simd = False
         loop_preamble = """
     //==========================================
-    // OPENMP LOOP ARCHITECTURE
+    // OPENMP PARALLEL LOOP
     //==========================================
     // Distribute photon rays across available CPU threads for parallel evaluation.
     #pragma omp parallel for
@@ -103,7 +102,7 @@ def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
             k += 1
     metric_load_str = "\n    ".join(metric_loads)
 
-    # Dynamically inject access patterns based on target architecture.
+    # Insert the selected CUDA or OpenMP memory accesses.
     pU1_load = read_fmt.format("d_f_bundle[IDX_F(5, i)]")
     pU2_load = read_fmt.format("d_f_bundle[IDX_F(6, i)]")
     pU3_load = read_fmt.format("d_f_bundle[IDX_F(7, i)]")
@@ -111,17 +110,17 @@ def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
 
     core_math = f"""
     //==========================================
-    // MACRO DEFINITIONS FOR BUNDLE ACCESS
+    // MACRO DEFINITIONS FOR ARRAY ACCESS
     //==========================================
-    // IDX_F maps a component to the flattened state bundle using SoA layout.
+    // IDX_F maps a component to the flattened state array using SoA layout.
     #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
-    // IDX_METRIC maps a component to the flattened symmetric metric bundle.
+    // IDX_METRIC maps a component to the flattened symmetric metric array.
     #define IDX_METRIC(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
 
     //==========================================
     // SPATIAL MOMENTUM UNPACKING
     //==========================================
-    // Unpacking variables from device memory to local registers minimizes global memory transactions.
+    // Load the three spatial momentum components into local variables.
     // Contravariant spatial momentum component $p^x$.
     const double pU1 = {pU1_load};
     // Contravariant spatial momentum component $p^y$.
@@ -132,27 +131,27 @@ def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
     //==========================================
     // METRIC TENSOR UNPACKING
     //==========================================
-    // Load the 10 independent metric components $g_{{\\mu\\nu}}$ from memory into explicitly named registers.
+    // Load the 10 independent metric components $g_{{\\mu\\nu}}$ into named local variables.
     {metric_load_str}
 
     //==========================================
     // HAMILTONIAN CONSTRAINT ROOT FINDING
     //==========================================
     // Evaluate the algebraic solution for the temporal momentum $p^0$.
-    // Local register storing the final evaluated negative root.
+    // Local variable storing the evaluated negative root.
     double p0_val = 0.0;
     {body_math}
 
     //==========================================
-    // GLOBAL MEMORY WRITE
+    // STATE ARRAY WRITE
     //==========================================
-    // Write the resulting temporal momentum back to component index 4 of the state bundle in memory.
+    // Write the resulting temporal momentum back to component index 4 of the state array in memory.
     {p0_write};
 
     //==========================================
     // MACRO CLEANUP
     //==========================================
-    // Undefine macros to ensure hermetic compilation and prevent redefinition errors.
+    // Undefine local macros to prevent later redefinition errors.
     #undef IDX_F
     #undef IDX_METRIC
     """
@@ -180,12 +179,12 @@ def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
 
-    desc = r""" Orchestrates the kernel for the initial temporal momentum calculation.
+    desc = r""" Runs the CUDA or OpenMP function for the initial temporal momentum calculation.
 
-    @param d_f_bundle Pointer to the state vector bundle $f^{\mu}$ in memory.
-    @param d_metric_bundle Pointer to the pre-calculated metric bundle $g_{\mu\nu}$ in memory.
-    @param chunk_size The number of active rays in the current bundle batch.
-    @param stream_idx The hardware stream index for asynchronous execution.
+    @param d_f_bundle Pointer to the state vector array $f^{\mu}$ in memory.
+    @param d_metric_bundle Pointer to the pre-calculated metric array $g_{\mu\nu}$ in memory.
+    @param chunk_size The number of active rays in the current ray chunk.
+    @param stream_idx Work-array index; CUDA uses the corresponding stream.
     """
 
     cfunc_type = "void"

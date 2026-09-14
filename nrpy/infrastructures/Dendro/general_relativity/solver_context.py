@@ -55,25 +55,68 @@ def output_solver_context_h(solver_stem: str, solver_namespace: str) -> str:
   int minkowski_initial_data();
   // Add the smooth GR qualification perturbation to every evolved component.
   int perturb_state();
+  /**
+   * Enforce the conformal determinant and trace-free constraints on all blocks.
+   *
+   * @return 0 when every point is projected; 1 if any point is rejected.
+   */
   int enforce_detgbar_equals_detghat_trAzero_all_blocks();
   double max_constraint_violation();
+  /**
+   * Replace the owned reference snapshot with the current evolved state.
+   *
+   * @return 0 after allocating and copying the snapshot.
+   */
   int snapshot_state();
+  /**
+   * Measure drift between the evolved state and the owned snapshot.
+   *
+   * @return Maximum absolute component drift over every local point.
+   */
   double max_drift_from_snapshot();"""
     standalone_members = """  $SCALAR** u0 = nullptr;
   $NAMESPACE::generated::detgtrazero_status_struct last_detgtrazero_status;
   unsigned long long detgtrazero_passes = 0;"""
-    standalone_free = """double observed_convergence_order(
+    standalone_free = """/**
+ * Estimate the generated RHS convergence order at one shared physical point.
+ *
+ * @param base_dx Coarsest grid spacing.
+ * @param[in] params Generated parameters forwarded to the RHS kernel.
+ * @return Observed base-two convergence order, or -1 if differences vanish.
+ */
+double observed_convergence_order(
     double base_dx, const $NAMESPACE::generated::params_struct& params);"""
     real_declarations = """  unsigned long long projection_passes = 0;
   unsigned long long dendrogr_initial_data_calls = 0;
   double projection_residual = 0.0;
+  /**
+   * Initialize the real-host state from Dendro-GR Minkowski data.
+   *
+   * @return 0 on success or an inactive rank; invalid data aborts MPI_COMM_WORLD.
+   */
   int initialize();
   int pre_stage(DVec&) { return 0; }
   int post_stage(DVec&) { return 0; }
   int pre_timestep(DVec&) { return 0; }
+  /**
+   * Project algebraic constraints after a real-host timestep.
+   *
+   * @param[in,out] input Packed evolved state updated by the projection.
+   * @return 0 on success or an inactive rank; invalid data aborts MPI_COMM_WORLD.
+   */
   int post_timestep(DVec& input);
+  /**
+   * Evaluate and reduce the generated constraint diagnostics.
+   *
+   * @return World maximum absolute constraint value.
+   */
   double max_constraints();
   double max_rhs();
+  /**
+   * Compare the current real-host state with its initial state.
+   *
+   * @return World maximum absolute evolved-state drift.
+   */
   double max_drift();
  private:
   std::vector<DendroScalar> initial;
@@ -180,7 +223,15 @@ double Ctx::max_constraint_violation() {
 }  // END FUNCTION: Ctx::max_constraint_violation"""
     standalone_free_definitions = """namespace {
 
-// Evaluate the generated RHS on one block at a shared physical point.
+/**
+ * Evaluate the generated RHS on one block at a shared physical point.
+ *
+ * @param extent Number of points on each block axis.
+ * @param dx Uniform grid spacing.
+ * @param sample_index Index of the sampled point on each axis.
+ * @param[in] params Generated parameters forwarded to the RHS kernel.
+ * @param[out] out Sampled RHS values in generated evolved-variable order.
+ */
 void sample_rhs_at_centre(
     int extent, double dx, int sample_index,
     const $NAMESPACE::generated::params_struct& params,
@@ -257,11 +308,19 @@ double observed_convergence_order(
     )
     initialization = f"""namespace {{
 
-// Dendro-GR owns the real-host initial-data values.  This adapter changes only
-// storage conventions: Dendro-GR's BSSN ordering/full conformal metric becomes
-// NRPy's generated named ordering/reference-metric perturbation.  Any generated
-// field not present in Dendro-GR's BSSN state (Theta for fCCZ4) starts at its
-// generated asymptotic value.
+/**
+ * Adapt one Dendro-GR Minkowski point to the generated state layout.
+ *
+ * Dendro-GR supplies the physical values; this function changes only ordering and
+ * storage.
+ * Fields absent from Dendro-GR's BSSN state start at generated asymptotic values.
+ *
+ * @param x Physical x coordinate.
+ * @param y Physical y coordinate.
+ * @param z Physical z coordinate.
+ * @param[out] output Generated component arrays receiving the adapted state.
+ * @param cell Flat destination index in every component array.
+ */
 void dendrogr_minkowski_point(double x, double y, double z,
                               DendroScalar* const* output,
                               std::size_t cell) {{
@@ -298,7 +357,7 @@ void dendrogr_minkowski_point(double x, double y, double z,
   store(generated::EvolVar::vetU0, ::bssn::VAR::U_BETA0);
   store(generated::EvolVar::vetU1, ::bssn::VAR::U_BETA1);
   store(generated::EvolVar::vetU2, ::bssn::VAR::U_BETA2);
-}} // END FUNCTION: adapt one native Dendro-GR Minkowski point
+}} // END FUNCTION: dendrogr_minkowski_point
 
 // clang-format off
 }}  // END NAMESPACE: internal linkage
@@ -328,7 +387,7 @@ int Ctx::initialize() {{
   post_timestep(state);
   initial.assign(state.get_vec_ptr(), state.get_vec_ptr() + state.get_size());
   return 0;
-}} // END FUNCTION: initialize native Dendro-GR Minkowski state"""
+}} // END FUNCTION: Ctx::initialize"""
     exterior_values = """// Exterior values use the same Dendro-GR initial-data
   // routine as the evolved initial state.
   std::vector<DendroScalar*> fp(flat.size());

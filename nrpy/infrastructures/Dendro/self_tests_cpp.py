@@ -4,9 +4,9 @@ Emit the generated project's self-test executable.
 
 Every test is driven from generated headers and registered CFunctions; the
 standalone host types stand in for the pinned Dendrolib API.  Production field
-names and asymptotic values remain application-owned.  The local two-field
-fixture is temporary, formulation-neutral, and removed from the registries after
-its generated artifacts are assembled.
+names and asymptotic values remain defined by the application.  The local
+two-field test system is temporary, formulation-neutral, and removed from the
+registries after its generated files are assembled.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -42,7 +42,7 @@ SECTIONS: Tuple[str, ...] = (
 
 _TESTS = """// Usage: $STEM_self_tests {state|params|names|application-section|all}
 // Exits 0 on success.  Each section runs only what it names, so a failure
-// localises to one gate.
+// localises to one check.
 
 #include <algorithm>
 #include <cmath>
@@ -62,6 +62,11 @@ namespace {
 
 using $NAMESPACE::generated::NUM_EVOL_GFS;
 
+/**
+ * Check completeness and uniqueness of the generated evolved-state metadata.
+ *
+ * @return 0 on success; 1 if any state-table invariant fails.
+ */
 int test_state() {
   // The generated state registry must be internally complete: one name per
   // enum member, all names distinct (a duplicate would alias two evolved
@@ -100,6 +105,13 @@ int test_params() {
   return 0;
 }  // END FUNCTION: test_params
 
+/**
+ * Check exact, case-sensitive lookup for every generated variable name.
+ *
+ * @return 0 on success; 1 for an empty name, 2 for failed lookup, 3 for a
+ * mismatched group or index, 4 for inconsistent case handling, 5 for an
+ * accepted unknown name, or 6 for an accepted empty name.
+ */
 int test_names() {
   // Every generated name resolves to its own group and index, matching is
   // case-sensitive, and an unknown name resolves to nothing.
@@ -154,6 +166,13 @@ int test_names() {
 
 $ADDITIONAL_TEST_FUNCTIONS
 
+/**
+ * Dispatch one named self-test section or the aggregate suite.
+ *
+ * @param[in] section Section name to run.
+ * @return 0 on success; a selected test's nonzero result, 1 for aggregate
+ * failure, or 2 for an unknown section.
+ */
 int run_section(const char* section) {
   if (std::strcmp(section, "state") == 0) return test_state();
   if (std::strcmp(section, "params") == 0) return test_params();
@@ -194,7 +213,7 @@ def output_self_tests_cpp(
 
     :param solver_stem: Lowercase formulation stem for emitted file names.
     :param solver_namespace: Solver namespace.
-    :param fixture_functions: Complete generated fixture functions.
+    :param fixture_functions: Complete generated test functions.
     :param additional_test_functions: Application-owned test functions.
     :param additional_dispatch: Application section dispatch statements.
     :param additional_all: Application terms in the aggregate runner.
@@ -220,7 +239,7 @@ def output_self_tests_cpp(
 
 def _stencil_terms(name: str, operator: str) -> str:
     """
-    Emit one coefficient/offset table from the shared FD owner.
+    Emit one coefficient/offset table from the shared finite-difference function.
 
     :param name: C++ table name.
     :param operator: Canonical finite-difference operator name.
@@ -257,6 +276,13 @@ double fixture_stencil(const StencilTerm (&terms)[N], Sample sample,
   return value * scale;
 }}  // END FUNCTION: fixture_stencil
 
+/**
+ * Check generated block addressing and values against an independent stencil.
+ *
+ * @param alternate_parameters Whether to use the alternate parameter set.
+ * @return 0 on success; 1 for a value mismatch, 2 for mutated input, 3 for a
+ * block sentinel write, 4 for flat/block disagreement, or 5 for a flat sentinel write.
+ */
 int test_address_values(bool alternate_parameters = false) {{
   constexpr unsigned nx = 13, ny = 15, nz = 17, pad = 3;
   constexpr std::size_t offset = 11;
@@ -382,12 +408,19 @@ int test_address_values(bool alternate_parameters = false) {{
   return 0;
 }}  // END FUNCTION: test_address_values
 
+/**
+ * Check generated parameter types, order, and forwarding values.
+ *
+ * @return 0 on success; 1 for a value mismatch, 2 for mutated input, 3 for a
+ * block sentinel write, 4 for flat/block disagreement, or 5 for a flat
+ * sentinel write.
+ */
 int test_parameter_forwarding() {{
   using Signature = void (*)(const block_geometry_struct&, const DendroScalar* const*,
       DendroScalar* const*, const DendroScalar, const int,
       const DendroScalar, const bool);
   static_assert(std::is_same_v<decltype(&{block_name}), Signature>,
-                "fixture parameter types/order changed");
+                "test parameter types/order changed");
   static_assert(std::is_same_v<decltype(
       $NAMESPACE_fixture::generated::params_struct::nrpy_fixture_count), int>);
   static_assert(std::is_same_v<decltype(
@@ -407,7 +440,7 @@ def output_self_test_artifacts(
     application_all: str,
 ) -> Dict[str, str]:
     """
-    Emit the self-test source and isolated tiny-fixture headers.
+    Emit the self-test source and isolated two-field test headers.
 
     Temporary registrations are collision checked and removed individually;
     production registry objects are never cleared or replaced.
@@ -417,10 +450,10 @@ def output_self_test_artifacts(
     :param application_test_functions: Application-owned C++ test functions.
     :param application_dispatch: Application section dispatch statements.
     :param application_all: Application terms in the aggregate runner.
-    :return: Solver-root-relative paths mapped to complete artifact text.
-    :raises ValueError: If fixture names collide or fixture contracts disagree.
+    :return: Solver-root-relative paths mapped to complete file contents.
+    :raises ValueError: If test names collide or the block and flat functions differ.
 
-    Success and a failure after both fixture functions are registered restore
+    Success and a failure after both test functions are registered restore
     every pre-existing registry and sidecar object.
 
     >>> _saved_infrastructure = par.parval_from_str("Infrastructure")
@@ -470,7 +503,7 @@ def output_self_test_artifacts(
     ...         except RuntimeError as error:
     ...             assert str(error) == "injected post-registration failure"
     ...         else:
-    ...             raise AssertionError("injected fixture failure was not observed")
+    ...             raise AssertionError("injected test-generation failure was not observed")
     ...     finally:
     ...         _owner_globals["output_self_tests_cpp"] = _original_output
     ...     assert set(gri.glb_gridfcs_dict) == set(_saved_fields)
@@ -523,9 +556,7 @@ def output_self_test_artifacts(
     ]
     collisions += [name for name in function_names if name in cfc.CFunction_dict]
     if collisions:
-        raise ValueError(
-            f"Self-test fixture registration collision: {sorted(collisions)}"
-        )
+        raise ValueError(f"Self-test registration collision: {sorted(collisions)}")
     added_fields: List[str] = []
     added_parameters: List[str] = []
     added_functions: List[str] = []
@@ -535,7 +566,7 @@ def output_self_test_artifacts(
     codeparameter_sidecar_existed = "CFunction_codeparameters" in dendro_extras
     role_sidecar_existed = "CFunction_roles" in dendro_extras
     try:
-        # The formulation-neutral fixture is deliberately FD4 in every
+        # The formulation-neutral test system is deliberately FD4 in every
         # application build; production FD order is restored in ``finally``.
         par.set_parval_from_str("fd_order", 4)
         u, v = gri.register_gridfunctions(list(field_names), group="EVOL")
@@ -598,7 +629,7 @@ def output_self_test_artifacts(
         )
         cfc.register_CFunction(
             includes=[f"{solver_stem}_fixture_parameters.h", "block_geometry.h"],
-            desc="Tiny executable Dendro address and parameter fixture.",
+            desc="Two-field Dendro address and parameter test.",
             cfunc_type="void",
             name=function_names[0],
             params=params,
@@ -623,7 +654,7 @@ def output_self_test_artifacts(
         )
         cfc.register_CFunction(
             includes=[f"{solver_stem}_fixture_parameters.h", "block_geometry.h"],
-            desc="Flat-layout adapter for the tiny executable fixture.",
+            desc="Flat-layout adapter for the two-field test.",
             cfunc_type="void",
             name=function_names[1],
             params=flat_params,
@@ -638,7 +669,7 @@ def output_self_test_artifacts(
         flat_tail = codeparameter_tail(function_names[1], "fixture_params")
         if block_tail != flat_tail:
             raise ValueError(
-                "Fixture block and flat adapters must forward identical parameters."
+                "Test block and flat adapters must forward identical parameters."
             )
         tables = "".join(
             (

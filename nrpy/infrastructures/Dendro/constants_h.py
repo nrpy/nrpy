@@ -49,8 +49,8 @@ def output_constants_h(
     lower incorrectly.
 
     :param solver_stem: Lowercase formulation stem for the emitted header name.
-    :param solver_namespace: Solver namespace, following Dendro's lowercase
-        formulation habit (``namespace bssn``).
+    :param solver_namespace: NRPy-qualified solver namespace, e.g.
+        ``nrpy::bssn``.
     :param required_padding: Ghost points required on every axis.  Pass the
         exact reach the kernel builder recorded through
         ``CFunction_roles.set_required_padding``, which every production

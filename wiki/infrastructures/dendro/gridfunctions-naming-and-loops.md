@@ -50,12 +50,21 @@ The fCCZ4 state keeps its exact NRPy names and the
 coordinates the conformal metric is the identity plus `hDD` -- and native
 evolved `lambdaU`, the fCCZ4 conformal connection quantity rather than a BSSN
 contracted connection. No full-metric field replaces `hDD`. Runtime physics
-parameters are the registered
-`CodeParameter` objects, emitted whole rather than filtered to a used-parameter
-closure, so no Dendro physics table duplicates them; an earlier design did
-compute such a closure and was discarded when the infrastructure was rebuilt on
-direct registry reads. A kernel is likewise a registered CFunction plus
-non-authoritative role metadata, with no second body registry.
+parameters come from the registered `CodeParameter` objects without a second
+Dendro physics table. `emitted_parameter_names()` selects the non-`#define`
+parameters recorded as used by registered CFunctions for the generated struct.
+`runtime_parameter_names()` narrows that use-closure to parameters used by the
+`rhs_eval_block` role and opted into the real-host parameter file. A
+registry-only parameter is absent from both the generated struct and real-host
+parameter bindings.
+A kernel is likewise a registered CFunction plus non-authoritative role
+metadata, with no second body registry.
+
+Claim evidence:
+- Claim: Dendro emits the non-`#define` CFunction parameter-use closure into its generated struct, while its real-host parameter bindings contain only the `add_to_parfile` subset used by `rhs_eval_block`; registry-only parameters are absent from both.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/CodeParameters.py`, `emitted_parameter_names`, `runtime_parameter_names`, and their doctest
+- Corroboration: [Project Assembly And Generating Functions](project-assembly-and-emitters.md), parameter-selection rules
 
 Because the decorations are reversible, an intentional rename or reorder of the
 registered state is a visible change to the emitted `EvolVar` enum and to the
@@ -118,8 +127,8 @@ is no parallel configuration object.
 `validate_generation_parameters` rejects an unsupported combination before
 anything is lowered, so an unqualified profile fails generation instead of
 producing silently wrong output. The runtime parameter default, validation, and
-print CFunctions are registered last, after the scientific CFunctions have put
-every CodeParameter they use into the registry.
+print CFunctions are registered last, after the scientific CFunctions have
+recorded their CodeParameter uses beside their registered CFunction names.
 
 The conformal-factor restriction is GR policy and therefore lives under
 `general_relativity/generation_parameters.py`. Generic reach accepts algebraic
@@ -131,15 +140,15 @@ to `nrpy.finite_difference`.
 - [grid.py](../../../nrpy/grid.py) - `DendroGridFunction`, `input_pointer`, `access_gf`, `read_gf_from_memory_Ccode_onept`
 - [gridfunction_name_decorations.py](../../../nrpy/infrastructures/Dendro/gridfunction_name_decorations.py) - `input_pointer`, `rhs_pointer`, `out_pointer`, `enum_member`, `rhs_symbol_to_gridfunction_name`, `validate_cpp_identifier`, `tensor_family_of`
 - [CFunction_roles.py](../../../nrpy/infrastructures/Dendro/CFunction_roles.py) - `set_CFunction_role`, `CFunction_name_for_role`, `registered_evol_order`, `set_required_padding`, `set_upwind_control_fields`
+- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `emitted_parameter_names`, `runtime_parameter_names`, `register_CFunctions_parameters`
 - [simple_loop.py](../../../nrpy/infrastructures/Dendro/simple_loop.py) - `simple_loop`, `block_loop`, `require_serial_parallelization`
 - [generation_parameters.py](../../../nrpy/infrastructures/Dendro/general_relativity/generation_parameters.py) - `validate_generation_parameters`
-- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `register_CFunctions_parameters`
 
 ## See Also
 
 - Parent: [Dendro](index.md)
 - Depends on: [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
-- See also: [Project Assembly And Emitters](project-assembly-and-emitters.md)
+- See also: [Project Assembly And Generating Functions](project-assembly-and-emitters.md)
 - Example: [fCCZ4 Application Wiring](fccz4-application-wiring.md)
 - See also: [Finite Difference](../../core/finite-difference.md)
 - See also: [Infrastructure Code Style](../infrastructure-code-style.md)

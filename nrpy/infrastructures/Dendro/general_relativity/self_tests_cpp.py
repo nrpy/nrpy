@@ -55,7 +55,7 @@ class ReferenceValue(NamedTuple):
     evaluation_scale: float
 
 
-# Scientific names are explicit application input to CMake.  The two fixture
+# Scientific names are explicit application input to CMake.  The two test
 # sections exercise formulation-neutral lowering through the same executable.
 def test_sections() -> Tuple[str, ...]:
     """
@@ -82,6 +82,12 @@ def test_sections() -> Tuple[str, ...]:
 
 _GR_SCIENTIFIC_TESTS = r"""
 struct GRTestBlock {
+  /**
+   * Allocate padded arrays for generated state.
+   *
+   * @param blocks Number of component-offset-sized blocks to allocate.
+   * @param padding Padding width on each block face.
+   */
   explicit GRTestBlock(
       unsigned blocks = 1,
       unsigned padding = $NAMESPACE::generated::REQUIRED_PADDING)
@@ -124,6 +130,12 @@ struct GRTestBlock {
   block_geometry_struct geometry{};
 };  // END STRUCT: GRTestBlock
 
+/**
+ * Measure the maximum generated RHS magnitude over a test-grid interior.
+ *
+ * @param[in] block Test state whose RHS arrays are inspected.
+ * @return Maximum absolute interior RHS value.
+ */
 double gr_interior_rhs_max(const GRTestBlock& block) {
   double worst = 0.0;
   const unsigned padding = block.geometry.padding;
@@ -136,6 +148,11 @@ double gr_interior_rhs_max(const GRTestBlock& block) {
   return worst;
 }  // END FUNCTION: gr_interior_rhs_max
 
+/**
+ * Check that generated initial data honors component offsets.
+ *
+ * @return 0 on success; 1 for a modified prefix or 2 for bad initial data.
+ */
 int test_offsets() {
   GRTestBlock block(2);
   block.geometry.component_offset = block.vol;
@@ -153,6 +170,11 @@ int test_offsets() {
   return 0;
 }  // END FUNCTION: test_offsets
 
+/**
+ * Check upwind direction and declared stencil reach on every axis.
+ *
+ * @return 0 on success; 1 for missing controls or 2 for a sensitivity failure.
+ */
 int test_upwind() {
   if ($NAMESPACE::generated::NUM_UPWIND_CONTROL_GFS < 3) return 1;
   $NAMESPACE::generated::params_struct params;
@@ -252,6 +274,11 @@ int test_rhs() {
   return gr_interior_rhs_max(block) <= 1e-13 ? 0 : 1;
 }  // END FUNCTION: test_rhs
 
+/**
+ * Check generated Minkowski initial data against asymptotic values.
+ *
+ * @return 0 on success; 1 for a value mismatch or 2 for an empty state norm.
+ */
 int test_init() {
   GRTestBlock block;
   std::vector<$SCALAR*> state = block.state_pointers();
@@ -267,6 +294,12 @@ int test_init() {
   return norm > 0.0 ? 0 : 2;
 }  // END FUNCTION: test_init
 
+/**
+ * Check algebraic-constraint projection, movement, and idempotence.
+ *
+ * @return 0 on success; 1 for changed flat data, 2 for failed first projection,
+ * or 3 for a non-idempotent or inaccurate second projection.
+ */
 int test_detgtrazero() {
   GRTestBlock block;
   std::vector<$SCALAR*> state = block.state_pointers();
@@ -322,11 +355,11 @@ def _coordinates(
     point: Tuple[int, int, int], spacings: Tuple[float, float, float]
 ) -> Tuple[float, float, float]:
     """
-    Map an integer fixture point to physical coordinates.
+    Map an integer test point to physical coordinates.
 
     :param point: Integer grid indices.
     :param spacings: Grid spacing in each coordinate direction.
-    :return: Physical coordinates about the fixed fixture centre.
+    :return: Physical coordinates about the fixed test centre.
     """
     centres = (6, 7, 8)
     return (
@@ -605,7 +638,7 @@ def output_self_test_artifacts(
     enable_ko: bool,
 ) -> Dict[str, str]:
     """
-    Return the GR test source and fixture companion headers.
+    Return the GR test source and companion headers.
 
     :param solver_stem: Lowercase formulation stem used in emitted paths.
     :param solver_namespace: Namespace containing the production solver.
@@ -613,7 +646,7 @@ def output_self_test_artifacts(
     :param constraints_build: Canonical diagnostic expressions registered for
         the generated solver.
     :param enable_ko: Whether this generation profile includes KO dissipation.
-    :return: Solver-root-relative paths mapped to complete artifact text.
+    :return: Solver-root-relative paths mapped to complete file contents.
     :raises ValueError: If configuration or reference validation is invalid.
     """
     fd_order = int(par.parval_from_str("fd_order"))
@@ -711,7 +744,7 @@ def output_self_test_artifacts(
         )
         if abs(reference.value - float(analytic)) > reference.bound:
             raise ValueError(
-                "Complete FD4 reference pipeline failed an analytic identity."
+                "Complete FD4 reference calculation failed an analytic identity."
             )
         if abs(ko) <= _exact_mpf(1.0e-12):
             raise ValueError("Independent FD4 reference has a zero KO discriminator.")
@@ -820,7 +853,7 @@ def output_self_test_artifacts(
             for family, discriminated in family_discriminated.items()
             if discriminated
         )
-        # The fixture deliberately designates several robust families instead
+        # The test deliberately designates several robust families instead
         # of claiming sensitivity where a tiny tensor KO term lies below the
         # independently derived full-RHS roundoff bound.
         if ko_discriminators < 3 or len(resolved_families) < 3:
@@ -856,6 +889,15 @@ def output_self_test_artifacts(
     constraints_name = roles.CFunction_name_for_role("constraints_eval_block")
     block_tail = generic_context.codeparameter_tail(block_name, "params")
     value_lines = [
+        "/**",
+        " * Evaluate one analytic nonflat reference-state component.",
+        " *",
+        " * @param f Generated evolved-component index.",
+        " * @param x Physical x coordinate.",
+        " * @param y Physical y coordinate.",
+        " * @param z Physical z coordinate.",
+        " * @return Analytic component value, or zero for an unknown index.",
+        " */",
         "double gr_reference_value(unsigned f, double x, double y, double z) {",
         "  const double q = 1.0e-3*(x + 0.5*y*y - 0.25*z + 0.1*x*y);",
         "  const double amplitude = 2.0e-4*(1.0 + x*x + y + 0.2*z*z);",
@@ -901,6 +943,13 @@ def output_self_test_artifacts(
     reference_cpp = f"""
 {value_function}
 
+/**
+ * Check nonflat block, diagnostic, and flat adapters against frozen oracles.
+ *
+ * @return 0 on success; 1 for reference/input encoding failure, 2 for mutated
+ * input, 3 or 7 for sentinel corruption, 4 for flat-reference mismatch, 5 for
+ * flat sentinel corruption, or 6 for diagnostic-reference mismatch.
+ */
 int test_gr_nonflat_reference() {{
   constexpr unsigned nx=13, ny=15, nz=17, pad=3;
   constexpr std::size_t offset=11;

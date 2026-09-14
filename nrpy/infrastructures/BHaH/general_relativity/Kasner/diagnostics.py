@@ -63,7 +63,7 @@ def register_CFunction_diagnostic_gfs_set(
  *      copying from a source point to a destination point with a sign determined by the relevant
  *      parity, ensuring parity-consistent values near symmetry or excision boundaries.
  *   3) Copy selected evolved gridfunctions from the current time level (y_n_gfs) into designated
- *      diagnostic channels for downstream consumers.
+ *      diagnostic channels read by interpolation and volume integration.
  *   4) Set additional Kasner exact and recovered diagnostic channels.
  *   5) Set a per-point grid identifier channel to the grid index (converted to REAL).
  *

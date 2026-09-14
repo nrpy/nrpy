@@ -1,7 +1,7 @@
 #include "fccz4_defines.h"
 
 /**
- * Per-block smooth analytic perturbation of every evolved field (lifecycle-test state; NRPy-authored profile).
+ * Per-block smooth analytic perturbation of every evolved field (evolution-test state; NRPy-authored profile).
  */
 void fccz4_smooth_perturbation_block(const block_geometry_struct &geom, DendroScalar *const *out_gfs,
                                      const DendroScalar smooth_perturbation_amplitude, const DendroScalar smooth_perturbation_wavelength) {

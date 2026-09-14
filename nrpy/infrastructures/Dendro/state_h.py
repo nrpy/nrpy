@@ -107,8 +107,8 @@ def output_state_h(solver_stem: str, solver_namespace: str) -> str:
     hardcoded here.
 
     :param solver_stem: Lowercase formulation stem for emitted header names.
-    :param solver_namespace: Solver namespace, following Dendro's lowercase
-        formulation habit (``namespace bssn``).
+    :param solver_namespace: NRPy-qualified solver namespace, e.g.
+        ``nrpy::bssn``.
     :return: The complete C++ header text.
     :raises ValueError: If a recorded upwind control field is not an EVOL field.
 

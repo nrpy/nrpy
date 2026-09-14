@@ -258,7 +258,7 @@ rhs_string = ""
 if use_separate_ricci:
     rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
 if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU:
-    # Must precede rhs_eval, its only consumer, within the substep.
+    # Must precede rhs_eval, which reads these values within the substep.
     rhs_string += "\ncfdD_alphadD_vetUdD_eval(params, RK_INPUT_GFS, auxevol_gfs);"
 rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);

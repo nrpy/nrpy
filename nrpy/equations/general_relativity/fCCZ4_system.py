@@ -5,9 +5,8 @@ Shared, infrastructure-neutral fCCZ4 expression factory.
 This module assembles the complete fCCZ4 right-hand-side system -- the
 non-gauge fCCZ4 equations, the moving-puncture gauge equations, and the
 optional Kreiss-Oliger, CAHD, and SSL terms -- into one infrastructure-
-neutral expression bundle.  Both the BHaH and Dendro infrastructure
-registrars consume this bundle, so there is exactly one fCCZ4 expression
-source.
+neutral expression set.  The BHaH and Dendro registration functions both use
+this set, so there is exactly one source for the fCCZ4 expressions.
 
 The factory returns expressions and semantic relationships only: it does not
 emit a state order, infrastructure-specific names, parameter default table,
@@ -39,7 +38,7 @@ from nrpy.equations.general_relativity.kreiss_oliger_terms import (
 @dataclass(frozen=True)
 class FCCZ4ExpressionBundle:
     """
-    Immutable fCCZ4 expression bundle for one formulation profile.
+    Immutable fCCZ4 expression set for one formulation profile.
 
     :param rhs_by_symbol_name: Mapping from NRPy RHS symbol name
         (e.g., ``"a_rhsDD00"``, ``"alpha_rhs"``) to its full symbolic
@@ -49,9 +48,8 @@ class FCCZ4ExpressionBundle:
     :param diagnostics_by_name: Diagnostic expressions keyed by diagnostic
         name (``H_Z4`` and ``Z4constraintU0..2`` from the registered
         constraint factory).  Empty unless ``enable_diagnostics`` was set.
-    :param provenance_files: Basenames of the equation modules the bundle was
-        assembled from, in deterministic order, derived from the actual
-        enabled inputs.
+    :param provenance_files: Basenames of the enabled equation modules used to
+        assemble the expression set, in deterministic order.
     """
 
     rhs_by_symbol_name: Mapping[str, sp.Expr]
@@ -110,8 +108,8 @@ def build_fccz4_expression_bundle(
     :param enable_diagnostics: Also build the constraint diagnostics
         (``H_Z4`` and ``Z4constraintU0..2``).  Off by default: constructing
         the constraint factory registers auxiliary gridfunctions in some
-        profiles, and no RHS consumer needs the result.
-    :return: The assembled fCCZ4 expression bundle.
+        profiles, and RHS evaluation does not need the result.
+    :return: The assembled fCCZ4 expression set.
     :raises ValueError: If EvolvedConformalFactor_cf is not a supported value,
         or if an optional feature combination is unsupported (whitepaper
         section 10.2 step 8: curvature-aware KO requires KO dissipation).
@@ -135,7 +133,7 @@ def build_fccz4_expression_bundle(
     >>> len(bundle.rhs_by_symbol_name)
     25
 
-    Section 8.5, single Kreiss-Oliger ownership: dissipation terms appear if
+    Section 8.5: Kreiss-Oliger dissipation terms are added exactly once if
     and only if they were requested.
 
     >>> def _has_ko(b):
@@ -161,7 +159,7 @@ def build_fccz4_expression_bundle(
     ...     print("Rejected without KO dissipation. Good.")
     Rejected without KO dissipation. Good.
 
-    Diagnostics are opt-in (section 10.4): the RHS consumers do not need them.
+    Diagnostics are opt-in (section 10.4): RHS evaluation does not need them.
 
     >>> bundle.diagnostics_by_name
     {}
@@ -183,7 +181,7 @@ def build_fccz4_expression_bundle(
     )
 
     # Step 1+2: Copy the cached non-gauge fCCZ4 RHS dictionary before adding
-    # terms; gauge and optional KO/CAHD/SSL terms belong only to this bundle.
+    # terms; gauge and optional KO/CAHD/SSL terms are added only to this set.
     fccz4_rhs = fCCZ4_RHSs.get_rhs(
         rhs_cache_key,
         enable_YBS_Gamma_constraint_adjustment=(enable_YBS_Gamma_constraint_adjustment),
@@ -315,7 +313,7 @@ def build_fccz4_expression_bundle(
     # section 10.1: H_Z4 and Z4constraintU0..2 first).  Building them is
     # opt-in: constructing the constraint factory is a side effect on the
     # caller's registries (with enable_T4munu it registers auxiliary
-    # gridfunctions), and the RHS consumers do not use the result.  The
+    # gridfunctions), and RHS evaluation does not use the result.  The
     # diagnostics profile qualifies separately in PR 9 (section 10.4).
     diagnostics: Dict[str, sp.Expr] = {}
     if enable_diagnostics:
@@ -329,9 +327,8 @@ def build_fccz4_expression_bundle(
         for i in range(3):
             diagnostics[f"Z4constraintU{i}"] = constraints.Z4constraintU[i]
 
-    # Provenance lists the equation modules this bundle was actually
-    # assembled from, so it tracks the enabled inputs rather than a fixed
-    # list.
+    # Provenance lists the equation modules used to assemble this expression set,
+    # so it tracks enabled inputs rather than a fixed list.
     provenance = [
         "BSSN_quantities.py",
         "fCCZ4_RHSs.py",
@@ -367,7 +364,7 @@ if __name__ == "__main__":
         sys.exit(1)
     print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    # Trusted-expression validation of the assembled bundle, over the option
+    # Trusted-expression validation of the assembled expression set, over the option
     # axes the qualified profile varies: Kreiss-Oliger dissipation off and on.
     # This pins the assembled right-hand sides themselves, so a change in any
     # contributing equation module is caught here at the symbolic layer.

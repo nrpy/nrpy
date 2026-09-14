@@ -1,7 +1,7 @@
 """
 Construct fully covariant conformal Z4 (fCCZ4) constraint expressions.
 
-This module owns the spatial Z4 connection constraint, its associated
+This module computes the spatial Z4 connection constraint, its associated
 conformal Ricci tensor, and the fCCZ4 Hamiltonian expression.  The Hamiltonian
 excludes ``-2 Theta K``; evolution modules append that term where required.
 

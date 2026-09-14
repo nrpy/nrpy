@@ -437,7 +437,8 @@ class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
         ... )
         (True, True, True, True, True, True, True, True)
 
-        The M / LAMBDA_CONSTRAINT gate defaults True, and flipping it forces a
+        ``register_M_and_LAMBDA_CONSTRAINT_gridfunctions`` defaults to ``True``;
+        changing it forces a
         rebuild rather than returning the memoized object registered under the
         old setting:
         >>> import contextlib, io

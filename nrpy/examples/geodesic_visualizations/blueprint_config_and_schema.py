@@ -1,6 +1,6 @@
 # nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py
 """
-Central schema and configuration for geodesic-visualization post-processing.
+Field definitions and configuration for geodesic-visualization post-processing.
 
 This module defines Python-side binary layout matching C `blueprint_data_t`,
 shared termination-type constants expected in serialized blueprint files, and

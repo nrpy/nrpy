@@ -129,7 +129,7 @@ def BSSN_rhs_expressions(
     )
     # Copy before adding: BSSN_RHSs caches its dictionary, and mutating it
     # would leak this profile's gauge and dissipation choices into every later
-    # consumer in the same process.
+    # generated RHS in the same process.
     rhs_by_symbol_name: Dict[str, sp.Expr] = OrderedDict(
         sorted(rhs.BSSN_RHSs_varname_to_expr_dict.items())
     )
@@ -264,9 +264,9 @@ def build_rhs_eval(
     >>> roles.required_padding()
     3
 
-    The mapping failure gate is exercised through this public builder before
-    lowering.  The temporary expression owner is restored even if an assertion
-    fails.
+    The mapping failure check is exercised through this public builder before
+    lowering.  The original ``BSSN_rhs_expressions`` binding is restored even if
+    an assertion fails.
 
     >>> _owner_globals = build_rhs_eval.__globals__
     >>> _original_bssn_expressions = _owner_globals["BSSN_rhs_expressions"]
@@ -369,7 +369,7 @@ def build_rhs_eval(
         )
     # The upwind control fields are the EVOL gridfunctions that appear in the
     # shared factory's upwind control vector (e.g. vetU0/1/2 for the
-    # canonical fCCZ4 profile).  Derived, not hardcoded, so a Gate 4 harness
+    # canonical fCCZ4 profile).  Derived, not hardcoded, so the upwind test
     # can drive positive/negative/zero control on exactly these fields.
     upwind_control_fields = bkh.upwind_control_fields_from_control_vec(
         upwind_control_vec, evol_order
@@ -459,7 +459,7 @@ def build_rhs_eval(
     padding = bkh.padding_from_derivative_operators(
         kernel_expressions, list(upwind_control_vec), fd_order
     )
-    # Single KO ownership: dKOD operators are present in the emitted kernel if
+    # Add dKOD operators to the emitted kernel exactly once if
     # and only if Kreiss-Oliger dissipation was requested.
     if (
         any(operator.startswith("dKOD") for operator in operators)

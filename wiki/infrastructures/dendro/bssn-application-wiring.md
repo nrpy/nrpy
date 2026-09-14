@@ -16,7 +16,7 @@ Dendro emitters.
 The layout follows BHaH. NRPy's established two-formulation infrastructure
 emits BSSN and fCCZ4 from a single `general_relativity/rhs_eval.py` on an
 `enable_fCCZ4` boolean, and Dendro follows it as far as the module layout:
-one module per artifact, taking the same boolean.
+one module per generated file, taking the same boolean.
 
 The per-formulation builder and registrar duplication is consolidated. Each
 module now has one public builder and one public registrar, with the
@@ -102,13 +102,14 @@ Claim evidence:
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), the `group="AUX"` registrations and their `not in gri.glb_gridfcs_dict` guards
 - Corroboration: [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), the `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` save/set/restore around the `BSSN_constraints` construction in the BSSN builder
 
-### Dendro's own vocabulary
+### NRPy module identity and BSSN names
 
-The emitted names follow Dendro-GR's BSSN solver rather than NRPy's: the solver
-directory is `BSSN_GR`, CMake variables carry the `BSSN_` prefix, the object
-library is `bssn_common`, the executable is `bssnSolver`, the namespace is
-`bssn`, and the context source is `bssnCtx.cpp`. The emitted kernel names are
-NRPy's, not the host's: `bssn_rhs_eval*`, `bssn_constraints_eval*` and
+NRPy authors the generated module, so its directory and CMake project are
+`nrpy_bssn`, and its C++ namespace is `nrpy::bssn`. Names inside the module
+retain the conventional BSSN stem and required Dendro target names: CMake
+variables carry the `BSSN_` prefix, the object library is `bssn_common`, the
+executable is `bssnSolver`, and the context source is `bssnCtx.cpp`. The kernel
+names `bssn_rhs_eval*`, `bssn_constraints_eval*` and
 `bssn_enforce_detgbar_equals_detghat_trAzero*` carry the stem the way ETLegacy
 carries its thorn name, and take the operation names BHaH and ETLegacy already
 use. Dendro-GR's own `bssn_constraints.cpp` is the det/trace *enforcement*, and
@@ -163,4 +164,4 @@ defects that a single-formulation tree could not expose:
 - Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)
 - Implements: [Gridfunctions, Naming, And Loops](gridfunctions-naming-and-loops.md)
 - Contrasts with: [fCCZ4 Application Wiring](fccz4-application-wiring.md)
-- Validated by: [Validation, Standalone Host, And Deferral Gates](validation-standalone-host-and-deferral-gates.md)
+- Validated by: [Validation, Standalone Host, And Deferred Tests](validation-standalone-host-and-deferral-gates.md)

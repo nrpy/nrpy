@@ -30,7 +30,7 @@ genuinely requires it, stated concretely. "Cleaner" is not a requirement.
 
 ### The generic layer carries no formulation name
 
-**Rule.** An infrastructure's top-level modules are named for the artifact they
+**Rule.** An infrastructure's top-level modules are named for the generated file they
 emit and contain no formulation name. Physics lives under
 `<Infrastructure>/general_relativity/`.
 
@@ -38,7 +38,7 @@ emit and contain no formulation name. Physics lives under
 `Makefile_helpers.py`, `CodeParameters.py`.
 
 **Wrong** — a generic layer with formulation-named templates and
-`Dendro-GR/FCCZ4_GR/` hardcoded into path construction. A second formulation
+`Dendro-GR/nrpy_fccz4/` hardcoded into path construction. A second formulation
 could not be lowered through that layer without editing it, which means the
 abstraction did not exist.
 
@@ -122,22 +122,22 @@ hardcoding the directory anyway, so the registered parameter had no effect.
 grep -rn "register_param.*_name" nrpy/infrastructures/<Infrastructure>/  # expect no unit-name parameters
 ```
 
-### The host's vocabulary governs emitted identifiers
+### Names identify both NRPy and the target code
 
-**Rule.** Namespaces, target names, directory names, and file prefixes follow
-the host's own conventions, read from the host's source.
+**Rule.** A generated module's public identity must identify NRPy when a generic
+name could imply that the target code supplied it. Names required for target-code
+integration still follow that code's source.
 
-**Right** — Cactus says thorn, so ETLegacy says `thorn_name`. Dendro's
-`BSSN_GR/CMakeLists.txt` header says "BSSN SOLVER", so Dendro says
-`solver_name`; Dendro namespaces solvers by lowercase formulation
-(`namespace bssn` in `BSSN_GR`, alongside `fluid`, `ode`, `solver`, `timer`),
-so a generated Dendro solver does the same.
+**Right** — Cactus says thorn, so ETLegacy says `thorn_name`. NRPy's Dendro
+modules use directories and CMake projects `nrpy_bssn` and `nrpy_fccz4`, with
+namespaces `nrpy::bssn` and `nrpy::fccz4`. Child files and functions retain the
+formulation stem, while Dendro-required targets retain their expected names.
 
 Claim evidence:
-- Claim: Dendro-GR uses the solver name BSSN and lowercase `bssn` namespace; these host conventions govern the generated solver name and namespace, without prescribing an occurrence count.
+- Claim: NRPy-generated Dendro module directories, CMake projects, and namespaces identify NRPy; child files, functions, and Dendro-required targets retain their formulation or host-required names.
 - Role: normative rule
 - Deciding authority: this page, `The host's vocabulary governs emitted identifiers`, Rule
-- Corroboration: registered Dendro-GR source, `BSSN_GR/CMakeLists.txt` header and `BSSN_GR` namespace declarations establish the host vocabulary
+- Corroboration: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) set the module identities; registered Dendro-GR source establishes the required host target names
 
 **Wrong** — replacing the C++ namespace `fccz4::generated` with
 `Dendro::generated` on the reasoning that "fccz4" is a formulation name and
@@ -159,17 +159,18 @@ for the project instance.
 **Precedence.** Where the host itself names solver files for the formulation,
 the host-vocabulary rule above governs and this one yields: Dendro-GR ships
 `bssnCtx.cpp` and `bssn_constraints.h`, so a generated Dendro solver emits
-`<solver_stem>Ctx.cpp`. This rule still governs artifacts that are
-infrastructure-generic rather than host-named. The host's vocabulary reaches
-only host-side identifiers — the solver directory, namespace, executable,
-context class and CMake variables. An NRPy-emitted kernel takes the name BHaH
+`<solver_stem>Ctx.cpp`. This rule still governs generated files that are
+infrastructure-generic rather than host-named. The module directory, CMake
+project, and namespace identify NRPy. Executables, libraries, context classes,
+CMake variables, generated files, and functions retain the formulation names
+or exact names required by Dendro. An NRPy-generated kernel takes the name BHaH
 and ETLegacy already use for that operation (`rhs_eval`, `constraints_eval`,
 `enforce_detgbar_equals_detghat_trAzero`), prefixed with the stem the way
 ETLegacy prefixes its thorn name.
 
 ### Module naming
 
-**Rule.** Modules are named for what they emit or do.
+**Rule.** Modules are named for what they generate or do.
 
 **Right** — `BHaH_defines_h.py`, `main_c.py`, `write_checkpoint.py`,
 `Makefile_helpers.py`.
@@ -192,4 +193,4 @@ their purpose", was too weak to prevent any of them.
 - Depends on: [Infrastructure Code Style](infrastructure-code-style.md)
 - Depends on: [Python Coding Style](../architecture/python-coding-style.md)
 - See also: [Generated Output Boundaries](../architecture/generated-output-boundaries.md)
-- Example: [Dendro Project Assembly And Emitters](dendro/project-assembly-and-emitters.md)
+- Example: [Project Assembly And Generating Functions](dendro/project-assembly-and-emitters.md)

@@ -6,6 +6,12 @@ Run as a module:
     python -m nrpy.examples.dendro_fccz4 \
         --project-dir project/dendro_fccz4 --fd-order 4
 
+Doctests:
+>>> (solver_name, solver_namespace)
+('nrpy_fccz4', 'nrpy::fccz4')
+>>> (solver_stem, exec_or_library_name)
+('fccz4', 'fccz4Solver')
+
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
@@ -39,15 +45,13 @@ from nrpy.infrastructures.Dendro.general_relativity import (
     solver_context,
 )
 
-# Dendro names a solver directory for its formulation (its own is BSSN_GR) and
-# namespaces the solver by the lowercase formulation (namespace bssn), so this
-# generated solver does the same.  These are arguments to the infrastructure,
-# not registered CodeParameters: NRPy threads project_name, thorn_name and
-# exec_or_library_name the same way.
-solver_name = "FCCZ4_GR"
+# NRPy authors the module directory, CMake project, and C++ namespace.  Names
+# inside that module retain the conventional fCCZ4 stem and Dendro target names.
+# These are arguments to the infrastructure, not registered CodeParameters.
+solver_name = "nrpy_fccz4"
 solver_prefix = "FCCZ4"
 solver_stem = "fccz4"
-solver_namespace = "fccz4"
+solver_namespace = "nrpy::fccz4"
 exec_or_library_name = "fccz4Solver"
 profile_name = "fccz4_cartesian_vacuum"
 
@@ -109,7 +113,7 @@ def main() -> None:
     #########################################################
     # Step 2: Register the generated C functions.  The right-hand side goes
     #         first: it registers the exact gridfunctions and physics
-    #         CodeParameters through the shared fCCZ4 expression bundle, and
+    #         CodeParameters through the shared fCCZ4 expression set, and
     #         records the ghost points the emitted operators reach.
     rhs_build = rhs_eval.register_CFunctions_rhs_eval(
         solver_stem=solver_stem,
@@ -122,7 +126,7 @@ def main() -> None:
     )
 
     # Minkowski initial data and the smooth analytic perturbation the
-    # lifecycle gates evolve.  Both are NRPy-authored kernels.
+    # evolution tests advance.  Both are NRPy-authored kernels.
     initial_data.register_CFunctions_minkowski_initial_data(solver_stem=solver_stem)
     initial_data.register_CFunctions_smooth_perturbation(solver_stem=solver_stem)
 
@@ -225,12 +229,13 @@ def main() -> None:
             self_tests_cpp.test_sections(),
             main_cpp.standalone_ctest_statements(solver_stem, exec_or_library_name),
             main_cpp.real_ctest_statements(solver_stem, exec_or_library_name),
+            real_host_available=True,
         )
     )
     for relative_path, text in sorted(artifacts.items()):
         target = Path(args.project_dir) / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
-        # C and C++ artifacts are clang-formatted, as every other NRPy
+        # Generated C and C++ source files are clang-formatted, as every other NRPy
         # infrastructure formats what it emits; CMake and TOML are left as
         # written.
         with ConditionalFileUpdater(

@@ -13,12 +13,12 @@
  * Lagrange basis in time, and interpolates each serialized `g4DD` and
  * `Gamma4UDD` component independently to `t_target`.
  *
- * The metric bundle ordering matches the geodesic interpolation-kernel contract:
+ * The metric array ordering matches the geodesic interpolation-kernel requirement:
  * `g4DD00, g4DD01, g4DD02, g4DD03, g4DD11, g4DD12, g4DD13, g4DD22, g4DD23,
  * g4DD33`.
  *
- * The Christoffel bundle ordering also matches the geodesic interpolation-kernel
- * contract: `Gamma4UDD<alpha><mu><nu>` with `alpha` outermost and `(mu, nu)` in
+ * The Christoffel array ordering also matches the geodesic interpolation-kernel
+ * requirement: `Gamma4UDD<alpha><mu><nu>` with `alpha` outermost and `(mu, nu)` in
  * upper-triangular order, i.e.
  * `Gamma4UDD000, Gamma4UDD001, Gamma4UDD002, Gamma4UDD003, Gamma4UDD011,
  * Gamma4UDD012, ..., Gamma4UDD333`.

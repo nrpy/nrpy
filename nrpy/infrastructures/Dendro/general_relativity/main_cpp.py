@@ -1,6 +1,6 @@
 # nrpy/infrastructures/Dendro/general_relativity/main_cpp.py
 """
-GR lifecycle policy for generated Dendro entry points and CTest gates.
+GR initialization, evolution, and CTest checks for generated Dendro entry points.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -165,7 +165,7 @@ def output_main_cpp(
     profile_name: str,
 ) -> str:
     """
-    Emit the generic process shell with explicit GR lifecycle policy.
+    Emit the generic entry point with explicit GR initialization and evolution.
 
     :param solver_stem: Lowercase formulation stem used in emitted names.
     :param solver_namespace: Namespace containing the generated solver.
@@ -193,14 +193,14 @@ def standalone_ctest_statements(
     solver_stem: str, exec_or_library_name: str
 ) -> Tuple[str, ...]:
     """
-    Return the standalone GR lifecycle registration.
+    Return the standalone GR evolution-test registration.
 
     :param solver_stem: Lowercase formulation stem used in test names.
     :param exec_or_library_name: Generated executable target name.
-    :return: CMake statements registering the standalone lifecycle test.
+    :return: CMake statements registering the standalone evolution test.
     """
     return (
-        "# The GR Minkowski lifecycle checks every printed acceptance gate.",
+        "# The GR Minkowski evolution test checks every printed acceptance condition.",
         f"add_test(NAME {solver_stem}_minkowski_lifecycle",
         f"         COMMAND {exec_or_library_name} -b 2 -n 25 -d 0.25)",
         f"set_tests_properties({solver_stem}_minkowski_lifecycle PROPERTIES TIMEOUT 300)",
@@ -211,11 +211,11 @@ def real_ctest_statements(
     solver_stem: str, exec_or_library_name: str
 ) -> Tuple[str, ...]:
     """
-    Return the real-host GR lifecycle registration.
+    Return the real-host GR evolution-test registration.
 
     :param solver_stem: Lowercase formulation stem used in test names.
     :param exec_or_library_name: Generated executable target name.
-    :return: CMake statements registering the real-host lifecycle test.
+    :return: CMake statements registering the real-host evolution test.
     """
     return (
         f"add_test(NAME {solver_stem}_real_minkowski COMMAND ${{MPIEXEC_EXECUTABLE}} ${{MPIEXEC_NUMPROC_FLAG}} 2 ${{MPIEXEC_PREFLAGS}} $<TARGET_FILE:{exec_or_library_name}> ${{MPIEXEC_POSTFLAGS}})",

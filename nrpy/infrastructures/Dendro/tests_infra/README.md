@@ -1,17 +1,17 @@
 # Dendrolib capability mini-tests
 
 `dendrolib_capability_test.cpp` proves, against the selected Dendrolib checkout,
-the host contract the generated Dendro solver assumes: the scalar ABI, the
+the host-interface requirements the generated Dendro solver assumes: the scalar ABI, the
 padded block dimensions, the padding rule, the unzip offsets, the variable-major
 x-fastest layout, the padded origin, and halo validity.
 
-The harness is not built by NRPy and is not part of any generated project. It
+The test program is not built by NRPy and is not part of any generated project. It
 is run by hand when the selected host changes.
 
 ## Build
 
 Clone Dendrolib, select the revision under qualification, and build it. Then
-compile the harness with that build's own definitions and include paths. Record
+compile the test program with that build's own definitions and include paths. Record
 the selected revision with the active qualification evidence, not in this
 durable procedure.
 
@@ -73,14 +73,15 @@ done
 
 The generated fCCZ4 solver has a separate real-host build selected by
 `FCCZ4_STANDALONE_HOST=OFF`. It uses actual blocks and vectors, synchronous
-Dendrolib halo exchange, and the selected host's `ts::ETS` RK4 lifecycle. This is a
+Dendrolib halo exchange, and the selected host's `ts::ETS` RK4 initialization,
+stage updates, and cleanup. This is a
 fixed-mesh, serial-CPU-per-rank Minkowski qualification with analytic exterior
 data. It does not qualify general physical boundaries, remeshing, LTS,
-checkpoint/restart, output pipelines, GPU execution, or threaded kernels.
+checkpoint/restart, output routines, GPU execution, or threaded kernels.
 
 Use an isolated working directory. Set `NRPY_SOURCE` to the absolute path of
 the source checkout containing this README. The following commands generate
-owned products and modify only the isolated host clone:
+solver files in the isolated working directory and modify only its `host` clone:
 
 ```bash
 export NRPY_SOURCE=/absolute/path/to/NRPy
@@ -92,12 +93,12 @@ export XDG_CACHE_HOME="$PWD/cache"
 PYTHONPATH="$NRPY_SOURCE" python -m nrpy.examples.dendro_fccz4 \
   --project-dir "$PWD/generated"
 cat >> host/CMakeLists.txt <<'CMAKE'
-add_subdirectory("${NRPY_GENERATED}/Dendro-GR/FCCZ4_GR" nrpy_fccz4)
+add_subdirectory("${NRPY_GENERATED}/Dendro-GR/nrpy_fccz4" nrpy_fccz4)
 add_executable(nrpy_runtime_test
   "${NRPY_SOURCE}/nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp")
 target_link_libraries(nrpy_runtime_test PRIVATE fccz4_common MPI::MPI_CXX)
 target_compile_definitions(nrpy_runtime_test PRIVATE
-  RUNTIME_HEADER="fccz4Ctx.h" RUNTIME_NAMESPACE=fccz4)
+  RUNTIME_HEADER="fccz4Ctx.h" RUNTIME_NAMESPACE=nrpy::fccz4)
 CMAKE
 cmake -S host -B build -DWITH_CUDA=OFF -DFCCZ4_STANDALONE_HOST=OFF \
   -DNRPY_SOURCE="$NRPY_SOURCE" -DNRPY_GENERATED="$PWD/generated" \
@@ -147,7 +148,7 @@ The solver defaults to 100 steps of `dt=0.001`; `--steps N` and `--dt T` change
 those values. `-t FILE` reads TOML on rank 0, broadcasts its contents, binds
 registered `[params]` values, and validates the optional generated profile.
 Unknown keys, profile mismatch, malformed values, and nonfinite values fail
-collectively. The sample file under `generated/Dendro-GR/FCCZ4_GR/pars/` is
+collectively. The sample file under `generated/Dendro-GR/nrpy_fccz4/pars/` is
 usable by the real build. Parameters used by the generated block RHS, including
 `eta`, `kappa1`, and `kappa2`, are forwarded through its registered signature.
 Parameters used only by standalone qualification kernels remain generated

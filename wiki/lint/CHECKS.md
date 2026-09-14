@@ -28,6 +28,12 @@ carry facts and sources, and excluded artifacts stay out of the KB.
 - Agents are never told to compute, recompute, compare, or lint source-tracking
   checksums, hashes, file counts, or timestamps; source drift is
   dependency-aware review per [Workflows](../workflows.md).
+- Every added or substantially revised passage read by a person or an agent has
+  completed the semantic review in [Language For Computational
+  Physicists](../computational-physics-language.md). Vague software-management
+  wording is translated into the specific equation, quantity, numerical method,
+  file, result, interface, or required behavior. Mathematical terms and exact
+  identifiers remain unchanged.
 - Relative Markdown links from `AGENTS.md`, `wiki/**/*.md`, and
   `raw/SOURCES.md` resolve within the repository. Frozen snapshots under
   `raw/source-docs/` are preserved verbatim and exempt from authored-KB lint.
@@ -113,5 +119,6 @@ carry facts and sources, and excluded artifacts stay out of the KB.
 
 ## See Also
 
-- [Schema](../SCHEMA.md)
+- [KB Page Format](../SCHEMA.md)
 - [Workflows](../workflows.md)
+- [Language For Computational Physicists](../computational-physics-language.md)

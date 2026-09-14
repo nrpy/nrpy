@@ -216,9 +216,9 @@ def register_CFunction_rhs_eval(
         # fCCZ4 factory's structure but must NOT be unified with it via a
         # shared helper: the formulations differ (no Theta_fCCZ4_dKOD here;
         # BSSN cache keys and gauge modules differ).  Keep this branch
-        # byte-identical for BSSN consumers; cross-formulation sharing would
+        # byte-identical for BSSN calls; cross-formulation sharing would
         # couple two formulations and endanger the PR4 "BHaH unchanged" exit.
-        # This branch's emitted expressions are pinned by the owner runner at
+        # This branch's emitted expressions are pinned by the comparison runner at
         # the bottom of this module, which compares against the tracked
         # dictionaries in nrpy/infrastructures/BHaH/general_relativity/tests/.
         bssn_rhs = BSSN_RHSs.get_rhs(
@@ -527,7 +527,7 @@ def register_CFunction_rhs_eval_with_Ricci(
 
     The caller must register Ricci and BSSN RHSs with precomputed reference metrics
     and RbarDD gridfunctions for the same coordinate system. Each worker computes
-    Ricci before the pointwise RHS consumer on a fixed 16x8 i1/i2 tile. The final
+    Ricci before the pointwise RHS calculation on a fixed 16x8 i1/i2 tile. The final
     OpenMP barrier completes all tiles before the caller applies boundary conditions.
     Existing full-grid entry points remain available for diagnostics and other callers.
 

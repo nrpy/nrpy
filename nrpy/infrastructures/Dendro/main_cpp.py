@@ -1,6 +1,6 @@
 # nrpy/infrastructures/Dendro/main_cpp.py
 """
-Emit generic standalone and real-host Dendro process shells.
+Emit generic standalone and real-host Dendro entry points.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -30,6 +30,13 @@ double global_max(double local) {
 }  // END NAMESPACE: internal linkage
 // clang-format on
 
+/**
+ * Run the generated solver with the standalone host test program.
+ *
+ * @param argc Command-line argument count.
+ * @param[in,out] argv Command-line arguments, also forwarded to MPI.
+ * @return 0 on success; 1 for setup, evolution, or acceptance failure; 2 for invalid arguments.
+ */
 int main(int argc, char* argv[]) {
   MPI_Init(&argc, &argv);
   int rank = 0, size = 1;
@@ -110,6 +117,13 @@ _REAL_MAIN = r"""#include "$STEMCtx.h"
 #include <stdexcept>
 #include <string>
 
+/**
+ * Run the generated solver inside the qualified real Dendro-GR host.
+ *
+ * @param argc Command-line argument count.
+ * @param[in,out] argv Command-line arguments, also forwarded to MPI.
+ * @return 0 on success; 1 after reporting a runtime or validation failure.
+ */
 int main(int argc, char** argv) {
   MPI_Init(&argc, &argv);
   int rank = 0, size = 1;
@@ -236,7 +250,7 @@ def output_main_cpp(
     real_application_final_checks: str,
 ) -> str:
     """
-    Emit process shells using explicit application lifecycle statements.
+    Emit entry points using explicit application initialization and evolution statements.
 
     :param solver_stem: Lowercase formulation stem used in emitted names.
     :param solver_namespace: Namespace containing the generated solver.
@@ -268,7 +282,7 @@ def output_main_cpp(
     ...     cfc.CFunction_dict.clear()
     ...     par.glb_extras_dict.clear()
     ...     cfc.register_CFunction(
-    ...         desc="fixture block RHS", name="wave_rhs_block", body="(void)0;"
+    ...         desc="test block RHS", name="wave_rhs_block", body="(void)0;"
     ...     )
     ...     roles.set_CFunction_role("wave_rhs_block", "rhs_eval_block")
     ...     wave = output_main_cpp(
@@ -322,7 +336,7 @@ def output_main_cpp(
     unresolved = tuple(token for token, _value in replacements if token in text)
     if unresolved:
         raise ValueError(
-            f"Application lifecycle insertions were not resolved: {unresolved}"
+            f"Application initialization/evolution statements were not resolved: {unresolved}"
         )
     return BANNER + substitute_solver_identifiers(text, solver_stem, solver_namespace)
 

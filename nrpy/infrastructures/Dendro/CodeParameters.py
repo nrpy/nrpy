@@ -95,20 +95,20 @@ def output_parameters_h(solver_stem: str, solver_namespace: str) -> str:
     in the sample parameter file.
 
     :param solver_stem: Lowercase formulation stem for emitted header names.
-    :param solver_namespace: Solver namespace, following Dendro's lowercase
-        formulation habit (``namespace bssn``).
+    :param solver_namespace: NRPy-qualified solver namespace, e.g.
+        ``nrpy::bssn``.
     :return: The complete C++ header text.
 
     Doctests:
-    >>> header = output_parameters_h("bssn", "bssn")
+    >>> header = output_parameters_h("bssn", "nrpy::bssn")
     >>> "#ifndef BSSN_PARAMETERS_H" in header
     True
     >>> header.rstrip().endswith("#endif  // BSSN_PARAMETERS_H")
     True
-    >>> "namespace bssn::generated {" in header
+    >>> "namespace nrpy::bssn::generated {" in header
     True
     >>> from nrpy.helpers.generic import clang_format
-    >>> "}  // END NAMESPACE: bssn::generated" in clang_format(header)
+    >>> "}  // END NAMESPACE: nrpy::bssn::generated" in clang_format(header)
     True
     """
     opening, closing = header_guard(f"{solver_stem}_parameters.h")
@@ -167,7 +167,7 @@ def runtime_parameter_names() -> List[str]:
 
     The real host forwards generated parameters only to its per-block RHS call,
     so only that CFunction's recorded use can be effective there.
-    ``add_to_parfile`` remains the parameter owner's explicit opt-in.
+    The parameter's ``add_to_parfile`` setting remains an explicit opt-in.
 
     :return: Sorted runtime CodeParameter names.
     """
@@ -195,8 +195,8 @@ def register_CFunctions_parameters(solver_stem: str, solver_namespace: str) -> N
     :param solver_stem: Lowercase formulation stem for the emitted CFunction
         names, following Dendro's habit of naming solver symbols for the
         formulation.
-    :param solver_namespace: Solver namespace, following Dendro's lowercase
-        formulation habit (``namespace bssn``).
+    :param solver_namespace: NRPy-qualified solver namespace, e.g.
+        ``nrpy::bssn``.
     :raises ValueError: If a ``char[N]`` default is not a string or contains an
         embedded null.
     """
@@ -362,12 +362,12 @@ def output_toml_bindings() -> str:
     ...     _ = par.register_CodeParameter("REAL", __name__, "fixture_standalone", 1.5)
     ...     _ = par.register_CodeParameter("REAL", __name__, "fixture_registry_only", 2.0)
     ...     cfc.register_CFunction(
-    ...         desc="runtime fixture", name="fixture_rhs", body="(void)0;"
+    ...         desc="runtime test function", name="fixture_rhs", body="(void)0;"
     ...     )
     ...     roles.set_CFunction_role("fixture_rhs", "rhs_eval_block")
     ...     roles.set_CFunction_codeparameters("fixture_rhs", ("fixture_runtime",))
     ...     cfc.register_CFunction(
-    ...         desc="standalone fixture", name="fixture_initial_data", body="(void)0;"
+    ...         desc="standalone test function", name="fixture_initial_data", body="(void)0;"
     ...     )
     ...     roles.set_CFunction_role(
     ...         "fixture_initial_data", "smooth_perturbation_block"

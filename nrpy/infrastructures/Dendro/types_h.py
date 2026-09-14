@@ -1,10 +1,10 @@
 # nrpy/infrastructures/Dendro/types_h.py
 """
-Emit the generated scalar-contract header for a Dendro solver.
+Emit the generated scalar-type header for a Dendro solver.
 
 The header fixes the generated scalar alias against the registered ``fp_type``.
-Application-owned declarations are supplied explicitly by the assembly recipe;
-the generic emitter does not infer a physics contract.
+The example generator passes formulation-specific declarations through
+``additional_declarations``; the generic emitter does not infer them.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -22,11 +22,11 @@ def output_types_h(
     solver_stem: str, solver_namespace: str, additional_declarations: str
 ) -> str:
     """
-    Emit the generated scalar-contract header.
+    Emit the generated scalar-type header.
 
     :param solver_stem: Lowercase formulation stem for the emitted header name.
-    :param solver_namespace: Solver namespace, following Dendro's lowercase
-        formulation habit (``namespace bssn``).
+    :param solver_namespace: NRPy-qualified solver namespace, e.g.
+        ``nrpy::bssn``.
     :param additional_declarations: Application-owned declarations placed in
         the generated namespace before dependent prototypes.
     :return: The complete C++ header text.
@@ -66,9 +66,9 @@ using NRPyArithmetic = {fp_type};
 using TargetScalar = {scalar_type};
 
 static_assert(sizeof(TargetScalar) == sizeof(NRPyArithmetic),
-              "generated scalar contract: width mismatch");
+              "generated scalar type: width mismatch");
 static_assert(std::is_same_v<TargetScalar, NRPyArithmetic>,
-              "generated scalar contract: alias must be the registered fp_type");
+              "generated scalar type: alias must be the registered fp_type");
 
 {additional_declarations.rstrip()}
 

@@ -12,8 +12,8 @@
 
 #include "block_geometry.h"
 
-// --- Host lifecycle declarations (standalone-host build only) ---------------
-// These declarations support the standalone test vehicle only. Real builds
+// --- Standalone-host declarations (standalone-host build only) --------------
+// These declarations support the standalone test program only. Real builds
 // include the pinned Dendrolib headers and use the separate real context branch.
 // The generated CMake records the Dendrolib pin; the validation page records
 // which host capabilities have been exercised.

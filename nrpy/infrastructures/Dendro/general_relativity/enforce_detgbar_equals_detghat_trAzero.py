@@ -15,7 +15,7 @@ The projected values come from the established NRPy module
 :func:`nrpy.equations.general_relativity.BSSN_algebraic_constraints.BSSN_algebraic_constraints`,
 so this module contributes no new formulation content: it lowers those
 expressions into a Dendro point loop, adds a structured status record the
-generated host lifecycle consumes, and never calls ``exit()``.
+generated host reads after each projection, and never calls ``exit()``.
 
 Every written field name is read back from the registered BSSN quantities
 (``Bq.hDD[i][j]`` and ``Bq.aDD[i][j]`` are the gridfunction symbols themselves),
@@ -123,8 +123,8 @@ def build_enforce_detgbar_equals_detghat_trAzero(
     read late.
 
     :param solver_stem: Lowercase stem for the emitted CFunction names.
-    :param solver_namespace: Solver namespace, following Dendro's lowercase
-        formulation habit (``namespace bssn``).
+    :param solver_namespace: NRPy-qualified solver namespace, e.g.
+        ``nrpy::bssn``.
     :param CoordSystem: Reference-metric coordinate system.
     :return: The immutable :class:`DetgtrazeroBuild` result.
     :raises ValueError: If Infrastructure is not Dendro, or if a projected
@@ -336,8 +336,8 @@ def register_CFunctions_enforce_detgbar_equals_detghat_trAzero(
     Register the per-block and all-block constraint-enforcement CFunctions.
 
     :param solver_stem: Lowercase stem for the emitted CFunction names.
-    :param solver_namespace: Solver namespace, following Dendro's lowercase
-        formulation habit (``namespace bssn``).
+    :param solver_namespace: NRPy-qualified solver namespace, e.g.
+        ``nrpy::bssn``.
     :param CoordSystem: Reference-metric coordinate system.
     """
     build = build_enforce_detgbar_equals_detghat_trAzero(

@@ -6,9 +6,9 @@ This module parses the binary files written by
 their headers strictly, sorts the inputs by physical simulation time, and
 writes one read-only combined container for downstream raytracing.
 
-The combined file stores only copied stage-1 point-record payloads plus the
-metadata needed for stage 3 to locate time slices and recover the payload-local
-logical-grid indexing convention. It does not recompute metric data,
+The combined file stores only copied stage-1 point records plus the
+metadata needed for stage 3 to locate time slices and recover the logical-grid
+indexing convention for exported interior points. It does not recompute metric data,
 Christoffels, or coordinate transforms, and it does not build a true spatial
 index.
 
@@ -155,7 +155,7 @@ class Stage1Info:
 
     This record mirrors the on-disk header plus the separately stored physical
     simulation time so later validation and combined-file layout code can work
-    with one immutable schema object.
+    with one immutable record.
     """
 
     path: Path
@@ -231,7 +231,7 @@ class SliceEntry:
     One fixed-width slice-table entry for the combined container.
 
     Each entry records the sorted simulation time together with the absolute
-    payload offset and provenance offsets from the original stage-1 file.
+    point-record offset and source offsets from the original stage-1 file.
     """
 
     output_index: int
@@ -252,7 +252,7 @@ class SliceEntry:
 @dataclass(frozen=True)
 class AxisymmetryMetadata:
     """
-    Reader-facing axisymmetry contract stored in combined metadata.
+    Axisymmetry conventions stored for the stage-3 reader.
 
     Stage 2 records only conventions here. Stage 3 remains responsible for any
     interpolation and arbitrary-phi tensor rotation logic.
@@ -567,7 +567,7 @@ def parse_args() -> argparse.Namespace:
         "--alignment",
         type=int,
         default=DEFAULT_ALIGNMENT,
-        help="Alignment in bytes for major blocks and payload slices.",
+        help="Alignment in bytes for major blocks and time-slice data.",
     )
     parser.add_argument(
         "--include-coordinate-table",
@@ -707,7 +707,7 @@ def parse_stage1_file(path: Path) -> Stage1Info:
         time_variable_is_f64 = _read_u32(fp, "time_variable_is_f64")
         _ = _read_u32(fp, "reserved_u32")
 
-        # Step 1.a: Reject unexpected schema counts before reading any
+        # Step 1.a: Reject unexpected header counts before reading any
         #           variable-length string tables from the file.
         if record_component_count != RECORD_COMPONENT_COUNT:
             raise RuntimeError(
@@ -865,7 +865,7 @@ def parse_stage1_file(path: Path) -> Stage1Info:
 
 def validate_stage1_file_internal(info: Stage1Info) -> None:
     """
-    Validate one parsed stage-1 file against the documented schema.
+    Validate one parsed stage-1 file against the documented file format.
 
     :param info: Parsed stage-1 file metadata.
     :raises RuntimeError: If the file fails validation.
@@ -910,7 +910,7 @@ def validate_stage1_file_internal(info: Stage1Info) -> None:
             f"found {info.serialized_real_bytes}."
         )
     if info.file_is_little_endian != 1:
-        raise RuntimeError(f"{info.path}: expected little-endian payload.")
+        raise RuntimeError(f"{info.path}: expected little-endian data.")
     if info.time_variable_is_f64 != 1:
         raise RuntimeError(f"{info.path}: expected time_variable_is_f64=1.")
     if info.record_component_count != RECORD_COMPONENT_COUNT:
@@ -943,15 +943,15 @@ def validate_stage1_file_internal(info: Stage1Info) -> None:
         raise RuntimeError(f"{info.path}: payload_includes_ghost_zones must be 0.")
     if info.record_component_names != RECORD_COMPONENT_NAMES:
         raise RuntimeError(
-            f"{info.path}: record component names do not match v1 schema."
+            f"{info.path}: record component names do not match v1 file format."
         )
     if info.metric_component_names != METRIC_COMPONENT_NAMES:
         raise RuntimeError(
-            f"{info.path}: metric component names do not match v1 schema."
+            f"{info.path}: metric component names do not match v1 file format."
         )
     if info.christoffel_component_names != CHRISTOFFEL_COMPONENT_NAMES:
         raise RuntimeError(
-            f"{info.path}: Christoffel component names do not match v1 schema."
+            f"{info.path}: Christoffel component names do not match v1 file format."
         )
     if info.output_index < 0:
         raise RuntimeError(f"{info.path}: output_index must be nonnegative.")
@@ -993,11 +993,11 @@ def validate_stage1_file_internal(info: Stage1Info) -> None:
             f"{info.path}: actual size {info.actual_file_size} did not match "
             f"total_file_bytes={info.total_file_bytes}."
         )
-    # Step 4: Enforce the stage-1 v1 interior-only payload convention. The
+    # Step 4: Enforce the stage-1 v1 interior-only data convention. The
     #         combined format records payload_i_start/count/end for reader
     #         clarity, but this v1 combiner intentionally rejects future
     #         stage-1 variants with ghost zones, partial domains, or shifted
-    #         payload windows.
+    #         data windows.
     if info.payload_i_count != info.Nxx:
         raise RuntimeError(
             f"{info.path}: payload_i_count={info.payload_i_count} did not equal "
@@ -1134,7 +1134,7 @@ def determine_axisymmetry_metadata(
     Build axisymmetry metadata from CLI options and stage-1 grid metadata.
 
     :param args: Parsed CLI namespace.
-    :param base: Reference stage-1 file whose native grid defines the payload.
+    :param base: Reference stage-1 file whose native grid defines the data.
     :return: Axisymmetry metadata record.
     :raises ValueError: If axisymmetry metadata is internally inconsistent.
     """
@@ -1161,7 +1161,7 @@ def determine_axisymmetry_metadata(
     expected_phi_samples: Tuple[float, ...] = _native_phi_samples(base)
     if len(expected_phi_samples) != 2:
         raise ValueError(
-            "Axisymmetry metadata currently requires the stage-1 payload to store "
+            "Axisymmetry metadata currently requires the stage-1 data to store "
             f"exactly two native phi planes; found {len(expected_phi_samples)}."
         )
 
@@ -1179,7 +1179,7 @@ def determine_axisymmetry_metadata(
     if len(set(phi_samples)) != len(phi_samples):
         raise ValueError("Phi samples must be unique.")
     if len(phi_samples) != len(expected_phi_samples):
-        raise ValueError("Phi sample count does not match the stage-1 payload.")
+        raise ValueError("Phi sample count does not match the stage-1 data.")
     for got_phi, expected_phi in zip(phi_samples, expected_phi_samples):
         if not math.isclose(got_phi, expected_phi, rel_tol=0.0, abs_tol=1.0e-14):
             raise ValueError("Phi samples do not match the stage-1 native grid.")
@@ -1240,7 +1240,7 @@ def determine_spatial_lookup_mode(
 
 def extract_coordinate_table_from_first_slice(base: Stage1Info) -> bytes:
     """
-    Build the GeometryBlock coordinate table from the first slice payload.
+    Build the GeometryBlock coordinate table from the first slice data.
 
     :param base: First time slice metadata.
     :return: Little-endian float64 coordinate table bytes.
@@ -1330,7 +1330,7 @@ def build_geometry_block(
     # Step 1: Optionally cache one Cartesian coordinate table. This is not a
     #         true spatial index; it exists so stage 3 can validate or build
     #         its own lookup structure for the nonuniform Cartesian embedding
-    #         without scanning the time-major payload.
+    #         without scanning the time-major data.
     if args.include_coordinate_table:
         coordinate_table = extract_coordinate_table_from_first_slice(base)
         if args.validate_coordinate_table:
@@ -1448,7 +1448,7 @@ def compute_layout(
     :param args: Parsed CLI namespace.
     :return: Concrete layout offsets and sizes.
     """
-    # Step 1: Align each major block and every payload slice for direct mmap/pread access.
+    # Step 1: Align each major block and every time-slice data block for direct mmap/pread access.
     _validate_power_of_two(args.alignment, "alignment")
     metadata_offset = FIXED_HEADER_BYTES
     slice_table_offset = align_up(metadata_offset + metadata_bytes_len, args.alignment)
@@ -1490,7 +1490,7 @@ def build_slice_entries(
     :param layout: Final combined container layout.
     :return: Slice table entries.
     """
-    # Step 1: Record payload offsets after the sort-by-time order is finalized.
+    # Step 1: Record point-record offsets after the sort-by-time order is finalized.
     entries: List[SliceEntry] = []
     for slice_index, info in enumerate(infos):
         entries.append(
@@ -1535,7 +1535,7 @@ def build_metadata_json(
     :param native_inverse_map_name: Reader-declared native inverse-map identifier.
     :return: UTF-8 encoded deterministic JSON metadata.
     """
-    # Step 1: Emit a verbose, deterministic schema description for readers and debugging.
+    # Step 1: Emit a verbose, deterministic file-format description for readers and debugging.
     metadata = {
         "combined_format_name": "NRPY raytracing stacked time-slice container",
         "combined_format_version": COMBINED_FORMAT_VERSION,
@@ -1628,7 +1628,8 @@ def build_metadata_json(
             "id": GRID_POINT_POSITION_CONVENTION_ID,
             "meaning": (
                 "Point records correspond to exported interior logical-grid "
-                "points with payload-local indices j = i - payload_i_start."
+                "points with relative interior-grid indices "
+                "j = i - payload_i_start."
             ),
         },
         "cartesian_bounds": (
@@ -1709,7 +1710,7 @@ def pack_slice_entry(entry: SliceEntry) -> bytes:
 
     :param entry: Slice table entry values.
     :return: Fixed-width packed entry bytes.
-    :raises RuntimeError: If the packed entry size differs from the schema.
+    :raises RuntimeError: If the packed entry size differs from the file format.
     """
     packed = struct.pack(
         "<IIdQQQIIQQQQQQ4Q",
@@ -1967,13 +1968,13 @@ def copy_payload(
     dst_offset: int,
 ) -> None:
     """
-    Copy one stage-1 payload region into the combined output.
+    Copy one stage-1 point-record data region into the combined output.
 
     :param src_path: Source stage-1 path.
-    :param src_offset: Source payload offset.
+    :param src_offset: Source point-record offset.
     :param num_bytes: Number of bytes to copy.
     :param dst_file: Open destination file.
-    :param dst_offset: Destination payload offset.
+    :param dst_offset: Destination point-record offset.
     :raises RuntimeError: If EOF is encountered while copying.
     """
     chunk_size = 16 * 1024 * 1024
@@ -1985,7 +1986,7 @@ def copy_payload(
             chunk = src.read(min(chunk_size, remaining))
             if not chunk:
                 raise RuntimeError(
-                    f"Unexpected EOF while copying payload from {src_path}."
+                    f"Unexpected EOF while copying data from {src_path}."
                 )
             dst_file.write(chunk)
             remaining -= len(chunk)
@@ -2060,7 +2061,7 @@ def write_combined_file_atomically(
                 out.write(pack_slice_entry(entry))
             out.seek(layout.geometry_block_offset)
             out.write(geometry_data.block_bytes)
-            # Step 3: Copy only the stage-1 payload region for each sorted slice.
+            # Step 3: Copy only the stage-1 point-record data region for each sorted slice.
             for slice_index, info in enumerate(infos):
                 copy_payload(
                     src_path=info.path,
@@ -2397,7 +2398,9 @@ def inspect_combined_file(path: Path) -> None:
         if slice_table_end > header.geometry_block_offset:
             raise RuntimeError(f"{path}: slice table overlapped the geometry block.")
         if geometry_block_end > header.first_payload_offset:
-            raise RuntimeError(f"{path}: geometry block overlapped the payload region.")
+            raise RuntimeError(
+                f"{path}: geometry block overlapped the point-record data region."
+            )
 
         fp.seek(header.metadata_offset)
         metadata_bytes = _read_exact(fp, header.metadata_bytes, "metadata JSON")
@@ -2501,7 +2504,7 @@ def inspect_combined_file(path: Path) -> None:
         payload_offset = entry.payload_offset
         payload_bytes = entry.payload_bytes
         if payload_offset % header.alignment_bytes != 0:
-            raise RuntimeError(f"{path}: slice payload offset was not aligned.")
+            raise RuntimeError(f"{path}: slice point-record offset was not aligned.")
         if payload_bytes != header.payload_bytes_per_slice:
             raise RuntimeError(f"{path}: slice payload_bytes differed from header.")
         if entry.point_record_count != header.point_record_count:
@@ -2513,14 +2516,14 @@ def inspect_combined_file(path: Path) -> None:
                 f"{path}: slice point_record_bytes differed from header."
             )
         if payload_offset + payload_bytes > file_size:
-            raise RuntimeError(f"{path}: slice payload exceeded file bounds.")
+            raise RuntimeError(f"{path}: slice data exceeded file bounds.")
     for slice_index, entry in enumerate(slice_entries):
         expected_payload_offset = (
             header.first_payload_offset + slice_index * header.payload_stride_bytes
         )
         if entry.payload_offset != expected_payload_offset:
             raise RuntimeError(
-                f"{path}: slice payload offset did not match stride formula."
+                f"{path}: slice point-record offset did not match stride formula."
             )
 
     # Step 3: Print a concise human-readable summary for quick inspection.
@@ -2533,7 +2536,7 @@ def inspect_combined_file(path: Path) -> None:
         print("time range:")
         print(f"  first simulation_time: {times[0]:.17g}")
         print(f"  last simulation_time: {times[-1]:.17g}")
-    print("payload:")
+    print("point-record data:")
     print(f"  first_payload_offset: {header.first_payload_offset}")
     print(f"  payload_bytes_per_slice: {header.payload_bytes_per_slice}")
     print(f"  payload_stride_bytes: {header.payload_stride_bytes}")
@@ -2602,7 +2605,7 @@ def main() -> None:
         inspect_combined_file(Path(args.inspect))
         return
 
-    # Step 2: Parse and validate every stage-1 source against one strict schema.
+    # Step 2: Parse and validate every stage-1 source against one strict file format.
     input_paths = discover_input_paths(args)
     if not input_paths:
         raise RuntimeError("No input stage-1 raytracing files found.")

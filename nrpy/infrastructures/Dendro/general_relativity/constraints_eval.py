@@ -7,8 +7,8 @@ One module, one entry point, and the formulation chosen by the
 constraint from the shared ``fCCZ4_system`` factory; the BSSN branch takes the
 Hamiltonian constraint and the momentum-constraint components from the
 established ``BSSN_constraints`` factory.  Both register what they write as
-DIAG gridfunctions, which is the Dendro diagnostics contract: they are
-recomputed from the evolved state and are never checkpoint state.
+DIAG gridfunctions: Dendro recomputes them from the evolved state and never
+stores them in checkpoints.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com

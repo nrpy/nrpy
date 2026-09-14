@@ -1,10 +1,10 @@
 """
 Register azimuthal-symmetry spatial Lagrange interpolation.
 
-This module emits the spatial stage of the numerical-spacetime interpolation
-pipeline used by the geodesic integrators. The generated C API evaluates one
+This module emits the spatial part of numerical-spacetime interpolation used
+by the geodesic integrators. The generated C API evaluates one
 spatial position `(x, y, z)` against caller-supplied mapped time-slice
-payloads and flat output buffers for the interpolated Cartesian-basis `g4DD`
+data pointers and flat output buffers for the interpolated Cartesian-basis `g4DD`
 and `Gamma4UDD` components. Higher-level code applies this helper once per
 time slice in the active temporal stencil, then passes the resulting per-slice
 tensors to the temporal interpolation stage.
@@ -14,25 +14,24 @@ spherical coordinates with the generated BHaH inverse map. In contrast, raw
 stencil nodes are now remapped with explicit dataset-specific spherical
 reflection rules. This keeps the interpolation nodes themselves on the raw
 uniform `(r, theta)` stencil required by
-`interpolation_lagrange_uniform.h`, while remapping only the payload-read
+`interpolation_lagrange_uniform.h`, while remapping only the data-read
 indices back into the stored interior.
 
-This helper intentionally performs no interpolation in `phi`. Its contract is
-dataset-specific: the combined numerical container stores exactly two native
+This helper intentionally performs no interpolation in `phi`. The combined
+numerical file stores exactly two native
 phi planes, and this helper interpolates only on the uniform `(r, theta)` grid.
-When reflected stencil nodes read payload values from different stored phi
+When reflected stencil nodes read values from different stored phi
 planes, the helper first rotates each node's Cartesian-basis tensors back to
 one common stored reference plane, then performs the weighted `(r, theta)`
 interpolation, and finally rotates the interpolated tensors to the target
 azimuth. In other words, axisymmetry is enforced through tensor rotation rather
 than through a separate interpolation in `phi`. This means the caller must
 provide metadata for exactly those two stored phi planes, and the native
-spatial grid spacing in `r` and `theta` must be constant across the stored
-payload.
+spatial grid spacing in `r` and `theta` must be constant across the stored data.
 
-This module does not implement JSON parsing or mmap ownership for the combined
-metadata. The caller must parse the combined file elsewhere, map the required
-time-window payloads, and pass already-mapped slice payload pointers to the
+This module does not parse the combined file's JSON header or open and close its
+mmap. The caller must parse the combined file elsewhere, map the required
+time-window data, and pass already-mapped time-slice data pointers to the
 interpolation routine.
 
 Author: Dalton J. Moone
@@ -83,11 +82,11 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     """
     Register the azimuthal-symmetry spatial Lagrange interpolation helper.
 
-    This is the first stage of the numerical-spacetime interpolation pipeline.
+    This is the spatial part of numerical-spacetime interpolation.
     For one requested photon position and one set of already-mapped numerical
     time slices, it computes spatially interpolated Cartesian-basis tensors on
     each supplied slice. The companion temporal interpolation helper then
-    consumes those per-slice tensors and interpolates them in physical time.
+    reads those per-slice tensors and interpolates them in physical time.
 
     :param CoordSystem: Coordinate system used by the source dataset.
     :param enable_simd: Whether SIMD helper headers are already available.
@@ -178,21 +177,21 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
 
     prefunc = r"""
 /**
- * Map one raw extended-grid stencil node back into the stored payload.
+ * Map one raw extended-grid stencil node back into the stored grid.
  *
  * The interpolation coefficients are always built on the raw uniform stencil.
- * This helper only recovers the in-domain payload index for one raw node by
+ * This helper only recovers the in-domain logical-grid index for one raw node by
  * applying the dataset-specific spherical reflection rules directly. The key
  * idea is that the polynomial nodes stay on the mathematically uniform
- * extended stencil, while only the payload reads are reflected back into the
+ * extended stencil, while only the grid reads are reflected back into the
  * stored two-plane data.
  *
  * @param[in] params Generated BHaH parameter struct.
  * @param[in] r_ext Raw stencil radial coordinate, possibly outside the interior.
  * @param[in] theta_ext Raw stencil polar coordinate, possibly outside the interior.
  * @param[in] i2_base Logical phi index for the selected stored reference plane.
- * @param[out] i0i1i2_map In-domain logical payload index recovered by reflection.
- * @return Status code indicating whether the mapped node lands inside the payload.
+ * @param[out] i0i1i2_map In-domain logical-grid index recovered by reflection.
+ * @return Status code indicating whether the mapped node lands inside the stored grid.
  */
 static int azimuthal_symmetry_spatial_lagrange_map_extended_node(
     const params_struct *restrict params,
@@ -261,9 +260,9 @@ static int azimuthal_symmetry_spatial_lagrange_map_extended_node(
       theta_index_map <=
           theta_max_supported + (REAL)(0.5 * params->dxx1) + theta_endpoint_tol) {
     theta_index_map = theta_max_supported;
-  } // END IF: theta landed in the last physical half-cell and should read the endpoint payload cell
+  } // END IF: theta landed in the last physical half-cell and should read the endpoint grid cell
 
-  // Step 5: Convert the reflected coordinates and phi toggle to payload indices.
+  // Step 5: Convert the reflected coordinates and phi toggle to logical-grid indices.
   i0_map = (int)((r_map - params->xxmin0) / params->dxx0 + (REAL)NGHOSTS);
   i1_map = (int)((theta_index_map - params->xxmin1) / params->dxx1 + (REAL)NGHOSTS);
   if (phi_toggle == 0) {
@@ -272,12 +271,12 @@ static int azimuthal_symmetry_spatial_lagrange_map_extended_node(
     i2_map = payload_i2_end - 1 - (i2_base - payload_i2_start);
   } // END IF: apply the pi shift through the stored two-plane layout
 
-  // Step 6: Confirm that the remapped logical index lies inside the stored payload.
+  // Step 6: Confirm that the remapped logical index lies inside the stored grid.
   if (i0_map < payload_i0_start || i0_map >= payload_i0_end ||
       i1_map < payload_i1_start || i1_map >= payload_i1_end ||
       i2_map < payload_i2_start || i2_map >= payload_i2_end) {
     return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
-  } // END IF: reflected stencil node could not be supported by the payload
+  } // END IF: reflected stencil node could not be supported by the stored grid
   i0i1i2_map[0] = i0_map;
   i0i1i2_map[1] = i1_map;
   i0i1i2_map[2] = i2_map;
@@ -287,7 +286,7 @@ static int azimuthal_symmetry_spatial_lagrange_map_extended_node(
 /**
  * Rotate Cartesian-basis metric and Christoffel components about the z axis.
  *
- * The payload stores tensors on one of exactly two native reference azimuthal
+ * The file stores tensors on one of exactly two native reference azimuthal
  * planes. This helper does not interpolate in `phi`; instead, axisymmetry
  * recovers the target azimuth by an active spatial rotation through
  * `delta_phi` after the `(r, theta)` interpolation has completed. This keeps
@@ -517,7 +516,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
   for (int u = 0; u < interp_order; u++) {
     const int i0_raw = center_idx[0] + (u - n_interp_ghosts);
     // Keep the polynomial nodes on the raw extended grid, even if the later
-    // payload reads are recovered back into the interior.
+    // grid reads are recovered back into the interior.
     src_r_stencil[u] =
         (REAL)(params->xxmin0 + (((i0_raw - NGHOSTS) + 0.5) * params->dxx0));
   } // END LOOP: for u over radial stencil nodes
@@ -529,7 +528,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
 
   if (src_r_stencil[interp_order - 1] > r_max_supported + r_support_tol) {
     return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
-  } // END IF: largest raw radial stencil node exceeded the supported payload radius
+  } // END IF: largest raw radial stencil node exceeded the supported radial extent
 
   compute_inv_denom(interp_order, inv_denom);
   compute_diffs_xi(interp_order, target_r, src_r_stencil, diffs_r);
@@ -589,13 +588,13 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
              comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
              comp++) {
           g4dd_node_ref[comp] = (REAL)tensor_record[comp];
-        } // END LOOP: for comp over serialized metric payload components
+        } // END LOOP: for comp over stored metric components
         for (int comp = 0;
              comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT;
              comp++) {
           gamma4udd_node_ref[comp] = (REAL)tensor_record[
               AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp];
-        } // END LOOP: for comp over serialized Christoffel payload components
+        } // END LOOP: for comp over stored Christoffel components
 
         // Rotate each remapped node back to the selected stored reference
         // plane so weighted accumulation never mixes Cartesian bases from
@@ -633,13 +632,13 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
     desc = r"""Interpolate Cartesian geodesic tensors at one spatial position.
 
 The caller supplies a trusted spatial context and already-mapped time-slice
-payload pointers. The helper builds one native `(r, theta)` stencil, remaps the
-payload-read indices once with explicit spherical reflections, reads tensor
-components directly from mapped payload memory for each requested slice,
+data pointers. The helper builds one native `(r, theta)` stencil, remaps the
+data indices once with explicit spherical reflections, reads tensor
+components directly from mapped memory for each requested slice,
 rotates each remapped node back to one common stored phi plane, interpolates
 there, rotates to the target azimuth, and writes flat per-slice outputs.
 
-This helper assumes the stored payload has constant native grid spacing in
+This helper assumes the stored data have constant native grid spacing in
 `r` and `theta`, and that axisymmetry is represented by exactly two stored phi
 planes. It therefore performs no interpolation in `phi`: it interpolates only
 on the uniform `(r, theta)` stencil. Reflected nodes that land on the opposite
@@ -653,14 +652,14 @@ tensors are then rotated from that reference plane to the target azimuth.
 @param x Cartesian x coordinate.
 @param y Cartesian y coordinate.
 @param z Cartesian z coordinate.
-@param num_target_slices Number of mapped slice payload pointers.
-@param[in] slice_payloads Mapped slice payload pointers.
+@param num_target_slices Number of mapped time-slice data pointers.
+@param[in] slice_payloads Mapped time-slice data pointers.
 @param[out] g4dd_out Flat metric output.
 @param[out] gamma4udd_out Flat Christoffel output.
 @return Status code indicating success or the interpolation failure reason.
 
 @note Each `slice_payloads` entry must point to the beginning of one mapped
-3D-grid payload and remain valid for the duration of this call. The spatial
+3D grid and remain valid for the duration of this call. The spatial
 stencil half-width is read from
 `commondata->numerical_spacetime_spatial_interp_order`; the actual number of
 radial and polar Lagrange nodes is `2*n+1`.

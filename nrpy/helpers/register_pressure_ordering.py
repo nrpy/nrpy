@@ -221,8 +221,8 @@ def order_statements_for_register_pressure(body: str) -> str:
         if kind == "constant":
             constant_names.add(name)
 
-    # Step 3: Remaining consumers of each defined name; a definition is ready once all its
-    #         operands exist.
+    # Step 3: Track the later expressions that read each defined name. A definition
+    #         is ready once all its operands exist.
     remaining_uses: Dict[str, int] = {name: 0 for name in names if name}
     consumers: Dict[str, List[int]] = {name: [] for name in names if name}
     for k, ops in enumerate(operands):

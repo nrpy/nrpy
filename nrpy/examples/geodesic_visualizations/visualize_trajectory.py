@@ -124,7 +124,7 @@ def visualize_trajectory(
     traj_path: Optional[str] = None, particle_type: str = "Test Particle"
 ) -> None:
     """
-    Read the trajectory data file and orchestrate the diagnostic visualization.
+    Read the trajectory data file and render the diagnostic plots.
 
     This function validates the existence and integrity of the output file
     before passing the parsed data to the plotting routine.

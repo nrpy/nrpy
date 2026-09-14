@@ -320,7 +320,7 @@ def point_loop(kernel: str, padding: str = "geom.padding") -> str:
     """
     Wrap a point kernel in the NRPy Dendro interior point loop.
 
-    The block-geometry field names are the host contract, so they are spelled
+    The block-geometry field names are part of the host interface, so they are spelled
     here once rather than at every builder.
 
     :param kernel: The ``c_codegen`` point kernel.
@@ -390,7 +390,7 @@ def padding_from_derivative_operators(
 
     One number, the widest axis: the emitted point loop takes a single
     ``geom.padding`` and Dendro sizes a block's padding from its element order,
-    so per-axis padding is unrepresentable in the host contract.
+    so the host block geometry cannot represent per-axis padding.
 
     This is not ``fd_order // 2``: the upwinded and Kreiss-Oliger families reach
     one point further than the centered ones (at fd_order 4, ``dupD`` reaches 3

@@ -4,7 +4,7 @@ Validate generation choices required by Dendro GR applications.
 
 Dendro registers no NRPy parameters of its own. The scalar alias is the core
 constant :data:`nrpy.grid.DENDRO_SCALAR_TYPE`, and Kreiss-Oliger dissipation is
-a per-call builder argument. This module owns the qualified conformal-factor
+a per-call builder argument. This module defines the qualified conformal-factor
 representations required by the current GR initial-data paths.
 
 Author: Zachariah B. Etienne

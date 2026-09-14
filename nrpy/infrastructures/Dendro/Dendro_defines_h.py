@@ -4,7 +4,7 @@ Emit the ``<stem>_defines.h`` header every generated CFunction source includes.
 
 It pulls in the host header, the generated scalar/state/parameter/constant
 headers and the generated CFunction declarations, and defines the upwind
-selection macro NRPy owns.  It carries no field name, no finite-difference
+selection macro defined by NRPy.  It carries no field name, no finite-difference
 coefficient and no numerical loop.
 
 Author: Zachariah B. Etienne
@@ -69,7 +69,7 @@ def output_Dendro_defines_h(solver_stem: str) -> str:
 #include "{solver_stem}_function_prototypes.h"
 // clang-format on
 
-// NRPy owns the upwind selection in the canonical backend, so the generated
+// NRPy selects the upwind direction in the canonical backend, so the generated
 // definition must win over any host definition -- matching
 // nrpy/helpers/simd_intrinsics.h and cuda_intrinsics.h, which also #undef
 // first.  A host macro with the opposite orientation would silently invert

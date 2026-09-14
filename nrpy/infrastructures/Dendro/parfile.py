@@ -86,7 +86,7 @@ def generate_default_parfile(
     >>> try:
     ...     cfc.CFunction_dict.clear()
     ...     _ = par.glb_extras_dict.pop("Dendro", None)
-    ...     cfc.register_CFunction(desc="fixture", name="fixture_rhs", body="(void)0;")
+    ...     cfc.register_CFunction(desc="test RHS", name="fixture_rhs", body="(void)0;")
     ...     roles.set_CFunction_role("fixture_rhs", "rhs_eval_block")
     ...     text = generate_default_parfile("bssn", "vacuum", 3, False)
     ... finally:

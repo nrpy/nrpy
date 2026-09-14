@@ -37,6 +37,7 @@ aggregate rows and `wiki/source-map.md`.
 
 | Source | Status |
 | --- | --- |
+| `AGENTS.md` | living |
 | `README.md` | living |
 | `CITATION.md` | living |
 | `setup.py` | living |
@@ -386,7 +387,7 @@ aggregate rows and `wiki/source-map.md`.
 | `https://arxiv.org/pdf/gr-qc/9810065v1` | Version-pinned v1 PDF for Baumgarte and Shapiro, arXiv:gr-qc/9810065. | frozen | ingested | Deciding source for the zero-shift harmonic lapse relation in Eqs. (30)-(32), including the special `C(x)=1` choice. |
 | `https://arxiv.org/pdf/gr-qc/9902024v1` | Version-pinned v1 PDF for Baumgarte, Hughes, and Shapiro, arXiv:gr-qc/9902024. | frozen | ingested | Deciding source for the zero-shift statement that their harmonic slicing reduces to `partial_t(alpha)=partial_t(exp(6*phi))`. |
 | `https://arxiv.org/pdf/1712.07658v2` | Version-pinned v2 PDF for Ruchlin, Etienne, and Baumgarte, arXiv:1712.07658. | frozen | ingested | Deciding source for the StaticTrumpet gauge pairing in Eqs. (65), (67), and (69). |
-| `https://github.com/zachetienne/nrpytutorial` | Historical NRPy tutorial repository; `Tutorial-BSSN_time_evolution-BSSN_gauge_RHSs.ipynb`. | living | partial | Background provenance for the `HarmonicSlicing` name and the `W`/`phi` chain-rule implementation in Step 2.b. |
+| `https://github.com/zachetienne/nrpytutorial` | Historical NRPy tutorial repository; selected overview, scalar-wave, and BSSN notebooks. | living | partial | Background for NRPy's computational-physics vocabulary and explanatory style, plus provenance for the `HarmonicSlicing` name and the `W`/`phi` chain-rule implementation in Step 2.b. |
 | `https://arxiv.org/abs/1605.01938` | arXiv abstract page for HBR2016 final-spin paper. | living | partial | Background landing page; exact revision-to-fit mapping is outside this ingest. |
 | `https://arxiv.org/abs/1611.00332` | arXiv abstract page for UIB2016 final-state paper and ancillary implementation. | living | partial | Background landing page; exact revision-to-fit/ancillary mapping is outside this ingest. |
 | `https://arxiv.org/abs/2111.02424` | arXiv abstract page for arXiv:2111.02424. | living | partial | Background landing page; exact revision-to-claim mapping is outside this ingest. |

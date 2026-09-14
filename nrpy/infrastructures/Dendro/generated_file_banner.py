@@ -1,6 +1,6 @@
 # nrpy/infrastructures/Dendro/generated_file_banner.py
 """
-Emit the provenance banner generated Dendro artifacts carry.
+Emit the provenance banner placed in generated Dendro files.
 
 The headers, build files, parameter file and host sources carry it; the
 per-CFunction sources do not, matching BHaH, ETLegacy and CarpetX, which banner
@@ -28,7 +28,7 @@ def generated_file_banner(comment: str = "//") -> str:
     Return the provenance banner, one commented line per banner line.
 
     :param comment: Line-comment token for the emitted language: ``//`` for the
-        C++ artifacts, ``#`` for the CMake files and the parameter file.
+        C++ source files, ``#`` for the CMake files and the parameter file.
     :return: The banner, newline-terminated.
 
     Doctests:

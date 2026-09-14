@@ -169,7 +169,7 @@ static void pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, 
 /**
  * PUP allocation state for the optional BHaHAHA input metric workspace.
  *
- * The workspace payload is intentionally not serialized here. At the normal
+ * The workspace data are intentionally not serialized here. At the normal
  * migration/checkpoint wait point, BHaHAHA_transform_BSSN_to_ADM() has not yet
  * filled this scratch buffer; it will be recomputed after interpolation data
  * are restored.

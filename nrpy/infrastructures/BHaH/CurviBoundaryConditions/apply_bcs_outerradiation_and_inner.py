@@ -8,8 +8,8 @@ code to compute radial derivatives (∂f/∂r) using the chain rule, with spatia
 derivatives calculated via arbitrary-order, upwinded finite differencing.
 
 The main function, `register_CFunction_apply_bcs_outerradiation_and_inner`,
-registers a top-level C routine that orchestrates the application of both these
-outer radiation conditions and the separate inner boundary conditions.
+registers a top-level C routine that applies the outer radiation conditions and
+then the separate inner boundary conditions.
 
 This process is documented in the tutorial:
 Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb

@@ -90,7 +90,7 @@ state; the solver checks rank count, finite values, flat-state numerical bounds,
 projection schedule, and drift before returning success. The image checksum
 fixes the consumed image bytes. The durable proof boundaries and local
 reproduction route live in [Validation,
-Standalone Host, And Deferral Gates](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md).
+Standalone Host, And Deferred Tests](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md).
 
 Claim evidence:
 - Claim: the configured Dendro job runs one nonflat fCCZ4 RHS-and-diagnostics numerical oracle and one bounded two-rank real-host Minkowski evolution; configuration does not establish a particular run's outcome.

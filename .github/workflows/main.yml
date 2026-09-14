@@ -284,7 +284,7 @@ jobs:
           export PYTHONPATH=/nrpy
 
           python -u -m nrpy.examples.dendro_fccz4 --project-dir /ci-work/fccz4
-          cmake -S /ci-work/fccz4/Dendro-GR/FCCZ4_GR -B /ci-work/build-fccz4 \
+          cmake -S /ci-work/fccz4/Dendro-GR/nrpy_fccz4 -B /ci-work/build-fccz4 \
             -DCMAKE_BUILD_TYPE=Release -DFCCZ4_STANDALONE_HOST=ON
           cmake --build /ci-work/build-fccz4 --target fccz4_self_tests --parallel
           ctest --test-dir /ci-work/build-fccz4 \
@@ -294,7 +294,7 @@ jobs:
           cp -a "$DENDRO_GR_SOURCE" /ci-work/host
           cp -a "$DENDROLIB_SOURCE" /ci-work/dendrolib
           cat >> /ci-work/host/CMakeLists.txt <<'CMAKE_EOF'
-          add_subdirectory("${NRPY_GENERATED}/Dendro-GR/FCCZ4_GR" nrpy_fccz4)
+          add_subdirectory("${NRPY_GENERATED}/Dendro-GR/nrpy_fccz4" nrpy_fccz4)
           CMAKE_EOF
 
           cmake -S /ci-work/host -B /ci-work/real-build \
@@ -308,7 +308,7 @@ jobs:
           GIT_DIR=/ci-work/host/.git GIT_WORK_TREE=/ci-work/host \
             cmake --build /ci-work/real-build --target fccz4Solver --parallel
 
-          parfile=/ci-work/fccz4/Dendro-GR/FCCZ4_GR/pars/fccz4_minkowski.par
+          parfile=/ci-work/fccz4/Dendro-GR/nrpy_fccz4/pars/fccz4_minkowski.par
           timeout --signal=KILL 300 mpiexec --oversubscribe -n 2 \
             /ci-work/real-build/nrpy_fccz4/fccz4Solver \
             --steps 1 --dt 0.001 -t "$parfile"

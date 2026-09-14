@@ -7,7 +7,7 @@ the whole tree first.
 Central Engineering Policy: Prefer the simplest sufficient implementation;
 reject abstractions without demonstrated need.
 
-## Agent Execution Contract
+## Agent Working Rules
 
 Follow system/developer instructions, explicit user instructions, applicable
 repository governance, then skill defaults. Specific repository rules govern their
@@ -56,6 +56,7 @@ clause when it blocks completion, distinguishing it from your interpretation.
 | [Examples](wiki/examples/index.md) | First wave-equation run and black-hole evolution examples. |
 | [Validation](wiki/validation/index.md) | Test and oracle policy, static analysis, expression validation, and generated-project CI. |
 | [Glossary](wiki/glossary.md) | Canonical terms. |
+| [Language For Computational Physicists](wiki/computational-physics-language.md) | Required wording for documentation, comments, messages, and other prose read by people or agents. |
 | [Catalog](wiki/catalog.md) | Global page inventory and query-routing terms. |
 | [Workflows](wiki/workflows.md) | KB ingest, query, and maintenance procedures. |
 | [Lint Checks](wiki/lint/CHECKS.md) | Mechanical and review checks for the KB. |
@@ -63,7 +64,7 @@ clause when it blocks completion, distinguishing it from your interpretation.
 | [Source Map](wiki/source-map.md) | Source-to-page dependency seed map and drift follow-up. |
 | [Contradictions](wiki/contradictions.md) | Contested, stale, and reconciled claims. |
 | [Syntheses](wiki/syntheses/index.md) | Cross-branch filed syntheses. |
-| [Schema](wiki/SCHEMA.md) | Page contracts and governance. |
+| [KB Page Format](wiki/SCHEMA.md) | Required page layout, source use, and maintenance rules. |
 
 ## Where Do I Start?
 
@@ -75,7 +76,25 @@ clause when it blocks completion, distinguishing it from your interpretation.
 | Work on BHaH, ETLegacy, CarpetX, superB, JAX, or Dendro generation | [Infrastructures](wiki/infrastructures/index.md) |
 | Run or compare example generators | [Examples](wiki/examples/index.md) |
 | Choose test placement or oracle rules, inspect static analysis or expression validation, or review generated-project CI | [Validation](wiki/validation/index.md) |
-| Update KB pages | [Workflows](wiki/workflows.md) |
+| Write or revise prose read by people or agents | [Language For Computational Physicists](wiki/computational-physics-language.md) |
+| Update other KB content | [Workflows](wiki/workflows.md) |
+
+## Human-Facing Language
+
+All prose read by people or agents must use the direct language of computational
+physics. This includes documentation, KB pages, comments, docstrings, command-line
+help, diagnostics, and generated comments or messages. Name the equation, symbolic
+expression, tensor, gridfunction, parameter, numerical method, source file,
+generated file, executable, input, output, or required behavior. Do not substitute
+software-management metaphors such as “artifact,” “contract,” or “schema” when a
+precise physical, numerical, or file-oriented term is available.
+
+Follow [Language For Computational
+Physicists](wiki/computational-physics-language.md) for the required translations
+and final review. Mathematical uses such as contracting tensor indices and exact
+code, file, command, or third-party names remain unchanged and should be formatted
+as exact names. Translate older vague wording in any paragraph or section you
+substantially revise; do not perform blind replacements across untouched text.
 
 ## Volatile Information Policy
 
@@ -105,7 +124,7 @@ Source drift is handled by dependency-aware review of changed paths, source
 status, [Source Map](wiki/source-map.md) rows, and affected compiled pages -
 not by stored fingerprints.
 
-Rules for maintaining this KB live in [wiki/SCHEMA.md](wiki/SCHEMA.md).
+Rules for maintaining this KB live in [KB Page Format](wiki/SCHEMA.md).
 
 ## Protected Workflow File
 
@@ -121,8 +140,7 @@ file, leave it unchanged and report the required workflow change to the user.
 `--all` is a compatibility alias with identical coverage, not a stronger mode.
 
 Commissioned root-level planning and task Markdown files that follow the
-[Coordination Artifacts](wiki/SCHEMA.md#coordination-artifacts) naming grammar
-are coordination artifacts. They may remain untracked and are exempt from KB
-routing/catalog checks. A matching name alone does not establish that a file
-was commissioned. Never file, stage, move, or delete a coordination artifact as
-KB content unless the user directs that action.
+[planning and task file naming rules](wiki/SCHEMA.md#coordination-artifacts) may
+remain untracked and are exempt from KB routing/catalog checks. A matching name
+alone does not establish that a file was commissioned. Never file, stage, move,
+or delete such a file as KB content unless the user directs that action.

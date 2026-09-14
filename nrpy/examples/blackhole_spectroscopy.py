@@ -140,7 +140,7 @@ separate_Ricci_and_BSSN_RHS = True
 # overwrites later in the same substep (see rhs_string below), so it costs no memory.
 # CUDA double precision only: on the RTX 4060 Ti the standard 64x64x128 SinhCylindrical
 # benchmark through t_final=0.5 measures 27.80 s -> 25.08 s; on 8 pinned CPU cores the same
-# change measures 56.16 s -> 58.02 s, because there the 18 arrays of producer traffic cost
+# change measures 56.16 s -> 58.02 s, because there the 18 arrays written by hDDdD_eval cost
 # more than the arithmetic they remove. An earlier attempt to extend the scheme to vetU, cf and
 # alpha was measured on the tree of 09-09-2026 and rejected: 32.03 s without stored derivatives,
 # 28.91 s with hDDdD alone, 29.85 s with the extension. That attempt stacked the extension on an
@@ -430,11 +430,12 @@ if enable_SSL:
 commondata->SSL_Gaussian_prefactor = commondata->SSL_h * exp(-commondata->time * commondata->time / (2 * commondata->SSL_sigma * commondata->SSL_sigma));
 """
 if enable_hDDdD_gridfunctions:
-    # hDDdD_eval writes the SCRATCH gridfunctions into RK_OUTPUT_GFS and Ricci_eval, its only
-    # consumer, reads them back. This is safe because rhs_eval overwrites every interior point of
-    # RK_OUTPUT_GFS later in this substep and nothing reads that buffer before rhs_eval, so its
-    # contents are dead here; its ghost zones hold stale data either way until the boundary
-    # conditions rewrite them. The SCRATCH set must fit in the evolved-gridfunction buffer.
+    # hDDdD_eval writes the SCRATCH gridfunctions into RK_OUTPUT_GFS, and Ricci_eval
+    # reads them back. This is safe because rhs_eval overwrites every interior point
+    # of RK_OUTPUT_GFS later in this substep and nothing reads that buffer before
+    # rhs_eval, so its contents are dead here; its ghost zones hold stale data either
+    # way until the boundary conditions rewrite them. The SCRATCH set must fit in the
+    # evolved-gridfunction buffer.
     rhs_string += """
 #if NUM_SCRATCH_GFS > NUM_EVOL_GFS
 #error "hDDdD scratch gridfunctions do not fit in the Method of Lines buffer that stores them"
@@ -444,7 +445,7 @@ Ricci_eval(params, rfmstruct, RK_INPUT_GFS, RK_OUTPUT_GFS, auxevol_gfs);"""
 elif separate_Ricci_and_BSSN_RHS:
     rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
 if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU:
-    # Must precede rhs_eval, its only consumer, within the substep.
+    # Must precede rhs_eval, which reads these values within the substep.
     rhs_string += "\ncfdD_alphadD_vetUdD_eval(params, RK_INPUT_GFS, auxevol_gfs);"
 rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
