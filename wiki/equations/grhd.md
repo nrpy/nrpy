@@ -1,6 +1,6 @@
 # GRHD
 
-> Map NRPy's general relativistic hydrodynamics equation builders, flux helpers, and validation coverage. · Status: confirmed · Last reconciled: 07-12-2026
+> Map NRPy's general relativistic hydrodynamics equation builders, flux helpers, and validation coverage. · Status: confirmed
 > Up: [Equations](index.md)
 
 ## Summary

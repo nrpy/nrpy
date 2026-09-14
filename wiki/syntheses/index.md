@@ -4,6 +4,6 @@
 
 | Page | Go here when... |
 | --- | --- |
-| [Generated Backend Comparison](generated-backend-comparison.md) | You need a side-by-side comparison of BHaH, ETLegacy, CarpetX, superB, and JAX generated backends. |
+| [Generated Backend Comparison](generated-backend-comparison.md) | You need a side-by-side comparison of BHaH, ETLegacy, CarpetX, superB, JAX, and Dendro generated backends. |
 
 Back to [AGENTS.md](../../AGENTS.md).

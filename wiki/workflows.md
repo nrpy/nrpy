@@ -1,6 +1,6 @@
 # Workflows
 
-> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 07-20-2026
+> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed
 
 ## Summary
 
@@ -9,6 +9,10 @@ answer from sourced pages. Durable answers are filed back into the wiki when
 they should compound. Maintenance work registers sources first, updates the
 owning leaf, then fixes nearby links, catalog entries, source-map rows, and
 glossary terms.
+Every passage added or revised during that work follows [Language For
+Computational Physicists](computational-physics-language.md) and names the
+equation, quantity, numerical method, file, result, or required behavior
+directly.
 NRPy code changes keep their normal project workflow: direct example runs need
 `PYTHONPATH=.` when there is no editable install. Modified handwritten Python
 follows [Static Analysis](validation/static-analysis.md); the generated
@@ -30,8 +34,9 @@ Use this order for agent navigation:
 1. Register the source in [raw/SOURCES.md](../raw/SOURCES.md) with provenance,
    `frozen` or `living` status, and ingest state. Exact cited-file rows may
    abbreviate to source and status per [SCHEMA.md](SCHEMA.md); external-source
-   rows may also carry an accessed date and notes. Do not record or compute
-   source-tracking digests or timestamps.
+   rows may also carry notes.
+   Do not record checksums, hashes, digests, mtimes, maintenance dates, timestamps,
+   inventory counts, environment tuples, or recorded run and audit results.
 2. Decide which branch owns the compiled facts.
 3. Update the owning leaf in synthesized prose and cite exact files plus stable
    symbols or headings.
@@ -88,7 +93,8 @@ them. Promote an external source to `external-spec` only when the claim needs
 the source as authority and one of these is true:
 
 1. A frozen markdown excerpt or version note exists under `raw/source-docs/`.
-2. The upstream source is stable by version, commit, or immutable URL.
+2. The upstream source is stable by release/tag or immutable URL without a
+   stored commit hash.
 3. A documented exception explains why the live external source is acceptable.
 
 Any external source trust change requires updates to
@@ -103,8 +109,8 @@ When sources disagree, create or update a structured
 `CONTR-0001`-form row in [contradictions.md](contradictions.md) before changing
 the affected claim's status to `contested`. Record exact claim/status,
 competing sources, authority decision, complete affected-page links,
-page-status rationale, owner/trigger, resolution test, opened/resolved dates,
-and notes. Put `Claim status: contested; contradiction: CONTR-0001.` on every
+page-status rationale, owner/trigger, resolution test, and notes. Put `Claim
+status: contested; contradiction: CONTR-0001.` on every
 active affected page; use `stale` in the same form when applicable.
 
 When a living source has moved and reconciliation cannot finish in the same
@@ -121,23 +127,24 @@ affected page is reconciled and the resolution test passes.
 ## Claim Adjudication
 
 The [Claim And Evidence Contract](SCHEMA.md#claim-and-evidence-contract) is
-prospective after its 07-13-2026 adoption change. High-risk claims predating it
-and claims changed in that same adoption change remain baseline-uncovered unless
+prospective after its adoption change. High-risk claims predating it and claims
+changed in that same adoption change remain baseline-uncovered unless
 an exact block is present; that adoption change asserts no completed block
 coverage. When a baseline claim or its deciding source is next materially
 changed after adoption, add the exact block immediately after the claim in its
 owning `Detail` section. For an active contradiction, add it to the matching
-`### CONTR-*` subsection, never the fixed register row. Add validation and
-dimensions only for behavioral claims. Use code for descriptive behavior;
-owning
+`### CONTR-*` subsection, never the fixed register row. For behavioral claims,
+name durable validation routes, fixtures, invariants, or oracles when available.
+Use code for descriptive behavior; owning
 governance/configuration for normative rules; stable specification plus targeted
 tests for intended public/scientific contracts; workflow/configuration for CI
-job shape; and frozen generated evidence only for its pinned context. Synthesis
+job shape; and frozen generated evidence only for the context encoded by that
+evidence. Synthesis
 agreement is never authority. Navigation, structure, provenance,
 status, symbolic definition, and normative rules do not receive behavioral
-validation lines. In every behavioral dimension, use an exact value when
-exercised, `not-run` when applicable but unexercised, and `not-applicable` only
-when the dimension does not apply; a date value uses `MM-DD-YYYY`.
+validation lines. Keep observed results, execution environments, tool versions,
+and run dates in command output, CI, or active review evidence rather than the
+KB.
 
 ## Safe Reproduction
 
@@ -148,9 +155,9 @@ no unrelated changes.
 Inspect side effects first, use owned disposable cache and output, and impose
 time/resource limits. Retain no incidental output and never clear or overwrite
 ambient or shared cache. No coordination exception permits mutation in the
-shared working tree. Record command,
-working directory, observed assertion, result, limits, cleanup, and behavioral
-tuple when relevant. Network, installs, remote CI, and external toolchains need
+shared working tree. Keep commands, working directories, observed assertions,
+results, limits, and cleanup in active review or CI evidence, not as KB
+snapshots. Network, installs, remote CI, and external toolchains need
 user authority. Never reset or clean shared `project/` output.
 
 ## Deterministic Checks
@@ -162,7 +169,7 @@ python tools/kb_lint.py
 git diff --check
 ```
 
-Expected success is exit 0; linter prints `KB lint passed.` `--all` is an
+Expected success is exit 0; the linter prints `KB lint passed.` `--all` is an
 identical compatibility alias, not stronger coverage. Inventory commands are
 diagnostics, never semantic completeness proof.
 
@@ -205,7 +212,8 @@ registered as frozen evidence.
 
 ## See Also
 
-- Depends on: [Schema](SCHEMA.md)
+- Depends on: [KB Page Format](SCHEMA.md)
+- Depends on: [Language For Computational Physicists](computational-physics-language.md)
 - See also: [Lint Checks](lint/CHECKS.md)
 - See also: [Contribution Style And Static Analysis](architecture/contribution-style-and-static-analysis.md)
 - See also: [Static Analysis](validation/static-analysis.md)

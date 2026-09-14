@@ -7,7 +7,7 @@ Description:
     This module is a standalone C application that evolves the trajectory
     of a massless photon test particle. Structure of Arrays (SoA) layouts
     minimize memory divergence during parallel execution. Memory is
-    dynamically allocated to mimic batch pipeline layouts. Struct mapping
+    dynamically allocated to mimic the batched array layout. Struct mapping
     establishes the SoA layout required by the downstream conserved
     quantities kernel. Pre-computing the metric solves the quadratic
     Hamiltonian constraint for temporal momentum. Deep copying preserves
@@ -83,7 +83,7 @@ def register_struct_definitions() -> None:
 
 def main_c(spacetime: str, particle: str) -> None:
     """
-    Define the main() function orchestrating the single-ray RKF45 integrator.
+    Define main() for single-ray RKF45 integration.
 
     :param spacetime: The specific background spacetime descriptor.
     :param particle: The type of test particle being integrated.
@@ -127,7 +127,7 @@ def main_c(spacetime: str, particle: str) -> None:
     double *f_temp = (double *)malloc(9 * sizeof(double));       // Intermediate RKF45 state buffer $f^\\mu_{{temp}}$.
     double *metric = (double *)malloc(10 * sizeof(double)); // The 10 independent components of the symmetric metric $g_{{\\mu\\nu}}$.
     double *connection = (double *)malloc(40 * sizeof(double)); // The 40 independent Christoffel symbols $\\Gamma^\\alpha_{{\\beta\\gamma}}$.
-    double *k_bundle = (double *)malloc(6 * 9 * sizeof(double)); // The derivative bundle storing all 6 RKF45 $k_n$ stages.
+    double *k_bundle = (double *)malloc(6 * 9 * sizeof(double)); // Derivative array storing all 6 RKF45 $k_n$ stages.
 
     double *affine_param = (double *)malloc(sizeof(double)); // The affine parameter $\\lambda$ accumulated along the geodesic.
     double *h = (double *)malloc(sizeof(double)); // The adaptive integration step size $h$.
@@ -189,7 +189,7 @@ def main_c(spacetime: str, particle: str) -> None:
 
         for (int i = 0; i < 9; i++) {{
         f_base[i] = f[i]; // The anchor state component $f^\\mu_{{base}}$.
-        f_temp[i] = f[i]; // The intermediate scratchpad state component $f^\\mu_{{temp}}$.
+        f_temp[i] = f[i]; // The intermediate state component $f^\\mu_{{temp}}$.
         }}
 
         // ==========================================

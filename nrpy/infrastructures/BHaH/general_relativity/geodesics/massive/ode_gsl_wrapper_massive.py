@@ -52,7 +52,7 @@ def ode_gsl_wrapper_massive(spacetime_name: str) -> None:
     params = "double t, const double y[8], double f[8], void *params"
 
     body = rf"""  //==========================================
-    // GSL TO THREAD-LOCAL BRIDGE
+    // COPY GSL STATE TO LOCAL ARRAYS
     //==========================================
     // Cast the generic parameter pointer and prepare local buffers.
     (void)t; // Mark proper time $\tau$ as unused to prevent compiler warnings.

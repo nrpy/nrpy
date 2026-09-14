@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 """
 
 from operator import itemgetter
-from typing import Any, Dict, List, Tuple, Union, cast
+from typing import Any, Dict, List, Sequence, Tuple, Union, cast
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -199,6 +199,26 @@ def setup_FD_matrix__return_inverse(
     return FD_Matrix_dict[(stencil_width, UPDOWNWIND_stencil_shift)]
 
 
+# Derivative-operator families compute_fdcoeffs_fdstencl() supplies coefficients
+# and stencils for.  All six have stencils, but only the four in
+# C_CODEGEN_DERIVATIVE_FAMILIES can be turned into C code: the dispatch in
+# proto_FD_operators_to_sympy_expressions() reads that same list and raises on
+# the two full-upwind families.  Keeping the two lists distinct is what lets
+# stencil_reach_per_axis() size a ghost zone for every family that has a stencil,
+# without changing what the shared extraction -- which every infrastructure runs
+# -- classifies as a derivative.
+C_CODEGEN_DERIVATIVE_FAMILIES: Tuple[str, ...] = (
+    "_dD",
+    "_dKOD",
+    "_dupD",
+    "_ddnD",
+)
+DERIVATIVE_FAMILIES: Tuple[str, ...] = C_CODEGEN_DERIVATIVE_FAMILIES + (
+    "_dfullupD",
+    "_dfulldnD",
+)
+
+
 def compute_fdcoeffs_fdstencl(
     derivstring: str, fd_order: int
 ) -> Tuple[List[sp.Rational], List[List[int]]]:
@@ -220,6 +240,28 @@ def compute_fdcoeffs_fdstencl(
     This function computes the finite difference coefficients and stencil points for various derivative types
     specified in `derivstring`. The coefficients are determined using the inverse of the finite difference matrix,
     which is constructed and inverted in the `setup_FD_matrix__return_inverse` function.
+
+    Doctests:
+    A mixed second-derivative stencil is exactly the tensor product of the two centered
+    first-derivative stencils it mixes, coefficient by coefficient. Callers rely on this to
+    rebuild a mixed second derivative as one first derivative of a stored first derivative,
+    as dD_eval and the BSSN dD gridfunctions do; unmixed second derivatives have their
+    own stencils and are not tensor products.
+    >>> def tensor_product_matches_mixed(order):
+    ...     for op, (a, b) in {"dDD01": (0, 1), "dDD02": (0, 2), "dDD12": (1, 2)}.items():
+    ...         mixed_coeffs, mixed_points = compute_fdcoeffs_fdstencl(op, order)
+    ...         mixed = {tuple(p): c for c, p in zip(mixed_coeffs, mixed_points)}
+    ...         product: dict = {}
+    ...         for ca, pa in zip(*compute_fdcoeffs_fdstencl(f"dD{a}", order)):
+    ...             for cb, pb in zip(*compute_fdcoeffs_fdstencl(f"dD{b}", order)):
+    ...                 point = tuple(x + y for x, y in zip(pa, pb))
+    ...                 product[point] = product.get(point, sp.sympify(0)) + ca * cb
+    ...         for point in set(product) | set(mixed):
+    ...             if sp.simplify(product.get(point, 0) - mixed.get(point, 0)) != 0:
+    ...                 return False
+    ...     return True
+    >>> [tensor_product_matches_mixed(order) for order in (2, 4, 6, 8, 10)]
+    [True, True, True, True, True]
     """
     # Step 0: Set finite differencing order, stencil size, and up/downwinding
     if "dKOD" in derivstring:
@@ -374,18 +416,120 @@ def symbol_is_gridfunction_Cparameter_or_other(var: sp.Basic) -> str:
     raise ValueError("grid.py: Could not find variable_type.")
 
 
+def stencil_reach_per_axis(
+    expressions: Sequence[sp.Expr],
+    upwind_control_vec: Union[List[sp.Basic], sp.Basic, str],
+    fd_order: int,
+) -> Tuple[int, int, int]:
+    """
+    Return the per-axis ghost-point reach the expressions' derivatives require.
+
+    An infrastructure that lays its data out in blocks or patches must size its
+    ghost zone to the widest stencil any emitted derivative reads.  That is not
+    ``fd_order // 2``: the single-point upwinded and Kreiss-Oliger families reach
+    one point further than the centered ones and the full-upwind families reach
+    ``fd_order``, so a radius derived from the order alone reads past the end of
+    a block.  The reach is therefore taken from the same coefficient source the
+    kernel is lowered with, per axis, because a stencil is one-dimensional and
+    only the axis it differentiates grows.
+
+    :param expressions: The expressions the kernel is generated from.
+    :param upwind_control_vec: Upwind control vector, or the string sentinel
+        used when upwinding is not enabled.
+    :param fd_order: Finite-difference order; ``dKOD`` adds its own two orders
+        internally, exactly as the kernel's C code is generated.
+    :return: The (x, y, z) ghost points required.
+    :raises ValueError: If a free symbol carries a derivative token whose
+        family is not one of :data:`DERIVATIVE_FAMILIES`, which would otherwise
+        be skipped silently and understate the reach.
+
+    DocTests:
+    >>> import nrpy.indexedexp as ixp
+    >>> gri.glb_gridfcs_dict.clear()
+    >>> _ = gri.register_gridfunctions("uu")
+    >>> uu_dD = ixp.declarerank1("uu_dD")
+    >>> stencil_reach_per_axis([uu_dD[0]], "unset", 4)
+    (2, 0, 0)
+    >>> uu_dupD = ixp.declarerank1("uu_dupD")
+    >>> stencil_reach_per_axis([uu_dupD[1]], "unset", 4)
+    (0, 3, 0)
+
+    Pinning more than one order is what catches an order-dependent regression
+    rather than only a family-blind one.
+
+    >>> stencil_reach_per_axis([uu_dupD[1]], "unset", 2)
+    (0, 2, 0)
+    >>> stencil_reach_per_axis([uu_dupD[1]], "unset", 6)
+    (0, 4, 0)
+    >>> uu_dfullupD = ixp.declarerank1("uu_dfullupD")
+    >>> stencil_reach_per_axis([uu_dfullupD[1]], "unset", 4)
+    (0, 4, 0)
+    >>> uu_dfulldnD = ixp.declarerank1("uu_dfulldnD")
+    >>> stencil_reach_per_axis([uu_dfulldnD[1]], "unset", 4)
+    (0, 4, 0)
+    >>> try:
+    ...     stencil_reach_per_axis([sp.Symbol("uu_dbogusD0")], "unset", 4)
+    ... except ValueError as error:
+    ...     print(error)
+    Unrecognized derivative family in uu_dbogusD0; known families: _dD, _dKOD, _dupD, _ddnD, _dfullupD, _dfulldnD.
+    """
+    free_symbols: List[sp.Basic] = []
+    for expr in expressions:
+        free_symbols.extend(expr.free_symbols)
+
+    for symbol in free_symbols:
+        name = str(symbol)
+        if symbol_is_gridfunction_Cparameter_or_other(symbol) != "other":
+            continue
+        # A derivative symbol is "<base>_d<operator>D<indices>": "_d", then an
+        # operator ending in an uppercase "D", then the index digits.  A name
+        # that merely contains "_d" and ends in a digit -- "eta_damp0",
+        # "xx_dim2" -- is an ordinary unregistered symbol, and the extraction
+        # below is deliberately permissive about those.
+        if "_d" not in name or name.rstrip("0123456789") == name:
+            continue
+        if "D" not in name[name.find("_d") + 2 :]:
+            continue
+        if not any(family in name for family in DERIVATIVE_FAMILIES):
+            raise ValueError(
+                f"Unrecognized derivative family in {name}; known families: "
+                + ", ".join(DERIVATIVE_FAMILIES)
+                + "."
+            )
+
+    deriv_vars = extract_list_of_deriv_var_strings_from_sympyexpr_list(
+        free_symbols, upwind_control_vec, families=DERIVATIVE_FAMILIES
+    )
+    _base_gfs, deriv_operators = (
+        extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(deriv_vars)
+    )
+
+    reach = [0, 0, 0]
+    for operator in superfast_uniq(deriv_operators):
+        _coeffs, stencils = compute_fdcoeffs_fdstencl(operator, fd_order)
+        for stencil in stencils:
+            for axis, step in enumerate(stencil):
+                reach[axis] = max(reach[axis], abs(step))
+    return (reach[0], reach[1], reach[2])
+
+
 #########################################
 # Step 1: Extract derivatives to compute
 #         from list of SymPy expressions
 def extract_list_of_deriv_var_strings_from_sympyexpr_list(
     list_of_free_symbols: List[sp.Basic],
-    upwind_control_vec: Union[List[sp.Basic], sp.Basic],
+    upwind_control_vec: Union[List[sp.Basic], sp.Basic, str],
+    families: Tuple[str, ...] = C_CODEGEN_DERIVATIVE_FAMILIES,
 ) -> List[sp.Basic]:
     """
     Extract derivative expressions from SymPy expressions' free symbols.
 
     :param list_of_free_symbols: List of free symbols from SymPy expressions.
     :param upwind_control_vec: Upwind control vector.
+    :param families: Derivative-operator families to classify as derivatives.
+        Defaults to the four ``c_codegen()`` can generate C code for, which is
+        what every caller of it needs; pass ``DERIVATIVE_FAMILIES`` to include
+        the two full-upwind families, which have stencils but no C-code path.
 
     :returns: List of derivative variables, creating _ddnD in case upwinding is enabled with control vector.
 
@@ -408,7 +552,7 @@ def extract_list_of_deriv_var_strings_from_sympyexpr_list(
     for var in list_of_free_symbols:
         vartype = symbol_is_gridfunction_Cparameter_or_other(var)
         if vartype == "other":
-            if any(s in str(var) for s in ["_dD", "_dKOD", "_dupD", "_ddnD"]):
+            if any(s in str(var) for s in families):
                 list_of_deriv_vars_with_duplicates.append(var)
             else:
                 # At one time this raised a ValueError that
@@ -512,6 +656,14 @@ def extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
     >>> extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
     ...    [c_dD[0], aDD_dD[0][1][2], aDD_dKOD[0][1][2], vetU_dKOD[2][1], hDD_dDD[0][1][1][2]])
     (['c', 'aDD01', 'aDD01', 'vetU2', 'hDD01'], ['dD0', 'dD2', 'dD2', 'dKOD1', 'dDD12'])
+
+    Gridfunctions whose own names record a derivative, such as the reference-metric
+    gridfunction ghatDDdD or the stored first derivatives hDDdD, are differentiated
+    like any other gridfunction; the rank follows from the index digits, not from the
+    letters preceding the final underscore:
+    >>> hDDdD_dD = ixp.declarerank4("hDDdD_dD")
+    >>> extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars([hDDdD_dD[0][1][0][1]])
+    (['hDDdD010'], ['dD1'])
     """
     list_of_base_gridfunction_names_in_derivs = []
     list_of_deriv_operators = []
@@ -537,15 +689,7 @@ def extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
         # Step 2a.2: Based on the variable name, find the rank of
         #            the underlying gridfunction of which we're
         #            trying to take the derivative.
-        # rank = "number of juxtaposed Us and Ds before the underscore in a derivative expression"
-        rank = 0
         underscore_position = varstr.rfind("_")  # Find the last occurrence of "_"
-        if underscore_position != -1:
-            # count contiguous "U"s and "D"s before underscore
-            i = underscore_position - 1
-            while i >= 0 and varstr[i] in ["U", "D"]:
-                rank += 1
-                i -= 1
 
         # Step 2a.3: Based on the variable name, find the order
         #            of the derivative we're trying to take.
@@ -553,6 +697,14 @@ def extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
         for i in range(underscore_position + 1, len(varstr)):
             if varstr[i] == "D":
                 deriv_order += 1
+
+        # rank = "number of indices carried by the differentiated gridfunction".
+        # The check above guarantees that the trailing digits are exactly the
+        # gridfunction's indices followed by the derivative's indices, so the rank
+        # follows by subtraction. Counting juxtaposed Us and Ds before the final
+        # underscore instead would misread a gridfunction whose own name records a
+        # derivative, such as the rank-3 hDDdD storing the first derivatives of hDD.
+        rank = num_digits_at_end - deriv_order
 
         # Step 2a.4: Based on derivative order and rank,
         #            store the base gridfunction name and
@@ -570,6 +722,64 @@ def extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
         list_of_deriv_operators.append(deriv_operator)
 
     return list_of_base_gridfunction_names_in_derivs, list_of_deriv_operators
+
+
+def select_stored_first_derivatives(
+    deriv_vars: List[sp.Basic], stored_first_derivatives: Sequence[str]
+) -> Tuple[List[str], List[str]]:
+    """
+    Select registered storage for centered derivatives without changing their symbols.
+
+    The caller explicitly supplies the stored gridfunction names valid for this kernel.
+    For example, hDD_dD011 reads hDDdD011, and hDD_dDD0112 differentiates
+    hDDdD011 in direction 2. An empty operator denotes a pointwise read. Only
+    canonical mixed pairs (k < l) use storage; diagonal, upwind, KO, and unselected
+    derivatives retain their stencils. The caller owns storage lifetime and halos.
+
+    :param deriv_vars: Original derivative symbols, retained as output temporaries.
+    :param stored_first_derivatives: Registered gridfunctions valid for this kernel.
+    :return: Source gridfunction names and operators, aligned with deriv_vars.
+    :raises ValueError: If selected storage is not registered.
+
+    Doctests:
+    >>> saved = gri.glb_gridfcs_dict.copy()
+    >>> try:
+    ...     _ = gri.register_gridfunctions(["hDDdD011", "cfdD0"], group="AUXEVOL", is_basename=False)
+    ...     variables = list(sp.symbols("hDD_dD011 hDD_dDD0112 hDD_dDD0111 hDD_dupD011 hDD_dKOD011 cf_dD0 cf_dDD02"))
+    ...     selected = select_stored_first_derivatives(variables, ["hDDdD011"])
+    ...     unselected = select_stored_first_derivatives(variables, [])
+    ... finally:
+    ...     gri.glb_gridfcs_dict.clear()
+    ...     gri.glb_gridfcs_dict.update(saved)
+    >>> selected
+    (['hDDdD011', 'hDDdD011', 'hDD01', 'hDD01', 'hDD01', 'cf', 'cf'], ['', 'dD2', 'dDD11', 'dupD1', 'dKOD1', 'dD0', 'dDD02'])
+    >>> unselected == extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(variables)
+    True
+    >>> select_stored_first_derivatives([], ["unregistered_stored_derivative"])
+    Traceback (most recent call last):
+      ...
+    ValueError: Stored first derivative is not registered: unregistered_stored_derivative
+    """
+    selected = set(stored_first_derivatives)
+    for name in sorted(selected):
+        if name not in gri.glb_gridfcs_dict:
+            raise ValueError(f"Stored first derivative is not registered: {name}")
+    bases, operators = extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
+        deriv_vars
+    )
+    for i, (var, operator) in enumerate(zip(deriv_vars, operators)):
+        basename, suffix = str(var).rsplit("_", 1)
+        if operator in ("dD0", "dD1", "dD2"):
+            stored = basename + "dD" + suffix[2:]
+            replacement_operator = ""
+        elif operator in ("dDD01", "dDD02", "dDD12"):
+            stored = basename + "dD" + suffix[3:-1]
+            replacement_operator = "dD" + operator[-1]
+        else:
+            continue
+        if stored in selected:
+            bases[i], operators[i] = stored, replacement_operator
+    return bases, operators
 
 
 def read_gfs_from_memory(
@@ -876,6 +1086,44 @@ def use_pointer_stride_mixed_derivative(operator: str) -> bool:
     )
 
 
+def use_pointer_stride_ko_derivative(operator: str) -> bool:
+    """
+    Select pointer/stride raw KO helpers for BHaH CUDA generation.
+
+    Use the existing backend setting; CPU and other infrastructures retain
+    value arguments. This changes helper storage access, not the KO formula.
+
+    :param operator: Finite-difference operator name.
+    :return: Whether the operator uses a pointer/stride KO helper.
+
+    Doctests:
+    >>> saved = {name: par.parval_from_str(name) for name in ("Infrastructure", "parallelization")}
+    >>> try:
+    ...     for infra in ("BHaH", "ETLegacy", "CarpetX", "NRPy"):
+    ...         par.set_parval_from_str("Infrastructure", infra)
+    ...         for backend in ("openmp", "cuda"):
+    ...             par.set_parval_from_str("parallelization", backend)
+    ...             print(infra, backend, [use_pointer_stride_ko_derivative(op) for op in
+    ...                   ("dKOD0", "dKOD1", "dKOD2", "dDD01", "dupD0", "ddnD1")])
+    ... finally:
+    ...     for name, value in saved.items():
+    ...         par.set_parval_from_str(name, value)
+    BHaH openmp [False, False, False, False, False, False]
+    BHaH cuda [True, True, True, False, False, False]
+    ETLegacy openmp [False, False, False, False, False, False]
+    ETLegacy cuda [False, False, False, False, False, False]
+    CarpetX openmp [False, False, False, False, False, False]
+    CarpetX cuda [False, False, False, False, False, False]
+    NRPy openmp [False, False, False, False, False, False]
+    NRPy cuda [False, False, False, False, False, False]
+    """
+    return (
+        par.parval_from_str("Infrastructure") == "BHaH"
+        and par.parval_from_str("parallelization") == "cuda"
+        and operator in ("dKOD0", "dKOD1", "dKOD2")
+    )
+
+
 class FDFunction:
     """
     A class to represent Finite-Difference (FD) functions in C/C++.
@@ -905,11 +1153,15 @@ class FDFunction:
         self.enable_simd = enable_simd
         self.c_function_name = "SIMD_" if enable_simd else ""
         self.c_function_name += f"fd_function_{self.operator}_fdorder{self.fd_order}"
-        self.modifiers = "NO_INLINE "
-        if par.parval_from_str("Infrastructure") == "CarpetX":
-            self.modifiers += "CCTK_DEVICE CCTK_HOST"
+        self.modifiers = (
+            "CCTK_DEVICE CCTK_HOST "
+            if par.parval_from_str("Infrastructure") == "CarpetX"
+            else ""
+        )
 
-        self.uses_pointer_stride = use_pointer_stride_mixed_derivative(operator)
+        self.uses_pointer_stride = use_pointer_stride_mixed_derivative(
+            operator
+        ) or use_pointer_stride_ko_derivative(operator)
 
         self.CFunction: cfc.CFunction
 
@@ -934,7 +1186,14 @@ class FDFunction:
                 "Nxx_plus_2NGHOSTS0",
                 "Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1",
             )
-            directions = [int(direction) for direction in self.operator[-2:]]
+            directions = [
+                int(direction)
+                for direction in (
+                    self.operator[-1:]
+                    if self.operator.startswith("dKOD")
+                    else self.operator[-2:]
+                )
+            ]
             args = [pointer] + [strides[d] for d in directions if d != 0]
             args += [f"invdxx{d}" for d in directions]
             return f"const {self.fp_type_alias} {deriv_var} = {self.c_function_name}({', '.join(args)})"
@@ -954,17 +1213,82 @@ class FDFunction:
         return c_function_call
 
     def CFunction_fd_function(self, FDexpr_c_code: str) -> cfc.CFunction:
-        """
+        r"""
         Generate a C function based on the given finite-difference expression.
 
         :param FDexpr_c_code: The finite-difference expression in C code format.
 
         :return: A cfc.CFunction object that encapsulates the C function details.
+
+        Verify KO loads and arithmetic against the stencil for independent values
+        at every offset. Symbolic strides distinguish the nonunit directions;
+        SIMD checks interpret one lane of each contiguous vector load.
+
+        Doctests:
+        >>> import re
+        >>> saved = {name: par.parval_from_str(name) for name in ("Infrastructure", "parallelization")}
+        >>> try:
+        ...     par.set_parval_from_str("Infrastructure", "BHaH")
+        ...     par.set_parval_from_str("parallelization", "cuda")
+        ...     u = sp.IndexedBase("u")
+        ...     s1, s2 = sp.symbols("s1 s2", integer=True)
+        ...     for order in (2, 4, 6, 8, 10):
+        ...         residuals = []
+        ...         for direction in range(3):
+        ...             op = f"dKOD{direction}"
+        ...             coeffs, points = compute_fdcoeffs_fdstencl(op, order)
+        ...             spacing = sp.Symbol(f"invdxx{direction}")
+        ...             expression = spacing * sum(c * sp.Symbol(fd_temp_variable_name("FDPROTO", *p[:3]))
+        ...                                        for c, p in zip(coeffs, points))
+        ...             reference = spacing * sum(c * u[p[0] + s1*p[1] + s2*p[2]] for c, p in zip(coeffs, points))
+        ...             for simd in (False, True):
+        ...                 alias = "REAL_SIMD_ARRAY" if simd else "REAL"
+        ...                 helper = FDFunction(alias, order, op, {}, expression, simd)
+        ...                 generated = helper.CFunction_fd_function(f"const {alias} FD_result = {sp.ccode(expression)};")
+        ...                 values = {"in_gf_pt": u, "s1": s1, "s2": s2}
+        ...                 for statement in generated.body.split(";")[:-1]:
+        ...                     if " = " in statement:
+        ...                         lhs, rhs = statement.strip().split(" = ", 1)
+        ...                         rhs = re.sub(r"ReadSIMD\(&(.+)\)", r"\1", rhs)
+        ...                         values[lhs.split()[-1]] = sp.sympify(rhs, locals=values)
+        ...                 residuals.append(sp.expand(values["FD_result"] - reference))
+        ...         print(order, set(residuals))
+        ... finally:
+        ...     for name, value in saved.items():
+        ...         par.set_parval_from_str(name, value)
+        2 {0}
+        4 {0}
+        6 {0}
+        8 {0}
+        10 {0}
         """
         includes: List[str] = []
         fp_type_alias = self.fp_type_alias
         name = self.c_function_name
-        if self.uses_pointer_stride:
+        if use_pointer_stride_ko_derivative(self.operator):
+            direction = int(self.operator[-1])
+            params_list = ["const REAL *restrict in_gf_pt"]
+            if direction != 0:
+                params_list.append(f"const int s{direction}")
+            params_list.append(f"const {fp_type_alias} invdxx{direction}")
+            params = ", ".join(params_list)
+            _, stencil = compute_fdcoeffs_fdstencl(self.operator, self.fd_order)
+            loads = []
+            for point in stencil:
+                local_name = fd_temp_variable_name(
+                    "FDPROTO", point[0], point[1], point[2]
+                )
+                offset = str(point[direction])
+                if direction != 0:
+                    offset += f" * s{direction}"
+                value = (
+                    f"ReadSIMD(&in_gf_pt[{offset}])"
+                    if self.enable_simd
+                    else f"in_gf_pt[{offset}]"
+                )
+                loads.append(f"const {fp_type_alias} {local_name} = {value};")
+            body = "\n".join(loads) + f"\n{FDexpr_c_code}\n return FD_result;"
+        elif self.uses_pointer_stride:
             # For BHaH mixed derivatives, pass the gridfunction pointer, strides,
             # and inverse spacings, and compute the FD stencil inside the function.
             params, body = self.pointer_stride_mixed_params_body()
@@ -983,7 +1307,7 @@ class FDFunction:
         return cfc.CFunction(
             includes=includes,
             desc=f"Finite difference function for operator {self.operator}, with FD accuracy order {self.fd_order}.",
-            cfunc_type=f"static {self.modifiers} {fp_type_alias}",
+            cfunc_type=f"static {self.modifiers}{fp_type_alias}",
             name=name,
             params=params,
             body=body,
@@ -1244,7 +1568,9 @@ def proto_FD_operators_to_sympy_expressions(
             direction2 = direction
             FDexprs[i] *= invdxx[direction1] * invdxx[direction2]
         # First-order or Kreiss-Oliger derivatives:
-        elif operator.startswith(("dKOD", "dD", "dupD", "ddnD")):
+        elif operator.startswith(
+            tuple(family[1:] for family in C_CODEGEN_DERIVATIVE_FAMILIES)
+        ):
             FDexprs[i] *= invdxx[direction]
         else:
             raise ValueError(

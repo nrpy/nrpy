@@ -7,7 +7,7 @@ the whole tree first.
 Central Engineering Policy: Prefer the simplest sufficient implementation;
 reject abstractions without demonstrated need.
 
-## Agent Execution Contract
+## Agent Working Rules
 
 Follow system/developer instructions, explicit user instructions, applicable
 repository governance, then skill defaults. Specific repository rules govern their
@@ -52,10 +52,11 @@ clause when it blocks completion, distinguishing it from your interpretation.
 | [Architecture](wiki/architecture/index.md) | Project purpose, build/run paths, generated-output boundaries, and contribution rules. |
 | [Core APIs](wiki/core/index.md) | Core codegen APIs, parameters, gridfunctions, indexed expressions, reference metrics, and finite difference support. |
 | [Equations](wiki/equations/index.md) | Symbolic equation families, GR and SEOBNR routes, support helpers, and trusted expression validation. |
-| [Infrastructures](wiki/infrastructures/index.md) | Generated-backend lifecycle and infrastructure routes for BHaH, ETLegacy, CarpetX, superB, and JAX. |
+| [Infrastructures](wiki/infrastructures/index.md) | Generated-backend lifecycle and infrastructure routes for BHaH, ETLegacy, CarpetX, superB, JAX, and Dendro. |
 | [Examples](wiki/examples/index.md) | First wave-equation run and black-hole evolution examples. |
 | [Validation](wiki/validation/index.md) | Test and oracle policy, static analysis, expression validation, and generated-project CI. |
 | [Glossary](wiki/glossary.md) | Canonical terms. |
+| [Language For Computational Physicists](wiki/computational-physics-language.md) | Required wording for documentation, comments, messages, and other prose read by people or agents. |
 | [Catalog](wiki/catalog.md) | Global page inventory and query-routing terms. |
 | [Workflows](wiki/workflows.md) | KB ingest, query, and maintenance procedures. |
 | [Lint Checks](wiki/lint/CHECKS.md) | Mechanical and review checks for the KB. |
@@ -63,7 +64,7 @@ clause when it blocks completion, distinguishing it from your interpretation.
 | [Source Map](wiki/source-map.md) | Source-to-page dependency seed map and drift follow-up. |
 | [Contradictions](wiki/contradictions.md) | Contested, stale, and reconciled claims. |
 | [Syntheses](wiki/syntheses/index.md) | Cross-branch filed syntheses. |
-| [Schema](wiki/SCHEMA.md) | Page contracts and governance. |
+| [KB Page Format](wiki/SCHEMA.md) | Required page layout, source use, and maintenance rules. |
 
 ## Where Do I Start?
 
@@ -72,29 +73,58 @@ clause when it blocks completion, distinguishing it from your interpretation.
 | Build, run, inspect code generation, generated outputs, or contribution rules | [Architecture](wiki/architecture/index.md) |
 | Find `CFunction`, `c_codegen`, parameters, or gridfunctions | [Core APIs](wiki/core/index.md) |
 | Change equation modules or expression validation | [Equations](wiki/equations/index.md) |
-| Work on BHaH, ETLegacy, CarpetX, superB, or JAX generation | [Infrastructures](wiki/infrastructures/index.md) |
+| Work on BHaH, ETLegacy, CarpetX, superB, JAX, or Dendro generation | [Infrastructures](wiki/infrastructures/index.md) |
 | Run or compare example generators | [Examples](wiki/examples/index.md) |
 | Choose test placement or oracle rules, inspect static analysis or expression validation, or review generated-project CI | [Validation](wiki/validation/index.md) |
-| Update KB pages | [Workflows](wiki/workflows.md) |
+| Write or revise prose read by people or agents | [Language For Computational Physicists](wiki/computational-physics-language.md) |
+| Update other KB content | [Workflows](wiki/workflows.md) |
 
-## Source-Tracking And Date Policy
+## Human-Facing Language
+
+All prose read by people or agents must use the direct language of computational
+physics. This includes documentation, KB pages, comments, docstrings, command-line
+help, diagnostics, and generated comments or messages. Name the equation, symbolic
+expression, tensor, gridfunction, parameter, numerical method, source file,
+generated file, executable, input, output, or required behavior. Do not substitute
+software-management metaphors such as “artifact,” “contract,” or “schema” when a
+precise physical, numerical, or file-oriented term is available.
+
+Follow [Language For Computational
+Physicists](wiki/computational-physics-language.md) for the required translations
+and final review. Mathematical uses such as contracting tensor indices and exact
+code, file, command, or third-party names remain unchanged and should be formatted
+as exact names. Translate older vague wording in any paragraph or section you
+substantially revise; do not perform blind replacements across untouched text.
+
+## Volatile Information Policy
 
 These rules bind every KB manifest and doc under `AGENTS.md`, `wiki/`, and
 `raw/`:
 
-- No source-tracking hash columns or values of any kind - `sha256` or any
-  other digest - and no hashing of sources at all.
-- No `mtime` columns or values.
-- Retained KB dates use `MM-DD-YYYY`.
+- No maintenance or runtime snapshots: dates, times, timestamps, source
+  revision values or digests, inventory, file, page, or job counts, source
+  access/reconciliation/audit/resolution fields, environment tuples, or
+  recorded run results.
+- No source-tracking hash or `mtime` columns or stored values, and no hashing
+  of sources for KB tracking.
+- Stable scientific and algorithmic values, interface version labels,
+  publication identifiers, technical names such as `CoordSystem_hash`, and
+  opaque components of complete stable source locators remain valid when they
+  carry identity or domain meaning rather than snapshot metadata.
+- Frozen imported evidence under `raw/source-docs/` remains verbatim; its
+  authored manifest registration obeys this policy.
 - Do not output KB maintenance notes to a separate log file. This KB already
   lives in a git repo: commit history records durable operations, so separate
   logs are redundant and wasteful.
+
+Git history already records when KB content changed and what changed. Duplicate
+snapshots add maintenance burden without authority.
 
 Source drift is handled by dependency-aware review of changed paths, source
 status, [Source Map](wiki/source-map.md) rows, and affected compiled pages -
 not by stored fingerprints.
 
-Rules for maintaining this KB live in [wiki/SCHEMA.md](wiki/SCHEMA.md).
+Rules for maintaining this KB live in [KB Page Format](wiki/SCHEMA.md).
 
 ## Protected Workflow File
 
@@ -110,8 +140,7 @@ file, leave it unchanged and report the required workflow change to the user.
 `--all` is a compatibility alias with identical coverage, not a stronger mode.
 
 Commissioned root-level planning and task Markdown files that follow the
-[Coordination Artifacts](wiki/SCHEMA.md#coordination-artifacts) naming grammar
-are coordination artifacts. They may remain untracked and are exempt from KB
-routing/catalog checks. A matching name alone does not establish that a file
-was commissioned. Never file, stage, move, or delete a coordination artifact as
-KB content unless the user directs that action.
+[planning and task file naming rules](wiki/SCHEMA.md#coordination-artifacts) may
+remain untracked and are exempt from KB routing/catalog checks. A matching name
+alone does not establish that a file was commissioned. Never file, stage, move,
+or delete such a file as KB content unless the user directs that action.

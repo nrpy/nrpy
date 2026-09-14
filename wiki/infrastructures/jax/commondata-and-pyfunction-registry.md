@@ -1,6 +1,6 @@
 # Commondata And PyFunction Registry
 
-> Consumer view of JAX shared-data and generated-function registries. · Status: confirmed · Last reconciled: 07-13-2026
+> Consumer view of JAX shared-data and generated-function registries. · Status: confirmed
 > Up: [JAX](index.md)
 
 ## Summary
@@ -37,9 +37,8 @@ construct the generated dataclass.
 
 Claim status: contested; contradiction: CONTR-0002.
 See [CONTR-0002](../../contradictions.md#contr-0002) for authority, affected
-pages, validation limits, and the executable resolution test. This is a
-descriptive contradiction record; it is not yet a migrated claim-evidence
-block.
+pages, validation limits, and the executable resolution test; that contradiction
+record owns the claim evidence.
 
 `generate_commondata_dataclass()` turns the current registry contents into the
 generated `Commondata.py` module text. It emits `from dataclasses import

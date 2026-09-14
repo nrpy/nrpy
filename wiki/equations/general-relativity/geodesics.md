@@ -1,6 +1,6 @@
 # Geodesics
 
-> Map analytic spacetime metrics, geodesic RHS construction, and conserved diagnostics. · Status: confirmed · Last reconciled: 06-29-2026
+> Map analytic spacetime metrics, geodesic RHS construction, and conserved diagnostics. · Status: confirmed
 > Up: [General Relativity](index.md)
 
 ## Summary

@@ -1,6 +1,6 @@
 # Lifecycle And Project Assembly
 
-> Explain how superB generators assemble Charm++ projects, emitted assets, build/run guidance, and top-level header/PUP registration. · Status: confirmed · Last reconciled: 07-12-2026
+> Explain how superB generators assemble Charm++ projects, emitted assets, build/run guidance, and top-level header/PUP registration. · Status: confirmed
 > Up: [superB](index.md)
 
 ## Summary
@@ -111,8 +111,7 @@ the NRPyElliptic, spectroscopy, and collision projects, but runs only
 `superB_two_blackholes_collide` with `+p2`. The workflow does not run the other
 two executables or assert restart, Psi4 output, diagnostic-file contents, GPU
 behavior, or performance/scaling. Workflow configuration proves this job shape,
-not a latest successful run. No generator, Charm++ build, or distributed runtime
-was executed during this KB audit.
+not execution outcomes.
 
 Top-level PUP support is registered before the final Makefile is emitted.
 `register_CFunction_superB_pup_routines` registers
@@ -140,9 +139,9 @@ struct declarations consumed by generated code.
 - [superB.h](../../../nrpy/infrastructures/superB/superB/superB.h) - `__SUPERB_H__`, `ckio.h`, `pup.h`
 - [superB_pup_function_prototypes.h](../../../nrpy/infrastructures/superB/superB/superB_pup_function_prototypes.h) - `pup_commondata_struct`, `pup_griddata_chare`
 - [.github/workflows/main.yml](../../../.github/workflows/main.yml) - `charmpp-validation`
-- [Charm++ 8.0.0 Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html) - `Parallel "Hello World" with Charm++`, `Compiling the Example`, `Running the Example`; accessed 07-12-2026
-- [Charm++ 8.0.0 Manual](https://charm.readthedocs.io/en/v8.0.0/charm%2B%2B/manual.html) - `Charm++ Interface (.ci) Files`, `Generated Files`; accessed 07-12-2026
-- [Charm++ 8.0.0 charmc](https://github.com/charmplusplus/charm/blob/v8.0.0/src/scripts/charmc) - compiler-driver `charmxi` dispatch context; accessed 07-12-2026
+- [Charm++ 8.0.0 Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html) - `Parallel "Hello World" with Charm++`, `Compiling the Example`, `Running the Example`
+- [Charm++ 8.0.0 Manual](https://charm.readthedocs.io/en/v8.0.0/charm%2B%2B/manual.html) - `Charm++ Interface (.ci) Files`, `Generated Files`
+- [Charm++ 8.0.0 charmc](https://github.com/charmplusplus/charm/blob/v8.0.0/src/scripts/charmc) - compiler-driver `charmxi` dispatch context
 
 ## See Also
 

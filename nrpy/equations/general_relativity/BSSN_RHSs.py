@@ -388,7 +388,7 @@ class BSSNRHSs:
                             / exp_m4phi
                         )
 
-            # Build the first partial derivative of M_i from already-owned
+            # Build the first partial derivative of M_i from already computed
             # BSSN tensors and the one newly required second derivative of aDD.
             gammabarDD_dD = Bq.gammabarDD_dD
             gammabarDD_dDD = Bq.gammabarDD_dDD

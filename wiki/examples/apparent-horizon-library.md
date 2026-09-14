@@ -1,6 +1,6 @@
 # Apparent Horizon Library
 
-> Route BHaHAHA library generation and keep horizon-enabled examples linked to, not owners of, the apparent-horizon internals. · Status: confirmed · Last reconciled: 07-12-2026
+> Route BHaHAHA library generation and keep horizon-enabled examples linked to, not owners of, the apparent-horizon internals. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary

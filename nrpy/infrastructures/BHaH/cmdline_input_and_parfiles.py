@@ -329,7 +329,7 @@ class CParameter(NamedTuple):
     """
     A structured representation of a parameter for C code generation.
 
-    This provides a clear data contract between analysis and generation functions.
+    These fields carry one registered parameter from analysis into C-code generation.
     """
 
     param_index: int
