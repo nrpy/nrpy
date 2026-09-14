@@ -1,6 +1,6 @@
 # Aligned-Spin Calibration And Remnant
 
-> Map SEOBNR aligned-spin calibration constants, remnant fits, and NR attachment data. · Status: confirmed · Last reconciled: 07-13-2026
+> Map SEOBNR aligned-spin calibration constants, remnant fits, and NR attachment data. · Status: confirmed · Last reconciled: 09-14-2026
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
@@ -13,15 +13,20 @@ time.
 
 ## Detail
 
-`SEOBNR_aligned_spin_constants` accepts two mutually exclusive calibration
-flags: `calibration_no_spin` and `calibration_spin`. In nonspinning calibration
-mode it exposes `a6` and `Delta_t_NS` as symbols, sets `dSO` and `Delta_t_S` to
+`SEOBNR_aligned_spin_constants` accepts three flags: `calibration_no_spin`,
+`calibration_spin`, and `nrpy_calibrated`; `nrpy_calibrated` cannot be
+combined with either calibration flag. In nonspinning calibration mode it
+exposes `a6` and `Delta_t_NS` as symbols, sets `dSO` and `Delta_t_S` to
 zero, and expects the calibration workflow to provide `chi1=chi2=0`. The class
-does not enforce that spin condition. In spin calibration mode it computes the
-nonspinning pieces first, then exposes
-`dSO` and `Delta_t_S` as symbols. In the default post-calibration mode it calls
-`compute_calibration_params()` and stores calibrated expressions such as
-`pyseobnr_a6`, `pyseobnr_dSO`, `Delta_t_NS`, and `Delta_t_S`.
+does not enforce that spin condition. In spin calibration mode it also
+exposes `a6` and `Delta_t_NS` as symbols — supplied externally by the
+completed nonspinning-calibration stage — and exposes `dSO` and `Delta_t_S`
+as symbols for this stage's own optimization. In the default post-calibration
+mode it calls `compute_calibration_params()` and stores calibrated
+expressions such as `a6`, `pyseobnr_dSO`, `Delta_t_NS`, and `Delta_t_S`; when
+`nrpy_calibrated=True`, `a6` and `Delta_t_NS` are selected from a separate
+NRPy-calibrated fit family instead of the default pySEOBNR fit (`dSO` and
+`Delta_t_S` are unaffected by this flag).
 
 For all modes, `Delta_t` is defined as `Delta_t_NS + Delta_t_S`. The class then
 computes remnant properties through `final_spin_non_precessing_HBR2016()` and
@@ -38,7 +43,9 @@ strings. `hNR` and `omegaNR` cover `(2,2)`, `(3,3)`, `(2,1)`, `(4,4)`, `(4,3)`,
 stable keys such as `hNR_22`, `omegaNR_22`, `hNR_55`, and `omegaNR_32` before
 calling the trusted-expression pipeline.
 
-Script validation instantiates only the default post-calibration mode. Neither
+Script validation instantiates the default post-calibration mode twice — once
+with `nrpy_calibrated=False` and once with `nrpy_calibrated=True` — and
+records both selector arms' `a6`/`Delta_t_NS` under distinct keys. Neither
 `calibration_no_spin=True` nor `calibration_spin=True` has a sibling trusted
 variant here. The stored dictionary is sampled numerical evidence for the
 current formulas, not an independent reproduction of the SEOBNRv5HM, HBR2016,

@@ -43,7 +43,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
     :param nrpy_calibrated: In production mode, select the NRPy-calibrated fits
                             instead of the default pySEOBNR fits. This option cannot
                             be combined with either calibration mode.
-    :raises ValueError: If both calibration_no_spin and calibration_spin are True.
+    :raises ValueError: If both calibration_no_spin and calibration_spin are True, or if nrpy_calibrated is True together with either calibration mode.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     # The calibration process for the SEOBNRv5 is done in two steps:

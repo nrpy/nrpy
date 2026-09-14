@@ -49,17 +49,24 @@ class SEOBNR_aligned_spin_constants:
             - 'a_6' : the pseudo-5PN non-spinning Hamiltonian
                             calibration parameter for the SEOBNRv5 model.
                             Equation 78 of https://arxiv.org/pdf/2303.18039.
-                            This is only computed if calibration_no_spin is False.
+                            This is only computed in production mode (both
+                            calibration_no_spin and calibration_spin are False);
+                            it is an external calibration input in both
+                            calibration_no_spin and calibration_spin modes.
             - 'Delta_t' : the time delay between the peak of the (l=2,m=2) mode
                             and the time when the EOB perturber crosses
                             the innermost stable circular orbit (ISCO) of the remnant.
                             Always defined as Delta_t_NS + Delta_t_S.
                             In production mode (calibration_no_spin and calibration_spin are False),
-                            it is evaluated from either
-                            Equations 79 & 80 of https://arxiv.org/pdf/2303.18039 (if nrpy_calibrated is set to False),
-                            or the new calibration results (if nrpy_calibrated is set to True. Currently, this option only applies to the non-spinning coefficients).
-                            In calibration modes, Delta_t_NS and Delta_t_S are
-                            treated as an external calibration input.
+                            it is evaluated from either Equations 79 & 80 of
+                            https://arxiv.org/pdf/2303.18039 (if nrpy_calibrated is
+                            False), or the NRPy-calibrated fit (if nrpy_calibrated is
+                            True; currently this option only applies to the
+                            non-spinning coefficients).
+                            Delta_t_NS is an external calibration input in both
+                            calibration_no_spin and calibration_spin modes. Delta_t_S
+                            is an external calibration input only in calibration_spin
+                            mode; it is zero in calibration_no_spin mode.
             - 'd_SO' : the spin-orbit calibration parameter for the SEOBNRv5 model.
                             Equation 81 of https://arxiv.org/pdf/2303.18039.
                             This is only computed if calibration_spin is False.
@@ -80,7 +87,7 @@ class SEOBNR_aligned_spin_constants:
         :param calibration_no_spin: Flag to enable/disable calibration of the non-spinning parameters
         :param calibration_spin: Flag to enable/disable calibration of the spinning parameters
         :param nrpy_calibrated: Flag to use the nrpy calibrated versions
-        :raises ValueError: If both calibration_no_spin and calibration_spin are True
+        :raises ValueError: If both calibration_no_spin and calibration_spin are True, or if nrpy_calibrated is True together with either calibration mode
         :return None:
         """
         # The calibration process for the SEOBNRv5 is done in two steps:
@@ -125,9 +132,10 @@ class SEOBNR_aligned_spin_constants:
             self.dSO = sp.sympify(0)
             self.Delta_t_S = sp.sympify(0)
         elif calibration_spin:
-            # This is the second (spinning) calibration stage where we have precalculated values for a6 and Delta_t_NS
-            # self.compute_calibration_params()
-            # overwrite Delta_t_S and dSO to symbols
+            # In the second (spin-aligned) calibration stage,
+            # the calibration algorithm injects values of a_6 and Delta_t
+            # and then optimizes for Delta_t_S and dSO.
+            # Therefore, declare all calibration parameters as symbols
             self.a6, self.Delta_t_NS = sp.symbols("a6 Delta_t_NS", real=True)
             self.dSO, self.Delta_t_S = sp.symbols("dSO Delta_t_S", real=True)
 
@@ -618,6 +626,14 @@ if __name__ == "__main__":
             "omegaNR_32": obj.omegaNR["(3 , 2)"],
         }
     )
+    nrpy_calibrated_obj = SEOBNR_aligned_spin_constants(nrpy_calibrated=True)
+    test_dict.update(
+        {
+            "a6_nrpy_calibrated": nrpy_calibrated_obj.a6,
+            "Delta_t_NS_nrpy_calibrated": nrpy_calibrated_obj.Delta_t_NS,
+        }
+    )
+
     results_dict = ve.process_dictionary_of_expressions(
         test_dict,
         fixed_mpfs_for_free_symbols=True,
