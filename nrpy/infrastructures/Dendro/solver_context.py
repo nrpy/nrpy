@@ -50,7 +50,7 @@ class Ctx {
    * @param dx Positive uniform grid spacing.
    * @param rank MPI rank used to place this rank's subdomain.
    * @param[in] parfile_path Optional parameter-file path; unsupported standalone.
-   * @return 0 on success; 1 for invalid mesh bounds or a supplied parameter file.
+   * @return 0 on success; 1 for invalid mesh dimensions, spacing, or a supplied parameter file.
    */
   int initialize_mesh(int n_blocks, int extent, double dx, int rank,
                        const char* parfile_path);
@@ -174,10 +174,11 @@ int Ctx::initialize_mesh(int n_blocks, int extent, double dx, int rank,
   const int pad = static_cast<int>($NAMESPACE::generated::REQUIRED_PADDING);
   if (n_blocks < 1 || n_blocks > static_cast<int>(standalone_host::MAX_STANDALONE_HOST_BLOCKS) ||
       extent < 2 * pad + 1 ||
-      extent > static_cast<int>(standalone_host::MAX_STANDALONE_HOST_EXTENT)) {
+      extent > static_cast<int>(standalone_host::MAX_STANDALONE_HOST_EXTENT) ||
+      !std::isfinite(dx) || dx <= 0.0) {
     std::fprintf(stderr,
                  "ERROR: standalone-host mesh needs 1..%d blocks, extent in "
-                 "[2*padding+1 (%d), %d]; got n_blocks=%d "
+                 "[2*padding+1 (%d), %d], and finite positive dx; got n_blocks=%d "
                  "extent=%d dx=%g\\n",
                  static_cast<int>(standalone_host::MAX_STANDALONE_HOST_BLOCKS), 2 * pad + 1,
                  static_cast<int>(standalone_host::MAX_STANDALONE_HOST_EXTENT),

@@ -17,10 +17,52 @@ _STANDALONE_MAIN = r"""// Standalone-host entry point.
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <mpi.h>
+#include <string>
 #include "$STEMCtx.h"
 
 namespace {
+/**
+ * Parse one complete command-line token as an int.
+ *
+ * @param[in] text Command-line token.
+ * @param[out] value Parsed integer when the token is valid.
+ * @return true when the complete token represents an int; false otherwise.
+ */
+bool parse_command_line_int(const char* text, int& value) {
+  try {
+    const std::string token(text);
+    std::size_t used = 0;
+    const int parsed = std::stoi(token, &used);
+    if (used != token.size()) return false;
+    value = parsed;
+    return true;
+  } catch (const std::exception&) {
+    return false;
+  }
+}  // END FUNCTION: parse_command_line_int
+
+/**
+ * Parse one complete command-line token as a double.
+ *
+ * @param[in] text Command-line token.
+ * @param[out] value Parsed number when the token is valid.
+ * @return true when the complete token represents a double; false otherwise.
+ */
+bool parse_command_line_double(const char* text, double& value) {
+  try {
+    const std::string token(text);
+    std::size_t used = 0;
+    const double parsed = std::stod(token, &used);
+    if (used != token.size()) return false;
+    value = parsed;
+    return true;
+  } catch (const std::exception&) {
+    return false;
+  }
+}  // END FUNCTION: parse_command_line_double
+
 double global_max(double local) {
   double global = local;
   MPI_Allreduce(&local, &global, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
@@ -35,7 +77,7 @@ double global_max(double local) {
  *
  * @param argc Command-line argument count.
  * @param[in,out] argv Command-line arguments, also forwarded to MPI.
- * @return 0 on success; 1 for setup, evolution, or acceptance failure; 2 for invalid arguments.
+ * @return 0 on success; 1 for setup, evolution, or acceptance failure; 2 for malformed command-line arguments.
  */
 int main(int argc, char* argv[]) {
   MPI_Init(&argc, &argv);
@@ -50,11 +92,26 @@ int main(int argc, char* argv[]) {
   unsigned n_selected = 0;
   for (int i = 1; i < argc; ++i) {
     if (!std::strcmp(argv[i], "-b") && i + 1 < argc) {
-      n_blocks = std::atoi(argv[++i]);
+      if (!parse_command_line_int(argv[++i], n_blocks)) {
+        if (rank == 0)
+          std::fprintf(stderr, "invalid block count: %s\n", argv[i]);
+        MPI_Finalize();
+        return 2;
+      }  // END IF: block count token invalid
     } else if (!std::strcmp(argv[i], "-n") && i + 1 < argc) {
-      extent = std::atoi(argv[++i]);
+      if (!parse_command_line_int(argv[++i], extent)) {
+        if (rank == 0)
+          std::fprintf(stderr, "invalid mesh extent: %s\n", argv[i]);
+        MPI_Finalize();
+        return 2;
+      }  // END IF: mesh extent token invalid
     } else if (!std::strcmp(argv[i], "-d") && i + 1 < argc) {
-      dx = std::atof(argv[++i]);
+      if (!parse_command_line_double(argv[++i], dx)) {
+        if (rank == 0)
+          std::fprintf(stderr, "invalid grid spacing: %s\n", argv[i]);
+        MPI_Finalize();
+        return 2;
+      }  // END IF: grid spacing token invalid
     } else if (!std::strcmp(argv[i], "-t") && i + 1 < argc) {
       parfile = argv[++i];
     } else if (!std::strcmp(argv[i], "-r") && i + 1 < argc) {

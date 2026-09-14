@@ -107,8 +107,8 @@ _STANDALONE_FINAL_CHECKS = r"""  const double drift = global_max(ctx.max_drift_f
     return 1;
   }  // END IF: projection schedule is wrong
   if (rank == 0)
-    std::printf("MINKOWSKI_OK blocks=%d extent=%d ranks=%d\n",
-                n_blocks, extent, size);"""
+    std::printf("MINKOWSKI_OK blocks=%d extent=%d dx=%.17g ranks=%d\n",
+                n_blocks, extent, dx, size);"""
 
 _REAL_FINAL_CHECKS = r"""      const double rhs = context.max_rhs();
       const double constraints = context.max_constraints();
