@@ -41,6 +41,14 @@ production mode and cannot be combined with either calibration flag):
 | `-seobnrv5_nrnqc_bob` | `seobnrv5_nrnqc_bob` | native numerical-relativity NQC | BOB-informed merger-ringdown | BHaH C project with GSL |
 | `-seobnrv5_nrpy` | `seobnrv5_nrpy` | native numerical-relativity NQC | native SEOBNRv5 merger-ringdown | BHaH C project with GSL |
 
+Claim evidence:
+- Claim: `nrpy.examples.seobnrv5_aligned_spin_inspiral` defaults to `-seobnrv5_bob` when no approximant flag is supplied, then optionally accepts one of three mutually exclusive calibration/selector flags (`-calibration_no_spin`, `-calibration_spin`, `-nrpy_calibrated`), where `-nrpy_calibrated` selects the NRPy-calibrated `a6`/`Delta_t_NS` fit in production mode and cannot be combined with either calibration flag; the three approximant flags map to generated project names `seobnrv5_bob`, `seobnrv5_nrnqc_bob`, and `seobnrv5_nrpy` with the NQC/merger-ringdown/dependency-class combinations in the adjacent table.
+- Role: descriptive behavior
+- Deciding authority: [seobnrv5_aligned_spin_inspiral.py](../../nrpy/examples/seobnrv5_aligned_spin_inspiral.py), `argparse` flag block and the `project_name` base-name assignment in the module `__main__` body
+- Corroboration: none available; no registered test exercises this generator's flag parsing or table-mapped output
+- Validation: `inspected=pass; generated=pass; built=pass; run=not-applicable; result_checked=not-applicable`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, gcc, GSL 2.7.1; backend=argparse plus BHaH codegen invocation and make; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=all three approximant flags generated, one variant (-seobnrv5_bob -calibration_no_spin) built to a linked executable, defaulting confirmed by omitting the approximant flag; date=09-14-2026`
+
 Project-name expansion is string-based. The script starts from the approximant
 base name, then appends `_calibration_no_spin` for `-calibration_no_spin`,
 `_calibration_spin` for `-calibration_spin`, or `_nrpy_calibrated` for
@@ -52,6 +60,14 @@ writes `project/seobnrv5_nrpy_calibration_spin/`, and
 `-seobnrv5_bob -nrpy_calibrated` writes
 `project/seobnrv5_bob_nrpy_calibrated/`. These flags also flow into SEOBNRv5
 aligned-spin coefficient registration, so they are not only naming suffixes.
+
+Claim evidence:
+- Claim: Project-name expansion is string-based: the generator starts from the approximant base name, then appends `_calibration_no_spin`, `_calibration_spin`, or `_nrpy_calibrated`; it rejects combining the two calibration flags and rejects combining `-nrpy_calibrated` with either calibration flag, so `-seobnrv5_bob -calibration_no_spin` writes `project/seobnrv5_bob_calibration_no_spin/`, `-seobnrv5_nrpy -calibration_spin` writes `project/seobnrv5_nrpy_calibration_spin/`, and `-seobnrv5_bob -nrpy_calibrated` writes `project/seobnrv5_bob_nrpy_calibrated/`.
+- Role: descriptive behavior
+- Deciding authority: [seobnrv5_aligned_spin_inspiral.py](../../nrpy/examples/seobnrv5_aligned_spin_inspiral.py), `project_name` string-assignment block and the `calibration_no_spin`/`calibration_spin`/`nrpy_calibrated` `ValueError` guards
+- Corroboration: none available; no registered test exercises this generator's project-name string construction
+- Validation: `inspected=pass; generated=pass; built=not-applicable; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=argparse plus BHaH codegen invocation; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass, both rejected flag combinations raised the expected ValueError; options=all three cited example flag combinations executed and confirmed to write the stated project directory names; date=09-14-2026`
 
 The SEOBNRv5 waveform projects are GSL-backed C projects. The generator sets
 `Infrastructure` to `BHaH`, registers C functions for commondata I/O,
@@ -128,6 +144,14 @@ regardless of the median comparison. This accounts for calibration-mode
 approximants depending on externally supplied calibration coefficients that
 this harness runs with placeholder parfile defaults. `sebobv2_consistency_check`
 has no calibration-mode variants and is unaffected by this behavior.
+
+Claim evidence:
+- Claim: For calibration-mode approximants (`_calibration_no_spin`/`_calibration_spin` in the directory name), the SEOBNRv5-family consistency script treats each input set's trusted/current executable run as its own success/failure outcome instead of letting a crash propagate: an input set where both executables succeed or both fail contributes no regression signal (excluded from the median rather than aborting the script), but an input set where one succeeds and the other crashes is reported as a regression and fails the run regardless of the median comparison; `sebobv2_consistency_check` has no calibration-mode variants and is unaffected.
+- Role: descriptive behavior
+- Deciding authority: [sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py), `process_input_set`, `__main__` (asymmetric-failure and consistent-failure branches)
+- Corroboration: none available; reproducing this branch requires built trusted/current SEOBNRv5 calibration-mode executables not rebuilt in this pass
+- Validation: `inspected=pass; generated=not-applicable; built=not-run; run=not-run; result_checked=not-run`
+- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=inspected only, not exercised; options=six calibration-mode SEOBNRv5 variants named in source; date=09-14-2026`
 
 These consistency scripts document the example workflow, not a new validation
 subsystem. The broader CI page is context for where generated projects are

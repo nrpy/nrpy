@@ -58,6 +58,16 @@ generate, build, or run the project.
 | `wave_equation_curvilinear.py` | `python -m nrpy.examples.wave_equation_curvilinear [--cuda] [--floating_point_precision TYPE] [--disable_intrinsics] [--disable_rfm_precompute]` | Standalone BHaH single-coordinate curvilinear wave project | Python, C or CUDA toolchain, `make` | Configured Ubuntu/macOS OpenMP build and local CUDA build; no executable/result check | [Wave Equation Generators](wave-equation-generators.md) |
 | `wave_equation_multicoordinates.py` | `python -m nrpy.examples.wave_equation_multicoordinates [--cuda] [--floating_point_precision TYPE] [--disable_intrinsics] [--disable_rfm_precompute]` | Standalone BHaH multicoordinate wave project | Python, C or CUDA toolchain, `make` | Configured Ubuntu/macOS OpenMP build and local CUDA build; no executable/result check | [Wave Equation Generators](wave-equation-generators.md) |
 
+The `seobnrv5_aligned_spin_inspiral.py` row's validation-route cell states that
+CI builds and ten-input-compares only the nine calibration/production variants,
+leaving the three additional `-nrpy_calibrated` variants build-only.
+
+Claim evidence:
+- Claim: `seobnrv5_aligned_spin_inspiral.py`'s configured CI route builds and ten-input-compares only the nine calibration/production variants (3 approximants × {production, `-calibration_no_spin`, `-calibration_spin`}); the three additional `-nrpy_calibrated` variants are generated and built in `codegen-ubuntu`/`codegen-mac` but are not included in the `sebob-consistency-test` comparison.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), jobs `codegen-ubuntu`, `codegen-mac`, `sebob-consistency-test`
+- Corroboration: [sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py), `__main__` invocation list
+
 Companion groups:
 
 | Companion group | Checked-in source shape | Artifact boundary | Owning page |

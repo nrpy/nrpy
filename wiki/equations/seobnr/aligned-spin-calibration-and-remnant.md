@@ -28,6 +28,14 @@ expressions such as `a6`, `pyseobnr_dSO`, `Delta_t_NS`, and `Delta_t_S`; when
 NRPy-calibrated fit family instead of the default pySEOBNR fit (`dSO` and
 `Delta_t_S` are unaffected by this flag).
 
+Claim evidence:
+- Claim: `SEOBNR_aligned_spin_constants` accepts `calibration_no_spin`, `calibration_spin`, and `nrpy_calibrated`, where `nrpy_calibrated` cannot be combined with either calibration flag; in the default post-calibration mode, `nrpy_calibrated=True` selects `a6` and `Delta_t_NS` from a separate NRPy-calibrated fit family (`nrpy_par_a6`, `nrpy_par_dtns`) instead of the default pySEOBNR fit (`pySEOBNR_par_a6`, `pySEOBNR_par_dtns`), while `dSO` and `Delta_t_S` are unaffected by that flag.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py), `SEOBNR_aligned_spin_constants.__init__`, `compute_calibration_params`
+- Corroboration: [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_constants.py), `trusted_dict` (`a6_nrpy_calibrated`, `Delta_t_NS_nrpy_calibrated` keys)
+- Validation: `inspected=pass; generated=not-applicable; built=not-applicable; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=fixed sampled trusted-expression comparison; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=default post-calibration mode sampled with nrpy_calibrated=False and nrpy_calibrated=True; calibration_no_spin and calibration_spin modes not sampled by this test; date=09-14-2026`
+
 For all modes, `Delta_t` is defined as `Delta_t_NS + Delta_t_S`. The class then
 computes remnant properties through `final_spin_non_precessing_HBR2016()` and
 `final_mass_non_precessing_UIB2016()`, stores the remnant outputs as `a_f` and
@@ -50,6 +58,14 @@ records both selector arms' `a6`/`Delta_t_NS` under distinct keys. Neither
 variant here. The stored dictionary is sampled numerical evidence for the
 current formulas, not an independent reproduction of the SEOBNRv5HM, HBR2016,
 or UIB2016 calibration data and not a remnant-fit accuracy test.
+
+Claim evidence:
+- Claim: Script validation instantiates `SEOBNR_aligned_spin_constants` in the default post-calibration mode twice — once with `nrpy_calibrated=False` and once with `nrpy_calibrated=True` — and records both selector arms' `a6`/`Delta_t_NS` under the distinct keys `a6_nrpy_calibrated`/`Delta_t_NS_nrpy_calibrated` alongside the unsuffixed default-arm keys; neither `calibration_no_spin=True` nor `calibration_spin=True` has a sibling trusted variant in this script.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py), `__main__` block
+- Corroboration: none available; this script is the sole registered source for its own sampled-dictionary construction
+- Validation: `inspected=pass; generated=not-applicable; built=not-applicable; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction plus trusted-expression comparison pipeline; precision=fixed sampled trusted-expression comparison; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=default post-calibration mode only, both nrpy_calibrated arms; date=09-14-2026`
 
 ## Sources
 

@@ -25,6 +25,16 @@ Configured GitHub job map:
 | `sebob-consistency-test` | Ubuntu 22.04/24.04; three matrix cells after one exclusion | Checks out trusted commit `785467615d63669a98fe85c6686c2388a324139e`; generates/builds trusted and current copies of all nine SEOBNRv5 variants (the three `-nrpy_calibrated` variants are not included) | Runs nine helper invocations. Each rebuilds both executables and runs ten deterministic inputs; for the six calibration-mode variants, an input set where the trusted and current executables disagree on success/failure fails the run independently of the error comparison, and a set where both fail consistently is excluded from it. Otherwise requires median current/trusted amplitude-plus-phase error not exceed its perturbation-derived baseline. |
 | `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the same trusted commit | Runs one helper invocation with ten deterministic inputs and the same median-error criterion. |
 
+The `codegen-ubuntu` and `codegen-mac` rows' generate/build-scope cells state
+that both jobs build all twelve SEOBNRv5 approximant/calibration variants (3
+approximants × {production, `-calibration_no_spin`, `-calibration_spin`,
+`-nrpy_calibrated`}) alongside the other named default projects.
+
+Claim evidence:
+- Claim: `codegen-ubuntu` and `codegen-mac` each generate and build 24 default C/library projects, including all twelve SEOBNRv5 approximant/calibration variants (3 approximants × {production, `-calibration_no_spin`, `-calibration_spin`, `-nrpy_calibrated`}), with no generated executable, test, or numerical result run for any of them.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), jobs `codegen-ubuntu`, `codegen-mac`
+
 A successful named build can establish only named generation plus toolchain
 compile/link compatibility. Generation completion or file existence is not a
 semantic result; build does not prove runtime, and process completion does not
