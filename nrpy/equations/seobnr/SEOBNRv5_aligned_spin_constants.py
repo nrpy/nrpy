@@ -30,7 +30,25 @@ thismodule = __name__
 
 
 class SEOBNR_aligned_spin_constants:
-    """Class for computing the SEOBNR aligned-spin constants."""
+    """Compute SEOBNR aligned-spin constants and optional precessing-remnant stages."""
+
+    a_f_nonprecessing_reference: sp.Expr
+    a_f_precessing: sp.Expr
+    chi1_mag_precessing: sp.Expr
+    chi2_mag_precessing: sp.Expr
+    cos_alpha_nonzero: sp.Expr
+    cos_alpha_precessing: sp.Expr
+    cos_beta_nonzero: sp.Expr
+    cos_beta_precessing: sp.Expr
+    cos_betas_precessing: sp.Expr
+    cos_gamma_nonzero: sp.Expr
+    cos_gamma_precessing: sp.Expr
+    cos_gammas_precessing: sp.Expr
+    ell_precessing: sp.Expr
+    sign_final_spin_precessing: sp.Expr
+    sin_beta_precessing: sp.Expr
+    sin_gamma_precessing: sp.Expr
+    sqrt_arg_precessing: sp.Expr
 
     def __init__(
         self,
@@ -412,20 +430,16 @@ class SEOBNR_aligned_spin_constants:
             par_dtns[1] + par_dtns[2] * nu + par_dtns[3] * nu**2 + par_dtns[4] * nu**3
         )
 
-    def final_spin_non_precessing_HBR2016(
-        self,
-    ) -> None:
+    def hbr2016_ell_m3j4(self, chi1z: sp.Expr, chi2z: sp.Expr) -> sp.Expr:
         """
-        Compute the final spin for the SEOBNRv5 aligned-spin model.
-        The spin is calculated using the non-precessing HBR2016 fits with version "M3J4"
-        as outlined in https://lscsoft.docs.ligo.org/lalsuite/lalinference/nrutils_8py_source.html
+        Compute the HBR2016 M3J4 orbital-angular-momentum fit.
 
-        :return None:
+        :param chi1z: Spin of body 1 projected along the orbital angular momentum.
+        :param chi2z: Spin of body 2 projected along the orbital angular momentum.
+        :return: HBR2016 M3J4 fitted orbital angular momentum.
         """
         m1 = self.m1
         m2 = self.m2
-        chi1 = self.chi1
-        chi2 = self.chi2
         nM = 3
         nJ = 4
         k = sp.zeros(4, 5)
@@ -451,8 +465,6 @@ class SEOBNR_aligned_spin_constants:
         k[3, 4] = f2r(1166.89)
         xi = f2r(0.474046)
         q = m2 / m1
-        chi1z = chi1
-        chi2z = chi2
         nu = m1 * m2 / (m1 + m2) ** 2
         atot = (chi1z + chi2z * q * q) / ((1 + q) * (1 + q))
         aeff = atot + xi * nu * (chi1z + chi2z)
@@ -463,13 +475,123 @@ class SEOBNR_aligned_spin_constants:
         EISCOeff = sp.sqrt(1 - 2 / (3 * rISCOeff))
         aeff_j = [1, aeff, aeff**2, aeff**3, aeff**4]
         nu_i = [1, nu, nu**2, nu**3]
-        ksum = 0
+        ksum = sp.sympify(0)
         for i in range(nM + 1):
             for j in range(nJ + 1):
                 ksum += k[i, j] * nu_i[i] * aeff_j[j]
 
-        ell = sp.Abs(LISCOeff - 2 * atot * (EISCOeff - 1) + nu * ksum)
+        return cast(sp.Expr, sp.Abs(LISCOeff - 2 * atot * (EISCOeff - 1) + nu * ksum))
+
+    def final_spin_non_precessing_HBR2016(
+        self,
+    ) -> None:
+        """
+        Compute the final spin for the SEOBNRv5 aligned-spin model.
+        The spin is calculated using the non-precessing HBR2016 fits with version "M3J4"
+        as outlined in https://lscsoft.docs.ligo.org/lalsuite/lalinference/nrutils_8py_source.html
+
+        :return None:
+        """
+        q = self.m2 / self.m1
+        atot = (self.chi1 + self.chi2 * q * q) / ((1 + q) * (1 + q))
+        ell = self.hbr2016_ell_m3j4(self.chi1, self.chi2)
         self.a_f = atot + ell / (1 / q + 2 + q)
+
+    def final_spin_precessing_HBR2016(self) -> None:
+        """
+        Construct the staged symbolic HBR2016 M3J4 precessing final-spin fit.
+
+        The staged expressions permit generated C to guard zero spin magnitudes before
+        evaluating normalized dot products, without duplicating the calibrated fit.
+        Calling this method populates the ``*_precessing`` and ``*_nonzero``
+        attributes declared on the class; the constructor intentionally does not
+        build these comparatively expensive optional expressions.
+
+        :return None:
+        """
+        chi1_x, chi1_y, chi1_z, chi2_x, chi2_y, chi2_z = sp.symbols(
+            "chi1_x chi1_y chi1_z chi2_x chi2_y chi2_z", real=True
+        )
+        (
+            chi1_mag,
+            chi2_mag,
+            cos_beta,
+            cos_gamma,
+            sin_beta,
+            sin_gamma,
+            cos_betas,
+            cos_gammas,
+            cos_alpha,
+            ell,
+            sqrt_arg,
+            sign_final_spin,
+        ) = sp.symbols(
+            "chi1_mag chi2_mag cos_beta cos_gamma sin_beta sin_gamma "
+            "cos_betas cos_gammas cos_alpha ell sqrt_arg "
+            "sign_final_spin",
+            real=True,
+        )
+
+        self.chi1_mag_precessing = sp.sqrt(chi1_x**2 + chi1_y**2 + chi1_z**2)
+        self.chi2_mag_precessing = sp.sqrt(chi2_x**2 + chi2_y**2 + chi2_z**2)
+        self.cos_beta_nonzero = sp.Max(
+            sp.sympify(-1), sp.Min(sp.sympify(1), self.chi1 / chi1_mag)
+        )
+        self.cos_gamma_nonzero = sp.Max(
+            sp.sympify(-1), sp.Min(sp.sympify(1), self.chi2 / chi2_mag)
+        )
+        self.cos_beta_precessing = sp.Piecewise(
+            (self.cos_beta_nonzero, chi1_mag > 0), (sp.sympify(1), True)
+        )
+        self.cos_gamma_precessing = sp.Piecewise(
+            (self.cos_gamma_nonzero, chi2_mag > 0), (sp.sympify(1), True)
+        )
+        self.sin_beta_precessing = sp.sqrt(sp.Max(sp.sympify(0), 1 - cos_beta**2))
+        self.sin_gamma_precessing = sp.sqrt(sp.Max(sp.sympify(0), 1 - cos_gamma**2))
+        eps = f2r(0.024)
+        self.cos_betas_precessing = cos_beta * sp.cos(
+            eps * sin_beta
+        ) - sin_beta * sp.sin(eps * sin_beta)
+        self.cos_gammas_precessing = cos_gamma * sp.cos(
+            eps * sin_gamma
+        ) - sin_gamma * sp.sin(eps * sin_gamma)
+
+        spin_dot = chi1_x * chi2_x + chi1_y * chi2_y + chi1_z * chi2_z
+        self.cos_alpha_nonzero = sp.Max(
+            sp.sympify(-1),
+            sp.Min(sp.sympify(1), spin_dot / (chi1_mag * chi2_mag)),
+        )
+        self.cos_alpha_precessing = sp.Piecewise(
+            (
+                self.cos_alpha_nonzero,
+                sp.And(chi1_mag > 0, chi2_mag > 0),
+            ),
+            (sp.sympify(1), True),
+        )
+
+        self.ell_precessing = self.hbr2016_ell_m3j4(
+            chi1_mag * cos_betas, chi2_mag * cos_gammas
+        )
+        q = self.m2 / self.m1
+        q2 = q * q
+        self.sqrt_arg_precessing = (
+            chi1_mag**2
+            + chi2_mag**2 * q2**2
+            + 2 * chi1_mag * chi2_mag * q2 * cos_alpha
+            + 2 * (chi1_mag * cos_betas + chi2_mag * q2 * cos_gammas) * ell * q
+            + ell**2 * q2
+        )
+        self.a_f_nonprecessing_reference = self.a_f
+        a_f_nonprecessing_symbol = sp.Symbol("a_f_nonprecessing", real=True)
+        sign_nonprecessing = sp.sign(a_f_nonprecessing_symbol)
+        self.sign_final_spin_precessing = (
+            sign_nonprecessing + 1 - sp.Abs(sign_nonprecessing)
+        )
+        self.a_f_precessing = (
+            sign_final_spin
+            * sp.sqrt(sp.Max(sp.sympify(0), sqrt_arg))
+            / ((1 + q) * (1 + q))
+        )
 
     def final_mass_non_precessing_UIB2016(
         self,
@@ -557,7 +679,93 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
     obj = SEOBNR_aligned_spin_constants()
+    obj.final_spin_precessing_HBR2016()
+    (
+        stage_chi1_mag,
+        stage_chi2_mag,
+        stage_cos_beta,
+        stage_cos_gamma,
+        stage_sin_beta,
+        stage_sin_gamma,
+        stage_cos_betas,
+        stage_cos_gammas,
+        stage_cos_alpha,
+        stage_ell,
+        stage_sqrt_arg,
+        stage_a_f_nonprecessing,
+        stage_sign_final_spin,
+    ) = sp.symbols(
+        "chi1_mag chi2_mag cos_beta cos_gamma sin_beta sin_gamma "
+        "cos_betas cos_gammas cos_alpha ell sqrt_arg "
+        "a_f_nonprecessing sign_final_spin",
+        real=True,
+    )
+    cos_beta_composed = obj.cos_beta_nonzero.subs(
+        stage_chi1_mag, obj.chi1_mag_precessing
+    )
+    cos_gamma_composed = obj.cos_gamma_nonzero.subs(
+        stage_chi2_mag, obj.chi2_mag_precessing
+    )
+    sin_beta_composed = obj.sin_beta_precessing.subs(stage_cos_beta, cos_beta_composed)
+    sin_gamma_composed = obj.sin_gamma_precessing.subs(
+        stage_cos_gamma, cos_gamma_composed
+    )
+    cos_betas_composed = obj.cos_betas_precessing.subs(
+        {
+            stage_cos_beta: cos_beta_composed,
+            stage_sin_beta: sin_beta_composed,
+        }
+    )
+    cos_gammas_composed = obj.cos_gammas_precessing.subs(
+        {
+            stage_cos_gamma: cos_gamma_composed,
+            stage_sin_gamma: sin_gamma_composed,
+        }
+    )
+    cos_alpha_composed = obj.cos_alpha_nonzero.subs(
+        {
+            stage_chi1_mag: obj.chi1_mag_precessing,
+            stage_chi2_mag: obj.chi2_mag_precessing,
+        }
+    )
+    ell_composed = obj.ell_precessing.subs(
+        {
+            stage_chi1_mag: obj.chi1_mag_precessing,
+            stage_chi2_mag: obj.chi2_mag_precessing,
+            stage_cos_betas: cos_betas_composed,
+            stage_cos_gammas: cos_gammas_composed,
+        }
+    )
+    sqrt_arg_composed = obj.sqrt_arg_precessing.subs(
+        {
+            stage_chi1_mag: obj.chi1_mag_precessing,
+            stage_chi2_mag: obj.chi2_mag_precessing,
+            stage_cos_alpha: cos_alpha_composed,
+            stage_cos_betas: cos_betas_composed,
+            stage_cos_gammas: cos_gammas_composed,
+            stage_ell: ell_composed,
+        }
+    )
+    sign_final_spin_composed = obj.sign_final_spin_precessing.subs(
+        stage_a_f_nonprecessing, obj.a_f_nonprecessing_reference
+    )
+    a_f_precessing_composed_nonzero = obj.a_f_precessing.subs(
+        {
+            stage_sqrt_arg: sqrt_arg_composed,
+            stage_sign_final_spin: sign_final_spin_composed,
+        }
+    )
     test_dict = obj.__dict__.copy()
+    test_dict.update(
+        {
+            "a_f_precessing_composed_nonzero": a_f_precessing_composed_nonzero,
+            "cos_alpha_zero_spin": obj.cos_alpha_precessing.subs(
+                {stage_chi1_mag: 0, stage_chi2_mag: 0}
+            ),
+            "cos_beta_zero_spin": obj.cos_beta_precessing.subs(stage_chi1_mag, 0),
+            "cos_gamma_zero_spin": obj.cos_gamma_precessing.subs(stage_chi2_mag, 0),
+        }
+    )
     for skipped_key in ["hNR", "omegaNR"]:
         if skipped_key in test_dict:
             del test_dict[skipped_key]
