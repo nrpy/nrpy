@@ -37,6 +37,16 @@ Claim evidence:
 - Deciding authority: [`sebobv2_consistency_check.py`](../../nrpy/examples/tests/sebobv2_consistency_check.py), module `__main__` entry point, `num_sets`
 - Corroboration: `none available`; the workflow invokes the helper but does not independently restate its input count
 
+The `codegen-ubuntu` and `codegen-mac` rows' generate/build-scope cells state
+that both jobs build all twelve SEOBNRv5 approximant/calibration variants (3
+approximants × {production, `-calibration_no_spin`, `-calibration_spin`,
+`-nrpy_calibrated`}) alongside the other named default projects.
+
+Claim evidence:
+- Claim: `codegen-ubuntu` and `codegen-mac` each generate and build 24 default C/library projects, including all twelve SEOBNRv5 approximant/calibration variants (3 approximants × {production, `-calibration_no_spin`, `-calibration_spin`, `-nrpy_calibrated`}), with no generated executable, test, or numerical result run for any of them.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), jobs `codegen-ubuntu`, `codegen-mac`
+
 A successful named build can establish only named generation plus toolchain
 compile/link compatibility. Generation completion or file existence is not a
 semantic result; build does not prove runtime, and process completion does not
