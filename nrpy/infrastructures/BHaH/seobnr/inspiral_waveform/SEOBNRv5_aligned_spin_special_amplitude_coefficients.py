@@ -574,14 +574,12 @@ if (use_projected_attachment) {
 // Step 6: Build the (2,2) and (5,5) attachment states from the splines.
 REAL t_peak_22 = commondata->t_ISCO - commondata->Delta_t;
 REAL t_peak_55 = t_peak_22 - 10;
-if (!use_projected_attachment) {
-  if (t_peak_22 > times[commondata->nsteps_fine - 1]){
-    t_peak_22 = times[commondata->nsteps_fine - 2];
-    t_peak_55 = t_peak_22;
-  } // END IF: aligned t_peak_22 past fine-dynamics endpoint
-  if (t_peak_55 > times[commondata->nsteps_fine - 1])
-    t_peak_55 = times[commondata->nsteps_fine - 2];
-} // END IF: aligned attachment fallback
+if (t_peak_22 > times[commondata->nsteps_fine - 1]){
+  t_peak_22 = times[commondata->nsteps_fine - 2];
+  t_peak_55 = t_peak_22;
+} // END IF: t_peak_22 past fine-dynamics endpoint
+if (t_peak_55 > times[commondata->nsteps_fine - 1])
+  t_peak_55 = times[commondata->nsteps_fine - 2];
 commondata->t_attach = t_peak_22;
 
 if (use_projected_attachment) {
