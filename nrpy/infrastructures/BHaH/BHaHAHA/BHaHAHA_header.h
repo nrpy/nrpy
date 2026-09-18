@@ -229,9 +229,15 @@ void bah_poisoning_set_inputs(bhahaha_params_and_data_struct *restrict params);
 // (highly recommended) Call bah_poisoning_check_inputs() right before bah_find_horizon(), to check whether external NR code has set inputs properly.
 void bah_poisoning_check_inputs(const bhahaha_params_and_data_struct *restrict params);
 // (required): Set up the (holey) spherical grid for BHaHAHA
+#if defined(__cplusplus) || !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 199901L)
+// C++ and pre-C99 C do not support variable-length array parameters.
+void bah_radial_grid_cell_centered_set_up(const int Nr_interp_max, const REAL max_search_radius, const REAL input_r_min, const REAL input_r_max,
+                                          int *restrict output_Nr_interp, REAL *restrict output_r_min, REAL *restrict output_dr, REAL *radii);
+#else
 void bah_radial_grid_cell_centered_set_up(const int Nr_interp_max, const REAL max_search_radius, const REAL input_r_min, const REAL input_r_max,
                                           int *restrict output_Nr_interp, REAL *restrict output_r_min, REAL *restrict output_dr,
                                           REAL radii[Nr_interp_max]);
+#endif
 void bah_xyz_center_r_minmax(const bhahaha_params_and_data_struct *restrict pars, REAL *restrict x_center, REAL *restrict y_center,
                              REAL *restrict z_center, REAL *restrict r_min, REAL *restrict r_max);
 // (required): Core BHaHAHA horizon finder
