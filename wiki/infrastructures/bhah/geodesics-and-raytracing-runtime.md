@@ -189,15 +189,16 @@ Claim evidence:
 Numerical endpoint dispatch is piecewise constant. At or below the first stored
 time, the first slice is spatially interpolated; at or above the selected final
 slice, that final slice is reused. `g4DD` obtains temporal metric derivatives
-from temporal interpolation, `g4DD_d0` uses stored metric derivatives and
-zeroes their temporal slots only for direct endpoint dispatch, and `GammaUDD`
-reuses stored Christoffels at endpoints. Mixed `g4DD_d0` temporal padding
-remains a separate interpolation behavior; it is not controlled by
-`--raytracing-static-christoffels`. That flag changes the exported final
+from temporal interpolation. `g4DD_d0` uses stored metric derivatives on real
+slices, but zeroes their temporal slots for direct endpoint dispatch and for
+synthetic lower or upper nodes used to extend a frozen endpoint; the metric and
+spatial-derivative slots remain copied from that endpoint. `GammaUDD` reuses
+stored Christoffels at endpoints. The `g4DD_d0` padding policy is not controlled
+by `--raytracing-static-christoffels`; that flag changes the exported final
 Christoffel payload only.
 
 Claim evidence:
-- Claim: Numerical endpoint dispatch reuses the first/final stored slices as piecewise-constant continuations; `g4DD`, `g4DD_d0`, and `GammaUDD` obtain their geometry according to their selected payload contracts, while `--raytracing-static-christoffels` affects only exported GammaUDD data.
+- Claim: Numerical endpoint dispatch reuses the first/final stored slices as piecewise-constant continuations; frozen `g4DD_d0` nodes retain endpoint metric and spatial-derivative data but zero metric time derivatives, while `--raytracing-static-christoffels` affects only exported GammaUDD data.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/numerical_interpolation.py` — endpoint dispatch; `output_raytracing_data.py` — payload mode
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/temporal_lagrange_interpolation.py` — temporal endpoint handling

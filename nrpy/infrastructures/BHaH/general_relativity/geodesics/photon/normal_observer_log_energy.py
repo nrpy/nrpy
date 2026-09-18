@@ -81,7 +81,7 @@ def normal_observer_log_energy(log_energy_expr: sp.Expr) -> None:
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= chunk_size) {
         return;
-    } // END IF: thread is outside active ray chunk
+    } // END IF: inactive ray thread
         """
         loop_open = ""
         loop_close = ""

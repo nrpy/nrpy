@@ -35,11 +35,11 @@ static inline void compute_lagrange_basis_derivative_coeffs_xi(
       for (int j = 0; j < interp_order; j++) {
         if (j != i && j != omitted)
           product *= diffs[j];
-      } // END LOOP: for j over retained Lagrange numerator factors
+      } // END LOOP: for j over retained factors
       derivative_sum += product;
-    } // END LOOP: for omitted over differentiated Lagrange numerator factors
+    } // END LOOP: for omitted over derivative factors
     derivative_coeffs[i] = inv_denom[i] * derivative_sum;
-  } // END LOOP: for i over Lagrange derivative coefficients
+  } // END LOOP: for i over derivative coefficients
 } // END FUNCTION: compute_lagrange_basis_derivative_coeffs_xi
 
 #endif // DIFFERENTIATE_INTERPOLATION_LAGRANGE_UNIFORM_H_

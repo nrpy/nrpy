@@ -541,7 +541,7 @@ static inline int rkf45_checked_floor_to_long(
 
             const double current_err = DivCUDA(err_abs, scale);
 {trial_debug_error_update}
-        } // END IF: exclude normal-observer path length from error
+        } // END IF: exclude path-length component
 """
         adaptive_step_control = rf"""
     double h_new =

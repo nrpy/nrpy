@@ -25,7 +25,6 @@ Author: Dalton J. Moone
 import argparse
 import os
 import shutil
-from typing import List, Optional
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
@@ -65,13 +64,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.normalization_constr
     normalization_constraint,
 )
 
-
-def _build_parser() -> argparse.ArgumentParser:
-    """
-    Build the massive single-geodesic generator argument parser.
-
-    :return: Configured command-line argument parser.
-    """
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Generate a standalone analytical massive geodesic project."
     )
@@ -107,21 +100,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=150.0,
         help="Escape radius used to terminate the trajectory.",
     )
-    return parser
-
-
-def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
-    """
-    Parse massive single-geodesic generator arguments.
-
-    :param argv: Optional argument list; defaults to ``sys.argv`` when omitted.
-    :return: Parsed command-line arguments.
-    """
-    return _build_parser().parse_args(argv)
-
-
-if __name__ == "__main__":
-    args = _parse_args()
+    args = parser.parse_args()
 
     # Step P1: Set code-generation parameters and register the geodesic kernels.
     enable_parallel_codegen = True

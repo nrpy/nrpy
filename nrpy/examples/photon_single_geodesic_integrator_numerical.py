@@ -75,11 +75,24 @@ if __name__ == "__main__":
             "Generate a standalone numerical-spacetime photon geodesic "
             "project using the shared observer-tetrad initializer."
         ),
-        epilog="""To generate the desired numerical spacetime data, run:
-python3 two_blackholes_collide.py --raytracing-time T_FINAL DIAGNOSTICS_OUTPUT_EVERY --raytracing-coord-system CoordSystem --raytracing-Nxx NXX0 NXX1 NXX2 --raytracing-domain ...
-
-Then rerun this photon script using the .bin filename printed to the terminal by two_blackholes_collide.py, e.g.:
-python3 photon_single_geodesic_integrator_numerical.py --bin-name two_blackholes_collide_7p5_7p5_0p25_z1_0p5_z2_neg0p5_M1_0p5_M2_0p5_SinhCylindricalv2n2_sinhwrho_0p25_sinhwz_0p4_rho-slope_0p0625_z-slope_0p0625_72_2_12.bin --coord-system-numerical SinhCylindricalv2n2 --domain 7.5 0.25 0.4 0.0625 0.0625 --t-numerical-end 100.0 --dt-spacetime-data 0.5""",
+        epilog=(
+            "To generate the example numerical spacetime data, run:\n"
+            "python3 two_blackholes_collide.py --raytracing-time 7.5 0.25 "
+            "--raytracing-data-mode g4DD --raytracing-coord-system "
+            "SinhCylindricalv2n2 --raytracing-Nxx 72 2 12 "
+            "--raytracing-domain 7.5 0.25 0.4 0.0625 0.0625\n\n"
+            "Then run the generated raytracing-data pipeline and invoke:\n"
+            "python3 photon_single_geodesic_integrator_numerical.py "
+            "--bin-name two_blackholes_collide_7p5_7p5_0p25_z1_0p5_z2_neg0p5_"
+            "M1_0p5_M2_0p5_SinhCylindricalv2n2_sinhwrho_0p25_sinhwz_0p4_"
+            "rho-slope_0p0625_z-slope_0p0625_72_2_12_g4DD.bin "
+            "--coord-system-numerical SinhCylindricalv2n2 "
+            "--domain 7.5 0.25 0.4 0.0625 0.0625 "
+            "--t-numerical-end 7.5 --dt-spacetime-data 0.25 --t-start 6.0 "
+            "--eom normalized --interpolation-method g4DD "
+            "--observer-position 5 0 0 --observer-look-forward -1 0 0 "
+            "--observer-up 0 0 1 --observer-fov 1 1 --escape-radius 7"
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     arg_parser.add_argument(
@@ -365,7 +378,17 @@ python3 photon_single_geodesic_integrator_numerical.py --bin-name two_blackholes
         or all(value is not None for value in non_terminal_plane_values),
         "Nonterminal-plane options must be supplied as one complete group.",
     )
-    temporal_margin = 4.0 * args.dt_spacetime_data
+    temporal_half_width = (
+        args.interpolation_half_widths[1]
+        if args.interpolation_half_widths is not None
+        else 3
+    )
+    time_slice_stride = (
+        args.time_slice_stride if args.time_slice_stride is not None else 1
+    )
+    temporal_margin = (
+        (temporal_half_width + 1) * time_slice_stride * args.dt_spacetime_data
+    )
     if args.t_start + temporal_margin > args.t_numerical_end:
         print(
             "WARNING: t-start is most likely too close to the numerical "

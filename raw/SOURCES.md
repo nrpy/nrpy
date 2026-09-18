@@ -257,6 +257,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/examples/et_WaveToyfiles/test/test.ccl` | living |
 | `nrpy/examples/et_WaveToyfiles/test/WaveToyNRPy_test.par` | living |
 | `nrpy/examples/et_WaveToyfiles/test/WaveToyNRPy_test/uuGF.x.asc` | living |
+| `nrpy/examples/geodesic_visualizations/__init__.py` | living |
 | `nrpy/examples/geodesic_visualizations/visualize_trajectory.py` | living |
 | `nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py` | living |
 | `nrpy/examples/geodesic_visualizations/blueprint_io.py` | living |

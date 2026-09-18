@@ -64,9 +64,9 @@ def register_CFunction_numerical_interpolation(
     final selected numerical slice time use that final numerical slice directly,
     treating the numerical spacetime as frozen in time thereafter. This
     endpoint policy is intentionally piecewise constant; it does not register
-    or apply a C1 temporal interpolator. For `g4DD_d0`, endpoint metric
-    derivatives are zeroed; `GammaUDD` endpoint Christoffels are reused exactly
-    as stored. Rays between those
+    or apply a C1 temporal interpolator. For `g4DD_d0`, metric time derivatives
+    are zeroed at direct endpoints and synthetic frozen nodes; `GammaUDD`
+    endpoint Christoffels are reused exactly as stored. Rays between those
     bounds use the adaptive
     `time_window_manager_numerical_stencil_for_time()` contract from
     `time_window_manager_numerical`, spatially interpolate only the mapped
@@ -149,12 +149,22 @@ def register_CFunction_numerical_interpolation(
             "interpolation_method must be one of ('g4DD', 'g4DD_d0', 'GammaUDD'); "
             f"found '{interpolation_method}'."
         )
-    static_geometry_update = (
+    static_endpoint_time_derivative_c_code = (
         """        // Static endpoints must not reuse stored dynamic time derivatives.
         for (int metric_component = 0;
              metric_component < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT;
              metric_component++)
           geometry_local[4 * metric_component] = 0.0;
+"""
+        if interpolation_method == "g4DD_d0"
+        else ""
+    )
+    frozen_node_time_derivative_c_code = (
+        """              // Frozen nodes have zero metric time derivatives.
+              for (int metric_component = 0;
+                   metric_component < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT;
+                   metric_component++)
+                geometry_missing_local[4 * metric_component] = 0.0;
 """
         if interpolation_method == "g4DD_d0"
         else ""
@@ -426,7 +436,7 @@ independently ray-by-ray.
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
           interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
         } else {
-{static_geometry_update}
+{static_endpoint_time_derivative_c_code}
           for (int comp = 0;
                comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
             if (!isfinite((double)g4dd_local[comp]))
@@ -453,7 +463,7 @@ independently ray-by-ray.
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
           interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
         } else {
-{static_geometry_update}
+{static_endpoint_time_derivative_c_code}
           for (int comp = 0;
                comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
             if (!isfinite((double)g4dd_local[comp]))
@@ -532,6 +542,7 @@ independently ray-by-ray.
                    comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
                 geometry_missing_local[comp] =
                     GEOMETRY_SLICE(geometry_available, last_available_slot, comp);
+{frozen_node_time_derivative_c_code}
             } // END ELSE: upper endpoint payload valid
           } else {
             const double *first_slice_payloads[1];
@@ -551,6 +562,7 @@ independently ray-by-ray.
                   AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
                 interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
               } else {
+{frozen_node_time_derivative_c_code}
                 for (int comp = 0;
                      comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
                   if (!isfinite((double)g4dd_missing_local[comp]))
@@ -676,7 +688,14 @@ independently ray-by-ray.
         .replace("{fixed_spatial_center_argument}", fixed_spatial_center_argument)
         .replace("{integration_parameter_params}", integration_parameter_params)
         .replace("{coordinate_time_c_code}", coordinate_time_c_code)
-        .replace("{static_geometry_update}", static_geometry_update)
+        .replace(
+            "{static_endpoint_time_derivative_c_code}",
+            static_endpoint_time_derivative_c_code,
+        )
+        .replace(
+            "{frozen_node_time_derivative_c_code}\n",
+            frozen_node_time_derivative_c_code,
+        )
     )
     desc = desc.replace("{spatial_center_desc}", spatial_center_desc).replace(
         "{integration_parameter_desc}", integration_parameter_desc

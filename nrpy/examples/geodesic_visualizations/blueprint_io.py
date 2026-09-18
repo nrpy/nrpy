@@ -37,15 +37,19 @@ class BlueprintHeader(NamedTuple):
     alpha_h: float
 
 
-def _unpack_header(raw_header: bytes, filename: str) -> BlueprintHeader:
+def read_blueprint_header(
+    filename: str, expected_tile: Optional[Tuple[int, int]] = None
+) -> BlueprintHeader:
     """
-    Decode and validate one native blueprint header.
+    Read and validate a blueprint header and exact payload length.
 
-    :param raw_header: Raw header bytes read from the artifact.
-    :param filename: Artifact name used in error messages.
+    :param filename: Native blueprint artifact path.
+    :param expected_tile: Optional expected ``(tile_x, tile_y)`` pair.
     :return: Validated blueprint metadata.
-    :raises ValueError: If header size, magic, version, or dimensions are invalid.
+    :raises ValueError: If the artifact is malformed or has the wrong tile.
     """
+    with open(filename, "rb") as blueprint_file:
+        raw_header = blueprint_file.read(cfg.BLUEPRINT_HEADER_SIZE)
     if len(raw_header) != cfg.BLUEPRINT_HEADER_SIZE:
         raise ValueError(f"Blueprint '{filename}' has a truncated header")
     values = struct.unpack(cfg.BLUEPRINT_HEADER_FORMAT, raw_header)
@@ -70,24 +74,6 @@ def _unpack_header(raw_header: bytes, filename: str) -> BlueprintHeader:
         raise ValueError(f"Blueprint '{filename}' has invalid fields of view")
     if header.record_count <= 0:
         raise ValueError(f"Blueprint '{filename}' has an invalid record count")
-    return header
-
-
-def read_blueprint_header(
-    filename: str, expected_tile: Optional[Tuple[int, int]] = None
-) -> BlueprintHeader:
-    """
-    Read and validate a blueprint header and exact payload length.
-
-    :param filename: Native blueprint artifact path.
-    :param expected_tile: Optional expected ``(tile_x, tile_y)`` pair.
-    :return: Validated blueprint metadata.
-    :raises ValueError: If the artifact is malformed or has the wrong tile.
-    """
-    with open(filename, "rb") as blueprint_file:
-        header = _unpack_header(
-            blueprint_file.read(cfg.BLUEPRINT_HEADER_SIZE), filename
-        )
     if expected_tile is not None and (header.tile_x, header.tile_y) != expected_tile:
         raise ValueError(f"Blueprint '{filename}' has an unexpected tile identity")
     expected_size = cfg.BLUEPRINT_HEADER_SIZE + (

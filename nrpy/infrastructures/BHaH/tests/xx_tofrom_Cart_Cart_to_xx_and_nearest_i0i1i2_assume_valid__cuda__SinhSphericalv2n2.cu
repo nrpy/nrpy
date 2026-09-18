@@ -129,7 +129,7 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhSp
                 (double)Cartx, (double)Carty, (double)Cartz);
         exit(1);
 #endif
-      } // END ELSE IF: safeguarded Newton-Raphson did not converge
+      } // END IF: safeguarded Newton-Raphson failed
       xx[0] = xx0;
     } // END BLOCK: inverse coordinate xx0
 

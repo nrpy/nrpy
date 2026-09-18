@@ -83,49 +83,6 @@ def _termination_type_info(enum_value: int) -> Tuple[str, str]:
     )
 
 
-def _termination_type_label(enum_value: int) -> str:
-    """
-    Format a termination enum for plot legends.
-
-    :param enum_value: Integer termination enum from a blueprint record.
-    :return: Human-readable enum number and symbolic name.
-    """
-    name, _ = _termination_type_info(enum_value)
-    return f"Type {enum_value}: {name}"
-
-
-def _print_termination_diagnostics(
-    enum_counts: Dict[int, int], total_rays: int
-) -> None:
-    """
-    Print observed termination counts and every configured enum definition.
-
-    :param enum_counts: Number of records observed for each termination enum.
-    :param total_rays: Total number of records used for percentages.
-    """
-    print("--- Raw Termination Enums in Binary ---")
-    for enum_value in sorted(enum_counts):
-        count = enum_counts[enum_value]
-        name, _ = _termination_type_info(enum_value)
-        percentage = count / total_rays * 100.0 if total_rays else 0.0
-        print(
-            f"  Raw Enum {enum_value:2d} ({name}): "
-            f"{count:12,} rays ({percentage:6.2f}%)"
-        )
-
-    print("\n--- Termination Enum Definitions ---")
-    for enum_value in sorted(TERMINATION_TYPE_INFO):
-        name, description = TERMINATION_TYPE_INFO[enum_value]
-        print(f"  Enum {enum_value:2d} ({name}): {description}")
-
-    configured_status = cfg.STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED
-    configured_name, _ = _termination_type_info(configured_status)
-    print(
-        f"\n  Configured evolution-measure status = {configured_status} "
-        f"({configured_name})"
-    )
-
-
 def _calculate_subsample_rate(total_expected_records: int, max_viz_points: int) -> int:
     """
     Calculate a visualization subsampling rate.
@@ -250,12 +207,13 @@ def plot_norm_abs_log_histogram(
         positive_values = values[values > 0.0]
         if len(positive_values) > 0:
             enum_int = int(enum_value)
+            termination_name, _ = _termination_type_info(enum_int)
             plt.hist(
                 np.log10(positive_values),
                 bins=100,
                 alpha=0.5,
                 color=termination_colors(enum_int % 10),
-                label=_termination_type_label(enum_int),
+                label=f"Type {enum_int}: {termination_name}",
             )
     plt.title("Log-Scale Normalization Magnitude by Termination Type")
     plt.xlabel("$\\log_{10}(|g_{{\\mu\\nu}}p^\\mu p^\\nu|)$")
@@ -382,7 +340,27 @@ def diagnose_blueprint() -> None:
                     f"Normalization sidecar for '{filepath}' has extra data"
                 )
 
-    _print_termination_diagnostics(enum_counts, total_rays)
+    print("--- Raw Termination Enums in Binary ---")
+    for enum_value in sorted(enum_counts):
+        count = enum_counts[enum_value]
+        name, _ = _termination_type_info(enum_value)
+        percentage = count / total_rays * 100.0 if total_rays else 0.0
+        print(
+            f"  Raw Enum {enum_value:2d} ({name}): "
+            f"{count:12,} rays ({percentage:6.2f}%)"
+        )
+
+    print("\n--- Termination Enum Definitions ---")
+    for enum_value in sorted(TERMINATION_TYPE_INFO):
+        name, description = TERMINATION_TYPE_INFO[enum_value]
+        print(f"  Enum {enum_value:2d} ({name}): {description}")
+
+    configured_status = cfg.STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED
+    configured_name, _ = _termination_type_info(configured_status)
+    print(
+        f"\n  Configured evolution-measure status = {configured_status} "
+        f"({configured_name})"
+    )
     print("\n--- Nonterminal-Plane Diagnostics ---")
     print(
         "  Rays with a recorded nonterminal-plane crossing: "

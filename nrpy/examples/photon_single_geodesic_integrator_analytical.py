@@ -18,7 +18,6 @@ Author: Dalton J. Moone
 import argparse
 import os
 import shutil
-from typing import List, Optional
 
 import nrpy.c_function as cfc
 import nrpy.params as par
@@ -239,23 +238,13 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
-    """
-    Parse analytical photon single-geodesic generator arguments.
-
-    :param argv: Optional argument list; defaults to ``sys.argv`` when omitted.
-    :return: Parsed command-line arguments.
-    """
-    return _build_parser().parse_args(argv)
-
-
 if __name__ == "__main__":
     import sys
 
     if len(sys.argv) == 1:
         _build_parser().print_help()
         sys.exit(0)
-    args = _parse_args()
+    args = _build_parser().parse_args()
 
     if any(value <= 0.0 for value in args.observer_fov):
         raise ValueError("--observer-fov values must be positive.")

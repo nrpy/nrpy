@@ -237,6 +237,8 @@ if enable_raytracing_data_output:
     )
     if any(nxx_value <= 0 for nxx_value in nxx_override):
         raise ValueError("--raytracing-Nxx values must all be positive.")
+    if CoordSystem == "SinhCylindricalv2n2" and nxx_override[1] != 2:
+        raise ValueError("--raytracing-Nxx NXX1 must equal 2 for SinhCylindricalv2n2.")
     Nxx_dict[CoordSystem] = nxx_override
 if args.raytracing_bhs is None:
     default_BH1_z_posn = +0.5

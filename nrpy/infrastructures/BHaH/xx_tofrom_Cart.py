@@ -692,7 +692,7 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
             (double)xx{i}, (double)Cartx, (double)Carty, (double)Cartz);
     exit(1);
 #endif
-  }} // END ELSE IF: safeguarded Newton-Raphson did not converge
+  }} // END IF: safeguarded Newton-Raphson failed
   xx[{i}] = xx{i};
   }} // END BLOCK: inverse coordinate xx{i}
 """)

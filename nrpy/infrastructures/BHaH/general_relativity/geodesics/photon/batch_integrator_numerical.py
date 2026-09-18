@@ -491,7 +491,7 @@ def batch_integrator_numerical(
                  log_energy_i < active_chunks[current]; ++log_energy_i) {
                 d_log_energy_bundle[current][log_energy_i] =
                     d_f_bundle[current][4 * BUNDLE_CAPACITY + log_energy_i];
-            } // END LOOP: copy normalized u into common log-energy bundle
+            } // END LOOP: for i over normalized log-energy
 """
         if normalized_eom
         else """
@@ -509,7 +509,7 @@ def batch_integrator_numerical(
                      log_energy_i < active_chunks[next]; ++log_energy_i) {
                     d_log_energy_bundle[next][log_energy_i] =
                         d_f_bundle[next][4 * BUNDLE_CAPACITY + log_energy_i];
-                } // END LOOP: copy normalized u into common log-energy bundle
+                } // END LOOP: for i over normalized log-energy
 """
         if normalized_eom
         else """

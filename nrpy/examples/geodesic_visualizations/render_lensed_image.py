@@ -134,9 +134,32 @@ def _load_texture(
             texture_array = np.array(img.convert("RGB")).astype(np.float64)
 
         if center_crop_to_square:
-            texture_array = _center_crop_texture_to_square(texture_array, image_input)
+            texture_height = texture_array.shape[0]
+            texture_width = texture_array.shape[1]
+            if texture_height != texture_width:
+                print(
+                    f"WARNING: Custom source image '{image_input}' is "
+                    f"{texture_width}x{texture_height}; center-cropping to a square."
+                )
+                cropped_size = min(texture_height, texture_width)
+                if texture_width > texture_height:
+                    left = (texture_width - cropped_size) // 2
+                    right = left + cropped_size
+                    texture_array = texture_array[:, left:right, :]
+                else:
+                    top = (texture_height - cropped_size) // 2
+                    bottom = top + cropped_size
+                    texture_array = texture_array[top:bottom, :, :]
         if warn_if_non_equirectangular:
-            _warn_if_texture_not_equirectangular(texture_array, image_input)
+            texture_height = texture_array.shape[0]
+            texture_width = texture_array.shape[1]
+            aspect_ratio = texture_width / texture_height
+            if not np.isclose(aspect_ratio, 2.0, rtol=0.05, atol=0.05):
+                print(
+                    f"WARNING: Custom celestial sphere image '{image_input}' is "
+                    f"{texture_width}x{texture_height}; expected an approximately "
+                    "2:1 texture."
+                )
         return texture_array / 255.0
     if isinstance(image_input, np.ndarray):
         texture_array = image_input.astype(np.float64)
@@ -144,54 +167,6 @@ def _load_texture(
             texture_array /= 255.0  # Normalize if input is 0-255
         return texture_array
     raise TypeError("Image input must be a file path (str) or a NumPy array.")
-
-
-def _center_crop_texture_to_square(
-    texture_array: npt.NDArray[np.float64], texture_path: str
-) -> npt.NDArray[np.float64]:
-    """
-    Center-crop a texture to a square using the smaller image dimension.
-
-    :param texture_array: The RGB image data to crop.
-    :param texture_path: Path used only for warning context.
-    :return: The original array if already square, otherwise a centered square crop.
-    """
-    texture_height = texture_array.shape[0]
-    texture_width = texture_array.shape[1]
-    if texture_height == texture_width:
-        return texture_array
-
-    print(
-        f"WARNING: Custom source image '{texture_path}' is {texture_width}x{texture_height}; center-cropping to a square."
-    )
-    cropped_size = min(texture_height, texture_width)
-
-    if texture_width > texture_height:
-        left = (texture_width - cropped_size) // 2
-        right = left + cropped_size
-        return texture_array[:, left:right, :]
-
-    top = (texture_height - cropped_size) // 2
-    bottom = top + cropped_size
-    return texture_array[top:bottom, :, :]
-
-
-def _warn_if_texture_not_equirectangular(
-    texture_array: npt.NDArray[np.float64], texture_path: str
-) -> None:
-    """
-    Warn if a texture does not appear approximately equirectangular.
-
-    :param texture_array: The RGB image data to inspect.
-    :param texture_path: Path used only for warning context.
-    """
-    texture_height = texture_array.shape[0]
-    texture_width = texture_array.shape[1]
-    aspect_ratio = texture_width / texture_height
-    if not np.isclose(aspect_ratio, 2.0, rtol=0.05, atol=0.05):
-        print(
-            f"WARNING: Custom celestial sphere image '{texture_path}' is {texture_width}x{texture_height}; expected an approximately 2:1 texture."
-        )
 
 
 def generate_source_disk_array(
@@ -474,48 +449,6 @@ def _process_blueprint_tile(
     )
 
 
-def _add_debug_legend(img: "Image.Image") -> None:  # type: ignore[name-defined]
-    """
-    Add the fixed failure-color key in the image's bottom-right corner.
-
-    :param img: Image receiving the failure-color legend.
-    """
-    # pylint: disable=import-outside-toplevel, import-error
-    from PIL import ImageDraw, ImageFont
-
-    draw = ImageDraw.Draw(img)
-    font = ImageFont.load_default()
-    padding = 4
-    swatch_size = 8
-    line_height = 11
-    labels = [failure_info[1] for failure_info in DEBUG_FAILURE_INFO]
-    text_width = max(int(draw.textlength(label, font=font)) for label in labels)
-    legend_width = 3 * padding + swatch_size + text_width
-    legend_height = 2 * padding + line_height * len(DEBUG_FAILURE_INFO)
-    left = max(0, img.width - legend_width - padding)
-    top = max(0, img.height - legend_height - padding)
-
-    # Draw last so the key is visually distinct from ray-traced pixels.
-    draw.rectangle((left, top, img.width - 1, img.height - 1), fill=(0, 0, 0))
-    for index, (_, label, color) in enumerate(DEBUG_FAILURE_INFO):
-        y_coord = top + padding + index * line_height
-        draw.rectangle(
-            (
-                left + padding,
-                y_coord,
-                left + padding + swatch_size,
-                y_coord + swatch_size,
-            ),
-            fill=color,
-        )
-        draw.text(
-            (left + 2 * padding + swatch_size, y_coord - 2),
-            label,
-            fill=(255, 255, 255),
-            font=font,
-        )
-
-
 def _save_image_to_file(img: "Image.Image", output_filename: str) -> None:  # type: ignore[name-defined]
     """
     Save a PIL Image to a file, creating the parent directory if necessary.
@@ -706,7 +639,39 @@ def generate_static_lensed_image(
         (np.clip(final_image_float, 0, 1) * 255).astype(np.uint8), "RGB"
     )
     if enable_debug and include_debug_key:
-        _add_debug_legend(img)
+        from PIL import ImageDraw, ImageFont
+
+        draw = ImageDraw.Draw(img)
+        font = ImageFont.load_default()
+        padding = 4
+        swatch_size = 8
+        line_height = 11
+        labels = [failure_info[1] for failure_info in DEBUG_FAILURE_INFO]
+        text_width = max(int(draw.textlength(label, font=font)) for label in labels)
+        legend_width = 3 * padding + swatch_size + text_width
+        legend_height = 2 * padding + line_height * len(DEBUG_FAILURE_INFO)
+        left = max(0, img.width - legend_width - padding)
+        top = max(0, img.height - legend_height - padding)
+
+        # Draw last so the key is visually distinct from ray-traced pixels.
+        draw.rectangle((left, top, img.width - 1, img.height - 1), fill=(0, 0, 0))
+        for index, (_, label, color) in enumerate(DEBUG_FAILURE_INFO):
+            y_coord = top + padding + index * line_height
+            draw.rectangle(
+                (
+                    left + padding,
+                    y_coord,
+                    left + padding + swatch_size,
+                    y_coord + swatch_size,
+                ),
+                fill=color,
+            )
+            draw.text(
+                (left + 2 * padding + swatch_size, y_coord - 2),
+                label,
+                fill=(255, 255, 255),
+                font=font,
+            )
     _save_image_to_file(img, output_filename)
 
     if display_image:

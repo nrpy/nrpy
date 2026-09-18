@@ -304,6 +304,21 @@ direct-momentum scale. The numerical batch path locks the spatial interpolation
 center selected for each RK trial and reuses that same center for every RK
 substage and the accepted-state metric refresh.
 
+```bash
+python -m nrpy.examples.photon_batch_geodesic_integrator_numerical \
+  --bin-name DATASET.bin \
+  --coord-system-numerical SinhCylindricalv2n2 \
+  --domain 30.0 0.075 0.05 1.0 4.0 \
+  --t-numerical-end 30.0 \
+  --dt-spacetime-data 0.4 --t-start 10.0 \
+  --observer-position 0.0 -10.0 0.0 \
+  --observer-look-forward 0.0 1.0 0.0 \
+  --observer-up 0.0 0.0 1.0 \
+  --observer-fov 1.0 1.0 --scan-density 64 \
+  --escape-radius 25.0 \
+  --eom geodesic --interpolation-method g4DD
+```
+
 Claim evidence:
 - Claim: Numerical photon generators expose direct and normalized EOM modes with a common upper-only log-energy cutoff and direct-scale-equivalent normalized norm sidecars; numerical batch RK stages reuse one spatial interpolation center per trial.
 - Role: public/scientific contract

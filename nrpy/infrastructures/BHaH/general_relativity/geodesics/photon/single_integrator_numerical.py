@@ -20,6 +20,7 @@ import shutil
 import nrpy.c_function as cfc
 import nrpy.params as par
 from nrpy.equations.general_relativity.geodesics.geodesics import Geodesic_Equations
+from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import BHaH_defines_h
 from nrpy.infrastructures.BHaH import CodeParameters as CPs
 from nrpy.infrastructures.BHaH import Makefile_helpers as Makefile
@@ -1344,18 +1345,13 @@ if __name__ == "__main__":
         src_code_file_ext="c",
     )
 
-    # Step 8: Copy the trajectory visualizer when this script resides in nrpy/examples.
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    visualization_source = os.path.join(
-        script_dir, "geodesic_visualizations", "visualize_trajectory.py"
+    # Step 8: Copy the packaged trajectory visualizer.
+    copy_files(
+        package="nrpy.examples.geodesic_visualizations",
+        filenames_list=["visualize_trajectory.py"],
+        project_dir=project_dir,
+        subdirectory="",
     )
-    if os.path.exists(visualization_source):
-        shutil.copy(visualization_source, project_dir)
-    else:
-        print(
-            "Warning: visualize_trajectory.py was not found beside this example; "
-            "the integrator project was still generated."
-        )
 
     print(f"Finished generating {project_dir}.")
     print(f"Set numerical_spacetime_bin_path in {parfile_path} before running.")
