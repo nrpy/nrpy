@@ -263,10 +263,6 @@ if use_cpp:
     cpp_compatibility_epilogue = "\n#ifdef __cplusplus\n" "}\n" "#endif"
     BHaHAHA_h = cpp_compatibility_preamble + BHaHAHA_h + cpp_compatibility_epilogue
 
-    # Convert fixed-size parameter to pointer
-    BHaHAHA_h = BHaHAHA_h.replace("REAL radii[Nr_interp_max]", "REAL radii[]")
-
-
 # Write the updated content to the output file
 with Path(project_dir, "BHaHAHA.h").open("w", encoding="utf-8") as output_file:
     output_file.write(BHaHAHA_h)
