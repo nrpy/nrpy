@@ -448,6 +448,14 @@ connection, and right-hand-side stages of each trial in execution order.
         trial_debug_cleanup = ""
         stage_debug_cleanup = ""
 
+    normalized_momentum_conversion = (
+        """    photon_momentum_to_normalized_kernel(
+      f, metric, chunk_size, stream_idx
+    );"""
+        if normalized_eom
+        else ""
+    )
+
     body = rf"""
     // ==========================================
     // STRUCTURAL SETUP & PARAMETERS
@@ -565,7 +573,7 @@ connection, and right-hand-side stages of each trial in execution order.
     set_initial_conditions_kernel(
       &commondata, num_rays, &all_photons, metric, observer_tetrad
     );
-{"    photon_momentum_to_normalized_kernel(\n      f, metric, chunk_size, stream_idx\n    );" if normalized_eom else ""}
+{normalized_momentum_conversion}
 {initial_normalization_check}
 
     printf("Initial State:\n");
