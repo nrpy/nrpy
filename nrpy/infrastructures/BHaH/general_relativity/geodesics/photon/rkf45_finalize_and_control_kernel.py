@@ -14,13 +14,14 @@ truncation errors are calculated directly via coefficient deltas to avoid catast
 floating-point cancellation against the anchor state. Upon step acceptance, the kernel
 commits the updated state, advances the integration-parameter tracker, resets
 the retry counter, and sets the ray status to active; otherwise, it increments
-the retries and sets a rejected or failure status. Direct geodesic evolution
+the retries and sets a rejected or failure status. Geodesic evolution
 tracks affine parameter, while normalized evolution tracks coordinate time and
 uses its log-energy tolerance in the embedded error norm.
 
 When requested by `enable_numerical_time_window_step_cap`, the generated kernel
-also caps accepted next-step sizes using `rkf45_max_delta_t` so backward
-numerical-spacetime ray tracing remains inside the mapped numerical time window.
+also applies an accepted-state, slot-relative next-step cap using
+`rkf45_max_delta_t` as backward lookahead so numerical-spacetime ray tracing
+remains inside the mapped numerical time window.
 This time window is distinct from the geometric `non_terminal_plane` event surface
 handled by the photon event-detection kernels.
 The numerical photon example registers the companion time-window manager before
@@ -92,6 +93,12 @@ def rkf45_finalize_and_control_kernel(
     True
     >>> "rkf45_checked_floor_to_long(slot_position, &slot_idx)" in generated
     True
+    >>> "const bool error_is_zero = (err_norm == 0.0);" in generated
+    True
+    >>> "pow(err_norm, -0.2)" in generated
+    True
+    >>> "double h_new = error_is_zero ? commondata->rkf45_h_max" in generated
+    True
     >>> cfc.CFunction_dict.clear()
     >>> with tempfile.TemporaryDirectory(dir=os.getcwd()) as temp_dir:
     ...     old_cache_home = os.environ.get("XDG_CACHE_HOME")
@@ -103,6 +110,10 @@ def rkf45_finalize_and_control_kernel(
     ...     else:
     ...         _ = os.environ.__setitem__("XDG_CACHE_HOME", old_cache_home)
     >>> "rkf45_checked_floor_to_long" not in generated
+    True
+    >>> "FAILURE_SPATIAL_INTERPOLATION" in generated
+    True
+    >>> "FAILURE_TEMPORAL_INTERPOLATION" in generated
     True
     >>> cfc.CFunction_dict.clear()
     >>> with tempfile.TemporaryDirectory(dir=os.getcwd()) as temp_dir:
@@ -119,6 +130,18 @@ def rkf45_finalize_and_control_kernel(
     >>> "rkf45_log_energy_tolerance" in generated
     True
     >>> "rkf45_constraint_tolerance" not in generated
+    True
+    >>> "const bool error_is_zero = (err_norm == 0.0);" in generated
+    True
+    >>> "pow(err_norm, -0.2)" in generated
+    True
+    >>> "double h_new_abs = error_is_zero ? commondata->rkf45_h_max" in generated
+    True
+    >>> "1e-15" not in generated
+    True
+    >>> "h_new_abs > commondata->rkf45_max_delta_t" not in generated
+    True
+    >>> "const double allowed_delta_t" in generated
     True
     >>> cfc.CFunction_dict.clear()
     >>> with tempfile.TemporaryDirectory(dir=os.getcwd()) as temp_dir:
@@ -224,6 +247,15 @@ def rkf45_finalize_and_control_kernel(
         &d_trial_debug[i].limiting_error_normalized,
         limiting_error_normalized);
 """
+        interpolation_failure_debug_output = r"""
+        WriteCUDA(&d_trial_debug[i].err_norm, NAN);
+        WriteCUDA(&d_trial_debug[i].h_error_controller, NAN);
+        WriteCUDA(&d_trial_debug[i].limiting_component, -1);
+        WriteCUDA(&d_trial_debug[i].limiting_delta_5_minus_4, NAN);
+        WriteCUDA(&d_trial_debug[i].limiting_error_absolute, NAN);
+        WriteCUDA(&d_trial_debug[i].limiting_scale, NAN);
+        WriteCUDA(&d_trial_debug[i].limiting_error_normalized, NAN);
+"""
     else:
         trial_debug_initialization = ""
         trial_debug_candidate_check = r"""
@@ -244,6 +276,7 @@ def rkf45_finalize_and_control_kernel(
 """
         trial_debug_h_capture = ""
         trial_debug_output = ""
+        interpolation_failure_debug_output = ""
 
     if normalized_eom:
         real_param_names.append("rkf45_log_energy_tolerance")
@@ -333,6 +366,8 @@ def rkf45_finalize_and_control_kernel(
         """
         loop_postamble = "    } // END LOOP: for i over chunk_size rays"
 
+    escape_statement = "return;" if parallelization == "cuda" else "continue;"
+
     prefunc = (
         r"""
 static inline int rkf45_checked_floor_to_long(
@@ -351,15 +386,7 @@ static inline int rkf45_checked_floor_to_long(
     )
 
     accepted_time_window_step_cap = ""
-    proposed_time_window_step_cap = ""
     if enable_numerical_time_window_step_cap and normalized_eom:
-        proposed_time_window_step_cap = rf"""
-    if ({cd_access}rkf45_max_delta_t > 0.0 &&
-        h_new_abs > {cd_access}rkf45_max_delta_t) {{
-        h_new_abs = {cd_access}rkf45_max_delta_t;
-        h_new = h_sign * h_new_abs;
-    }} // END IF: next coordinate-time step exceeded rkf45_max_delta_t
-"""
         accepted_time_window_step_cap = rf"""
         //==========================================
         // NUMERICAL TIME-WINDOW ACCEPTED-STEP CAP
@@ -482,7 +509,10 @@ static inline int rkf45_checked_floor_to_long(
 """
         adaptive_step_control = rf"""
     const double h_sign = (h_local < 0.0) ? -1.0 : 1.0;
-    double h_new_abs = MulCUDA(safety, MulCUDA(AbsCUDA(h_local), factor));
+    double h_new_abs =
+        error_is_zero
+            ? {cd_access}rkf45_h_max
+            : MulCUDA(safety, MulCUDA(AbsCUDA(h_local), factor));
     h_new_abs = fmax(h_new_abs, {cd_access}rkf45_h_min);
     h_new_abs = fmin(h_new_abs, {cd_access}rkf45_h_max);
     double h_new = h_sign * h_new_abs;
@@ -507,19 +537,22 @@ static inline int rkf45_checked_floor_to_long(
                 scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n)));
             } else {
                 scale = AddCUDA(atol, MulCUDA(rtol, p_L1));
-            } // END ELSE: direct-geodesic tolerance selection
+            } // END ELSE: geodesic tolerance selection
 
             const double current_err = DivCUDA(err_abs, scale);
 {trial_debug_error_update}
         } // END IF: exclude normal-observer path length from error
 """
         adaptive_step_control = rf"""
-    double h_new = MulCUDA(safety, MulCUDA(h_local, factor));
+    double h_new =
+        error_is_zero
+            ? {cd_access}rkf45_h_max
+            : MulCUDA(safety, MulCUDA(h_local, factor));
     h_new = fmax(h_new, {cd_access}rkf45_h_min);
     h_new = fmin(h_new, {cd_access}rkf45_h_max);
 """
         integration_parameter_update = r"""
-        // Direct geodesic evolution advances affine parameter by the accepted step.
+        // Geodesic evolution advances affine parameter by the accepted step.
         const double old_integration_param = ReadCUDA(&d_integration_param[i]);
         WriteCUDA(
             &d_integration_param[i], AddCUDA(old_integration_param, h_local));
@@ -530,6 +563,15 @@ static inline int rkf45_checked_floor_to_long(
     )
 
     core_math = rf"""
+    // Interpolation failures terminate only their owning photon. Preserve the
+    // last accepted state and the owning interpolation-failure classification.
+    const termination_type_t incoming_status = ReadCUDA(&d_status[i]);
+    if (incoming_status == FAILURE_SPATIAL_INTERPOLATION ||
+        incoming_status == FAILURE_TEMPORAL_INTERPOLATION) {{
+{interpolation_failure_debug_output}
+        {escape_statement}
+    }} // END IF: interpolation failure already established
+
     //==========================================
     // MACRO DEFINITIONS FOR BUNDLE ACCESS
     //==========================================
@@ -621,11 +663,11 @@ static inline int rkf45_checked_floor_to_long(
     //==========================================
     // Evaluates the mathematically optimal adaptive step size $h$ for subsequent integration.
     const double safety = 0.9; // Fixed RKF45 damping factor for next-step scaling.
-    double factor = (err_norm > 1e-15) ? pow(DivCUDA(1.0, err_norm), 0.2) : 2.0; // Growth or shrink factor for the adaptive step $h$.
+    const bool error_is_zero = (err_norm == 0.0);
+    const double factor = error_is_zero ? 1.0 : pow(err_norm, -0.2); // Growth or shrink factor for the adaptive step $h$.
 
 {adaptive_step_control}
 {trial_debug_h_capture}
-{proposed_time_window_step_cap}
 
     if (err_norm <= 1.0) {{
         //==========================================

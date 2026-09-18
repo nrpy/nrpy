@@ -231,6 +231,9 @@ def calculate_and_fill_blueprint_data_universal(
     @param[out] result The array of blueprint data structures to be populated.
     @param[in] normalization_abs_by_ray Optional per-ray normalization magnitudes.
     @param[in] norm_abs_bin_path Optional separate normalization-sidecar filename.
+    @param[in] normalization_abs_non_terminal_by_ray Optional sparse-event norm values.
+    @param[in] non_terminal_norm_recorded Per-ray flags identifying saved crossings.
+    @param[in] norm_abs_non_terminal_bin_path Optional sparse sidecar filename.
     @param stream_idx The stream index identifier for asynchronous scheduling.
 
     Detailed algorithm:
@@ -238,8 +241,10 @@ def calculate_and_fill_blueprint_data_universal(
     2. Iterates over the global dataset in chunks of BUNDLE_CAPACITY.
     3. Transfers state, computes projections, and transfers results back.
     4. Evaluates final 3D positions onto a celestial sphere $(\theta, \phi)$ for escaped rays.
-    5. Optionally writes one raw double per photon to a separate normalization
-       sidecar; normalization values are never embedded in blueprint records."""
+    5. Optionally writes one raw double per photon to the final normalization
+       sidecar and sparse photon-index/norm-error records for nonterminal
+       accepted-state diagnostics; normalization values are never embedded in
+       blueprint records."""
     cfunc_type = "void"
     name = "calculate_and_fill_blueprint_data_universal"
     params = (
@@ -248,6 +253,9 @@ def calculate_and_fill_blueprint_data_universal(
         "blueprint_data_t *restrict result, "
         "const double *restrict normalization_abs_by_ray, "
         "const char *restrict norm_abs_bin_path, "
+        "const double *restrict normalization_abs_non_terminal_by_ray, "
+        "const bool *restrict non_terminal_norm_recorded, "
+        "const char *restrict norm_abs_non_terminal_bin_path, "
         "const int stream_idx"
     )
     include_CodeParameters_h = False
@@ -279,43 +287,92 @@ def calculate_and_fill_blueprint_data_universal(
     BHAH_FREE_DEVICE(d_status_bundle); // Free status buffer.
     BHAH_FREE_DEVICE(d_result_bundle); // Free results buffer.
     
-    if (normalization_abs_by_ray == NULL || norm_abs_bin_path == NULL ||
-        norm_abs_bin_path[0] == '\\0') {{
+    if (normalization_abs_by_ray != NULL && norm_abs_bin_path != NULL &&
+        norm_abs_bin_path[0] != '\\0') {{
+        FILE *restrict norm_abs_file = fopen(norm_abs_bin_path, "wb");
+        if (norm_abs_file == NULL) {{
+            fprintf(stderr,
+                    "ERROR: Could not open normalization sidecar '%s' for writing.\\n",
+                    norm_abs_bin_path);
+            exit(1);
+        }} // END IF: failed to open normalization sidecar
+
+        const size_t num_written = fwrite(
+            normalization_abs_by_ray, sizeof(double), (size_t)num_rays, norm_abs_file);
+        if (num_written != (size_t)num_rays) {{
+            fprintf(stderr,
+                    "ERROR: Failed to write normalization sidecar '%s'; wrote %zu of %ld records.\\n",
+                    norm_abs_bin_path,
+                    num_written,
+                    num_rays);
+            fclose(norm_abs_file);
+            exit(1);
+        }} // END IF: normalization sidecar write count mismatched
+
+        if (fclose(norm_abs_file) != 0) {{
+            fprintf(stderr,
+                    "ERROR: Could not close normalization sidecar '%s' after writing.\\n",
+                    norm_abs_bin_path);
+            exit(1);
+        }} // END IF: normalization sidecar close failed
+    }} // END IF: final norm sidecar inputs present
+
+    if (normalization_abs_non_terminal_by_ray == NULL ||
+        non_terminal_norm_recorded == NULL ||
+        norm_abs_non_terminal_bin_path == NULL ||
+        norm_abs_non_terminal_bin_path[0] == '\\0') {{
         return;
-    }} // END IF: normalization sidecar inputs are absent
+    }} // END IF: sparse sidecar inputs absent
 
-    FILE *restrict norm_abs_file = fopen(norm_abs_bin_path, "wb");
-    if (norm_abs_file == NULL) {{
+    FILE *restrict non_terminal_norm_file =
+        fopen(norm_abs_non_terminal_bin_path, "wb");
+    if (non_terminal_norm_file == NULL) {{
         fprintf(stderr,
-                "ERROR: Could not open normalization sidecar '%s' for writing.\\n",
-                norm_abs_bin_path);
+                "ERROR: Could not open nonterminal normalization sidecar '%s' for writing.\\n",
+                norm_abs_non_terminal_bin_path);
         exit(1);
-    }} // END IF: failed to open normalization sidecar
+    }} // END IF: failed opening sparse sidecar
 
-    const size_t num_written = fwrite(
-        normalization_abs_by_ray, sizeof(double), (size_t)num_rays, norm_abs_file);
-    if (num_written != (size_t)num_rays) {{
-        fprintf(stderr,
-                "ERROR: Failed to write normalization sidecar '%s'; wrote %zu of %ld records.\\n",
-                norm_abs_bin_path,
-                num_written,
-                num_rays);
-        fclose(norm_abs_file);
-        exit(1);
-    }} // END IF: normalization sidecar write count mismatched
+    uint64_t non_terminal_record_count = 0;
+    for (long int photon_index = 0; photon_index < num_rays; ++photon_index) {{
+        if (!non_terminal_norm_recorded[photon_index]) {{
+            continue;
+        }} // END IF: photon did not cross plane
 
-    if (fclose(norm_abs_file) != 0) {{
+        const uint64_t serialized_photon_index = (uint64_t)photon_index;
+        const double norm_error =
+            normalization_abs_non_terminal_by_ray[photon_index];
+        if (!isfinite(norm_error) ||
+            fwrite(&serialized_photon_index, sizeof(serialized_photon_index), 1,
+                   non_terminal_norm_file) != 1 ||
+            fwrite(&norm_error, sizeof(norm_error), 1, non_terminal_norm_file) != 1) {{
+            fprintf(stderr,
+                    "ERROR: Failed to write nonterminal normalization record %ld to '%s'.\\n",
+                    photon_index,
+                    norm_abs_non_terminal_bin_path);
+            fclose(non_terminal_norm_file);
+            exit(1);
+        }} // END IF: sparse nonterminal record write failed
+        non_terminal_record_count++;
+    }} // END LOOP: write sparse nonterminal normalization records
+
+    if (fclose(non_terminal_norm_file) != 0) {{
         fprintf(stderr,
-                "ERROR: Could not close normalization sidecar '%s' after writing.\\n",
-                norm_abs_bin_path);
+                "ERROR: Could not close nonterminal normalization sidecar '%s' after writing.\\n",
+                norm_abs_non_terminal_bin_path);
         exit(1);
-    }} // END IF: normalization sidecar close failed
+    }} // END IF: sparse nonterminal sidecar close failed
+
+    printf(
+        "Wrote %llu nonterminal accepted-state normalization records to %s\\n",
+        (unsigned long long)non_terminal_record_count,
+        norm_abs_non_terminal_bin_path);
     """
 
     # Step 8: Function Registration
     cfc.register_CFunction(
         prefunc=prefunc,
-        includes=includes + ["<stdio.h>", "<stdlib.h>"],
+        includes=includes + ["<stdio.h>", "<stdlib.h>", "<stdint.h>"],
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,

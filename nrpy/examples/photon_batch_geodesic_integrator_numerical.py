@@ -736,7 +736,7 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     par.adjust_CodeParam_default("rkf45_absolute_error_tolerance", 1.0e-8)
     par.adjust_CodeParam_default("rkf45_error_tolerance", 1.0e-8)
     par.adjust_CodeParam_default("rkf45_h_max", 10.0)
-    par.adjust_CodeParam_default("rkf45_h_min", 1.0e-4)
+    par.adjust_CodeParam_default("rkf45_h_min", 1.0e-8)
     if normalized_eom:
         par.adjust_CodeParam_default("rkf45_log_energy_tolerance", 1.0e0)
 

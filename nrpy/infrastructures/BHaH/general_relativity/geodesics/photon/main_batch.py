@@ -62,7 +62,7 @@ def main(
         else "Conservation Check"
     )
     batch_integrator_call = (
-        "batch_integrator_numerical(&commondata, num_rays, results_buffer, norm_abs_bin_name);"
+        "batch_integrator_numerical(&commondata, num_rays, results_buffer, norm_abs_bin_name, norm_abs_non_terminal_bin_name);"
         if integrator_mode == "Numerical"
         else "batch_integrator_analytical(&commondata, num_rays, results_buffer);"
     )
@@ -78,7 +78,9 @@ def main(
     )
     serialization_desc = (
         " When normalization checks are enabled in numerical mode, each tile also "
-        "writes a matching raw 'light_blueprint_norm_abs_XX_YY.bin' sidecar file."
+        "writes a matching raw 'light_blueprint_norm_abs_XX_YY.bin' sidecar file "
+        "and a sparse 'light_blueprint_norm_abs_non_terminal_XX_YY.bin' sidecar "
+        "containing photon-index/norm-error records for nonterminal crossings."
         if integrator_mode == "Numerical"
         else ""
     )
@@ -95,6 +97,17 @@ def main(
             } else {
                 norm_abs_bin_name[0] = '\\0';
             } // END ELSE: disable normalization sidecar
+            char norm_abs_non_terminal_bin_name[256];
+            if (commondata.perform_normalization_check) {
+                snprintf(
+                    norm_abs_non_terminal_bin_name,
+                    sizeof(norm_abs_non_terminal_bin_name),
+                    "light_blueprint_norm_abs_non_terminal_%02d_%02d.bin",
+                    tx,
+                    ty);
+            } else {
+                norm_abs_non_terminal_bin_name[0] = '\\0';
+            } // END ELSE: disable nonterminal normalization sidecar
 """
         if integrator_mode == "Numerical"
         else ""
@@ -114,7 +127,7 @@ def main(
     printf("Data File: %s\\n", commondata.numerical_spacetime_bin_path);
     printf("Configured final numerical time: %.2f\\n", commondata.t_numerical_end);
     printf("Slice Spacing / Stride: %.6f / %d\\n", commondata.dt_numerical_spacetime_data, commondata.numerical_spacetime_time_slice_stride);
-    printf("RKF45 Time-Window Cap: %.2f\\n", commondata.rkf45_max_delta_t);
+    printf("RKF45 Time-Window Lookahead: %.2f\\n", commondata.rkf45_max_delta_t);
 """
         if integrator_mode == "Numerical"
         else ""

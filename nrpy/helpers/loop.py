@@ -136,7 +136,7 @@ def loop(
         if tile_size == ""
         else [tile_size] if isinstance(tile_size, str) else tile_size
     )
-    idx_type = [idx_type] if isinstance(idx_type, str) else idx_type
+    idx_type = [idx_type] * len(idx_var) if isinstance(idx_type, str) else idx_type
 
     if (
         len(

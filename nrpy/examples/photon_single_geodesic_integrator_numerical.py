@@ -7,9 +7,10 @@ from ``two_blackholes_collide.py --raytracing-time ...``. It retains the batch
 example's command-line inputs, numerical interpolation setup, parameter
 defaults, and RKF45 registrations, but selects the single-photon integrator and
 writes accepted trajectory states to ``trajectory.txt``. Initialization uses
-the shared observer-tetrad contract with one tile and one ray. RKF45 trial and
-stage diagnostics are enabled by default and written to ``rkf45_trials.txt``
-and ``rkf45_stages.txt``; diagnostic code can be disabled from the command line.
+the shared observer-tetrad contract with one ray and runtime-selectable camera
+tile geometry. RKF45 trial and stage diagnostics are enabled by default and
+written to ``rkf45_trials.txt`` and ``rkf45_stages.txt``; diagnostic code can be
+disabled from the command line.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -736,8 +737,9 @@ python3 photon_single_geodesic_integrator_numerical.py --bin-name two_blackholes
     if args.interpolation_half_widths is not None:
         spatial_width, temporal_width = args.interpolation_half_widths
         _require(
-            spatial_width >= 1 and temporal_width >= 1,
-            "Interpolation half widths must be positive.",
+            spatial_width >= 1 and temporal_width >= 0,
+            "Spatial interpolation half-width must be positive; temporal "
+            "interpolation half-width must be nonnegative.",
         )
         par.adjust_CodeParam_default(
             "numerical_spacetime_spatial_interp_half_width", spatial_width
@@ -790,7 +792,13 @@ python3 photon_single_geodesic_integrator_numerical.py --bin-name two_blackholes
         project_dir=project_dir, project_name=project_name
     )
     cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
-        project_name=project_name
+        project_name=project_name,
+        cmdline_inputs=[
+            "tiles_width",
+            "tiles_height",
+            "tile_index_width",
+            "tile_index_height",
+        ],
     )
 
     # Step 7: Assemble the generated C project.

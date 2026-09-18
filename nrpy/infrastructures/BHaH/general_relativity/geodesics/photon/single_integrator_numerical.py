@@ -101,6 +101,14 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     True
     >>> "stage_debug_file" in generated
     True
+    >>> "commondata.tiles_width = 1;" not in generated
+    True
+    >>> "commondata.tile_index_width = 0;" not in generated
+    True
+    >>> par.glb_code_params_dict["tiles_width"].add_to_parfile
+    True
+    >>> par.glb_code_params_dict["tile_index_width"].add_to_parfile
+    True
     >>> "Cart_to_xx_and_nearest_i0i1i2_assume_valid" in generated
     True
     >>> "k_bundle[(stage - 1) * 9 + 5]" in generated
@@ -121,22 +129,34 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
 
     # Register the shared batch state definitions and metric-tetrad initializer.
     register_photon_batch_structs()
+    BHaH_defines_h.register_BHaH_defines(
+        "single_photon_macros",
+        """
+    #undef BUNDLE_CAPACITY
+    #define BUNDLE_CAPACITY 1
+    """,
+    )
     set_initial_conditions_kernel(normalized_eom=normalized_eom)
     handle_terminal_plane_intersection.register_terminal_plane_parameters()
     handle_non_terminal_plane_intersection.register_non_terminal_plane_parameters()
 
-    # The shared initializer uses the batch tiling contract.  A single-ray
-    # executable has one tile containing one ray, so register the two tile
-    # counts locally rather than inheriting batch-only parameters from
-    # main_batch.py.  The active tile indices and scan density are registered
-    # by set_initial_conditions_kernel().
+    # The shared initializer uses the batch tiling contract.  Expose the tile
+    # counts and active tile indices so one single-ray process can reproduce
+    # any batch-camera sample exactly.  The defaults remain the center ray of
+    # one tile.  This registration intentionally replaces the non-parfile tile
+    # indices registered by set_initial_conditions_kernel().
     par.register_CodeParameters(
         "int",
         __name__,
-        ["tiles_width", "tiles_height"],
-        [1, 1],
+        [
+            "tiles_width",
+            "tiles_height",
+            "tile_index_width",
+            "tile_index_height",
+        ],
+        [1, 1, 0, 0],
         commondata=True,
-        add_to_parfile=False,
+        add_to_parfile=True,
     )
 
     # Step 1: Register single-photon escape and numerical-dataset parameters.
@@ -179,12 +199,15 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
             &numerical_params, trial_cartesian, NULL, trial_native,
             trial_automatic_center_idx, trial_selected_center_idx) !=
         TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
-      fprintf(stderr, "ERROR: could not resolve the RKF45 trial spatial center.\n");
-      exit_status = EXIT_FAILURE;
-      goto cleanup;
-    } // END IF: RKF45 trial center invalid
-    trial_spatial_center.i0 = trial_selected_center_idx[0];
-    trial_spatial_center.i2 = trial_selected_center_idx[2];
+      // Preserve the last accepted state and route this ray through the same
+      // per-photon spatial-interpolation failure path as the wrapper.
+      *status = FAILURE_SPATIAL_INTERPOLATION;
+      trial_spatial_center.i0 = 0;
+      trial_spatial_center.i2 = 0;
+    } else {
+      trial_spatial_center.i0 = trial_selected_center_idx[0];
+      trial_spatial_center.i2 = trial_selected_center_idx[2];
+    } // END ELSE: RKF45 trial spatial center resolved
 """
 
     # Step 2: Select emitted C expressions for the two state conventions.
@@ -319,6 +342,10 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
   fprintf(stage_debug_file, "{stage_debug_header_c}");
 """
         stage_debug_record = rf"""
+      // A failed interpolation intentionally leaves NaN RK scratch data. Do
+      // not treat that expected sentinel as a separate diagnostics failure.
+      if (*status != FAILURE_SPATIAL_INTERPOLATION &&
+          *status != FAILURE_TEMPORAL_INTERPOLATION) {{
       // Record the interpolated stage before the next RKF45 stage update.
       normalization_constraint_t stage_normalization;
       {normalization_kernel_name}(
@@ -387,6 +414,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
           f_temp[5],
           stage_pi1_derivative);
       fflush(stage_debug_file);
+      }} // END IF: stage interpolation valid
 """
         trial_debug_open = r"""
   trial_debug_file = fopen("rkf45_trials.txt", "w");
@@ -419,7 +447,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         trial_debug_record = r"""
     const int trial_status_value = (int)*status;
     const char *trial_status_name =
-        (trial_status_value >= 0 && trial_status_value < 9)
+        (trial_status_value >= 0 && trial_status_value < 11)
             ? status_names[trial_status_value]
             : "UNKNOWN_STATUS";
     const int trial_component_value = trial_debug.limiting_component;
@@ -435,6 +463,10 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
       trial_result = "REJECTED";
     } else if (*status == FAILURE_RKF45_REJECTION_LIMIT) {
       trial_result = "FAILED_REJECTION_LIMIT";
+    } else if (*status == FAILURE_SPATIAL_INTERPOLATION) {
+      trial_result = "FAILED_SPATIAL_INTERPOLATION";
+    } else if (*status == FAILURE_TEMPORAL_INTERPOLATION) {
+      trial_result = "FAILED_TEMPORAL_INTERPOLATION";
     } // END ELSE IF: classify RKF45 trial result
     fprintf(
         trial_debug_file,
@@ -546,7 +578,9 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
     "FAILURE_SLOT_MANAGER_ERROR",
     "FAILURE_GENERIC",
     "ACTIVE",
-    "REJECTED"
+    "REJECTED",
+    "FAILURE_SPATIAL_INTERPOLATION",
+    "FAILURE_TEMPORAL_INTERPOLATION"
   }};
 
   int exit_status = EXIT_SUCCESS;
@@ -685,14 +719,10 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   // Reuse the batch initializer's observer parameters. The single-ray
   // command-line momentum is the observer look-forward direction seed, while q
   // sets the initial observer-frame energy to one.
-  // Single-ray execution is the one-tile, one-sample specialization of the
-  // shared angular sampling contract.  Tile origins and pixel dimensions are
-  // deliberately not part of commondata; the initializer derives the sample
-  // from these canonical indices and counts.
-  commondata.tiles_width = 1;
-  commondata.tiles_height = 1;
-  commondata.tile_index_width = 0;
-  commondata.tile_index_height = 0;
+  // Single-ray execution is the one-sample-per-tile specialization of the
+  // shared angular sampling contract.  Runtime tile counts and indices permit
+  // exact reproduction of any batch-camera pixel; their defaults select the
+  // center ray of a one-tile camera.
   commondata.scan_density = 1;
   // The temporary state supplies the observer event to one metric
   // interpolation. The shared initializer overwrites f and h with the
@@ -747,28 +777,31 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   }} // END IF: initial numerical time-window mapping failed
   mapped_slot_index = initial_slot_index;
 
+  // Observer interpolation uses a temporary status because failure here means
+  // no photon can be initialized; it is therefore a project-level error.
+  termination_type_t observer_interpolation_status = ACTIVE;
   numerical_interpolation(
       &commondata,
       &numerical_params,
       &spatial_context,
       &numerical_window,
       f,
+      &observer_interpolation_status,
       {interpolation_initial_arguments}
       metric,
       NULL,
       chunk_size,
       stream_idx);
 
-  for (int component = 0; component < 10; ++component) {{
-    if (!isfinite(metric[component])) {{
-      fprintf(
-          stderr,
-          "ERROR: initial numerical metric component %d was not finite.\n",
-          component);
-      exit_status = EXIT_FAILURE;
-      goto cleanup;
-    }} // END IF: initial metric component invalid
-  }} // END LOOP: for component over initial metric
+  if (observer_interpolation_status == FAILURE_SPATIAL_INTERPOLATION ||
+      observer_interpolation_status == FAILURE_TEMPORAL_INTERPOLATION) {{
+    fprintf(
+        stderr,
+        "ERROR: observer metric interpolation failed with status %d.\n",
+        (int)observer_interpolation_status);
+    exit_status = EXIT_FAILURE;
+    goto cleanup;
+  }} // END IF: observer metric interpolation failed
 
   // Preserve the one interpolated observer metric while the shared initializer
   // constructs and validates the observer tetrad.
@@ -889,38 +922,12 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
           &spatial_context,
           &numerical_window,
           f_temp,
+          status,
           {interpolation_stage_arguments}
           metric,
           rhs_geometry,
           chunk_size,
           stream_idx);
-
-      for (int component = 0; component < 10; ++component) {{
-        if (!isfinite(metric[component])) {{
-          fprintf(
-              stderr,
-              "ERROR: stage %d metric component %d was not finite at t=%e.\n",
-              stage,
-              component,
-              coordinate_time);
-          exit_status = EXIT_FAILURE;
-          goto cleanup;
-        }} // END IF: stage metric component invalid
-      }} // END LOOP: for component over stage metric
-
-      for (int component = 0; component < 40; ++component) {{
-        if (!isfinite(rhs_geometry[component])) {{
-          fprintf(
-              stderr,
-              "ERROR: stage %d geometry component %d was not finite "
-              "at t=%e.\n",
-              stage,
-              component,
-              coordinate_time);
-          exit_status = EXIT_FAILURE;
-          goto cleanup;
-        }} // END IF: stage geometry component invalid
-      }} // END LOOP: for component over stage geometry
 
       calculate_ode_rhs_kernel(
           f_temp,
@@ -977,22 +984,39 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
           &spatial_context,
           &numerical_window,
           f,
+          status,
           {accepted_metric_interpolation_arguments}
           metric,
           NULL,
           chunk_size,
           stream_idx);
 
-      for (int component = 0; component < 10; ++component) {{
-        if (!isfinite(metric[component])) {{
-          fprintf(
-              stderr,
-              "ERROR: accepted-state metric component %d was not finite.\n",
-              component);
-          exit_status = EXIT_FAILURE;
-          goto cleanup;
-        }} // END IF: accepted-state metric component invalid
-      }} // END LOOP: for component over accepted-state metric
+      if (*status == FAILURE_SPATIAL_INTERPOLATION ||
+          *status == FAILURE_TEMPORAL_INTERPOLATION) {{
+        // RKF45 already accepted and committed this state. Preserve it in the
+        // trajectory even though its normalization diagnostic is unavailable.
+        fprintf(
+            trajectory_file,
+            "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
+            {trajectory_lambda_expression},
+            {trajectory_time_expression},
+            f[1],
+            f[2],
+            f[3],
+            f[4],
+            f[5],
+            f[6],
+            f[7],
+            f[8],
+            NAN);
+        fflush(trajectory_file);
+        accepted_steps++;
+        printf(
+            "Accepted-state interpolation failed with status %d; "
+            "preserving the accepted state.\n",
+            (int)*status);
+        break;
+      }} // END IF: accepted-state interpolation failed
 
       {log_energy_evaluation}
       if (!isfinite(log_energy_measure)) {{
@@ -1045,6 +1069,10 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
     else if (*status == FAILURE_RKF45_REJECTION_LIMIT) {{
       printf("RKF45 reached its consecutive-rejection limit.\n");
       break;
+    }} else if (*status == FAILURE_SPATIAL_INTERPOLATION ||
+               *status == FAILURE_TEMPORAL_INTERPOLATION) {{
+      printf("Interpolation failed with status %d.\n", (int)*status);
+      break;
     }} else {{
       fprintf(stderr, "ERROR: unexpected integration status %d.\n", (int)*status);
       exit_status = EXIT_FAILURE;
@@ -1064,7 +1092,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
 
   const int final_status_index = (int)*status;
   const char *final_status_name =
-      (final_status_index >= 0 && final_status_index < 9)
+      (final_status_index >= 0 && final_status_index < 11)
           ? status_names[final_status_index]
           : "UNKNOWN_STATUS";
   printf(
@@ -1090,54 +1118,59 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
           "slot range.\n",
           terminal_coordinate_time);
     }} else {{
+      bool terminal_normalization_ready = true;
       if (terminal_slot_index != mapped_slot_index) {{
         if (time_window_manager_numerical_mmap_for_slot(
                 &numerical_window, &tsm, terminal_slot_index) !=
             TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {{
-          fprintf(
-              stderr,
-              "ERROR: failed to map the terminal normalization time window.\n");
-          exit_status = EXIT_FAILURE;
-          goto cleanup;
-        }} // END IF: terminal normalization time-window mapping failed
-        mapped_slot_index = terminal_slot_index;
+          printf(
+              "Terminal normalization skipped: failed to map its numerical "
+              "time window.\n");
+          terminal_normalization_ready = false;
+        }} else {{
+          mapped_slot_index = terminal_slot_index;
+        }} // END ELSE: terminal normalization time window mapped
       }} // END IF: terminal state changed slot
 
-      numerical_interpolation(
-          &commondata,
-          &numerical_params,
-          &spatial_context,
-          &numerical_window,
-          f,
-          {interpolation_initial_arguments}
-          metric,
-          NULL,
-          chunk_size,
-          stream_idx);
+      if (terminal_normalization_ready) {{
+        // A separate status prevents this optional diagnostic from replacing
+        // the physical termination status established by the evolution.
+        termination_type_t terminal_interpolation_status = ACTIVE;
+        numerical_interpolation(
+            &commondata,
+            &numerical_params,
+            &spatial_context,
+            &numerical_window,
+            f,
+            &terminal_interpolation_status,
+            {interpolation_initial_arguments}
+            metric,
+            NULL,
+            chunk_size,
+            stream_idx);
 
-      for (int component = 0; component < 10; ++component) {{
-        if (!isfinite(metric[component])) {{
-          fprintf(
-              stderr,
-              "ERROR: terminal metric component %d was not finite.\n",
-              component);
-          exit_status = EXIT_FAILURE;
-          goto cleanup;
-        }} // END IF: terminal metric component invalid
-      }} // END LOOP: for component over terminal metric
-
-      normalization_constraint_t normalization;
-      {normalization_kernel_name}(
-          f, metric, &normalization, chunk_size, stream_idx);
-      const double normalization_deviation = {normalization_diagnostic_expression};
-      if (!isfinite(normalization_deviation)) {{
-        fprintf(stderr, "ERROR: terminal normalization deviation was not finite.\n");
-        exit_status = EXIT_FAILURE;
-        goto cleanup;
-      }} // END IF: terminal normalization deviation invalid
-      printf(
-          "Final signed normalization deviation: %.15e\n",
-          normalization_deviation);
+        if (terminal_interpolation_status == FAILURE_SPATIAL_INTERPOLATION ||
+            terminal_interpolation_status == FAILURE_TEMPORAL_INTERPOLATION) {{
+          printf(
+              "Terminal normalization skipped: interpolation failed with "
+              "status %d.\n",
+              (int)terminal_interpolation_status);
+        }} else {{
+          normalization_constraint_t normalization;
+          {normalization_kernel_name}(
+              f, metric, &normalization, chunk_size, stream_idx);
+          const double normalization_deviation =
+              {normalization_diagnostic_expression};
+          if (!isfinite(normalization_deviation)) {{
+            printf(
+                "Terminal normalization skipped: deviation was not finite.\n");
+          }} else {{
+            printf(
+                "Final signed normalization deviation: %.15e\n",
+                normalization_deviation);
+          }} // END ELSE: terminal normalization deviation is finite
+        }} // END ELSE: terminal normalization interpolation succeeded
+      }} // END IF: terminal normalization window available
     }} // END ELSE: terminal state inside window
   }} // END IF: terminal normalization diagnostics were requested
 
@@ -1252,7 +1285,13 @@ if __name__ == "__main__":
         project_dir=project_dir, project_name=PROJECT_NAME
     )
     cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
-        project_name=PROJECT_NAME
+        project_name=PROJECT_NAME,
+        cmdline_inputs=[
+            "tiles_width",
+            "tiles_height",
+            "tile_index_width",
+            "tile_index_height",
+        ],
     )
 
     # Shared RKF45 kernels retain architecture-neutral intrinsic names. These

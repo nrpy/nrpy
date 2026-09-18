@@ -88,6 +88,12 @@ def batch_integrator_numerical(
     True
     >>> "normalization_abs_by_ray[master_idx] = sidecar_norm_err;" in generated
     True
+    >>> "non_terminal_norm_recorded" in generated
+    True
+    >>> "normalization_abs_non_terminal_by_ray" in generated
+    True
+    >>> "!all_photons_host.non_terminal_norm_recorded[m_idx]" in generated
+    True
     >>> "normal_observer_log_energy(" in generated
     False
     >>> "d_f_bundle[current][4 * BUNDLE_CAPACITY + log_energy_i]" in generated
@@ -184,7 +190,10 @@ def batch_integrator_numerical(
                                intersections.
     @param[in] norm_abs_bin_path Optional output filename for the raw float64
                                  absolute direct-scale-equivalent null-constraint
-                                 error sidecar."""
+                                 error sidecar.
+    @param[in] norm_abs_non_terminal_bin_path Optional output filename for the
+                                              sparse accepted-state nonterminal
+                                              normalization sidecar."""
 
     cfunc_type = "void"
 
@@ -194,7 +203,8 @@ def batch_integrator_numerical(
         "commondata_struct *restrict commondata, "
         "long int num_rays, "
         "blueprint_data_t *restrict results_buffer, "
-        "const char *restrict norm_abs_bin_path"
+        "const char *restrict norm_abs_bin_path, "
+        "const char *restrict norm_abs_non_terminal_bin_path"
     )
 
     include_CodeParameters_h = True
@@ -220,6 +230,9 @@ def batch_integrator_numerical(
         "results_buffer, "
         "NULL, "
         "NULL, "
+        "NULL, "
+        "NULL, "
+        "NULL, "
         "0);"
     )
     calc_blueprint_with_norm_abs = (
@@ -229,6 +242,9 @@ def batch_integrator_numerical(
         "results_buffer, "
         "normalization_abs_by_ray, "
         "norm_abs_bin_path, "
+        "normalization_abs_non_terminal_by_ray, "
+        "all_photons_host.non_terminal_norm_recorded, "
+        "norm_abs_non_terminal_bin_path, "
         "0);"
     )
     set_initial_conditions_call = (
@@ -257,6 +273,11 @@ def batch_integrator_numerical(
         "all_photons_host.integration_param[norm_ray]"
         if normalized_eom
         else "all_photons_host.f[0 * num_rays + norm_ray]"
+    )
+    accepted_coordinate_time_bridge = (
+        "integration_param_bridge[current][fin_i]"
+        if normalized_eom
+        else "f_bridge[current][0 * BUNDLE_CAPACITY + fin_i]"
     )
     interpolation_integration_param_args = (
         "d_spatial_stencil_center_i0[current], "
@@ -350,17 +371,19 @@ def batch_integrator_numerical(
                         &numerical_params, trial_cartesian, NULL, trial_native,
                         automatic_center_idx, selected_center_idx) !=
                     TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
-                    fprintf(stderr,
-                            "ERROR: could not resolve a trial spatial center for buffer %d ray %ld.\n",
-                            current, stencil_i);
-                    time_window_manager_numerical_free(&numerical_window);
-                    slot_manager_free(&tsm);
-                    exit(1);
-                } // END IF: current trial spatial center invalid
-                d_spatial_stencil_center_i0[current][stencil_i] =
-                    selected_center_idx[0];
-                d_spatial_stencil_center_i2[current][stencil_i] =
-                    selected_center_idx[2];
+                    // Coordinate inversion belongs to spatial interpolation.
+                    // Mark only this photon; the wrapper will emit NAN scratch
+                    // outputs and the finalizer will preserve its accepted state.
+                    d_status[current][stencil_i] =
+                        FAILURE_SPATIAL_INTERPOLATION;
+                    d_spatial_stencil_center_i0[current][stencil_i] = 0;
+                    d_spatial_stencil_center_i2[current][stencil_i] = 0;
+                } else {
+                    d_spatial_stencil_center_i0[current][stencil_i] =
+                        selected_center_idx[0];
+                    d_spatial_stencil_center_i2[current][stencil_i] =
+                        selected_center_idx[2];
+                } // END ELSE: current trial center resolved
             } // END LOOP: for stencil_i over trial rays
 """
     trial_spatial_center_setup_next = r"""
@@ -376,17 +399,18 @@ def batch_integrator_numerical(
                             &numerical_params, trial_cartesian, NULL, trial_native,
                             automatic_center_idx, selected_center_idx) !=
                         TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
-                        fprintf(stderr,
-                                "ERROR: could not resolve a trial spatial center for buffer %d ray %ld.\n",
-                                next, stencil_i);
-                        time_window_manager_numerical_free(&numerical_window);
-                        slot_manager_free(&tsm);
-                        exit(1);
-                    } // END IF: next trial spatial center invalid
-                    d_spatial_stencil_center_i0[next][stencil_i] =
-                        selected_center_idx[0];
-                    d_spatial_stencil_center_i2[next][stencil_i] =
-                        selected_center_idx[2];
+                        // Coordinate inversion belongs to spatial interpolation.
+                        // Mark only this photon; later stages remain lane-local.
+                        d_status[next][stencil_i] =
+                            FAILURE_SPATIAL_INTERPOLATION;
+                        d_spatial_stencil_center_i0[next][stencil_i] = 0;
+                        d_spatial_stencil_center_i2[next][stencil_i] = 0;
+                    } else {
+                        d_spatial_stencil_center_i0[next][stencil_i] =
+                            selected_center_idx[0];
+                        d_spatial_stencil_center_i2[next][stencil_i] =
+                            selected_center_idx[2];
+                    } // END ELSE: next trial center resolved
                 } // END LOOP: for stencil_i over trial rays
 """
     normalization_kernel_name = (
@@ -428,6 +452,7 @@ def batch_integrator_numerical(
                 &spatial_context,
                 &numerical_window,
                 d_f_bundle[current],
+                d_status[current],
                 d_spatial_stencil_center_i0[current],
                 d_spatial_stencil_center_i2[current],
                 d_metric_bundle[current],
@@ -449,6 +474,7 @@ def batch_integrator_numerical(
                     &spatial_context,
                     &numerical_window,
                     d_f_bundle[next],
+                    d_status[next],
                     d_spatial_stencil_center_i0[next],
                     d_spatial_stencil_center_i2[next],
                     d_metric_bundle[next],
@@ -493,7 +519,166 @@ def batch_integrator_numerical(
                     d_log_energy_bundle[next],
                     active_chunks[next],
                     0);
+        """
+    )
+
+    non_terminal_norm_integration_param_setup = (
+        """
+                    for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {
+                        const long int master_idx = chunk_buffer[0][norm_i];
+                        integration_param_bridge[0][norm_i] =
+                            all_photons_host.non_terminal_norm_coordinate_time[master_idx];
+                    } // END LOOP: load accepted nonterminal coordinate times
+                    memcpy(
+                        d_integration_param_bundle[0],
+                        integration_param_bridge[0],
+                        sizeof(double) * chunk_size);
+        """
+        if normalized_eom
+        else ""
+    )
+
+    # The nonterminal diagnostic deliberately uses the accepted state saved by
+    # the host synchronization path, not the quadratically reconstructed event
+    # state. Keep this separate from event detection: the event manager remains
+    # responsible only for geometric crossing detection and the persistent lock.
+    non_terminal_normalization_block = r"""
+        //==========================================
+        // NONTERMINAL ACCEPTED-STATE NORMALIZATION DIAGNOSTIC
+        //==========================================
+        if (commondata->perform_normalization_check) {
+            TimeSlotManager non_terminal_norm_tsm;
+            long int non_terminal_recorded_count = 0;
+            long int non_terminal_skipped_count = 0;
+            slot_manager_init(
+                &non_terminal_norm_tsm,
+                commondata->slot_manager_t_min,
+                slot_manager_t_max,
+                commondata->slot_manager_delta_t,
+                num_rays);
+
+            for (long int norm_ray = 0; norm_ray < num_rays; ++norm_ray) {
+                if (!all_photons_host.non_terminal_norm_recorded[norm_ray]) {
+                    continue;
+                }
+                non_terminal_recorded_count++;
+                const int norm_slot_idx = slot_get_index(
+                    &non_terminal_norm_tsm,
+                    all_photons_host.non_terminal_norm_coordinate_time[norm_ray]);
+                if (norm_slot_idx < 0) {
+                    non_terminal_skipped_count++;
+                    continue;
+                }
+                slot_add_photon(&non_terminal_norm_tsm, norm_slot_idx, norm_ray);
+            } // END LOOP: bin saved accepted nonterminal states
+
+            for (int norm_slot_idx = non_terminal_norm_tsm.num_slots - 1;
+                 norm_slot_idx >= 0;
+                 --norm_slot_idx) {
+                if (non_terminal_norm_tsm.slot_counts[norm_slot_idx] <= 0) {
+                    continue;
+                }
+                if (time_window_manager_numerical_mmap_for_slot(
+                        &numerical_window,
+                        &non_terminal_norm_tsm,
+                        norm_slot_idx) != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+                    non_terminal_skipped_count +=
+                        non_terminal_norm_tsm.slot_counts[norm_slot_idx];
+                    continue;
+                }
+
+                while (non_terminal_norm_tsm.slot_counts[norm_slot_idx] > 0) {
+                    const long int chunk_size = NRPYMIN(
+                        (long int)BUNDLE_CAPACITY,
+                        non_terminal_norm_tsm.slot_counts[norm_slot_idx]);
+                    slot_remove_chunk(
+                        &non_terminal_norm_tsm,
+                        norm_slot_idx,
+                        chunk_buffer[0],
+                        chunk_size);
+
+                    for (int norm_k = 0; norm_k < 9; ++norm_k) {
+                        for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {
+                            const long int master_idx = chunk_buffer[0][norm_i];
+                            f_bridge[0][norm_k * BUNDLE_CAPACITY + norm_i] =
+                                all_photons_host.non_terminal_norm_f[
+                                    norm_k * num_rays + master_idx];
+                        }
+                    } // END LOOP: copy saved accepted nonterminal states
+
+                    for (int norm_k = 0; norm_k < 9; ++norm_k) {
+                        memcpy(
+                            d_f_bundle[0] + norm_k * BUNDLE_CAPACITY,
+                            f_bridge[0] + norm_k * BUNDLE_CAPACITY,
+                            sizeof(double) * chunk_size);
+                    }
+                    for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {
+                        // This status buffer is diagnostic scratch space. An
+                        // interpolation failure skips only this diagnostic and
+                        // never overwrites the photon's physical termination.
+                        d_status[0][norm_i] = ACTIVE;
+                    }
+{NON_TERMINAL_INTEGRATION_PARAM_SETUP}
+
+                    numerical_interpolation(
+                        commondata,
+                        &numerical_params,
+                        &spatial_context,
+                        &numerical_window,
+                        d_f_bundle[0],
+                        d_status[0],
+                        {INTERPOLATION_TERMINAL_ARGS}
+                        d_metric_bundle[0],
+                        NULL,
+                        chunk_size,
+                        0);
+
+                    {NORMALIZATION_KERNEL_NAME}(
+                        d_f_bundle[0],
+                        d_metric_bundle[0],
+                        d_norm_bundle,
+                        chunk_size,
+                        0);
+
+                    for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {
+                        const long int master_idx = chunk_buffer[0][norm_i];
+                        if (d_status[0][norm_i] == FAILURE_SPATIAL_INTERPOLATION ||
+                            d_status[0][norm_i] == FAILURE_TEMPORAL_INTERPOLATION) {
+                            non_terminal_skipped_count++;
+                            continue;
+                        }
+                        const double current_norm_err = {NORMALIZATION_ERROR_EXPR};
+                        const double sidecar_norm_err = {NORMALIZATION_SIDECAR_ERROR_EXPR};
+                        if (!isfinite(current_norm_err) || !isfinite(sidecar_norm_err)) {
+                            non_terminal_skipped_count++;
+                            continue;
+                        }
+                        normalization_abs_non_terminal_by_ray[master_idx] =
+                            sidecar_norm_err;
+                    } // END LOOP: evaluate accepted nonterminal norms
+                } // END WHILE: evaluate nonterminal normalization slot
+            } // END LOOP: evaluate nonterminal normalization slots
+
+            slot_manager_free(&non_terminal_norm_tsm);
+
+            printf(
+                "Nonterminal accepted-state normalization records: %ld; skipped diagnostics: %ld\n",
+                non_terminal_recorded_count,
+                non_terminal_skipped_count);
+        } // END IF: evaluate accepted-state nonterminal normalization
 """
+    non_terminal_normalization_block = (
+        non_terminal_normalization_block.replace(
+            "{NON_TERMINAL_INTEGRATION_PARAM_SETUP}",
+            non_terminal_norm_integration_param_setup,
+        )
+        .replace(
+            "{INTERPOLATION_TERMINAL_ARGS}",
+            interpolation_terminal_integration_param_args,
+        )
+        .replace("{NORMALIZATION_KERNEL_NAME}", normalization_kernel_name)
+        .replace("{NORMALIZATION_ERROR_EXPR}", normalization_error_expr)
+        .replace("{NORMALIZATION_SIDECAR_ERROR_EXPR}", normalization_sidecar_error_expr)
     )
 
     def memcpy_cpu(dest: str, src: str, size: str) -> str:
@@ -545,6 +730,15 @@ def batch_integrator_numerical(
     {malloc_pinned}(all_photons_host.non_terminal_plane_event_found, sizeof(bool) * num_rays);
     // {pin_comment} the terminal-plane intersection lock.
     {malloc_pinned}(all_photons_host.terminal_plane_event_found, sizeof(bool) * num_rays);
+    // Optional per-ray latch for the first accepted state after a nonterminal crossing.
+    all_photons_host.non_terminal_norm_recorded = NULL;
+    all_photons_host.non_terminal_norm_f = NULL;
+    all_photons_host.non_terminal_norm_coordinate_time = NULL;
+    if (commondata->perform_normalization_check) {{
+        {malloc_pinned}(all_photons_host.non_terminal_norm_recorded, sizeof(bool) * num_rays);
+        {malloc_pinned}(all_photons_host.non_terminal_norm_f, sizeof(double) * 9 * num_rays);
+        {malloc_pinned}(all_photons_host.non_terminal_norm_coordinate_time, sizeof(double) * num_rays);
+    }} // END IF: allocate accepted-state nonterminal normalization storage
 
     // CPU-only numerical integration: direct commondata access and no extra execution-buffer setup.
 
@@ -678,12 +872,16 @@ def batch_integrator_numerical(
     // Host array storing one absolute direct-scale-equivalent null-constraint
     // error per photon in master-ray order.
     double *normalization_abs_by_ray = NULL;
+    // Host array storing the accepted-state nonterminal norm in master-ray order.
+    double *normalization_abs_non_terminal_by_ray = NULL;
 
     if (commondata->perform_normalization_check) {{
         {malloc_device}(d_norm_bundle, sizeof(normalization_constraint_t) * BUNDLE_CAPACITY); // Allocate terminal normalization scratchpad.
         {malloc_pinned}(normalization_abs_by_ray, sizeof(double) * num_rays); // Allocate per-photon direct-scale-equivalent normalization sidecar buffer.
+        {malloc_pinned}(normalization_abs_non_terminal_by_ray, sizeof(double) * num_rays); // Allocate sparse nonterminal normalization values.
         for (long int norm_init_i = 0; norm_init_i < num_rays; ++norm_init_i) {{
             normalization_abs_by_ray[norm_init_i] = NAN; // Marks photons whose terminal normalization was not evaluated.
+            normalization_abs_non_terminal_by_ray[norm_init_i] = NAN; // Marks photons not yet captured after a nonterminal crossing.
         }} // END LOOP: for norm_init_i over num_rays
     }} // END IF: commondata->perform_normalization_check to allocate normalization scratchpad
 
@@ -794,12 +992,16 @@ def batch_integrator_numerical(
     d_f_bundle[0][3 * BUNDLE_CAPACITY] = commondata->observer_z;
 {observer_state_integration_setup}
 
+    // Observer interpolation uses a temporary status because failure here
+    // prevents every ray in the batch from being initialized.
+    termination_type_t observer_interpolation_status = ACTIVE;
     numerical_interpolation(
         commondata,
         &numerical_params,
         &spatial_context,
         &numerical_window,
         d_f_bundle[0],
+        &observer_interpolation_status,
         {interpolation_initial_integration_param_args}
         d_metric_bundle[0],
         NULL,
@@ -810,16 +1012,17 @@ def batch_integrator_numerical(
          ++observer_metric_component) {{
         observer_metric[observer_metric_component] =
             d_metric_bundle[0][observer_metric_component * BUNDLE_CAPACITY];
-        if (!isfinite(observer_metric[observer_metric_component])) {{
-            fprintf(
-                stderr,
-                "ERROR: interpolated observer metric component %d is non-finite.\n",
-                observer_metric_component);
-            time_window_manager_numerical_free(&numerical_window);
-            slot_manager_free(&tsm);
-            exit(1);
-        }} // END IF: observer metric component was invalid
     }} // END LOOP: for observer_metric_component over metric
+
+    if (observer_interpolation_status == FAILURE_SPATIAL_INTERPOLATION ||
+        observer_interpolation_status == FAILURE_TEMPORAL_INTERPOLATION) {{
+        fprintf(stderr,
+                "ERROR: observer interpolation failed with status %d.\n",
+                (int)observer_interpolation_status);
+        time_window_manager_numerical_free(&numerical_window);
+        slot_manager_free(&tsm);
+        exit(1);
+    }} // END IF: observer interpolation failed
 
     // Operates synchronously as the primary state array must be fully
     // populated before pipeline dispatch. The initializer validates the
@@ -993,6 +1196,14 @@ def batch_integrator_numerical(
         all_photons_host.integration_param_p_p[sync_i] = {initial_integration_param}; // Initializes the second preceding integration parameter.
         all_photons_host.non_terminal_plane_event_found[sync_i] = false; // Sets the nonterminal plane intersection logical lock to false.
         all_photons_host.terminal_plane_event_found[sync_i] = false; // Sets the terminal-plane intersection logical lock to false.
+        if (commondata->perform_normalization_check) {{
+            all_photons_host.non_terminal_norm_recorded[sync_i] = false;
+            all_photons_host.non_terminal_norm_coordinate_time[sync_i] = NAN;
+            for (int norm_state_component = 0; norm_state_component < 9; ++norm_state_component) {{
+                all_photons_host.non_terminal_norm_f[
+                    norm_state_component * num_rays + sync_i] = NAN;
+            }} // END LOOP: initialize accepted-state nonterminal norm state
+        }} // END IF: initialize accepted-state nonterminal norm state
 
         int s_idx = slot_get_index(&tsm, {initial_coordinate_time}); // Maps coordinate time to a TimeSlotManager bin.
         if (s_idx != -1) {{
@@ -1133,46 +1344,12 @@ def batch_integrator_numerical(
                     &spatial_context,
                     &numerical_window,
                     d_f_temp_bundle[current],
+                    d_status[current],
                     {interpolation_integration_param_args}
                     d_metric_bundle[current],
                     d_rhs_geometry_bundle[current],
                     active_chunks[current],
                     current);
-                long int bad_interp_current = 0;
-                for (int interp_i = 0; interp_i < active_chunks[current]; ++interp_i) {{
-                    bool bad_interp = false;
-                    for (int interp_c = 0; interp_c < 10; ++interp_c) {{
-                        const double val = d_metric_bundle[current][interp_c * BUNDLE_CAPACITY + interp_i];
-                        if (!isfinite(val)) {{
-                            bad_interp = true;
-                            break;
-                        }} // END IF: metric component invalid
-                    }} // END LOOP: for interp_c over metric components
-                    if (!bad_interp) {{
-                        for (int interp_c = 0; interp_c < 40; ++interp_c) {{
-                            const double val = d_rhs_geometry_bundle[current][interp_c * BUNDLE_CAPACITY + interp_i];
-                            if (!isfinite(val)) {{
-                                bad_interp = true;
-                                break;
-                            }} // END IF: geometry component invalid
-                        }} // END LOOP: for interp_c over geometry components
-                    }} // END IF: metric components finite
-                    if (bad_interp)
-                        bad_interp_current++;
-                }} // END LOOP: for interp_i over active chunks
-                if (bad_interp_current > 0) {{
-                    fprintf(stderr,
-                            "ERROR: Slot %d stage %d buffer %d: %ld rays had "
-                            "nonfinite numerical interpolation output. "
-                            "Aborting numerical batch integration.\n",
-                            slot_idx,
-                            stage,
-                            current,
-                            bad_interp_current);
-                    time_window_manager_numerical_free(&numerical_window);
-                    slot_manager_free(&tsm);
-                    exit(1);
-                }} // END IF: bad_interp_current > 0 to abort
                 // RHS step: compute the geodesic equation derivatives $\dot{{ f}}^\mu$
                 // on the active buffer.
                 calculate_ode_rhs_kernel(d_f_temp_bundle[current], d_metric_bundle[current], d_rhs_geometry_bundle[current], {rhs_integration_param_args} d_k_bundle[current], stage, active_chunks[current]{stream_arg_current});
@@ -1307,46 +1484,12 @@ def batch_integrator_numerical(
                         &spatial_context,
                         &numerical_window,
                         d_f_temp_bundle[next],
+                        d_status[next],
                         {interpolation_integration_param_args_next}
                         d_metric_bundle[next],
                         d_rhs_geometry_bundle[next],
                         active_chunks[next],
                         next);
-                    long int bad_interp_next = 0;
-                    for (int interp_i = 0; interp_i < active_chunks[next]; ++interp_i) {{
-                        bool bad_interp = false;
-                        for (int interp_c = 0; interp_c < 10; ++interp_c) {{
-                            const double val = d_metric_bundle[next][interp_c * BUNDLE_CAPACITY + interp_i];
-                            if (!isfinite(val)) {{
-                                bad_interp = true;
-                                break;
-                            }} // END IF: metric component invalid
-                        }} // END LOOP: for interp_c over metric components
-                        if (!bad_interp) {{
-                            for (int interp_c = 0; interp_c < 40; ++interp_c) {{
-                                const double val = d_rhs_geometry_bundle[next][interp_c * BUNDLE_CAPACITY + interp_i];
-                                if (!isfinite(val)) {{
-                                    bad_interp = true;
-                                    break;
-                                }} // END IF: geometry component invalid
-                            }} // END LOOP: for interp_c over geometry components
-                        }} // END IF: metric components finite
-                        if (bad_interp)
-                            bad_interp_next++;
-                    }} // END LOOP: for interp_i over active chunks
-                    if (bad_interp_next > 0) {{
-                        fprintf(stderr,
-                                "ERROR: Slot %d stage %d buffer %d: %ld rays had "
-                                "nonfinite numerical interpolation output. "
-                                "Aborting numerical batch integration.\n",
-                                slot_idx,
-                                stage,
-                                next,
-                                bad_interp_next);
-                        time_window_manager_numerical_free(&numerical_window);
-                        slot_manager_free(&tsm);
-                        exit(1);
-                    }} // END IF: bad_interp_next > 0 to abort
                     // RHS step: compute the geodesic equation derivatives
                     // $\dot{{ f}}^\mu$ on the alternate buffer.
                     calculate_ode_rhs_kernel(d_f_temp_bundle[next], d_metric_bundle[next], d_rhs_geometry_bundle[next], {rhs_integration_param_args_next} d_k_bundle[next], stage, active_chunks[next]{stream_arg_next});
@@ -1422,6 +1565,23 @@ def batch_integrator_numerical(
                     all_photons_host.integration_param_p_p[m_idx] = integration_param_p_p_bridge[current][fin_i]; // Unpacks the synchronized second preceding integration parameter into the global Host matrix.
                     all_photons_host.non_terminal_plane_event_found[m_idx] = non_terminal_plane_event_found_bridge[current][fin_i]; // Unpacks the synchronized nonterminal-plane lock into the global Host matrix.
                     all_photons_host.terminal_plane_event_found[m_idx] = terminal_plane_event_found_bridge[current][fin_i]; // Unpacks the synchronized terminal-plane lock into the global Host matrix.
+
+                    // Capture the accepted RK state exactly once, immediately
+                    // after the nonterminal crossing latch becomes visible on
+                    // the host. The event manager remains geometry-only; the
+                    // normalization is evaluated later from this saved state.
+                    if (commondata->perform_normalization_check &&
+                        !all_photons_host.non_terminal_norm_recorded[m_idx] &&
+                        all_photons_host.non_terminal_plane_event_found[m_idx]) {{
+                        for (int norm_state_component = 0; norm_state_component < 9; ++norm_state_component) {{
+                            all_photons_host.non_terminal_norm_f[
+                                norm_state_component * num_rays + m_idx] =
+                                f_bridge[current][norm_state_component * BUNDLE_CAPACITY + fin_i];
+                        }} // END LOOP: save accepted crossing state
+                        all_photons_host.non_terminal_norm_coordinate_time[m_idx] =
+                            {accepted_coordinate_time_bridge};
+                        all_photons_host.non_terminal_norm_recorded[m_idx] = true;
+                    }} // END IF: capture first accepted crossing state
                 }} // END LOOP: for fin_i over active_chunks[current]
 
                 // 3. TimeSlotManager State Update (Cache-hot, strictly sequential)
@@ -1552,9 +1712,7 @@ def batch_integrator_numerical(
         //==========================================
         if (commondata->perform_normalization_check) {{
             TimeSlotManager norm_tsm;
-            int normalization_failure_mode = 0;
-            long int normalization_failure_ray = -1;
-            int normalization_failure_slot = -1;
+            long int normalization_skipped_count = 0;
             slot_manager_init(
                 &norm_tsm,
                 commondata->slot_manager_t_min,
@@ -1571,13 +1729,14 @@ def batch_integrator_numerical(
                 const int norm_slot_idx = slot_get_index(
                     &norm_tsm, {terminal_coordinate_time});
                 if (norm_slot_idx < 0) {{
+                    normalization_skipped_count++;
                     continue;
                 }} // END IF: norm_slot_idx < 0 to skip
                 slot_add_photon(&norm_tsm, norm_slot_idx, norm_ray);
             }} // END LOOP: for norm_ray over num_rays
 
             for (int norm_slot_idx = norm_tsm.num_slots - 1;
-                 norm_slot_idx >= 0 && normalization_failure_mode == 0;
+                 norm_slot_idx >= 0;
                  --norm_slot_idx) {{
                 if (norm_tsm.slot_counts[norm_slot_idx] <= 0) {{
                     continue;
@@ -1586,13 +1745,12 @@ def batch_integrator_numerical(
                 if (time_window_manager_numerical_mmap_for_slot(
                         &numerical_window, &norm_tsm, norm_slot_idx) !=
                     TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {{
-                    normalization_failure_mode = 2;
-                    normalization_failure_slot = norm_slot_idx;
-                    break;
+                    normalization_skipped_count +=
+                        norm_tsm.slot_counts[norm_slot_idx];
+                    continue;
                 }} // END IF: terminal normalization mmap fails
 
-                while (norm_tsm.slot_counts[norm_slot_idx] > 0 &&
-                       normalization_failure_mode == 0) {{
+                while (norm_tsm.slot_counts[norm_slot_idx] > 0) {{
                     const long int chunk_size = NRPYMIN(
                         (long int)BUNDLE_CAPACITY, norm_tsm.slot_counts[norm_slot_idx]);
                     slot_remove_chunk(
@@ -1609,6 +1767,12 @@ def batch_integrator_numerical(
                     for (int norm_k = 0; norm_k < 9; ++norm_k) {{
                         {memcpy_cpu("d_f_bundle[0] + norm_k * BUNDLE_CAPACITY", "f_bridge[0] + norm_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size")}
                     }} // END LOOP: for norm_k over 9
+                    for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {{
+                        // This status buffer is diagnostic scratch space. An
+                        // interpolation failure skips only this diagnostic and
+                        // never overwrites the photon's physical termination.
+                        d_status[0][norm_i] = ACTIVE;
+                    }} // END LOOP: for norm_i over chunk_size
 {terminal_integration_param_setup}
 
                     numerical_interpolation(
@@ -1617,6 +1781,7 @@ def batch_integrator_numerical(
                         &spatial_context,
                         &numerical_window,
                         d_f_bundle[0],
+                        d_status[0],
                         {interpolation_terminal_integration_param_args}
                         d_metric_bundle[0],
                         NULL,
@@ -1632,12 +1797,16 @@ def batch_integrator_numerical(
 
                     for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {{
                         const long int master_idx = chunk_buffer[0][norm_i];
+                        if (d_status[0][norm_i] == FAILURE_SPATIAL_INTERPOLATION ||
+                            d_status[0][norm_i] == FAILURE_TEMPORAL_INTERPOLATION) {{
+                            normalization_skipped_count++;
+                            continue;
+                        }} // END IF: interpolation failed for terminal diagnostic
                         const double current_norm_err = {normalization_error_expr};
                         const double sidecar_norm_err = {normalization_sidecar_error_expr};
                         if (!isfinite(current_norm_err) || !isfinite(sidecar_norm_err)) {{
-                            normalization_failure_mode = 3;
-                            normalization_failure_ray = master_idx;
-                            break;
+                            normalization_skipped_count++;
+                            continue;
                         }} // END IF: normalization diagnostic is non-finite
                         normalization_abs_by_ray[master_idx] = sidecar_norm_err;
                         if (current_norm_err > max_err_norm) {{
@@ -1656,25 +1825,6 @@ def batch_integrator_numerical(
 
             slot_manager_free(&norm_tsm);
 
-            if (normalization_failure_mode != 0) {{
-                if (normalization_failure_mode == 1) {{
-                    fprintf(stderr,
-                            "ERROR: terminal normalization diagnostic could not bin photon %ld.\n",
-                            normalization_failure_ray);
-                }} else if (normalization_failure_mode == 2) {{
-                    fprintf(stderr,
-                            "ERROR: failed to map numerical time window for terminal normalization slot %d.\n",
-                            normalization_failure_slot);
-                }} else if (normalization_failure_mode == 3) {{
-                    fprintf(stderr,
-                            "ERROR: terminal normalization diagnostic produced a non-finite constraint for photon %ld.\n",
-                            normalization_failure_ray);
-                }} // END ELSE IF: normalization_failure_mode == 3 to report
-                time_window_manager_numerical_free(&numerical_window);
-                slot_manager_free(&tsm);
-                exit(1);
-            }} // END IF: normalization_failure_mode != 0 to abort
-
             printf("\n=================================================\n");
             printf(" NORMALIZATION DIAGNOSTIC REPORT\n");
             printf("=================================================\n");
@@ -1686,7 +1836,12 @@ def batch_integrator_numerical(
                 "  Max Absolute Error, excluding STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED; FAILURE_RKF45_REJECTION_LIMIT: %e (Ray %ld)\n",
                 max_err_norm_excluding_failures,
                 worst_ray_norm_excluding_failures);
+            printf(
+                "  Skipped terminal normalization diagnostics: %ld\n",
+                normalization_skipped_count);
         }} // END IF: commondata->perform_normalization_check to evaluate terminal normalization
+
+{non_terminal_normalization_block}
 
         // Final output step: process escaped photons intersecting the celestial
         // sphere $r > r_{{escape}}$ and optionally write the direct-scale-equivalent
@@ -1703,6 +1858,7 @@ def batch_integrator_numerical(
         if (commondata->perform_normalization_check) {{
             {free_device}(d_norm_bundle); // Purges the terminal normalization diagnostic scratchpad.
             {free_pinned}(normalization_abs_by_ray); // Purges the per-photon normalization sidecar buffer.
+            {free_pinned}(normalization_abs_non_terminal_by_ray); // Purges the sparse nonterminal normalization values.
         }} // END IF: commondata->perform_normalization_check to purge normalization scratchpad
 
         // Loop iterator $s$ purging the double-buffered arrays across both CPU buffers.
@@ -1762,6 +1918,11 @@ def batch_integrator_numerical(
         {free_pinned}(all_photons_host.integration_param_p_p); // Purges the second preceding Host integration-parameter array.
         {free_pinned}(all_photons_host.non_terminal_plane_event_found); // Purges the primary Host array nonterminal plane intersection lock.
         {free_pinned}(all_photons_host.terminal_plane_event_found); // Purges the primary Host array terminal-plane intersection lock.
+        if (commondata->perform_normalization_check) {{
+            {free_pinned}(all_photons_host.non_terminal_norm_recorded);
+            {free_pinned}(all_photons_host.non_terminal_norm_f);
+            {free_pinned}(all_photons_host.non_terminal_norm_coordinate_time);
+        }} // END IF: purge accepted-state nonterminal normalization storage
 
         // Release the active numerical spacetime window before the slot lattice is destroyed.
         time_window_manager_numerical_free(&numerical_window);

@@ -646,7 +646,8 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
       double previous_time = 0.0;
       uint64_t previous_payload_end = 0ULL;
 
-      if (ntwm == NULL || ntwm->fd < 0 || ntwm->num_time_slices < 2ULL ||
+      if (ntwm == NULL || ntwm->fd < 0 ||
+          ntwm->num_time_slices < (uint64_t)ntwm->temporal_interp_num_points ||
           ntwm->slice_times != NULL ||
           ntwm->num_time_slices > (uint64_t)(SIZE_MAX / sizeof(double)) ||
           ntwm->num_time_slices > (uint64_t)(SIZE_MAX / sizeof(uint64_t))) {
@@ -742,7 +743,8 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
 
       if (!isfinite(slice_times[0]) ||
           !isfinite(slice_times[ntwm->num_time_slices - 1ULL]) ||
-          slice_times[ntwm->num_time_slices - 1ULL] <= slice_times[0] ||
+          (ntwm->num_time_slices > 1ULL &&
+           slice_times[ntwm->num_time_slices - 1ULL] <= slice_times[0]) ||
           previous_payload_end != ntwm->total_file_bytes) {
         free(slice_times);
         free(slice_payload_offsets);
@@ -1180,8 +1182,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
       ntwm->total_file_bytes = time_window_manager_numerical_load_u64(
           header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_TOTAL_FILE_BYTES);
 
-      if (ntwm->num_time_slices < 2ULL ||
-          ntwm->num_time_slices < (uint64_t)ntwm->temporal_interp_num_points ||
+      if (ntwm->num_time_slices < (uint64_t)ntwm->temporal_interp_num_points ||
           ntwm->num_time_slices > (uint64_t)LONG_MAX ||
           ntwm->alignment_bytes == 0ULL ||
           (ntwm->alignment_bytes & (ntwm->alignment_bytes - 1ULL)) != 0ULL ||
@@ -1475,12 +1476,13 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           ntwm->slice_payload_offsets == NULL ||
           ntwm->slice_payload_bytes == NULL ||
           ntwm->time_slice_stride == 0ULL ||
-          ntwm->num_time_slices < 2ULL ||
           ntwm->num_time_slices < (uint64_t)ntwm->temporal_interp_num_points ||
           ntwm->payload_bytes_total == 0ULL ||
           !isfinite(ntwm->slice_times[0]) ||
           !isfinite(ntwm->slice_times[ntwm->num_time_slices - 1ULL]) ||
-          ntwm->slice_times[ntwm->num_time_slices - 1ULL] <= ntwm->slice_times[0])
+          (ntwm->num_time_slices > 1ULL &&
+           ntwm->slice_times[ntwm->num_time_slices - 1ULL] <=
+               ntwm->slice_times[0]))
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
 
       uint64_t first_slice = 0ULL;

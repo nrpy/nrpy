@@ -144,10 +144,7 @@ def iter_blueprint_chunks(
                     f"Blueprint '{filename}' has invalid normalized image coordinates"
                 )
             termination_types = records["termination_type"]
-            if np.any(
-                (termination_types < cfg.STOP_CONDITION_COORD_RADIUS_EXCEEDED)
-                | (termination_types > cfg.FAILURE_GENERIC)
-            ):
+            if np.any(~np.isin(termination_types, cfg.FINAL_TERMINATION_TYPES)):
                 raise ValueError(
                     f"Blueprint '{filename}' has an invalid termination type"
                 )

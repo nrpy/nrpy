@@ -52,6 +52,7 @@ except ImportError:
 # Global variables for zero-copy memory sharing across process workers
 _WORKER_SOURCE_TEX: Optional[npt.NDArray[np.float64]] = None
 _WORKER_SPHERE_TEX: Optional[npt.NDArray[np.float64]] = None
+_DEBUG_STATUS_UNSET = 127
 
 # Fixed high-contrast colors for opt-in termination diagnostics.
 DEBUG_FAILURE_INFO: Tuple[Tuple[int, str, Tuple[int, int, int]], ...] = (
@@ -64,7 +65,18 @@ DEBUG_FAILURE_INFO: Tuple[Tuple[int, str, Tuple[int, int, int]], ...] = (
     (cfg.STOP_CONDITION_T_MAX_EXCEEDED, "STOP_CONDITION_T_MAX_EXCEEDED", (255, 122, 0)),
     (cfg.FAILURE_SLOT_MANAGER_ERROR, "FAILURE_SLOT_MANAGER_ERROR", (182, 255, 0)),
     (cfg.FAILURE_GENERIC, "FAILURE_GENERIC", (0, 229, 255)),
+    (
+        cfg.FAILURE_SPATIAL_INTERPOLATION,
+        "FAILURE_SPATIAL_INTERPOLATION",
+        (0, 128, 255),
+    ),
+    (
+        cfg.FAILURE_TEMPORAL_INTERPOLATION,
+        "FAILURE_TEMPORAL_INTERPOLATION",
+        (128, 0, 255),
+    ),
 )
+DEBUG_FAILURE_TYPES = tuple(failure_info[0] for failure_info in DEBUG_FAILURE_INFO)
 
 
 def _init_worker(
@@ -297,6 +309,8 @@ def _accumulate_ray_hits_jit(
     term_sphere: int,
     term_evolution_measure: int,
     term_fail_generic: int,
+    term_fail_spatial_interpolation: int,
+    term_fail_temporal_interpolation: int,
     enable_debug: bool,
 ) -> None:
     # JIT-compiled core math loop for mapping rays to pixels.
@@ -355,7 +369,11 @@ def _accumulate_ray_hits_jit(
         # Preserve requested integration failures for the opt-in debug overlay.
         if (
             enable_debug
-            and term_evolution_measure <= term <= term_fail_generic
+            and (
+                term_evolution_measure <= term <= term_fail_generic
+                or term == term_fail_spatial_interpolation
+                or term == term_fail_temporal_interpolation
+            )
             and term < local_debug_term_types[py, px]
         ):
             local_debug_term_types[py, px] = term
@@ -395,7 +413,7 @@ def _process_blueprint_tile(
     if enable_debug:
         local_debug_term_types = np.full(
             (output_pixel_height, output_pixel_width),
-            cfg.ACTIVE,
+            _DEBUG_STATUS_UNSET,
             dtype=np.int8,
         )
     else:
@@ -424,6 +442,8 @@ def _process_blueprint_tile(
             cfg.STOP_CONDITION_COORD_RADIUS_EXCEEDED,
             cfg.STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED,
             cfg.FAILURE_GENERIC,
+            cfg.FAILURE_SPATIAL_INTERPOLATION,
+            cfg.FAILURE_TEMPORAL_INTERPOLATION,
             enable_debug,
         )
 
@@ -435,7 +455,7 @@ def _process_blueprint_tile(
     flat_counts = local_count_acc[hit_mask]
 
     if enable_debug:
-        debug_mask = local_debug_term_types < cfg.ACTIVE
+        debug_mask = np.isin(local_debug_term_types, DEBUG_FAILURE_TYPES)
         debug_flat_y, debug_flat_x = np.nonzero(debug_mask)
         debug_flat_term_types = local_debug_term_types[debug_mask]
     else:
@@ -587,7 +607,9 @@ def generate_static_lensed_image(
     )
     if enable_debug:
         debug_term_types = np.full(
-            (output_pixel_height, output_pixel_width), cfg.ACTIVE, dtype=np.int8
+            (output_pixel_height, output_pixel_width),
+            _DEBUG_STATUS_UNSET,
+            dtype=np.int8,
         )
     else:
         debug_term_types = np.empty((0, 0), dtype=np.int8)

@@ -35,9 +35,8 @@ def register_struct_definitions() -> None:
     register_non_terminal_plane_parameters()
 
     macro_defs = r"""
-    #ifndef BUNDLE_CAPACITY
+    #undef BUNDLE_CAPACITY
     #define BUNDLE_CAPACITY 1
-    #endif
     """
     BHaH_defines_h.register_BHaH_defines("single_photon_macros", macro_defs)
 
@@ -55,13 +54,35 @@ def single_integrator_analytical(
     :param spacetime: The background spacetime descriptor.
     :param particle: The test-particle type.
     :param normalized_eom: Whether to use normalized photon evolution.
-    :raises ValueError: If normalized photon evolution is requested.
-    """
-    if normalized_eom:
-        raise ValueError(
-            "single_integrator_analytical supports direct geodesic evolution only."
-        )
 
+    Doctests:
+    >>> import nrpy.c_function as cfc
+    >>> import nrpy.params as par
+    >>> import os
+    >>> import tempfile
+    >>> from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import rkf45_finalize_and_control_kernel
+    >>> cache_dir = tempfile.TemporaryDirectory()
+    >>> os.environ["XDG_CACHE_HOME"] = cache_dir.name
+    >>> par.set_parval_from_str("Infrastructure", "BHaH")
+    >>> par.set_parval_from_str("parallelization", "openmp")
+    >>> cfc.CFunction_dict.clear()
+    >>> rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
+    ...     normalized_eom=True
+    ... )
+    >>> single_integrator_analytical(
+    ...     "BrillLindquist_InitialData_Static_Cartesian",
+    ...     "photon",
+    ...     normalized_eom=True,
+    ... )
+    >>> generated = cfc.CFunction_dict["single_integrator_analytical"].full_function
+    >>> "photon_momentum_to_normalized_kernel(" in generated
+    True
+    >>> "normalization_constraint_photon_normalized(" in generated
+    True
+    >>> "integration_param, h," in generated
+    True
+    >>> cache_dir.cleanup()
+    """
     register_struct_definitions()
     # The shared initializer expects the batch tiling contract.  This
     # standalone path is fixed to one tile containing one ray; the active
@@ -106,6 +127,93 @@ conserved-quantity diagnostics.
     name = "single_integrator_analytical"
     params = "int argc, const char *argv[]"
 
+    if spacetime == "KerrSchild_Cartesian":
+        conserved_quantity_q_report = r"""
+    printf("  Delta Q  = %.4e\n", fabs(cq_final.Q - cq_init.Q));
+"""
+    else:
+        conserved_quantity_q_report = r"""
+    printf("  Delta Q  = not defined for this spacetime.\n");
+"""
+
+    if normalized_eom:
+        conserved_quantity_q_report = ""
+        conserved_quantity_initialization = ""
+        conserved_quantity_finalization = ""
+        initial_integration_parameter = "commondata.t_start"
+        trajectory_lambda_expression = "f[0]"
+        trajectory_time_expression = "*integration_param"
+        rhs_integration_arguments = "integration_param, h,"
+        log_energy_evaluation = "const double log_energy_measure = f[4];"
+        normalization_kernel_name = "normalization_constraint_photon_normalized"
+        normalization_error_expression = "fabs(norm_final.C - 1.0)"
+        initial_normalization_check = r"""
+    normalization_constraint_t norm_initial;
+    normalization_constraint_photon_normalized(
+      f, metric, &norm_initial, chunk_size, stream_idx
+    );
+    if (!isfinite(norm_initial.C) || fabs(norm_initial.C - 1.0) > 1.0e-9) {
+      fprintf(stderr, "ERROR: initial normalized photon constraint is invalid.\n");
+      exit_status = EXIT_FAILURE;
+      goto cleanup;
+    }
+"""
+        normalized_history_allocations = r"""
+    BHAH_MALLOC(integration_param_p, sizeof(double));
+    BHAH_MALLOC(integration_param_p_p, sizeof(double));
+"""
+        normalized_history_declarations = r"""
+    double *integration_param_p = NULL;
+    double *integration_param_p_p = NULL;
+"""
+        normalized_history_assignment = r"""
+    all_photons.integration_param_p = integration_param_p;
+    all_photons.integration_param_p_p = integration_param_p_p;
+"""
+        normalized_history_initialization = r"""
+    *integration_param_p = commondata.t_start;
+    *integration_param_p_p = commondata.t_start;
+"""
+        normalized_history_cleanup = r"""
+    BHAH_FREE(integration_param_p);
+    BHAH_FREE(integration_param_p_p);
+"""
+        normalized_history_failure_check = r"""
+        integration_param_p == NULL || integration_param_p_p == NULL ||
+"""
+    else:
+        conserved_quantity_initialization = rf"""
+    conserved_quantities_t cq_init;
+    calculate_conserved_quantities_universal_{spacetime}_{particle}(
+      &commondata, &all_photons, num_rays, &cq_init
+    );
+"""
+        conserved_quantity_finalization = rf"""
+    conserved_quantities_t cq_final;
+    calculate_conserved_quantities_universal_{spacetime}_{particle}(
+      &commondata, &all_photons, num_rays, &cq_final
+    );
+"""
+        initial_integration_parameter = "0.0"
+        trajectory_lambda_expression = "*integration_param"
+        trajectory_time_expression = "f[0]"
+        rhs_integration_arguments = ""
+        log_energy_evaluation = r"""
+        normal_observer_log_energy(
+          f, metric, log_energy_bundle, chunk_size, stream_idx
+        );
+        const double log_energy_measure = log_energy_bundle[0];
+"""
+        normalization_kernel_name = "normalization_constraint_photon"
+        normalization_error_expression = "fabs(norm_final.C)"
+        initial_normalization_check = ""
+        normalized_history_allocations = ""
+        normalized_history_declarations = ""
+        normalized_history_assignment = ""
+        normalized_history_initialization = ""
+        normalized_history_cleanup = ""
+        normalized_history_failure_check = ""
+
     body = rf"""
     // ==========================================
     // STRUCTURAL SETUP & PARAMETERS
@@ -136,7 +244,7 @@ conserved-quantity diagnostics.
     FILE *fp = NULL;
 
     printf("Starting Split-Pipeline Geodesic Integrator...\n");
-    printf("spacetime: {spacetime}, M=%.2f, a=%.2f\n", commondata.M_scale, commondata.a_spin);
+    printf("spacetime: {spacetime}\n");
 
     // ==========================================
     // GLOBAL MEMORY ALLOCATION
@@ -152,6 +260,7 @@ conserved-quantity diagnostics.
     int *rejection_retries = NULL;
     termination_type_t *status = NULL;
     double *log_energy_bundle = NULL;
+{normalized_history_declarations}
 
     BHAH_MALLOC(f, 9 * sizeof(double));
     BHAH_MALLOC(f_base, 9 * sizeof(double));
@@ -164,11 +273,13 @@ conserved-quantity diagnostics.
     BHAH_MALLOC(rejection_retries, sizeof(int));
     BHAH_MALLOC(status, sizeof(termination_type_t));
     BHAH_MALLOC(log_energy_bundle, sizeof(double));
+{normalized_history_allocations}
 
     if (f == NULL || f_base == NULL || f_temp == NULL || metric == NULL ||
         connection == NULL || k_bundle == NULL || integration_param == NULL ||
         h == NULL || rejection_retries == NULL || status == NULL ||
-        log_energy_bundle == NULL) {{
+        log_energy_bundle == NULL ||
+{normalized_history_failure_check}        false) {{
       fprintf(stderr, "Error: failed to allocate photon state buffers.\n");
       exit_status = EXIT_FAILURE;
       goto cleanup;
@@ -178,6 +289,7 @@ conserved-quantity diagnostics.
     all_photons.f = f;
     all_photons.h = h;
     all_photons.integration_param = integration_param;
+{normalized_history_assignment}
 
     // ==========================================
     // INITIAL CONDITIONS
@@ -200,7 +312,8 @@ conserved-quantity diagnostics.
     commondata.tile_index_width = 0;
     commondata.tile_index_height = 0;
     commondata.scan_density = 1;
-    *integration_param = 0.0;
+    *integration_param = {initial_integration_parameter};
+{normalized_history_initialization}
     *h = commondata.initial_h;
     *rejection_retries = 0;
     *status = ACTIVE;
@@ -215,6 +328,8 @@ conserved-quantity diagnostics.
     set_initial_conditions_kernel(
       &commondata, num_rays, &all_photons, metric, observer_tetrad
     );
+{"    photon_momentum_to_normalized_kernel(\n      f, metric, chunk_size, stream_idx\n    );" if normalized_eom else ""}
+{initial_normalization_check}
 
     printf("Initial State:\n");
     printf("  Pos (%.4f, %.4f, %.4f)\n", f[1], f[2], f[3]);
@@ -223,10 +338,7 @@ conserved-quantity diagnostics.
     // ==========================================
     // PRE-INTEGRATION DIAGNOSTICS
     // ==========================================
-    conserved_quantities_t cq_init;
-    calculate_conserved_quantities_universal_{spacetime}_{particle}(
-      &commondata, &all_photons, num_rays, &cq_init
-    );
+{conserved_quantity_initialization}
 
     fp = fopen("trajectory.txt", "w");
     if (fp == NULL) {{
@@ -253,7 +365,8 @@ conserved-quantity diagnostics.
           &commondata, f_temp, metric, connection, chunk_size, stream_idx
         );
         calculate_ode_rhs_kernel(
-          f_temp, metric, connection, k_bundle, stage, chunk_size, stream_idx
+          f_temp, metric, connection, {rhs_integration_arguments}
+          k_bundle, stage, chunk_size, stream_idx
         );
 
         if (stage < 6)
@@ -279,10 +392,7 @@ conserved-quantity diagnostics.
         interpolation_kernel_{spacetime}(
           &commondata, f, metric, NULL, chunk_size, stream_idx
         );
-        normal_observer_log_energy(
-          f, metric, log_energy_bundle, chunk_size, stream_idx
-        );
-        const double log_energy_measure = log_energy_bundle[0];
+{log_energy_evaluation}
         if (!isfinite(log_energy_measure)) {{
           fprintf(stderr, "ERROR: accepted-state log-energy measure was not finite.\n");
           exit_status = EXIT_FAILURE;
@@ -292,8 +402,8 @@ conserved-quantity diagnostics.
         fprintf(
           fp,
           "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
-          *integration_param,
-          f[0],
+          {trajectory_lambda_expression},
+          {trajectory_time_expression},
           f[1],
           f[2],
           f[3],
@@ -337,24 +447,20 @@ conserved-quantity diagnostics.
     // ==========================================
     // POST-INTEGRATION DIAGNOSTICS
     // ==========================================
-    conserved_quantities_t cq_final;
-    calculate_conserved_quantities_universal_{spacetime}_{particle}(
-      &commondata, &all_photons, num_rays, &cq_final
-    );
+{conserved_quantity_finalization}
 
     normalization_constraint_t norm_final;
     interpolation_kernel_{spacetime}(
       &commondata, f, metric, NULL, chunk_size, stream_idx
     );
-    normalization_constraint_photon(
+    {normalization_kernel_name}(
       f, metric, &norm_final, chunk_size, stream_idx
     );
 
-    printf("\nFinal normalization constraint: |C| = %.4e\n", fabs(norm_final.C));
-    printf("Conservation Absolute Errors:\n");
-    printf("  Delta E  = %.4e\n", fabs(cq_final.E - cq_init.E));
-    printf("  Delta Lz = %.4e\n", fabs(cq_final.Lz - cq_init.Lz));
-    printf("  Delta Q  = %.4e\n", fabs(cq_final.Q - cq_init.Q));
+    printf("\nFinal normalization constraint error = %.4e\n",
+           {normalization_error_expression});
+{("    printf(\"Conservation Absolute Errors are not reported for normalized EOM.\\n\");" if normalized_eom else "    printf(\"Conservation Absolute Errors:\\n\");\n    printf(\"  Delta E  = %.4e\\n\", fabs(cq_final.E - cq_init.E));\n    printf(\"  Delta Lz = %.4e\\n\", fabs(cq_final.Lz - cq_init.Lz));")}
+{conserved_quantity_q_report}
 
     cleanup:
     if (fp != NULL)
@@ -370,6 +476,7 @@ conserved-quantity diagnostics.
     BHAH_FREE(rejection_retries);
     BHAH_FREE(status);
     BHAH_FREE(log_energy_bundle);
+{normalized_history_cleanup}
 
     return exit_status;
     """

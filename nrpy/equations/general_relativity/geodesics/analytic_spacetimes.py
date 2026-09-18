@@ -52,6 +52,11 @@ class AnalyticSpacetimes:
 
         if self.spacetime_name == "KerrSchild_Cartesian":
             self.g4DD, self.xx = self._define_kerr_metric_Cartesian_Kerr_Schild()
+        elif self.spacetime_name == "BrillLindquist_InitialData_Static_Cartesian":
+            (
+                self.g4DD,
+                self.xx,
+            ) = self._define_brill_lindquist_initial_data_static_Cartesian()
         else:
             raise ValueError(f"Spacetime '{self.spacetime_name}' is not supported.")
 
@@ -122,6 +127,37 @@ class AnalyticSpacetimes:
 
         return g4DD, xx
 
+    @staticmethod
+    def _define_brill_lindquist_initial_data_static_Cartesian() -> (
+        Tuple[List[List[sp.Expr]], List[sp.Symbol]]
+    ):
+        """
+        Define the static coincident-hole Brill-Lindquist metric.
+
+        The coincident Brill-Lindquist initial data reduce to a static
+        Schwarzschild spacetime in isotropic Cartesian coordinates. This
+        recipe is therefore restricted to the coincident-hole configuration;
+        separated Brill-Lindquist data do not define a static four-metric.
+
+        :return: A tuple (g4DD, xx), where g4DD is the symbolic 4-metric and
+                 xx is the list of coordinate variables (t, x, y, z).
+        """
+        t, x, y, z = sp.symbols("t x y z", real=True)
+        xx = [t, x, y, z]
+
+        M_total = par.register_CodeParameter(
+            "REAL", __name__, "M_total", 1.0, commondata=True
+        )
+        isotropic_radius = sp.sqrt(x**2 + y**2 + z**2)
+        psi = sp.sympify(1) + M_total / (2 * isotropic_radius)
+
+        g4DD = ixp.zerorank2(dimension=4)
+        g4DD[0][0] = -(psi ** (-4))
+        for spatial_index in range(1, 4):
+            g4DD[spatial_index][spatial_index] = psi**4
+
+        return g4DD, xx
+
 
 class AnalyticSpacetimes_dict(Dict[str, "AnalyticSpacetimes"]):
     """A caching dictionary for AnalyticSpacetimes instances."""
@@ -163,6 +199,7 @@ if __name__ == "__main__":
     # Use a distinct loop variable name to avoid pylint redefined-outer-name warnings.
     for spacetime_name_str in [
         "KerrSchild_Cartesian",
+        "BrillLindquist_InitialData_Static_Cartesian",
     ]:
         spacetimes = Analytic_Spacetimes[spacetime_name_str]
         results_dict = ve.process_dictionary_of_expressions(

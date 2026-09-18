@@ -75,6 +75,13 @@ def register_CFunction_numerical_interpolation(
     nodes by reusing the final selected numerical slice, and then perform
     ordinary temporal interpolation on the reconstructed full stencil.
 
+    Ray-local failures are classified at their owning stage. Spatial helper or
+    spatial-output failures receive ``FAILURE_SPATIAL_INTERPOLATION``;
+    temporal-stencil or temporal-output failures receive
+    ``FAILURE_TEMPORAL_INTERPOLATION``. Failed rays receive deterministic
+    ``NAN`` scratch outputs so later lane-independent RKF45 work cannot consume
+    uninitialized memory.
+
     :param CoordSystem: Coordinate system used by the mapped numerical dataset;
         must be `"SinhCylindricalv2n2"`.
     :param interpolation_method: Geometry payload method to generate.
@@ -261,6 +268,7 @@ independently ray-by-ray.
 @param[in] spatial_context Trusted azimuthal-symmetry spatial interpolation context.
 @param[in] numerical_window Active mapped numerical time-window manager.
 @param[in] d_f_bundle Photon state bundle.
+@param[in,out] d_status Per-ray integration status bundle.
 {spatial_center_desc}{integration_parameter_desc}@param[out] d_metric_bundle Destination metric bundle.
 @param[out] d_rhs_geometry_bundle Destination 40-component geometry bundle, or NULL.
 @param chunk_size Number of active rays in the chunk.
@@ -275,6 +283,7 @@ independently ray-by-ray.
                 const azimuthal_symmetry_spatial_lagrange_context_struct *restrict spatial_context,
                 const NumericalTimeWindowManager *restrict numerical_window,
                 const double *restrict d_f_bundle,
+                termination_type_t *restrict d_status,
                 {spatial_center_params}
                 {integration_parameter_params}
                 double *restrict d_metric_bundle,
@@ -301,20 +310,18 @@ independently ray-by-ray.
   const REAL t_numerical_end = (REAL)commondata->t_numerical_end;
   const REAL dt_numerical_spacetime_data =
       (REAL)commondata->dt_numerical_spacetime_data;
-  // Step 0: Validate the mapped numerical window pointers before reading any
-  // of their fields.
+  // Step 0: Reject shared caller/configuration errors before per-ray work.
+  if (d_status == NULL) {
+    fprintf(stderr,
+            "ERROR: numerical_interpolation requires a non-NULL status bundle.\n");
+    exit(1);
+  } // END IF: status bundle missing
   if (numerical_window == NULL || numerical_window->slice_times == NULL ||
       numerical_window->num_time_slices < 1ULL ||
       numerical_window->time_slice_stride == 0ULL) {
-    #pragma omp parallel for
-    for (long int i = 0; i < chunk_size; i++) {
-      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
-        d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
-      if (d_rhs_geometry_bundle != NULL)
-        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
-          d_rhs_geometry_bundle[IDX_RHS_GEOMETRY(comp, i)] = NAN;
-    } // END LOOP: for i over rays
-    return;
+    fprintf(stderr,
+            "ERROR: numerical_interpolation received invalid mapped-window metadata.\n");
+    exit(1);
   } // END IF: mapped window metadata invalid
   const uint64_t first_slice_index = 0ULL;
   const uint64_t final_slice_index =
@@ -342,15 +349,9 @@ independently ray-by-ray.
       selected_slice_dt <= 0.0 ||
       !isfinite((double)t_final_numerical_slice) ||
       t_numerical_initial >= t_numerical_end) {
-    #pragma omp parallel for
-    for (long int i = 0; i < chunk_size; i++) {
-      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
-        d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
-      if (d_rhs_geometry_bundle != NULL)
-        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
-          d_rhs_geometry_bundle[IDX_RHS_GEOMETRY(comp, i)] = NAN;
-    } // END LOOP: for i over rays
-    return;
+    fprintf(stderr,
+            "ERROR: numerical_interpolation received inconsistent temporal bounds or stencil metadata.\n");
+    exit(1);
   } // END IF: temporal bounds or mapped stencil
   if (fabs((double)(t_numerical_end - t_final_numerical_slice)) >
       (double)t_numerical_end_tolerance) {
@@ -364,19 +365,23 @@ independently ray-by-ray.
   } // END IF: t_numerical_end mismatched final slice
   const int temporal_num_points = 2 * temporal_half_width + 1;
   if (temporal_num_points != numerical_window->temporal_interp_num_points) {
-    #pragma omp parallel for
-    for (long int i = 0; i < chunk_size; i++) {
+    fprintf(stderr,
+            "ERROR: numerical_interpolation temporal stencil size disagrees with the mapped window.\n");
+    exit(1);
+  } // END IF: runtime stencil size mismatched
+
+  #pragma omp parallel for
+  for (long int i = 0; i < chunk_size; i++) {
+    if (d_status[i] == FAILURE_SPATIAL_INTERPOLATION ||
+        d_status[i] == FAILURE_TEMPORAL_INTERPOLATION) {
       for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
         d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
       if (d_rhs_geometry_bundle != NULL)
         for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
           d_rhs_geometry_bundle[IDX_RHS_GEOMETRY(comp, i)] = NAN;
-    } // END LOOP: for i over rays
-    return;
-  } // END IF: runtime stencil size mismatched
+      continue;
+    } // END IF: ray already failed interpolation
 
-  #pragma omp parallel for
-  for (long int i = 0; i < chunk_size; i++) {
     double f_local[9];
     for (int comp = 0; comp < 9; comp++)
       f_local[comp] = d_f_bundle[IDX_F(comp, i)];
@@ -385,7 +390,7 @@ independently ray-by-ray.
     const REAL y = (REAL)f_local[2];
     const REAL z = (REAL)f_local[3];
 {spatial_center_setup}
-    int ray_failed = 0;
+    termination_type_t interpolation_failure = ACTIVE;
     uint64_t available_slice_indices[temporal_num_points];
     REAL available_slice_times[temporal_num_points];
     const double *available_slice_payloads[temporal_num_points];
@@ -403,43 +408,63 @@ independently ray-by-ray.
     REAL geometry_missing_local[TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT] = {0};
 
     // Step 1: Dispatch directly to a static numerical endpoint when this ray
-    // is outside the mixed temporal-interpolation region. At and below the
-    // authoritative first stored slice time, interpolate that slice in space
-    // only. The g4DD_d0 endpoint branch zeroes stored metric derivatives;
-    // GammaUDD reuses stored Christoffels. At or above the final selected slice
-    // time, likewise use the final slice in space only.
+    // is outside the mixed temporal-interpolation region. Endpoint payload
+    // lookup is temporal-data management; interpolation and output validation
+    // remain spatial because no temporal interpolation occurs there.
     if (t <= t_numerical_initial) {
       const double *first_slice_payloads[1];
       first_slice_payloads[0] =
           time_window_manager_numerical_grid_ptr(numerical_window, first_slice_index);
       if (first_slice_payloads[0] == NULL) {
-        ray_failed = 1;
+        interpolation_failure = FAILURE_TEMPORAL_INTERPOLATION;
       } else {
         const int spatial_status =
             {spatial_name}(
                 spatial_context, commondata, params, x, y, z,
                 {fixed_spatial_center_argument}
                 1, first_slice_payloads, g4dd_local, geometry_local);
-        if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
-          ray_failed = 1;
+        if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
+          interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
+        } else {
 {static_geometry_update}
-      } // END ELSE: first numerical slice selected
+          for (int comp = 0;
+               comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
+            if (!isfinite((double)g4dd_local[comp]))
+              interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
+          if (d_rhs_geometry_bundle != NULL)
+            for (int comp = 0;
+                 comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
+              if (!isfinite((double)geometry_local[comp]))
+                interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
+        } // END ELSE: first endpoint spatial output
+      } // END ELSE: first endpoint payload available
     } else if (t >= t_final_numerical_slice) {
       const double *final_slice_payloads[1];
       final_slice_payloads[0] =
           time_window_manager_numerical_grid_ptr(numerical_window, final_slice_index);
       if (final_slice_payloads[0] == NULL) {
-        ray_failed = 1;
+        interpolation_failure = FAILURE_TEMPORAL_INTERPOLATION;
       } else {
         const int spatial_status =
             {spatial_name}(
                 spatial_context, commondata, params, x, y, z,
                 {fixed_spatial_center_argument}
                 1, final_slice_payloads, g4dd_local, geometry_local);
-        if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
-          ray_failed = 1;
+        if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
+          interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
+        } else {
 {static_geometry_update}
-      } // END ELSE: final numerical slice selected
+          for (int comp = 0;
+               comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
+            if (!isfinite((double)g4dd_local[comp]))
+              interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
+          if (d_rhs_geometry_bundle != NULL)
+            for (int comp = 0;
+                 comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
+              if (!isfinite((double)geometry_local[comp]))
+                interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
+        } // END ELSE: final endpoint spatial output
+      } // END ELSE: final endpoint payload available
     } else {
       // Step 2: Recover one adaptive numerical stencil from the slot-level
       // time window shared by the whole chunk.
@@ -451,78 +476,99 @@ independently ray-by-ray.
       if (window_status != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS ||
           num_available_slices <= 0 ||
           num_available_slices + num_missing_slices != temporal_num_points) {
-        ray_failed = 1;
+        interpolation_failure = FAILURE_TEMPORAL_INTERPOLATION;
       } else {
         // Step 3: Interpolate only the available mapped numerical slices in
-        // space at the photon position.
+        // space at the photon position, then validate those spatial outputs
+        // before temporal reconstruction can propagate a failure.
         const int spatial_status =
             {spatial_name}(
                 spatial_context, commondata, params, x, y, z,
                 {fixed_spatial_center_argument}
                 num_available_slices, available_slice_payloads, g4dd_available,
                 geometry_available);
-        if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
-          ray_failed = 1;
-        else {
-          int missing_is_upper = 0;
-          int missing_is_lower = 0;
+        if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
+          interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
+        } else {
+          for (int comp = 0;
+               comp < num_available_slices * TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT;
+               comp++)
+            if (!isfinite((double)g4dd_available[comp]))
+              interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
+          if (d_rhs_geometry_bundle != NULL)
+            for (int comp = 0;
+                 comp < num_available_slices * TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT;
+                 comp++)
+              if (!isfinite((double)geometry_available[comp]))
+                interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
+        } // END ELSE: available spatial outputs returned
 
-          // Step 4: Centered lower-boundary stencils pad their missing negative
-          // time nodes from the static first numerical slice. Freeze the final
-          // selected numerical slice for ordinary upper missing nodes.
-          if (num_missing_slices > 0) {
-            missing_is_upper =
-                missing_slice_times[0] >
-                available_slice_times[num_available_slices - 1];
-            missing_is_lower =
-                missing_slice_times[num_missing_slices - 1] <
-                available_slice_times[0];
+        int missing_is_upper = 0;
+        int missing_is_lower = 0;
 
-            if (missing_is_upper == missing_is_lower) {
-              ray_failed = 1;
+        // Step 4: Centered lower-boundary stencils pad their missing negative
+        // time nodes from the static first numerical slice. Freeze the final
+        // selected numerical slice for ordinary upper missing nodes.
+        if (interpolation_failure == ACTIVE && num_missing_slices > 0) {
+          missing_is_upper =
+              missing_slice_times[0] >
+              available_slice_times[num_available_slices - 1];
+          missing_is_lower =
+              missing_slice_times[num_missing_slices - 1] <
+              available_slice_times[0];
+
+          if (missing_is_upper == missing_is_lower) {
+            interpolation_failure = FAILURE_TEMPORAL_INTERPOLATION;
+          } else if (missing_is_upper) {
+            const int last_available_slot = num_available_slices - 1;
+            if (available_slice_indices[last_available_slot] != final_slice_index) {
+              interpolation_failure = FAILURE_TEMPORAL_INTERPOLATION;
             } else {
-              if (missing_is_upper) {
-                const int last_available_slot = num_available_slices - 1;
-                if (available_slice_indices[last_available_slot] != final_slice_index) {
-                  ray_failed = 1;
-                } else {
-                  for (int comp = 0;
-                       comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++) {
-                    g4dd_missing_local[comp] =
-                        G4_SLICE(g4dd_available, last_available_slot, comp);
-                  } // END LOOP: for comp over upper frozen
-                  for (int comp = 0;
-                       comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++) {
-                    geometry_missing_local[comp] =
-                        GEOMETRY_SLICE(geometry_available, last_available_slot, comp);
-                  } // END LOOP: for comp over upper frozen
-                } // END ELSE: upper missing stencil edge reached
+              for (int comp = 0;
+                   comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
+                g4dd_missing_local[comp] =
+                    G4_SLICE(g4dd_available, last_available_slot, comp);
+              for (int comp = 0;
+                   comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
+                geometry_missing_local[comp] =
+                    GEOMETRY_SLICE(geometry_available, last_available_slot, comp);
+            } // END ELSE: upper endpoint payload valid
+          } else {
+            const double *first_slice_payloads[1];
+            first_slice_payloads[0] =
+                time_window_manager_numerical_grid_ptr(
+                    numerical_window, first_slice_index);
+            if (first_slice_payloads[0] == NULL) {
+              interpolation_failure = FAILURE_TEMPORAL_INTERPOLATION;
+            } else {
+              const int first_slice_spatial_status =
+                  {spatial_name}(
+                      spatial_context, commondata, params, x, y, z,
+                      {fixed_spatial_center_argument}
+                      1, first_slice_payloads, g4dd_missing_local,
+                      geometry_missing_local);
+              if (first_slice_spatial_status !=
+                  AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
+                interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
               } else {
-                const double *first_slice_payloads[1];
-                first_slice_payloads[0] =
-                    time_window_manager_numerical_grid_ptr(
-                        numerical_window, first_slice_index);
-                if (first_slice_payloads[0] == NULL) {
-                  ray_failed = 1;
-                } else {
-                  const int first_slice_spatial_status =
-                      {spatial_name}(
-                          spatial_context, commondata, params, x, y, z,
-                          {fixed_spatial_center_argument}
-                          1, first_slice_payloads, g4dd_missing_local,
-                          geometry_missing_local);
-                  if (first_slice_spatial_status !=
-                      AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
-                    ray_failed = 1;
-                } // END ELSE: first numerical slice selected
-              } // END ELSE: lower missing edge reconstructed
-            } // END ELSE: one-sided stencil classification valid
-          } // END IF: missing stencil nodes present
+                for (int comp = 0;
+                     comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
+                  if (!isfinite((double)g4dd_missing_local[comp]))
+                    interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
+                if (d_rhs_geometry_bundle != NULL)
+                  for (int comp = 0;
+                       comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
+                    if (!isfinite((double)geometry_missing_local[comp]))
+                      interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
+              } // END ELSE: lower spatial outputs returned
+            } // END ELSE: first endpoint payload available
+          } // END ELSE: lower edge reconstruction
+        } // END IF: missing temporal nodes present
 
-          if (!ray_failed) {
-            // Step 5: Reconstruct the full ordered temporal stencil expected
-            // by the temporal interpolation helper.
-            if (num_missing_slices > 0 && missing_is_lower) {
+        if (interpolation_failure == ACTIVE) {
+          // Step 5: Reconstruct the full ordered temporal stencil expected
+          // by the temporal interpolation helper.
+          if (num_missing_slices > 0 && missing_is_lower) {
               for (int s = 0; s < num_missing_slices; s++) {
                 full_slice_times[s] = missing_slice_times[s];
                 for (int comp = 0;
@@ -576,29 +622,41 @@ independently ray-by-ray.
                       geometry_missing_local[comp];
                 } // END LOOP: for comp over upper missing
               } // END LOOP: for s over upper missing
-            } // END ELSE: upper missing edge or fully
-          } // END IF: ordered stencil reconstruction valid
+          } // END ELSE: upper or full stencil
+        } // END IF: spatial interpolation succeeded
 
-          if (!ray_failed) {
-            // Step 6: Interpolate the reconstructed stencil in physical time.
-            const int temporal_status = temporal_lagrange_interpolation(
-                commondata, full_slice_times, g4dd_slices, geometry_slices, t,
-                g4dd_local, geometry_local);
-            if (temporal_status != TEMPORAL_LAGRANGE_INTERP_SUCCESS)
-              ray_failed = 1;
-          } // END IF: reconstructed stencil ready
-        } // END ELSE: spatial interpolation succeeded
+        if (interpolation_failure == ACTIVE) {
+          // Step 6: Interpolate the reconstructed stencil in physical time and
+          // validate the final values separately from spatial intermediates.
+          const int temporal_status = temporal_lagrange_interpolation(
+              commondata, full_slice_times, g4dd_slices, geometry_slices, t,
+              g4dd_local, geometry_local);
+          if (temporal_status != TEMPORAL_LAGRANGE_INTERP_SUCCESS) {
+            interpolation_failure = FAILURE_TEMPORAL_INTERPOLATION;
+          } else {
+            for (int comp = 0;
+                 comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
+              if (!isfinite((double)g4dd_local[comp]))
+                interpolation_failure = FAILURE_TEMPORAL_INTERPOLATION;
+            if (d_rhs_geometry_bundle != NULL)
+              for (int comp = 0;
+                   comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
+                if (!isfinite((double)geometry_local[comp]))
+                  interpolation_failure = FAILURE_TEMPORAL_INTERPOLATION;
+          } // END ELSE: temporal helper returned output
+        } // END IF: temporal stencil ready
       } // END ELSE: adaptive stencil query succeeded
     } // END ELSE: photon required numerical or mixed
 
-    if (ray_failed) {
+    if (interpolation_failure != ACTIVE) {
+      d_status[i] = interpolation_failure;
       for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
         d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
       if (d_rhs_geometry_bundle != NULL)
         for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
           d_rhs_geometry_bundle[IDX_RHS_GEOMETRY(comp, i)] = NAN;
       continue;
-    } // END IF: at least one interpolation stage
+    } // END IF: ray-local interpolation failed
 
     for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
       d_metric_bundle[IDX_METRIC(comp, i)] = (double)g4dd_local[comp];

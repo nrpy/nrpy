@@ -44,10 +44,17 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     interpolation_kernel,
     main_single,
     normal_observer_log_energy,
+    normalization_constraint_photon_normalized,
+    photon_momentum_to_normalized_kernel,
     rkf45_finalize_and_control_kernel,
     rkf45_stage_update,
     set_initial_conditions_kernel,
     single_integrator_analytical,
+)
+
+SUPPORTED_ANALYTICAL_SPACETIMES = (
+    "KerrSchild_Cartesian",
+    "BrillLindquist_InitialData_Static_Cartesian",
 )
 
 
@@ -68,6 +75,18 @@ def _build_parser() -> argparse.ArgumentParser:
         type=str,
         default="project",
         help="Parent directory for the generated C project.",
+    )
+    parser.add_argument(
+        "--spacetime",
+        choices=SUPPORTED_ANALYTICAL_SPACETIMES,
+        default="KerrSchild_Cartesian",
+        help="Analytic spacetime metric used for photon evolution.",
+    )
+    parser.add_argument(
+        "--eom",
+        choices=("geodesic", "normalized"),
+        default="geodesic",
+        help="Photon equations of motion; default: geodesic.",
     )
     parser.add_argument(
         "--observer-position",
@@ -195,6 +214,12 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="VALUE",
         help="Upper limit on the common normal-observer log-energy measure ln(abs(alpha*p^0)).",
     )
+    parser.add_argument(
+        "--rkf45-log-energy-tolerance",
+        type=float,
+        metavar="VALUE",
+        help="Normalized-EOM tolerance for the u=ln(abs(alpha*p^0)) state.",
+    )
     return parser
 
 
@@ -220,6 +245,7 @@ if __name__ == "__main__":
         raise ValueError("--observer-fov values must be positive.")
     if args.escape_radius <= 0.0:
         raise ValueError("--escape-radius must be positive.")
+    normalized_eom = args.eom == "normalized"
     terminal_plane_values = (
         args.terminal_plane_center,
         args.terminal_plane_normal,
@@ -253,7 +279,7 @@ if __name__ == "__main__":
     project_dir = os.path.abspath(os.path.join(args.outdir, project_name))
     parfile_path = os.path.join(project_dir, f"{project_name}.par")
 
-    SPACETIME = "KerrSchild_Cartesian"
+    SPACETIME = args.spacetime
     PARTICLE = "photon"
     GEO_KEY = f"{SPACETIME}_{PARTICLE}"
 
@@ -270,31 +296,46 @@ if __name__ == "__main__":
     print("Registering Split-Pipeline Physics Kernels...")
     g4DD_metric.g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
     connections.connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
-    conserved_quantities.conserved_quantities(SPACETIME, PARTICLE)
-    normalization_constraint.normalization_constraint(
-        geodesic_data.norm_constraint_expr, PARTICLE
-    )
-    u_expr, _ = geodesic_data.photon_momentum_to_normalized_quantities()
-    normal_observer_log_energy.normal_observer_log_energy(u_expr)
+    u_expr, PiD_exprs = geodesic_data.photon_momentum_to_normalized_quantities()
+    if normalized_eom:
+        normalization_constraint_photon_normalized.normalization_constraint_photon_normalized(
+            geodesic_data.normalization_constraint_photon_normalized()
+        )
+        photon_momentum_to_normalized_kernel.photon_momentum_to_normalized_kernel(
+            u_expr, PiD_exprs
+        )
+    else:
+        conserved_quantities.conserved_quantities(SPACETIME, PARTICLE)
+        normalization_constraint.normalization_constraint(
+            geodesic_data.norm_constraint_expr, PARTICLE
+        )
+        normal_observer_log_energy.normal_observer_log_energy(u_expr)
 
     set_initial_conditions_kernel.register_photon_batch_structs()
-    set_initial_conditions_kernel.set_initial_conditions_kernel(normalized_eom=False)
+    set_initial_conditions_kernel.set_initial_conditions_kernel(
+        normalized_eom=normalized_eom
+    )
     event_detection_manager_kernel.register_event_plane_parameters()
     interpolation_kernel.interpolation_kernel(SPACETIME)
+    geodesic_rhs = (
+        geodesic_data.geodesic_eom_rhs_photon_normalized_christoffel()
+        if normalized_eom
+        else geodesic_data.geodesic_eom_rhs_photon_christoffel()
+    )
     calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
-        geodesic_data.geodesic_eom_rhs_photon_christoffel(),
+        geodesic_rhs,
         geodesic_data.xx,
         rhs_uses_metric_derivatives=False,
-        normalized_eom=False,
+        normalized_eom=normalized_eom,
     )
     rkf45_stage_update.rkf45_stage_update()
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
-        normalized_eom=False
+        normalized_eom=normalized_eom
     )
 
     # Step 5.a: Register the single-ray C main function.
     single_integrator_analytical.single_integrator_analytical(
-        SPACETIME, PARTICLE, normalized_eom=False
+        SPACETIME, PARTICLE, normalized_eom=normalized_eom
     )
     main_single.main_single("single_integrator_analytical")
 
@@ -331,7 +372,7 @@ if __name__ == "__main__":
     par.adjust_CodeParam_default("alpha_w", args.observer_fov[0])
     par.adjust_CodeParam_default("alpha_h", args.observer_fov[1])
     par.adjust_CodeParam_default("t_start", args.t_start)
-    par.adjust_CodeParam_default("initial_h", 0.1)
+    par.adjust_CodeParam_default("initial_h", -0.1 if normalized_eom else 0.1)
     par.adjust_CodeParam_default("r_escape", args.escape_radius)
     par.adjust_CodeParam_default("evolution_measure_max", 3.0)
 
@@ -399,7 +440,9 @@ if __name__ == "__main__":
     if args.initial_step is not None:
         if args.initial_step <= 0.0:
             raise ValueError("--initial-step must be positive.")
-        par.adjust_CodeParam_default("initial_h", args.initial_step)
+        par.adjust_CodeParam_default(
+            "initial_h", -args.initial_step if normalized_eom else args.initial_step
+        )
     if args.rkf45_tolerances is not None:
         absolute_tolerance, relative_tolerance = args.rkf45_tolerances
         if absolute_tolerance <= 0.0 or relative_tolerance <= 0.0:
@@ -423,6 +466,14 @@ if __name__ == "__main__":
             raise ValueError("--evolution-measure-max must be positive.")
         par.adjust_CodeParam_default(
             "evolution_measure_max", args.evolution_measure_max
+        )
+    if args.rkf45_log_energy_tolerance is not None:
+        if not normalized_eom:
+            raise ValueError("--rkf45-log-energy-tolerance requires --eom normalized.")
+        if args.rkf45_log_energy_tolerance <= 0.0:
+            raise ValueError("--rkf45-log-energy-tolerance must be positive.")
+        par.adjust_CodeParam_default(
+            "rkf45_log_energy_tolerance", args.rkf45_log_energy_tolerance
         )
 
     # Step 7: Generate headers, default parameters, and the Makefile.

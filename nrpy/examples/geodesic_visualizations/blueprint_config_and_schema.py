@@ -6,6 +6,14 @@ This module defines Python-side binary layout matching C `blueprint_data_t`,
 shared termination-type constants expected in serialized blueprint files, and
 common visualization defaults used by renderer and diagnostic scripts.
 
+Final blueprint records contain physical stop conditions and terminal failures,
+never the internal active or rejected RKF45 states.
+
+>>> FINAL_TERMINATION_TYPES
+(0, 1, 2, 3, 4, 5, 6, 9, 10)
+>>> ACTIVE in FINAL_TERMINATION_TYPES or REJECTED in FINAL_TERMINATION_TYPES
+False
+
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
 """
@@ -92,6 +100,22 @@ FAILURE_SLOT_MANAGER_ERROR = 5  # Slot manager failed to handle the ray
 FAILURE_GENERIC = 6  # Unspecified integration failure
 ACTIVE = 7  # Ray is still being processed (should not appear in final blueprints)
 REJECTED = 8  # Ray is in a rejected RKF45 stage (not a final status)
+FAILURE_SPATIAL_INTERPOLATION = 9  # Spatial interpolation failed for this ray
+FAILURE_TEMPORAL_INTERPOLATION = 10  # Temporal interpolation failed for this ray
+
+# Only completed physical stops and failures may be serialized. ACTIVE and
+# REJECTED are internal RKF45 states and therefore deliberately absent.
+FINAL_TERMINATION_TYPES = (
+    STOP_CONDITION_COORD_RADIUS_EXCEEDED,
+    STOP_CONDITION_TERMINAL_PLANE,
+    STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED,
+    FAILURE_RKF45_REJECTION_LIMIT,
+    STOP_CONDITION_T_MAX_EXCEEDED,
+    FAILURE_SLOT_MANAGER_ERROR,
+    FAILURE_GENERIC,
+    FAILURE_SPATIAL_INTERPOLATION,
+    FAILURE_TEMPORAL_INTERPOLATION,
+)
 
 # Step 3: Physics and scene parameters.
 MASS_OF_BLACK_HOLE = 1.0  # Normalized mass ($M$)

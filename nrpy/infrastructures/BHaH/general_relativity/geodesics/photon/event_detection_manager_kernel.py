@@ -149,6 +149,10 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
     // Memory Striding strictly uses BUNDLE_CAPACITY, preventing bounds failure on remainders.
     #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
 
+    // Terminated photons bypass every later event test so an established
+    // interpolation or physical failure status cannot be overwritten.
+    if (d_status_bundle[i] != ACTIVE) {escape_statement}
+
     //==========================================
     // MODE-SPECIFIC EVOLUTION-MEASURE LIMIT CHECK
     //==========================================
@@ -160,9 +164,6 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
         d_status_bundle[i] = STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED; // Stops a ray whose evolution measure exceeded its limit.
         {escape_statement}
     }} // END IF: mode-specific evolution-measure limit exceeded
-
-    // Terminated photons cleanly bypass the geometric evaluation logic.
-    if (d_status_bundle[i] != ACTIVE) {escape_statement}
 
     //==========================================
     // LOCAL REGISTER HYDRATION
@@ -226,7 +227,7 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
         // Evaluates the global plane equation $E_w$ for the photon's current spatial position.
         const double w_val = x*w_normal[0] + y*w_normal[1] + z*w_normal[2] - w_dist;
 
-        const bool on_pos_non_terminal_plane_curr = (w_val > 1e-10); // Checks the nonterminal-plane side.
+        const bool on_pos_non_terminal_plane_curr = (w_val > 0.0); // Checks the nonterminal-plane side.
         const bool on_pos_non_terminal_plane_prev = d_on_pos_non_terminal_plane_prev[i]; // Retrieves the previous nonterminal-plane side.
 
         if (on_pos_non_terminal_plane_curr != on_pos_non_terminal_plane_prev) {{ // Triggers an event when the nonterminal plane is crossed.
@@ -265,7 +266,7 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
         const double s_dist = {cd_access}terminal_plane_center_x*s_normal[0] + {cd_access}terminal_plane_center_y*s_normal[1] + {cd_access}terminal_plane_center_z*s_normal[2]; // Calculates orthogonal distance $d_s$ to the terminal plane.
         const double s_val = x*s_normal[0] + y*s_normal[1] + z*s_normal[2] - s_dist; // Evaluates the plane equation $E_s$ for the current position.
 
-        const bool on_pos_terminal_plane_curr = (s_val > 1e-10); // Checks the terminal-plane side.
+        const bool on_pos_terminal_plane_curr = (s_val > 0.0); // Checks the terminal-plane side.
         const bool on_pos_terminal_plane_prev = d_on_pos_terminal_plane_prev[i]; // Retrieves the previous terminal-plane side.
 
         if (on_pos_terminal_plane_curr != on_pos_terminal_plane_prev) {{ // Triggers intersection event if the plane was crossed.

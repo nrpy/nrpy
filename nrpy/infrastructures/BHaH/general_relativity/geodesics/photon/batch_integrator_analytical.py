@@ -180,14 +180,14 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
     # This block configures the hardware-specific teardown and memory synchronization sequences.
     if parallelization == "cuda":
         results_memcpy = "cudaMemcpy(results_buffer, d_results_buffer, sizeof(blueprint_data_t) * num_rays, cudaMemcpyDeviceToHost);"
-        calc_blueprint = "calculate_and_fill_blueprint_data_universal(&all_photons_host, num_rays, results_buffer, NULL, NULL, 0);"
+        calc_blueprint = "calculate_and_fill_blueprint_data_universal(&all_photons_host, num_rays, results_buffer, NULL, NULL, NULL, NULL, NULL, 0);"
         set_initial_conditions_call = " set_initial_conditions_kernel(commondata, num_rays, &all_photons_host, observer_metric, observer_tetrad, 0);"
         stream_destroy = "cudaStreamDestroy(streams[s]); // Purges the hardware stream execution context."
         free_device = "BHAH_FREE_DEVICE"
         free_pinned = "BHAH_FREE_PINNED"
     else:
         results_memcpy = "memcpy(results_buffer, d_results_buffer, sizeof(blueprint_data_t) * num_rays);"
-        calc_blueprint = "calculate_and_fill_blueprint_data_universal(&all_photons_host, num_rays, results_buffer, NULL, NULL, 0);"
+        calc_blueprint = "calculate_and_fill_blueprint_data_universal(&all_photons_host, num_rays, results_buffer, NULL, NULL, NULL, NULL, NULL, 0);"
         set_initial_conditions_call = " set_initial_conditions_kernel(commondata, num_rays, &all_photons_host, observer_metric, observer_tetrad);"
         stream_destroy = (
             "// Stream destruction natively omitted for synchronous CPU execution."

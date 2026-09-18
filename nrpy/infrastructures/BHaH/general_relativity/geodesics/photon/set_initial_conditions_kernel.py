@@ -50,15 +50,17 @@ batch_structs_c_code = r"""
 
     // Defines the specific exit condition for a photon's integration loop.
     typedef enum {
-        STOP_CONDITION_COORD_RADIUS_EXCEEDED, // 0: Coordinate-radius stop condition was reached.
-        STOP_CONDITION_TERMINAL_PLANE, // 1: Photon hit the terminal plane.
-        STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED, // 2: Evolution-measure stop condition was reached.
-        FAILURE_RKF45_REJECTION_LIMIT, // 3: Adaptive step size was rejected too many times.
-        STOP_CONDITION_T_MAX_EXCEEDED, // 4: Maximum physical coordinate time was exceeded.
-        FAILURE_SLOT_MANAGER_ERROR, // 5: TimeSlotManager failed to handle the photon.
-        FAILURE_GENERIC, // 6: Generic unclassified numerical failure.
-        ACTIVE, // 7: Photon is currently undergoing integration.
-        REJECTED, // 8: Photon RKF45 step was rejected.
+        STOP_CONDITION_COORD_RADIUS_EXCEEDED = 0, // Coordinate-radius stop condition was reached.
+        STOP_CONDITION_TERMINAL_PLANE = 1, // Photon hit the terminal plane.
+        STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED = 2, // Evolution-measure stop condition was reached.
+        FAILURE_RKF45_REJECTION_LIMIT = 3, // Adaptive step size was rejected too many times.
+        STOP_CONDITION_T_MAX_EXCEEDED = 4, // Maximum physical coordinate time was exceeded.
+        FAILURE_SLOT_MANAGER_ERROR = 5, // TimeSlotManager failed to handle the photon.
+        FAILURE_GENERIC = 6, // Generic unclassified numerical failure.
+        ACTIVE = 7, // Photon is currently undergoing integration.
+        REJECTED = 8, // Photon RKF45 step was rejected.
+        FAILURE_SPATIAL_INTERPOLATION = 9, // Spatial interpolation failed for this photon.
+        FAILURE_TEMPORAL_INTERPOLATION = 10 // Temporal interpolation failed for this photon.
     } termination_type_t; // END ENUM: termination_type_t
 
     // Native same-build metadata for one serialized blueprint tile.
@@ -178,6 +180,13 @@ batch_structs_c_code = r"""
         bool *non_terminal_plane_event_found; // Nonterminal-plane intersection lock.
         double *non_terminal_plane_event_lambda; // Affine parameter $\lambda$ at nonterminal plane.
         double *non_terminal_plane_event_f_intersect; // State at nonterminal-plane intersection.
+
+        // Numerical-batch diagnostic state. These arrays capture the first
+        // accepted RK state after a nonterminal crossing and remain separate
+        // from the geometric event lock.
+        bool *non_terminal_norm_recorded;
+        double *non_terminal_norm_f;
+        double *non_terminal_norm_coordinate_time;
     } PhotonStateSoA; // END STRUCT: PhotonStateSoA
 """
 
@@ -997,7 +1006,7 @@ __TETRAD_SCALAR_DECLARATIONS__
             (commondata->observer_y - commondata->terminal_plane_center_y) +
         commondata->terminal_plane_normal_z *
             (commondata->observer_z - commondata->terminal_plane_center_z);
-    const bool init_terminal_plane_side = (terminal_plane_side_value >= 0.0);
+    const bool init_terminal_plane_side = (terminal_plane_side_value > 0.0);
     if (all_photons->on_positive_side_of_non_terminal_plane_prev != NULL &&
         all_photons->on_positive_side_of_terminal_plane_prev != NULL) {
         for (long int plane_i = 0; plane_i < num_rays; ++plane_i) {

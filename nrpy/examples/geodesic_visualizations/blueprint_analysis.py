@@ -50,6 +50,14 @@ TERMINATION_TYPE_INFO: Dict[int, Tuple[str, str]] = {
         "Slot manager failed to handle the ray",
     ),
     cfg.FAILURE_GENERIC: ("FAILURE_GENERIC", "Unspecified integration failure"),
+    cfg.FAILURE_SPATIAL_INTERPOLATION: (
+        "FAILURE_SPATIAL_INTERPOLATION",
+        "Spatial interpolation failed for the ray",
+    ),
+    cfg.FAILURE_TEMPORAL_INTERPOLATION: (
+        "FAILURE_TEMPORAL_INTERPOLATION",
+        "Temporal interpolation failed for the ray",
+    ),
     cfg.ACTIVE: (
         "ACTIVE",
         "Ray is still being processed (should not appear in final blueprints)",
