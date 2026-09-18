@@ -145,6 +145,10 @@ connection, and right-hand-side stages of each trial in execution order.
 
     if normalized_eom:
         conserved_quantity_q_report = ""
+        conservation_error_report = (
+            '    printf("Conservation Absolute Errors are not reported for '
+            'normalized EOM.\\n");'
+        )
         conserved_quantity_initialization = ""
         conserved_quantity_finalization = ""
         initial_integration_parameter = "commondata.t_start"
@@ -190,6 +194,11 @@ connection, and right-hand-side stages of each trial in execution order.
         integration_param_p == NULL || integration_param_p_p == NULL ||
 """
     else:
+        conservation_error_report = (
+            '    printf("Conservation Absolute Errors:\\n");\n'
+            '    printf("  Delta E  = %.4e\\n", fabs(cq_final.E - cq_init.E));\n'
+            '    printf("  Delta Lz = %.4e\\n", fabs(cq_final.Lz - cq_init.Lz));'
+        )
         conserved_quantity_initialization = rf"""
     conserved_quantities_t cq_init;
     calculate_conserved_quantities_universal_{spacetime}_{particle}(
@@ -695,7 +704,7 @@ connection, and right-hand-side stages of each trial in execution order.
 
     printf("\nFinal normalization constraint error = %.4e\n",
            {normalization_error_expression});
-{("    printf(\"Conservation Absolute Errors are not reported for normalized EOM.\\n\");" if normalized_eom else "    printf(\"Conservation Absolute Errors:\\n\");\n    printf(\"  Delta E  = %.4e\\n\", fabs(cq_final.E - cq_init.E));\n    printf(\"  Delta Lz = %.4e\\n\", fabs(cq_final.Lz - cq_init.Lz));")}
+{conservation_error_report}
 {conserved_quantity_q_report}
 
     cleanup:
