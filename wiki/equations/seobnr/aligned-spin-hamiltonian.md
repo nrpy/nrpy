@@ -34,7 +34,12 @@ integration and initial-data construction. Public derivative outputs include
 counterparts are formed by substituting `prstar = 0` before differentiating, with
 outputs such as `dHreal_dr_circ`, `dHreal_dpphi_circ`,
 `dHreal_dr_dr_circ`, `dHreal_dr_dpphi_circ`, and
-`dHreal_dpphi_dpphi_circ`.
+`dHreal_dpphi_dpphi_circ`. The circular first derivatives are divided by `nu`;
+each circular second derivative differentiates one of those normalized first
+derivatives without a second division by `nu`. The two first derivatives, with
+the input orbital frequency subtracted from `dHreal_dpphi_circ`, form the
+residual of the circular-orbit root solve, and the three second derivatives are
+the entries of its Jacobian.
 
 Validation is module-local. Running the Hamiltonian source as a script executes
 doctests, processes the class `__dict__` through the trusted-expression helper,

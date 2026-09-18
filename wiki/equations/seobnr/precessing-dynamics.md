@@ -35,7 +35,10 @@ The Hamiltonian object's stable outputs include `xi`, `Hreal`,
 `dHreal_dr_dpphi`. It also stores circular-orbit derivatives obtained by
 substituting `prstar = 0`: `dHreal_dr_circ`, `dHreal_dpphi_circ`,
 `dHreal_dr_dr_circ`, `dHreal_dr_dpphi_circ`, and
-`dHreal_dpphi_dpphi_circ`. These outputs are the symbolic interface for ODE
+`dHreal_dpphi_dpphi_circ`. As in the aligned-spin Hamiltonian, the circular first
+derivatives are divided by `nu`, and each circular second derivative
+differentiates a normalized first derivative without a second division by `nu`.
+These outputs are the symbolic interface for ODE
 integration, circular initial-data solves, and waveform or flux consumers that
 need instantaneous Hamiltonian derivatives.
 

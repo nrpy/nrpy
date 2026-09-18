@@ -278,14 +278,12 @@ Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties.
     body = """
 REAL q = commondata->mass_ratio;
 REAL eta = q / (1.0 + q) / (1.0 + q);
-// Ensure eta is consistent if we snap q to 1.0
+// eta = q / (1 + q)^2 is at most 0.25, so an excess is floating-point rounding for q close to 1.
+// Clamp eta, and snap q to 1.0 when it agrees with 1.0 to within 1e-13.
 if (eta > 0.25){
+  eta = 0.25;
   if (fabs(q - 1.) < 1e-13){
     q = 1.;
-    eta = 0.25;
-  } else {
-    printf("mass ratio = %.15e causes eta = %.15e > 0.25\\n",q,eta);
-    exit(EXIT_FAILURE);
   }
 }
 commondata->m1 = q / (1.0 + q);

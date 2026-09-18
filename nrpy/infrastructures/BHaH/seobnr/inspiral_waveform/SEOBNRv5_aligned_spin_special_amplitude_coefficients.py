@@ -388,24 +388,31 @@ double complex h43 = inspiral_modes[STRAIN43 - 1];
 SEOBNRv5_aligned_spin_waveform(dynamics_55, commondata, inspiral_modes);
 double complex h55 = inspiral_modes[STRAIN55 - 1];
 
-const REAL v22 = pow(dynamics_22[OMEGA], 1.0/3.0);
-const REAL K21 = cabs(h21) / fabs(rho21);
-const REAL K43 = cabs(h43) / fabs(rho43);
-const REAL v55 = pow(dynamics_55[OMEGA], 1.0/3.0);
-const REAL K55 = cabs(h55) / fabs(rho55);
-
-const REAL vpow21 = pow(v22, 7.0);
-const REAL vpow43 = pow(v22, 7.0);
-const REAL vpow55 = pow(v55, 5.0);
-
-const REAL c21 = (hNR21/K21 - rho21)/vpow21;
-const REAL c43 = (hNR43/K43 - rho43)/vpow43;
-const REAL c55 = (hNR55/K55 - rho55)/vpow55;
-
 // Step 6: Store special amplitude coefficients for later inspiral mode generation.
-commondata->c_21 = c21;
-commondata->c_43 = c43;
-commondata->c_55 = c55;
+// For equal masses (fabs(delta) <= 1e-14, the branch where the odd-mode waveform factors use their
+// equal-mass limit) and equal spins (chiA = 0), rho and h vanish for the (2,1), (4,3), and (5,5) modes,
+// so K = |h|/|rho| is 0/0. In that case keep c_21 = c_43 = c_55 = 0, the registered defaults.
+const REAL delta = (m1 - m2) / (m1 + m2);
+const int equal_mass_equal_spin = (fabs(delta) <= 1e-14 && fabs(chiA) < 1e-14);
+if (!equal_mass_equal_spin) {
+  const REAL v22 = pow(dynamics_22[OMEGA], 1.0/3.0);
+  const REAL K21 = cabs(h21) / fabs(rho21);
+  const REAL K43 = cabs(h43) / fabs(rho43);
+  const REAL v55 = pow(dynamics_55[OMEGA], 1.0/3.0);
+  const REAL K55 = cabs(h55) / fabs(rho55);
+
+  const REAL vpow21 = pow(v22, 7.0);
+  const REAL vpow43 = pow(v22, 7.0);
+  const REAL vpow55 = pow(v55, 5.0);
+
+  const REAL c21 = (hNR21/K21 - rho21)/vpow21;
+  const REAL c43 = (hNR43/K43 - rho43)/vpow43;
+  const REAL c55 = (hNR55/K55 - rho55)/vpow55;
+
+  commondata->c_21 = c21;
+  commondata->c_43 = c43;
+  commondata->c_55 = c55;
+} // END IF: not equal mass with equal spins
 
 
 free(times);
