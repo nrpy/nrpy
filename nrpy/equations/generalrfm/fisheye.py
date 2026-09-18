@@ -377,6 +377,26 @@ class GeneralRFMFisheye:
             s_list=self.s_list,
         )
 
+    def radius_map_and_deriv_for_inverse(self, r: sp.Expr) -> Tuple[sp.Expr, sp.Expr]:
+        """
+        Return a codegen-stable scaled radial map and first derivative.
+
+        This interface is intended for numerical inversion. The radial value uses
+        a stable log-cosh representation, while the derivative retains its
+        explicit closed form.
+
+        :param r: Radial coordinate.
+        :return: (rbar, drbar)
+        """
+        rb0 = _radius_map_unscaled(
+            r=r,
+            a_list=self.a_list,
+            R_list=self.R_list,
+            s_list=self.s_list,
+        )
+        _, rb1, _, _ = self.radius_map_unscaled_and_derivs_closed_form(r)
+        return self.c * rb0, self.c * rb1
+
 
 def build_fisheye(num_transitions: int) -> GeneralRFMFisheye:
     """
@@ -390,22 +410,43 @@ def build_fisheye(num_transitions: int) -> GeneralRFMFisheye:
 
 def _G_kernel(r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:
     """
-    Compute the single transition kernel G(r; R, s).
+    Compute the single transition kernel G(r; R, s) for numerical inversion.
 
     Kernel definition:
 
         G(r; R, s) = s / (2*tanh(R/s)) * log( cosh((r+R)/s) / cosh((r-R)/s) )
 
+    This value-only form assumes a positive transition width and evaluates the
+    log-cosh difference directly to avoid catastrophic cancellation when
+    `r << R`.
+
     :param r: Raw radius expression.
     :param R: Transition center parameter.
-    :param s: Transition width parameter.
+    :param s: Positive transition width parameter.
     :return: The kernel value G(r; R, s).
+
+    Doctests:
+    >>> import math
+    >>> r, R, s = sp.symbols("r R s", positive=True, real=True)
+    >>> kernel = sp.lambdify(
+    ...     (r, R, s),
+    ...     _G_kernel(r=r, R=R, s=s),
+    ...     [{"log1p": math.log1p, "expm1": math.expm1}, "math"],
+    ... )
+    >>> abs(kernel(1.0e-15, 100.0, 0.1) - 1.0e-15) < 1.0e-30
+    True
     """
-    # G(r; R, s) = s/(2*tanh(R/s)) * log( cosh((r+R)/s) / cosh((r-R)/s) )
+    scaled_min = sp.Min(r, R) / s
+    scaled_max = sp.Max(r, R) / s
+    tail = sp.exp(-2 * (scaled_max - scaled_min))
+    log1p = sp.Function("log1p")
+    expm1 = sp.Function("expm1")
+    logcosh_difference = 2 * scaled_min + log1p(
+        tail * expm1(-4 * scaled_min) / (sp.Integer(1) + tail)
+    )
     return cast(
         sp.Expr,
-        (s / (2 * sp.tanh(R / s)))
-        * sp.log(sp.cosh((r + R) / s) / sp.cosh((r - R) / s)),
+        (s / (2 * sp.tanh(R / s))) * logcosh_difference,
     )
 
 
@@ -426,7 +467,7 @@ def _radius_map_unscaled(
     :return: The unscaled radius map rbar_unscaled(r).
     """
     # rb = aN * r
-    rb = a_list[-1] * r
+    rb: sp.Expr = a_list[-1] * r
 
     # rb += sum_i (a[i] - a[i+1]) * G(r; R_i, s_i)
     for i, (R_i, s_i) in enumerate(zip(R_list, s_list)):

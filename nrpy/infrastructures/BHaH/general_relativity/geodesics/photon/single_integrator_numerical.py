@@ -71,7 +71,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     >>> cfc.CFunction_dict.clear()
     >>> single_integrator_numerical("Numerical", "SinhCylindricalv2n2")
     >>> generated = cfc.CFunction_dict["single_integrator_numerical"].full_function
-    >>> "# lambda t x y z energy_measure p_x p_y p_z aux norm" in generated
+    >>> "# lambda t x y z p^t p^x p^y p^z L_normal norm" in generated
     True
     >>> "const double trajectory_norm = normalization.C;" in generated
     True
@@ -80,7 +80,8 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     >>> cfc.CFunction_dict.clear()
     >>> single_integrator_numerical("Numerical", "SinhCylindricalv2n2", normalized_eom=True)
     >>> generated = cfc.CFunction_dict["single_integrator_numerical"].full_function
-    >>> "const double trajectory_norm = normalization.C - 1.0;" in generated
+    >>> ("# lambda t x y z u Pi_1 Pi_2 Pi_3 L_normal norm" in generated and
+    ...  "const double trajectory_norm = normalization.C - 1.0;" in generated)
     True
     >>> "fabs(normalization.C - 1.0)" not in generated
     True
@@ -219,6 +220,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         coordinate_time_expression = "*integration_param"
         trajectory_lambda_expression = "f[0]"
         trajectory_time_expression = "*integration_param"
+        trajectory_header = "# lambda t x y z u Pi_1 Pi_2 Pi_3 L_normal norm\\n"
         interpolation_stage_arguments = (
             "&trial_spatial_center.i0, &trial_spatial_center.i2, "
             "integration_param, h, stage,"
@@ -239,6 +241,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         coordinate_time_expression = "f[0]"
         trajectory_lambda_expression = "*integration_param"
         trajectory_time_expression = "f[0]"
+        trajectory_header = "# lambda t x y z p^t p^x p^y p^z L_normal norm\\n"
         interpolation_stage_arguments = (
             "&trial_spatial_center.i0, &trial_spatial_center.i2,"
         )
@@ -867,7 +870,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   }} // END IF: trajectory output unavailable
   fprintf(
       trajectory_file,
-      "# lambda t x y z energy_measure p_x p_y p_z aux norm\n");
+      "{trajectory_header}");
 {trial_debug_open}
 {stage_debug_open}
 

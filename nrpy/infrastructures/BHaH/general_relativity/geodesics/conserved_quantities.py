@@ -1,13 +1,11 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/conserved_quantities.py
 """
-Defines the physical conserved quantities evaluated along particle trajectories.
+Define symmetry-dependent trajectory diagnostics.
 
-This module implements a streaming bundle architecture to compute physical conserved
-quantities along particle trajectories. SymPy expressions define a C kernel that
-computes energy, angular momentum, and the Carter constant. A custom C-structure holds
-these quantities. A Structure of Arrays (SoA) layout provides uniform memory mapping.
-Statically allocated execution buffers map to the memory hierarchy. A pagination loop
-orchestrates data transfers.
+SymPy expressions define a C kernel for the available energy, angular-momentum,
+and Carter-constant diagnostics. A custom structure stores the results, while a
+Structure-of-Arrays state layout and chunked staging buffers support CPU and CUDA
+execution.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com

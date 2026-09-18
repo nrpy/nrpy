@@ -2,12 +2,12 @@
 """
 Defines the event-finding C kernel.
 
-This module resolves exact coordinate intersections when a boundary plane crossing is
+This module estimates coordinate intersections when a boundary plane crossing is
 detected by evaluating historical trajectory points against the target plane equation.
 It accepts the thread-local state arrays and integration parameters from the current and
 two previous integration steps, along with the geometric unit normal and orthogonal
 distance of the target plane. The algorithm executes a fallback linear seed followed
-by second-order quadratic interpolation to resolve the exact event parameter. The full
+by second-order quadratic interpolation to estimate the event parameter. The full
 tensor state is then reconstructed at the boundary using three-point Lagrange
 polynomials. Mapping this logic directly to local memory space minimizes global data
 transfers and maintains all intermediate state reconstructions within local hardware

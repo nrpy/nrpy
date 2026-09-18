@@ -1,6 +1,6 @@
 # Diagnostics Output And Checkpointing
 
-> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed. Last reconciled: 07-20-2026
+> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed.
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -25,10 +25,10 @@ serialized point indices before reallocating and restoring `y_n_gfs`.
 raytracing-data export, registers the top-level `_register_CFunction_diagnostics`
 driver, and then registers per-coordinate nearest-diagnostic and volume-element
 helpers. Raytracing export is deliberately narrow: it rejects CUDA generation,
-requires `enable_rfm_precompute=True`, requires
-`enable_RbarDD_gridfunctions=True`, allows exactly one coordinate system, and
-currently supports only `Cartesian` and `Spherical`; the generated exporter also
-aborts unless `commondata->NUMGRIDS == 1`.
+allows exactly one generated coordinate system, and aborts unless
+`commondata->NUMGRIDS == 1`. Plain `g4DD` output needs no RHS payload;
+`g4DD_d0`, `GammaUDD`, and `all` require reference-metric precomputation and
+the Ricci/RHS setup supplied by `enable_RbarDD_gridfunctions=True`.
 
 `diagnostics()` is called once per timestep. Its cadence test is time-based:
 `fabs(round(time / diagnostics_output_every) * diagnostics_output_every - time)
@@ -50,12 +50,20 @@ header contains one enum token per diagnostic gridfunction, a
 initializer handling through `DIAG_INIT`.
 
 `diagnostic_gfs_set` is the normal GR producer for diagnostic channels. It
-registers `DIAG_HAMILTONIAN`, `DIAG_MSQUARED`, `DIAG_LAPSE`, `DIAG_W`,
-`DIAG_GRIDINDEX`, `DIAG_RBARDD`, optional `DIAG_T4UU`, and optional
-`DIAG_PSI4_RE/IM`. At runtime it loops over grids, calls `Ricci_eval` or
-`Ricci_eval_host`, calls `constraints_eval`, optionally calls `psi4`, applies
-inner boundary conditions to interpolation-sensitive diagnostic channels, and
-copies lapse, conformal factor, and grid index into `diagnostic_gfs`.
+registers `DIAG_HAMILTONIAN`, `DIAG_M`, `DIAG_LAPSE`, `DIAG_W`,
+`DIAG_GRIDINDEX`, `DIAG_RBARDD`, `DIAG_LAMBDA_CONSTRAINT`, optional
+`DIAG_T4UU`, and optional `DIAG_PSI4_RE/IM`. At runtime it loops over grids,
+calls `Ricci_eval` or `Ricci_eval_host`, calls `constraints_eval`, optionally
+calls `psi4`, applies inner boundary conditions to interpolation-sensitive
+diagnostic channels, and copies lapse, conformal factor, and grid index into
+`diagnostic_gfs`. The interpolation inner-boundary list includes Hamiltonian,
+momentum magnitude, and Lambda-constraint magnitude.
+
+Claim evidence:
+- Claim: The generic BHaH diagnostic producer registers `DIAG_M` and `DIAG_LAMBDA_CONSTRAINT` and applies interpolation inner boundary conditions to Hamiltonian, momentum-magnitude, and Lambda-magnitude channels.
+- Role: descriptive behavior
+- Deciding authority: [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
+- Corroboration: [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`; [Kasner diagnostics.py](../../../nrpy/infrastructures/BHaH/general_relativity/Kasner/diagnostics.py), `register_CFunction_diagnostic_gfs_set`
 
 Nearest diagnostics are a dispatcher plus three helper samplers. Users select
 `which_gfs_0d`, `which_gfs_1d`, and `which_gfs_2d` in the generated
@@ -69,7 +77,16 @@ y- and z-axis lines, converts native coordinates through `xx_to_Cart`, sorts by
 physical axis coordinate, and writes per-time files `out1d-y-*` and `out1d-z-*`.
 The 2D helper samples nearest xy and yz planes, including multi-slice cases
 such as opposite phi quadrants, and writes per-time `out2d-xy-*` and
-`out2d-yz-*` files.
+`out2d-yz-*` files. The generic BHaH dispatcher and GRoovy's default-enabled
+constraint branch select Hamiltonian, momentum magnitude, and Lambda-constraint
+magnitude for every 0D, 1D, and 2D output. The Kasner dispatcher prepends those
+same three constraints to its Kasner-specific fields.
+
+Claim evidence:
+- Claim: Generic BHaH and Kasner nearest dispatchers include `DIAG_HAMILTONIANGF`, `DIAG_MGF`, and `DIAG_LAMBDA_CONSTRAINTGF` in each 0D, 1D, and 2D default selection; GRoovy includes the same three when its default-true `include_constraint_diagnostics` option is enabled, and Kasner retains its additional fields.
+- Role: descriptive behavior
+- Deciding authority: [generic diagnostics_nearest.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [GRoovy diagnostics_nearest.py](../../../nrpy/infrastructures/BHaH/GRoovy/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [Kasner diagnostics.py](../../../nrpy/infrastructures/BHaH/general_relativity/Kasner/diagnostics.py), `register_CFunction_diagnostics_nearest`
+- Corroboration: [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
 
 `diagnostics_nearest_common.h` supplies the shared text-output contract: time
 comments use `# [time] = ...`, headers list coordinate columns plus diagnostic
@@ -81,21 +98,38 @@ Volume diagnostics use `diagnostics_volume_integration()` and the copied
 `diagnostics_volume_integration_helpers.h`. The generated routine builds a
 small recipe array with user-editable spherical include/exclude rules and
 integrand specs. It then calls `diags_integration_execute_recipes` with
-`gridfuncs_diags`; the default examples integrate squared Hamiltonian and
-momentum constraints over the whole domain and outside a radius. The
+`gridfuncs_diags`; the default examples integrate `H^2`, the momentum second
+moment `M^2 = gamma_ij M^i M^j`, and the conformal connection-constraint
+contraction `\bar{\gamma}_{ij} C^i C^j` over the whole domain and outside a
+radius. `DIAG_MGF` and `DIAG_LAMBDA_CONSTRAINTGF` store magnitudes, so
+`is_squared=1` squares each exactly once for its L2/RMS numerator. Supplying
+either already-squared contraction with `is_squared=1` would instead produce a
+fourth moment. The
 coordinate-specialized `sqrt_detgammahat_d3xx_volume_element` helper evaluates
 `sqrt(detgammahat) * abs(dxx0 * dxx1 * dxx2)` by reference for ordinary
-reference metrics. For `GeneralRFM` it is intentionally inert because the
-active integration path reads the `DETGAMMAHATGF`-backed volume element from
-the helper header.
+reference metrics, so this is conformal/reference volume rather than physical
+proper volume. For `GeneralRFM` it is intentionally inert because the active
+integration path reads the `DETGAMMAHATGF`-backed volume element from the
+helper header.
+
+Claim evidence:
+- Claim: The two default BHaH GR volume recipes use `DIAG_HAMILTONIANGF`, `DIAG_MGF`, and `DIAG_LAMBDA_CONSTRAINTGF` with `is_squared=1`, so their reported L2/RMS numerators contain `H^2`, `gamma_ij M^i M^j`, and `gammabar_ij C^i C^j`, not a momentum fourth moment.
+- Role: descriptive behavior
+- Deciding authority: [diagnostics_volume_integration.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostics_volume_integration.py), `register_CFunction_diagnostics_volume_integration`; [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
+- Corroboration: [diagnostics_volume_integration_helpers.h](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics_volume_integration_helpers.h), `diags_integration_execute_recipes`; [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`
 
 Raytracing output is an optional diagnostics-side stage-1 export.
 `output_raytracing_data` writes a time-stamped binary stage-1 payload through a
 unique temporary sibling and installs it with `link()` so an existing final file
-is not overwritten. Before writing payload records it refreshes same-slice
-Ricci/RHS data with `Ricci_eval(...)` and `rhs_eval(...)`, then evaluates final
-Cartesian coordinates, the ten unique covariant four-metric components, and the
-forty unique four-Christoffel components at interior logical-grid points. The
+is not overwritten. For `g4DD_d0`, `GammaUDD`, and `all`, it first refreshes
+same-slice Ricci/RHS data with `Ricci_eval(...)` and `rhs_eval(...)`. The
+mode-selected payload contains Cartesian coordinates and the ten unique
+covariant four-metric components, plus ten metric time derivatives for
+`g4DD_d0`, forty four-Christoffel components for `GammaUDD`, or both output
+families when `all` is selected. Coordinates are filled over the full logical
+grid; tensor expressions are evaluated on interior points, after which pure
+outer ghost records are extrapolated and inner ghost records are copied from
+their mapped `bcstruct` sources. The
 header records binary64, little-endian, format-version, coordinate-system,
 conformal-factor convention, logical-grid extents, offsets, component names,
 and that the payload includes ghost zones. `combine_raytracing_time_slices.py` is the
@@ -104,6 +138,12 @@ them by physical simulation time, validates compatibility and unique times,
 optionally records coordinate-table and axisymmetry metadata, then atomically
 writes a read-only combined container. It copies stage-1 point payloads; it does
 not recompute metrics, Christoffels, transforms, or a true spatial index.
+
+Claim evidence:
+- Claim: Raytracing export is single-grid host/OpenMP output with mode-specific `g4DD`, `g4DD_d0`, and `GammaUDD` payloads; it evaluates tensors on the interior and fills outer and inner ghost records through extrapolation and `bcstruct` mapping before serialization.
+- Role: generated evidence
+- Deciding authority: `nrpy/infrastructures/BHaH/diagnostics/output_raytracing_data.py` — `register_CFunction_output_raytracing_data`
+- Corroboration: `nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py` — stage-1 parsing and combined-container writing
 
 `progress_indicator` registers `start_wallclock_time` and
 `output_progress_every`. Generated C initializes the wall-clock reference at
@@ -131,15 +171,9 @@ owned interiors, buffer-zone points, and outer-boundary points; otherwise every
 point is selected. MoL intermediate-stage storage is freed before compacting and
 reallocated after the grid payload is written.
 
-Current `BHaH` package aggregation and updated checkpoint-using examples use
-the split owners. The tracked `checkpointing.py` nevertheless remains directly
-importable and still defines its own older reader, writer, and combined
-`register_CFunctions` wrapper; that old writer independently registers another
-`checkpoint_every` owner. The module is not a forwarding or deprecation shim,
-and its reader lacks the split reader's checks described below. Explicit legacy
-submodule imports can therefore still reach a duplicate, less-hardened
-implementation; no equivalence, compatibility, or current-canonical guarantee
-applies to that direct-import path.
+The `BHaH` package aggregation and checkpoint-using examples use the split
+owners. The superseded combined `checkpointing.py` module has been removed, so
+the package exposes no duplicate legacy checkpoint registrar.
 
 `read_checkpoint()` returns `0` when the named checkpoint file does not exist.
 After reading `commondata`, it requires `NUMGRIDS` in `1..MAXNUMGRIDS`. With
@@ -185,30 +219,26 @@ them from the checkpoint, preserving horizon-history data without reusing old
 process pointer values.
 
 Claim evidence:
-- Claim: Package aggregation and updated examples use separate checkpoint reader/writer registrars, with split writer owning `checkpoint_every` for that path; split reader requires valid `NUMGRIDS`, BHaHAHA capacities and finest-resolution index, positive overflow-safe dimensions/products, representable evolved-gridfunction and allocation counts, bounded strictly increasing serialized point indices, checked ordinary host allocations, zero-count-safe reads, and `size_t` scatter offsets, while split writer provides no matching BHaHAHA validation-order, capacity, or overflow guarantee; direct import of retained `checkpointing.py` still reaches an older duplicate whose writer independently registers `checkpoint_every` and which has no forwarding, deprecation, equivalence, compatibility, or current-canonical guarantee.
+- Claim: Package aggregation and checkpoint-using examples use separate checkpoint reader/writer registrars, with split writer owning `checkpoint_every`; no duplicate legacy checkpoint registrar remains in the package. Split reader requires valid `NUMGRIDS`, BHaHAHA capacities and finest-resolution index, positive overflow-safe dimensions/products, representable evolved-gridfunction and allocation counts, bounded strictly increasing serialized point indices, checked ordinary host allocations, zero-count-safe reads, and `size_t` scatter offsets, while split writer provides no matching BHaHAHA validation-order, capacity, or overflow guarantee.
 - Role: descriptive behavior
-- Deciding authority: registered primary code `nrpy/infrastructures/BHaH/read_checkpoint.py::register_CFunction_read_checkpoint`, `nrpy/infrastructures/BHaH/write_checkpoint.py::register_CFunction_write_checkpoint`, and `nrpy/infrastructures/BHaH/checkpointing.py::register_CFunctions`
-- Corroboration: `nrpy/infrastructures/BHaH/__init__.py` package import list and representative `nrpy/examples/blackhole_spectroscopy.py` split registrar calls; no independent registered test exercises malformed-input, allocation-failure, direct-import, or restart paths
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, clang-format 22.1.8; backend=OpenMP C and CUDA source; precision=not-applicable; GPU=not-run; restart=not-run; distributed=not-applicable; error_path=not-run; options=default reader source baselines plus BHaHAHA reader source inspection; date=07-20-2026`
+- Deciding authority: registered primary code `nrpy/infrastructures/BHaH/read_checkpoint.py::register_CFunction_read_checkpoint`, `nrpy/infrastructures/BHaH/write_checkpoint.py::register_CFunction_write_checkpoint`, and `nrpy/infrastructures/BHaH/__init__.py` package import list
+- Corroboration: representative `nrpy/examples/blackhole_spectroscopy.py` split registrar calls; no independent registered test exercises malformed-input, allocation-failure, or restart paths
 
 Validation here is source-inspection scoped. Current Ubuntu/macOS codegen jobs
 generate and build default BHaH examples without running a write/restart/read
-sequence. File integrity, restored values, CUDA restart, multipatch selection,
-malformed-input rejection, allocation failure, and BHaHAHA horizon-history
-restart are therefore `not-run` runtime outcomes in this KB audit. The two
-changed default reader `.c`/`.cu` baselines were regenerated in an isolated
-copy and passed a second fresh-process comparison; retained writer baselines
-were unchanged. That proves normalized emitted-source regression only; it does
-not establish compilation, restart, malformed-input behavior, BHaHAHA source
-variants, GPU execution, or runtime results.
+sequence. Configured automation therefore does not establish file integrity,
+restored values, CUDA restart, multipatch selection, malformed-input rejection,
+allocation failure, or BHaHAHA horizon-history restart behavior.
 
 ## Sources
 
 - [diagnostics.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics.py) - `register_all_diagnostics`, `_register_CFunction_diagnostics`
 - [diagnostic_gfs_h_create.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostic_gfs_h_create.py) - `diagnostics_gfs_h_create`
 - [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py) - `register_CFunction_diagnostic_gfs_set`
+- [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py) - `register_CFunction_constraints_eval`
 - [diagnostics_nearest.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostics_nearest.py) - `register_CFunction_diagnostics_nearest`
+- [GRoovy diagnostics_nearest.py](../../../nrpy/infrastructures/BHaH/GRoovy/diagnostics_nearest.py) - `register_CFunction_diagnostics_nearest`
+- [Kasner diagnostics.py](../../../nrpy/infrastructures/BHaH/general_relativity/Kasner/diagnostics.py) - `register_CFunction_diagnostic_gfs_set`, `register_CFunction_diagnostics_nearest`
 - [diagnostics_nearest_grid_center.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics_nearest_grid_center.py) - `register_CFunction_diagnostics_nearest_grid_center`
 - [diagnostics_nearest_1d_y_and_z_axes.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics_nearest_1d_y_and_z_axes.py) - `register_CFunction_diagnostics_nearest_1d_y_and_z_axes`, `bhah_axis_configs`
 - [diagnostics_nearest_2d_xy_and_yz_planes.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics_nearest_2d_xy_and_yz_planes.py) - `register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes`, `bhah_plane_configs`
@@ -222,7 +252,6 @@ variants, GPU execution, or runtime results.
 - [BHaH package initializer](../../../nrpy/infrastructures/BHaH/__init__.py) - package import list for `read_checkpoint` and `write_checkpoint`
 - [read_checkpoint.py](../../../nrpy/infrastructures/BHaH/read_checkpoint.py) - `register_CFunction_read_checkpoint`
 - [write_checkpoint.py](../../../nrpy/infrastructures/BHaH/write_checkpoint.py) - `register_CFunction_write_checkpoint`
-- [checkpointing.py](../../../nrpy/infrastructures/BHaH/checkpointing.py) - retained `register_CFunction_read_checkpoint`, `register_CFunction_write_checkpoint`, `register_CFunctions`
 - [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py) - `BHaH.read_checkpoint.register_CFunction_read_checkpoint`, `BHaH.write_checkpoint.register_CFunction_write_checkpoint`
 - [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py) - `BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create`, `BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator`
 - [SOURCES.md](../../../raw/SOURCES.md) - `infrastructure-modules-and-embedded-headers`

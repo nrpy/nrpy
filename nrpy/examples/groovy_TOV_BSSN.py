@@ -111,7 +111,7 @@ if separate_Ricci_and_BSSN_RHS:
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
-BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BHaH.general_relativity.enforce_detgbar_equals_detghat_trAzero.register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
@@ -369,7 +369,7 @@ apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].
 """
 
 post_RHS_string = r"""
-enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);
+enforce_detgbar_equals_detghat_trAzero(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);
 conservatives_to_primitives_routine(commondata, params, &commondata->ghl_params, 
                                     &commondata->eos, xx, RK_OUTPUT_GFS, auxevol_gfs);
 apply_copy_and_outflow_bcs(commondata, params, &commondata->ghl_params, bcstruct, xx, 
@@ -473,7 +473,7 @@ for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {
 
   apply_bcs_outerextrap_and_inner(&commondata, params, bcstruct, in_gfs);
 
-  enforce_detgammabar_equals_detgammahat(params, rfmstruct, in_gfs, auxevol_gfs);
+  enforce_detgbar_equals_detghat_trAzero(params, rfmstruct, in_gfs, auxevol_gfs);
 
   primitives_to_conservatives_routine(&commondata, params, xx, &commondata.eos, auxevol_gfs, in_gfs);
   conservatives_to_primitives_routine(&commondata, params, &commondata.ghl_params, &commondata.eos, xx, in_gfs, auxevol_gfs);

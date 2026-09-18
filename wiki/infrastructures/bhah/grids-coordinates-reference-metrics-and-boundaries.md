@@ -1,6 +1,6 @@
 # Grids, Coordinates, Reference Metrics, And Boundaries
 
-> BHaH route for numerical grid setup, coordinate wrappers, reference-metric precompute, GeneralRFM, fisheye hooks, and curvilinear boundaries. Status: confirmed. Last reconciled: 07-20-2026
+> BHaH route for numerical grid setup, coordinate wrappers, reference-metric precompute, GeneralRFM, fisheye hooks, and curvilinear boundaries. Status: confirmed.
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -61,8 +61,13 @@ and maps them to `xx`. When the caller supplies `Cart_to_i0i1i2`, the emitted C
 function then converts `xx` to nearest indices with `xxmin`, `dxx`, and
 `NGHOSTS`; this conversion assumes a valid, in-domain, cell-centered point and
 does not perform a bounds check. When `Cart_to_i0i1i2 == NULL`, it returns after
-computing `xx`, before any floating-to-integer index conversion. For a
-multipatch grid with `params->grid_rotates`, inverse conversion builds the
+computing `xx`, before any floating-to-integer index conversion. For an
+ordinary coordinate map whose inverse requires a
+numerical root, each affected native coordinate is solved inside
+`[xxmin, xxmax]` with endpoint checks and safeguarded Newton iterations;
+out-of-bracket Newton proposals fall back to bisection, and failure after 100
+iterations is fatal. For a multipatch grid with `params->grid_rotates`,
+inverse conversion builds the
 cumulative rotation matrix and applies `R^T` to the Cartesian vector before
 local-origin handling and native-coordinate inversion; forward `xx_to_Cart`
 applies `R` after native-to-Cartesian mapping and origin handling. GeneralRFM
@@ -77,23 +82,40 @@ Maintenance rule: coordinate-admission checks are request-gated by
 [Contribution Style And Static Analysis](../../architecture/contribution-style-and-static-analysis.md);
 the nullable coordinates-only path does not authorize adding them.
 
-The 30 current `Cart_to_xx_and_nearest_i0i1i2_assume_valid` and 30 current
-`xx_to_Cart` default independent-grid baselines and four explicitly named
-Cartesian multipatch OpenMP/CUDA baselines passed isolated candidate
-generation, review, byte comparison, and a second fresh-process source comparison. No C/CUDA
-compilation, runtime inverse check, or numerical-result guarantee was
-established. Then
-`rfm_wrapper_functions.py` creates non-coordinate-specific wrapper functions that
-switch on `params->CoordSystem_hash`, calls the matching coordinate-specific
-function, and registers uppercase coordinate hash macros in `BHaH_defines.h`.
+Owner full-source baselines cover the default independent-grid inverse and
+forward converters plus explicitly named Cartesian multipatch OpenMP/CUDA
+variants. The OpenMP GeneralRFM fisheye inverse is intentionally excluded from
+full-source golden comparison; its semantic doctest compiles generated OpenMP C
+harnesses with `REAL=float` and `REAL=double`, checks finite round-trip fixtures,
+and checks recoverable failure for non-finite Cartesian input. No broader
+application build, CUDA GeneralRFM runtime, GPU run, restart run, distributed
+run, or production numerical-result guarantee follows.
 
 Claim evidence:
-- Claim: `Cart_to_xx_and_nearest_i0i1i2_assume_valid` returns logical coordinates without index conversion when `Cart_to_i0i1i2 == NULL`; each multipatch converter self-registers its exact SO(3) dependency closure; and rotating-multipatch inverse/forward conversion applies `R^T` and `R`, respectively.
+- Claim: Owner full-source baselines cover the default independent-grid inverse and forward converters plus explicitly named Cartesian multipatch OpenMP/CUDA variants. The GeneralRFM fisheye inverse is intentionally excluded from full-source golden comparison; its semantic doctest compiles generated OpenMP C harnesses with `REAL=float` and `REAL=double`, checks finite round-trip fixtures, and checks recoverable failure for non-finite Cartesian input. No broader application build, CUDA GeneralRFM runtime, GPU run, restart run, distributed run, or production numerical-result guarantee follows.
+- Role: generated evidence
+- Deciding authority: `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, `register_CFunction_xx_to_Cart`, `_run_generalrfm_fisheye_inverse_roundtrip_check`
+- Corroboration: `nrpy/infrastructures/BHaH/generalrfm_cart_to_xx.py` - `register_CFunction_generalrfm_Cart_to_xx`
+
+GeneralRFM CUDA converters are unsupported in these coordinate conversion
+registrars.
+
+Claim evidence:
+- Claim: GeneralRFM CUDA converters are unsupported in these coordinate conversion registrars.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, `register_CFunction_xx_to_Cart`
+- Corroboration: `nrpy/infrastructures/BHaH/generalrfm_cart_to_xx.py` - `register_CFunction_generalrfm_Cart_to_xx`
+
+`rfm_wrapper_functions.py` creates non-coordinate-specific wrapper functions
+that switch on `params->CoordSystem_hash`, calls the matching
+coordinate-specific function, and registers uppercase coordinate hash macros in
+`BHaH_defines.h`.
+
+Claim evidence:
+- Claim: `Cart_to_xx_and_nearest_i0i1i2_assume_valid` returns logical coordinates without index conversion when `Cart_to_i0i1i2 == NULL`; ordinary numerical inverses use bounded safeguarded Newton iterations with bisection fallback; each multipatch converter self-registers its exact SO(3) dependency closure; and rotating-multipatch inverse/forward conversion applies `R^T` and `R`, respectively.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, `register_CFunction_xx_to_Cart`
 - Corroboration: none available; owner-derived emitted-source comparisons are not independent evidence.
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, clang-format 22.1.8; backend=OpenMP C and CUDA source; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=15 default independent coordinate systems plus Cartesian rotating multipatch; date=07-20-2026`
 
 Curvilinear boundary registration starts in
 `CurviBoundaryConditions/register_all.py`. It registers `outer_bc_type` with

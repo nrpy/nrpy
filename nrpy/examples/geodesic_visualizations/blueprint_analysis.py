@@ -2,7 +2,8 @@
 Validate and visualize native geodesic blueprint artifacts.
 
 This utility checks the native tile headers and streams records for integrity,
-termination-status, and coordinate diagnostics before plotting sampled data.
+termination-status, coordinate, and optional normalization diagnostics before
+plotting sampled data.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com

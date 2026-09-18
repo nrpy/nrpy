@@ -2,7 +2,6 @@ from . import (
     CurviBoundaryConditions,
     Makefile_helpers,
     MoL,
-    chare_communication_maps,
     diagnostics,
     general_relativity,
     horizon_finder_chare,

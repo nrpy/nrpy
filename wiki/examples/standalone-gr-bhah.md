@@ -1,6 +1,6 @@
 # Standalone GR/BHaH
 
-> Route standalone BHaH numerical-relativity generators by initial data, coordinates, diagnostics, and build mode. · Status: confirmed · Last reconciled: 07-19-2026
+> Route standalone BHaH numerical-relativity generators by initial data, coordinates, diagnostics, and build mode. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
@@ -38,12 +38,26 @@ explicitly OpenMP-only and is rejected with `--cuda`.
 Cartesian initial-data coordinates on `SinhCylindrical`, registers
 `NRPyPN_quasicircular_momenta`, registers the TwoPunctures library, solves the
 TwoPunctures initial-data persist structure before filling BHaH initial data,
-and frees the TwoPunctures derivative storage afterward. It uses
+and frees the TwoPunctures derivative storage afterward. It overrides the
+shared `psi^n` initial lapse with `W` for SSL; option semantics are documented in
+[BHaH GR Application Wiring](../infrastructures/bhah/gr-application-wiring.md).
+It uses
 `OnePlusLog`/`GammaDriving2ndOrder_Covariant`, eighth-order finite differences,
 separate Ricci, outgoing radiation boundaries, checkpointing every `2.0` by
 default, Psi4 and spin-weight minus-two spherical-harmonic diagnostics, and GSL
 Makefile flags through `gsl-config`. Its source-backed generation flags are
-`--cuda` and `--floating_point_precision`.
+`--cuda`, `--fccz4`, and `--floating_point_precision`. BSSN remains the
+default. `--fccz4` selects fCCZ4 RHS/gauge registration and zeroes
+`Theta_fCCZ4` only while fresh ADM data are converted; checkpoint loading is
+attempted first and returns without that zeroing. Both choices use the same
+combined determinant/trace projection after initial-data boundary handling and
+in the Method of Lines post-RHS hook.
+
+Claim evidence:
+- Claim: `blackhole_spectroscopy.py` defaults to BSSN and accepts `--fccz4`; that flag selects fCCZ4 RHS/gauge registration and fresh-data-only Theta zeroing after the checkpoint branch, while both formulations use the same initial-data and post-RHS conformal projection; this source ordering does not prove restart correctness or scientific validity.
+- Role: public/scientific contract
+- Deciding authority: [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py), `parser`, `enable_fCCZ4`, initial-data/RHS/Method of Lines registrations
+- Corroboration: [initial_data.py](../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [ADM_Initial_Data_Reader__BSSN_Converter.py](../../nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py), `register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`; [enforce_detgbar_equals_detghat_trAzero.py](../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), combined projector
 
 `python -m nrpy.examples.spinning_blackhole` generates
 `project/spinning_blackhole/`. It evolves `IDtype = "UIUCBlackHole"` in
@@ -62,18 +76,26 @@ horizon workflow: `IDtype = "Kasner"`, Cartesian initial-data coordinates,
 fourth-order finite differences, extrapolation outer boundaries, and a guard
 that requires the Kasner exponents to satisfy both Kasner constraints. It uses
 Kasner-specific diagnostic gridfunction registration and nearest diagnostics.
-The source keeps separate Ricci for supported paths, but disables device-side
-separate Ricci when CUDA and GeneralRFM are combined, then still registers a
-host-only Ricci path for CUDA. Its source-backed generation flags are `--cuda`
-and `--floating_point_precision`.
+The parser exposes `--cuda`, but that route is not usable. The fixed GeneralRFM
+coordinate causes initial-data registration to request GeneralRFM support, and
+GeneralRFM precompute rejects CUDA before later Ricci registration can help.
+Use the default OpenMP route; `--floating_point_precision` remains available.
 
-All four generators default to OpenMP and switch to CUDA only when `--cuda` is
-present. In CUDA mode they register CUDA host/device helpers, use `nvcc`,
-choose `.cu` source output, copy `cuda_intrinsics.h`, and relax generated
-pointer qualifiers from `*restrict` to `*`. In OpenMP mode, the three
-black-hole examples generate or link a BHaHAHA static library subdirectory and
-require double precision for that integration; non-double OpenMP BHaHAHA
-generation raises an error. The Kasner benchmark does not generate BHaHAHA.
+Claim evidence:
+- Claim: `kasner_exact_evolution.py` defaults to a source-supported OpenMP path and exposes `--floating_point_precision`; it also exposes `--cuda`, but CUDA generation fails while initial-data registration requests support for its fixed GeneralRFM coordinate because GeneralRFM precompute rejects CUDA before later Ricci registration.
+- Role: descriptive behavior
+- Deciding authority: [kasner_exact_evolution.py](../../nrpy/examples/kasner_exact_evolution.py), `parser`, `parallelization`, `CoordSystem`, `enable_rfm_precompute`, `BHaH.general_relativity.initial_data.register_CFunction_initial_data`, and `BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval`
+- Corroboration: [initial_data.py](../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [generalrfm_precompute.py](../../nrpy/infrastructures/BHaH/generalrfm_precompute.py), `register_CFunctions_generalrfm_support` and `register_CFunction_generalrfm_precompute`
+
+The listed generators default to OpenMP. The black-hole generators switch
+to CUDA when `--cuda` is present; the Kasner parser selects CUDA but fails at
+the GeneralRFM precompute gate described above. For the usable CUDA routes,
+generators register CUDA host/device helpers, use `nvcc`, choose `.cu` source
+output, copy `cuda_intrinsics.h`, and relax generated pointer qualifiers from
+`*restrict` to `*`. In OpenMP mode, the black-hole examples generate or
+link a BHaHAHA static library subdirectory and require double precision for
+that integration; non-double OpenMP BHaHAHA generation raises an error. The
+Kasner benchmark does not generate BHaHAHA.
 
 The shared BHaH runtime pieces include nearest and volume diagnostics,
 diagnostic gridfunction header generation, progress output, constraint
@@ -96,8 +118,12 @@ generator that horizon-enabled black-hole examples call.
 
 - [two_blackholes_collide.py](../../nrpy/examples/two_blackholes_collide.py) - `project_name`, `CoordSystem`, `IDtype`, `--raytracing-time`, `--raytracing-data-mode`, `enable_bhahaha`
 - [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py) - `project_name`, `IDtype`, `BHaH.general_relativity.TwoPunctures.TwoPunctures_lib.register_C_functions`, `enable_psi4_diagnostics`, `BHaH.read_checkpoint.register_CFunction_read_checkpoint`, `BHaH.write_checkpoint.register_CFunction_write_checkpoint`
+- [initial_data.py](../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py) - checkpoint-first `register_CFunction_initial_data`
+- [ADM_Initial_Data_Reader__BSSN_Converter.py](../../nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py) - fresh-data `Theta_fCCZ4` initialization
+- [enforce_detgbar_equals_detghat_trAzero.py](../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - shared determinant/trace projector
 - [spinning_blackhole.py](../../nrpy/examples/spinning_blackhole.py) - `project_name`, `CoordSystem`, `IDtype`, `spin_alignment_vector_params`, `default_BH_spin_chiU`
 - [kasner_exact_evolution.py](../../nrpy/examples/kasner_exact_evolution.py) - `project_name`, `IDtype`, `LapseEvolutionOption`, `ShiftEvolutionOption`, `use_separate_ricci`
+- [generalrfm_precompute.py](../../nrpy/infrastructures/BHaH/generalrfm_precompute.py) - `register_CFunctions_generalrfm_support`, `register_CFunction_generalrfm_precompute`
 
 ## See Also
 

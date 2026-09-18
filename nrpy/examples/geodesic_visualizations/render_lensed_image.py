@@ -4,8 +4,8 @@ Defines the static image rendering engine.
 
 Translates raw geodesic data (blueprints) into visual images. Performs texture mapping
 for the celestial sphere (background stars) and the accretion disk. Uses an
-accumulator-based approach to map terminal ray data onto the global pixel coordinates
-stored in each blueprint record.
+accumulator-based approach to map terminal ray data from the normalized image-sample
+coordinates stored in each blueprint record onto the requested output raster.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -448,7 +448,7 @@ def _process_blueprint_tile(
         )
 
     # --- SPARSE MAP-REDUCE COMPRESSION ---
-    # Downcast the output payload to float32 only AFTER the float64 math is done
+    # Downcast the output image data to float32 only AFTER the float64 math is done.
     hit_mask = local_count_acc > 0
     flat_y, flat_x = np.nonzero(hit_mask)
     flat_colors = local_pixel_acc[hit_mask].astype(np.float32)

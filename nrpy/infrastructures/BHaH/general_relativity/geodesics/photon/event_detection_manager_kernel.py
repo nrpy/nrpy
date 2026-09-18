@@ -4,11 +4,11 @@ Provides the C orchestrator for geometric event detection.
 
 This module provides high-level logic for detecting crossings of the independent
 nonterminal and terminal planes. It generates a C kernel that reads current
-and historical integration state bundles from global device memory into local arrays
+and historical integration state bundles into local arrays
 to evaluate evolution-measure limits and coordinate-radius bounds before verifying
 physical plane intersections. The geometric boundaries remain mathematically immutable
 across all rendered tiles, ensuring consistent hit detection depth. The kernel calls
-downstream interpolation routines to resolve precise boundary crossing coordinates
+downstream interpolation routines to estimate boundary crossing coordinates
 and outputs the filtered physical intersections to persistent blueprint structures
 while shifting the valid trajectory history arrays to stage the next solver step.
 

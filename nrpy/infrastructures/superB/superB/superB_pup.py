@@ -30,7 +30,7 @@ def generate_pup_serialization_lines_for_CodeParams(
     :return:               A list of C++ lines (strings) performing p| or PUParray calls
                            for this field.
     """
-    base, size, is_array = BHaH.BHaH_defines_h.parse_cparam_type(codeparam.cparam_type)
+    base, size, is_array = par.parse_cparam_type(codeparam.cparam_type)
     lines: List[str] = []
     comment = f"  // {codeparam.module}::{field_name}"
     target = f"{struct_prefix}.{field_name}"
@@ -69,7 +69,6 @@ It includes routines for serializing and deserializing:
     - rfm_struct with reference metric precomputation and memory allocation,
     - inner and outer boundary condition structures (innerpt_bc_struct, outerpt_bc_struct, bc_info_struct, bc_struct),
     - MoL grid functions (MoL_gridfunctions_struct),
-    - chare communication structures (charecomm_struct),
     - diagnostic information (diagnostic_struct),
     - temporary buffers and nonlocal inner boundary conditions (tmpBuffers_struct, nonlocalinnerbc_struct),
     - and grid data structures (griddata_struct, griddata_chare).
@@ -170,7 +169,7 @@ static void pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, 
 /**
  * PUP allocation state for the optional BHaHAHA input metric workspace.
  *
- * The workspace payload is intentionally not serialized here. At the normal
+ * The workspace data are intentionally not serialized here. At the normal
  * migration/checkpoint wait point, BHaHAHA_transform_BSSN_to_ADM() has not yet
  * filled this scratch buffer; it will be recomputed after interpolation data
  * are restored.
@@ -307,7 +306,15 @@ void pup_outerpt_bc_struct(PUP::er &p, outerpt_bc_struct &obc) {
   p | obc.FACEX0;
   p | obc.FACEX1;
   p | obc.FACEX2;
-}
+  p | obc.r;
+  p | obc.partial_x0_partial_r;
+  p | obc.partial_x1_partial_r;
+  p | obc.partial_x2_partial_r;
+  p | obc.r_int;
+  p | obc.partial_x0_partial_r_int;
+  p | obc.partial_x1_partial_r_int;
+  p | obc.partial_x2_partial_r_int;
+} // END FUNCTION: pup_outerpt_bc_struct
 
 // PUP routine for struct bc_info_struct
 void pup_bc_info_struct(PUP::er &p, bc_info_struct &bci) {
@@ -415,17 +422,6 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
     prefunc += """
 }
 """
-    # PUP routine for charecomm_struct
-    prefunc += """
-// PUP routine for struct charecomm_struct
-void pup_charecomm_struct(PUP::er &p, charecomm_struct &cc, const params_struct &params_chare) {
-  const int ntotchare = params_chare.Nxx_plus_2NGHOSTS0 * params_chare.Nxx_plus_2NGHOSTS1 * params_chare.Nxx_plus_2NGHOSTS2;
-  if (p.isUnpacking()) {
-    cc.localidx3pt_to_globalidx3pt = (int *restrict)malloc(sizeof(int) * ntotchare);
-  }
-  PUParray(p, cc.localidx3pt_to_globalidx3pt, ntotchare);
-}"""
-
     # PUP routine for diagnostic_struct
     prefunc += """
 // PUP routine for struct diagnostic_struct
@@ -561,9 +557,9 @@ void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, co
     nonlocal.num_srcpts_tosend_each_chare = (int *restrict)malloc(sizeof(int) * nonlocal.tot_num_dst_chares);
 
     nonlocal.map_srcchare_and_srcpt_id_to_linear_id = (int **)malloc(sizeof(int *) * nonlocal.tot_num_src_chares);
-    nonlocal.globalidx3_srcpts = (int **)malloc(sizeof(int *) * nonlocal.tot_num_src_chares);
+    nonlocal.globalidx3_srcpts = (int64_t **)malloc(sizeof(int64_t *) * nonlocal.tot_num_src_chares);
 
-    nonlocal.globalidx3_srcpts_tosend = (int **)malloc(sizeof(int *) * nonlocal.tot_num_dst_chares);
+    nonlocal.globalidx3_srcpts_tosend = (int64_t **)malloc(sizeof(int64_t *) * nonlocal.tot_num_dst_chares);
   }
   PUParray(p, nonlocal.idx3_of_src_chares, nonlocal.tot_num_src_chares);
   PUParray(p, nonlocal.idx3chare_to_src_chare_id, tot_num_chares);
@@ -578,7 +574,7 @@ void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, co
       nonlocal.map_srcchare_and_srcpt_id_to_linear_id[src_chare] =
           (int *restrict)malloc(sizeof(int) * nonlocal.num_srcpts_each_chare[src_chare]);
       nonlocal.globalidx3_srcpts[src_chare] =
-          (int *restrict)malloc(sizeof(int) * nonlocal.num_srcpts_each_chare[src_chare]);
+          (int64_t *restrict)malloc(sizeof(int64_t) * nonlocal.num_srcpts_each_chare[src_chare]);
     }
     PUParray(p, nonlocal.map_srcchare_and_srcpt_id_to_linear_id[src_chare], nonlocal.num_srcpts_each_chare[src_chare]);
     PUParray(p, nonlocal.globalidx3_srcpts[src_chare], nonlocal.num_srcpts_each_chare[src_chare]);
@@ -586,7 +582,7 @@ void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, co
   for (int dst_chare = 0; dst_chare < nonlocal.tot_num_dst_chares; dst_chare++) {
     if (p.isUnpacking()) {
       nonlocal.globalidx3_srcpts_tosend[dst_chare] =
-          (int *restrict)malloc(sizeof(int) * nonlocal.num_srcpts_tosend_each_chare[dst_chare]);
+          (int64_t *restrict)malloc(sizeof(int64_t) * nonlocal.num_srcpts_tosend_each_chare[dst_chare]);
     }
     PUParray(p, nonlocal.globalidx3_srcpts_tosend[dst_chare], nonlocal.num_srcpts_tosend_each_chare[dst_chare]);
   }
@@ -595,8 +591,7 @@ void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, co
     # PUP routine for griddata struct
     prefunc += """
 // PUP routine for struct griddata
-// During time evolution, need params from griddata for xx used by diagnostics;
-// charecomm_struct now unpacks from gd.params within griddata_chare.
+// During time evolution, need params from griddata for xx used by diagnostics.
 void pup_griddata(PUP::er &p, griddata_struct &gd) {
   pup_params_struct(p, gd.params);
   if (p.isUnpacking()) {
@@ -627,8 +622,6 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const commondata_struct
   PUParray(p, gd.xx[2], gd.params.Nxx_plus_2NGHOSTS2);
 
   pup_diagnostic_struct(p, gd.diagnosticstruct, gd.params);
-
-  pup_charecomm_struct(p, gd.charecommstruct, gd.params);
 
   pup_bc_struct(p, gd.bcstruct);
 

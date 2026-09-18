@@ -10,16 +10,9 @@ ray's normalized image-sample coordinates for ray construction. Batch struct
 definitions are registered separately so analytical single-ray code can retain
 its smaller state layout.
 
-Single coalesced memory writes prevent thread serialization and ensure aligned cache
-access. An explicit hardware error synchronization trap prevents silent link-time
-symbol failures caused by compiling with -rdc=true. Hydrating pinned memory via data
-bus seeds the Time Slot Manager. Evaluating the initial side of the independent
-nonterminal and terminal planes natively prevents redundant device memory allocation
-and data transfers.
-Thread identification boundaries prevent out-of-bounds access for threads exceeding
-the active chunk. Parallelized batch processing distributes execution across threads.
-Processing memory in static bundles protects hardware limits. A synchronization
-transfer updates the master Structure of Arrays state.
+The generated CPU/CUDA path initializes chunked state buffers, records each ray's
+initial side of the independent event planes, and copies the completed state back
+to the caller-owned Structure-of-Arrays storage.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -39,7 +32,7 @@ from nrpy.helpers.loop import loop
 batch_structs_c_code = r"""
     #include <stddef.h>
 
-    // Maximum number of photons processed per batch to fit within L1/L2 cache.
+    // Maximum number of photons processed by one pipeline bundle.
     #define BUNDLE_CAPACITY 524288
 
     // Defines the physical event surfaces tracked during integration.
@@ -553,7 +546,6 @@ __OBSERVER_RAY_MATH__
         upper_bound="num_rays",
         increment="BUNDLE_CAPACITY",
         pragma="",
-        idx_type="long int",
         loop_body=f"""
         const long int chunk_size = NRPYMIN(num_rays - start_idx, BUNDLE_CAPACITY);
         {launch_code}

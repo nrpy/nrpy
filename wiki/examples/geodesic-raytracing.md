@@ -1,6 +1,6 @@
 # Geodesic Raytracing
 
-> Explain standalone massive and photon geodesic examples plus batch photon raytracing visualization artifacts. · Status: confirmed · Last reconciled: 07-30-2026
+> Explain standalone massive and photon geodesic examples plus batch photon raytracing visualization artifacts. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
@@ -8,8 +8,9 @@
 NRPy has five checked-in geodesic example generators. `massive_single_geodesic_integrator_analytical`
 builds a single massive-particle Kerr-Schild Cartesian trajectory and uses GSL's
 RKF45 ODE path. `photon_single_geodesic_integrator_analytical` builds a single photon trajectory
-with the same analytic spacetime target but uses the split-pipeline photon RKF45
-kernels directly. `photon_batch_geodesic_integrator_analytical` builds a tiled photon
+from either the Kerr-Schild recipe or the static coincident Brill-Lindquist
+recipe and uses the split-pipeline photon RKF45 kernels directly.
+`photon_batch_geodesic_integrator_analytical` builds a tiled photon
 raytracing project, defaults to OpenMP, can generate CUDA code with `--cuda`,
 honors `--outdir`, and writes per-tile light-blueprint binary artifacts for the
 lensed-image renderer and diagnostic scripts. The numerical single- and batch-
@@ -25,8 +26,7 @@ states use `u`.
 
 All generation, build, executable, trajectory, and rendering commands on this
 page are manual/source-supported. Neither GitHub workflow nor the local full-CI
-helper invokes these three generators. No runtime or numerical result was
-reproduced during this KB audit.
+helper invokes these five generators, so these routes remain manual/source-supported.
 
 ## Detail
 
@@ -73,8 +73,10 @@ make
 python3 visualize_trajectory.py --particle_type Photon
 ```
 
-The single-photon path also targets `KerrSchild_Cartesian`, but it does not use
-GSL. It allocates one Structure-of-Arrays photon state, constructs the complete
+The analytical single-photon path defaults to `KerrSchild_Cartesian` and also
+accepts `BrillLindquist_InitialData_Static_Cartesian` through `--spacetime`.
+It accepts direct or normalized photon equations through `--eom` and does not
+use GSL. It allocates one Structure-of-Arrays photon state, constructs the complete
 initial momentum from the observer tetrad, and runs the split RKF45 pipeline through
 `interpolation_kernel`, `calculate_ode_rhs_kernel`, `rkf45_stage_update`, and
 `rkf45_finalize_and_control`, writes `trajectory.txt`, and reports null
@@ -85,29 +87,35 @@ normal-observer log-energy cutoff, whose default `--evolution-measure-max` is
 `pip install matplotlib numpy`; those Python visualization dependencies are
 source-limited to the checked-in script imports and generator message.
 
+Both single-photon generators enable RKF45 trial and stage diagnostics by
+default. Their generated executables write adaptive-step controller values to
+`rkf45_trials.txt` and all six metric, connection, and right-hand-side stage
+evaluations for each trial to `rkf45_stages.txt`; the numerical version records
+the interpolated geometry used at each stage. Pass
+`--disable-rkf45-trial-debug` during project generation to omit this diagnostic
+code; use `--enable-rkf45-trial-debug` to select it explicitly.
+
 Claim evidence:
-- Claim: The single-photon analytical generator constructs unit-energy initial momentum from the observer tetrad, runs the split RKF45 pipeline, applies the upper-only log-energy cutoff, writes `trajectory.txt`, and reports normalization and conserved-quantity diagnostics.
-- Role: generated-output boundary
-- Deciding authority: `nrpy/examples/photon_single_geodesic_integrator_analytical.py` — generator registration and `single_integrator_analytical`
+- Claim: The analytical and numerical single-photon generators construct unit-energy initial momentum from the observer tetrad, run the split RKF45 pipeline, apply the upper-only log-energy cutoff, write `trajectory.txt`, and enable trial/stage diagnostics by default.
+- Role: generated evidence
+- Deciding authority: `nrpy/examples/photon_single_geodesic_integrator_analytical.py` and `nrpy/examples/photon_single_geodesic_integrator_numerical.py` — generator registration and debug-option defaults
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/set_initial_conditions_kernel.py` — observer-tetrad initialization
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
 `trajectory.txt` is the handoff artifact for the single-ray visualization. The
-massive file header is `# tau t x y z u^t u^x u^y u^z`; the photon file header
-is `# lambda t x y z p^t p^x p^y p^z aux`. `visualize_trajectory.py` loads that
-text file with NumPy, validates it is present and non-empty, prints initial and
-final spatial positions plus the accumulated affine or proper parameter, then
-saves `trajectory_plot.png` and displays a Matplotlib 3D path with an approximate
-`r=2M` horizon.
+massive file header is `# proper_time t x y z u^t u^x u^y u^z`. Direct photon
+output uses `# lambda t x y z p^t p^x p^y p^z L_normal`; normalized output uses
+`# lambda t x y z u Pi_1 Pi_2 Pi_3 L_normal`. Numerical photon output appends a
+`norm` column containing the accepted-state constraint residual.
+`visualize_trajectory.py` loads the text file with NumPy, validates it is present
+and non-empty, prints initial and final spatial positions plus the accumulated
+affine or proper parameter, then saves `trajectory_plot.png` and displays a
+Matplotlib 3D path with a schematic `r=2M` reference sphere.
 
 Claim evidence:
 - Claim: `trajectory.txt` is the single-ray visualization handoff with the documented state headers, and `visualize_trajectory.py` validates the input before plotting it.
-- Role: generated-output boundary
+- Role: generated evidence
 - Deciding authority: `nrpy/examples/geodesic_visualizations/visualize_trajectory.py` — `visualize_trajectory`; `nrpy/examples/photon_single_geodesic_integrator_analytical.py` — trajectory header
 - Corroboration: `nrpy/examples/photon_single_geodesic_integrator_numerical.py` — numerical trajectory header
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
 For a batch lensed-image run with default OpenMP output under `project/`:
 
@@ -161,11 +169,9 @@ CUDA Toolkit; this page does not claim any GPU model/toolkit version was tested.
 
 Claim evidence:
 - Claim: The analytical batch generator defaults to OpenMP, selects CUDA with `--cuda`, derives its project directory from `--outdir`, and exposes tile counts and scan density as angular sampling controls while final PNG pixel width remains a visualization setting.
-- Role: user-facing commands and interfaces
+- Role: public/scientific contract
 - Deciding authority: `nrpy/examples/photon_batch_geodesic_integrator_analytical.py` — argument parser and project generation
 - Corroboration: `nrpy/examples/geodesic_visualizations/visualize_lensed_image.py` — header-driven tile and aspect-ratio handling
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
 The analytical batch integrator applies the same upper-only log-energy cutoff
 after each accepted state. Its direct-EOM path refreshes the accepted-state
@@ -185,11 +191,9 @@ risk.
 
 Claim evidence:
 - Claim: Analytical batch artifacts use native same-build blueprint schema version 6 with 100-byte records, and Python `BLUEPRINT_DTYPE` must match the generated C `blueprint_data_t` layout and termination enums.
-- Role: generated-output boundary
+- Role: generated evidence
 - Deciding authority: `nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py` — `BLUEPRINT_SCHEMA_VERSION`, `BLUEPRINT_DTYPE`
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/calculate_and_fill_blueprint_data_universal.py` — generated record layout
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
 `visualize_lensed_image.py` expects those per-tile `.bin` files next to the
 script and discovers the tile grid and angular aspect ratio from headers. It
@@ -209,27 +213,25 @@ source-limited to the checked-in files.
 
 Claim evidence:
 - Claim: `visualize_lensed_image.py` consumes per-tile binary artifacts, discovers tile geometry from headers, maps normalized image fractions to pixels, and delegates final rendering to `render_lensed_image.py`.
-- Role: generated-output boundary
+- Role: generated evidence
 - Deciding authority: `nrpy/examples/geodesic_visualizations/visualize_lensed_image.py` — `main`; `render_lensed_image.py` — `generate_static_lensed_image`
 - Corroboration: `nrpy/examples/geodesic_visualizations/blueprint_io.py` — binary header and record readers
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
 `blueprint_analysis.py` is the diagnostic script for the same binary artifacts.
 It streams each tile, counts raw termination enums, compares them to
 `blueprint_config_and_schema.py`, reports nonterminal-plane diagnostic statistics,
 prints early records, and displays heatmaps for nonterminal-plane, terminal-plane,
-and celestial-sphere coordinates. Its warning text directs maintainers to
-update the schema file when raw enum values do not match current Python
-constants.
+and celestial-sphere coordinates. When every matching
+`light_blueprint_norm_abs_XX_YY.bin` sidecar is present and correctly sized, it
+also plots normalization-magnitude histograms grouped by termination status.
+Its warning text directs maintainers to update the schema file when raw enum
+values do not match current Python constants.
 
 Claim evidence:
-- Claim: `blueprint_analysis.py` streams the same binary artifacts, reports termination diagnostics against the configured enum names, and provides nonterminal-plane, terminal-plane, and celestial-sphere heatmaps.
+- Claim: `blueprint_analysis.py` streams blueprint artifacts, reports termination diagnostics against the configured enum names, provides plane/celestial heatmaps, and consumes complete matching normalization sidecars when available.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/examples/geodesic_visualizations/blueprint_analysis.py` — `diagnose_blueprint`, `plot_heatmaps`
 - Corroboration: `nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py` — termination constants and record fields
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
 This standalone batch raytracer is related to, but distinct from, the
 evolution-time raytracing export enabled by
@@ -247,8 +249,6 @@ Claim evidence:
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/diagnostics/diagnostics.py` — `enable_static_christoffels` scheduling
 - Corroboration: `nrpy/infrastructures/BHaH/diagnostics/output_raytracing_data.py` — static GammaUDD selection
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
 For a numerical-spacetime dataset, first generate the evolution project and
 its slice-combining workflow:
@@ -275,11 +275,9 @@ near, rather than exactly equal to, nominal evolution intervals.
 
 Claim evidence:
 - Claim: The numerical pipeline combines full logical-grid slice payloads into a `.bin` container; nominal `--dt-spacetime-data` describes approximate gaps and synthetic edge times, while stored slice-table times remain authoritative at runtime.
-- Role: user-facing commands and interfaces
+- Role: public/scientific contract
 - Deciding authority: `nrpy/examples/photon_single_geodesic_integrator_numerical.py` and `photon_batch_geodesic_integrator_numerical.py` — CLI help and runtime parameters
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/time_window_manager_numerical.py` — slice-table loading and time-window construction
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
 ```bash
 python -m nrpy.examples.photon_single_geodesic_integrator_numerical \
@@ -311,8 +309,6 @@ Claim evidence:
 - Role: public/scientific contract
 - Deciding authority: `nrpy/examples/photon_single_geodesic_integrator_numerical.py` and `nrpy/examples/photon_batch_geodesic_integrator_numerical.py` — CLI and parameter wiring
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/batch_integrator_numerical.py` and `numerical_interpolation.py` — generated integration and interpolation contracts
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-30-2026`
 
 ## Sources
 
@@ -325,6 +321,7 @@ Claim evidence:
 - [combine_raytracing_time_slices.py](../../nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py) - `InputSliceInfo`, `parse_args`, `--run-metadata`
 - [visualize_trajectory.py](../../nrpy/examples/geodesic_visualizations/visualize_trajectory.py) - `visualize_trajectory`, `plot_trajectory`
 - [blueprint_config_and_schema.py](../../nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py) - `BLUEPRINT_DTYPE`, `STOP_CONDITION_TERMINAL_PLANE`
+- [blueprint_io.py](../../nrpy/examples/geodesic_visualizations/blueprint_io.py) - `read_blueprint_header`, `iter_blueprint_chunks`
 - [render_lensed_image.py](../../nrpy/examples/geodesic_visualizations/render_lensed_image.py) - `generate_static_lensed_image`, `_process_blueprint_tile`, `_load_texture`
 - [visualize_lensed_image.py](../../nrpy/examples/geodesic_visualizations/visualize_lensed_image.py) - `main`, `light_blueprint_{i:02d}_{j:02d}.bin`, `urlretrieve`
 - [blueprint_analysis.py](../../nrpy/examples/geodesic_visualizations/blueprint_analysis.py) - `diagnose_blueprint`, `plot_heatmaps`

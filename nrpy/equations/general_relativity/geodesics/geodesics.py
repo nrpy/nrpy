@@ -44,8 +44,8 @@ class GeodesicEquations:
         """
         Initialize and compute all geodesic equation quantities.
 
-        This constructor orchestrates the acquisition of the metric, the computation
-        of its derivatives and Christoffel symbols, and the final generation of
+        This constructor obtains the metric, computes its derivatives and
+        Christoffel symbols, and generates
         the geodesic equations of motion and Hamiltonian constraint for the
         specified particle type.
 

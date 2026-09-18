@@ -19,20 +19,19 @@ from nrpy.helpers.expression_utils import (
 
 def generate_CFunction_psi4_tetrad(
     CoordSystem: str,
-    tetrad: str = "quasiKinnersley",
-    use_metric_to_construct_unit_normal: bool = False,
+    tetrad: str = "BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad",
 ) -> Tuple[str, str]:
     """
     Register C function for psi4 tetrad computations.
 
     :param CoordSystem: The coordinate system to be used.
-    :param tetrad: The type of tetrad. Defaults to "quasiKinnersley".
-    :param use_metric_to_construct_unit_normal: Whether to use the metric to construct the unit normal. Defaults to False.
+    :param tetrad: The tetrad identifier. Defaults to
+        ``"BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad"``.
 
     :return: Tuple containing the prefunction and prefunction launch code.
     """
     parallelization = par.parval_from_str("parallelization")
-    desc = f"Compute {tetrad} tetrad for psi4, with use_metric_to_construct_unit_normal={use_metric_to_construct_unit_normal}"
+    desc = f"Compute {tetrad} for psi4"
     name = "psi4_tetrad"
     cfunc_type = "static void"
     cfunc_decorators = "__device__" if parallelization == "cuda" else ""
@@ -42,7 +41,6 @@ def generate_CFunction_psi4_tetrad(
         CoordSystem,
         enable_rfm_precompute=False,
         tetrad=tetrad,
-        use_metric_to_construct_unit_normal=use_metric_to_construct_unit_normal,
     )
     list_of_vrnms = []
     list_of_exprs = []

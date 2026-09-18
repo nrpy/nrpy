@@ -4,14 +4,13 @@ Defines the computation for impact parameters on the physical terminal plane.
 
 This module constructs the C engine responsible for evaluating terminal interactions
 with the terminal surface. It accepts the fully interpolated nine-component tensor
-state and affine parameter at the exact boundary crossing alongside a pointer to the
-output blueprint structure. The mathematical mechanism constructs a local orthonormal
-basis using the parameterized terminal plane normal and up-vectors, with a fallback
-strategy for degenerate cross products. The global Cartesian intersection coordinates
-are projected into this local two-dimensional coordinate system and filtered against
-the minimum and maximum radial disk bounds. Valid impacts are stored persistently in
-the blueprint structures. It relies on constant memory caching to process physical
-impact parameters.
+state and affine parameter at the reconstructed boundary crossing alongside a pointer
+to the output blueprint structure. The mathematical mechanism constructs a local
+orthonormal basis using the parameterized terminal plane normal and up-vectors,
+with a fallback strategy for degenerate cross products. The global Cartesian
+intersection coordinates are projected into this local two-dimensional coordinate
+system and filtered against the minimum and maximum radial disk bounds. Valid impacts
+are stored in the blueprint structures.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com

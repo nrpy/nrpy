@@ -28,7 +28,10 @@ import nrpy.params as par
 
 
 def register_CFunction_diagnostic_gfs_set(
-    enable_interp_diagnostics: bool, enable_psi4: bool, enable_T4munu: bool = False
+    enable_interp_diagnostics: bool,
+    enable_psi4: bool,
+    enable_T4munu: bool = False,
+    enable_hDDdD_gridfunctions: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register a C function that populates per-grid diagnostic arrays used by interpolation and integration routines.
@@ -47,10 +50,46 @@ def register_CFunction_diagnostic_gfs_set(
     :param enable_psi4:              If True, include additional waveform-related diagnostic channels
                                       in the registration; if False, omit them.
     :param enable_T4munu:            If True, copy latest T4munu to DIAG_T4UU gridfunctions.
+    :param enable_hDDdD_gridfunctions: Whether OpenMP Ricci reads stored hDD derivatives.
+                                       Match the option passed to Ricci_eval and register
+                                       hDDdD_eval when enabled for OpenMP.
+                                       Diagnostics computes fresh derivatives in temporary
+                                       storage; CUDA continues to use Ricci_eval_host.
     :return: None if in registration phase, else the updated NRPy environment.
 
     Doctests:
-    TBD
+    >>> original_gridfunctions = gri.glb_gridfcs_dict.copy()
+    >>> original_cfunctions = cfc.CFunction_dict.copy()
+    >>> original_parallelization = par.parval_from_str("parallelization")
+    >>> ricci_paths = []
+    >>> try:
+    ...     gri.glb_gridfcs_dict.clear()
+    ...     cfc.CFunction_dict.clear()
+    ...     _ = register_CFunction_diagnostic_gfs_set(True, False)
+    ...     lambda_gf = gri.glb_gridfcs_dict["DIAG_LAMBDA_CONSTRAINT"]
+    ...     lambda_metadata = (lambda_gf.name, lambda_gf.group, lambda_gf.desc)
+    ...     for backend, stored in [("openmp", False), ("openmp", True), ("cuda", True)]:
+    ...         par.set_parval_from_str("parallelization", backend)
+    ...         cfc.CFunction_dict.clear()
+    ...         gri.glb_gridfcs_dict.clear()
+    ...         _ = register_CFunction_diagnostic_gfs_set(False, False, enable_hDDdD_gridfunctions=stored)
+    ...         body = cfc.CFunction_dict["diagnostic_gfs_set"].body
+    ...         ricci_paths.append([line.strip() for line in body.splitlines()
+    ...                             if line.strip().startswith(("hDDdD_eval(", "Ricci_eval(", "Ricci_eval_host(", "free(scratch_gfs)"))])
+    ... finally:
+    ...     par.set_parval_from_str("parallelization", original_parallelization)
+    ...     gri.glb_gridfcs_dict.clear()
+    ...     gri.glb_gridfcs_dict.update(original_gridfunctions)
+    ...     cfc.CFunction_dict.clear()
+    ...     cfc.CFunction_dict.update(original_cfunctions)
+    >>> lambda_metadata
+    ('DIAG_LAMBDA_CONSTRAINT', 'DIAG', 'Covariant_conformal_connection_constraint_magnitude')
+    >>> ricci_paths[0]
+    ['Ricci_eval(params, rfmstruct, y_n_gfs, auxevol_gfs);']
+    >>> ricci_paths[1]
+    ['hDDdD_eval(params, y_n_gfs, scratch_gfs);', 'Ricci_eval(params, rfmstruct, y_n_gfs, scratch_gfs, auxevol_gfs);', 'free(scratch_gfs);']
+    >>> ricci_paths[2]
+    ['Ricci_eval_host(params, rfmstruct, y_n_gfs, diagnostic_gfs[grid]);']
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -65,7 +104,16 @@ def register_CFunction_diagnostic_gfs_set(
     gri.register_gridfunctions(
         names="DIAG_HAMILTONIAN", desc="H_constraint", group="DIAG"
     )
-    gri.register_gridfunctions(names="DIAG_MSQUARED", desc="M^2", group="DIAG")
+    gri.register_gridfunctions(
+        names="DIAG_M",
+        desc_list=["Momentum_constraint_magnitude"],
+        group="DIAG",
+    )
+    gri.register_gridfunctions(
+        names="DIAG_LAMBDA_CONSTRAINT",
+        desc_list=["Covariant_conformal_connection_constraint_magnitude"],
+        group="DIAG",
+    )
     gri.register_gridfunctions(names="DIAG_LAPSE", desc="Lapse", group="DIAG")
     gri.register_gridfunctions(names="DIAG_W", desc="Conformal_factor_W", group="DIAG")
     gri.register_gridfunctions(names="DIAG_GRIDINDEX", desc="GridIndex", group="DIAG")
@@ -101,7 +149,7 @@ def register_CFunction_diagnostic_gfs_set(
  *      copying from a source point to a destination point with a sign determined by the relevant
  *      parity, ensuring parity-consistent values near symmetry or excision boundaries.
  *   3) Copy selected evolved gridfunctions from the current time level (y_n_gfs) into designated
- *      diagnostic channels for downstream consumers.
+ *      diagnostic channels read by interpolation and volume integration.
  *   4) Set a per-point grid identifier channel to the grid index (converted to REAL).
  *
  * The routine assumes each per-grid output buffer is contiguous and large enough to store all
@@ -150,6 +198,19 @@ def register_CFunction_diagnostic_gfs_set(
         if parallelization == "cuda"
         else "Ricci_eval(params, rfmstruct, y_n_gfs, auxevol_gfs);"
     )
+    if parallelization == "openmp" and enable_hDDdD_gridfunctions:
+        ricci_call = """
+    // Diagnostics uses the current solution, not derivatives left by an RK stage.
+    REAL *restrict scratch_gfs = (REAL *)malloc((size_t)NUM_SCRATCH_GFS *
+        Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * sizeof(REAL));
+    if (scratch_gfs == NULL) {
+        fprintf(stderr, "Failed to allocate diagnostic hDDdD scratch storage.\\n");
+        exit(EXIT_FAILURE);
+    } // END IF: scratch allocation failed
+    hDDdD_eval(params, y_n_gfs, scratch_gfs);
+    Ricci_eval(params, rfmstruct, y_n_gfs, scratch_gfs, auxevol_gfs);
+    free(scratch_gfs);
+"""
     body += f"""
     // Set Ricci and constraints gridfunctions
     {ricci_call}
@@ -170,7 +231,7 @@ def register_CFunction_diagnostic_gfs_set(
     {
       // NOTE: Inner boundary conditions must be set before any interpolations are performed, whether for psi4 decomp. or interp diags.
       // Apply inner bcs to constraints needed to do interpolation correctly
-      const int inner_bc_apply_gfs[] = {DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF};
+      const int inner_bc_apply_gfs[] = {DIAG_HAMILTONIANGF, DIAG_MGF, DIAG_LAMBDA_CONSTRAINTGF};
       const int num_inner_bc_apply_gfs = (int)(sizeof(inner_bc_apply_gfs) / sizeof(inner_bc_apply_gfs[0]));
       apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], num_inner_bc_apply_gfs, diag_gf_parities,
                                         inner_bc_apply_gfs);
@@ -197,3 +258,15 @@ def register_CFunction_diagnostic_gfs_set(
         body=body,
     )
     return pcg.NRPyEnv()
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

@@ -2,13 +2,15 @@
 """
 Define the reusable single-photon analytical geodesic integrator orchestrator.
 
-This module registers the C function that evolves one massless test particle in an
-analytic spacetime using the split Runge-Kutta-Fehlberg 4(5) photon pipeline. Its
+This module registers the C function that evolves one massless test particle from a
+symbolic spacetime recipe using the split Runge-Kutta-Fehlberg 4(5) photon pipeline. Its
 initial state is constructed from the metric-driven observer tetrad shared with
 the numerical integrator. The registered function writes trajectory samples and
-reports normalization and
-conserved-quantity diagnostics while preserving the Structure of Arrays layout
-expected by the shared geodesic kernels.
+reports normalization and conserved-quantity diagnostics while preserving the
+Structure of Arrays layout expected by the shared geodesic kernels. Optional
+RKF45 debugging writes trial-controller records and analytic metric,
+connection, and right-hand-side records from the single-photon integration
+loop.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -28,21 +30,11 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.set_initial_c
 )
 
 
-def register_struct_definitions() -> None:
-    """Register shared state definitions and single-ray-only macros."""
-    register_photon_batch_structs()
-    register_terminal_plane_parameters()
-    register_non_terminal_plane_parameters()
-
-    macro_defs = r"""
-    #undef BUNDLE_CAPACITY
-    #define BUNDLE_CAPACITY 1
-    """
-    BHaH_defines_h.register_BHaH_defines("single_photon_macros", macro_defs)
-
-
 def single_integrator_analytical(
-    spacetime: str, particle: str, normalized_eom: bool = False
+    spacetime: str,
+    particle: str,
+    normalized_eom: bool = False,
+    enable_rkf45_trial_debug: bool = False,
 ) -> None:
     """
     Register the single-photon analytical geodesic integrator C function.
@@ -54,6 +46,10 @@ def single_integrator_analytical(
     :param spacetime: The background spacetime descriptor.
     :param particle: The test-particle type.
     :param normalized_eom: Whether to use normalized photon evolution.
+    :param enable_rkf45_trial_debug: Whether to write one diagnostic row for every
+        RKF45 trial to ``rkf45_trials.txt`` and one analytic metric, connection,
+        and right-hand-side row for each of its six stages to
+        ``rkf45_stages.txt``.
 
     Doctests:
     >>> import nrpy.c_function as cfc
@@ -67,23 +63,30 @@ def single_integrator_analytical(
     >>> par.set_parval_from_str("parallelization", "openmp")
     >>> cfc.CFunction_dict.clear()
     >>> rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
-    ...     normalized_eom=True
+    ...     normalized_eom=True, enable_rkf45_trial_debug=True
     ... )
     >>> single_integrator_analytical(
     ...     "BrillLindquist_InitialData_Static_Cartesian",
     ...     "photon",
     ...     normalized_eom=True,
+    ...     enable_rkf45_trial_debug=True,
     ... )
     >>> generated = cfc.CFunction_dict["single_integrator_analytical"].full_function
-    >>> "photon_momentum_to_normalized_kernel(" in generated
-    True
-    >>> "normalization_constraint_photon_normalized(" in generated
-    True
-    >>> "integration_param, h," in generated
+    >>> ("rkf45_trials.txt" in generated and "rkf45_stages.txt" in generated and
+    ...  "# lambda t x y z u Pi_1 Pi_2 Pi_3 L_normal" in generated)
     True
     >>> cache_dir.cleanup()
     """
-    register_struct_definitions()
+    register_photon_batch_structs()
+    register_terminal_plane_parameters()
+    register_non_terminal_plane_parameters()
+
+    macro_defs = r"""
+    #undef BUNDLE_CAPACITY
+    #define BUNDLE_CAPACITY 1
+    """
+    BHaH_defines_h.register_BHaH_defines("single_photon_macros", macro_defs)
+
     # The shared initializer expects the batch tiling contract.  This
     # standalone path is fixed to one tile containing one ray; the active
     # indices and scan density are registered by set_initial_conditions_kernel.
@@ -120,6 +123,10 @@ Initializes one photon state, evolves it with the split RKF45 pipeline,
 writes trajectory samples, and reports final normalization and
 conserved-quantity diagnostics.
 
+When RKF45 trial debugging is enabled, ``rkf45_trials.txt`` records every
+adaptive-step trial and ``rkf45_stages.txt`` records all six analytic metric,
+connection, and right-hand-side stages of each trial in execution order.
+
 @return EXIT_SUCCESS on successful completion; EXIT_FAILURE if setup fails.
 """
 
@@ -143,6 +150,7 @@ conserved-quantity diagnostics.
         initial_integration_parameter = "commondata.t_start"
         trajectory_lambda_expression = "f[0]"
         trajectory_time_expression = "*integration_param"
+        trajectory_header = "# lambda t x y z u Pi_1 Pi_2 Pi_3 L_normal\\n"
         rhs_integration_arguments = "integration_param, h,"
         log_energy_evaluation = "const double log_energy_measure = f[4];"
         normalization_kernel_name = "normalization_constraint_photon_normalized"
@@ -197,6 +205,7 @@ conserved-quantity diagnostics.
         initial_integration_parameter = "0.0"
         trajectory_lambda_expression = "*integration_param"
         trajectory_time_expression = "f[0]"
+        trajectory_header = "# lambda t x y z p^t p^x p^y p^z L_normal\\n"
         rhs_integration_arguments = ""
         log_energy_evaluation = r"""
         normal_observer_log_energy(
@@ -214,6 +223,222 @@ conserved-quantity diagnostics.
         normalized_history_cleanup = ""
         normalized_history_failure_check = ""
 
+    stage_normalization_diagnostic_expression = (
+        "stage_normalization.C - 1.0" if normalized_eom else "stage_normalization.C"
+    )
+    trial_start_time_expression = (
+        "*integration_param" if normalized_eom else "f_base[0]"
+    )
+    if normalized_eom:
+        stage_time_expression = """*integration_param +
+          rkf45_stage_time_fractions[stage - 1] * *h"""
+    else:
+        stage_time_expression = "f_temp[0]"
+
+    if enable_rkf45_trial_debug:
+        trial_component_names = (
+            r"""
+    "lambda",
+    "x",
+    "y",
+    "z",
+    "u",
+    "Pi_1",
+    "Pi_2",
+    "Pi_3",
+    "L_normal"
+"""
+            if normalized_eom
+            else r"""
+    "t",
+    "x",
+    "y",
+    "z",
+    "p^0",
+    "p^1",
+    "p^2",
+    "p^3",
+    "L_normal"
+"""
+        )
+        trial_debug_declarations = r"""
+    FILE *trial_debug_file = NULL;
+    rkf45_trial_diagnostic_t trial_debug;
+    const char *trial_component_names[] = {
+{trial_component_names}
+    };
+""".replace("{trial_component_names}", trial_component_names)
+        stage_debug_declarations = (
+            r"""
+    FILE *stage_debug_file = NULL;
+    const double rkf45_stage_time_fractions[] = {
+      0.0, 1.0 / 4.0, 3.0 / 8.0, 12.0 / 13.0, 1.0, 1.0 / 2.0};
+"""
+            if normalized_eom
+            else r"""
+    FILE *stage_debug_file = NULL;
+"""
+        )
+        stage_debug_header = (
+            """# accepted_step trial_number retry_number stage h_trial t_start stage_time lambda x y z r_stage stage_norm_error u Pi_1 Pi_1_derivative
+"""
+            if normalized_eom
+            else """# accepted_step trial_number retry_number stage h_trial t_start stage_time t x y z r_stage stage_norm_error p^0 p^1 p^1_derivative
+"""
+        )
+        stage_debug_header_c = (
+            stage_debug_header.rstrip("\n").replace("\\", "\\\\").replace('"', '\\"')
+            + "\\n"
+        )
+        trial_debug_open = r"""
+    trial_debug_file = fopen("rkf45_trials.txt", "w");
+    if (trial_debug_file == NULL) {
+      fprintf(stderr, "ERROR: could not open rkf45_trials.txt for writing.\n");
+      exit_status = EXIT_FAILURE;
+      goto cleanup;
+    } // END IF: RKF45 trial diagnostics unavailable
+    fprintf(
+      trial_debug_file,
+      "# accepted_step trial_number retry_number_before retry_number_after "
+      "status_name status_value t_start h_trial h_error_controller h_proposed "
+      "err_norm limiting_component limiting_component_name "
+      "limiting_delta_5_minus_4 limiting_error_absolute limiting_scale "
+      "limiting_error_normalized trial_result x_start y_start z_start r_start\n");
+"""
+        stage_debug_open = rf"""
+    stage_debug_file = fopen("rkf45_stages.txt", "w");
+    if (stage_debug_file == NULL) {{
+      fprintf(stderr, "ERROR: could not open rkf45_stages.txt for writing.\n");
+      exit_status = EXIT_FAILURE;
+      goto cleanup;
+    }} // END IF: RKF45 stage diagnostics unavailable
+    fprintf(stage_debug_file, "{stage_debug_header_c}");
+"""
+        trial_debug_trial_metadata = rf"""
+      const long int accepted_step_before_trial = steps;
+      const long int trial_number = rkf45_attempts + 1;
+      const int retry_number_before = *rejection_retries;
+      const double t_start = {trial_start_time_expression};
+      const double h_trial = *h;
+      const double x_start = f_base[1];
+      const double y_start = f_base[2];
+      const double z_start = f_base[3];
+      const double r_start = sqrt(
+        x_start * x_start + y_start * y_start + z_start * z_start);
+"""
+        stage_debug_record = rf"""
+        normalization_constraint_t stage_normalization;
+        {normalization_kernel_name}(
+          f_temp, metric, &stage_normalization, chunk_size, stream_idx
+        );
+        const double stage_norm_error =
+          {stage_normalization_diagnostic_expression};
+        // Preserve nonfinite diagnostic values in the stage record. The
+        // RKF45 finalizer handles a nonfinite candidate through its ordinary
+        // rejection path, so enabling diagnostics does not change evolution.
+
+        const double stage_radius = sqrt(
+          f_temp[1] * f_temp[1] +
+          f_temp[2] * f_temp[2] +
+          f_temp[3] * f_temp[3]);
+        const double stage_time = {stage_time_expression};
+        const double stage_p1_derivative = k_bundle[(stage - 1) * 9 + 5];
+        fprintf(
+          stage_debug_file,
+          "%ld %ld %d %d "
+          "%.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g "
+          "%.17g %.17g %.17g %.17g\n",
+          accepted_step_before_trial,
+          trial_number,
+          retry_number_before,
+          stage,
+          h_trial,
+          t_start,
+          stage_time,
+          f_temp[0],
+          f_temp[1],
+          f_temp[2],
+          f_temp[3],
+          stage_radius,
+          stage_norm_error,
+          f_temp[4],
+          f_temp[5],
+          stage_p1_derivative);
+        fflush(stage_debug_file);
+"""
+        trial_debug_call_argument = "&trial_debug,\n        "
+        trial_debug_attempt_declaration = "    long int rkf45_attempts = 0;\n"
+        trial_debug_attempt_increment = "      rkf45_attempts++;\n"
+        trial_debug_record = r"""
+      const int trial_status_value = (int)*status;
+      const char *trial_status_name =
+        (trial_status_value >= 0 && trial_status_value < 9)
+          ? status_names[trial_status_value]
+          : "UNKNOWN_STATUS";
+      const int trial_component_value = trial_debug.limiting_component;
+      const char *trial_component_name =
+        (trial_component_value >= 0 && trial_component_value < 9)
+          ? trial_component_names[trial_component_value]
+          : "UNKNOWN_COMPONENT";
+      const int retry_number_after = *rejection_retries;
+      const char *trial_result = "FAILED_OTHER";
+      if (*status == ACTIVE) {
+        trial_result = "ACCEPTED";
+      } else if (*status == REJECTED) {
+        trial_result = "REJECTED";
+      } else if (*status == FAILURE_RKF45_REJECTION_LIMIT) {
+        trial_result = "FAILED_REJECTION_LIMIT";
+      } // END ELSE IF: classify RKF45 trial result
+      fprintf(
+        trial_debug_file,
+        "%ld %ld %d %d %s %d %.17g %.17g %.17g %.17g %.17g %d %s "
+        "%.17g %.17g %.17g %.17g %s %.17g %.17g %.17g %.17g\n",
+        accepted_step_before_trial,
+        trial_number,
+        retry_number_before,
+        retry_number_after,
+        trial_status_name,
+        trial_status_value,
+        t_start,
+        h_trial,
+        trial_debug.h_error_controller,
+        *h,
+        trial_debug.err_norm,
+        trial_component_value,
+        trial_component_name,
+        trial_debug.limiting_delta_5_minus_4,
+        trial_debug.limiting_error_absolute,
+        trial_debug.limiting_scale,
+        trial_debug.limiting_error_normalized,
+        trial_result,
+        x_start,
+        y_start,
+        z_start,
+        r_start);
+      fflush(trial_debug_file);
+"""
+        trial_debug_cleanup = r"""
+    if (trial_debug_file != NULL)
+      fclose(trial_debug_file);
+"""
+        stage_debug_cleanup = r"""
+    if (stage_debug_file != NULL)
+      fclose(stage_debug_file);
+"""
+    else:
+        trial_debug_declarations = ""
+        stage_debug_declarations = ""
+        trial_debug_open = ""
+        stage_debug_open = ""
+        trial_debug_trial_metadata = ""
+        stage_debug_record = ""
+        trial_debug_call_argument = ""
+        trial_debug_attempt_declaration = ""
+        trial_debug_attempt_increment = ""
+        trial_debug_record = ""
+        trial_debug_cleanup = ""
+        stage_debug_cleanup = ""
+
     body = rf"""
     // ==========================================
     // STRUCTURAL SETUP & PARAMETERS
@@ -225,9 +450,10 @@ conserved-quantity diagnostics.
     const long int num_rays = 1;
     const long int chunk_size = 1;
     const int stream_idx = 0;
-    // These values match the shared termination_type_t used by the batch and
-    // numerical single-ray paths. ACTIVE and REJECTED are intentionally 7 and
-    // 8; they are not the first two enum values.
+    // These values match the shared termination_type_t through REJECTED.
+    // Numerical-only interpolation failures are omitted because this path
+    // evaluates the analytic metric and connection directly. ACTIVE and
+    // REJECTED are intentionally 7 and 8, not the first two enum values.
     const char *status_names[] = {{
       "STOP_CONDITION_COORD_RADIUS_EXCEEDED",
       "STOP_CONDITION_TERMINAL_PLANE",
@@ -242,6 +468,8 @@ conserved-quantity diagnostics.
 
     int exit_status = EXIT_SUCCESS;
     FILE *fp = NULL;
+{trial_debug_declarations}
+{stage_debug_declarations}
 
     printf("Starting Split-Pipeline Geodesic Integrator...\n");
     printf("spacetime: {spacetime}\n");
@@ -319,7 +547,7 @@ conserved-quantity diagnostics.
     *status = ACTIVE;
 
     // ==========================================
-    // INITIAL METRIC EVALUATION
+    // INITIAL ANALYTIC METRIC EVALUATION
     // ==========================================
     interpolation_kernel_{spacetime}(
       &commondata, f, metric, NULL, chunk_size, stream_idx
@@ -346,12 +574,15 @@ conserved-quantity diagnostics.
       exit_status = EXIT_FAILURE;
       goto cleanup;
     }} // END IF: trajectory output unavailable
-    fprintf(fp, "# lambda t x y z energy_measure p_x p_y p_z aux\n");
+    fprintf(fp, "{trajectory_header}");
+{trial_debug_open}
+{stage_debug_open}
 
     // ==========================================
     // MODULAR SPLIT-PIPELINE INTEGRATION LOOP
     // ==========================================
     int steps = 0;
+{trial_debug_attempt_declaration}
 
     const long int max_accepted_steps = 200000;
     while (steps < max_accepted_steps) {{
@@ -359,8 +590,10 @@ conserved-quantity diagnostics.
         f_base[i] = f[i];
         f_temp[i] = f[i];
       }} // END LOOP: copy current state
+{trial_debug_trial_metadata}
 
       for (int stage = 1; stage <= 6; stage++) {{
+        // Evaluate the analytic metric and connection at the stage state.
         interpolation_kernel_{spacetime}(
           &commondata, f_temp, metric, connection, chunk_size, stream_idx
         );
@@ -368,6 +601,7 @@ conserved-quantity diagnostics.
           f_temp, metric, connection, {rhs_integration_arguments}
           k_bundle, stage, chunk_size, stream_idx
         );
+{stage_debug_record}
 
         if (stage < 6)
           rkf45_stage_update(
@@ -384,9 +618,11 @@ conserved-quantity diagnostics.
         status,
         integration_param,
         rejection_retries,
-        chunk_size,
+        {trial_debug_call_argument}chunk_size,
         stream_idx
       );
+{trial_debug_attempt_increment}
+{trial_debug_record}
 
       if (*rejection_retries == 0) {{
         interpolation_kernel_{spacetime}(
@@ -463,6 +699,8 @@ conserved-quantity diagnostics.
 {conserved_quantity_q_report}
 
     cleanup:
+{trial_debug_cleanup}
+{stage_debug_cleanup}
     if (fp != NULL)
       fclose(fp);
     BHAH_FREE(f);

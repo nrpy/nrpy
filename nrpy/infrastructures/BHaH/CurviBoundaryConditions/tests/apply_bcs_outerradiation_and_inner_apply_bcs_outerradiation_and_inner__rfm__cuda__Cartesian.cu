@@ -137,29 +137,6 @@ __device__ static inline REAL FD1_arbitrary_upwind_x2_dirn(const size_t streamid
   return 0.0 / 0.0; // poison output if offset computed incorrectly
 } // END FUNCTION: FD1_arbitrary_upwind_x2_dirn
 /**
- * Compute r(xx0,xx1,xx2) and partial_r x^i.
- */
-__device__ static inline void r_and_partial_xi_partial_r_derivs(const size_t streamid, const REAL xx0, const REAL xx1, const REAL xx2, REAL *r,
-                                                                REAL *partial_x0_partial_r, REAL *partial_x1_partial_r, REAL *partial_x2_partial_r) {
-  const REAL tmp0 = ((xx2) * (xx2));
-  const REAL tmp3 = ((xx0) * (xx0)) + ((xx1) * (xx1));
-  const REAL tmp4 = tmp0 + tmp3;
-  const REAL tmp5 = sqrt(tmp4);
-  const REAL tmp6 = 1 / (tmp3 * sqrt(-tmp0 / tmp4 + 1));
-  const REAL tmp8 = tmp0 / ((tmp4) * (tmp4));
-  const REAL tmp11 = pow(tmp4, -3.0 / 2.0);
-  const REAL tmp7 = tmp6 * ((xx0) * (xx0));
-  const REAL tmp9 = tmp6 * ((xx1) * (xx1));
-  const REAL tmp10 = (1.0 / (tmp5));
-  const REAL tmp12 = -tmp0 * tmp11 + tmp10;
-  const REAL tmp14 = (1.0 / (tmp10 * tmp12 * tmp7 + tmp10 * tmp12 * tmp9 + tmp7 * tmp8 + tmp8 * tmp9));
-  const REAL tmp15 = tmp12 * tmp14 * tmp6;
-  *r = tmp5;
-  *partial_x0_partial_r = tmp15 * xx0;
-  *partial_x1_partial_r = tmp15 * xx1;
-  *partial_x2_partial_r = tmp14 * (tmp11 * tmp7 * xx2 + tmp11 * tmp9 * xx2);
-} // END FUNCTION: r_and_partial_xi_partial_r_derivs
-/**
  * Compute \partial_r f
  */
 __device__ static inline REAL compute_partial_r_f(const size_t streamid, REAL *restrict xx[3], const REAL *restrict gfs, const int which_gf,
@@ -231,7 +208,10 @@ __device__ static inline REAL compute_partial_r_f(const size_t streamid, REAL *r
  */
 __device__ static inline REAL radiation_bcs(const size_t streamid, REAL *restrict xx[3], const REAL *restrict gfs, REAL *restrict gfs_rhss,
                                             const int which_gf, const REAL gf_wavespeed, const REAL gf_f_infinity, const int dest_i0,
-                                            const int dest_i1, const int dest_i2, const short FACEi0, const short FACEi1, const short FACEi2) {
+                                            const int dest_i1, const int dest_i2, const short FACEi0, const short FACEi1, const short FACEi2,
+                                            const REAL r, const REAL partial_x0_partial_r, const REAL partial_x1_partial_r,
+                                            const REAL partial_x2_partial_r, const REAL r_int, const REAL partial_x0_partial_r_int,
+                                            const REAL partial_x1_partial_r_int, const REAL partial_x2_partial_r_int) {
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
@@ -250,12 +230,6 @@ __device__ static inline REAL radiation_bcs(const size_t streamid, REAL *restric
 
   // Nearest "interior" neighbor of this gridpoint, based on current face
   const int dest_i0_int = dest_i0 + 1 * FACEi0, dest_i1_int = dest_i1 + 1 * FACEi1, dest_i2_int = dest_i2 + 1 * FACEi2;
-  REAL r, partial_x0_partial_r, partial_x1_partial_r, partial_x2_partial_r;
-  REAL r_int, partial_x0_partial_r_int, partial_x1_partial_r_int, partial_x2_partial_r_int;
-  r_and_partial_xi_partial_r_derivs(streamid, xx[0][dest_i0], xx[1][dest_i1], xx[2][dest_i2], &r, &partial_x0_partial_r, &partial_x1_partial_r,
-                                    &partial_x2_partial_r);
-  r_and_partial_xi_partial_r_derivs(streamid, xx[0][dest_i0_int], xx[1][dest_i1_int], xx[2][dest_i2_int], &r_int, &partial_x0_partial_r_int,
-                                    &partial_x1_partial_r_int, &partial_x2_partial_r_int);
   const REAL partial_r_f = compute_partial_r_f(streamid, xx, gfs, which_gf, dest_i0, dest_i1, dest_i2, FACEi0, FACEi1, FACEi2, partial_x0_partial_r,
                                                partial_x1_partial_r, partial_x2_partial_r);
   const REAL partial_r_f_int = compute_partial_r_f(streamid, xx, gfs, which_gf, dest_i0_int, dest_i1_int, dest_i2_int, FACEi0, FACEi1, FACEi2,
@@ -311,10 +285,20 @@ __global__ static void apply_bcs_pure_only_gpu(const size_t streamid, const int 
     const short FACEX2 = pure_outer_bc_array[idx2d].FACEX2;
     const int idx3 = IDX3(i0, i1, i2);
     REAL *xx[3] = {x0, x1, x2};
+    const REAL r = pure_outer_bc_array[idx2d].r;
+    const REAL partial_x0_partial_r = pure_outer_bc_array[idx2d].partial_x0_partial_r;
+    const REAL partial_x1_partial_r = pure_outer_bc_array[idx2d].partial_x1_partial_r;
+    const REAL partial_x2_partial_r = pure_outer_bc_array[idx2d].partial_x2_partial_r;
+    const REAL r_int = pure_outer_bc_array[idx2d].r_int;
+    const REAL partial_x0_partial_r_int = pure_outer_bc_array[idx2d].partial_x0_partial_r_int;
+    const REAL partial_x1_partial_r_int = pure_outer_bc_array[idx2d].partial_x1_partial_r_int;
+    const REAL partial_x2_partial_r_int = pure_outer_bc_array[idx2d].partial_x2_partial_r_int;
     for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
       // *** Apply radiation BCs to all outer boundary points. ***
-      rhs_gfs[IDX4pt(which_gf, idx3)] = radiation_bcs(streamid, xx, gfs, rhs_gfs, which_gf, d_gridfunctions_wavespeed[which_gf],
-                                                      d_gridfunctions_f_infinity[which_gf], i0, i1, i2, FACEX0, FACEX1, FACEX2);
+      rhs_gfs[IDX4pt(which_gf, idx3)] =
+          radiation_bcs(streamid, xx, gfs, rhs_gfs, which_gf, d_gridfunctions_wavespeed[which_gf], d_gridfunctions_f_infinity[which_gf], i0, i1, i2,
+                        FACEX0, FACEX1, FACEX2, r, partial_x0_partial_r, partial_x1_partial_r, partial_x2_partial_r, r_int, partial_x0_partial_r_int,
+                        partial_x1_partial_r_int, partial_x2_partial_r_int);
     }
   }
 } // END FUNCTION: apply_bcs_pure_only_gpu

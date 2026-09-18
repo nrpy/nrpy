@@ -102,10 +102,12 @@ def register_CFunction_initial_data(
     IDCoordSystem: str,
     ID_persist_struct_str: str,
     set_of_CoordSystems: Set[str],
+    enable_rfm_precompute: bool,
     enable_checkpointing: bool = False,
     populate_ID_persist_struct_str: str = "",
     free_ID_persist_struct_str: str = "",
     enable_T4munu: bool = False,
+    enable_conformal_projection: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions for converting ADM initial data to BSSN variables and applying boundary conditions.
@@ -118,11 +120,15 @@ def register_CFunction_initial_data(
     :param set_of_CoordSystems: Set of coordinate systems for ADM->BSSN converters.
     :param IDtype: The type of initial data.
     :param IDCoordSystem: The native coordinate system of the initial data.
+    :param enable_rfm_precompute: Whether reference-metric quantities are
+        passed through ``rfmstruct`` instead of coordinate arrays.
     :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial data.
     :param ID_persist_struct_str: A string representing the persistent structure for the initial data.
     :param populate_ID_persist_struct_str: Optional string to populate the persistent structure for initial data.
     :param free_ID_persist_struct_str: Optional string to free the persistent structure for initial data.
     :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
+    :param enable_conformal_projection: Apply the determinant and Abar-trace
+        projection after checkpoint recovery and final boundary handling.
 
     :raises ValueError: If ``set_of_CoordSystems`` is empty.
     :return: None if in registration phase, else the updated NRPy environment.
@@ -174,9 +180,26 @@ def register_CFunction_initial_data(
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, const int initial_data_part"
 
     body = ""
+    projector_reference_metric_args = (
+        "griddata[grid].rfmstruct"
+        if enable_rfm_precompute
+        else "griddata[grid].xx[0], griddata[grid].xx[1], griddata[grid].xx[2]"
+    )
     if enable_checkpointing:
         body += """// Attempt to read checkpoint file. If it doesn't exist, then continue. Otherwise return.
-if( read_checkpoint(commondata, griddata) ) return;
+if( read_checkpoint(commondata, griddata) ) {
+"""
+        if enable_conformal_projection:
+            body += """
+  for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
+    enforce_detgbar_equals_detghat_trAzero(
+        &griddata[grid].params, PROJECTION_RFM_ARGS,
+        griddata[grid].gridfuncs.y_n_gfs,
+        griddata[grid].gridfuncs.auxevol_gfs);
+  } // END LOOP: for grid over all grids
+""".replace("PROJECTION_RFM_ARGS", projector_reference_metric_args)
+        body += """  return;
+} // END IF: checkpoint read succeeded
 """
 
     body += """
@@ -236,6 +259,15 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
       // Unpack griddata struct:
       params_struct *restrict params = &griddata[grid].params;
       apply_bcs_outerextrap_and_inner(commondata, params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.y_n_gfs);
+"""
+    if enable_conformal_projection:
+        body += """
+      enforce_detgbar_equals_detghat_trAzero(
+          params, PROJECTION_RFM_ARGS,
+          griddata[grid].gridfuncs.y_n_gfs,
+          griddata[grid].gridfuncs.auxevol_gfs);
+""".replace("PROJECTION_RFM_ARGS", projector_reference_metric_args)
+    body += """
     }
     break;
   }

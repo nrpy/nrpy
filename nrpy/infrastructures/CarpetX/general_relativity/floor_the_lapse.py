@@ -53,7 +53,7 @@ def register_CFunction_floor_the_lapse(
     )
 
     schedule = f"""
-schedule FUNC_NAME in ODESolvers_PostStep before {thorn_name}_enforce_detgammahat_constraint
+schedule FUNC_NAME in ODESolvers_PostStep before {thorn_name}_enforce_detgbar_equals_detghat_trAzero
 {{
   LANG: C
   READS:  alphaGF(everywhere)

@@ -2,12 +2,14 @@
 r"""
 Generate a standalone C project for integrating a single photon geodesic.
 
-The generated project evolves one massless test particle in an analytic
-spacetime using the split RKF45 photon pipeline. Its one-ray initialization
+The generated project evolves one massless test particle in a symbolic
+spacetime recipe using the split RKF45 photon pipeline. Its one-ray initialization
 uses the observer metric tetrad and the shared one-tile sampling contract. It
 writes trajectory samples and reports normalization and conserved-quantity
 diagnostics while preserving the Structure of Arrays layout expected by the
-shared geodesic kernels.
+shared geodesic kernels. RKF45 trial and stage diagnostics are enabled by
+default and written to ``rkf45_trials.txt`` and ``rkf45_stages.txt``;
+diagnostic code can be disabled from the command line.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -80,7 +82,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--spacetime",
         choices=SUPPORTED_ANALYTICAL_SPACETIMES,
         default="KerrSchild_Cartesian",
-        help="Analytic spacetime metric used for photon evolution.",
+        help="Symbolic spacetime recipe used for photon evolution.",
     )
     parser.add_argument(
         "--eom",
@@ -220,6 +222,20 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="VALUE",
         help="Normalized-EOM tolerance for the u=ln(abs(alpha*p^0)) state.",
     )
+    trial_debug_group = parser.add_mutually_exclusive_group()
+    trial_debug_group.add_argument(
+        "--enable-rkf45-trial-debug",
+        dest="enable_rkf45_trial_debug",
+        action="store_true",
+        help="Enable per-trial and per-stage RKF45 diagnostics (default).",
+    )
+    trial_debug_group.add_argument(
+        "--disable-rkf45-trial-debug",
+        dest="enable_rkf45_trial_debug",
+        action="store_false",
+        help="Disable per-trial and per-stage RKF45 diagnostics.",
+    )
+    parser.set_defaults(enable_rkf45_trial_debug=True)
     return parser
 
 
@@ -330,12 +346,16 @@ if __name__ == "__main__":
     )
     rkf45_stage_update.rkf45_stage_update()
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
-        normalized_eom=normalized_eom
+        normalized_eom=normalized_eom,
+        enable_rkf45_trial_debug=args.enable_rkf45_trial_debug,
     )
 
     # Step 5.a: Register the single-ray C main function.
     single_integrator_analytical.single_integrator_analytical(
-        SPACETIME, PARTICLE, normalized_eom=normalized_eom
+        SPACETIME,
+        PARTICLE,
+        normalized_eom=normalized_eom,
+        enable_rkf45_trial_debug=args.enable_rkf45_trial_debug,
     )
     main_single.main_single("single_integrator_analytical")
 
@@ -475,6 +495,11 @@ if __name__ == "__main__":
         par.adjust_CodeParam_default(
             "rkf45_log_energy_tolerance", args.rkf45_log_energy_tolerance
         )
+
+    print(
+        " -> RKF45 trial/stage debugging: "
+        f"{'enabled' if args.enable_rkf45_trial_debug else 'disabled'}"
+    )
 
     # Step 7: Generate headers, default parameters, and the Makefile.
     print("Generating header files and Makefile...")

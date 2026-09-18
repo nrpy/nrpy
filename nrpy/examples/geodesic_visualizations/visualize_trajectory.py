@@ -169,7 +169,7 @@ def plot_trajectory(
     ax.set_ylabel("y (M)")
     ax.set_zlabel("z (M)")
     ax.set_aspect("equal")
-    title = f"{particle_type.capitalize()} Geodesic in Kerr-Schild Cartesian Spacetime"
+    title = f"{particle_type.capitalize()} Geodesic Trajectory"
     if plot_norm_error:
         title += " (colored by norm error)"
     ax.set_title(title)
@@ -179,7 +179,7 @@ def plot_trajectory(
     fig.text(
         0.5,
         0.02,
-        "* Reference sphere rendered at r=2M; not the exact Kerr horizon for nonzero spin.",
+        "* Reference sphere rendered at r=2M; it is a schematic guide, not a general horizon.",
         ha="center",
         fontsize=9,
         color="gray",
@@ -203,7 +203,7 @@ def visualize_trajectory(
     plot_norm_error: bool = False,
 ) -> None:
     """
-    Read the trajectory data file and orchestrate the diagnostic visualization.
+    Read the trajectory data file and render the diagnostic plots.
 
     This function validates the existence and integrity of the output file
     before passing the parsed data to the plotting routine.

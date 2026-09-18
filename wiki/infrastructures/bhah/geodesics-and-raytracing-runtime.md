@@ -1,6 +1,6 @@
 # Geodesics And Raytracing Runtime
 
-> BHaH runtime pieces for standalone geodesics and evolution-time raytracing export. · Status: confirmed · Last reconciled: 09-17-2026
+> BHaH runtime pieces for standalone geodesics and evolution-time raytracing export. · Status: confirmed
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -9,29 +9,28 @@ BHaH has two distinct raytracing-facing paths. The standalone photon geodesic
 runtime builds a generated `main`, initializes observer and independent plane
 parameters, tiles the angular pixel grid, integrates batches of photon geodesics with RKF45,
 and serializes per-tile light-blueprint results. The evolution-time export path is
-part of diagnostics: it writes Cartesian `g4DD` and `Gamma4UDD` time-slice data
-from a live BSSN evolution, then a combiner validates and stacks those slices
-for later numerical-spacetime interpolation.
+part of diagnostics: it writes mode-selected Cartesian `g4DD`, `g4DD_d0`, and
+`Gamma4UDD` time-slice data from a live BSSN evolution, then a combiner validates
+and stacks those slices for later numerical-spacetime interpolation.
 
 ## Detail
 
 The standalone photon entrypoint is `main` in the photon geodesics package. It
 registers angular tile-grid parameters, initializes `commondata`, parses
-command-line and parfile input, computes an observer tetrad with fallback logic
-for near-degenerate up vectors, loops over `(tx, ty)` tile indices, and calls
-the selected batch integrator. Each record receives normalized image-sample
+command-line and parfile input, loops over `(tx, ty)` tile indices, and calls
+the selected batch integrator. The shared initializer invoked by that integrator
+constructs the observer tetrad, including fallback logic for near-degenerate up
+vectors. Each record receives normalized image-sample
 coordinates before serialization; image placement does not depend on integer
 pixel identity fields.
 This path is a standalone geodesic program; it is not the same as
 diagnostics emitted by an evolving BHaH spacetime.
 
 Claim evidence:
-- Claim: The standalone photon entrypoint registers angular tile-grid controls, initializes an observer tetrad, assigns normalized image-sample coordinates, and is distinct from evolution-time diagnostics.
-- Role: generated-output boundary
+- Claim: The standalone photon entrypoint registers angular tile-grid controls, delegates observer-tetrad construction to the shared initializer, assigns normalized image-sample coordinates, and is distinct from evolution-time diagnostics.
+- Role: generated evidence
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/main_batch.py` — `main`
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/calculate_and_fill_blueprint_data_universal.py` — normalized record fields
-- Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=not-run`
-- Dimensions: `platform=local; tool_version=not-recorded; backend=OpenMP; precision=double; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=direct-and-normalized-g4DD; date=09-17-2026`
 
 The shared `set_initial_conditions_kernel` receives one metric evaluated at the
 observer event and constructs one validated metric-orthonormal tetrad per tile
@@ -47,8 +46,6 @@ Claim evidence:
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/set_initial_conditions_kernel.py` — observer initialization
 - Corroboration: `nrpy/examples/photon_batch_geodesic_integrator_numerical.py` — shared observer initialization arguments
-- Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=not-run`
-- Dimensions: `platform=local; tool_version=not-recorded; backend=OpenMP; precision=double; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=direct-and-normalized-g4DD; date=09-17-2026`
 
 `batch_integrator_numerical` is the host orchestrator for photon batches. It
 registers integration limits and RKF45 controls in `commondata`, allocates the
@@ -67,11 +64,9 @@ normalization sidecar stores `|C_direct|` for direct EOM and
 
 Claim evidence:
 - Claim: `batch_integrator_numerical` orchestrates host-side photon batches, manages flat state/history/geometry/result bundles, reuses trial-locked spatial centers for accepted-state metric refresh, computes the common log-energy bundle, and processes active rays through coordinate-time slots.
-- Role: generated-output boundary
+- Role: generated evidence
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/batch_integrator_numerical.py` — `batch_integrator_numerical`
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/time_slot_manager_helpers.py` — `TimeSlotManager`
-- Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=not-run`
-- Dimensions: `platform=local; tool_version=not-recorded; backend=OpenMP; precision=double; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=direct-and-normalized-g4DD; date=09-17-2026`
 
 The RKF45 kernels are deliberately split. `interpolation_kernel` evaluates
 spacetime-specialized `g4DD_metric` and `connections` helpers for each ray and
@@ -90,8 +85,6 @@ Claim evidence:
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/interpolation_kernel.py`, `calculate_ode_rhs_kernel.py`, and `rkf45_stage_update.py` — generated kernel interfaces
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/rkf45_finalize_and_control_kernel.py` — acceptance/control
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
 `event_detection_manager_kernel` owns energy/geometric termination and result
 capture. It first consumes the common per-ray log-energy bundle and marks rays
@@ -108,8 +101,6 @@ Claim evidence:
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py` — `event_detection_manager_kernel`
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/find_event_time_and_state.py` — event reconstruction
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
 Blueprint headers carry tile identity/counts, `alpha_w`, `alpha_h`, and schema
 version 6. Records carry plane diagnostics, final angles, termination times,
@@ -119,15 +110,14 @@ stops and numerical failures; internal `ACTIVE` and `REJECTED` states remain
 invalid serialized outcomes.
 The renderer places rays from the normalized fractions and preserves the
 vertical raster flip, while plane diagnostics remain available to
-`blueprint_analysis.py`.
+`blueprint_analysis.py`. That analysis also consumes optional matching
+normalization sidecars and plots their magnitudes by termination status.
 
 Claim evidence:
 - Claim: Blueprint schema version 6 records tile/header geometry, plane diagnostics, termination times, final angles, and normalized image-sample fractions; the renderer preserves the documented vertical raster flip.
-- Role: generated-output boundary
+- Role: generated evidence
 - Deciding authority: `nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py` — schema constants and dtype
 - Corroboration: `nrpy/examples/geodesic_visualizations/visualize_lensed_image.py` — image placement
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
 Metric and connection generation is shared by photon and massive geodesic
 runtimes. `g4DD_metric` writes the upper-triangular 10-component covariant
@@ -144,8 +134,6 @@ Claim evidence:
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/g4DD_metric.py`, `connections.py`, and `massive/ode_gsl_wrapper_massive.py` — generated helper registrations
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/massive/calculate_ode_rhs_massive.py` — massive RHS
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
 Numerical-spacetime interpolation is separate from analytic metric evaluation.
 `register_CFunction_numerical_interpolation` emits a CPU wrapper that assumes a
@@ -169,6 +157,16 @@ endpoint refresh. Normalized-EOM calls also provide the integration parameter,
 trial step, and RK stage so interpolated geometry uses the RK stage coordinate
 time; direct-EOM calls continue to read coordinate time from the state.
 
+The spatial helper performs tensor-product Lagrange interpolation only in the
+two non-azimuthal native coordinates. It obtains spatial metric derivatives
+from analytic derivatives of the same uniform-grid basis, rotates tensors from
+the stored reference-azimuth plane to the target azimuth, and transforms native
+derivatives to Cartesian coordinates with the reference-metric Jacobian. The
+temporal helper builds a barycentric Lagrange basis from the actual, potentially
+nonuniform slice times. For `g4DD`, analytic derivatives of that temporal basis
+provide metric time derivatives; `g4DD_d0` and `GammaUDD` instead interpolate
+their stored secondary payloads.
+
 Ray-local interpolation errors have distinct terminal statuses. Coordinate
 inversion, spatial-helper, and nonfinite spatial-output failures produce
 `FAILURE_SPATIAL_INTERPOLATION`; temporal-window, temporal-helper, and
@@ -183,12 +181,10 @@ use temporary statuses, skip failed diagnostic samples, and leave their
 sidecar entries as `NAN` without replacing a physical termination status.
 
 Claim evidence:
-- Claim: Numerical interpolation uses authoritative combined-container slice times, preserves the full logical grid including ghost zones, reuses caller-supplied trial-locked spatial centers, supplies RK stage coordinate time for normalized EOM, classifies ray-local spatial and temporal interpolation failures separately, and uses nominal spacing only for approximate synthetic temporal-stencil edge times.
+- Claim: Numerical interpolation uses authoritative combined-container slice times, preserves the full logical grid including ghost zones, performs two-dimensional native spatial Lagrange interpolation with analytic basis derivatives and azimuthal tensor rotation, uses a nonuniform temporal barycentric basis, reuses caller-supplied trial-locked spatial centers, supplies RK stage coordinate time for normalized EOM, classifies ray-local spatial and temporal interpolation failures separately, and uses nominal spacing only for approximate synthetic temporal-stencil edge times.
 - Role: public/scientific contract
-- Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/time_window_manager_numerical.py` — slice-table loading and stencil construction
-- Corroboration: `nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py` — combined layout and metadata
-- Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=OpenMP; precision=double; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=source-inspected; options=numerical-spacetime; date=09-17-2026`
+- Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/azimuthal_symmetry_spatial_lagrange_interpolation.py`, `temporal_lagrange_interpolation.py`, and `time_window_manager_numerical.py` — spatial, temporal, and window contracts
+- Corroboration: `nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py` — combined layout and metadata; `nrpy/infrastructures/BHaH/interpolation/differentiate_interpolation_lagrange_uniform.h` — uniform-basis derivative helper
 
 Numerical endpoint dispatch is piecewise constant. At or below the first stored
 time, the first slice is spatially interpolated; at or above the selected final
@@ -205,8 +201,6 @@ Claim evidence:
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/numerical_interpolation.py` — endpoint dispatch; `output_raytracing_data.py` — payload mode
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/temporal_lagrange_interpolation.py` — temporal endpoint handling
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
 Startup reads `.bin` `NGHOSTS` metadata and terminates if the configured spatial
 half-width requires more ghost zones than available. It also terminates when
@@ -217,11 +211,9 @@ native stencil; the relevant `.par` controls are
 
 Claim evidence:
 - Claim: Numerical startup rejects insufficient ghost-zone capacity and observer or positive Cartesian `r_escape` probes that cannot support the requested native stencil.
-- Role: user-facing commands and interfaces
+- Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/time_window_manager_numerical.py` — startup domain validation
 - Corroboration: `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` — Cartesian-to-native inversion and admission checks
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
 Evolution-time raytracing export lives under BHaH diagnostics. When enabled by
 `register_all_diagnostics`, the diagnostics function calls
@@ -241,11 +233,9 @@ and writes a read-only stacked container for downstream interpolation.
 
 Claim evidence:
 - Claim: Evolution-time export is host/OpenMP, single-grid, SinhCylindricalv2n2-only in the documented path; it writes mode-selected Cartesian metric/geometry payloads over the full logical grid, and optional static Christoffels affect only GammaUDD values on the last scheduled output while the default remains nonstatic.
-- Role: generated-output boundary
+- Role: generated evidence
 - Deciding authority: `nrpy/infrastructures/BHaH/diagnostics/diagnostics.py` and `output_raytracing_data.py` — diagnostics registration and exporter
 - Corroboration: `nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py` — stage-1 validation and combined container
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
 ## Sources
 
@@ -272,6 +262,8 @@ Claim evidence:
 - [numerical_interpolation.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/numerical_interpolation.py) - `register_CFunction_numerical_interpolation`
 - [time_window_manager_numerical.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/time_window_manager_numerical.py) - `time_window_manager_numerical`, `NumericalTimeWindowManager`
 - [azimuthal_symmetry_spatial_lagrange_interpolation.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/azimuthal_symmetry_spatial_lagrange_interpolation.py) - `register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation`
+- [temporal_lagrange_interpolation.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/temporal_lagrange_interpolation.py) - `register_CFunction_temporal_lagrange_interpolation`
+- [differentiate_interpolation_lagrange_uniform.h](../../../nrpy/infrastructures/BHaH/interpolation/differentiate_interpolation_lagrange_uniform.h) - `compute_lagrange_basis_derivative_coeffs_xi`
 - [output_raytracing_data.py](../../../nrpy/infrastructures/BHaH/diagnostics/output_raytracing_data.py) - `register_CFunction_output_raytracing_data`, `raytracing_data_point_index_from_logical_indices`
 - [combine_raytracing_time_slices.py](../../../nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py) - `InputSliceInfo`, `Layout`
 - [diagnostics.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics.py) - `register_all_diagnostics`, `enable_raytracing_data_output`

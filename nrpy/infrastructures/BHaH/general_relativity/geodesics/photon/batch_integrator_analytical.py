@@ -9,17 +9,6 @@ Intermediate tensors and state vectors are persisted in flattened Structure of A
 bundles. The orchestrator manages asynchronous data transfers and parallel execution
 streams.
 
-Double-buffered streams hide data transfer latency behind the integration compute
-time. The primary execution stream dynamically computes the metric and checks the
-normalization constraint without persistent memory allocation. Pinned memory increases
-transfer bandwidth for diagnostic arrays. Evaluating relative numerical drift natively
-prevents device memory bottlenecks. Pre-computing states prior to the temporal loop
-enables coalesced memory access during iterative integration. Diagnostic probes verify
-that the logic populated coordinates and complete metric-null initial momenta.
-Intercepting unphysical spacetime regions after calculation
-ensures constraint solver convergence. Evaluating conserved quantities establishes a
-data baseline before the pipeline mutates the state vectors.
-
 Each invocation is one tile batch: it receives the caller-computed ``num_rays``,
 interpolates the analytic metric once at the observer event, constructs one
 observer tetrad, and passes that tetrad to all rays in the invocation. Image
@@ -40,7 +29,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_man
 
 def batch_integrator_analytical(spacetime_name: str) -> None:
     r"""
-    Construct the Native CUDA orchestrator for the batched analytical integration pipeline.
+    Construct the CPU/OpenMP or CUDA orchestrator for analytical photon batches.
 
     :param spacetime_name: The identifier for the spacetime metric (e.g., 'KerrSchild').
     """

@@ -29,8 +29,7 @@ def register_CFunction_psi4(
     CoordSystem: str,
     OMP_collapse: int,
     enable_fd_functions: bool,
-    tetrad: str = "quasiKinnersley",
-    use_metric_to_construct_unit_normal: bool = False,
+    tetrad: str = "BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Add psi4 to Cfunction dictionary.
@@ -38,8 +37,8 @@ def register_CFunction_psi4(
     :param CoordSystem: Coordinate system to be used.
     :param OMP_collapse: OpenMP collapse clause integer value.
     :param enable_fd_functions: Flag to enable or disable the finite difference functions.
-    :param tetrad: The type of tetrad. Defaults to "quasiKinnersley".
-    :param use_metric_to_construct_unit_normal: Whether to use the metric to construct the unit normal. Defaults to False.
+    :param tetrad: The tetrad identifier. Defaults to
+        ``"BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad"``.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -111,7 +110,6 @@ def register_CFunction_psi4(
         BHaH.general_relativity.psi4.compute_psi4_tetrad.generate_CFunction_psi4_tetrad(
             CoordSystem=CoordSystem,
             tetrad=tetrad,
-            use_metric_to_construct_unit_normal=use_metric_to_construct_unit_normal,
         )
     )
 

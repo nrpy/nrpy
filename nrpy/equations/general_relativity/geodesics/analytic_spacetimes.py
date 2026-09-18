@@ -132,12 +132,13 @@ class AnalyticSpacetimes:
         Tuple[List[List[sp.Expr]], List[sp.Symbol]]
     ):
         """
-        Define the static coincident-hole Brill-Lindquist metric.
+        Define a static four-metric from coincident Brill-Lindquist spatial data.
 
-        The coincident Brill-Lindquist initial data reduce to a static
-        Schwarzschild spacetime in isotropic Cartesian coordinates. This
-        recipe is therefore restricted to the coincident-hole configuration;
-        separated Brill-Lindquist data do not define a static four-metric.
+        This analytic-like recipe uses ``gamma_ij = psi^4 delta_ij``,
+        ``alpha = psi^-2``, and zero shift. It is a chosen static continuation
+        of the coincident initial data, not the standard Schwarzschild
+        four-metric in isotropic coordinates. Separated Brill-Lindquist data do
+        not define a static four-metric.
 
         :return: A tuple (g4DD, xx), where g4DD is the symbolic 4-metric and
                  xx is the list of coordinate variables (t, x, y, z).

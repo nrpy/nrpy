@@ -10,6 +10,8 @@ from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Union, cast
 
+import sympy as sp
+
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.finite_difference as fin
@@ -34,6 +36,46 @@ def register_CFunction_constraints_eval(
     :param OMP_collapse: Degree of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctests:
+    >>> from types import SimpleNamespace
+    >>> registration_globals = register_CFunction_constraints_eval.__globals__
+    >>> original_constraints = registration_globals["BSSN_constraints"]
+    >>> original_codegen = ccg.c_codegen
+    >>> original_simple_loop = BHaH.simple_loop.simple_loop
+    >>> original_cfunctions = cfc.CFunction_dict.copy()
+    >>> captured = {}
+    >>> def capture_codegen(expressions, outputs, **_kwargs):
+    ...     captured["expressions"] = expressions
+    ...     captured["outputs"] = outputs
+    ...     return ""
+    >>> fake_constraints = SimpleNamespace(
+    ...     H=object(),
+    ...     Msquared=sp.Symbol("Msquared", nonnegative=True),
+    ...     LambdaConstraintMagnitude=object(),
+    ... )
+    >>> try:
+    ...     registration_globals["BSSN_constraints"] = {
+    ...         "Cartesian_rfm_precompute_RbarDD_gridfunctions": fake_constraints
+    ...     }
+    ...     ccg.c_codegen = capture_codegen
+    ...     BHaH.simple_loop.simple_loop = lambda **_kwargs: "/* doctest */"
+    ...     cfc.CFunction_dict.clear()
+    ...     _ = register_CFunction_constraints_eval("Cartesian", False, False, 1)
+    ... finally:
+    ...     registration_globals["BSSN_constraints"] = original_constraints
+    ...     ccg.c_codegen = original_codegen
+    ...     BHaH.simple_loop.simple_loop = original_simple_loop
+    ...     cfc.CFunction_dict.clear()
+    ...     cfc.CFunction_dict.update(original_cfunctions)
+    >>> captured["expressions"] == [
+    ...     fake_constraints.H,
+    ...     sp.sqrt(fake_constraints.Msquared),
+    ...     fake_constraints.LambdaConstraintMagnitude,
+    ... ]
+    True
+    >>> captured["outputs"]
+    ['diagnostic_gfs[IDX4(DIAG_HAMILTONIANGF, i0, i1, i2)]', 'diagnostic_gfs[IDX4(DIAG_MGF, i0, i1, i2)]', 'diagnostic_gfs[IDX4(DIAG_LAMBDA_CONSTRAINTGF, i0, i1, i2)]']
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -57,12 +99,13 @@ def register_CFunction_constraints_eval(
         + "_rfm_precompute_RbarDD_gridfunctions"
         + ("_T4munu" if enable_T4munu else "")
     ]
-    expr_list = [Bcon.H, Bcon.Msquared]
+    expr_list = [Bcon.H, sp.sqrt(Bcon.Msquared), Bcon.LambdaConstraintMagnitude]
     loop_body = ccg.c_codegen(
         expr_list,
         [
             "diagnostic_gfs[IDX4(DIAG_HAMILTONIANGF, i0, i1, i2)]",
-            "diagnostic_gfs[IDX4(DIAG_MSQUAREDGF, i0, i1, i2)]",
+            "diagnostic_gfs[IDX4(DIAG_MGF, i0, i1, i2)]",
+            "diagnostic_gfs[IDX4(DIAG_LAMBDA_CONSTRAINTGF, i0, i1, i2)]",
         ],
         enable_fd_codegen=True,
         enable_simd=True,
@@ -107,3 +150,15 @@ def register_CFunction_constraints_eval(
         CoordSystem_for_wrapper_func=CoordSystem,
     )
     return pcg.NRPyEnv()
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

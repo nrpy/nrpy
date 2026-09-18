@@ -160,9 +160,8 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
     else:
         body += "// (reference-metric precomputation disabled)\n"
     body += r"""
-for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-  charecommstruct_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, chare_index);
-"""
+    for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+    """
     body += "\n// Step 1.d: Set up curvilinear boundary condition struct (bcstruct)\n"
     if enable_CurviBCs:
         body += r"""

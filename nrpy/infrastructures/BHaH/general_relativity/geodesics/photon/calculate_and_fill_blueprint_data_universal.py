@@ -1,13 +1,12 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/calculate_and_fill_blueprint_data_universal.py
 """
-Defines a streaming bundle architecture to project escaped photon trajectories.
+Define blueprint-record output for completed photon trajectories.
 
-This module unpacks the 3D Cartesian coordinates of photons from a flattened
-Structure of Arrays (SoA) layout and mathematically maps escaped photons into
-spherical polar and azimuthal angles on the celestial sphere. It manages memory
-usage by processing photons in fixed batches, ensuring compliance with general
-hardware memory limits across various execution contexts. Execution buffers are
-allocated statically to map to the active memory hierarchy.
+This module copies final photon state and termination data from flattened
+Structure-of-Arrays bundles into persistent blueprint records. Escaped rays
+receive celestial-sphere angles; plane diagnostics and normalized image-sample
+coordinates remain available for other outcomes. Fixed-size chunks bound the
+working memory used by CPU and CUDA execution.
 
 The implementation relies on out-of-bounds execution guards to prevent invalid memory
 accesses for processing units that exceed the active chunk size. Final exit statuses
@@ -109,8 +108,8 @@ def calculate_and_fill_blueprint_data_universal(
     //==========================================
     // TERMINATION STATE RECORD
     //==========================================
-    // Preserve the exact interpolated terminal-plane termination event already stored in
-    // the blueprint. All other termination modes record the final evolved state.
+    // Preserve the reconstructed terminal-plane event already stored in the blueprint.
+    // All other termination modes record the final evolved state.
     if (d_status_bundle[c] != STOP_CONDITION_TERMINAL_PLANE) {
 {terminal_state_assignment}
     } // END IF: termination did not already store

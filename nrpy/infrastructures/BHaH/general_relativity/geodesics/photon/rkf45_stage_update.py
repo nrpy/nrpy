@@ -3,12 +3,12 @@ r"""
 Provides the native kernel and host-side orchestrator for the RKF45 Stage Update.
 
 This module provides the computational kernel responsible for evaluating the intermediate
-stages of the Runge-Kutta-Fehlberg 4(5) algorithm for relativistic ray tracing on
-numerical spacetimes. The step size is loaded into local variables, minimizing repeated
+stages of the Runge-Kutta-Fehlberg 4(5) algorithm for relativistic photon ray tracing.
+The step size is loaded into local variables, minimizing repeated
 memory accesses during the 9-component tensor loop. The implementation explicitly
-branches based on the RKF45 stage index, bypassing stage 6 to ensure OpenMP compliance.
-It utilizes fused multiply-add intrinsics to calculate the intermediate Runge-Kutta
-stages, ensuring exact IEEE 754 rounding behavior. The update operates on the
+branches based on the RKF45 stage index; stage 6 needs no intermediate state because
+finalization follows immediately. It uses fused multiply-add intrinsics to calculate
+the intermediate Runge-Kutta stages. The update operates on the
 mode-independent nine-component photon state: direct geodesic and normalized
 evolution choose their state interpretation when generating the RHS. Finally,
 writing the calculated update directly to memory enforces the split-pipeline
@@ -93,9 +93,9 @@ def rkf45_stage_update() -> None:
     //==========================================
     // BUTCHER TABLEAU EVALUATION
     //==========================================
-    // Fused multiply-add intrinsics evaluate the intermediate Runge-Kutta stages to ensure exact IEEE 754 rounding behavior.
+    // Fused multiply-add intrinsics evaluate the intermediate Runge-Kutta stages.
 
-    // Bypass the computation entirely for stage 6 to ensure OpenMP compliance.
+    // Stage 6 is followed immediately by finalization, so no intermediate state is needed.
     if (stage != 6) {
         int comp; // Loop index for iterating over the tensor components.
         for (comp = 0; comp < 9; ++comp) {

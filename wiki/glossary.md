@@ -1,6 +1,6 @@
 # Glossary
 
-> Canonical spellings for recurring code, domain, and experiment entities. · Status: confirmed · Last reconciled: 07-12-2026
+> Canonical spellings for recurring code, domain, and experiment entities. · Status: confirmed
 
 ## Summary
 
@@ -39,6 +39,7 @@ pages where a first-pass owner exists.
 | indexed expression | Tensor or vector structure built with `nrpy.indexedexp`; see [Indexed Expressions](core/indexed-expressions.md). |
 | ADM | Arnowitt-Deser-Misner 3+1 quantities used by GR conversions and initial-data pages; see [Metric Conversions And Matter](equations/general-relativity/metric-conversions-and-matter.md). |
 | BSSN | Baumgarte-Shapiro-Shibata-Nakamura formulation family implemented by NRPy equation modules; see [BSSN Family](equations/general-relativity/bssn-family.md). |
+| YBS-MOM | Default-disabled direct Yo--Lin--Cao momentum-gradient adjustment shared by BSSN and fCCZ4, with CAHD-style local timestep scaling and no new evolved state; distinct from the historical YBS Gamma adjustment. See [YBS-MOM Timestep-Scaled Momentum Adjustment](equations/general-relativity/ybs-momentum-damping.md). |
 | GRHD | General relativistic hydrodynamics equation family for conserved variables, fluxes, sources, speeds, and HLL helpers; see [GRHD](equations/grhd.md). |
 | TOV | Tolman-Oppenheimer-Volkoff stellar-equilibrium ODE system; see [TOV Equations](equations/tov-equations.md). |
 | Psi4 | Weyl radiation scalar implementation and tetrad construction path; see [Psi4 And Tetrads](equations/general-relativity/psi4-and-tetrads.md). |
@@ -80,6 +81,7 @@ pages where a first-pass owner exists.
 | SDAG | Charm++ structured dagger notation for coordinating asynchronous entry-method control flow; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
 | CkIO | Charm++ parallel I/O library used by superB diagnostic output paths; see [Diagnostics And Observables](infrastructures/superb/diagnostics-and-observables.md). |
 | JAX | Generated Python/JAX infrastructure target used by `sebobv1_jax`; see [JAX](infrastructures/jax/index.md). |
+| Dendro | Generated solver infrastructure target for a Dendro-GR checkout; NRPy generates the `nrpy_fccz4` and `nrpy_bssn` modules, one per formulation, the real host library is Dendrolib, and `dendro5` is required by fCCZ4's qualified real-host branch while BSSN remains standalone-only; see [Dendro](infrastructures/dendro/index.md). |
 | NRPyElliptic | Hyperbolic-relaxation elliptic initial-data solver family spanning equation modules, BHaH workflows, and superB examples; see [NRPyElliptic Workflow](infrastructures/bhah/nrpyelliptic-workflow.md). |
 | SEBOB | SEOBNR-plus-BOB waveform example family (SEBOBv1, SEBOBv2) spanning generated C library and JAX routes; see [SEOBNR BOB Generated Library](infrastructures/bhah/seobnr-bob-generated-library.md). |
 | Kreiss-Oliger | Numerical dissipation scheme applied through `dKOD` finite-difference operators in evolution RHS wiring; see [Finite Difference](core/finite-difference.md). |

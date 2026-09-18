@@ -11,7 +11,7 @@ import subprocess
 import sys
 from io import StringIO
 from pathlib import Path
-from typing import Any, Tuple, Union
+from typing import Any, Optional, Tuple, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -80,19 +80,46 @@ def calculate_rmse(
 
 def process_input_set(
     nominal_args: Tuple[NDArray[np.float64], str, str],
-) -> Tuple[Union[float, Any], Union[float, Any]]:
+) -> Tuple[Optional[Union[float, Any]], Optional[Union[float, Any]], bool]:
     """
     Process a single input set to get both baseline and test error.
 
+    Calibration-mode approximants (path contains "calibration") depend on
+    calibration coefficients supplied by an external calibration algorithm;
+    this harness runs them with placeholder parfile defaults, so either
+    executable may legitimately abort on a given input. Trusted and current
+    must therefore succeed or fail consistently: any asymmetry between them,
+    in either direction, is a genuine regression and is reported as such
+    instead of letting the crash propagate and abort the whole comparison
+    run.
+
     :param nominal_args: Tuple containing the nominal input paramters, path to trusted executable, and path to current executable.
-    :return: Tuple containing the baseline error and test error.
+    :return: Tuple containing the baseline error, the test error (both None if no comparison was performed), and whether this input set is a trusted/current success-vs-failure regression.
     """
     nominal_inputs, nominal_trusted_exec, nominal_current_exec = nominal_args
+    is_calibration_mode = "calibration" in Path(nominal_trusted_exec).name
 
-    # 1. Run trusted code with nominal inputs
-    trusted_output = run_sebob(nominal_trusted_exec, nominal_inputs)
-    # 2. Run current code with nominal inputs
-    current_output = run_sebob(nominal_current_exec, nominal_inputs)
+    if is_calibration_mode:
+        try:
+            trusted_output = run_sebob(nominal_trusted_exec, nominal_inputs)
+        except subprocess.CalledProcessError:
+            trusted_output = None
+        try:
+            current_output = run_sebob(nominal_current_exec, nominal_inputs)
+        except subprocess.CalledProcessError:
+            current_output = None
+
+        if (trusted_output is None) != (current_output is None):
+            # Asymmetric failure: a real regression, in either direction.
+            return None, None, True
+        if trusted_output is None or current_output is None:
+            # Both failed consistently: not a regression, nothing to compare.
+            return None, None, False
+    else:
+        # 1. Run trusted code with nominal inputs
+        trusted_output = run_sebob(nominal_trusted_exec, nominal_inputs)
+        # 2. Run current code with nominal inputs
+        current_output = run_sebob(nominal_current_exec, nominal_inputs)
 
     # 3. Create perturbed inputs only for mass ratio and spins and run trusted code again
     rng_perturbation = np.random.default_rng(0)
@@ -110,7 +137,7 @@ def process_input_set(
     # Calculate errors
     baseline_error = calculate_rmse(trusted_output, perturbed_output)
     test_error = calculate_rmse(trusted_output, current_output)
-    return baseline_error, test_error
+    return baseline_error, test_error, False
 
 
 # --- Main Logic ---
@@ -181,25 +208,50 @@ if __name__ == "__main__":
     print(f"Starting accuracy comparison for {num_sets} input sets...")
     baseline_errors = []
     test_errors = []
+    regressed_sets = []
     for i in range(num_sets):
         print(f"Processing input set {i+1}/{num_sets}...")
         inputs_set = np.array([q[i], chi_1[i], chi_2[i], omega_0, M, dt])
         task = (inputs_set, trusted_exec, current_exec)
-        baseline_err, test_err = process_input_set(task)
+        baseline_err, test_err, regressed = process_input_set(task)
+        if regressed:
+            print(
+                f"  Input set {i+1}: trusted and current executables disagreed on success/failure."
+            )
+            regressed_sets.append(i + 1)
+            continue
+        if baseline_err is None or test_err is None:
+            print(
+                f"  Input set {i+1}: trusted and current both failed; skipping from median."
+            )
+            continue
         baseline_errors.append(baseline_err)
         test_errors.append(test_err)
 
-    baseline_median = np.median(baseline_errors)
-    test_median = np.median(test_errors)
-
     print("\n--- Test Results ---")
-    print(f"Test Error Median:      {test_median:.6e}")
-    print(f"Baseline Error Median:  {baseline_median:.6e}")
-    if test_median <= baseline_median:
-        print("\nPASSED: Median error is within roundoff baseline.\n")
-        sys.exit(0)
+    failed = False
+    if regressed_sets:
+        print(
+            f"FAILED: trusted and current executables disagreed on success/failure "
+            f"for input set(s) {regressed_sets}.\n"
+        )
+        failed = True
+
+    if baseline_errors:
+        baseline_median = np.median(baseline_errors)
+        test_median = np.median(test_errors)
+        print(f"Test Error Median:      {test_median:.6e}")
+        print(f"Baseline Error Median:  {baseline_median:.6e}")
+        if test_median <= baseline_median:
+            print("PASSED: Median error is within roundoff baseline.\n")
+        else:
+            print(
+                f"FAILED: Median error ({test_median:.6e}) exceeds the baseline ({baseline_median:.6e}).\n"
+            )
+            failed = True
     else:
         print(
-            f"\nFAILED: Median error ({test_median:.6e}) exceeds the baseline ({baseline_median:.6e}).\n"
+            "No input sets where both trusted and current succeeded; no median comparison performed.\n"
         )
-        sys.exit(1)
+
+    sys.exit(1 if failed else 0)

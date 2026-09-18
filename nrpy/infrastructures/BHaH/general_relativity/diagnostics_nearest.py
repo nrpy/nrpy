@@ -103,13 +103,13 @@ def register_CFunction_diagnostics_nearest() -> Union[None, pcg.NRPyEnv_type]:
   // --- USER-EDIT: Select diagnostic gridfunctions to sample (applies to all grids) ---
 
   // 0D diagnostics: nearest point to the grid center.
-  const int which_gfs_0d[] = {DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF};
+  const int which_gfs_0d[] = {DIAG_HAMILTONIANGF, DIAG_MGF, DIAG_LAMBDA_CONSTRAINTGF};
 
   // 1D diagnostics: nearest lines to the y and z axes.
-  const int which_gfs_1d[] = {DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF};
+  const int which_gfs_1d[] = {DIAG_HAMILTONIANGF, DIAG_MGF, DIAG_LAMBDA_CONSTRAINTGF};
 
   // 2D diagnostics: nearest planes to the xy and yz coordinate planes.
-  const int which_gfs_2d[] = {DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF};
+  const int which_gfs_2d[] = {DIAG_HAMILTONIANGF, DIAG_MGF, DIAG_LAMBDA_CONSTRAINTGF};
 
   // --- END USER-EDIT ---
 

@@ -1,5 +1,5 @@
 """
-Generate C code for computing the RHS of the BSSN equations in curvilinear coordinates, using a reference-metric formalism.
+Generate C code for computing BSSN or fCCZ4 RHSs in curvilinear coordinates, using a reference-metric formalism.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -28,11 +28,20 @@ from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
 from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
+from nrpy.equations.general_relativity.fCCZ4_system import (
+    build_fccz4_expression_bundle,
+)
+from nrpy.equations.general_relativity.kreiss_oliger_terms import (
+    add_KreissOliger_dissipation_terms,
+)
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
 from nrpy.infrastructures import BHaH
+from nrpy.infrastructures.BHaH.general_relativity.cfdD_alphadD_vetUdD_eval import (
+    register_cfdD_alphadD_vetUdD_gridfunctions,
+)
 
 
 def register_CFunction_rhs_eval(
@@ -52,9 +61,14 @@ def register_CFunction_rhs_eval(
     enable_SSL: bool = False,
     OMP_collapse: int = 1,
     validate_expressions: bool = False,
+    enable_fCCZ4: bool = False,
+    enable_YBS_Gamma_constraint_adjustment: bool = False,
+    enable_YBS_momentum_constraint_adjustment: bool = False,
+    enable_cfdD_alphadD_vetUdD_gridfunctions: bool = False,
+    enable_cpu_tiling: bool = False,
 ) -> Union[None, Dict[str, Union[mpf, mpc]], pcg.NRPyEnv_type]:
     """
-    Register the right-hand side evaluation function for the BSSN equations.
+    Register the right-hand side evaluation function for BSSN or fCCZ4.
 
     :param CoordSystem: The coordinate system to be used.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
@@ -72,6 +86,20 @@ def register_CFunction_rhs_eval(
     :param enable_SSL: Whether to enable slow-start lapse.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :param validate_expressions: Whether to validate generated sympy expressions against trusted values.
+    :param enable_fCCZ4: Use fCCZ4 instead of BSSN evolution equations.
+    :param enable_YBS_Gamma_constraint_adjustment: Enable the YBS connection-constraint adjustment.
+    :param enable_YBS_momentum_constraint_adjustment: Enable the timestep-scaled
+        Yo--Lin--Cao momentum-constraint adjustment.
+    :param enable_cfdD_alphadD_vetUdD_gridfunctions: Whether to read the first derivatives of
+        cf, alpha and vetU from the gridfunctions cfdD_alphadD_vetUdD_eval stores, and to
+        build each mixed second derivative of them as a single first derivative of those
+        gridfunctions, instead of differencing the evolved fields twice. The caller must also
+        register cfdD_alphadD_vetUdD_eval and call it before rhs_eval within the same
+        right-hand-side evaluation; rhs_eval registers the gridfunctions either way, so an
+        unpaired caller would compile and read values nobody wrote.
+    :param enable_cpu_tiling: Whether to register the tile-bounded OpenMP variant used by
+        rhs_eval_with_Ricci. This requires precomputed reference metrics, RbarDD
+        gridfunctions, and BSSN rather than fCCZ4.
 
     :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
 
@@ -91,7 +119,7 @@ def register_CFunction_rhs_eval(
                 else Path("intrinsics") / "simd_intrinsics.h"
             )
         ]
-    desc = r"""Set RHSs for the BSSN evolution equations."""
+    desc = r"""Set RHSs for the BSSN or fCCZ4 evolution equations."""
     cfunc_type = "void"
     name = "rhs_eval"
     arg_dict_cuda = {
@@ -119,168 +147,204 @@ def register_CFunction_rhs_eval(
     }
     params = ",".join([f"{v} {k}" for k, v in arg_dict_host.items()])
 
-    # Populate BSSN rhs variables
-    rhs = BSSN_RHSs[
+    stored_first_derivatives = (
+        register_cfdD_alphadD_vetUdD_gridfunctions()
+        if enable_cfdD_alphadD_vetUdD_gridfunctions
+        else []
+    )
+
+    rhs_cache_key = (
         CoordSystem
         + ("_rfm_precompute" if enable_rfm_precompute else "")
         + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
         + ("_T4munu" if enable_T4munu else "")
-    ]
-    alpha_rhs, vet_rhsU, bet_rhsU = BSSN_gauge_RHSs(
-        CoordSystem=CoordSystem,
-        enable_rfm_precompute=enable_rfm_precompute,
-        enable_T4munu=enable_T4munu,
-        LapseEvolutionOption=LapseEvolutionOption,
-        ShiftEvolutionOption=ShiftEvolutionOption,
     )
-    rhs.BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] = alpha_rhs
-    for i in range(3):
-        rhs.BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] = vet_rhsU[i]
-        rhs.BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] = bet_rhsU[i]
-
-    # local_BSSN_RHSs_varname_to_expr_dict is modified below if e.g., we add KO terms;
-    #    DO NOT MODIFY rhs.BSSN_RHSs_varname_to_expr_dict!
-    local_BSSN_RHSs_varname_to_expr_dict = rhs.BSSN_RHSs_varname_to_expr_dict.copy()
-    local_BSSN_RHSs_varname_to_expr_dict = ODict(
-        sorted(local_BSSN_RHSs_varname_to_expr_dict.items())
-    )
-
-    # Define conformal factor W.
-    Bq = BSSN_quantities[
-        CoordSystem
-        + ("_rfm_precompute" if enable_rfm_precompute else "")
-        + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
-    ]
-    EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
-    if EvolvedConformalFactor_cf == "W":
-        W = Bq.cf
-    elif EvolvedConformalFactor_cf == "chi":
-        W = sp.sqrt(Bq.cf)
-    elif EvolvedConformalFactor_cf == "phi":
-        W = sp.exp(-2 * Bq.cf)
-    else:
-        raise ValueError(
-            "Error: only EvolvedConformalFactor_cf = (W or chi or phi) supported."
-        )
-
-    # Add Kreiss-Oliger dissipation to the BSSN RHSs:
-    if enable_KreissOliger_dissipation:
-        diss_strength_gauge, diss_strength_nongauge = par.register_CodeParameters(
+    if enable_YBS_Gamma_constraint_adjustment:
+        par.register_CodeParameter(
             "REAL",
             __name__,
-            ["KreissOliger_strength_gauge", "KreissOliger_strength_nongauge"],
-            [KreissOliger_strength_gauge, KreissOliger_strength_nongauge],
+            "YBS_chi",
+            2.0 / 3.0,
             commondata=True,
+            add_to_parfile=True,
         )
-
-        # vvv BEGIN CAKO vvv
-        if enable_CAKO:
-            diss_strength_gauge *= W
-            diss_strength_nongauge *= W
-        # ^^^ END CAKO ^^^
-
-        rfm = refmetric.reference_metric[
-            CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
-        ]
-        alpha_dKOD = ixp.declarerank1("alpha_dKOD")
-        cf_dKOD = ixp.declarerank1("cf_dKOD")
-        trK_dKOD = ixp.declarerank1("trK_dKOD")
-        betU_dKOD = ixp.declarerank2("betU_dKOD", symmetry="nosym")
-        vetU_dKOD = ixp.declarerank2("vetU_dKOD", symmetry="nosym")
-        lambdaU_dKOD = ixp.declarerank2("lambdaU_dKOD", symmetry="nosym")
-        aDD_dKOD = ixp.declarerank3("aDD_dKOD", symmetry="sym01")
-        hDD_dKOD = ixp.declarerank3("hDD_dKOD", symmetry="sym01")
-        for k in range(3):
-            local_BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] += (
-                diss_strength_gauge * alpha_dKOD[k] * rfm.ReU[k]
-            )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-            local_BSSN_RHSs_varname_to_expr_dict["cf_rhs"] += (
-                diss_strength_nongauge * cf_dKOD[k] * rfm.ReU[k]
-            )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-            local_BSSN_RHSs_varname_to_expr_dict["trK_rhs"] += (
-                diss_strength_nongauge * trK_dKOD[k] * rfm.ReU[k]
-            )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-            for i in range(3):
-                if "2ndOrder" in ShiftEvolutionOption:
-                    local_BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] += (
-                        diss_strength_gauge * betU_dKOD[i][k] * rfm.ReU[k]
-                    )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-                local_BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] += (
-                    diss_strength_gauge * vetU_dKOD[i][k] * rfm.ReU[k]
-                )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-                local_BSSN_RHSs_varname_to_expr_dict[f"lambda_rhsU{i}"] += (
-                    diss_strength_nongauge * lambdaU_dKOD[i][k] * rfm.ReU[k]
-                )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-                for j in range(i, 3):
-                    local_BSSN_RHSs_varname_to_expr_dict[f"a_rhsDD{i}{j}"] += (
-                        diss_strength_nongauge * aDD_dKOD[i][j][k] * rfm.ReU[k]
-                    )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-                    local_BSSN_RHSs_varname_to_expr_dict[f"h_rhsDD{i}{j}"] += (
-                        diss_strength_nongauge * hDD_dKOD[i][j][k] * rfm.ReU[k]
-                    )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-
-    # vvv BEGIN CAHD vvv
-    if enable_CAHD:
-        Bcon = BSSN_constraints[
-            CoordSystem
-            + ("_rfm_precompute" if enable_rfm_precompute else "")
-            + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
-            + ("_T4munu" if enable_T4munu else "")
-        ]
-        if "cahdprefactor" not in gri.glb_gridfcs_dict:
+    if enable_CAHD or enable_YBS_momentum_constraint_adjustment:
+        if "dsmin" not in gri.glb_gridfcs_dict:
             _ = gri.register_gridfunctions(
-                "cahdprefactor",
+                "dsmin",
                 group="AUXEVOL",
                 gf_array_name="auxevol_gfs",
             )
-        _C_CAHD = par.register_CodeParameter(
-            "REAL", __name__, "C_CAHD", 0.15, commondata=True, add_to_parfile=True
+    if enable_YBS_momentum_constraint_adjustment:
+        par.register_CodeParameter(
+            "REAL",
+            __name__,
+            "C_YBS_mom",
+            1.0,
+            commondata=True,
+            add_to_parfile=True,
         )
-        # Initialize CAHD_term assuming phi is the evolved conformal factor. CFL_FACTOR is defined in MoL.
-        # CAHD_term = -C_CAHD * (sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")) * Bcon.H
-        # -> cahdprefactor = C_CAHD * sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")
-        CAHD_term = -1 * sp.symbols("cahdprefactor") * Bcon.H
-        if EvolvedConformalFactor_cf == "phi":
-            pass  # CAHD_term already assumes phi is the evolved conformal factor.
-        elif EvolvedConformalFactor_cf == "W":
-            # \partial_t W = \partial_t e^{-2 phi} = -2 W \partial_t phi
-            CAHD_term *= -2 * Bq.cf
+    if enable_fCCZ4:
+        # The shared fCCZ4 expression factory is the single fCCZ4 expression
+        # source for all infrastructures: it assembles the non-gauge fCCZ4
+        # RHSs, the selected gauge RHSs, and the optional KO/CAHD/SSL terms.
+        fccz4_bundle = build_fccz4_expression_bundle(
+            CoordSystem=CoordSystem,
+            enable_rfm_precompute=enable_rfm_precompute,
+            enable_RbarDD_gridfunctions=enable_RbarDD_gridfunctions,
+            enable_T4munu=enable_T4munu,
+            LapseEvolutionOption=LapseEvolutionOption,
+            ShiftEvolutionOption=ShiftEvolutionOption,
+            enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
+            KreissOliger_strength_gauge=KreissOliger_strength_gauge,
+            KreissOliger_strength_nongauge=KreissOliger_strength_nongauge,
+            enable_CAKO=enable_CAKO,
+            enable_CAHD=enable_CAHD,
+            enable_SSL=enable_SSL,
+            enable_YBS_Gamma_constraint_adjustment=(
+                enable_YBS_Gamma_constraint_adjustment
+            ),
+            enable_YBS_momentum_constraint_adjustment=(
+                enable_YBS_momentum_constraint_adjustment
+            ),
+        )
+        local_RHSs_varname_to_expr_dict = ODict(fccz4_bundle.rhs_by_symbol_name)
+        betaU = list(fccz4_bundle.upwind_control_vec)
+    else:
+        # DIVERGENCE GUARD (I4-4): this `else` branch is the BSSN formulation,
+        # not fCCZ4.  Its W/CAKO/CAHD/SSL/betaU blocks intentionally mirror the
+        # fCCZ4 factory's structure but must NOT be unified with it via a
+        # shared helper: the formulations differ (no Theta_fCCZ4_dKOD here;
+        # BSSN cache keys and gauge modules differ).  Keep this branch
+        # byte-identical for BSSN calls; cross-formulation sharing would
+        # couple two formulations and endanger the PR4 "BHaH unchanged" exit.
+        # This branch's emitted expressions are pinned by the comparison runner at
+        # the bottom of this module, which compares against the tracked
+        # dictionaries in nrpy/infrastructures/BHaH/general_relativity/tests/.
+        bssn_rhs = BSSN_RHSs.get_rhs(
+            rhs_cache_key,
+            enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
+            enable_YBS_momentum_constraint_adjustment=enable_YBS_momentum_constraint_adjustment,
+        )
+        local_RHSs_varname_to_expr_dict = ODict(
+            bssn_rhs.BSSN_RHSs_varname_to_expr_dict.copy()
+        )
+        alpha_rhs, vet_rhsU, bet_rhsU = BSSN_gauge_RHSs(
+            CoordSystem=CoordSystem,
+            enable_rfm_precompute=enable_rfm_precompute,
+            enable_T4munu=enable_T4munu,
+            LapseEvolutionOption=LapseEvolutionOption,
+            ShiftEvolutionOption=ShiftEvolutionOption,
+            enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
+        )
+
+        # Keep cached nongauge RHS dictionaries immutable: gauge and optional
+        # KO, CAHD, and SSL terms belong only to this generated function.
+        local_RHSs_varname_to_expr_dict["alpha_rhs"] = alpha_rhs
+        for i in range(3):
+            local_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] = vet_rhsU[i]
+            local_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] = bet_rhsU[i]
+
+        local_RHSs_varname_to_expr_dict = ODict(
+            sorted(local_RHSs_varname_to_expr_dict.items())
+        )
+
+        # Define conformal factor W.
+        Bq = BSSN_quantities[
+            CoordSystem
+            + ("_rfm_precompute" if enable_rfm_precompute else "")
+            + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
+        ]
+        EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
+        if EvolvedConformalFactor_cf == "W":
+            W = Bq.cf
         elif EvolvedConformalFactor_cf == "chi":
-            # \partial_t chi = \partial_t e^{-4 phi} = -4 chi \partial_t phi
-            CAHD_term *= -4 * Bq.cf
+            W = sp.sqrt(Bq.cf)
+        elif EvolvedConformalFactor_cf == "phi":
+            W = sp.exp(-2 * Bq.cf)
         else:
             raise ValueError(
                 "Error: only EvolvedConformalFactor_cf = (W or chi or phi) supported."
             )
-        local_BSSN_RHSs_varname_to_expr_dict["cf_rhs"] += CAHD_term
-    # ^^^ END CAHD ^^^
 
-    # vvv BEGIN SSL vvv
-    if enable_SSL:
-        SSL_Gaussian_prefactor = par.register_CodeParameter(
-            "REAL",
-            __name__,
-            "SSL_Gaussian_prefactor",
-            1.0,
-            commondata=True,
-            add_to_parfile=False,
-        )
-        _SSL_h, _SSL_sigma = par.register_CodeParameters(
-            "REAL",
-            __name__,
-            ["SSL_h", "SSL_sigma"],
-            [0.6, 20.0],
-            commondata=True,
-            add_to_parfile=True,
-        )
-        local_BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] -= (
-            W * SSL_Gaussian_prefactor * (Bq.alpha - W)
-        )
-    # ^^^ END SSL ^^^
+        # Add Kreiss-Oliger dissipation to the BSSN RHSs.  The dissipation
+        # terms are shared with the fCCZ4 system (which adds one more, for
+        # Theta_fCCZ4); the strengths stay registered under this module so the
+        # generated parameter metadata is unchanged.
+        if enable_KreissOliger_dissipation:
+            add_KreissOliger_dissipation_terms(
+                local_RHSs_varname_to_expr_dict,
+                CoordSystem=CoordSystem,
+                enable_rfm_precompute=enable_rfm_precompute,
+                registering_module=__name__,
+                ShiftEvolutionOption=ShiftEvolutionOption,
+                KreissOliger_strength_gauge=KreissOliger_strength_gauge,
+                KreissOliger_strength_nongauge=KreissOliger_strength_nongauge,
+                enable_CAKO=enable_CAKO,
+                W=W,
+                include_Theta_fCCZ4=False,
+            )
 
-    BSSN_RHSs_access_gf: List[str] = []
-    for var in local_BSSN_RHSs_varname_to_expr_dict.keys():
-        BSSN_RHSs_access_gf += [
+        # vvv BEGIN CAHD vvv
+        if enable_CAHD:
+            Bcon = BSSN_constraints[
+                CoordSystem
+                + ("_rfm_precompute" if enable_rfm_precompute else "")
+                + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
+                + ("_T4munu" if enable_T4munu else "")
+            ]
+            C_CAHD = par.register_CodeParameter(
+                "REAL", __name__, "C_CAHD", 0.15, commondata=True, add_to_parfile=True
+            )
+            # Initialize CAHD_term assuming phi is the evolved conformal factor.
+            # CFL_FACTOR is defined in MoL; dsmin stores raw physical grid spacing.
+            CAHD_term = (
+                -C_CAHD
+                * sp.Symbol("CFL_FACTOR", real=True)
+                * sp.Symbol("dsmin", real=True)
+                * Bcon.H
+            )
+            if EvolvedConformalFactor_cf == "phi":
+                pass  # CAHD_term already assumes phi is the evolved conformal factor.
+            elif EvolvedConformalFactor_cf == "W":
+                # \partial_t W = \partial_t e^{-2 phi} = -2 W \partial_t phi
+                CAHD_term *= -2 * Bq.cf
+            elif EvolvedConformalFactor_cf == "chi":
+                # \partial_t chi = \partial_t e^{-4 phi} = -4 chi \partial_t phi
+                CAHD_term *= -4 * Bq.cf
+            else:
+                raise ValueError(
+                    "Error: only EvolvedConformalFactor_cf = (W or chi or phi) supported."
+                )
+            local_RHSs_varname_to_expr_dict["cf_rhs"] += CAHD_term
+        # ^^^ END CAHD ^^^
+
+        # vvv BEGIN SSL vvv
+        if enable_SSL:
+            SSL_Gaussian_prefactor = par.register_CodeParameter(
+                "REAL",
+                __name__,
+                "SSL_Gaussian_prefactor",
+                1.0,
+                commondata=True,
+                add_to_parfile=False,
+            )
+            _SSL_h, _SSL_sigma = par.register_CodeParameters(
+                "REAL",
+                __name__,
+                ["SSL_h", "SSL_sigma"],
+                [0.6, 20.0],
+                commondata=True,
+                add_to_parfile=True,
+            )
+            local_RHSs_varname_to_expr_dict["alpha_rhs"] -= (
+                W * SSL_Gaussian_prefactor * (Bq.alpha - W)
+            )
+        # ^^^ END SSL ^^^
+
+    RHSs_access_gf: List[str] = []
+    for var in local_RHSs_varname_to_expr_dict.keys():
+        RHSs_access_gf += [
             gri.BHaHGridFunction.access_gf(
                 var.replace("_rhs", ""),
                 0,
@@ -289,20 +353,21 @@ def register_CFunction_rhs_eval(
                 gf_array_name="rhs_gfs",
             )
         ]
-    # Set up upwind control vector (betaU)
-    rfm = refmetric.reference_metric[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
-    ]
-    betaU = ixp.zerorank1()
-    vetU = ixp.declarerank1("vetU")
-    for i in range(3):
-        # self.lambda_rhsU[i] = self.Lambdabar_rhsU[i] / rfm.ReU[i]
-        betaU[i] = vetU[i] * rfm.ReU[i]
+    if not enable_fCCZ4:
+        # Set up upwind control vector (betaU)
+        rfm = refmetric.reference_metric[
+            CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        ]
+        betaU = ixp.zerorank1()
+        vetU = ixp.declarerank1("vetU")
+        for i in range(3):
+            # self.lambda_rhsU[i] = self.Lambdabar_rhsU[i] / rfm.ReU[i]
+            betaU[i] = vetU[i] * rfm.ReU[i]
 
-    # Perform validation of BSSN_RHSs against trusted version.
+    # Perform validation of RHSs against trusted expressions.
     if validate_expressions:
         return ve.process_dictionary_of_expressions(
-            local_BSSN_RHSs_varname_to_expr_dict, fixed_mpfs_for_free_symbols=True
+            local_RHSs_varname_to_expr_dict, fixed_mpfs_for_free_symbols=True
         )
     # ve.compare_or_generate_trusted_results(
     #     os.path.abspath(__file__),
@@ -313,12 +378,16 @@ def register_CFunction_rhs_eval(
     #     cast(Dict[str, Union[mpf, mpc]], results_dict),
     # )
 
-    expr_list = list(local_BSSN_RHSs_varname_to_expr_dict.values())
-
+    expr_list = list(local_RHSs_varname_to_expr_dict.values())
     # Find symbols stored in params
     param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
         expr_list, exclude=[f"xx{j}" for j in range(3)]
     )
+    if (
+        enable_CAHD or enable_YBS_momentum_constraint_adjustment
+    ) and "CFL_FACTOR" not in commondata_symbols:
+        commondata_symbols.append("CFL_FACTOR")
+        commondata_symbols.sort()
 
     arg_dict_cuda = {
         **arg_dict_cuda,
@@ -333,82 +402,173 @@ def register_CFunction_rhs_eval(
         **{k.replace("CUDA", "SIMD"): v for k, v in arg_dict_cuda.items()},
     }
 
-    kernel_body = BHaH.simple_loop.simple_loop(
-        loop_body=ccg.c_codegen(
-            expr_list,
-            BSSN_RHSs_access_gf,
-            enable_fd_codegen=True,
-            enable_simd=enable_intrinsics,
-            upwind_control_vec=betaU,
-            enable_fd_functions=enable_fd_functions,
-            rational_const_alias=(
-                "static constexpr" if parallelization == "cuda" else "static const"
+    point_body = ccg.c_codegen(
+        expr_list,
+        RHSs_access_gf,
+        enable_fd_codegen=True,
+        stored_first_derivatives=stored_first_derivatives,
+        enable_simd=enable_intrinsics,
+        upwind_control_vec=betaU,
+        enable_fd_functions=enable_fd_functions,
+        rational_const_alias=(
+            "static constexpr" if parallelization == "cuda" else "static const"
+        ),
+    ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD")
+    emit_cpu_tile_function = (
+        enable_cpu_tiling
+        and parallelization == "openmp"
+        and enable_rfm_precompute
+        and enable_RbarDD_gridfunctions
+        and not enable_fCCZ4
+    )
+    for tiled in ([False, True] if emit_cpu_tile_function else [False]):
+        kernel_body = BHaH.simple_loop.simple_loop(
+            loop_body=point_body,
+            loop_region="interior",
+            enable_intrinsics=enable_intrinsics,
+            CoordSystem=CoordSystem,
+            enable_rfm_precompute=enable_rfm_precompute,
+            read_xxs=not enable_rfm_precompute,
+            OMP_collapse=OMP_collapse,
+            enable_OpenMP=not tiled,
+            loop_bounds=(
+                (
+                    ["lo2", "lo1", "NGHOSTS"],
+                    ["hi2", "hi1", "Nxx_plus_2NGHOSTS0 - NGHOSTS"],
+                )
+                if tiled
+                else None
             ),
-        ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
-        loop_region="interior",
-        enable_intrinsics=enable_intrinsics,
-        CoordSystem=CoordSystem,
-        enable_rfm_precompute=enable_rfm_precompute,
-        read_xxs=not enable_rfm_precompute,
-        OMP_collapse=OMP_collapse,
-    )
-    loop_params = parallel_utils.get_loop_parameters(
-        parallelization, enable_intrinsics=enable_intrinsics
-    )
-    if enable_intrinsics:
-        for symbol in commondata_symbols:
-            loop_params += f"MAYBE_UNUSED const REAL_SIMD_ARRAY {symbol} = ConstSIMD(NOSIMD{symbol});\n"
-
-    params_definitions = generate_definition_header(
-        param_symbols,
-        enable_intrinsics=enable_intrinsics,
-        var_access=parallel_utils.get_params_access(parallelization),
-    )
-    kernel_body = f"{loop_params}\n{params_definitions}\n{kernel_body}"
-
-    kernel, launch_body = parallel_utils.generate_kernel_and_launch_code(
-        name,
-        kernel_body.replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
-        arg_dict_cuda,
-        arg_dict_host,
-        parallelization=parallelization,
-        comments=desc,
-        cfunc_type=f"static {cfunc_type}",
-        launchblock_with_braces=False,
-        thread_tiling_macro_suffix="BSSN_RHS",
-    )
-
-    for symbol in commondata_symbols:
-        tmp_sym = (
-            f"NOCUDA{symbol}"
-            if parallelization == "cuda" and enable_intrinsics
-            else (
-                f"NOSIMD{symbol}"
-                if enable_intrinsics
-                else symbol if enable_intrinsics else symbol
-            )
         )
-        launch_body = launch_body.replace(tmp_sym, f"commondata->{symbol}")
+        loop_params = parallel_utils.get_loop_parameters(
+            parallelization, enable_intrinsics=enable_intrinsics
+        )
+        if enable_intrinsics:
+            for symbol in commondata_symbols:
+                loop_params += f"MAYBE_UNUSED const REAL_SIMD_ARRAY {symbol} = ConstSIMD(NOSIMD{symbol});\n"
 
-    prefunc = ""
-    if parallelization == "cuda" and enable_fd_functions:
-        prefunc = fin.construct_FD_functions_prefunc(
-            cfunc_decorators="__device__ "
-        ).replace("SIMD", "CUDA")
-    elif enable_fd_functions:
-        prefunc = fin.construct_FD_functions_prefunc()
+        params_definitions = generate_definition_header(
+            param_symbols,
+            enable_intrinsics=enable_intrinsics,
+            var_access=parallel_utils.get_params_access(parallelization),
+        )
+        kernel_body = f"{loop_params}\n{params_definitions}\n{kernel_body}"
 
+        kernel, launch_body = parallel_utils.generate_kernel_and_launch_code(
+            name + ("_tile" if tiled else ""),
+            kernel_body.replace(
+                "SIMD", "CUDA" if parallelization == "cuda" else "SIMD"
+            ),
+            arg_dict_cuda,
+            {
+                **arg_dict_host,
+                **(
+                    {key: "const int" for key in ("lo1", "hi1", "lo2", "hi2")}
+                    if tiled
+                    else {}
+                ),
+            },
+            parallelization=parallelization,
+            comments=desc,
+            cfunc_type=f"static {cfunc_type}",
+            launchblock_with_braces=False,
+            launch_dict={
+                **BHaH.parallelization.cuda_utilities.default_launch_dictionary,
+                "threads_per_block": ["64", "1", "1"],
+            },
+            thread_tiling_macro_suffix="BSSN_RHS",
+        )
+
+        for symbol in commondata_symbols:
+            tmp_sym = (
+                f"NOCUDA{symbol}"
+                if parallelization == "cuda" and enable_intrinsics
+                else (
+                    f"NOSIMD{symbol}"
+                    if enable_intrinsics
+                    else symbol if enable_intrinsics else symbol
+                )
+            )
+            launch_body = launch_body.replace(tmp_sym, f"commondata->{symbol}")
+
+        prefunc = ""
+        if parallelization == "cuda" and enable_fd_functions:
+            prefunc = fin.construct_FD_functions_prefunc(
+                cfunc_decorators="__device__ "
+            ).replace("SIMD", "CUDA")
+        elif enable_fd_functions:
+            prefunc = fin.construct_FD_functions_prefunc()
+
+        cfc.register_CFunction(
+            include_CodeParameters_h=False,
+            includes=includes,
+            prefunc=prefunc + kernel,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            CoordSystem_for_wrapper_func=CoordSystem,
+            name=name + ("_tile" if tiled else ""),
+            params=params
+            + (
+                ", const int lo1, const int hi1, const int lo2, const int hi2"
+                if tiled
+                else ""
+            ),
+            body=launch_body,
+            enable_simd=enable_intrinsics,
+        )
+    return pcg.NRPyEnv()
+
+
+def register_CFunction_rhs_eval_with_Ricci(
+    CoordSystem: str,
+) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register the CPU scheduler for separately registered Ricci and BSSN RHS tiles.
+
+    The caller must register Ricci and BSSN RHSs with precomputed reference metrics
+    and RbarDD gridfunctions for the same coordinate system. Each worker computes
+    Ricci before the pointwise RHS calculation on a fixed 16x8 i1/i2 tile. The final
+    OpenMP barrier completes all tiles before the caller applies boundary conditions.
+    Existing full-grid entry points remain available for diagnostics and other callers.
+
+    :param CoordSystem: Coordinate system of the registered tile functions.
+    :return: None in registration phase, otherwise the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = "Evaluate Ricci and BSSN RHSs together on CPU tiles."
+    cfunc_type = "void"
+    name = "rhs_eval_with_Ricci"
+    params = (
+        "const commondata_struct *restrict commondata, const params_struct *restrict params, "
+        "const rfm_struct *restrict rfmstruct, REAL *restrict auxevol_gfs, "
+        "const REAL *restrict in_gfs, REAL *restrict rhs_gfs"
+    )
+    body = f"""
+const int end1 = params->Nxx_plus_2NGHOSTS1 - NGHOSTS;
+const int end2 = params->Nxx_plus_2NGHOSTS2 - NGHOSTS;
+#pragma omp parallel for collapse(2)
+for (int lo2 = NGHOSTS; lo2 < end2; lo2 += 8) {{
+  for (int lo1 = NGHOSTS; lo1 < end1; lo1 += 16) {{
+    const int hi1 = lo1 + 16 < end1 ? lo1 + 16 : end1;
+    const int hi2 = lo2 + 8 < end2 ? lo2 + 8 : end2;
+    Ricci_eval_tile__rfm__{CoordSystem}(params, rfmstruct, in_gfs, auxevol_gfs, lo1, hi1, lo2, hi2);
+    rhs_eval_tile__rfm__{CoordSystem}(commondata, params, rfmstruct, auxevol_gfs, in_gfs, rhs_gfs, lo1, hi1, lo2, hi2);
+  }} // END LOOP: for lo1 over [NGHOSTS, end1)
+}} // END LOOP: for lo2 over [NGHOSTS, end2)
+"""
     cfc.register_CFunction(
         include_CodeParameters_h=False,
         includes=includes,
-        prefunc=prefunc + kernel,
         desc=desc,
         cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
-        body=launch_body,
-        enable_simd=enable_intrinsics,
+        body=body,
     )
     return pcg.NRPyEnv()
 
@@ -435,6 +595,8 @@ if __name__ == "__main__":
                     enable_CAKO=enable_Improvements,
                     enable_CAHD=enable_Improvements,
                     enable_SSL=enable_Improvements,
+                    enable_YBS_Gamma_constraint_adjustment=True,
+                    enable_YBS_momentum_constraint_adjustment=True,
                     validate_expressions=True,
                 )
                 ve.compare_or_generate_trusted_results(

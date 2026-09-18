@@ -82,6 +82,16 @@ MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 4
 separate_Ricci_and_BSSN_RHS = True
+# Store the first derivatives of cf, alpha and vetU that the fifteen mixed second derivatives in
+# the BSSN right-hand sides are built from, so that rhs_eval rebuilds each as a single
+# one-dimensional first-derivative stencil of a stored AUXEVOL gridfunction instead of the
+# two-dimensional tensor-product stencil. Ten gridfunctions, so it costs memory; off by default,
+# CUDA builds only. See nrpy/examples/blackhole_spectroscopy.py for the measurements (fd_order 8).
+enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU = False
+if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU and parallelization != "cuda":
+    raise ValueError(
+        "enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU requires --cuda."
+    )
 enable_parallel_codegen = True
 enable_rfm_precompute = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
 enable_intrinsics = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
@@ -172,6 +182,8 @@ BHaH.general_relativity.initial_data.register_CFunction_initial_data(
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     set_of_CoordSystems=set_of_CoordSystems,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_conformal_projection=True,
     ID_persist_struct_str="",
     spin_alignment_vector_params=(
         spin_alignment_vector_params if IDtype == "UIUCBlackHole" else None
@@ -214,7 +226,15 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
     OMP_collapse=OMP_collapse,
+    enable_cfdD_alphadD_vetUdD_gridfunctions=enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU,
 )
+if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU:
+    BHaH.general_relativity.cfdD_alphadD_vetUdD_eval.register_CFunction_cfdD_alphadD_vetUdD_eval(
+        CoordSystem=CoordSystem,
+        enable_intrinsics=enable_intrinsics,
+        enable_fd_functions=enable_fd_functions,
+        OMP_collapse=OMP_collapse,
+    )
 if separate_Ricci_and_BSSN_RHS:
     BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
@@ -231,7 +251,7 @@ if separate_Ricci_and_BSSN_RHS:
             host_only_version=True,
         )
 
-BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BHaH.general_relativity.enforce_detgbar_equals_detghat_trAzero.register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
@@ -253,6 +273,9 @@ BHaH.CurviBoundaryConditions.register_all.register_C_functions(
 rhs_string = ""
 if separate_Ricci_and_BSSN_RHS:
     rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
+if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU:
+    # Must precede rhs_eval, which reads these values within the substep.
+    rhs_string += "\ncfdD_alphadD_vetUdD_eval(params, RK_INPUT_GFS, auxevol_gfs);"
 rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
@@ -267,7 +290,7 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
-  enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
+  enforce_detgbar_equals_detghat_trAzero(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
     rational_const_alias=(

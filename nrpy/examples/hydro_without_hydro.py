@@ -56,7 +56,7 @@ par.set_parval_from_str("fp_type", fp_type)
 project_name = "hydro_without_hydro"
 IDtype = "TOVola_interp"
 CoordSystem = "Spherical"
-LapseEvolutionOption = "HarmonicSlicing"
+LapseEvolutionOption = "BHSHarmonicSlicing"
 ShiftEvolutionOption = "Frozen"
 grid_physical_size = 7.5
 diagnostics_output_every = 0.25
@@ -71,6 +71,16 @@ MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 4
 separate_Ricci_and_BSSN_RHS = True
+# Store the first derivatives of cf, alpha and vetU that the fifteen mixed second derivatives in
+# the BSSN right-hand sides are built from, so that rhs_eval rebuilds each as a single
+# one-dimensional first-derivative stencil of a stored AUXEVOL gridfunction instead of the
+# two-dimensional tensor-product stencil. Ten gridfunctions, so it costs memory; off by default,
+# CUDA builds only. See nrpy/examples/blackhole_spectroscopy.py for the measurements (fd_order 8).
+enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU = False
+if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU and parallelization != "cuda":
+    raise ValueError(
+        "enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU requires --cuda."
+    )
 enable_parallel_codegen = True
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
@@ -114,7 +124,9 @@ BHaH.general_relativity.initial_data.register_CFunction_initial_data(
     IDtype=IDtype,
     IDCoordSystem="Spherical",
     set_of_CoordSystems=set_of_CoordSystems,
+    enable_rfm_precompute=enable_rfm_precompute,
     enable_checkpointing=True,
+    enable_conformal_projection=True,
     ID_persist_struct_str=BHaH.general_relativity.TOVola.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 TOVola_solve(commondata, &ID_persist);
@@ -175,7 +187,15 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     enable_CAKO=enable_CAKO,
     OMP_collapse=OMP_collapse,
+    enable_cfdD_alphadD_vetUdD_gridfunctions=enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU,
 )
+if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU:
+    BHaH.general_relativity.cfdD_alphadD_vetUdD_eval.register_CFunction_cfdD_alphadD_vetUdD_eval(
+        CoordSystem=CoordSystem,
+        enable_intrinsics=enable_intrinsics,
+        enable_fd_functions=enable_fd_functions,
+        OMP_collapse=OMP_collapse,
+    )
 if separate_Ricci_and_BSSN_RHS:
     BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
@@ -191,7 +211,7 @@ if separate_Ricci_and_BSSN_RHS:
             OMP_collapse=OMP_collapse,
             host_only_version=True,
         )
-BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BHaH.general_relativity.enforce_detgbar_equals_detghat_trAzero.register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
@@ -214,6 +234,9 @@ BHaH.CurviBoundaryConditions.register_all.register_C_functions(
 rhs_string = ""
 if separate_Ricci_and_BSSN_RHS:
     rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
+if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU:
+    # Must precede rhs_eval, which reads these values within the substep.
+    rhs_string += "\ncfdD_alphadD_vetUdD_eval(params, RK_INPUT_GFS, auxevol_gfs);"
 rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
@@ -228,7 +251,7 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
-  enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
+  enforce_detgbar_equals_detghat_trAzero(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
