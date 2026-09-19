@@ -20,7 +20,7 @@ Configured GitHub job map:
 | `codegen-ubuntu` | Configured Ubuntu/Python matrix | Installs NRPy, generates in `tmp/`, and builds the selected default C/library projects with `make`, spanning elliptic, wave, black-hole, PN, SEOBNR, TOV, hydro, BHaHAHA, and `sebobv2` routes. It generates `sebobv1_jax` without package install/build. | The `make` builds run no generated executable, and `make clean` follows each; MANGA commands are commented out. |
 | `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation as Ubuntu; no Dendro generation or build; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
 | `einsteintoolkit-validation` | Configured Ubuntu/Apptainer Einstein Toolkit image | Generates `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs the configured Baikal, BaikalVacuum, and WaveToyNRPy Cactus testsuites and fails on reported failures. No `carpetx_*` generation/build/run. |
-| `dendro-validation` | Configured Ubuntu/Apptainer image, digest-verified before use; 60-minute job limit, five-minute limit per MPI invocation, and one OpenMP thread per rank | Generates BSSN and fCCZ4 at finite-difference orders 4, 6, and 8 with KO dissipation enabled and disabled; builds and runs every generated standalone CTest check; runs focused AddressSanitizer and UndefinedBehaviorSanitizer storage checks for every profile; embeds both formulations in Dendro-GR for FD4/6/8 with KO and FD6 without KO | Runs each selected real-host profile on one and two MPI ranks, runs one two-rank Minkowski step, checks injected transport, callback, element-order, and TOML-profile failures, and prints transient FD6 compile, size, block-RHS time, and allocation measurements without treating them as fixed thresholds. |
+| `dendro-validation` | Configured Ubuntu/Apptainer image, digest-verified before use; 60-minute job limit, five-minute limit per MPI invocation, and one OpenMP thread per rank | Generates BSSN and fCCZ4 at finite-difference orders 4, 6, and 8 with KO dissipation enabled and disabled; builds and runs every generated standalone CTest check; runs focused AddressSanitizer and UndefinedBehaviorSanitizer storage checks for every profile; embeds both formulations in Dendro-GR for FD4/6/8 with KO and FD6 without KO | Runs each selected real-host profile on one and two MPI ranks, runs one two-rank Minkowski step, checks injected transport, callback, element-order, and TOML-profile failures, and rejects mesh-sized allocation by the block-local RHS callback. |
 | `charmpp-validation` | Configured Ubuntu/Apptainer Charm++ context | Generates and builds the configured superB elliptic, spectroscopy, and collision projects | Runs the configured collision executable through `charmrun`; no explicit scientific-output assertion beyond process success. |
 | `sebob-consistency-test` | Configured Ubuntu matrix | Checks out the workflow-selected trusted revision; generates/builds trusted and current SEOBNRv5 variants | Each helper invocation rebuilds both executables, uses exactly ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed the perturbation-derived baseline. |
 | `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the workflow-selected trusted revision | Uses the same ten-input and median-error criterion. |
@@ -98,10 +98,10 @@ formulations at FD4/6/8 with KO and FD6 without KO. The real-host test programs
 exercise block geometry, data transfer, callbacks, parameter forwarding, and
 failure termination on one and two MPI ranks. Each qualification executable
 also evolves Minkowski data for one RK4 step on two ranks. Host element-order
-and TOML-profile mismatches must emit their expected diagnostics. Transient
-FD6 timing, allocation, generated-size, and compile measurements are job output,
-not stored thresholds. These commands establish configured checks, not a stored
-run result. Reproduction details and
+and TOML-profile mismatches must emit their expected diagnostics. The
+block-local callback check rejects mesh-sized allocation. Shared-runner
+wall time is not treated as a performance measurement. These commands establish
+configured checks, not a stored run result. Reproduction details and
 proof limits live in [Validation, Standalone Host, And Deferred
 Tests](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md).
 

@@ -3,7 +3,6 @@
 #include RUNTIME_HEADER
 #include <algorithm>
 #include <atomic>
-#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
@@ -109,7 +108,7 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
                        block_rhs_allocations = 0,
                        block_rhs_allocation_bytes = 0;
     double flat_rhs_error = 0.0, whole_rhs_error = 0.0, projection_error = 0.0,
-           whole_rhs_scale = 0.0, block_rhs_seconds = 0.0;
+           whole_rhs_scale = 0.0;
     context.initialize();
     if (mesh.isActive()) {
         // A constant nonzero shift-driver field gives d(B^0)/dt=-eta*B^0.
@@ -237,20 +236,12 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
         if (fault == "block_bad_id")
             context.rhs_blk(flat_input.data(), flat_output.data(), dof,
                             blocks.size(), block_time);
-        context.rhs_blk(flat_input.data(), flat_output.data(), dof, selected,
-                        block_time);
-        std::fill(flat_output.begin(), flat_output.end(), sentinel);
         allocation_measurement::count.store(0, std::memory_order_relaxed);
         allocation_measurement::bytes.store(0, std::memory_order_relaxed);
-        const auto block_rhs_start = std::chrono::steady_clock::now();
         allocation_measurement::enabled.store(true, std::memory_order_relaxed);
         context.rhs_blk(flat_input.data(), flat_output.data(), dof, selected,
                         block_time);
         allocation_measurement::enabled.store(false, std::memory_order_relaxed);
-        block_rhs_seconds =
-            std::chrono::duration<double>(std::chrono::steady_clock::now() -
-                                          block_rhs_start)
-                .count();
         block_rhs_allocations =
             allocation_measurement::count.load(std::memory_order_relaxed);
         block_rhs_allocation_bytes =
@@ -326,10 +317,10 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
                                     block_rhs_allocation_bytes};
     MPI_Allreduce(local, totals, 6, MPI_UNSIGNED_LONG_LONG, MPI_SUM,
                   MPI_COMM_WORLD);
-    double local_errors[5] = {flat_rhs_error, whole_rhs_error, projection_error,
-                              whole_rhs_scale, block_rhs_seconds},
-           errors[5]       = {};
-    MPI_Allreduce(local_errors, errors, 5, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    double local_errors[4] = {flat_rhs_error, whole_rhs_error, projection_error,
+                              whole_rhs_scale},
+           errors[4]       = {};
+    MPI_Allreduce(local_errors, errors, 4, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     const bool ok = totals[0] > 0 && totals[1] > 0 && totals[2] > 0 &&
                     totals[3] > 0 && errors[0] < 1e-12 && errors[1] < 1e-12 &&
                     errors[2] < 1e-12 && errors[3] > 1e-6;
@@ -338,11 +329,10 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
             "REAL_CALLBACKS %s interior=%llu nonzero_offsets=%llu "
             "preserved=%llu projected=%llu flat_rhs_error=%.17g "
             "whole_rhs_error=%.17g projection_error=%.17g "
-            "whole_rhs_scale=%.17g block_rhs_seconds=%.17g "
-            "block_rhs_allocations=%llu block_rhs_allocation_bytes=%llu\n",
+            "whole_rhs_scale=%.17g block_rhs_allocations=%llu "
+            "block_rhs_allocation_bytes=%llu\n",
             ok ? "PASS" : "FAIL", totals[0], totals[1], totals[2], totals[3],
-            errors[0], errors[1], errors[2], errors[3], errors[4], totals[4],
-            totals[5]);
+            errors[0], errors[1], errors[2], errors[3], totals[4], totals[5]);
     if (!ok) throw std::runtime_error("block callback qualification failed");
 }  // END FUNCTION: qualify Berger-Oliger block callbacks
 // clang-format off

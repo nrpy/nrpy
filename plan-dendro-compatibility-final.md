@@ -24,13 +24,11 @@ qualification now:
 - runs sanitizer-enabled block-offset and flat-storage checks;
 - injects host element-order and TOML profile mismatches and checks their
   diagnostics;
-- prints transient FD6 block-RHS time, allocation count, generated object and
-  source size, and compile time outside the KB; and
+- rejects mesh-sized allocation by the block-local RHS callback; and
 - compares independent KO coefficients and signs with the public Dendro-GR
   `ko_deriv21`, `ko_deriv42`, and radius-four `ko_deriv64` functions.
 
-These are configured checks, not a stored CI run result. Real-host runtime
-measurements remain diagnostic values without permanent pass thresholds.
+These are configured checks, not a stored CI run result.
 
 The twelve-profile standalone matrix, independent nonflat expression check,
 manufactured centered-derivative convergence check, centered-stencil reach
@@ -286,7 +284,9 @@ For every profile:
 
 For real-host qualification, build both formulations against the read-only Dendro-GR source as separate, collision-free subprojects. Exercise host element orders 4, 6, and 8; KO on for all six formulation/order pairs; and KO off at least for both default-order modules, with the full KO-off matrix remaining mandatory in standalone tests. Run whole-vector and block callbacks on one and two MPI ranks where available. Query actual block geometry; do not assert fixed dimensions.
 
-For the default FD6 release profile, record transient qualification measurements for block-RHS time, allocation count, generated object/code size, and compile time. Require `rhs_blk` to allocate no mesh-sized storage and perform no unzip, zip, or MPI operation. These measurements detect gross regressions; they do not establish permanent thresholds and must not be stored as KB snapshots.
+Require `rhs_blk` to allocate no mesh-sized storage and perform no unzip, zip,
+or MPI operation. Do not treat wall time from shared CI runners as a performance
+measurement.
 
 If the available Dendrolib exposes callback signatures but does not actively schedule local Berger-Oliger stepping, directly compile and call the exact callbacks and report local-time-stepping scheduling as unqualified. Do not simulate a successful local-time-stepping result.
 
@@ -347,7 +347,14 @@ The change is complete when:
 
 ## Deferred optimizations
 
-After correctness and Dendro compatibility are established, profile before considering stored/shared derivative workspaces, altered common-subexpression elimination, SIMD, block tasking, GPU kernels, or combined multi-order projects. Measure sixth-order time per interior point, memory traffic, generated code size, compile time, and register pressure. Any optimization must preserve one numerical block body, Dendro-owned geometry/storage, the callback interface, and numerical equivalence for all qualified profiles.
+After correctness and Dendro compatibility are established, profile on
+controlled hardware before considering stored/shared derivative workspaces,
+altered common-subexpression elimination, SIMD, block tasking, GPU kernels, or
+combined multi-order projects. Measure memory traffic, sustained bandwidth,
+arithmetic intensity, cache behavior, and time per interior point with repeated
+runs and uncertainty estimates. Any optimization must preserve one numerical
+block body, Dendro-owned geometry/storage, the callback interface, and numerical
+equivalence for all qualified profiles.
 
 ## Trialectic reconciliation basis
 

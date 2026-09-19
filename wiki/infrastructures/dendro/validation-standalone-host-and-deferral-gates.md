@@ -165,9 +165,9 @@ FD6, and FD8 with KO enabled and FD6 with KO disabled. Each selected profile
 runs `runtime_integration_test.cpp` on one and two MPI ranks and one two-rank
 Minkowski step. The job requires injected transport, callback, host
 element-order, and TOML-profile defects to fail with their expected diagnostics.
-It prints transient FD6 compile, source/object size, block-RHS time, and C++
-allocation measurements without assigning permanent thresholds. Workflow
-configuration proves this check sequence, not a latest successful run.
+The block-local callback check rejects mesh-sized allocation. Shared-runner
+wall time is not treated as a performance measurement. Workflow configuration
+proves this check sequence, not a latest successful run.
 
 Claim evidence:
 - Claim: `dendro-validation` configures the complete standalone formulation/order/KO matrix, focused sanitizer checks, and the real-host FD4/6/8 KO-on plus FD6 KO-off matrix described above, without recording a run result in the KB.

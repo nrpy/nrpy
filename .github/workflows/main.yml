@@ -397,26 +397,6 @@ jobs:
               -DFETCHCONTENT_SOURCE_DIR_TOML11="$TOML11_SOURCE" \
               -DFETCHCONTENT_SOURCE_DIR_SPDLOG="$SPDLOG_SOURCE"
             GIT_DIR=/ci-work/host/.git GIT_WORK_TREE=/ci-work/host \
-              cmake --build /ci-work/real-build --parallel --target dendro5
-            for formulation in bssn fccz4; do
-              if { [ "$formulation" = bssn ] && \
-                   [ "$fd_order-$ko_mode" = 6-off ]; } || \
-                 { [ "$formulation" = fccz4 ] && \
-                   [ "$fd_order-$ko_mode" = 6-on ]; }; then
-                metric="/ci-work/${formulation}-fd6-ko-${ko_mode}-compile.txt"
-                GIT_DIR=/ci-work/host/.git GIT_WORK_TREE=/ci-work/host \
-                  /usr/bin/time -f \
-                    "NRPY_DENDRO_METRIC formulation=${formulation} fd_order=6 ko=${ko_mode} compile_seconds=%e max_rss_kib=%M" \
-                    -o "$metric" cmake --build /ci-work/real-build --parallel \
-                    --target "nrpy_${formulation}_dendro"
-                cat "$metric"
-              else
-                GIT_DIR=/ci-work/host/.git GIT_WORK_TREE=/ci-work/host \
-                  cmake --build /ci-work/real-build --parallel --target \
-                    "nrpy_${formulation}_dendro"
-              fi
-            done
-            GIT_DIR=/ci-work/host/.git GIT_WORK_TREE=/ci-work/host \
               cmake --build /ci-work/real-build --parallel --target \
                 nrpy_bssn_dendro_qualify nrpy_fccz4_dendro_qualify \
                 nrpy_bssn_runtime_test nrpy_fccz4_runtime_test
@@ -430,20 +410,6 @@ jobs:
               timeout --signal=KILL 300 mpiexec --oversubscribe -n 2 "$runtime"
               timeout --signal=KILL 300 mpiexec --oversubscribe -n 2 \
                 "$qualifier" --steps 1 --dt 0.001 -t "$parfile"
-
-              if { [ "$formulation" = bssn ] && \
-                   [ "$fd_order-$ko_mode" = 6-off ]; } || \
-                 { [ "$formulation" = fccz4 ] && \
-                   [ "$fd_order-$ko_mode" = 6-on ]; }; then
-                source_bytes=$(find "$project/Dendro-GR/nrpy_${formulation}" \
-                  -type f \( -name '*.cpp' -o -name '*.h' \) -printf '%s\n' \
-                  | awk '{total += $1} END {print total + 0}')
-                object_bytes=$(find \
-                  "/ci-work/real-build/nrpy_${formulation}/CMakeFiles/nrpy_${formulation}_dendro.dir" \
-                  -type f -name '*.o' -printf '%s\n' \
-                  | awk '{total += $1} END {print total + 0}')
-                echo "NRPY_DENDRO_METRIC formulation=${formulation} fd_order=6 ko=${ko_mode} source_bytes=${source_bytes} object_bytes=${object_bytes}"
-              fi
 
               if [ "$fd_order-$ko_mode" = 6-off ]; then
                 expect_failure 1 "$runtime" "$formulation" element_order \
