@@ -92,6 +92,7 @@ class CCodeGen:
         enable_fd_functions: bool = False,
         mem_alloc_style: Literal["210", "012"] = "210",
         upwind_control_vec: Union[List[sp.Expr], sp.Expr] = sp.Symbol("unset"),
+        ko_fd_order: Optional[int] = None,
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         rational_const_alias: str = "static const",
         enable_clang_format: bool = False,
@@ -125,6 +126,8 @@ class CCodeGen:
         :param enable_fd_functions: Boolean to enable finite difference functions.
         :param mem_alloc_style: Memory allocation style.
         :param upwind_control_vec: Upwind control vector as a symbol or list of symbols.
+        :param ko_fd_order: Optional base order used only for ``dKOD``.  The
+            KO construction adds two to this value.
         :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
         :param rational_const_alias: Override default alias for specifying rational constness
         :param enable_clang_format: Boolean to enable clang formatting.
@@ -193,6 +196,7 @@ class CCodeGen:
         self.stored_first_derivatives = tuple(stored_first_derivatives or ())
         self.mem_alloc_style = mem_alloc_style
         self.upwind_control_vec = upwind_control_vec
+        self.ko_fd_order = ko_fd_order
         self.symbol_to_Rational_dict = symbol_to_Rational_dict
         self.rational_const_alias = rational_const_alias
         self.enable_clang_format = enable_clang_format
@@ -262,6 +266,17 @@ class CCodeGen:
             raise ValueError(
                 "Due to the ambiguity of centering a lopsided stencil,"
                 "we choose fd_order to be an even, positive integer by convention."
+            )
+        if self.ko_fd_order is not None and (
+            isinstance(self.ko_fd_order, bool)
+            or not isinstance(self.ko_fd_order, int)
+            or self.ko_fd_order <= 0
+            or self.ko_fd_order % 2 != 0
+        ):
+            raise ValueError("ko_fd_order must be a positive even integer.")
+        if self.ko_fd_order is not None and self.enable_fd_functions:
+            raise ValueError(
+                "ko_fd_order is not supported with enable_fd_functions=True."
             )
 
         if self.enable_fd_codegen:
@@ -544,7 +559,9 @@ def c_codegen(
         deriv_operator_dict = {}
         for deriv_op in superfast_uniq(list_of_deriv_operators):
             deriv_operator_dict[deriv_op] = fin.compute_fdcoeffs_fdstencl(
-                deriv_op, CCGParams.fd_order
+                deriv_op,
+                CCGParams.fd_order,
+                ko_fd_order=CCGParams.ko_fd_order,
             )
 
         # This calls outputC as needed to construct a C kernel that does gridfunction management with or without FDs,
@@ -558,6 +575,7 @@ def c_codegen(
             deriv_operator_dict,
             mem_alloc_style=CCGParams.mem_alloc_style,
             upwind_control_vec=CCGParams.upwind_control_vec,
+            ko_fd_order=CCGParams.ko_fd_order,
             enable_fd_functions=CCGParams.enable_fd_functions,
             stored_first_derivatives=CCGParams.stored_first_derivatives,
             enable_simd=CCGParams.enable_simd,
@@ -990,7 +1008,9 @@ def gridfunction_management_and_FD_codegen(
             list_of_deriv_vars, CCGParams.stored_first_derivatives
         )
         deriv_operator_dict = {
-            op: fin.compute_fdcoeffs_fdstencl(op, CCGParams.fd_order)
+            op: fin.compute_fdcoeffs_fdstencl(
+                op, CCGParams.fd_order, ko_fd_order=CCGParams.ko_fd_order
+            )
             for op in superfast_uniq(list_of_deriv_operators)
             if op
         }
@@ -1086,6 +1106,9 @@ def gridfunction_management_and_FD_codegen(
         par.parval_from_str("Infrastructure") == "BHaH"
         and CCGParams.fp_type == "double"
         and isinstance(CCGParams.upwind_control_vec, list)
+        and (
+            CCGParams.ko_fd_order is None or CCGParams.ko_fd_order == CCGParams.fd_order
+        )
     ):
         original_symbols = {
             str(symbol) for expr in sympyexpr_list for symbol in expr.free_symbols

@@ -20,15 +20,13 @@ Author: Zachariah B. Etienne
 
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Dict, Mapping, Tuple
+from typing import Dict, Iterable, Mapping, Tuple
 
 import sympy as sp
 
 import nrpy.c_function as cfc
 import nrpy.grid as gri
-import nrpy.indexedexp as ixp
 import nrpy.params as par
-import nrpy.reference_metric as refmetric
 from nrpy.c_codegen import c_codegen
 from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
 from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
@@ -37,6 +35,9 @@ from nrpy.equations.general_relativity.fCCZ4_system import (
 )
 from nrpy.equations.general_relativity.kreiss_oliger_terms import (
     add_KreissOliger_dissipation_terms,
+)
+from nrpy.finite_difference import (
+    extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars,
 )
 from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import block_kernel_helpers as bkh
@@ -56,6 +57,14 @@ RHS_EVAL_BLOCK_SUFFIX = "rhs_eval_block"
 RHS_EVAL_ALL_BLOCKS_SUFFIX = "rhs_eval"
 RHS_EVAL_FLAT_BLOCK_SUFFIX = "rhs_eval_flat_block"
 
+# (KO base order, required padding).  NRPy's dKOD construction adds two to
+# the base order, so these profiles produce effective KO differences 4/6/8.
+DENDRO_FD_PROFILES: Mapping[int, Tuple[int, int]] = {
+    4: (2, 2),
+    6: (4, 3),
+    8: (6, 4),
+}
+
 
 @dataclass(frozen=True)
 class RHSBuild:
@@ -63,7 +72,9 @@ class RHSBuild:
     Immutable result of building the direct-FD RHS for one profile.
 
     :param evol_order: The EVOL gridfunction names, in registry order.
-    :param upwind_control_fields: The EVOL names the emitted kernel upwinds on.
+    :param fd_order: Centered finite-difference order.
+    :param ko_fd_order: Base order supplied to NRPy's ``dKOD`` construction.
+    :param ko_enabled: Whether the emitted RHS contains KO dissipation.
     :param lvalues: The output lvalues (``rhs_<name>[pp]``).
     :param padding: Ghost points the emitted operators reach, widest axis.
     :param block_body: The per-block CFunction body (point loop + bindings).
@@ -80,7 +91,9 @@ class RHSBuild:
     """
 
     evol_order: Tuple[str, ...]
-    upwind_control_fields: Tuple[str, ...]
+    fd_order: int
+    ko_fd_order: int
+    ko_enabled: bool
     lvalues: Tuple[str, ...]
     padding: int
     block_body: str
@@ -98,26 +111,92 @@ class RHSBuild:
 BSSN_EVOL_COUNT = 24
 
 
+def _center_shift_advection(
+    rhs_by_symbol_name: Mapping[str, sp.Expr],
+) -> Dict[str, sp.Expr]:
+    """Return copied RHS expressions with directional first derivatives centered."""
+    centered: Dict[str, sp.Expr] = OrderedDict()
+    for rhs_name, expression in rhs_by_symbol_name.items():
+        replacements: Dict[sp.Basic, sp.Basic] = {}
+        for symbol in expression.free_symbols:
+            name = str(symbol)
+            separator = name.rfind("_")
+            if separator < 0:
+                continue
+            suffix_position = separator + 1
+            suffix = name[suffix_position:]
+            prefix = next(
+                (
+                    candidate
+                    for candidate in ("dupD", "ddnD")
+                    if suffix.startswith(candidate)
+                    and suffix[len(candidate) :].isdigit()
+                ),
+                None,
+            )
+            if prefix is None:
+                continue
+            _, operators = (
+                extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars([symbol])
+            )
+            if len(operators) != 1 or not operators[0].startswith(("dupD", "ddnD")):
+                continue
+            # Preserve every tensor-component digit following the derivative
+            # suffix.  For example, aDD_dupD000 becomes aDD_dD000, not
+            # aDD00_dD0.  The parser above validates the derivative symbol;
+            # this replacement changes only its final operator suffix.
+            replacement_name = name[:suffix_position] + "dD" + suffix[len(prefix) :]
+            replacements[symbol] = sp.Symbol(replacement_name, **symbol.assumptions0)
+        centered[rhs_name] = expression.xreplace(replacements)
+    remaining = _directional_operators(centered.values())
+    if remaining:
+        raise ValueError(
+            "Dendro RHS contains directional derivative operators after centered "
+            f"normalization: {remaining}."
+        )
+    return centered
+
+
+def _directional_operators(expressions: Iterable[sp.Expr]) -> Tuple[str, ...]:
+    """Return directional finite-difference operators in an expression sequence."""
+    directional_families = ("dupD", "ddnD", "dfullupD", "dfulldnD")
+    candidates = []
+    for expression in expressions:
+        for symbol in expression.free_symbols:
+            suffix = str(symbol).rsplit("_", maxsplit=1)[-1]
+            if any(
+                suffix.startswith(family) and suffix[len(family) :].isdigit()
+                for family in directional_families
+            ):
+                candidates.append(symbol)
+    if not candidates:
+        return ()
+    _, operators = extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
+        candidates
+    )
+    return tuple(sorted(set(operators)))
+
+
 def BSSN_rhs_expressions(
     *,
     CoordSystem: str,
     LapseEvolutionOption: str,
     ShiftEvolutionOption: str,
     enable_KreissOliger_dissipation: bool,
-) -> Tuple[Dict[str, sp.Expr], Tuple[sp.Expr, ...]]:
+) -> Dict[str, sp.Expr]:
     """
-    Assemble the BSSN RHS expression set and its upwind control vector.
+    Assemble the BSSN RHS expression set.
 
     The assembly order matches ETLegacy's and BHaH's: the non-gauge RHSs come
     from the cached ``BSSN_RHSs`` object, the gauge RHSs are added to a copy of
     its dictionary, Kreiss-Oliger terms are applied through the shared helper,
-    and the upwind control vector is the rescaled shift.
+    and the Dendro lowering later centers directional advection derivatives.
 
     :param CoordSystem: Reference-metric coordinate system.
     :param LapseEvolutionOption: Lapse evolution option.
     :param ShiftEvolutionOption: Shift evolution option.
     :param enable_KreissOliger_dissipation: Enable Kreiss-Oliger dissipation.
-    :return: (rhs_by_symbol_name, upwind_control_vec).
+    :return: RHS expressions keyed by their symbolic output names.
     """
     rhs = BSSN_RHSs[CoordSystem]
     alpha_rhs, vet_rhsU, bet_rhsU = BSSN_gauge_RHSs(
@@ -157,21 +236,14 @@ def BSSN_rhs_expressions(
             include_Theta_fCCZ4=False,
         )
 
-    # Upwind control vector is the rescaled shift, exactly as ETLegacy builds
-    # it: betaU[i] = vetU[i] * ReU[i].
-    rfm = refmetric.reference_metric[CoordSystem]
-    vetU = ixp.declarerank1("vetU")
-    betaU = ixp.zerorank1()
-    for i in range(3):
-        betaU[i] = vetU[i] * rfm.ReU[i]
-    return rhs_by_symbol_name, tuple(betaU)
+    return rhs_by_symbol_name
 
 
 def build_rhs_eval(
     solver_stem: str,
     *,
     enable_fCCZ4: bool = False,
-    fd_order: int = 4,
+    fd_order: int = 6,
     enable_KreissOliger_dissipation: bool = True,
     CoordSystem: str = "Cartesian",
     LapseEvolutionOption: str = "OnePlusLog",
@@ -187,7 +259,7 @@ def build_rhs_eval(
     :param solver_stem: Lowercase formulation stem, prefixed onto every
         emitted CFunction name.
     :param enable_fCCZ4: Build fCCZ4 instead of BSSN.
-    :param fd_order: The finite-difference order (2, 4, or 6).
+    :param fd_order: The centered finite-difference order (4, 6, or 8).
     :param enable_KreissOliger_dissipation: Enable Kreiss-Oliger dissipation.
     :param CoordSystem: Reference-metric coordinate system.
     :param LapseEvolutionOption: Lapse evolution option.
@@ -205,10 +277,10 @@ def build_rhs_eval(
     >>> _gri.glb_gridfcs_dict.clear()
     >>> par.glb_extras_dict.pop("Dendro", None) and None
     >>> try:
-    ...     build_rhs_eval("fccz4", enable_fCCZ4=True, fd_order=8, enable_KreissOliger_dissipation=False)
+    ...     build_rhs_eval("fccz4", enable_fCCZ4=True, fd_order=2, enable_KreissOliger_dissipation=False)
     ... except ValueError as error:
     ...     print(str(error).splitlines()[0])
-    Unsupported fd_order=8; allowed: (2, 4, 6). fd_order 8 reaches five ghost points, which the pinned Dendrolib proves at element order 10; it is outside this builder's qualified set rather than host-gated.
+    Unsupported fd_order=2; allowed: (4, 6, 8).
     >>> import contextlib, io
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     _build = build_rhs_eval(
@@ -219,13 +291,11 @@ def build_rhs_eval(
     >>> sorted(_build.lvalues)[:2]
     ['rhs_Theta_fCCZ4[pp]', 'rhs_aDD00[pp]']
     >>> _build.padding
-    3
-    >>> _build.upwind_control_fields
-    ('vetU0', 'vetU1', 'vetU2')
-    >>> roles.upwind_control_fields()
-    ('vetU0', 'vetU1', 'vetU2')
+    2
+    >>> _build.ko_fd_order
+    2
     >>> roles.required_padding()
-    3
+    2
 
 
     >>> import contextlib, io
@@ -243,10 +313,10 @@ def build_rhs_eval(
     >>> # rebuild finds nothing registered.
     >>> _bq.clear() or _brhs.clear()
     >>> try:
-    ...     build_rhs_eval("bssn", fd_order=8, enable_KreissOliger_dissipation=False)
+    ...     build_rhs_eval("bssn", fd_order=2, enable_KreissOliger_dissipation=False)
     ... except ValueError as error:
     ...     print(str(error).splitlines()[0])
-    Unsupported fd_order=8; allowed: (2, 4, 6). fd_order 8 reaches five ghost points, which the pinned Dendrolib proves at element order 10; it is outside this builder's qualified set rather than host-gated.
+    Unsupported fd_order=2; allowed: (4, 6, 8).
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     _build = build_rhs_eval(
     ...         "bssn", fd_order=4, enable_KreissOliger_dissipation=False
@@ -256,13 +326,11 @@ def build_rhs_eval(
     >>> sorted(_build.lvalues)[:2]
     ['rhs_aDD00[pp]', 'rhs_aDD01[pp]']
     >>> _build.padding
-    3
-    >>> _build.upwind_control_fields
-    ('vetU0', 'vetU1', 'vetU2')
-    >>> roles.upwind_control_fields() == _build.upwind_control_fields
-    True
+    2
+    >>> _build.ko_fd_order
+    2
     >>> roles.required_padding()
-    3
+    2
 
     The mapping failure check is exercised through this public builder before
     lowering.  The original ``BSSN_rhs_expressions`` binding is restored even if
@@ -273,7 +341,7 @@ def build_rhs_eval(
     >>> _good_rhs = OrderedDict(_build.rhs_by_symbol_name)
     >>> _fake_rhs = _good_rhs
     >>> def _temporary_bssn_expressions(**_kwargs):
-    ...     return _fake_rhs, tuple(sp.Symbol(name) for name in _build.upwind_control_fields)
+    ...     return _fake_rhs
     >>> try:
     ...     _owner_globals["BSSN_rhs_expressions"] = _temporary_bssn_expressions
     ...     _missing = OrderedDict(_good_rhs)
@@ -312,13 +380,9 @@ def build_rhs_eval(
             "Infrastructure must be 'Dendro' to build the Dendro RHS, got "
             f"{par.parval_from_str('Infrastructure')!r}."
         )
-    if fd_order not in (2, 4, 6):
-        raise ValueError(
-            f"Unsupported fd_order={fd_order!r}; allowed: (2, 4, 6). "
-            "fd_order 8 reaches five ghost points, which the pinned "
-            "Dendrolib proves at element order 10; it is outside this "
-            "builder's qualified set rather than host-gated."
-        )
+    if fd_order not in DENDRO_FD_PROFILES:
+        raise ValueError(f"Unsupported fd_order={fd_order!r}; allowed: (4, 6, 8).")
+    ko_fd_order, expected_padding = DENDRO_FD_PROFILES[fd_order]
     # Current GR initial-data kernels require a conformal-factor representation
     # whose Minkowski value matches the registered asymptotic field value.
     generation_parameters.validate_generation_parameters()
@@ -328,7 +392,6 @@ def build_rhs_eval(
     require_serial_parallelization()
     formulation = "fCCZ4" if enable_fCCZ4 else "BSSN"
     expected_evol_count = 25 if enable_fCCZ4 else BSSN_EVOL_COUNT
-    upwind_control_vec: Tuple[sp.Expr, ...]
     if enable_fCCZ4:
         bundle = build_fccz4_expression_bundle(
             CoordSystem=CoordSystem,
@@ -337,13 +400,20 @@ def build_rhs_eval(
             enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         )
         rhs_by_symbol_name = bundle.rhs_by_symbol_name
-        upwind_control_vec = bundle.upwind_control_vec
     else:
-        rhs_by_symbol_name, upwind_control_vec = BSSN_rhs_expressions(
+        rhs_by_symbol_name = BSSN_rhs_expressions(
             CoordSystem=CoordSystem,
             LapseEvolutionOption=LapseEvolutionOption,
             ShiftEvolutionOption=ShiftEvolutionOption,
             enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
+        )
+    rhs_by_symbol_name = _center_shift_advection(rhs_by_symbol_name)
+    kernel_expressions = list(rhs_by_symbol_name.values())
+    remaining_directional = _directional_operators(kernel_expressions)
+    if remaining_directional:
+        raise ValueError(
+            "Dendro RHS contains directional derivative operators before code "
+            f"generation: {remaining_directional}."
         )
     rhs_symbols = tuple(rhs_by_symbol_name)
     lvalues = tuple(
@@ -367,13 +437,6 @@ def build_rhs_eval(
             f"EVOL fields: missing={sorted(set(evol_order) - mapped)} "
             f"extra={sorted(mapped - set(evol_order))}"
         )
-    # The upwind control fields are the EVOL gridfunctions that appear in the
-    # shared factory's upwind control vector (e.g. vetU0/1/2 for the
-    # canonical fCCZ4 profile).  Derived, not hardcoded, so the upwind test
-    # can drive positive/negative/zero control on exactly these fields.
-    upwind_control_fields = bkh.upwind_control_fields_from_control_vec(
-        upwind_control_vec, evol_order
-    )
     par.set_parval_from_str("fd_order", fd_order)
     # Both scalar spellings come from the registries,
     # and every codegen option is passed explicitly.
@@ -390,14 +453,13 @@ def build_rhs_eval(
         mem_alloc_style="210",
         rational_const_alias="static const",
         verbose=False,
-        upwind_control_vec=list(upwind_control_vec),
+        upwind_control_vec=sp.Symbol("unset"),
+        ko_fd_order=ko_fd_order,
     )
     # Padding is the widest reach of the derivative operators the emitted
     # kernel actually contains, taken per axis from the same coefficient
-    # source the kernel was lowered with.  It is NOT fd_order // 2: the
-    # upwinded and Kreiss-Oliger families reach one point further than the
-    # centered ones (at fd_order 4, dupD reaches 3 while dD reaches 2), so a
-    # radius-derived padding reads past the end of a Dendro block.
+    # source used to generate the kernel. The Dendro profiles make the KO and
+    # centered regular derivatives fit the same 2-, 3-, or 4-point padding.
     # The consumed CodeParameters are the expression free symbols that are
     # registered CodeParameters.  Reading the symbols the equations actually
     # contain is exact; scanning the emitted C text for names is not.  Sorted
@@ -452,13 +514,23 @@ def build_rhs_eval(
         f"{scalar_type}* const rhs_gfs_flat"
         + (f", {cparam_args}" if cparam_args else "")
     )
-    kernel_expressions = list(rhs_by_symbol_name.values())
-    operators = bkh.emitted_derivative_operators(
-        kernel_expressions, list(upwind_control_vec)
-    )
+    operators = bkh.emitted_derivative_operators(kernel_expressions)
     padding = bkh.padding_from_derivative_operators(
-        kernel_expressions, list(upwind_control_vec), fd_order
+        kernel_expressions,
+        fd_order,
+        ko_fd_order=ko_fd_order,
     )
+    remaining_directional = _directional_operators(kernel_expressions)
+    if remaining_directional:
+        raise ValueError(
+            "Dendro RHS contains directional derivative operators after centered "
+            f"lowering: {remaining_directional}."
+        )
+    if padding != expected_padding:
+        raise ValueError(
+            f"Dendro fd_order={fd_order} requires padding {expected_padding}, "
+            f"but emitted operators reach {padding}."
+        )
     # Add dKOD operators to the emitted kernel exactly once if
     # and only if Kreiss-Oliger dissipation was requested.
     if (
@@ -469,13 +541,12 @@ def build_rhs_eval(
             "dKOD-operator presence does not match "
             f"enable_KreissOliger_dissipation={enable_KreissOliger_dissipation!r}."
         )
-    # Recorded beside the padding so the state header renders the positions
-    # the emitted kernel actually upwinds on, rather than an empty table.
-    roles.set_upwind_control_fields(upwind_control_fields)
     roles.set_required_padding(padding)
     return RHSBuild(
         evol_order=evol_order,
-        upwind_control_fields=upwind_control_fields,
+        fd_order=fd_order,
+        ko_fd_order=ko_fd_order,
+        ko_enabled=enable_KreissOliger_dissipation,
         lvalues=lvalues,
         padding=padding,
         block_body=block_body,
@@ -493,7 +564,7 @@ def register_CFunctions_rhs_eval(
     solver_stem: str,
     *,
     enable_fCCZ4: bool = False,
-    fd_order: int = 4,
+    fd_order: int = 6,
     enable_KreissOliger_dissipation: bool = True,
     CoordSystem: str = "Cartesian",
     LapseEvolutionOption: str = "OnePlusLog",
@@ -505,7 +576,7 @@ def register_CFunctions_rhs_eval(
     :param solver_stem: Lowercase formulation stem, prefixed onto every
         emitted CFunction name and onto the emitted include.
     :param enable_fCCZ4: Register fCCZ4 instead of BSSN.
-    :param fd_order: The finite-difference order (2, 4, or 6).
+    :param fd_order: The centered finite-difference order (4, 6, or 8).
     :param enable_KreissOliger_dissipation: Enable Kreiss-Oliger dissipation.
     :param CoordSystem: Reference-metric coordinate system.
     :param LapseEvolutionOption: Lapse evolution option.

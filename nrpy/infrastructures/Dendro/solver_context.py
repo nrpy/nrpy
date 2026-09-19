@@ -247,12 +247,12 @@ int Ctx::startup_checks(int rank) {
     return 1;
   }  // END IF: component count mismatch
   for (unsigned b = 0; b < host.mesh.num_blocks; ++b) {
-    if (host.mesh.geom[b].padding <
+    if (host.mesh.geom[b].padding !=
         $NAMESPACE::generated::REQUIRED_PADDING) {
       std::fprintf(stderr,
-                   "ERROR: block %u padding below generated minimum\\n", b);
+                   "ERROR: block %u padding does not match generated profile\\n", b);
       return 1;
-    }  // END IF: block padding below minimum
+    }  // END IF: block padding mismatch
   }  // END LOOP: for b over local blocks
 $STANDALONE_APPLICATION_STARTUP_CHECKS
   if (!$VALIDATE(params)) {
@@ -456,6 +456,11 @@ $REAL_APPLICATION_DECLARATIONS
    * @return 0 on success or an inactive rank; invalid data aborts MPI_COMM_WORLD.
    */
   int rhs(DVec* in, DVec* out, unsigned int count, DendroScalar time);
+  int rhs_blkwise(DVec in, DVec out,
+                  const unsigned int* const blkIDs, unsigned int numIds,
+                  DendroScalar* blk_time);
+  int rhs_blk(const DendroScalar* in, DendroScalar* out, unsigned int dof,
+              unsigned int local_blk_id, DendroScalar blk_time);
  private:
   /**
    * Prescribe application values outside the physical domain only.
@@ -540,15 +545,29 @@ block_geometry_struct block_geometry(const ot::Mesh& mesh, const ot::Block& bloc
   g.pmin_padded[0] = origin.x() - g.padding * g.dx[0];
   g.pmin_padded[1] = origin.y() - g.padding * g.dx[1];
   g.pmin_padded[2] = origin.z() - g.padding * g.dx[2];
-  const std::size_t volume = std::size_t(g.nx) * g.ny * g.nz;
-  if (g.padding < generated::REQUIRED_PADDING || g.nx <= 2*g.padding ||
-      g.ny <= 2*g.padding || g.nz <= 2*g.padding ||
-      g.component_offset > mesh.getDegOfFreedomUnZip() ||
-      volume > mesh.getDegOfFreedomUnZip() - g.component_offset)
+  if (g.padding != generated::REQUIRED_PADDING ||
+      g.nx <= 2 * g.padding || g.ny <= 2 * g.padding ||
+      g.nz <= 2 * g.padding || !std::isfinite(g.dx[0]) ||
+      !std::isfinite(g.dx[1]) || !std::isfinite(g.dx[2]) ||
+      g.dx[0] <= 0.0 || g.dx[1] <= 0.0 || g.dx[2] <= 0.0)
     throw std::runtime_error("invalid Dendro block allocation or padding");
+  const std::size_t maximum_size = std::numeric_limits<std::size_t>::max();
+  if (g.ny > maximum_size / g.nx ||
+      g.nz > maximum_size / (std::size_t(g.nx) * g.ny))
+    throw std::runtime_error("Dendro block volume overflows size_t");
+  const std::size_t volume = std::size_t(g.nx) * g.ny * g.nz;
+  const std::size_t allocation = mesh.getDegOfFreedomUnZip();
+  if (g.component_offset > allocation ||
+      volume > allocation - g.component_offset)
+    throw std::runtime_error("Dendro block component interval is out of bounds");
   return g;
 } // END FUNCTION: normalize real block geometry
 Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum, double dt) {
+  if (mesh == nullptr) throw std::invalid_argument("Dendro mesh is null");
+  if (!std::isfinite(dt) || dt <= 0.0)
+    throw std::invalid_argument("Dendro timestep must be finite and positive");
+  if (mesh->getElementOrder() != generated::FD_ORDER)
+    throw std::invalid_argument("Dendro element order does not match generated FD_ORDER");
   set_mesh(mesh);
   m_uiElementOrder = mesh->getElementOrder();
   m_uiMinPt = minimum;
@@ -627,6 +646,46 @@ int Ctx::rhs(DVec* in, DVec* out, unsigned int count, DendroScalar) {
   require_finite(*out);
   return 0;
 } // END FUNCTION: unzip evaluate and zip
+int Ctx::rhs_blkwise(DVec in, DVec out,
+                     const unsigned int* const blkIDs, unsigned int numIds,
+                     DendroScalar* blk_time) {
+  if (in.get_dof() != generated::NUM_EVOL_GFS ||
+      out.get_dof() != generated::NUM_EVOL_GFS)
+    fail("blockwise RHS field count does not match generated state");
+  if (numIds != 0 && blkIDs == nullptr)
+    fail("blockwise RHS received null block identifiers");
+  const auto& blocks = m_uiMesh->getLocalBlockList();
+  for (unsigned index = 0; index < numIds; ++index)
+    if (blkIDs[index] >= blocks.size())
+      fail("blockwise RHS block identifier is out of range");
+  if (!m_uiMesh->isActive()) return 0;
+  std::vector<DendroScalar*> input(generated::NUM_EVOL_GFS);
+  std::vector<DendroScalar*> output(generated::NUM_EVOL_GFS);
+  in.to_2d(input.data());
+  out.to_2d(output.data());
+  for (unsigned index = 0; index < numIds; ++index) {
+    const auto g = block_geometry(*m_uiMesh, blocks[blkIDs[index]], m_uiMinPt,
+                                  m_uiMaxPt);
+    $RHS_EVAL_BLOCK(g, input.data(), output.data()$RHS_EVAL_BLOCK_TAIL);
+  }
+  (void)blk_time;
+  return 0;
+} // END FUNCTION: evaluate selected unzipped blocks
+int Ctx::rhs_blk(const DendroScalar* in, DendroScalar* out, unsigned int dof,
+                 unsigned int local_blk_id, DendroScalar blk_time) {
+  if (in == nullptr || out == nullptr)
+    fail("flat block RHS received a null field array");
+  if (dof != generated::NUM_EVOL_GFS)
+    fail("flat block RHS field count does not match generated state");
+  const auto& blocks = m_uiMesh->getLocalBlockList();
+  if (local_blk_id >= blocks.size())
+    fail("flat block RHS block identifier is out of range");
+  auto g = block_geometry(*m_uiMesh, blocks[local_blk_id], m_uiMinPt, m_uiMaxPt);
+  g.component_offset = 0;
+  $RHS_EVAL_FLAT_BLOCK(g, in, out$RHS_EVAL_FLAT_BLOCK_TAIL);
+  (void)blk_time;
+  return 0;
+} // END FUNCTION: evaluate one block-local flat slab
 $REAL_APPLICATION_AFTER_RHS
 // clang-format off
 }  // END NAMESPACE: $NAMESPACE
@@ -702,6 +761,7 @@ def substitute_solver_identifiers(
         text = text.replace(placeholder, value)
 
     role_tokens = (
+        ("$RHS_EVAL_FLAT_BLOCK_TAIL", "rhs_eval_flat_block", True),
         ("$RHS_EVAL_FLAT_BLOCK", "rhs_eval_flat_block", False),
         ("$RHS_EVAL_BLOCK_TAIL", "rhs_eval_block", True),
         ("$RHS_EVAL_BLOCK", "rhs_eval_block", False),
@@ -869,7 +929,6 @@ def output_solver_context_cpp(
     ...     _ = gri.register_gridfunctions_for_single_rank1(
     ...         "waveU", dimension=2, group="EVOL"
     ...     )
-    ...     roles.set_upwind_control_fields(("waveU0", "waveU1"))
     ...     _function_specs = (
     ...         ("wave_rhs", "rhs_eval",
     ...          "const standalone_host_mesh_struct& mesh, const DendroScalar* const* in_gfs, DendroScalar* const* rhs_gfs",

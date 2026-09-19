@@ -12,6 +12,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import math
 from typing import Dict, List, Tuple
 
 import sympy as sp
@@ -21,7 +22,6 @@ import nrpy.grid as gri
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.c_codegen import c_codegen
-from nrpy.finite_difference import compute_fdcoeffs_fdstencl
 from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import CodeParameters, block_kernel_helpers, types_h
 from nrpy.infrastructures.Dendro.generated_file_banner import generated_file_banner
@@ -237,15 +237,71 @@ def output_self_tests_cpp(
     return BANNER + substitute_solver_identifiers(text, solver_stem, solver_namespace)
 
 
-def _stencil_terms(name: str, operator: str) -> str:
+def _independent_stencil(
+    operator: str, fd_order: int, ko_fd_order: int
+) -> Tuple[List[sp.Rational], List[List[int]]]:
+    """Construct test-only centered and KO tables without NRPy FD helpers."""
+    if operator.startswith("dKOD"):
+        radius = (ko_fd_order + 2) // 2
+        axis = int(operator[-1])
+        coefficients = [
+            sp.Rational(
+                (-1) ** (radius + 1 + k) * math.comb(2 * radius, k), 2 ** (2 * radius)
+            )
+            for k in range(2 * radius + 1)
+        ]
+        offsets = []
+        for step in range(-radius, radius + 1):
+            offset = [0, 0, 0]
+            offset[axis] = step
+            offsets.append(offset)
+        return coefficients, offsets
+    radius = fd_order // 2
+    nodes = list(range(-radius, radius + 1))
+    if operator.startswith("dDD"):
+        axis0, axis1 = int(operator[-2]), int(operator[-1])
+        first = sp.finite_diff_weights(1, nodes, 0)[1][-1]
+        if axis0 != axis1:
+            coefficients: List[sp.Rational] = []
+            offsets = []
+            for i, coefficient0 in zip(nodes, first):
+                for j, coefficient1 in zip(nodes, first):
+                    if coefficient0 == 0 or coefficient1 == 0:
+                        continue
+                    offset = [0, 0, 0]
+                    offset[axis0], offset[axis1] = i, j
+                    coefficients.append(sp.Rational(coefficient0 * coefficient1))
+                    offsets.append(offset)
+            return coefficients, offsets
+        derivative = 2
+        axis = axis0
+    else:
+        derivative = 1
+        axis = int(operator[-1])
+    weights = sp.finite_diff_weights(derivative, nodes, 0)[derivative][-1]
+    coefficients = []
+    offsets = []
+    for step, coefficient in zip(nodes, weights):
+        if coefficient == 0:
+            continue
+        offset = [0, 0, 0]
+        offset[axis] = step
+        coefficients.append(sp.Rational(coefficient))
+        offsets.append(offset)
+    return coefficients, offsets
+
+
+def _stencil_terms(name: str, operator: str, fd_order: int, ko_fd_order: int) -> str:
     """
-    Emit one coefficient/offset table from the shared finite-difference function.
+    Emit one coefficient/offset table from the independent test construction.
 
     :param name: C++ table name.
     :param operator: Canonical finite-difference operator name.
+    :param fd_order: Centered finite-difference order.
+    :param ko_fd_order: Base order used for the KO difference.
     :return: Complete C++ table declaration.
     """
-    coefficients, stencil = compute_fdcoeffs_fdstencl(operator, 4)
+    coefficients, stencil = _independent_stencil(operator, fd_order, ko_fd_order)
     entries = ",\n".join(
         "    {"
         + f"{float(coefficient):.17g}, {offset[0]}, {offset[1]}, {offset[2]}"
@@ -259,9 +315,9 @@ _FIXTURE_CPP = """
 struct StencilTerm {{ double coefficient; int di; int dj; int dk; }};
 {tables}
 
-double fixture_u(double x, double, double) {{ return x + x*x*x*x*x*x; }}
+double fixture_u(double x, double y, double) {{ return x + std::pow(x,8) + 0.1*y; }}
 double fixture_v(double x, double y, double z) {{
-  return 2.0 + 0.3*x*x + 0.1*y*y*y*y*y*y + 0.2*z + 0.05*x*y;
+  return 2.0 + 0.3*x*x + 0.1*std::pow(y,8) + 0.2*z + 0.05*x*y;
 }}
 
 template <std::size_t N, class Sample>
@@ -284,7 +340,7 @@ double fixture_stencil(const StencilTerm (&terms)[N], Sample sample,
  * block sentinel write, 4 for flat/block disagreement, or 5 for a flat sentinel write.
  */
 int test_address_values(bool alternate_parameters = false) {{
-  constexpr unsigned nx = 13, ny = 15, nz = 17, pad = 3;
+  constexpr unsigned nx = 17, ny = 19, nz = 21, pad = {padding};
   constexpr std::size_t offset = 11;
   constexpr std::size_t vol = static_cast<std::size_t>(nx) * ny * nz;
   constexpr double sentinel = -9876.25;
@@ -303,9 +359,9 @@ int test_address_values(bool alternate_parameters = false) {{
   }};
   for (unsigned c = 0; c < nz; ++c) for (unsigned b = 0; b < ny; ++b)
     for (unsigned a = 0; a < nx; ++a) {{
-      const double x = (static_cast<int>(a) - 6) * dx[0];
-      const double y = (static_cast<int>(b) - 7) * dx[1];
-      const double z = (static_cast<int>(c) - 8) * dx[2];
+      const double x = (static_cast<int>(a) - 8) * dx[0];
+      const double y = (static_cast<int>(b) - 9) * dx[1];
+      const double z = (static_cast<int>(c) - 10) * dx[2];
       input[0][offset + index(a,b,c)] = fixture_u(x,y,z);
       input[1][offset + index(a,b,c)] = fixture_v(x,y,z);
     }}  // END LOOP: input grid points
@@ -325,20 +381,20 @@ int test_address_values(bool alternate_parameters = false) {{
   auto sample_v = [&](int a, int b, int c) {{
     return static_cast<double>(input[1][offset + index(a,b,c)]);
   }};
-  const unsigned points[][3] = {{{{3,3,3}}, {{6,7,8}}, {{9,11,13}}}};
+  const unsigned points[][3] = {{{{4,4,4}}, {{8,9,10}}, {{12,14,16}}}};
   for (const auto& point : points) {{
     const unsigned a = point[0], b = point[1], c = point[2];
-    const double control = sample_u(a,b,c);
     const double u_d0 = fixture_stencil(D1, sample_u, a,b,c, 1.0/dx[0]);
-    const double u_up = fixture_stencil(control > 0.0 ? UP : DOWN,
-                                         sample_u, a,b,c, 1.0/dx[0]);
+    const double u_d1 = fixture_stencil(D1, [&](int da,int db,int dc) {{
+      return sample_u(db,da,dc);
+    }}, b,a,c, 1.0/dx[1]);
     const double u_ko = fixture_stencil(KO, sample_u, a,b,c, 1.0/dx[0]);
     const double v_mix = fixture_stencil(
         MIXED, sample_v, a,b,c, 1.0/(dx[0]*dx[1]));
     const double v_d2 = fixture_stencil(D1, [&](int da,int db,int dc) {{
       return sample_v(dc,db,da);
     }}, c,b,a, 1.0/dx[2]);
-    const double v_up1 = fixture_stencil(control > 0.0 ? UP : DOWN,
+    const double v_d1 = fixture_stencil(D1,
         [&](int da,int db,int dc) {{ return sample_v(db,da,dc); }},
         b,a,c, 1.0/dx[1]);
     const double v_ko1 = fixture_stencil(KO,
@@ -349,13 +405,13 @@ int test_address_values(bool alternate_parameters = false) {{
         + fixture_params.nrpy_fixture_common*v_mix
         + (fixture_params.nrpy_fixture_toggle ? sample_v(a,b,c)
                                               : sample_u(a,b,c))
-        + u_up + u_ko;
+        + u_d1 + u_ko;
     const double expected_v = fixture_params.nrpy_fixture_real*sample_v(a,b,c)
         - fixture_params.nrpy_fixture_count*v_d2
         + fixture_params.nrpy_fixture_common*v_mix
         + (fixture_params.nrpy_fixture_toggle ? sample_u(a,b,c)
                                               : sample_v(a,b,c))
-        + v_up1 + v_ko1;
+        + v_d1 + v_ko1;
     const double actual_u = output[0][offset + index(a,b,c)];
     const double actual_v = output[1][offset + index(a,b,c)];
     const double bound_u = 2e-12 * std::max(1.0, std::fabs(expected_u));
@@ -561,14 +617,16 @@ def output_self_test_artifacts(
     added_parameters: List[str] = []
     added_functions: List[str] = []
     saved_fd_order = par.parval_from_str("fd_order")
+    fixture_fd_order = int(saved_fd_order)
+    if fixture_fd_order not in (4, 6, 8):
+        raise ValueError("Dendro self tests require fd_order 4, 6, or 8.")
+    fixture_ko_fd_order = fixture_fd_order - 2
+    fixture_padding = fixture_fd_order // 2
     dendro_extras_existed = "Dendro" in par.glb_extras_dict
     dendro_extras = par.glb_extras_dict.get("Dendro", {})
     codeparameter_sidecar_existed = "CFunction_codeparameters" in dendro_extras
     role_sidecar_existed = "CFunction_roles" in dendro_extras
     try:
-        # The formulation-neutral test system is deliberately FD4 in every
-        # application build; production FD order is restored in ``finally``.
-        par.set_parval_from_str("fd_order", 4)
         u, v = gri.register_gridfunctions(list(field_names), group="EVOL")
         added_fields.extend(field_names)
         parameter_symbols = {}
@@ -578,10 +636,8 @@ def output_self_test_artifacts(
             )
             added_parameters.append(name)
         u_dD = ixp.declarerank1("nrpy_fixture_u_dD")
-        u_dupD = ixp.declarerank1("nrpy_fixture_u_dupD")
         u_dKOD = ixp.declarerank1("nrpy_fixture_u_dKOD")
         v_dD = ixp.declarerank1("nrpy_fixture_v_dD")
-        v_dupD = ixp.declarerank1("nrpy_fixture_v_dupD")
         v_dKOD = ixp.declarerank1("nrpy_fixture_v_dKOD")
         v_dDD = ixp.declarerank2("nrpy_fixture_v_dDD")
         toggle = parameter_symbols["nrpy_fixture_toggle"]
@@ -592,13 +648,13 @@ def output_self_test_artifacts(
             + parameter_symbols["nrpy_fixture_count"] * u_dD[0]
             + parameter_symbols["nrpy_fixture_common"] * v_dDD[0][1]
             + conditional_u
-            + u_dupD[0]
+            + u_dD[1]
             + u_dKOD[0],
             parameter_symbols["nrpy_fixture_real"] * v
             - parameter_symbols["nrpy_fixture_count"] * v_dD[2]
             + parameter_symbols["nrpy_fixture_common"] * v_dDD[0][1]
             + conditional_v
-            + v_dupD[1]
+            + v_dD[1]
             + v_dKOD[1],
         )
         kernel = c_codegen(
@@ -612,7 +668,7 @@ def output_self_test_artifacts(
             mem_alloc_style="210",
             rational_const_alias="static const",
             verbose=False,
-            upwind_control_vec=[u, u, u],
+            ko_fd_order=fixture_ko_fd_order,
         )
         used = block_kernel_helpers.used_codeparameters(expressions)
         declarations = block_kernel_helpers.cparam_declarations(used)
@@ -621,7 +677,7 @@ def output_self_test_artifacts(
                 field_names, gri.DENDRO_SCALAR_TYPE
             )
             + "\n"
-            + block_kernel_helpers.point_loop(kernel, "3")
+            + block_kernel_helpers.point_loop(kernel, str(fixture_padding))
         )
         params = (
             f"const block_geometry_struct& geom, const {gri.DENDRO_SCALAR_TYPE}* const* in_gfs, "
@@ -673,11 +729,9 @@ def output_self_test_artifacts(
             )
         tables = "".join(
             (
-                _stencil_terms("D1", "dD0"),
-                _stencil_terms("UP", "dupD0"),
-                _stencil_terms("DOWN", "ddnD0"),
-                _stencil_terms("KO", "dKOD0"),
-                _stencil_terms("MIXED", "dDD01"),
+                _stencil_terms("D1", "dD0", fixture_fd_order, fixture_ko_fd_order),
+                _stencil_terms("KO", "dKOD0", fixture_fd_order, fixture_ko_fd_order),
+                _stencil_terms("MIXED", "dDD01", fixture_fd_order, fixture_ko_fd_order),
             )
         )
         fixture_tests = _FIXTURE_CPP.format(
@@ -685,6 +739,7 @@ def output_self_test_artifacts(
             block_name=function_names[0],
             call_tail=block_tail,
             flat_name=function_names[1],
+            padding=fixture_padding,
         ).replace("$NAMESPACE", solver_namespace)
         source = output_self_tests_cpp(
             solver_stem,

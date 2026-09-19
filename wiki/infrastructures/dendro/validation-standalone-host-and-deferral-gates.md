@@ -13,7 +13,7 @@ file inventories. A capability claim must be re-established against the
 source and host checkout being reviewed.
 
 The standalone route covers both BSSN and fCCZ4 without Dendrolib. The real-host
-route exercises the generated fCCZ4 context with Dendro-GR and Dendrolib. General
+route supports either generated context with Dendro-GR and Dendrolib. General
 physical boundaries, remeshing, local time stepping, checkpoint/restart, output
 selection, GPU execution, and threaded kernels remain outside that route.
 
@@ -39,11 +39,11 @@ Claim evidence:
 
 ### Generated Standalone Test Executable
 
-Every generated solver compiles against `dendro_standalone_host.h` by default.
-The fCCZ4 solver exposes `FCCZ4_STANDALONE_HOST=ON` for this selection; BSSN is
-standalone-only and exposes no host-selection option. The example generator
+Every generated solver compiles against `dendro_standalone_host.h` when its
+directory is configured as the top-level CMake project. The example generator
 copies that header and `block_geometry.h` into the project, so they participate
-in the same build as the generated kernels.
+in the same build as the generated kernels. Embedded mode instead builds the
+production library against the host's `dendro5` target.
 
 Generated CTest cases exercise registry consistency, parameter forwarding,
 offsets, derivative selection and reach, RHS and initial-data calls,
@@ -55,10 +55,11 @@ bound is derived from each expression graph, scales, spacing amplification, and 
 rounding/reassociation effects, not from a measured C++ error.
 
 The addressing test uses unequal spacing, component offsets, sentinel regions,
-centered and mixed derivatives, both upwind directions, zero-speed upwinding,
-and Kreiss-Oliger response. The GR upwind test perturbs cells at the recorded
-reach and one point beyond it, proving the generated RHS both uses the declared
-outer point and ignores anything outside it. Fault variants must make the checker
+centered first and second derivatives, mixed derivatives, and Kreiss-Oliger
+response. Its coefficient values come from an independent finite-difference
+weight construction rather than the code-generation helper. It perturbs cells
+at the recorded reach and one point beyond it, proving the generated RHS both
+uses the declared outer point and ignores anything outside it. Fault variants must make the checker
 reject the corresponding bad address, halo, or derivative behavior. The evolution tests
 check algebraic residuals, constraints, flat-state RHS, adapter agreement,
 perturbation response, convergence, drift, and algebraic enforcement. Any
@@ -95,25 +96,48 @@ The opt-in host branch uses actual `ot::Mesh`, `ot::Block`, `ot::DVector`, and
 `ts::Ctx` types. `block_geometry` normalizes padded allocation, component
 offset, physical padded origin, and spacing. Component pointers retain their
 bases; the generated block kernel applies the block offset once. The RHS
-callback exchanges halos, evaluates generated block kernels, and zips the
-result. Post-timestep projection applies to stage and accepted states according
-to the callback sequence required by the selected host integrator.
+callbacks divide ownership as follows:
+
+- `rhs` owns the halo exchange, exterior values, traversal of every local
+  block, and zip back to a packed vector.
+- `rhs_blkwise` accepts already-unzipped component arrays and a list of local
+  block identifiers. It performs no exchange or zip and writes only the
+  selected block interiors, using each Dendrolib component offset.
+- `rhs_blk` accepts one component-major block-local slab. It rebases that
+  block's component offset to zero before calling the same numerical kernel.
+- `pre_stage_blk`, `post_stage_blk`, and `pre_timestep_blk` are byte-preserving
+  no-ops. `post_timestep_blk` applies the algebraic BSSN projection to one
+  block-local slab with the same zero-offset rule as `rhs_blk`.
+
+The direct runtime check calls these functions on real Dendrolib storage and
+compares the block and whole-vector results with `B^0=0.01`, `eta=1`, and an
+explicit nonzero RHS-magnitude requirement. The nonzero shift-driver RHS makes
+the comparison sensitive to component routing and input selection. This proves
+their numerical and storage behavior, but does not prove that a particular
+Berger-Oliger or local time-stepping scheduler invokes them in the required
+sequence. Scheduler-driven
+stage projection remains unqualified until that sequence is observed in the
+selected Dendrolib time integrator.
 
 `dendrolib_capability_test.cpp` derives expected padded geometry and values from
 the selected checkout's block records. It checks that Dendrolib padding is half
-the element order; the order-ten case is the padding-five probe needed by an
-eighth-order finite-difference profile. It also checks scalar ABI, padded
+the element order for generated element orders 4, 6, and 8, corresponding to 2,
+3, and 4 points per side. It also checks scalar ABI, padded
 extents, unzip offsets, variable-major x-fastest layout, padded origin, and
 in-domain halo values. Component-distinct affine fields separate layout and
 transport errors from interpolation error. Each checker has a corresponding
 fault-injection mode; a checker is credible only when its fault makes the
 qualification fail.
 
-`runtime_integration_test.cpp` exercises generated fCCZ4 callbacks, component
-offsets, padded origins, halo exchange, nonconstant zip, parameter response,
-finite-value handling, and rank-local failure termination. The Minkowski route
-checks its configured evolution invariants using mesh-scaled numerical bounds.
-These checks qualify only the selected source and host checkout; the KB stores
+`runtime_integration_test.cpp` exercises a selected generated formulation's
+whole-vector and block callbacks, component offsets, block-local zero offsets,
+selected-block writes, padded origins, halo exchange, nonconstant zip,
+parameter response, block/whole projection equivalence, byte-preserving block
+hooks, argument rejection, finite-value handling, and rank-local failure
+termination. It runs on one rank to isolate local block addressing and on two
+ranks to include distributed transport. The Minkowski route checks its
+configured evolution invariants using mesh-scaled numerical bounds. These
+checks qualify only the selected source and host checkout; the KB stores
 neither a revision fingerprint nor the run outcome.
 
 Claim evidence:
@@ -124,29 +148,26 @@ Claim evidence:
 
 ### CI And Tests Not Yet Implemented
 
-Module doctests run through static analysis. The configured
-`dendro-validation` GitHub job generates default fourth-order, KO-enabled
-fCCZ4. It runs the generated nonflat RHS-and-diagnostics multiprecision reference check, then links
-the same solver into a checksum-verified real host and runs one Minkowski step
-on exactly two MPI ranks. The real state is initialized through Dendro-GR's
-Minkowski routine. The job is capped at 30 minutes; the real run is capped at
-five minutes and uses one OpenMP thread per rank. These are configured tests,
-not a stored execution result.
+Module doctests run through static analysis. The checked-in
+`dendro-validation` GitHub job still names the previous standalone option and
+solver targets. The generated interface now uses the common
+`NRPY_DENDRO_BUILD_*` options and `nrpy_<formulation>_dendro[_qualify]` targets,
+so that job must be updated under the repository's protected-workflow rule
+before it can exercise the new generated interface. This page does not treat
+that unsynchronized job as execution evidence.
 
 General application boundary semantics, remeshing and state transfer, local time
 stepping, checkpoint/restart ABI, output selection, GPU execution, and threaded
-kernels remain open. The real-host test uses Dendrolib block-boundary flags
+kernels remain open. The real-host qualification uses Dendrolib block-boundary flags
 to prescribe constant analytic exterior data; it does not expose a general
-application boundary-condition interface. Its application qualification is
-fCCZ4-specific; BSSN retains the standalone route until its generating module adds
-an equivalent qualification.
+application boundary-condition interface.
 
 The numerical checks use analytic or property oracles rather than a frozen
 runtime output: multiprecision evaluation of the canonical RHS expressions,
 resolvable KO contributions, and roundoff-scaled Minkowski bounds. The
-configured generation does not establish nondefault finite-difference orders,
-convergence, distributed transport, long-time or nonlinear evolution, or broad
-physics validation.
+generated matrix covers finite-difference orders 4, 6, and 8 with KO both
+disabled and enabled. It does not establish remeshing, long-time or nonlinear
+evolution, or broad physics validation.
 
 ## Sources
 

@@ -4,13 +4,13 @@ Generate an NRPy-authored fCCZ4 solver for Dendro-GR.
 Run as a module:
 
     python -m nrpy.examples.dendro_fccz4 \
-        --project-dir project/dendro_fccz4 --fd-order 4
+        --project-dir project/dendro_fccz4 --fd-order 6
 
 Doctests:
 >>> (solver_name, solver_namespace)
 ('nrpy_fccz4', 'nrpy::fccz4')
->>> (solver_stem, exec_or_library_name)
-('fccz4', 'fccz4Solver')
+>>> (solver_stem, production_target, qualification_target)
+('fccz4', 'nrpy_fccz4_dendro', 'nrpy_fccz4_dendro_qualify')
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -52,7 +52,8 @@ solver_name = "nrpy_fccz4"
 solver_prefix = "FCCZ4"
 solver_stem = "fccz4"
 solver_namespace = "nrpy::fccz4"
-exec_or_library_name = "fccz4Solver"
+production_target = "nrpy_fccz4_dendro"
+qualification_target = "nrpy_fccz4_dendro_qualify"
 profile_name = "fccz4_cartesian_vacuum"
 
 CoordSystem = "Cartesian"
@@ -72,16 +73,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--project-dir", default=os.path.join("project", "dendro_fccz4")
     )
-    # fd_order 8 reaches five ghost points.  Padding 5 is proven on the
-    # pinned Dendrolib at element order 10, so the limit is this
-    # generator's qualified set rather than the host.
     parser.add_argument(
         "--fd-order",
         type=int,
-        choices=(2, 4, 6),
-        default=4,
-        help="finite-difference order; 8 is not in this generator's "
-        "qualified set, though the pinned host proves padding 5",
+        choices=(4, 6, 8),
+        default=6,
+        help="centered finite-difference order; Dendro padding is 2, 3, or 4",
     )
     # argparse.BooleanOptionalAction needs Python 3.9; the supported floor is
     # 3.7, so the two flags are declared explicitly.
@@ -174,7 +171,13 @@ def main() -> None:
         ),
         layout.generated_include
         + f"{solver_stem}_constants.h": constants_h.output_constants_h(
-            solver_stem, solver_namespace, required_padding, args.ko
+            solver_stem,
+            solver_namespace,
+            rhs_build.fd_order,
+            rhs_build.ko_fd_order,
+            rhs_build.ko_fd_order + 2,
+            required_padding,
+            rhs_build.ko_enabled,
         ),
         layout.generated_include
         + f"{solver_stem}_state.h": state_h.output_state_h(
@@ -194,18 +197,24 @@ def main() -> None:
         ),
         layout.src
         + f"{solver_stem}Ctx.cpp": solver_context.output_solver_context_cpp(
-            solver_stem, solver_namespace, enable_fCCZ4=True
+            solver_stem, solver_namespace
         ),
         layout.src
         + f"{solver_stem}_main.cpp": main_cpp.output_main_cpp(
             solver_stem,
             solver_namespace,
-            exec_or_library_name,
+            qualification_target,
             profile_name,
         ),
         layout.pars
         + f"{solver_stem}_minkowski.par": parfile.generate_default_parfile(
-            solver_stem, profile_name, required_padding, args.ko
+            solver_stem,
+            profile_name,
+            rhs_build.fd_order,
+            rhs_build.ko_fd_order,
+            rhs_build.ko_fd_order + 2,
+            required_padding,
+            rhs_build.ko_enabled,
         ),
     }
     artifacts.update(
@@ -216,7 +225,6 @@ def main() -> None:
                 solver_namespace,
                 rhs_build,
                 constraints_build,
-                args.ko,
             ).items()
         }
     )
@@ -225,11 +233,11 @@ def main() -> None:
             solver_name,
             solver_stem,
             solver_prefix,
-            exec_or_library_name,
+            production_target,
+            qualification_target,
             self_tests_cpp.test_sections(),
-            main_cpp.standalone_ctest_statements(solver_stem, exec_or_library_name),
-            main_cpp.real_ctest_statements(solver_stem, exec_or_library_name),
-            real_host_available=True,
+            main_cpp.standalone_ctest_statements(solver_stem, qualification_target),
+            main_cpp.real_ctest_statements(solver_stem, qualification_target),
         )
     )
     for relative_path, text in sorted(artifacts.items()):
@@ -265,7 +273,12 @@ def main() -> None:
     print(f"  profile: {profile_name}")
     print(f"  evolved variables: {len(EVOL)}")
     print(f"  finite-difference order: {args.fd_order}")
-    print(f"  Kreiss-Oliger dissipation: {'enabled' if args.ko else 'disabled'}")
+    print(f"  KO finite-difference order: {rhs_build.ko_fd_order}")
+    print(f"  effective KO difference order: {rhs_build.ko_fd_order + 2}")
+    print(
+        "  Kreiss-Oliger dissipation: "
+        f"{'enabled' if rhs_build.ko_enabled else 'disabled'}"
+    )
     print(f"  required ghost points: {roles.required_padding()}")
     print("Now build and run the generated self-tests with:")
     print(f"  cmake -S {args.project_dir}/Dendro-GR/{solver_name} -B build")

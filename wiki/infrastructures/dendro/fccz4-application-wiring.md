@@ -25,29 +25,29 @@ kernel family is shaped this way.
 ## Detail
 
 The example passes GR-owned context, lifecycle, status, and scientific-test
-content into generic Dendro emitters explicitly. fCCZ4/chi FD4 is checked on a
-nonflat fixed block, component by component, against an independent
+content into generic Dendro emitters explicitly. fCCZ4/chi is checked at regular
+finite-difference orders 4, 6, and 8 on a nonflat fixed block, component by
+component, against an independent
 high-precision reference for the RHS block kernel, flat adapter, and constraint
 diagnostics. Kernel and reference inputs are the same exactly emitted binary64
 samples; the reference applies the stencil and actual CSE graph at 80 and 100
 digits and derives a componentwise roundoff bound from their scale and operation
-count. KO is enabled by default; `--no-ko` retains the nondissipative generation
-profile. The KO-enabled reference proves resolvable KO effects in several field
-families.
+count. Order 6 with KO is the default; `--no-ko` retains the nondissipative
+generation profile. KO base order is two below the regular derivative order,
+so both profiles use 2, 3, or 4 ghost points per side.
 
 ### Right-hand side
 
 The RHS builder maps each RHS symbol to its registered EVOL gridfunction name
 algorithmically and asserts the bijection against the registry, derives the
 output lvalues and the `in_` and `rhs_` pointer bindings from the gridfunction
-registry, and runs `c_codegen` with direct finite differences using the shared factory's
-upwind control vector and the `DendroScalar` alias. Point and block loops are
+registry, normalizes the equation factory's directional derivative symbols to
+centered derivatives, and runs `c_codegen` with the `DendroScalar` alias. Point and block loops are
 emitted through the Dendro loop helpers. It provides three registered CFunction
 bodies — per-block, all-block, and a local-time-stepping flat-block adapter
 that reuses the same numerical body — and records the ghost points its emitted
-operators reach. That padding is taken per axis from the same coefficient
-source the kernel was lowered with, so it is not `fd_order // 2`: the upwinded
-and Kreiss-Oliger families reach one point further than the centered ones.
+operators reach. The explicit KO base order is two below the regular derivative
+order, so centered regular derivatives and KO terms have the same reach.
 
 ### Enforcing det(gammabar) = det(gammahat) and tr(Abar) = 0
 

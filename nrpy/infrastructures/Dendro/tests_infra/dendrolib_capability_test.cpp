@@ -362,10 +362,10 @@ int main(int argc, char **argv) {
         report("scalar_abi", scalarOk, detail);
     }  // END IF: rank 0 reports scalar ABI
 
-    // CAPTEST_ORDERS overrides the element orders under test; padding is
-    // half the element order, so order 10 is the padding-5 probe that an
-    // eighth-order finite-difference profile would need.
-    std::vector<unsigned> orders = {2, 4, 6, 8};
+    // CAPTEST_ORDERS overrides the element orders under test. The generated
+    // Dendro profiles use element orders 4, 6, and 8, whose block padding is
+    // 2, 3, and 4 points per side, respectively.
+    std::vector<unsigned> orders = {4, 6, 8};
     if (const char *env = std::getenv("CAPTEST_ORDERS"); rank == 0 && env != nullptr) {
         orders.clear();
         for (const char *s = env; *s != '\0';) {

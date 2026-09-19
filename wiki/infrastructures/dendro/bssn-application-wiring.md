@@ -26,12 +26,14 @@ formulation branch confined to expression assembly and its field-count check.
 
 The example now assembles GR-owned context policy, lifecycle CTest statements,
 projection status, and scientific self-tests explicitly into generic Dendro
-emitters. BSSN/W FD4 is checked on a nonflat fixed block, component by
-component, for the RHS block kernel, flat adapter, and constraint diagnostics.
+emitters. BSSN/W is checked at regular finite-difference orders 4, 6, and 8 on
+a nonflat fixed block, component by component, for the RHS block kernel, flat
+adapter, and constraint diagnostics.
 The expected values use the same exactly emitted binary64 samples as the kernels
-and an independent 80/100-digit stencil-and-CSE evaluation. KO-off is the configured default;
-KO-on is a separately generated local qualification whose fixture first proves
-that several field families have resolvable KO contributions.
+and an independent 80/100-digit stencil-and-CSE evaluation. Order 6 is the
+configured default. KO-off is the BSSN default; KO-on uses KO base order two
+below the regular derivative order, so both cases fit the same 2-, 3-, or
+4-point block padding.
 
 ### Shared assembly and registration
 
@@ -53,10 +55,10 @@ the way ETLegacy and BHaH do: the non-gauge equations from the cached
 `BSSN_RHSs` object, the lapse and shift from `BSSN_gauge_RHSs` added to a *copy*
 of its dictionary, Kreiss-Oliger terms through the shared
 `add_KreissOliger_dissipation_terms` helper with `include_Theta_fCCZ4=False`,
-and the upwind control vector as the rescaled shift
-`betaU[i] = vetU[i] * ReU[i]`. It then emits all of it through
-`block_kernel_helpers`, asserts the 24-field bijection against the registry, and
-records the padding and the upwind control set.
+and centered advection after normalizing the equation factory's directional
+derivative symbols. It then emits all of it through `block_kernel_helpers`,
+asserts the 24-field bijection against the registry, and records the exact
+padding implied by the selected regular and KO operators.
 
 `general_relativity/constraints_eval.py`'s BSSN builder emits the Hamiltonian
 constraint and the three momentum constraint components from the established
@@ -106,9 +108,9 @@ Claim evidence:
 
 NRPy authors the generated module, so its directory and CMake project are
 `nrpy_bssn`, and its C++ namespace is `nrpy::bssn`. Names inside the module
-retain the conventional BSSN stem and required Dendro target names: CMake
-variables carry the `BSSN_` prefix, the object library is `bssn_common`, the
-executable is `bssnSolver`, and the context source is `bssnCtx.cpp`. The kernel
+retain the conventional BSSN stem: CMake variables carry the `BSSN_` prefix,
+the production library is `nrpy_bssn_dendro`, the qualification executable is
+`nrpy_bssn_dendro_qualify`, and the context source is `bssnCtx.cpp`. The kernel
 names `bssn_rhs_eval*`, `bssn_constraints_eval*` and
 `bssn_enforce_detgbar_equals_detghat_trAzero*` carry the stem the way ETLegacy
 carries its thorn name, and take the operation names BHaH and ETLegacy already

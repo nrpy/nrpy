@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 """
 
 from operator import itemgetter
-from typing import Any, Dict, List, Sequence, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, cast
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -220,7 +220,7 @@ DERIVATIVE_FAMILIES: Tuple[str, ...] = C_CODEGEN_DERIVATIVE_FAMILIES + (
 
 
 def compute_fdcoeffs_fdstencl(
-    derivstring: str, fd_order: int
+    derivstring: str, fd_order: int, *, ko_fd_order: Optional[int] = None
 ) -> Tuple[List[sp.Rational], List[List[int]]]:
     """
     Construct finite difference coefficients and stencils for a given derivative type.
@@ -229,6 +229,8 @@ def compute_fdcoeffs_fdstencl(
                         like "dKOD", "dupD", "ddnD", "dfullupD", "dfulldnD", "DDD", and "DD" to
                         dictate how the function processes and returns coefficients.
     :param fd_order: Order of the finite differencing.
+    :param ko_fd_order: Optional base order for ``dKOD``.  The KO construction
+        adds two to this value, as it does to ``fd_order`` when omitted.
 
     :return: A tuple containing two lists. The first list contains the finite difference coefficients
              as sympy.Rational numbers, and the second list contains the stencils as lists of integers.
@@ -264,10 +266,18 @@ def compute_fdcoeffs_fdstencl(
     [True, True, True, True, True]
     """
     # Step 0: Set finite differencing order, stencil size, and up/downwinding
+    if ko_fd_order is not None and (
+        isinstance(ko_fd_order, bool)
+        or not isinstance(ko_fd_order, int)
+        or ko_fd_order <= 0
+        or ko_fd_order % 2 != 0
+    ):
+        raise ValueError("ko_fd_order must be a positive even integer.")
+    operator_fd_order = fd_order
     if "dKOD" in derivstring:
-        fd_order += 2  # par.parval_from_str("FD_KO_ORDER__CENTDERIVS_PLUS")
+        operator_fd_order = (fd_order if ko_fd_order is None else ko_fd_order) + 2
 
-    stencil_width = fd_order + 1
+    stencil_width = operator_fd_order + 1
     UPDOWNWIND_stencil_shift = 0
     # dup/dnD = single-point-offset upwind/downwinding.
     if "dupD" in derivstring:
@@ -276,9 +286,9 @@ def compute_fdcoeffs_fdstencl(
         UPDOWNWIND_stencil_shift = -1
     # dfullup/dnD = full upwind/downwinding.
     elif "dfullupD" in derivstring:
-        UPDOWNWIND_stencil_shift = int(fd_order / 2)
+        UPDOWNWIND_stencil_shift = int(operator_fd_order / 2)
     elif "dfulldnD" in derivstring:
-        UPDOWNWIND_stencil_shift = -int(fd_order / 2)
+        UPDOWNWIND_stencil_shift = -int(operator_fd_order / 2)
 
     # Step 1: Set up FD matrix and return the inverse, as documented above.
     Minv = setup_FD_matrix__return_inverse(stencil_width, UPDOWNWIND_stencil_shift)
@@ -420,6 +430,8 @@ def stencil_reach_per_axis(
     expressions: Sequence[sp.Expr],
     upwind_control_vec: Union[List[sp.Basic], sp.Basic, str],
     fd_order: int,
+    *,
+    ko_fd_order: Optional[int] = None,
 ) -> Tuple[int, int, int]:
     """
     Return the per-axis ghost-point reach the expressions' derivatives require.
@@ -438,6 +450,8 @@ def stencil_reach_per_axis(
         used when upwinding is not enabled.
     :param fd_order: Finite-difference order; ``dKOD`` adds its own two orders
         internally, exactly as the kernel's C code is generated.
+    :param ko_fd_order: Optional base order for ``dKOD``.  When omitted, KO
+        starts from ``fd_order`` and retains the historical wider stencil.
     :return: The (x, y, z) ghost points required.
     :raises ValueError: If a free symbol carries a derivative token whose
         family is not one of :data:`DERIVATIVE_FAMILIES`, which would otherwise
@@ -506,7 +520,9 @@ def stencil_reach_per_axis(
 
     reach = [0, 0, 0]
     for operator in superfast_uniq(deriv_operators):
-        _coeffs, stencils = compute_fdcoeffs_fdstencl(operator, fd_order)
+        _coeffs, stencils = compute_fdcoeffs_fdstencl(
+            operator, fd_order, ko_fd_order=ko_fd_order
+        )
         for stencil in stencils:
             for axis, step in enumerate(stencil):
                 reach[axis] = max(reach[axis], abs(step))

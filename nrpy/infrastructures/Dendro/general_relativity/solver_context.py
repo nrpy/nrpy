@@ -87,10 +87,10 @@ def output_solver_context_h(solver_stem: str, solver_namespace: str) -> str:
 double observed_convergence_order(
     double base_dx, const $NAMESPACE::generated::params_struct& params);"""
     real_declarations = """  unsigned long long projection_passes = 0;
-  unsigned long long dendrogr_initial_data_calls = 0;
+  unsigned long long initial_data_calls = 0;
   double projection_residual = 0.0;
   /**
-   * Initialize the real-host state from Dendro-GR Minkowski data.
+   * Initialize the real-host state from generated Minkowski data.
    *
    * @return 0 on success or an inactive rank; invalid data aborts MPI_COMM_WORLD.
    */
@@ -105,6 +105,17 @@ double observed_convergence_order(
    * @return 0 on success or an inactive rank; invalid data aborts MPI_COMM_WORLD.
    */
   int post_timestep(DVec& input);
+  int pre_stage_blk(DendroScalar*, unsigned int, unsigned int, DendroScalar) {
+    return 0;
+  }
+  int post_stage_blk(DendroScalar*, unsigned int, unsigned int, DendroScalar) {
+    return 0;
+  }
+  int pre_timestep_blk(DendroScalar*, unsigned int, unsigned int, DendroScalar) {
+    return 0;
+  }
+  int post_timestep_blk(DendroScalar* input, unsigned int dof,
+                        unsigned int local_blk_id, DendroScalar blk_time);
   /**
    * Evaluate and reduce the generated constraint diagnostics.
    *
@@ -133,15 +144,12 @@ double observed_convergence_order(
     )
 
 
-def output_solver_context_cpp(
-    solver_stem: str, solver_namespace: str, enable_fCCZ4: bool = False
-) -> str:
+def output_solver_context_cpp(solver_stem: str, solver_namespace: str) -> str:
     """
     Emit the generic context implementation with GR operations resolved.
 
     :param solver_stem: Lowercase formulation stem used in emitted names.
     :param solver_namespace: Namespace containing the generated solver.
-    :param enable_fCCZ4: Whether the generated state extends BSSN with Theta.
     :return: Complete generated context implementation.
     """
     standalone_destructor = """  if (u0 != nullptr) {
@@ -154,10 +162,10 @@ def output_solver_context_cpp(
   // is fixed only after the standalone mesh spacing is known.
   params.smooth_perturbation_wavelength = 0.618 * extent * dx;"""
     standalone_startup = """  const unsigned fd_order = $NAMESPACE::generated::FD_ORDER;
-  if (fd_order != 2 && fd_order != 4 && fd_order != 6) {
+  if (fd_order != 4 && fd_order != 6 && fd_order != 8) {
     std::fprintf(stderr,
                  "ERROR: unsupported generated FD order %u; the qualified set "
-                 "is 2, 4, 6\\n", fd_order);
+                 "is 4, 6, 8\\n", fd_order);
     return 1;
   }  // END IF: unsupported generated FD order"""
     standalone_initialization = """int Ctx::minkowski_initial_data() {
@@ -301,99 +309,49 @@ double observed_convergence_order(
   if (!(d1 > 0.0) || !(d2 > 0.0)) return -1.0;
   return std::log2(d1 / d2);
 }  // END FUNCTION: observed_convergence_order"""
-    cf_from_dendrogr_chi = (
-        "native[::bssn::VAR::U_CHI]"
-        if enable_fCCZ4
-        else "std::sqrt(native[::bssn::VAR::U_CHI])"
-    )
-    initialization = f"""namespace {{
-
-/**
- * Adapt one Dendro-GR Minkowski point to the generated state layout.
- *
- * Dendro-GR supplies the physical values; this function changes only ordering and
- * storage.
- * Fields absent from Dendro-GR's BSSN state start at generated asymptotic values.
- *
- * @param x Physical x coordinate.
- * @param y Physical y coordinate.
- * @param z Physical z coordinate.
- * @param[out] output Generated component arrays receiving the adapted state.
- * @param cell Flat destination index in every component array.
- */
-void dendrogr_minkowski_point(double x, double y, double z,
-                              DendroScalar* const* output,
-                              std::size_t cell) {{
-  std::array<double, ::bssn::BSSN_NUM_VARS> native{{}};
-  ::bssn::minkowskiInitialData(x, y, z, native.data());
-  for (unsigned f = 0; f < generated::NUM_EVOL_GFS; ++f)
-    output[f][cell] = generated::EVOL_GF_F_INFINITY[f];
-  const auto store = [&](generated::EvolVar target, ::bssn::VAR source,
-                         double offset = 0.0) {{
-    output[generated::to_index(target)][cell] = native[source] + offset;
-  }};
-  store(generated::EvolVar::aDD00, ::bssn::VAR::U_SYMAT0);
-  store(generated::EvolVar::aDD01, ::bssn::VAR::U_SYMAT1);
-  store(generated::EvolVar::aDD02, ::bssn::VAR::U_SYMAT2);
-  store(generated::EvolVar::aDD11, ::bssn::VAR::U_SYMAT3);
-  store(generated::EvolVar::aDD12, ::bssn::VAR::U_SYMAT4);
-  store(generated::EvolVar::aDD22, ::bssn::VAR::U_SYMAT5);
-  store(generated::EvolVar::alpha, ::bssn::VAR::U_ALPHA);
-  store(generated::EvolVar::betU0, ::bssn::VAR::U_B0);
-  store(generated::EvolVar::betU1, ::bssn::VAR::U_B1);
-  store(generated::EvolVar::betU2, ::bssn::VAR::U_B2);
-  output[generated::to_index(generated::EvolVar::cf)][cell] =
-      {cf_from_dendrogr_chi};
-  store(generated::EvolVar::hDD00, ::bssn::VAR::U_SYMGT0, -1.0);
-  store(generated::EvolVar::hDD01, ::bssn::VAR::U_SYMGT1);
-  store(generated::EvolVar::hDD02, ::bssn::VAR::U_SYMGT2);
-  store(generated::EvolVar::hDD11, ::bssn::VAR::U_SYMGT3, -1.0);
-  store(generated::EvolVar::hDD12, ::bssn::VAR::U_SYMGT4);
-  store(generated::EvolVar::hDD22, ::bssn::VAR::U_SYMGT5, -1.0);
-  store(generated::EvolVar::lambdaU0, ::bssn::VAR::U_GT0);
-  store(generated::EvolVar::lambdaU1, ::bssn::VAR::U_GT1);
-  store(generated::EvolVar::lambdaU2, ::bssn::VAR::U_GT2);
-  store(generated::EvolVar::trK, ::bssn::VAR::U_K);
-  store(generated::EvolVar::vetU0, ::bssn::VAR::U_BETA0);
-  store(generated::EvolVar::vetU1, ::bssn::VAR::U_BETA1);
-  store(generated::EvolVar::vetU2, ::bssn::VAR::U_BETA2);
-}} // END FUNCTION: dendrogr_minkowski_point
-
-// clang-format off
-}}  // END NAMESPACE: internal linkage
-// clang-format on
-
-int Ctx::initialize() {{
+    initialization = """int Ctx::initialize() {
   if (!$VALIDATE(params)) fail("invalid runtime parameters");
   if (!m_uiMesh->isActive()) return 0;
   std::vector<DendroScalar*> pointers(generated::NUM_EVOL_GFS);
   unzipped.to_2d(pointers.data());
-  for (const auto& b : m_uiMesh->getLocalBlockList()) {{
+  for (const auto& b : m_uiMesh->getLocalBlockList()) {
     const auto g = block_geometry(*m_uiMesh, b, m_uiMinPt, m_uiMaxPt);
-    for (unsigned k = 0; k < g.nz; ++k)
-      for (unsigned j = 0; j < g.ny; ++j)
-        for (unsigned i = 0; i < g.nx; ++i) {{
-          const std::size_t cell =
-              g.component_offset + i + std::size_t(g.nx) *
-                                       (j + std::size_t(g.ny) * k);
-          dendrogr_minkowski_point(
-              g.pmin_padded[0] + i * g.dx[0],
-              g.pmin_padded[1] + j * g.dx[1],
-              g.pmin_padded[2] + k * g.dx[2], pointers.data(), cell);
-          ++dendrogr_initial_data_calls;
-        }} // END LOOP: initialize one padded Dendro point
-  }} // END LOOP: initialize local blocks
+    $MINKOWSKI_INITIAL_DATA_BLOCK(g, pointers.data());
+    ++initial_data_calls;
+  } // END LOOP: initialize local blocks
   zip(unzipped, state);
   post_timestep(state);
   initial.assign(state.get_vec_ptr(), state.get_vec_ptr() + state.get_size());
   return 0;
-}} // END FUNCTION: Ctx::initialize"""
-    exterior_values = """// Exterior values use the same Dendro-GR initial-data
-  // routine as the evolved initial state.
-  std::vector<DendroScalar*> fp(flat.size());
-  for (unsigned f = 0; f < flat.size(); ++f) fp[f] = &flat[f];
-  dendrogr_minkowski_point(0.0, 0.0, 0.0, fp.data(), 0);"""
-    after_rhs = """int Ctx::post_timestep(DVec& input) {
+} // END FUNCTION: Ctx::initialize"""
+    exterior_values = """// Generated asymptotic values are Minkowski exterior data.
+  for (unsigned f = 0; f < flat.size(); ++f)
+    flat[f] = generated::EVOL_GF_F_INFINITY[f];"""
+    after_rhs = """int Ctx::post_timestep_blk(
+    DendroScalar* input, unsigned int dof, unsigned int local_blk_id,
+    DendroScalar blk_time) {
+  if (input == nullptr) fail("block projection received a null field array");
+  if (dof != generated::NUM_EVOL_GFS)
+    fail("block projection field count does not match generated state");
+  const auto& blocks = m_uiMesh->getLocalBlockList();
+  if (local_blk_id >= blocks.size())
+    fail("block projection block identifier is out of range");
+  auto g = block_geometry(*m_uiMesh, blocks[local_blk_id], m_uiMinPt, m_uiMaxPt);
+  g.component_offset = 0;
+  const std::size_t volume = std::size_t(g.nx) * g.ny * g.nz;
+  std::array<DendroScalar*, generated::NUM_EVOL_GFS> fields{};
+  for (unsigned f = 0; f < generated::NUM_EVOL_GFS; ++f)
+    fields[f] = input + std::size_t(f) * volume;
+  generated::detgtrazero_status_struct status{};
+  $ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK(g, fields.data(), &status);
+  if (status.failed_points || status.nonfinite_points) fail("block projection failed");
+  projection_residual = std::max(projection_residual,
+      std::max(status.max_abs_det_minus_one, status.max_abs_trace_residual));
+  ++projection_passes;
+  (void)blk_time;
+  return 0;
+} // END FUNCTION: project one block-local slab
+int Ctx::post_timestep(DVec& input) {
   if (!m_uiMesh->isActive()) return 0;
   require_finite(input);
   unzip(input, unzipped, 1);
@@ -463,7 +421,7 @@ double Ctx::max_drift() {
             initialization,
             exterior_values,
             after_rhs,
-            '#include "grUtils.h"\n#include <array>',
+            "#include <array>",
         )
     )
 

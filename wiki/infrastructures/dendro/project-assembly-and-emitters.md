@@ -22,7 +22,7 @@ Modules are named for what they generate, following BHaH's `BHaH_defines_h.py` a
 | --- | --- |
 | `types_h` | scalar-type requirements plus declarations supplied explicitly by the formulation module |
 | `state_h` | the EVOL enum, name array, metadata, and exact-name lookup |
-| `constants_h` | the generated finite-difference order, required padding and Kreiss-Oliger switch |
+| `constants_h` | the generated regular finite-difference order, KO base and effective orders, required padding, and Kreiss-Oliger switch |
 | `CodeParameters` | the generated `params_struct` header and parameter CFunctions |
 | `Dendro_defines_h` | the `<stem>_defines.h` header every generated source includes, playing the role `BHaH_defines.h` plays in BHaH |
 | `cmake_helpers` | one source file per registered CFunction, the `<stem>_function_prototypes.h` header, the CMake source list, and the solver and tests `CMakeLists.txt` |
@@ -46,15 +46,15 @@ BHaH copies `simd_intrinsics.h`.
 ### Names come from the caller, not from a parameter registry
 
 `solver_name`, `solver_prefix`, `solver_stem`, `solver_namespace`,
-`exec_or_library_name`, and `profile_name` are function arguments threaded from
-the example, as BHaH threads `project_name` and ETLegacy threads `thorn_name`.
-None of them is a registered `CodeParameter`.
+`production_target`, `qualification_target`, and `profile_name` are function
+arguments threaded from the example, as BHaH threads `project_name` and
+ETLegacy threads `thorn_name`. None of them is a registered `CodeParameter`.
 
 Module-level names identify NRPy as the author. The generated directories and
 CMake projects are `nrpy_bssn` and `nrpy_fccz4`; their namespaces are
 `nrpy::bssn` and `nrpy::fccz4`. Names inside each module retain the formulation
-stem and required Dendro target names, such as `bssnCtx.cpp`, `bssn_common`,
-`fccz4Ctx.cpp`, and `fccz4Solver`.
+stem. Production libraries are `nrpy_bssn_dendro` and `nrpy_fccz4_dendro`;
+qualification executables append `_qualify` to those names.
 
 Claim evidence:
 - Claim: the generated unit's names are function arguments threaded from the calling example rather than registered `CodeParameter`s; module directories, CMake projects, and namespaces identify NRPy, while child files, functions, and required Dendro targets retain their formulation names.
@@ -76,9 +76,10 @@ the sample file, TOML bindings, and effective-parameter printout contain only
 that CFunction's recorded parameters which also opt in through
 `add_to_parfile`. Smooth-perturbation controls are not real-host inputs because
 the real-host executable does not call that standalone qualification kernel.
-`name`, `fd_order`, `required_padding`, and `ko_enabled` remain meaningful
-profile assertions: the parser compares them with the generated kernel profile
-rather than forwarding them as physics parameters.
+`name`, `fd_order`, `ko_fd_order`, `ko_effective_difference_order`,
+`required_padding`, and `ko_enabled` remain meaningful profile assertions: the
+parser compares them with the generated kernel profile rather than forwarding
+them as physics parameters.
 
 Claim evidence:
 - Claim: the Dendro parameter struct is the registered-CFunction use closure, while its real-host TOML/sample/print interface is the `add_to_parfile` subset used by the block-RHS CFunction.
@@ -126,24 +127,28 @@ shared geometry header in `include/`. The project carries no
 generated README: another generated prose file would restate what this page and the
 generated `CMakeLists.txt` already carry.
 
+Each generated project contains one finite-difference profile. Generate a
+separate project when an application needs another member of the 4/2, 6/4, or
+8/6 regular/KO order set. This keeps every source file, constant, parameter
+check, padding requirement, and compiled library in one project consistent;
+the Dendro application may then select or link the generated project it needs.
+
 ### Host selection
 
-Every generated solver includes the standalone test executable. The fCCZ4 solver
-also exposes `FCCZ4_STANDALONE_HOST`; with it `OFF`, the solver must be added to
-a host CMake tree defining `dendro5`,
-`dendro_config`, `toml11::toml11`, and `bssn_common`; the generated context uses
-actual `ot::Mesh`, `ot::Block`, `ot::DVector`, and `ts::Ctx` types. The external
-host include directories are system includes for generated targets, keeping
-generated-source warnings distinct from diagnostics owned by the host. Duplicate
-executable names fail configuration. BSSN is standalone-only: its generated
-CMake file exposes no host-selection option or real-host CTest until a
-separately named integration is qualified.
-The fCCZ4 example can be added as `nrpy_fccz4` beside upstream `BSSN_GR`.
-Reproduction commands and selected-host requirements live in the
-[host test README](../../../nrpy/infrastructures/Dendro/tests_infra/README.md#generated-real-host-qualification).
+Every generated solver uses the same two CMake modes. Configuring its directory
+as the top-level project builds the standalone qualification executable and
+generated numerical tests by default. Adding it to a Dendro tree that defines
+`dendro5` builds the production library; drivers and tests default off in that
+embedded mode. `NRPY_DENDRO_BUILD_DRIVERS` and `NRPY_DENDRO_BUILD_TESTS` can
+enable them explicitly. An embedded qualification driver also requires
+`toml11::toml11` and MPI. Both BSSN and fCCZ4 use actual `ot::Mesh`, `ot::Block`,
+`ot::DVector`, and `ts::Ctx` types through the same generated host interface.
+The two production libraries have distinct target names and can coexist in one
+Dendro application. Reproduction commands and selected-host requirements live
+in the [host test README](../../../nrpy/infrastructures/Dendro/tests_infra/README.md#generated-real-host-qualification).
 
 Claim evidence:
-- Claim: disabling fCCZ4's standalone host selects real Dendrolib context types, requires host CMake targets `dendro5`, `dendro_config`, `toml11::toml11`, and `bssn_common`, and treats those targets' external include directories as system includes for generated compilation; BSSN generates only the standalone branch.
+- Claim: top-level generated builds select the standalone qualification host, while embedded builds require `dendro5` and expose separately named BSSN and fCCZ4 production libraries; optional embedded qualification drivers also require MPI and `toml11::toml11`.
 - Role: descriptive behavior
 - Deciding authority: [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py), `output_solver_cmake`; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), `_REAL_HEADER`
 - Corroboration: [Dendro_defines_h.py](../../../nrpy/infrastructures/Dendro/Dendro_defines_h.py), `output_Dendro_defines_h`
@@ -155,12 +160,13 @@ from `cfc.CFunction_dict`, so the build source list is generated: every
 registered CFunction maps to one generated source file and one CMake entry.
 
 The ghost points the generated kernels need are recorded by the right-hand-side
-builder through `CFunction_roles.set_required_padding` and read back by
-`main` through `CFunction_roles.required_padding`. They are not
-`fd_order // 2`: the upwinded and Kreiss-Oliger operator families reach one
-point further than the centered ones. Algebraic expressions have numerical
-reach zero, and a derivative restricted to one axis is accepted; the uniform
-host value is the maximum canonical reach over all axes.
+builder through `CFunction_roles.set_required_padding` and read back by `main`
+through `CFunction_roles.required_padding`. Dendro profiles select regular/KO
+base order pairs 4/2, 6/4, and 8/6, giving exact uniform padding 2, 3, and 4.
+Algebraic expressions have numerical reach zero, and a derivative restricted to
+one axis is accepted; the uniform host value is the maximum canonical reach
+over all axes. Dendro owns every block's interior dimensions; generated code
+checks only that each padded axis can contain the required interior and halo.
 
 ### Determinism
 

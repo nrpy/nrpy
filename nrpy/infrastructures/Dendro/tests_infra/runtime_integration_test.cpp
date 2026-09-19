@@ -2,10 +2,12 @@
 // RUNTIME_HEADER and RUNTIME_NAMESPACE select the generated formulation.
 #include RUNTIME_HEADER
 #include <algorithm>
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "meshUtils.h"
 #include "octUtils.h"
@@ -14,6 +16,228 @@ namespace {
 double field(unsigned f, double x, double y, double z) {
     return 101.0 * (f + 1) + (f + 2) * x - (2 * f + 3) * y + (3 * f + 5) * z;
 }  // END FUNCTION: field
+
+void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
+                             const Point &minimum, const Point &maximum,
+                             const std::string &fault, int rank) {
+    const unsigned dof = app::generated::NUM_EVOL_GFS;
+    constexpr double sentinel = 9.87654321e200;
+    unsigned long long callback_points = 0, callback_offsets = 0,
+                       preserved_points = 0, projection_points = 0;
+    double flat_rhs_error = 0.0, whole_rhs_error = 0.0,
+           projection_error = 0.0, whole_rhs_scale = 0.0;
+    context.initialize();
+    if (mesh.isActive()) {
+        // A constant nonzero shift-driver field gives d(B^0)/dt=-eta*B^0.
+        // This prevents a zero Minkowski RHS from hiding component-routing or
+        // input-selection errors in the whole-vector/blockwise comparison.
+        context.params.eta = 1.0;
+        const unsigned b0 =
+            static_cast<unsigned>(app::generated::EvolVar::betU0);
+        const unsigned state_stride = mesh.getDegOfFreedom();
+        for (unsigned i = mesh.getNodeLocalBegin(); i < mesh.getNodeLocalEnd();
+             ++i)
+            context.state.get_vec_ptr()[std::size_t(b0) * state_stride + i] =
+                0.01;
+        const auto &blocks = mesh.getLocalBlockList();
+        if (blocks.empty())
+            throw std::runtime_error("active rank has no local blocks");
+        unsigned selected = 0;
+        for (unsigned id = 0; id < blocks.size(); ++id) {
+            const auto candidate =
+                app::block_geometry(mesh, blocks[id], minimum, maximum);
+            if (candidate.component_offset != 0) {
+                selected = id;
+                break;
+            }
+        }  // END LOOP: prefer a block with a nonzero component offset
+        auto geometry =
+            app::block_geometry(mesh, blocks[selected], minimum, maximum);
+        if (geometry.component_offset != 0)
+            ++callback_offsets;
+        double block_time = 0.0;
+        const std::size_t stride = mesh.getDegOfFreedomUnZip();
+        const std::size_t volume =
+            std::size_t(geometry.nx) * geometry.ny * geometry.nz;
+
+        // Retain the selected block result from the whole-vector callback.
+        // rhs() owns exchange, exterior values, all-block traversal, and zip;
+        // rhs_blkwise() below starts from the unzipped input it prepared.
+        app::DVec whole_output;
+        whole_output.create_vector(&mesh, ot::DVEC_TYPE::OCT_SHARED_NODES,
+                                   ot::DVEC_LOC::HOST, dof, true);
+        context.rhs(&context.state, &whole_output, 1, block_time);
+        std::vector<double *> whole_pointers(dof);
+        context.unzipped_rhs.to_2d(whole_pointers.data());
+        std::vector<double> whole_block(std::size_t(dof) * volume);
+        for (unsigned f = 0; f < dof; ++f)
+            for (std::size_t cell = 0; cell < volume; ++cell)
+                whole_block[std::size_t(f) * volume + cell] =
+                    whole_pointers[f][geometry.component_offset + cell];
+        whole_output.destroy_vector();
+        std::fill_n(context.unzipped_rhs.get_vec_ptr(),
+                    context.unzipped_rhs.get_size(), sentinel);
+        if (fault == "blockwise_null_ids")
+            context.rhs_blkwise(context.unzipped, context.unzipped_rhs, nullptr,
+                                1, &block_time);
+        if (fault == "blockwise_bad_id") {
+            const unsigned bad_id = blocks.size();
+            context.rhs_blkwise(context.unzipped, context.unzipped_rhs, &bad_id,
+                                1, &block_time);
+        }
+        if (fault == "blockwise_bad_dof") {
+            app::DVec wrong_dof;
+            wrong_dof.create_vector(&mesh,
+                                    ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
+                                    ot::DVEC_LOC::HOST, dof - 1, true);
+            context.rhs_blkwise(wrong_dof, context.unzipped_rhs, &selected, 1,
+                                &block_time);
+            wrong_dof.destroy_vector();
+        }
+        const unsigned selected_ids[1] = {selected};
+        context.rhs_blkwise(context.unzipped, context.unzipped_rhs,
+                            selected_ids, 1, &block_time);
+
+        std::vector<unsigned char> selected_interior(stride, 0);
+        for (unsigned k = geometry.padding; k < geometry.nz - geometry.padding;
+             ++k)
+            for (unsigned j = geometry.padding;
+                 j < geometry.ny - geometry.padding; ++j)
+                for (unsigned i = geometry.padding;
+                     i < geometry.nx - geometry.padding; ++i) {
+                    const std::size_t cell =
+                        geometry.component_offset + i +
+                        std::size_t(geometry.nx) *
+                            (j + std::size_t(geometry.ny) * k);
+                    selected_interior[cell] = 1;
+                    ++callback_points;
+                }  // END LOOP: mark selected block interior
+        std::vector<double *> input(dof), output(dof);
+        context.unzipped.to_2d(input.data());
+        context.unzipped_rhs.to_2d(output.data());
+        for (unsigned f = 0; f < dof; ++f)
+            for (std::size_t cell = 0; cell < stride; ++cell) {
+                if (selected_interior[cell]) {
+                    whole_rhs_scale = std::max(
+                        whole_rhs_scale,
+                        std::abs(whole_block[std::size_t(f) * volume + cell -
+                                             geometry.component_offset]));
+                    if (!std::isfinite(output[f][cell]) ||
+                        output[f][cell] == sentinel)
+                        throw std::runtime_error(
+                            "selected block interior was not evaluated");
+                    whole_rhs_error = std::max(
+                        whole_rhs_error,
+                        std::abs(output[f][cell] -
+                                 whole_block[std::size_t(f) * volume + cell -
+                                             geometry.component_offset]));
+                } else {
+                    ++preserved_points;
+                    if (output[f][cell] != sentinel)
+                        throw std::runtime_error(
+                            "blockwise RHS wrote outside selected interior");
+                }
+            }  // END LOOP: require selected-block-only writes
+
+        std::vector<double> flat_input(std::size_t(dof) * volume);
+        std::vector<double> flat_output(std::size_t(dof) * volume, sentinel);
+        for (unsigned f = 0; f < dof; ++f)
+            for (std::size_t cell = 0; cell < volume; ++cell)
+                flat_input[std::size_t(f) * volume + cell] =
+                    input[f][geometry.component_offset + cell];
+        if (fault == "block_null")
+            context.rhs_blk(nullptr, flat_output.data(), dof, selected,
+                            block_time);
+        if (fault == "block_bad_dof")
+            context.rhs_blk(flat_input.data(), flat_output.data(), dof - 1,
+                            selected, block_time);
+        if (fault == "block_bad_id")
+            context.rhs_blk(flat_input.data(), flat_output.data(), dof,
+                            blocks.size(), block_time);
+        context.rhs_blk(flat_input.data(), flat_output.data(), dof, selected,
+                        block_time);
+        for (unsigned f = 0; f < dof; ++f)
+            for (std::size_t cell = 0; cell < volume; ++cell)
+                flat_rhs_error = std::max(
+                    flat_rhs_error,
+                    std::abs(flat_output[std::size_t(f) * volume + cell] -
+                             output[f][geometry.component_offset + cell]));
+
+        const std::vector<double> before_hooks = flat_input;
+        context.pre_stage_blk(flat_input.data(), dof, selected, block_time);
+        context.post_stage_blk(flat_input.data(), dof, selected, block_time);
+        context.pre_timestep_blk(flat_input.data(), dof, selected, block_time);
+        if (std::memcmp(flat_input.data(), before_hooks.data(),
+                        flat_input.size() * sizeof(double)) != 0)
+            throw std::runtime_error("no-op block hook changed its input");
+
+        // Give both projection paths the same nontrivial positive-definite
+        // conformal metric and nonzero conformal extrinsic curvature.
+        context.initialize();
+        const unsigned h00 =
+            static_cast<unsigned>(app::generated::EvolVar::hDD00);
+        const unsigned a00 =
+            static_cast<unsigned>(app::generated::EvolVar::aDD00);
+        const unsigned zipped_stride = mesh.getDegOfFreedom();
+        for (unsigned i = mesh.getNodeLocalBegin(); i < mesh.getNodeLocalEnd();
+             ++i) {
+            context.state.get_vec_ptr()[std::size_t(h00) * zipped_stride + i] +=
+                0.125;
+            context.state.get_vec_ptr()[std::size_t(a00) * zipped_stride + i] +=
+                0.03125;
+        }
+        context.unzip(context.state, context.unzipped, 1);
+        context.unzipped.to_2d(input.data());
+        std::vector<double> flat_projection(std::size_t(dof) * volume);
+        for (unsigned f = 0; f < dof; ++f)
+            for (std::size_t cell = 0; cell < volume; ++cell)
+                flat_projection[std::size_t(f) * volume + cell] =
+                    input[f][geometry.component_offset + cell];
+        if (fault == "projection_null")
+            context.post_timestep_blk(nullptr, dof, selected, block_time);
+        if (fault == "projection_bad_dof")
+            context.post_timestep_blk(flat_projection.data(), dof - 1, selected,
+                                      block_time);
+        if (fault == "projection_bad_id")
+            context.post_timestep_blk(flat_projection.data(), dof,
+                                      blocks.size(), block_time);
+        context.post_timestep_blk(flat_projection.data(), dof, selected,
+                                  block_time);
+        context.post_timestep(context.state);
+        context.unzip(context.state, context.unzipped, 1);
+        context.unzipped.to_2d(input.data());
+        for (unsigned f = 0; f < dof; ++f)
+            for (std::size_t cell = 0; cell < volume; ++cell) {
+                projection_error = std::max(
+                    projection_error,
+                    std::abs(flat_projection[std::size_t(f) * volume + cell] -
+                             input[f][geometry.component_offset + cell]));
+                ++projection_points;
+            }  // END LOOP: compare block-local and whole-vector projection
+    }  // END IF: qualify active-rank callbacks
+
+    unsigned long long totals[4] = {},
+                       local[4] = {callback_points, callback_offsets,
+                                   preserved_points, projection_points};
+    MPI_Allreduce(local, totals, 4, MPI_UNSIGNED_LONG_LONG, MPI_SUM,
+                  MPI_COMM_WORLD);
+    double local_errors[4] = {flat_rhs_error, whole_rhs_error, projection_error,
+                              whole_rhs_scale},
+           errors[4] = {};
+    MPI_Allreduce(local_errors, errors, 4, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    const bool ok = totals[0] > 0 && totals[1] > 0 && totals[2] > 0 &&
+                    totals[3] > 0 && errors[0] < 1e-12 && errors[1] < 1e-12 &&
+                    errors[2] < 1e-12 && errors[3] > 1e-6;
+    if (rank == 0)
+        std::printf("REAL_CALLBACKS %s interior=%llu nonzero_offsets=%llu "
+                    "preserved=%llu projected=%llu flat_rhs_error=%.17g "
+                    "whole_rhs_error=%.17g projection_error=%.17g "
+                    "whole_rhs_scale=%.17g\n",
+                    ok ? "PASS" : "FAIL", totals[0], totals[1], totals[2],
+                    totals[3], errors[0], errors[1], errors[2], errors[3]);
+    if (!ok)
+        throw std::runtime_error("block callback qualification failed");
+}  // END FUNCTION: qualify Berger-Oliger block callbacks
 // clang-format off
 } // END NAMESPACE: independent field oracle
 // clang-format on
@@ -34,14 +258,14 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &ranks);
     try {
         const std::string fault = argc > 1 ? argv[1] : "";
-        m_uiMaxDepth            = 8;
+        m_uiMaxDepth = 8;
         _InitializeHcurve(m_uiDim);
         std::function<double(double, double, double)> refine =
             [](double x, double y, double z) {
                 return std::exp(-(x * x + y * y + z * z) / 0.5);
             };  // END LAMBDA: choose initial octree refinement
         std::vector<ot::TreeNode> octree;
-        const unsigned order = 2 * app::generated::REQUIRED_PADDING;
+        const unsigned order = app::generated::FD_ORDER;
         function2Octree(refine, octree, 5, 1e-3, order, MPI_COMM_WORLD);
         std::unique_ptr<ot::Mesh> mesh(
             ot::createMesh(octree.data(), octree.size(), order, MPI_COMM_WORLD,
@@ -53,7 +277,7 @@ int main(int argc, char **argv) {
             app::Ctx context(mesh.get(), minimum, maximum, 0.001);
             if (fault == "nonfinite") {
                 context.initialize();
-                if (rank == 1 && mesh->isActive())
+                if (rank == ranks - 1 && mesh->isActive())
                     context.state.get_vec_ptr()[mesh->getNodeLocalBegin()] =
                         std::numeric_limits<double>::quiet_NaN();
                 context.max_rhs();
@@ -69,9 +293,9 @@ int main(int argc, char **argv) {
                     mesh->createCGVector<double>(fill, dof));
                 unsigned long long halos = 0, remote = 0, blocks = 0,
                                    offset_blocks = 0;
-                double error                     = 0;
+                double error = 0;
                 if (mesh->isActive()) {
-                    blocks                = mesh->getLocalBlockList().size();
+                    blocks = mesh->getLocalBlockList().size();
                     const unsigned stride = mesh->getDegOfFreedom();
                     std::copy_n(expected.get(), context.state.get_size(),
                                 context.state.get_vec_ptr());
@@ -108,12 +332,13 @@ int main(int argc, char **argv) {
                     for (const auto &b : mesh->getLocalBlockList()) {
                         auto g =
                             app::block_geometry(*mesh, b, minimum, maximum);
-                        if (g.component_offset) ++offset_blocks;
-                        if (fault == "offset" && rank == 1)
+                        if (g.component_offset)
+                            ++offset_blocks;
+                        if (fault == "offset" && rank == ranks - 1)
                             g.component_offset = 0;
                         // Expected coordinates derive independently from the
                         // raw octree.
-                        const auto node      = b.getBlockNode();
+                        const auto node = b.getBlockNode();
                         const unsigned bflag = b.getBlkNodeFlag();
                         const double base[3] = {double(node.minX()),
                                                 double(node.minY()),
@@ -156,15 +381,17 @@ int main(int argc, char **argv) {
                                          k < g.padding) ||
                                         ((bflag & (1u << OCT_DIR_FRONT)) &&
                                          k >= g.nz - g.padding);
-                                    if (exterior) continue;
-                                    if (halo) ++halos;
+                                    if (exterior)
+                                        continue;
+                                    if (halo)
+                                        ++halos;
                                     const std::size_t cell =
                                         g.component_offset + i +
                                         std::size_t(g.nx) *
                                             (j + std::size_t(g.ny) * k);
                                     for (unsigned f = 0; f < dof; ++f) {
-                                        if (fault == "halo" && rank == 1 &&
-                                            halo)
+                                        if (fault == "halo" &&
+                                            rank == ranks - 1 && halo)
                                             pointers[f][cell] = 0;
                                         if (!std::isfinite(pointers[f][cell]))
                                             throw std::runtime_error(
@@ -216,10 +443,11 @@ int main(int argc, char **argv) {
                 int active = mesh->isActive(), active_ranks = 0;
                 MPI_Allreduce(&active, &active_ranks, 1, MPI_INT, MPI_SUM,
                               MPI_COMM_WORLD);
-                const bool ok = ranks >= 2 && active_ranks >= 2 &&
-                                max_blocks >= 2 && total_offsets > 0 &&
-                                total_halos > 0 && total_remote > 0 &&
-                                global_error < 1e-9;
+                const bool distributed_ok =
+                    ranks == 1 || (active_ranks >= 2 && total_remote > 0);
+                const bool ok = active_ranks >= 1 && max_blocks >= 2 &&
+                                total_offsets > 0 && total_halos > 0 &&
+                                distributed_ok && global_error < 1e-9;
                 if (rank == 0)
                     std::printf(
                         "REAL_TRANSPORT %s active_ranks=%d "
@@ -230,6 +458,8 @@ int main(int argc, char **argv) {
                         total_offsets, total_halos, total_remote, global_error);
                 if (!ok)
                     throw std::runtime_error("transport qualification failed");
+                qualify_block_callbacks(context, *mesh, minimum, maximum, fault,
+                                        rank);
                 // Exercise the real RHS callback with a parameter-dependent
                 // nonzero state. For the shipped shift gauge, d(B^0)/dt
                 // contains -eta*B^0.
