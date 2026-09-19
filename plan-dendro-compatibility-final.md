@@ -14,21 +14,23 @@ Modify NRPy so its Dendro examples emit host-linkable BSSN and fCCZ4 modules wit
 
 The public [Dendro-GR repository](https://github.com/paralab/Dendro-GR) is the read-only conformance reference. Generated qualification projects must be written outside its checkout.
 
-## Status and remaining qualification
+## Status and qualification coverage
 
-Sections 1 through 8 record the implemented baseline except for the
-qualification items listed below. Do not repeat completed changes or add
-replacement interfaces. Remaining qualification work is:
+Sections 1 through 8 record the implemented baseline. The configured
+qualification now:
 
-- exercise real-host BSSN and fCCZ4 FD4, FD6, and FD8 modules with KO enabled,
+- exercises real-host BSSN and fCCZ4 FD4, FD6, and FD8 modules with KO enabled,
   plus both formulations at FD6 with KO disabled;
-- run sanitizer-enabled block-offset and flat-storage checks where supported;
-- inject host element-order and TOML profile mismatches and check their
+- runs sanitizer-enabled block-offset and flat-storage checks;
+- injects host element-order and TOML profile mismatches and checks their
   diagnostics;
-- record transient FD6 block-RHS time, allocation count, generated object and
+- prints transient FD6 block-RHS time, allocation count, generated object and
   source size, and compile time outside the KB; and
-- compare independent KO coefficients and signs with the public Dendro-GR
+- compares independent KO coefficients and signs with the public Dendro-GR
   `ko_deriv21`, `ko_deriv42`, and radius-four `ko_deriv64` functions.
+
+These are configured checks, not a stored CI run result. Real-host runtime
+measurements remain diagnostic values without permanent pass thresholds.
 
 The twelve-profile standalone matrix, independent nonflat expression check,
 manufactured centered-derivative convergence check, centered-stencil reach

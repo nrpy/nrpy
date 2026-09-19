@@ -130,18 +130,24 @@ mode. The `dendro-validation` CI job generates and runs all twelve BSSN/fCCZ4,
 order-4/6/8, and KO-off/on combinations. Their independent multiprecision
 stencil evaluation checks the NRPy-generated operators. Real-host capability
 tests check padding 2, 3, and 4, padded geometry, component layout, unzip/zip
-data movement, and the default-profile runtime path.
+data movement, and the FD4/6/8 KO-on plus FD6 KO-off runtime paths for both
+formulations.
+
+The independent KO oracle compares exact coefficients and signs against
+Dendro-GR's `ko_deriv21`, `ko_deriv42`, and radius-four `ko_deriv64` interior
+functions. The configured Dendro-GR order-8 selector still uses another KO
+family; this comparison establishes the required radius-four operator, not
+selector equivalence or physical-boundary closure equivalence.
 
 These checks do not compare centered and directional advection, benchmark the
 profiles, or reproduce Dendro-GR's `bflag`-dependent physical-boundary closures
-for regular, advection, or KO derivatives. Order-8 KO also differs in its
-interior difference. The checks do not establish long-time stability and
+for regular, advection, or KO derivatives. The checks do not establish long-time stability and
 convergence on a remeshing AMR evolution or exercise Dendrolib's NUTS schedule.
 Such claims require separate numerical experiments against the intended
 Dendro application.
 
 Claim evidence:
-- Claim: current qualification checks the emitted NRPy operators across all twelve formulation/order/KO combinations and checks real-host block geometry, but does not qualify comparative performance, directional advection, Dendro-GR's `bflag`-dependent derivative closures, the different order-8 KO interior difference, remeshing, NUTS, or long-time evolution.
+- Claim: current qualification checks the emitted NRPy operators across all twelve formulation/order/KO combinations, compares KO interior coefficients with the corresponding Dendro-GR radius-two, radius-three, and radius-four functions, and checks the selected real-host profiles; it does not qualify comparative performance, directional advection, Dendro-GR's `bflag`-dependent derivative closures or order-8 selector, remeshing, NUTS, or long-time evolution.
 - Role: descriptive behavior
 - Deciding authority: [main.yml](../../../.github/workflows/main.yml), `dendro-validation`; [general_relativity/self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py), generated numerical checks; [dendrolib_capability_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp), host geometry checks; [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), direct runtime checks
 - Corroboration: [main_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py), CTest profile registration

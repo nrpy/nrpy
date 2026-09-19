@@ -39,6 +39,16 @@ SECTIONS: Tuple[str, ...] = (
     "names",
 )
 
+# Exact interior coefficients from Dendro-GR's public ko_deriv21,
+# ko_deriv42, and ko_deriv64 functions, indexed by NRPy's KO base order.
+DENDRO_GR_KO_COEFFICIENTS = {
+    2: tuple(sp.Rational(value, 16) for value in (-1, 4, -6, 4, -1)),
+    4: tuple(sp.Rational(value, 64) for value in (1, -6, 15, -20, 15, -6, 1)),
+    6: tuple(
+        sp.Rational(value, 256) for value in (-1, 8, -28, 56, -70, 56, -28, 8, -1)
+    ),
+}
+
 _TESTS = """// Usage: $STEM_self_tests {state|params|names|application-section|all}
 // Exits 0 on success.  Each section runs only what it names, so a failure
 // localises to one check.
@@ -246,6 +256,7 @@ def _independent_stencil(
     :param fd_order: Centered finite-difference order.
     :param ko_fd_order: Base order supplied to NRPy's ``dKOD`` construction.
     :return: Exact coefficients and three-dimensional stencil offsets.
+    :raises ValueError: If a KO stencil differs from Dendro-GR's interior operator.
     """
     coefficients: List[sp.Rational]
     if operator.startswith("dKOD"):
@@ -258,6 +269,11 @@ def _independent_stencil(
             )
             for k in range(2 * radius + 1)
         ]
+        reference = DENDRO_GR_KO_COEFFICIENTS.get(ko_fd_order)
+        if reference is None or tuple(coefficients) != reference:
+            raise ValueError(
+                "Independent KO stencil does not match the Dendro-GR interior operator."
+            )
         offsets = []
         for step in range(-radius, radius + 1):
             offset = [0, 0, 0]

@@ -158,17 +158,19 @@ Claim evidence:
 Module doctests run through static analysis. The checked-in
 `dendro-validation` GitHub job generates BSSN and fCCZ4 projects for
 finite-difference orders 4, 6, and 8 with KO dissipation enabled and disabled,
-then runs every generated standalone CTest check. It adds the default profiles
-to one Dendro-GR build with `NRPY_DENDRO_BUILD_DRIVERS=ON`, builds the current
-production libraries and `nrpy_<formulation>_dendro_qualify` executables, and
-runs `runtime_integration_test.cpp` on one and two MPI ranks for each
-formulation. The job also requires each injected transport and callback defect
-to fail with its expected diagnostic and runs one two-rank Minkowski step with
-each qualification executable. Workflow configuration proves this check
-sequence, not a latest successful run.
+then runs every generated standalone CTest check. Focused sanitizer builds run
+the offset, flat-storage, and nonflat-reference sections for every profile.
+One Dendro-GR build is reconfigured for both formulations at FD4,
+FD6, and FD8 with KO enabled and FD6 with KO disabled. Each selected profile
+runs `runtime_integration_test.cpp` on one and two MPI ranks and one two-rank
+Minkowski step. The job requires injected transport, callback, host
+element-order, and TOML-profile defects to fail with their expected diagnostics.
+It prints transient FD6 compile, source/object size, block-RHS time, and C++
+allocation measurements without assigning permanent thresholds. Workflow
+configuration proves this check sequence, not a latest successful run.
 
 Claim evidence:
-- Claim: `dendro-validation` configures the complete standalone formulation/order/KO matrix and real-host default-profile checks described above, without recording a run result in the KB.
+- Claim: `dendro-validation` configures the complete standalone formulation/order/KO matrix, focused sanitizer checks, and the real-host FD4/6/8 KO-on plus FD6 KO-off matrix described above, without recording a run result in the KB.
 - Role: CI behavior
 - Deciding authority: [main.yml](../../../.github/workflows/main.yml), `dendro-validation`
 - Corroboration: [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), real-host checks and injected defects; [general_relativity/self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py), generated standalone numerical checks

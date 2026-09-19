@@ -142,6 +142,26 @@ analytic RHS difference `-0.01`, with other components unchanged. A passing
 run prints `REAL_TRANSPORT PASS`, `REAL_CALLBACKS PASS`, and
 `REAL_PARAMETER PASS`.
 
+The CI real-host matrix repeats these checks for BSSN and fCCZ4 at FD4, FD6,
+and FD8 with KO enabled, then at FD6 with KO disabled. Each profile runs the
+direct callback test on one and two MPI ranks and one two-rank Minkowski step.
+The FD6 KO-off runs also inject a host element order that differs from
+`FD_ORDER` and a TOML `fd_order` that differs from the compiled profile. Both
+must fail with their named diagnostics before RHS evaluation.
+
+The direct callback test measures one warmed `rhs_blk` call. It reports wall
+time, C++ allocation count, and allocated bytes. It rejects an allocation as
+large as the component-major block slab. CI also prints generated source and
+object sizes and target compile time for each formulation's default FD6
+profile. These transient values detect gross changes; they are not stable
+performance thresholds and are not stored in the knowledge base.
+
+Separate AddressSanitizer and UndefinedBehaviorSanitizer builds run the
+standalone `offsets`, `address_values`, and `gr_nonflat_reference` sections for
+all twelve formulation, order, and KO profiles. These sections exercise nonzero
+component offsets, component-major flat storage, writable interiors, and
+sentinel regions.
+
 Exercise the negative cases before relying on these checkers:
 
 ```bash

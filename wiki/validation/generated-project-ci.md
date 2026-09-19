@@ -20,7 +20,7 @@ Configured GitHub job map:
 | `codegen-ubuntu` | Configured Ubuntu/Python matrix | Installs NRPy, generates in `tmp/`, and builds the selected default C/library projects with `make`, spanning elliptic, wave, black-hole, PN, SEOBNR, TOV, hydro, BHaHAHA, and `sebobv2` routes. It generates `sebobv1_jax` without package install/build. | The `make` builds run no generated executable, and `make clean` follows each; MANGA commands are commented out. |
 | `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation as Ubuntu; no Dendro generation or build; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
 | `einsteintoolkit-validation` | Configured Ubuntu/Apptainer Einstein Toolkit image | Generates `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs the configured Baikal, BaikalVacuum, and WaveToyNRPy Cactus testsuites and fails on reported failures. No `carpetx_*` generation/build/run. |
-| `dendro-validation` | Configured Ubuntu/Apptainer image, digest-verified before use; 60-minute job limit, five-minute limit per MPI invocation, and one OpenMP thread per rank | Generates BSSN and fCCZ4 at finite-difference orders 4, 6, and 8 with KO dissipation enabled and disabled; builds and runs every generated standalone CTest check; embeds the default profiles in Dendro-GR and builds both current production libraries, qualification executables, and real-host test programs | Runs each real-host test program on one and two MPI ranks, requires every injected transport/callback failure to emit its expected diagnostic, and runs one two-rank Minkowski step through each `nrpy_<formulation>_dendro_qualify` executable. |
+| `dendro-validation` | Configured Ubuntu/Apptainer image, digest-verified before use; 60-minute job limit, five-minute limit per MPI invocation, and one OpenMP thread per rank | Generates BSSN and fCCZ4 at finite-difference orders 4, 6, and 8 with KO dissipation enabled and disabled; builds and runs every generated standalone CTest check; runs focused AddressSanitizer and UndefinedBehaviorSanitizer storage checks for every profile; embeds both formulations in Dendro-GR for FD4/6/8 with KO and FD6 without KO | Runs each selected real-host profile on one and two MPI ranks, runs one two-rank Minkowski step, checks injected transport, callback, element-order, and TOML-profile failures, and prints transient FD6 compile, size, block-RHS time, and allocation measurements without treating them as fixed thresholds. |
 | `charmpp-validation` | Configured Ubuntu/Apptainer Charm++ context | Generates and builds the configured superB elliptic, spectroscopy, and collision projects | Runs the configured collision executable through `charmrun`; no explicit scientific-output assertion beyond process success. |
 | `sebob-consistency-test` | Configured Ubuntu matrix | Checks out the workflow-selected trusted revision; generates/builds trusted and current SEOBNRv5 variants | Each helper invocation rebuilds both executables, uses exactly ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed the perturbation-derived baseline. |
 | `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the workflow-selected trusted revision | Uses the same ten-input and median-error criterion. |
@@ -92,18 +92,21 @@ a local command recipe requiring a prepared environment, not CI pass evidence.
 Dendro has a dedicated configured job on every workflow invocation. Separate
 generated projects cover the complete BSSN/fCCZ4, finite-difference-order
 4/6/8, and KO-on/off matrix. Each project runs its full generated standalone
-CTest set. The default BSSN and fCCZ4 profiles are then added to the same
-Dendro-GR CMake tree through `NRPY_DENDRO_BUILD_DRIVERS`; CI builds the current
-production and qualification targets directly. The real-host test programs
+CTest set. Focused sanitizer builds check nonzero offsets and flat storage for
+every profile. The job then reconfigures one Dendro-GR build for both
+formulations at FD4/6/8 with KO and FD6 without KO. The real-host test programs
 exercise block geometry, data transfer, callbacks, parameter forwarding, and
 failure termination on one and two MPI ranks. Each qualification executable
-also evolves Minkowski data for one RK4 step on two ranks. These commands
-establish configured checks, not a stored run result. Reproduction details and
+also evolves Minkowski data for one RK4 step on two ranks. Host element-order
+and TOML-profile mismatches must emit their expected diagnostics. Transient
+FD6 timing, allocation, generated-size, and compile measurements are job output,
+not stored thresholds. These commands establish configured checks, not a stored
+run result. Reproduction details and
 proof limits live in [Validation, Standalone Host, And Deferred
 Tests](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md).
 
 Claim evidence:
-- Claim: the configured Dendro job builds and runs every standalone BSSN/fCCZ4 order-and-KO profile, then checks both default profiles through the real Dendro-GR host on one and two MPI ranks; this configuration does not establish a latest successful run.
+- Claim: the configured Dendro job runs every standalone BSSN/fCCZ4 order-and-KO profile, focused sanitizer storage checks, and the selected real-host order/KO matrix on one and two MPI ranks; this configuration does not establish a latest successful run.
 - Role: CI behavior
 - Deciding authority: [main.yml](../../.github/workflows/main.yml), `dendro-validation`
 - Corroboration: [general_relativity/self_tests_cpp.py](../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py), generated numerical checks; [runtime_integration_test.cpp](../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), real-host block and failure checks; [general_relativity/main_cpp.py](../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py), Minkowski acceptance checks

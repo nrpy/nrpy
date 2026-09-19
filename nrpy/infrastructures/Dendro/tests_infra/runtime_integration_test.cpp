@@ -2,9 +2,13 @@
 // RUNTIME_HEADER and RUNTIME_NAMESPACE select the generated formulation.
 #include RUNTIME_HEADER
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <new>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -12,6 +16,66 @@
 #include "meshUtils.h"
 #include "octUtils.h"
 namespace app = RUNTIME_NAMESPACE;
+
+namespace allocation_measurement {
+std::atomic<bool> enabled{false};
+std::atomic<unsigned long long> count{0};
+std::atomic<unsigned long long> bytes{0};
+
+void record(std::size_t size) noexcept {
+    if (enabled.load(std::memory_order_relaxed)) {
+        count.fetch_add(1, std::memory_order_relaxed);
+        bytes.fetch_add(size, std::memory_order_relaxed);
+    }
+}  // END FUNCTION: record measured allocation
+}  // END NAMESPACE: allocation measurement
+
+void *operator new(std::size_t size) {
+    allocation_measurement::record(size);
+    if (void *memory = std::malloc(size == 0 ? 1 : size)) return memory;
+    throw std::bad_alloc();
+}  // END FUNCTION: measured scalar new
+
+void *operator new[](std::size_t size) {
+    allocation_measurement::record(size);
+    if (void *memory = std::malloc(size == 0 ? 1 : size)) return memory;
+    throw std::bad_alloc();
+}  // END FUNCTION: measured array new
+
+void operator delete(void *memory) noexcept { std::free(memory); }
+void operator delete[](void *memory) noexcept { std::free(memory); }
+void operator delete(void *memory, std::size_t) noexcept { std::free(memory); }
+void operator delete[](void *memory, std::size_t) noexcept {
+    std::free(memory);
+}
+
+void *operator new(std::size_t size, std::align_val_t alignment) {
+    allocation_measurement::record(size);
+    void *memory = nullptr;
+    if (posix_memalign(&memory, static_cast<std::size_t>(alignment),
+                       size == 0 ? 1 : size) == 0)
+        return memory;
+    throw std::bad_alloc();
+}  // END FUNCTION: measured aligned new
+
+void *operator new[](std::size_t size, std::align_val_t alignment) {
+    return operator new(size, alignment);
+}  // END FUNCTION: measured aligned array new
+
+void operator delete(void *memory, std::align_val_t) noexcept {
+    std::free(memory);
+}
+void operator delete[](void *memory, std::align_val_t) noexcept {
+    std::free(memory);
+}
+void operator delete(void *memory, std::size_t, std::align_val_t) noexcept {
+    std::free(memory);
+}
+void operator delete[](void *memory, std::size_t,
+                       std::align_val_t) noexcept {
+    std::free(memory);
+}
+
 namespace {
 double field(unsigned f, double x, double y, double z) {
     return 101.0 * (f + 1) + (f + 2) * x - (2 * f + 3) * y + (3 * f + 5) * z;
@@ -41,9 +105,11 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
     const unsigned dof                 = app::generated::NUM_EVOL_GFS;
     constexpr double sentinel          = 9.87654321e200;
     unsigned long long callback_points = 0, callback_offsets = 0,
-                       preserved_points = 0, projection_points = 0;
+                       preserved_points = 0, projection_points = 0,
+                       block_rhs_allocations = 0,
+                       block_rhs_allocation_bytes = 0;
     double flat_rhs_error = 0.0, whole_rhs_error = 0.0, projection_error = 0.0,
-           whole_rhs_scale = 0.0;
+           whole_rhs_scale = 0.0, block_rhs_seconds = 0.0;
     context.initialize();
     if (mesh.isActive()) {
         // A constant nonzero shift-driver field gives d(B^0)/dt=-eta*B^0.
@@ -173,6 +239,26 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
                             blocks.size(), block_time);
         context.rhs_blk(flat_input.data(), flat_output.data(), dof, selected,
                         block_time);
+        std::fill(flat_output.begin(), flat_output.end(), sentinel);
+        allocation_measurement::count.store(0, std::memory_order_relaxed);
+        allocation_measurement::bytes.store(0, std::memory_order_relaxed);
+        const auto block_rhs_start = std::chrono::steady_clock::now();
+        allocation_measurement::enabled.store(true, std::memory_order_relaxed);
+        context.rhs_blk(flat_input.data(), flat_output.data(), dof, selected,
+                        block_time);
+        allocation_measurement::enabled.store(false, std::memory_order_relaxed);
+        block_rhs_seconds =
+            std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                          block_rhs_start)
+                .count();
+        block_rhs_allocations =
+            allocation_measurement::count.load(std::memory_order_relaxed);
+        block_rhs_allocation_bytes =
+            allocation_measurement::bytes.load(std::memory_order_relaxed);
+        const unsigned long long mesh_storage_bytes =
+            static_cast<unsigned long long>(flat_input.size() * sizeof(double));
+        if (block_rhs_allocation_bytes >= mesh_storage_bytes)
+            throw std::runtime_error("flat block RHS allocated mesh-sized storage");
         for (unsigned f = 0; f < dof; ++f)
             for (std::size_t cell = 0; cell < volume; ++cell)
                 flat_rhs_error = std::max(
@@ -233,15 +319,17 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
             }  // END LOOP: compare block-local and whole-vector projection
     }  // END IF: qualify active-rank callbacks
 
-    unsigned long long totals[4] = {},
-                       local[4]  = {callback_points, callback_offsets,
-                                    preserved_points, projection_points};
-    MPI_Allreduce(local, totals, 4, MPI_UNSIGNED_LONG_LONG, MPI_SUM,
+    unsigned long long totals[6] = {},
+                       local[6]  = {callback_points, callback_offsets,
+                                    preserved_points, projection_points,
+                                    block_rhs_allocations,
+                                    block_rhs_allocation_bytes};
+    MPI_Allreduce(local, totals, 6, MPI_UNSIGNED_LONG_LONG, MPI_SUM,
                   MPI_COMM_WORLD);
-    double local_errors[4] = {flat_rhs_error, whole_rhs_error, projection_error,
-                              whole_rhs_scale},
-           errors[4]       = {};
-    MPI_Allreduce(local_errors, errors, 4, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    double local_errors[5] = {flat_rhs_error, whole_rhs_error, projection_error,
+                              whole_rhs_scale, block_rhs_seconds},
+           errors[5]       = {};
+    MPI_Allreduce(local_errors, errors, 5, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     const bool ok = totals[0] > 0 && totals[1] > 0 && totals[2] > 0 &&
                     totals[3] > 0 && errors[0] < 1e-12 && errors[1] < 1e-12 &&
                     errors[2] < 1e-12 && errors[3] > 1e-6;
@@ -250,9 +338,11 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
             "REAL_CALLBACKS %s interior=%llu nonzero_offsets=%llu "
             "preserved=%llu projected=%llu flat_rhs_error=%.17g "
             "whole_rhs_error=%.17g projection_error=%.17g "
-            "whole_rhs_scale=%.17g\n",
+            "whole_rhs_scale=%.17g block_rhs_seconds=%.17g "
+            "block_rhs_allocations=%llu block_rhs_allocation_bytes=%llu\n",
             ok ? "PASS" : "FAIL", totals[0], totals[1], totals[2], totals[3],
-            errors[0], errors[1], errors[2], errors[3]);
+            errors[0], errors[1], errors[2], errors[3], errors[4], totals[4],
+            totals[5]);
     if (!ok) throw std::runtime_error("block callback qualification failed");
 }  // END FUNCTION: qualify Berger-Oliger block callbacks
 // clang-format off
@@ -283,10 +373,11 @@ int main(int argc, char **argv) {
             };  // END LAMBDA: choose initial octree refinement
         std::vector<ot::TreeNode> octree;
         const unsigned order = app::generated::FD_ORDER;
-        function2Octree(refine, octree, 5, 1e-3, order, MPI_COMM_WORLD);
+        const unsigned mesh_order = fault == "element_order" ? order + 2 : order;
+        function2Octree(refine, octree, 5, 1e-3, mesh_order, MPI_COMM_WORLD);
         std::unique_ptr<ot::Mesh> mesh(
-            ot::createMesh(octree.data(), octree.size(), order, MPI_COMM_WORLD,
-                           0, ot::SM_TYPE::FDM));
+            ot::createMesh(octree.data(), octree.size(), mesh_order,
+                           MPI_COMM_WORLD, 0, ot::SM_TYPE::FDM));
         const double lo[3] = {-1, -2, -4}, hi[3] = {3, 2, 4};
         const Point minimum(lo[0], lo[1], lo[2]), maximum(hi[0], hi[1], hi[2]);
         mesh->setDomainBounds(minimum, maximum);
