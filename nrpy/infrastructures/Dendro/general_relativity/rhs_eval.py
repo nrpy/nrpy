@@ -114,7 +114,14 @@ BSSN_EVOL_COUNT = 24
 def _center_shift_advection(
     rhs_by_symbol_name: Mapping[str, sp.Expr],
 ) -> Dict[str, sp.Expr]:
-    """Return copied RHS expressions with directional first derivatives centered."""
+    """
+    Return copied RHS expressions with directional first derivatives centered.
+
+    :param rhs_by_symbol_name: RHS expressions keyed by symbolic output name.
+    :return: Copied RHS expressions with centered shift-advection derivatives.
+    :raises ValueError: If any directional derivative operator remains after
+        normalization.
+    """
     centered: Dict[str, sp.Expr] = OrderedDict()
     for rhs_name, expression in rhs_by_symbol_name.items():
         replacements: Dict[sp.Basic, sp.Basic] = {}
@@ -158,7 +165,12 @@ def _center_shift_advection(
 
 
 def _directional_operators(expressions: Iterable[sp.Expr]) -> Tuple[str, ...]:
-    """Return directional finite-difference operators in an expression sequence."""
+    """
+    Return directional finite-difference operators in an expression sequence.
+
+    :param expressions: Symbolic expressions to inspect.
+    :return: Sorted unique directional finite-difference operator names.
+    """
     directional_families = ("dupD", "ddnD", "dfullupD", "dfulldnD")
     candidates = []
     for expression in expressions:

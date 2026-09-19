@@ -240,7 +240,15 @@ def output_self_tests_cpp(
 def _independent_stencil(
     operator: str, fd_order: int, ko_fd_order: int
 ) -> Tuple[List[sp.Rational], List[List[int]]]:
-    """Construct test-only centered and KO tables without NRPy FD helpers."""
+    """
+    Construct test-only centered and KO tables without NRPy FD helpers.
+
+    :param operator: Finite-difference operator name.
+    :param fd_order: Centered finite-difference order.
+    :param ko_fd_order: Base order supplied to NRPy's ``dKOD`` construction.
+    :return: Exact coefficients and three-dimensional stencil offsets.
+    """
+    coefficients: List[sp.Rational]
     if operator.startswith("dKOD"):
         radius = (ko_fd_order + 2) // 2
         axis = int(operator[-1])
@@ -262,7 +270,7 @@ def _independent_stencil(
         axis0, axis1 = int(operator[-2]), int(operator[-1])
         first = sp.finite_diff_weights(1, nodes, 0)[1][-1]
         if axis0 != axis1:
-            coefficients: List[sp.Rational] = []
+            coefficients = []
             offsets = []
             for i, coefficient0 in zip(nodes, first):
                 for j, coefficient1 in zip(nodes, first):

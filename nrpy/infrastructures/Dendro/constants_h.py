@@ -58,6 +58,9 @@ def output_constants_h(
         emitted numerical code reads it or derives a stencil reach from it.
         The emitted parameter file records the same switch as ``ko_enabled``.
     :return: The complete C++ header text.
+    :raises ValueError: If the finite-difference order, KO order, effective KO
+        difference order, and required padding do not define a supported
+        Dendro profile.
 
     Doctests:
     >>> header = output_constants_h("bssn", "bssn", 4, 2, 4, 2, False)

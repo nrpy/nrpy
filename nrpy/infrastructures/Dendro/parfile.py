@@ -81,6 +81,9 @@ def generate_default_parfile(
         Kreiss-Oliger dissipation, passed by the caller that built the kernels
         rather than read from a global parameter.
     :return: The complete parameter-file text.
+    :raises ValueError: If the finite-difference order, KO order, effective KO
+        difference order, and required padding do not define a supported
+        Dendro profile.
 
     Doctests:
     >>> import nrpy.c_function as cfc
