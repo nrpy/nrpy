@@ -146,15 +146,25 @@ Claim evidence:
 - Deciding authority: [dendrolib_capability_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp), its geometry/value checkers and fault modes; [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), its transport, parameter, evolution, and failure checks
 - Corroboration: [README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md), reproduction procedure; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), real-host adapter and callback implementation
 
-### CI And Tests Not Yet Implemented
+### CI Coverage And Remaining Tests
 
 Module doctests run through static analysis. The checked-in
-`dendro-validation` GitHub job still names the previous standalone option and
-solver targets. The generated interface now uses the common
-`NRPY_DENDRO_BUILD_*` options and `nrpy_<formulation>_dendro[_qualify]` targets,
-so that job must be updated under the repository's protected-workflow rule
-before it can exercise the new generated interface. This page does not treat
-that unsynchronized job as execution evidence.
+`dendro-validation` GitHub job generates BSSN and fCCZ4 projects for
+finite-difference orders 4, 6, and 8 with KO dissipation enabled and disabled,
+then runs every generated standalone CTest check. It adds the default profiles
+to one Dendro-GR build with `NRPY_DENDRO_BUILD_DRIVERS=ON`, builds the current
+production libraries and `nrpy_<formulation>_dendro_qualify` executables, and
+runs `runtime_integration_test.cpp` on one and two MPI ranks for each
+formulation. The job also requires each injected transport and callback defect
+to fail with its expected diagnostic and runs one two-rank Minkowski step with
+each qualification executable. Workflow configuration proves this check
+sequence, not a latest successful run.
+
+Claim evidence:
+- Claim: `dendro-validation` configures the complete standalone formulation/order/KO matrix and real-host default-profile checks described above, without recording a run result in the KB.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../../.github/workflows/main.yml), `dendro-validation`
+- Corroboration: [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), real-host checks and injected defects; [general_relativity/self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py), generated standalone numerical checks
 
 General application boundary semantics, remeshing and state transfer, local time
 stepping, checkpoint/restart ABI, output selection, GPU execution, and threaded

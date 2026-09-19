@@ -244,7 +244,7 @@ jobs:
 
   dendro-validation:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: read
 
@@ -272,7 +272,7 @@ jobs:
       - name: Disable AppArmor restriction on unprivileged user namespaces, needed for 24.04 compatibility.
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
-      - name: Check generated fCCZ4 numerics and run the real two-rank host
+      - name: Check generated Dendro modules and real-host integration
         run: |
           mkdir -p "$RUNNER_TEMP/dendro-validation"
           apptainer exec --cleanenv \
@@ -283,35 +283,122 @@ jobs:
           export OMP_NUM_THREADS=1
           export PYTHONPATH=/nrpy
 
-          python -u -m nrpy.examples.dendro_fccz4 --project-dir /ci-work/fccz4
-          cmake -S /ci-work/fccz4/Dendro-GR/nrpy_fccz4 -B /ci-work/build-fccz4 \
-            -DCMAKE_BUILD_TYPE=Release -DFCCZ4_STANDALONE_HOST=ON
-          cmake --build /ci-work/build-fccz4 --target fccz4_self_tests --parallel
-          ctest --test-dir /ci-work/build-fccz4 \
-            --tests-regex '^fccz4_gr_nonflat_reference$' \
-            --no-tests=error --output-on-failure
+          for formulation in bssn fccz4; do
+            for fd_order in 4 6 8; do
+              for ko_mode in on off; do
+                profile="${formulation}-fd${fd_order}-ko-${ko_mode}"
+                project="/ci-work/${profile}"
+                build="/ci-work/build-${profile}"
+                if [ "$ko_mode" = on ]; then
+                  ko_option=--ko
+                else
+                  ko_option=--no-ko
+                fi
+                python -u -m "nrpy.examples.dendro_${formulation}" \
+                  --project-dir "$project" --fd-order "$fd_order" "$ko_option"
+                cmake -S "$project/Dendro-GR/nrpy_${formulation}" -B "$build" \
+                  -DCMAKE_BUILD_TYPE=Release \
+                  -DNRPY_DENDRO_BUILD_DRIVERS=ON \
+                  -DNRPY_DENDRO_BUILD_TESTS=ON
+                cmake --build "$build" --parallel
+                ctest --test-dir "$build" --no-tests=error --output-on-failure
+              done
+            done
+          done
 
           cp -a "$DENDRO_GR_SOURCE" /ci-work/host
           cp -a "$DENDROLIB_SOURCE" /ci-work/dendrolib
           cat >> /ci-work/host/CMakeLists.txt <<'CMAKE_EOF'
-          add_subdirectory("${NRPY_GENERATED}/Dendro-GR/nrpy_fccz4" nrpy_fccz4)
+          add_subdirectory("${NRPY_BSSN_GENERATED}/Dendro-GR/nrpy_bssn" nrpy_bssn)
+          add_subdirectory("${NRPY_FCCZ4_GENERATED}/Dendro-GR/nrpy_fccz4" nrpy_fccz4)
+          add_executable(nrpy_bssn_runtime_test
+            "/nrpy/nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp")
+          target_link_libraries(nrpy_bssn_runtime_test PRIVATE nrpy_bssn_dendro MPI::MPI_CXX)
+          target_compile_definitions(nrpy_bssn_runtime_test PRIVATE
+            RUNTIME_HEADER="bssnCtx.h" RUNTIME_NAMESPACE=nrpy::bssn)
+          add_executable(nrpy_fccz4_runtime_test
+            "/nrpy/nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp")
+          target_link_libraries(nrpy_fccz4_runtime_test PRIVATE nrpy_fccz4_dendro MPI::MPI_CXX)
+          target_compile_definitions(nrpy_fccz4_runtime_test PRIVATE
+            RUNTIME_HEADER="fccz4Ctx.h" RUNTIME_NAMESPACE=nrpy::fccz4)
           CMAKE_EOF
 
           cmake -S /ci-work/host -B /ci-work/real-build \
             -DCMAKE_BUILD_TYPE=Release -DWITH_CUDA=OFF -DCPU_ARCH=native \
-            -DFCCZ4_STANDALONE_HOST=OFF \
-            -DNRPY_GENERATED=/ci-work/fccz4 \
+            -DNRPY_DENDRO_BUILD_DRIVERS=ON \
+            -DNRPY_DENDRO_BUILD_TESTS=OFF \
+            -DNRPY_BSSN_GENERATED=/ci-work/bssn-fd6-ko-off \
+            -DNRPY_FCCZ4_GENERATED=/ci-work/fccz4-fd6-ko-on \
             -DDENDRO_dendrolib_DIR=/ci-work/dendrolib \
             -DDENDRO_dendrolib_GIT_TAG=246043709e806021fcfc011fe657b8bf964cae4c \
             -DFETCHCONTENT_SOURCE_DIR_TOML11="$TOML11_SOURCE" \
             -DFETCHCONTENT_SOURCE_DIR_SPDLOG="$SPDLOG_SOURCE"
           GIT_DIR=/ci-work/host/.git GIT_WORK_TREE=/ci-work/host \
-            cmake --build /ci-work/real-build --target fccz4Solver --parallel
+            cmake --build /ci-work/real-build --parallel --target \
+              nrpy_bssn_dendro_qualify nrpy_fccz4_dendro_qualify \
+              nrpy_bssn_runtime_test nrpy_fccz4_runtime_test
 
-          parfile=/ci-work/fccz4/Dendro-GR/nrpy_fccz4/pars/fccz4_minkowski.par
-          timeout --signal=KILL 300 mpiexec --oversubscribe -n 2 \
-            /ci-work/real-build/nrpy_fccz4/fccz4Solver \
-            --steps 1 --dt 0.001 -t "$parfile"
+          expect_failure() {
+            ranks=$1
+            executable=$2
+            formulation=$3
+            fault=$4
+            diagnostic=$5
+            log="/ci-work/${formulation}-${fault}.log"
+            set +e
+            timeout --signal=KILL 300 mpiexec --oversubscribe -n "$ranks" \
+              "$executable" "$fault" >"$log" 2>&1
+            status=$?
+            set -e
+            if [ "$status" -eq 0 ] || [ "$status" -eq 124 ] || \
+               [ "$status" -eq 137 ] || ! grep -Fq "$diagnostic" "$log"; then
+              cat "$log"
+              echo "${formulation} ${fault}: expected diagnostic was not detected"
+              return 1
+            fi
+          }
+
+          for formulation in bssn fccz4; do
+            runtime="/ci-work/real-build/nrpy_${formulation}_runtime_test"
+            timeout --signal=KILL 300 mpiexec --oversubscribe -n 1 "$runtime"
+            timeout --signal=KILL 300 mpiexec --oversubscribe -n 2 "$runtime"
+            expect_failure 2 "$runtime" "$formulation" offset \
+              "unfilled block halo or interior"
+            expect_failure 2 "$runtime" "$formulation" halo \
+              "transport qualification failed"
+            expect_failure 2 "$runtime" "$formulation" nonfinite \
+              "nonfinite evolved state"
+            expect_failure 1 "$runtime" "$formulation" blockwise_null_ids \
+              "blockwise RHS received null block identifiers"
+            expect_failure 1 "$runtime" "$formulation" blockwise_bad_id \
+              "blockwise RHS block identifier is out of range"
+            expect_failure 1 "$runtime" "$formulation" blockwise_bad_dof \
+              "blockwise RHS field count does not match generated state"
+            expect_failure 1 "$runtime" "$formulation" block_null \
+              "flat block RHS received a null field array"
+            expect_failure 1 "$runtime" "$formulation" block_bad_dof \
+              "flat block RHS field count does not match generated state"
+            expect_failure 1 "$runtime" "$formulation" block_bad_id \
+              "flat block RHS block identifier is out of range"
+            expect_failure 1 "$runtime" "$formulation" projection_null \
+              "block projection received a null field array"
+            expect_failure 1 "$runtime" "$formulation" projection_bad_dof \
+              "block projection field count does not match generated state"
+            expect_failure 1 "$runtime" "$formulation" projection_bad_id \
+              "block projection block identifier is out of range"
+          done
+
+          for formulation in bssn fccz4; do
+            if [ "$formulation" = bssn ]; then
+              project=/ci-work/bssn-fd6-ko-off
+            else
+              project=/ci-work/fccz4-fd6-ko-on
+            fi
+            parfile="$project/Dendro-GR/nrpy_${formulation}/pars/${formulation}_minkowski.par"
+            timeout --signal=KILL 300 mpiexec --oversubscribe -n 2 \
+              "/ci-work/real-build/nrpy_${formulation}/nrpy_${formulation}_dendro_qualify" \
+              --steps 1 --dt 0.001 -t "$parfile"
+          done
           BASH
 
   charmpp-validation:
