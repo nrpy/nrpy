@@ -229,14 +229,17 @@ def compute_fdcoeffs_fdstencl(
                         like "dKOD", "dupD", "ddnD", "dfullupD", "dfulldnD", "DDD", and "DD" to
                         dictate how the function processes and returns coefficients.
     :param fd_order: Order of the finite differencing.
-    :param ko_fd_order: Optional base order for ``dKOD``.  The KO construction
-        adds two to this value, as it does to ``fd_order`` when omitted.
+    :param ko_fd_order: ``None`` or a non-Boolean positive even integer used
+        as the base order for ``dKOD``.  The KO construction adds two to this
+        value, as it does to ``fd_order`` when omitted.
 
     :return: A tuple containing two lists. The first list contains the finite difference coefficients
              as sympy.Rational numbers, and the second list contains the stencils as lists of integers.
 
     :raises ValueError: If "DDD" is found in `derivstring`, indicating that only derivatives up to second order
                         are currently supported by this function.
+    :raises ValueError: If ``ko_fd_order`` is neither ``None`` nor a
+        non-Boolean positive even integer.
 
     Note:
     This function computes the finite difference coefficients and stencil points for various derivative types
@@ -450,12 +453,16 @@ def stencil_reach_per_axis(
         used when upwinding is not enabled.
     :param fd_order: Finite-difference order; ``dKOD`` adds its own two orders
         internally, exactly as the kernel's C code is generated.
-    :param ko_fd_order: Optional base order for ``dKOD``.  When omitted, KO
-        starts from ``fd_order`` and retains the historical wider stencil.
+    :param ko_fd_order: ``None`` or a non-Boolean positive even integer used
+        as the base order for ``dKOD``.  When omitted, KO starts from
+        ``fd_order`` and retains the historical wider stencil.
     :return: The (x, y, z) ghost points required.
     :raises ValueError: If a free symbol carries a derivative token whose
         family is not one of :data:`DERIVATIVE_FAMILIES`, which would otherwise
         be skipped silently and understate the reach.
+    :raises ValueError: If derivative operators are present and
+        ``ko_fd_order`` is neither ``None`` nor a non-Boolean positive even
+        integer.
 
     DocTests:
     >>> import nrpy.indexedexp as ixp

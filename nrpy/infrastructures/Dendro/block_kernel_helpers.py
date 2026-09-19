@@ -396,8 +396,16 @@ def padding_from_derivative_operators(
 
     :param expressions: The expressions the kernel is generated from.
     :param fd_order: The finite-difference order.
-    :param ko_fd_order: Optional base order used for ``dKOD``.
+    :param ko_fd_order: ``None`` or a non-Boolean positive even integer used
+        as the base order for ``dKOD``.
     :return: The widest numerical stencil reach over all axes.
+    :raises ValueError: If derivative operators are present and
+        ``ko_fd_order`` is neither ``None`` nor a non-Boolean positive even
+        integer.
+
+    Darglint cannot infer the ``ValueError`` propagated by numerical-stencil
+    construction.
+    # noqa: DAR402
 
     Doctests:
     >>> import nrpy.indexedexp as ixp

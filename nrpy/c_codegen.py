@@ -126,8 +126,10 @@ class CCodeGen:
         :param enable_fd_functions: Boolean to enable finite difference functions.
         :param mem_alloc_style: Memory allocation style.
         :param upwind_control_vec: Upwind control vector as a symbol or list of symbols.
-        :param ko_fd_order: Optional base order used only for ``dKOD``.  The
-            KO construction adds two to this value.
+        :param ko_fd_order: ``None`` or a non-Boolean positive even integer
+            used only as the base order for ``dKOD``.  The KO construction
+            adds two to this value.  This option is incompatible with
+            ``enable_fd_functions=True``.
         :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
         :param rational_const_alias: Override default alias for specifying rational constness
         :param enable_clang_format: Boolean to enable clang formatting.
@@ -137,6 +139,10 @@ class CCodeGen:
         :raises ValueError: If SIMD optimizations are enabled but the floating-point type is not 'double'.
         :raises ValueError: If 'upwind_control_vec' is not a sympy Symbol or a list of sympy Symbols.
         :raises ValueError: If 'fd_order' is not an even, positive integer.
+        :raises ValueError: If ``ko_fd_order`` is neither ``None`` nor a
+            non-Boolean positive even integer.
+        :raises ValueError: If ``ko_fd_order`` is specified with
+            ``enable_fd_functions=True``.
         :raises ValueError: If SIMD optimizations are requested but the floating-point type is incompatible.
 
         >>> c = CCodeGen(fp_type="double")

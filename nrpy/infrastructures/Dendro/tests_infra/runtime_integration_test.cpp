@@ -26,20 +26,20 @@ void record(std::size_t size) noexcept {
         count.fetch_add(1, std::memory_order_relaxed);
         bytes.fetch_add(size, std::memory_order_relaxed);
     }
-}  // END FUNCTION: record measured allocation
+}  // END FUNCTION: record
 }  // END NAMESPACE: allocation measurement
 
 void *operator new(std::size_t size) {
     allocation_measurement::record(size);
     if (void *memory = std::malloc(size == 0 ? 1 : size)) return memory;
     throw std::bad_alloc();
-}  // END FUNCTION: measured scalar new
+}  // END FUNCTION: operator new
 
 void *operator new[](std::size_t size) {
     allocation_measurement::record(size);
     if (void *memory = std::malloc(size == 0 ? 1 : size)) return memory;
     throw std::bad_alloc();
-}  // END FUNCTION: measured array new
+}  // END FUNCTION: operator new[]
 
 void operator delete(void *memory) noexcept { std::free(memory); }
 void operator delete[](void *memory) noexcept { std::free(memory); }
@@ -55,11 +55,11 @@ void *operator new(std::size_t size, std::align_val_t alignment) {
                        size == 0 ? 1 : size) == 0)
         return memory;
     throw std::bad_alloc();
-}  // END FUNCTION: measured aligned new
+}  // END FUNCTION: operator new
 
 void *operator new[](std::size_t size, std::align_val_t alignment) {
     return operator new(size, alignment);
-}  // END FUNCTION: measured aligned array new
+}  // END FUNCTION: operator new[]
 
 void operator delete(void *memory, std::align_val_t) noexcept {
     std::free(memory);
@@ -213,7 +213,8 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
                         std::abs(output[f][cell] -
                                  whole_block[std::size_t(f) * volume + cell -
                                              geometry.component_offset]));
-                } else {
+                }  // END IF: selected block interior
+                else {
                     ++preserved_points;
                     if (output[f][cell] != sentinel)
                         throw std::runtime_error(
@@ -334,7 +335,7 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
             ok ? "PASS" : "FAIL", totals[0], totals[1], totals[2], totals[3],
             errors[0], errors[1], errors[2], errors[3], totals[4], totals[5]);
     if (!ok) throw std::runtime_error("block callback qualification failed");
-}  // END FUNCTION: qualify Berger-Oliger block callbacks
+}  // END FUNCTION: qualify_block_callbacks
 // clang-format off
 } // END NAMESPACE: independent field oracle
 // clang-format on
