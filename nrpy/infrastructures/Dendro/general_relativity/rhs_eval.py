@@ -20,7 +20,7 @@ Author: Zachariah B. Etienne
 
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Dict, Iterable, Mapping, Tuple
+from typing import Dict, Mapping, Tuple
 
 import sympy as sp
 
@@ -37,7 +37,7 @@ from nrpy.equations.general_relativity.kreiss_oliger_terms import (
     add_KreissOliger_dissipation_terms,
 )
 from nrpy.finite_difference import (
-    extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars,
+    extract_list_of_deriv_var_strings_from_sympyexpr_list,
 )
 from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import block_kernel_helpers as bkh
@@ -109,31 +109,6 @@ class RHSBuild:
 # The BSSN evolved state: hDD (6), aDD (6), cf, trK, lambdaU (3), alpha,
 # vetU (3), betU (3).
 BSSN_EVOL_COUNT = 24
-
-
-def _directional_operators(expressions: Iterable[sp.Expr]) -> Tuple[str, ...]:
-    """
-    Return directional finite-difference operators in an expression sequence.
-
-    :param expressions: Symbolic expressions to inspect.
-    :return: Sorted unique directional finite-difference operator names.
-    """
-    directional_families = ("dupD", "ddnD", "dfullupD", "dfulldnD")
-    candidates = []
-    for expression in expressions:
-        for symbol in expression.free_symbols:
-            suffix = str(symbol).rsplit("_", maxsplit=1)[-1]
-            if any(
-                suffix.startswith(family) and suffix[len(family) :].isdigit()
-                for family in directional_families
-            ):
-                candidates.append(symbol)
-    if not candidates:
-        return ()
-    _, operators = extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
-        candidates
-    )
-    return tuple(sorted(set(operators)))
 
 
 def BSSN_rhs_expressions(
@@ -366,54 +341,52 @@ def build_rhs_eval(
             ShiftEvolutionOption=ShiftEvolutionOption,
             enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         )
-    centered: Dict[str, sp.Expr] = OrderedDict()
-    for rhs_name, expression in rhs_by_symbol_name.items():
-        replacements: Dict[sp.Basic, sp.Basic] = {}
-        for symbol in expression.free_symbols:
-            name = str(symbol)
-            separator = name.rfind("_")
-            if separator < 0:
-                continue
-            suffix_position = separator + 1
-            suffix = name[suffix_position:]
-            prefix = next(
-                (
-                    candidate
-                    for candidate in ("dupD", "ddnD")
-                    if suffix.startswith(candidate)
-                    and suffix[len(candidate) :].isdigit()
-                ),
-                None,
-            )
-            if prefix is None:
-                continue
-            _, derivative_operators = (
-                extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars([symbol])
-            )
-            if len(derivative_operators) != 1 or not derivative_operators[0].startswith(
-                ("dupD", "ddnD")
-            ):
-                continue
-            # Preserve every tensor-component digit following the derivative
-            # suffix. For example, aDD_dupD000 becomes aDD_dD000, not
-            # aDD00_dD0. The parser above validates the derivative symbol;
-            # this replacement changes only its final operator suffix.
-            replacement_name = name[:suffix_position] + "dD" + suffix[len(prefix) :]
-            replacements[symbol] = sp.Symbol(replacement_name, **symbol.assumptions0)
-        centered[rhs_name] = expression.xreplace(replacements)
-    remaining = _directional_operators(centered.values())
-    if remaining:
-        raise ValueError(
-            "Dendro RHS contains directional derivative operators after centered "
-            f"normalization: {remaining}."
+    free_symbols = [
+        symbol
+        for expression in rhs_by_symbol_name.values()
+        for symbol in expression.free_symbols
+    ]
+    derivative_symbols = extract_list_of_deriv_var_strings_from_sympyexpr_list(
+        free_symbols, "unset"
+    )
+    replacements: Dict[sp.Basic, sp.Basic] = {}
+    for symbol in derivative_symbols:
+        name = str(symbol)
+        separator = name.rfind("_")
+        suffix_position = separator + 1
+        suffix = name[suffix_position:]
+        prefix = next(
+            (
+                candidate
+                for candidate in ("dupD", "ddnD")
+                if suffix.startswith(candidate) and suffix[len(candidate) :].isdigit()
+            ),
+            None,
         )
+        if prefix is None:
+            continue
+        # Preserve every tensor-component digit following the derivative
+        # suffix. For example, aDD_dupD000 becomes aDD_dD000, not
+        # aDD00_dD0. Canonical extraction above validates the derivative
+        # symbol; this replacement changes only its final operator suffix.
+        replacement_name = name[:suffix_position] + "dD" + suffix[len(prefix) :]
+        replacements[symbol] = sp.Symbol(replacement_name, **symbol.assumptions0)
+    centered: Dict[str, sp.Expr] = OrderedDict(
+        (rhs_name, expression.xreplace(replacements))
+        for rhs_name, expression in rhs_by_symbol_name.items()
+    )
     rhs_by_symbol_name = centered
     kernel_expressions = list(rhs_by_symbol_name.values())
-    remaining_directional = _directional_operators(kernel_expressions)
+    operators = bkh.emitted_derivative_operators(kernel_expressions)
+    remaining_directional = tuple(
+        operator
+        for operator in operators
+        if operator.startswith(("dupD", "ddnD", "dfullupD", "dfulldnD"))
+    )
     if remaining_directional:
         raise ValueError(
-            "Dendro RHS contains directional derivative operators before code "
-            f"generation: {remaining_directional}."
+            "Dendro RHS contains directional derivative operators after centered "
+            f"normalization: {remaining_directional}."
         )
     rhs_symbols = tuple(rhs_by_symbol_name)
     lvalues = tuple(
@@ -443,7 +416,7 @@ def build_rhs_eval(
     fp_type = str(par.parval_from_str("fp_type"))
     scalar_type = gri.DENDRO_SCALAR_TYPE
     kernel = c_codegen(
-        list(rhs_by_symbol_name.values()),
+        kernel_expressions,
         list(lvalues),
         enable_fd_codegen=True,
         enable_fd_functions=False,
@@ -514,18 +487,11 @@ def build_rhs_eval(
         f"{scalar_type}* const rhs_gfs_flat"
         + (f", {cparam_args}" if cparam_args else "")
     )
-    operators = bkh.emitted_derivative_operators(kernel_expressions)
     padding = bkh.padding_from_derivative_operators(
         kernel_expressions,
         fd_order,
         ko_fd_order=ko_fd_order,
     )
-    remaining_directional = _directional_operators(kernel_expressions)
-    if remaining_directional:
-        raise ValueError(
-            "Dendro RHS contains directional derivative operators after centered "
-            f"lowering: {remaining_directional}."
-        )
     if padding != expected_padding:
         raise ValueError(
             f"Dendro fd_order={fd_order} requires padding {expected_padding}, "
