@@ -266,7 +266,7 @@ def output_solver_cmake(
     ... )
     >>> all(name in text for name in ("nrpy_bssn_dendro", "nrpy_bssn_dendro_qualify"))
     True
-    >>> "bssn_common" in text or "BSSN_STANDALONE_HOST" in text
+    >>> "bssn_common" in text
     False
 
     """
@@ -279,8 +279,13 @@ def output_solver_cmake(
         "  set(_nrpy_dendro_top_level ON)",
         "endif()",
         "",
+        "set(_nrpy_dendro_legacy_driver_request OFF)",
+        f"if(DEFINED {solver_prefix}_STANDALONE_HOST)",
+        "  set(_nrpy_dendro_legacy_driver_request ON)",
+        "endif()",
+        "",
         "set(_nrpy_dendro_option_default OFF)",
-        "if(_nrpy_dendro_top_level)",
+        "if(_nrpy_dendro_top_level OR _nrpy_dendro_legacy_driver_request)",
         "  set(_nrpy_dendro_option_default ON)",
         "endif()",
         "option(NRPY_DENDRO_BUILD_DRIVERS",
@@ -333,6 +338,14 @@ def output_solver_cmake(
         "  endif()",
         f"  target_compile_features({qualification_target} PRIVATE cxx_std_17)",
         f"  target_compile_options({qualification_target} PRIVATE -Wall)",
+        "  if(_nrpy_dendro_legacy_driver_request AND NOT TARGET " f"{stem}Solver)",
+        f"    add_custom_target({stem}Solver",
+        '      COMMAND "${CMAKE_COMMAND}" -E copy_if_different',
+        f'              "$<TARGET_FILE:{qualification_target}>"',
+        f'              "${{CMAKE_CURRENT_BINARY_DIR}}/{stem}Solver"',
+        f"      DEPENDS {qualification_target}",
+        "    )",
+        "  endif()",
         "endif()",
         "",
         f'option({solver_prefix}_ENABLE_CUDA "Build a qualified generated CUDA backend" OFF)',

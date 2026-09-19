@@ -141,7 +141,12 @@ generated numerical tests by default. Adding it to a Dendro tree that defines
 `dendro5` builds the production library; drivers and tests default off in that
 embedded mode. `NRPY_DENDRO_BUILD_DRIVERS` and `NRPY_DENDRO_BUILD_TESTS` can
 enable them explicitly. An embedded qualification driver also requires
-`toml11::toml11` and MPI. Both BSSN and fCCZ4 use actual `ot::Mesh`, `ot::Block`,
+`toml11::toml11` and MPI. Existing commands that define
+`BSSN_STANDALONE_HOST` or `FCCZ4_STANDALONE_HOST` make the driver default on.
+When the conventional target name is free, `bssnSolver` or `fccz4Solver`
+copies the separately named qualification executable to the conventional
+Dendro solver path. The production library names remain distinct. Both BSSN
+and fCCZ4 use actual `ot::Mesh`, `ot::Block`,
 `ot::DVector`, and `ts::Ctx` types through the same generated host interface.
 The two production libraries have distinct target names and can coexist in one
 Dendro application. Reproduction commands and selected-host requirements live
