@@ -265,7 +265,7 @@ int main(int argc, char** argv) {
               throw std::runtime_error(std::string("profile ") + name +
                   " mismatch: expected " + std::to_string(expected) +
                   ", observed " + std::to_string(observed));
-          };
+          }; // END LAMBDA: validate unsigned profile values
           const std::string observed_name = toml::find<std::string>(profile, "name");
           if (observed_name != "$PROFILE_NAME")
             throw std::runtime_error("profile name mismatch: expected $PROFILE_NAME, observed " +

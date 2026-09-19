@@ -31,7 +31,7 @@ namespace {
 const double kDomainMin[3] = {-1.0, -2.0, -4.0};
 const double kDomainMax[3] = {3.0, 2.0, 4.0};
 
-int g_failures = 0;
+int g_failures             = 0;
 
 // Fault injection: every checker below must be demonstrated able to fail, or
 // its passing result proves nothing.  CAPTEST_INJECT names one defect to
@@ -99,13 +99,14 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
     ot::Mesh *mesh = ot::createMesh(octree.data(), octree.size(), eleOrder,
                                     comm, 0, ot::SM_TYPE::FDM);
     const int meshFailed = mesh == nullptr || (faultRank && inject("mesh"));
-    int setupFailed = 0;
+    int setupFailed      = 0;
     MPI_Allreduce(&meshFailed, &setupFailed, 1, MPI_INT, MPI_MAX, comm);
     if (setupFailed) {
         if (meshFailed) report("mesh_setup", false, "mesh creation failed");
         // A partial mesh cannot be destroyed collectively: a missing mesh
         // cannot participate in its destructor's communicator free. Reclaim
-        // it at process teardown after every rank reports qualification failure.
+        // it at process teardown after every rank reports qualification
+        // failure.
         return false;
     }  // END IF: mesh setup failed
 
@@ -113,7 +114,7 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
     const Point pmax(kDomainMax[0], kDomainMax[1], kDomainMax[2]);
     mesh->setDomainBounds(pmin, pmax);
 
-    const unsigned dof = 3;
+    const unsigned dof     = 3;
     const unsigned unzipSz = mesh->getDegOfFreedomUnZip();
 
     // createCGVector hands the callback physical coordinates, so the same
@@ -122,7 +123,7 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
         [](double x, double y, double z, double *out) {
             for (unsigned v = 0; v < 3; ++v) out[v] = field(v, x, y, z);
         };
-    double *zipped = mesh->createCGVector<double>(fill, dof);
+    double *zipped   = mesh->createCGVector<double>(fill, dof);
     double *unzipped = mesh->createUnZippedVector<double>(dof);
     if (faultRank && inject("zipped")) {
         delete[] zipped;
@@ -132,11 +133,12 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
         delete[] unzipped;
         unzipped = nullptr;
     }  // END IF: inject unzipped allocation failure
-    const int vectorFailed = mesh->isActive() &&
-                             (zipped == nullptr || unzipped == nullptr);
+    const int vectorFailed =
+        mesh->isActive() && (zipped == nullptr || unzipped == nullptr);
     MPI_Allreduce(&vectorFailed, &setupFailed, 1, MPI_INT, MPI_MAX, comm);
     if (setupFailed) {
-        if (vectorFailed) report("vector_setup", false, "vector allocation failed");
+        if (vectorFailed)
+            report("vector_setup", false, "vector allocation failed");
         delete[] zipped;
         delete[] unzipped;
         delete mesh;
@@ -156,9 +158,9 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
         // Blank the halo the host just filled.
         const std::vector<ot::Block> &bl = mesh->getLocalBlockList();
         for (std::size_t b = 0; b < bl.size(); ++b) {
-            const unsigned pw = bl[b].get1DPadWidth();
-            const unsigned sx = bl[b].getAllocationSzX();
-            const unsigned sy = bl[b].getAllocationSzY();
+            const unsigned pw  = bl[b].get1DPadWidth();
+            const unsigned sx  = bl[b].getAllocationSzX();
+            const unsigned sy  = bl[b].getAllocationSzY();
             const unsigned sz2 = bl[b].getAllocationSzZ();
             for (unsigned v = 0; v < dof; ++v)
                 for (unsigned k = 0; k < sz2; ++k)
@@ -175,7 +177,7 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
     }  // END IF: halo injection requested
 
     const std::vector<ot::Block> &blkList = mesh->getLocalBlockList();
-    const unsigned numBlocks = blkList.size();
+    const unsigned numBlocks              = blkList.size();
 
     bool dimsOk = true, layoutOk = true, offsetsOk = true, ghostOk = true;
     bool originOk = true, padOk = true;
@@ -184,14 +186,13 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
     double worstCorner = 0.0;
 
     for (unsigned blk = 0; blk < numBlocks; ++blk) {
-        const ot::Block &b = blkList[blk];
-        const unsigned pw = b.get1DPadWidth();
-        const unsigned sz[3] = {b.getAllocationSzX(), b.getAllocationSzY(),
-                                b.getAllocationSzZ()};
+        const ot::Block &b    = blkList[blk];
+        const unsigned pw     = b.get1DPadWidth();
+        const unsigned sz[3]  = {b.getAllocationSzX(), b.getAllocationSzY(),
+                                 b.getAllocationSzZ()};
         const std::size_t off = b.getOffset();
-        const std::size_t vol =
-            static_cast<std::size_t>(sz[0]) * sz[1] * sz[2];
-        const unsigned bflag = b.getBlkNodeFlag();
+        const std::size_t vol = static_cast<std::size_t>(sz[0]) * sz[1] * sz[2];
+        const unsigned bflag  = b.getBlkNodeFlag();
 
         if (pw != (eleOrder >> 1u) + (inject("padding") ? 1u : 0u))
             padOk = false;
@@ -218,14 +219,14 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
         const double dx[3] = {b.computeDx(pmin, pmax), b.computeDy(pmin, pmax),
                               b.computeDz(pmin, pmax)};
 
-        const double mine[3] = {grid_to_phys(b.getBlockNode().minX(), 0),
-                                grid_to_phys(b.getBlockNode().minY(), 1),
-                                grid_to_phys(b.getBlockNode().minZ(), 2)};
+        const double mine[3]  = {grid_to_phys(b.getBlockNode().minX(), 0),
+                                 grid_to_phys(b.getBlockNode().minY(), 1),
+                                 grid_to_phys(b.getBlockNode().minZ(), 2)};
 
         const double padShift = inject("origin") ? 0.0 : 1.0;
-        const double org[3] = {mine[0] - padShift * pw * dx[0],
-                               mine[1] - padShift * pw * dx[1],
-                               mine[2] - padShift * pw * dx[2]};
+        const double org[3]   = {mine[0] - padShift * pw * dx[0],
+                                 mine[1] - padShift * pw * dx[1],
+                                 mine[2] - padShift * pw * dx[2]};
 
         for (unsigned v = 0; v < dof; ++v) {
             const std::size_t cornerIdx =
@@ -239,8 +240,9 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
                 field(v, mine[0] + cornerShift * pw * dx[0],
                       mine[1] + cornerShift * pw * dx[1],
                       mine[2] + cornerShift * pw * dx[2]);
-            const double cornerErr = std::fabs(unzipped[cornerIdx] - cornerWant) /
-                                     (1.0 + std::fabs(cornerWant));
+            const double cornerErr =
+                std::fabs(unzipped[cornerIdx] - cornerWant) /
+                (1.0 + std::fabs(cornerWant));
             if (cornerErr > 1e-9) ++badCorner;
             if (cornerErr > worstCorner) worstCorner = cornerErr;
 
@@ -277,8 +279,7 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
                                 ((bflag & (1u << OCT_DIR_BACK)) && k < pw) ||
                                 ((bflag & (1u << OCT_DIR_FRONT)) &&
                                  k >= sz[2] - pw);
-                            if (exterior)
-                                continue;
+                            if (exterior) continue;
                             ++checkedPadded;
                             if (err > worstPadded) worstPadded = err;
                             if (err > 1e-9) ++badPadded;
@@ -318,8 +319,8 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
     report("ghost_validity", ghostOk, detail);
 
     if (verbose)
-        std::printf("  eleOrder=%u blocks=%u unzipSz=%u\n", eleOrder,
-                    numBlocks, unzipSz);
+        std::printf("  eleOrder=%u blocks=%u unzipSz=%u\n", eleOrder, numBlocks,
+                    unzipSz);
 
     delete[] zipped;
     delete[] unzipped;
@@ -353,12 +354,14 @@ int main(int argc, char **argv) {
     if (rank == 0) {
         std::printf("Dendrolib capability mini-tests, %d rank(s)\n", npes);
         // Axis: scalar ABI.  The generated solver's required DendroScalar type.
-        const bool scalarOk = sizeof(DendroScalar) == (inject("scalar") ? 4u : 8u) &&
-                              std::is_same<DendroScalar, double>::value;
+        const bool scalarOk =
+            sizeof(DendroScalar) == (inject("scalar") ? 4u : 8u) &&
+            std::is_same<DendroScalar, double>::value;
         char detail[128];
-        std::snprintf(detail, sizeof(detail), "sizeof=%zu is_double=%d",
-                      sizeof(DendroScalar),
-                      static_cast<int>(std::is_same<DendroScalar, double>::value));
+        std::snprintf(
+            detail, sizeof(detail), "sizeof=%zu is_double=%d",
+            sizeof(DendroScalar),
+            static_cast<int>(std::is_same<DendroScalar, double>::value));
         report("scalar_abi", scalarOk, detail);
     }  // END IF: rank 0 reports scalar ABI
 
@@ -366,14 +369,15 @@ int main(int argc, char **argv) {
     // Dendro profiles use element orders 4, 6, and 8, whose block padding is
     // 2, 3, and 4 points per side, respectively.
     std::vector<unsigned> orders = {4, 6, 8};
-    if (const char *env = std::getenv("CAPTEST_ORDERS"); rank == 0 && env != nullptr) {
+    if (const char *env = std::getenv("CAPTEST_ORDERS");
+        rank == 0 && env != nullptr) {
         orders.clear();
         for (const char *s = env; *s != '\0';) {
-            char *end = nullptr;
-            errno = 0;
+            char *end             = nullptr;
+            errno                 = 0;
             const unsigned long v = std::strtoul(s, &end, 10);
-            if (*s < '0' || *s > '9' || end == s || errno == ERANGE ||
-                v < 2 || v % 2 != 0 || v > std::numeric_limits<unsigned>::max() ||
+            if (*s < '0' || *s > '9' || end == s || errno == ERANGE || v < 2 ||
+                v % 2 != 0 || v > std::numeric_limits<unsigned>::max() ||
                 (*end != '\0' && (*end != ',' || end[1] == '\0'))) {
                 orders.clear();
                 break;
@@ -382,7 +386,9 @@ int main(int argc, char **argv) {
             s = (*end == '\0') ? end : end + 1;
         }  // END LOOP: for s over CAPTEST_ORDERS
         if (orders.empty())
-            report("orders", false, "CAPTEST_ORDERS requires comma-separated positive even orders");
+            report(
+                "orders", false,
+                "CAPTEST_ORDERS requires comma-separated positive even orders");
     }  // END IF: element orders overridden
     // Rank zero owns the request, so ranks cannot enter different order loops.
     unsigned orderCount = static_cast<unsigned>(orders.size());

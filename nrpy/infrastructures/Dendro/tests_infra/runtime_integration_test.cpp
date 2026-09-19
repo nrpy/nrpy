@@ -17,15 +17,33 @@ double field(unsigned f, double x, double y, double z) {
     return 101.0 * (f + 1) + (f + 2) * x - (2 * f + 3) * y + (3 * f + 5) * z;
 }  // END FUNCTION: field
 
+/**
+ * Compare generated callbacks on one local Dendro block.
+ *
+ * 1. Selects a local block with a nonzero component offset when available.
+ * 2. Compares whole-vector, unzipped, and flat component-major RHS values.
+ * 3. Compares flat algebraic projection with whole-vector projection.
+ *
+ * @param[in,out] context Generated context whose state and work vectors change.
+ * @param[in] mesh Borrowed mesh that supplies local blocks and vector layouts.
+ * @param[in] minimum Physical domain minimum used to construct block geometry.
+ * @param[in] maximum Physical domain maximum used to construct block geometry.
+ * @param[in] fault Optional invalid input selected by the negative tests.
+ * @param rank MPI rank used for root-only diagnostics.
+ *
+ * @note The caller retains ownership of the context and mesh.
+ * @warning Invalid input aborts MPI_COMM_WORLD; failed comparisons throw
+ * std::runtime_error.
+ */
 void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
                              const Point &minimum, const Point &maximum,
                              const std::string &fault, int rank) {
-    const unsigned dof = app::generated::NUM_EVOL_GFS;
-    constexpr double sentinel = 9.87654321e200;
+    const unsigned dof                 = app::generated::NUM_EVOL_GFS;
+    constexpr double sentinel          = 9.87654321e200;
     unsigned long long callback_points = 0, callback_offsets = 0,
                        preserved_points = 0, projection_points = 0;
-    double flat_rhs_error = 0.0, whole_rhs_error = 0.0,
-           projection_error = 0.0, whole_rhs_scale = 0.0;
+    double flat_rhs_error = 0.0, whole_rhs_error = 0.0, projection_error = 0.0,
+           whole_rhs_scale = 0.0;
     context.initialize();
     if (mesh.isActive()) {
         // A constant nonzero shift-driver field gives d(B^0)/dt=-eta*B^0.
@@ -50,12 +68,11 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
                 selected = id;
                 break;
             }
-        }  // END LOOP: prefer a block with a nonzero component offset
+        }  // END LOOP: for id seeking nonzero offset
         auto geometry =
             app::block_geometry(mesh, blocks[selected], minimum, maximum);
-        if (geometry.component_offset != 0)
-            ++callback_offsets;
-        double block_time = 0.0;
+        if (geometry.component_offset != 0) ++callback_offsets;
+        double block_time        = 0.0;
         const std::size_t stride = mesh.getDegOfFreedomUnZip();
         const std::size_t volume =
             std::size_t(geometry.nx) * geometry.ny * geometry.nz;
@@ -93,7 +110,7 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
             context.rhs_blkwise(wrong_dof, context.unzipped_rhs, &selected, 1,
                                 &block_time);
             wrong_dof.destroy_vector();
-        }
+        }  // END IF: inject blockwise field-count fault
         const unsigned selected_ids[1] = {selected};
         context.rhs_blkwise(context.unzipped, context.unzipped_rhs,
                             selected_ids, 1, &block_time);
@@ -217,26 +234,26 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
     }  // END IF: qualify active-rank callbacks
 
     unsigned long long totals[4] = {},
-                       local[4] = {callback_points, callback_offsets,
-                                   preserved_points, projection_points};
+                       local[4]  = {callback_points, callback_offsets,
+                                    preserved_points, projection_points};
     MPI_Allreduce(local, totals, 4, MPI_UNSIGNED_LONG_LONG, MPI_SUM,
                   MPI_COMM_WORLD);
     double local_errors[4] = {flat_rhs_error, whole_rhs_error, projection_error,
                               whole_rhs_scale},
-           errors[4] = {};
+           errors[4]       = {};
     MPI_Allreduce(local_errors, errors, 4, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     const bool ok = totals[0] > 0 && totals[1] > 0 && totals[2] > 0 &&
                     totals[3] > 0 && errors[0] < 1e-12 && errors[1] < 1e-12 &&
                     errors[2] < 1e-12 && errors[3] > 1e-6;
     if (rank == 0)
-        std::printf("REAL_CALLBACKS %s interior=%llu nonzero_offsets=%llu "
-                    "preserved=%llu projected=%llu flat_rhs_error=%.17g "
-                    "whole_rhs_error=%.17g projection_error=%.17g "
-                    "whole_rhs_scale=%.17g\n",
-                    ok ? "PASS" : "FAIL", totals[0], totals[1], totals[2],
-                    totals[3], errors[0], errors[1], errors[2], errors[3]);
-    if (!ok)
-        throw std::runtime_error("block callback qualification failed");
+        std::printf(
+            "REAL_CALLBACKS %s interior=%llu nonzero_offsets=%llu "
+            "preserved=%llu projected=%llu flat_rhs_error=%.17g "
+            "whole_rhs_error=%.17g projection_error=%.17g "
+            "whole_rhs_scale=%.17g\n",
+            ok ? "PASS" : "FAIL", totals[0], totals[1], totals[2], totals[3],
+            errors[0], errors[1], errors[2], errors[3]);
+    if (!ok) throw std::runtime_error("block callback qualification failed");
 }  // END FUNCTION: qualify Berger-Oliger block callbacks
 // clang-format off
 } // END NAMESPACE: independent field oracle
@@ -258,7 +275,7 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &ranks);
     try {
         const std::string fault = argc > 1 ? argv[1] : "";
-        m_uiMaxDepth = 8;
+        m_uiMaxDepth            = 8;
         _InitializeHcurve(m_uiDim);
         std::function<double(double, double, double)> refine =
             [](double x, double y, double z) {
@@ -293,9 +310,9 @@ int main(int argc, char **argv) {
                     mesh->createCGVector<double>(fill, dof));
                 unsigned long long halos = 0, remote = 0, blocks = 0,
                                    offset_blocks = 0;
-                double error = 0;
+                double error                     = 0;
                 if (mesh->isActive()) {
-                    blocks = mesh->getLocalBlockList().size();
+                    blocks                = mesh->getLocalBlockList().size();
                     const unsigned stride = mesh->getDegOfFreedom();
                     std::copy_n(expected.get(), context.state.get_size(),
                                 context.state.get_vec_ptr());
@@ -332,13 +349,12 @@ int main(int argc, char **argv) {
                     for (const auto &b : mesh->getLocalBlockList()) {
                         auto g =
                             app::block_geometry(*mesh, b, minimum, maximum);
-                        if (g.component_offset)
-                            ++offset_blocks;
+                        if (g.component_offset) ++offset_blocks;
                         if (fault == "offset" && rank == ranks - 1)
                             g.component_offset = 0;
                         // Expected coordinates derive independently from the
                         // raw octree.
-                        const auto node = b.getBlockNode();
+                        const auto node      = b.getBlockNode();
                         const unsigned bflag = b.getBlkNodeFlag();
                         const double base[3] = {double(node.minX()),
                                                 double(node.minY()),
@@ -381,10 +397,8 @@ int main(int argc, char **argv) {
                                          k < g.padding) ||
                                         ((bflag & (1u << OCT_DIR_FRONT)) &&
                                          k >= g.nz - g.padding);
-                                    if (exterior)
-                                        continue;
-                                    if (halo)
-                                        ++halos;
+                                    if (exterior) continue;
+                                    if (halo) ++halos;
                                     const std::size_t cell =
                                         g.component_offset + i +
                                         std::size_t(g.nx) *

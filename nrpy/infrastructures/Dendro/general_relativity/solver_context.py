@@ -114,6 +114,20 @@ double observed_convergence_order(
   int pre_timestep_blk(DendroScalar*, unsigned int, unsigned int, DendroScalar) {
     return 0;
   }
+  /**
+   * Project algebraic constraints on one flat local-block array.
+   *
+   * The array uses zero-offset component-major storage. This callback performs
+   * no halo exchange, unzip, or zip operation.
+   *
+   * @param[in,out] input Flat evolved fields updated by the projection.
+   * @param dof Number of field components; must equal NUM_EVOL_GFS.
+   * @param local_blk_id Local block identifier used for block geometry.
+   * @param blk_time Host block time; unused by this autonomous profile.
+   * @return 0 on success; invalid input or projection failure aborts MPI_COMM_WORLD.
+   *
+   * @note The caller retains ownership of the flat component array.
+   */
   int post_timestep_blk(DendroScalar* input, unsigned int dof,
                         unsigned int local_blk_id, DendroScalar blk_time);
   /**

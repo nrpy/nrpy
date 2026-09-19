@@ -74,13 +74,6 @@ done
 Each generated formulation exposes a production library when its module is
 added to a CMake tree containing `dendro5`. Enabling
 `NRPY_DENDRO_BUILD_DRIVERS` also builds its real-host qualification executable.
-Existing Dendro commands that define `BSSN_STANDALONE_HOST` or
-`FCCZ4_STANDALONE_HOST` make the corresponding driver default on. When the
-conventional target name is free, they may build the compatibility target
-`bssnSolver` or `fccz4Solver`; that target copies the separately named NRPy
-qualification executable into the conventional Dendro solver path. New
-commands should use `NRPY_DENDRO_BUILD_DRIVERS` and the
-`nrpy_*_dendro_qualify` target directly.
 It uses actual blocks and vectors, synchronous Dendrolib halo exchange, and the
 selected host's `ts::ETS` RK4 initialization, stage updates, and cleanup. This
 is a fixed-mesh, serial-CPU-per-rank Minkowski qualification with generated

@@ -456,9 +456,40 @@ $REAL_APPLICATION_DECLARATIONS
    * @return 0 on success or an inactive rank; invalid data aborts MPI_COMM_WORLD.
    */
   int rhs(DVec* in, DVec* out, unsigned int count, DendroScalar time);
+  /**
+   * Evaluate generated RHS kernels for selected unzipped local blocks.
+   *
+   * Reads component-major DVec storage using each block's component offset and
+   * writes only selected block interiors. The caller performs halo exchange,
+   * unzip, exterior-value assignment, and zip operations.
+   *
+   * @param in Already-unzipped component-major input storage; read only.
+   * @param out Unzipped output storage receiving selected interior RHS values.
+   * @param[in] blkIDs Local block identifiers to evaluate.
+   * @param numIds Number of entries in blkIDs.
+   * @param[in,out] blk_time Host-owned block-time pointer retained unchanged.
+   * @return 0 on success or an inactive rank; invalid input aborts MPI_COMM_WORLD.
+   *
+   * @note The caller owns the DVec storage and all communication operations.
+   */
   int rhs_blkwise(DVec in, DVec out,
                   const unsigned int* const blkIDs, unsigned int numIds,
                   DendroScalar* blk_time);
+  /**
+   * Evaluate the generated RHS kernel on one flat local-block array.
+   *
+   * Input and output use zero-offset component-major storage. The caller owns
+   * halo exchange, unzip, exterior-value assignment, and zip operations.
+   *
+   * @param[in] in Flat component-major evolved fields; read only.
+   * @param[out] out Flat component-major interior RHS values.
+   * @param dof Number of field components; must equal NUM_EVOL_GFS.
+   * @param local_blk_id Local block identifier used for block geometry.
+   * @param blk_time Host block time; unused by this autonomous profile.
+   * @return 0 on success; invalid input aborts MPI_COMM_WORLD.
+   *
+   * @note The caller retains ownership of both flat arrays.
+   */
   int rhs_blk(const DendroScalar* in, DendroScalar* out, unsigned int dof,
               unsigned int local_blk_id, DendroScalar blk_time);
  private:
@@ -667,7 +698,7 @@ int Ctx::rhs_blkwise(DVec in, DVec out,
     const auto g = block_geometry(*m_uiMesh, blocks[blkIDs[index]], m_uiMinPt,
                                   m_uiMaxPt);
     $RHS_EVAL_BLOCK(g, input.data(), output.data()$RHS_EVAL_BLOCK_TAIL);
-  }
+  } // END LOOP: evaluate selected block RHS
   (void)blk_time;
   return 0;
 } // END FUNCTION: evaluate selected unzipped blocks

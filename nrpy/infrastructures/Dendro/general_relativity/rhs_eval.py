@@ -111,59 +111,6 @@ class RHSBuild:
 BSSN_EVOL_COUNT = 24
 
 
-def _center_shift_advection(
-    rhs_by_symbol_name: Mapping[str, sp.Expr],
-) -> Dict[str, sp.Expr]:
-    """
-    Return copied RHS expressions with directional first derivatives centered.
-
-    :param rhs_by_symbol_name: RHS expressions keyed by symbolic output name.
-    :return: Copied RHS expressions with centered shift-advection derivatives.
-    :raises ValueError: If any directional derivative operator remains after
-        normalization.
-    """
-    centered: Dict[str, sp.Expr] = OrderedDict()
-    for rhs_name, expression in rhs_by_symbol_name.items():
-        replacements: Dict[sp.Basic, sp.Basic] = {}
-        for symbol in expression.free_symbols:
-            name = str(symbol)
-            separator = name.rfind("_")
-            if separator < 0:
-                continue
-            suffix_position = separator + 1
-            suffix = name[suffix_position:]
-            prefix = next(
-                (
-                    candidate
-                    for candidate in ("dupD", "ddnD")
-                    if suffix.startswith(candidate)
-                    and suffix[len(candidate) :].isdigit()
-                ),
-                None,
-            )
-            if prefix is None:
-                continue
-            _, operators = (
-                extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars([symbol])
-            )
-            if len(operators) != 1 or not operators[0].startswith(("dupD", "ddnD")):
-                continue
-            # Preserve every tensor-component digit following the derivative
-            # suffix.  For example, aDD_dupD000 becomes aDD_dD000, not
-            # aDD00_dD0.  The parser above validates the derivative symbol;
-            # this replacement changes only its final operator suffix.
-            replacement_name = name[:suffix_position] + "dD" + suffix[len(prefix) :]
-            replacements[symbol] = sp.Symbol(replacement_name, **symbol.assumptions0)
-        centered[rhs_name] = expression.xreplace(replacements)
-    remaining = _directional_operators(centered.values())
-    if remaining:
-        raise ValueError(
-            "Dendro RHS contains directional derivative operators after centered "
-            f"normalization: {remaining}."
-        )
-    return centered
-
-
 def _directional_operators(expressions: Iterable[sp.Expr]) -> Tuple[str, ...]:
     """
     Return directional finite-difference operators in an expression sequence.
@@ -419,7 +366,48 @@ def build_rhs_eval(
             ShiftEvolutionOption=ShiftEvolutionOption,
             enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         )
-    rhs_by_symbol_name = _center_shift_advection(rhs_by_symbol_name)
+    centered: Dict[str, sp.Expr] = OrderedDict()
+    for rhs_name, expression in rhs_by_symbol_name.items():
+        replacements: Dict[sp.Basic, sp.Basic] = {}
+        for symbol in expression.free_symbols:
+            name = str(symbol)
+            separator = name.rfind("_")
+            if separator < 0:
+                continue
+            suffix_position = separator + 1
+            suffix = name[suffix_position:]
+            prefix = next(
+                (
+                    candidate
+                    for candidate in ("dupD", "ddnD")
+                    if suffix.startswith(candidate)
+                    and suffix[len(candidate) :].isdigit()
+                ),
+                None,
+            )
+            if prefix is None:
+                continue
+            _, derivative_operators = (
+                extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars([symbol])
+            )
+            if len(derivative_operators) != 1 or not derivative_operators[0].startswith(
+                ("dupD", "ddnD")
+            ):
+                continue
+            # Preserve every tensor-component digit following the derivative
+            # suffix. For example, aDD_dupD000 becomes aDD_dD000, not
+            # aDD00_dD0. The parser above validates the derivative symbol;
+            # this replacement changes only its final operator suffix.
+            replacement_name = name[:suffix_position] + "dD" + suffix[len(prefix) :]
+            replacements[symbol] = sp.Symbol(replacement_name, **symbol.assumptions0)
+        centered[rhs_name] = expression.xreplace(replacements)
+    remaining = _directional_operators(centered.values())
+    if remaining:
+        raise ValueError(
+            "Dendro RHS contains directional derivative operators after centered "
+            f"normalization: {remaining}."
+        )
+    rhs_by_symbol_name = centered
     kernel_expressions = list(rhs_by_symbol_name.values())
     remaining_directional = _directional_operators(kernel_expressions)
     if remaining_directional:

@@ -12,7 +12,6 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-import math
 from typing import Dict, List, Tuple
 
 import sympy as sp
@@ -254,7 +253,8 @@ def _independent_stencil(
         axis = int(operator[-1])
         coefficients = [
             sp.Rational(
-                (-1) ** (radius + 1 + k) * math.comb(2 * radius, k), 2 ** (2 * radius)
+                (-1) ** (radius + 1 + k) * sp.binomial(2 * radius, k),
+                2 ** (2 * radius),
             )
             for k in range(2 * radius + 1)
         ]
