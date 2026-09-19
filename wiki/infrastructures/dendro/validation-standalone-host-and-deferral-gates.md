@@ -114,10 +114,17 @@ compares the block and whole-vector results with `B^0=0.01`, `eta=1`, and an
 explicit nonzero RHS-magnitude requirement. The nonzero shift-driver RHS makes
 the comparison sensitive to component routing and input selection. This proves
 their numerical and storage behavior, but does not prove that a particular
-Berger-Oliger or local time-stepping scheduler invokes them in the required
-sequence. Scheduler-driven
-stage projection remains unqualified until that sequence is observed in the
-selected Dendrolib time integrator.
+Dendrolib `ExplicitNUTS` schedule invokes them in the required sequence.
+Scheduler-driven stage projection remains unqualified until that sequence is
+observed in the selected Dendrolib time integrator. See [Octree Grid, AMR, And
+Time Stepping](grid-amr-and-time-stepping.md) for the distinction between
+Dendro's octree AMR and its time-stepper choices.
+
+Claim evidence:
+- Claim: direct block-callback tests establish callback storage and numerical behavior, but do not qualify Dendrolib `ExplicitNUTS` scheduling or scheduler-driven stage projection.
+- Role: descriptive behavior
+- Deciding authority: [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), direct callback invocation
+- Corroboration: [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), block callbacks; [enuts.h](https://github.com/paralab/Dendro-5.01/blob/master/ODE/include/enuts.h), `ts::ExplicitNUTS`
 
 `dendrolib_capability_test.cpp` derives expected padded geometry and values from
 the selected checkout's block records. It checks that Dendrolib padding is half
@@ -142,7 +149,7 @@ neither a revision fingerprint nor the run outcome.
 
 Claim evidence:
 - Claim: Dendro supplies reproducible capability and generated-runtime tests that can qualify the selected real host without embedding host snapshots in the KB.
-- Role: tested host behavior
+- Role: descriptive behavior
 - Deciding authority: [dendrolib_capability_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp), its geometry/value checkers and fault modes; [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), its transport, parameter, evolution, and failure checks
 - Corroboration: [README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md), reproduction procedure; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), real-host adapter and callback implementation
 
@@ -177,7 +184,12 @@ runtime output: multiprecision evaluation of the canonical RHS expressions,
 resolvable KO contributions, and roundoff-scaled Minkowski bounds. The
 generated matrix covers finite-difference orders 4, 6, and 8 with KO both
 disabled and enabled. It does not establish remeshing, long-time or nonlinear
-evolution, or broad physics validation.
+evolution, or broad physics validation. It also does not compare centered with
+directional advection, benchmark stencil profiles, or reproduce Dendro-GR's
+order-8 KO physical-boundary formulas. The real-host tests qualify block
+padding and the selected generated runtime path, not exact equality with every
+Dendro-GR derivative implementation. See [Finite-Difference Profiles And
+Dendro Conformance](finite-difference-profiles-and-dendro-conformance.md).
 
 ## Sources
 
@@ -195,12 +207,15 @@ evolution, or broad physics validation.
 - [general_relativity/main_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py) - GR evolution and CTest registration
 - [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py) - solver/test CMake emission
 - [parfile.py](../../../nrpy/infrastructures/Dendro/parfile.py) - default parameter file
+- [enuts.h](https://github.com/paralab/Dendro-5.01/blob/master/ODE/include/enuts.h) - `ts::ExplicitNUTS`
 
 ## See Also
 
 - Parent: [Dendro](index.md)
 - See also: [Generated Project CI](../../validation/generated-project-ci.md)
 - Depends on: [Project Assembly And Generating Functions](project-assembly-and-emitters.md)
+- Depends on: [Octree Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md)
+- See also: [Finite-Difference Profiles And Dendro Conformance](finite-difference-profiles-and-dendro-conformance.md)
 - Implements: [Code Test Policy](../../validation/code-test-policy.md)
 - See also: [Generated Backend Comparison](../../syntheses/generated-backend-comparison.md)
 - See also: [fCCZ4 Application Wiring](fccz4-application-wiring.md)

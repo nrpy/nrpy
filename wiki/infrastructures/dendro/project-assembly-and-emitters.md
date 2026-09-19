@@ -98,7 +98,9 @@ reference-metric shorthand; for Cartesian reference metrics it supplies one
 symmetric half-width for all three axes. It cannot express the generated real
 host's independent, asymmetric axis bounds. The host sets its `Point` bounds,
 and `block_geometry()` obtains spacing and padded origins from the Dendro mesh
-and block. Consequently `grid_physical_size`, `grid_hole_radius`, Cartesian
+and block. The [grid and AMR page](grid-amr-and-time-stepping.md) defines the
+host mesh units and data movement that supply this geometry. Consequently
+`grid_physical_size`, `grid_hole_radius`, Cartesian
 origin entries, `xmin`/`xmax` axis entries, `NUMGRIDS`, `grid_rotates`, and
 `CoordSystemName` are not Dendro real-host runtime controls merely because
 other NRPy setup registered them; absent CFunction use keeps them out of the
@@ -128,10 +130,13 @@ generated README: another generated prose file would restate what this page and 
 generated `CMakeLists.txt` already carry.
 
 Each generated project contains one finite-difference profile. Generate a
-separate project when an application needs another member of the 4/2, 6/4, or
-8/6 regular/KO order set. This keeps every source file, constant, parameter
-check, padding requirement, and compiled library in one project consistent;
-the Dendro application may then select or link the generated project it needs.
+separate project when an application needs another supported profile.
+[Finite-Difference Profiles And Dendro
+Conformance](finite-difference-profiles-and-dendro-conformance.md) defines the
+supported order pairs and stencil reach. This keeps every source file,
+constant, parameter check, padding requirement, and compiled library in one
+project consistent; the Dendro application may then select or link the
+generated project it needs.
 
 ### Host selection
 
@@ -161,12 +166,19 @@ registered CFunction maps to one generated source file and one CMake entry.
 
 The ghost points the generated kernels need are recorded by the right-hand-side
 builder through `CFunction_roles.set_required_padding` and read back by `main`
-through `CFunction_roles.required_padding`. Dendro profiles select regular/KO
-base order pairs 4/2, 6/4, and 8/6, giving exact uniform padding 2, 3, and 4.
-Algebraic expressions have numerical reach zero, and a derivative restricted to
-one axis is accepted; the uniform host value is the maximum canonical reach
-over all axes. Dendro owns every block's interior dimensions; generated code
-checks only that each padded axis can contain the required interior and halo.
+through `CFunction_roles.required_padding`. Dendro owns every block's interior
+dimensions. Generated code requires block padding to equal the generated
+profile and each padded axis to contain a nonempty interior.
+See [Finite-Difference Profiles And Dendro
+Conformance](finite-difference-profiles-and-dendro-conformance.md) for the
+centered-advection choice, KO semantics, Dendro-GR comparison, and numerical
+claims that current tests do not establish.
+
+Claim evidence:
+- Claim: generated Dendro hosts require every block's padding to equal the selected generated profile and every padded axis to contain a nonempty interior.
+- Role: descriptive behavior
+- Deciding authority: [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), standalone `Ctx::startup_checks` and real-host `block_geometry`
+- Corroboration: [CFunction_roles.py](../../../nrpy/infrastructures/Dendro/CFunction_roles.py), `set_required_padding` and `required_padding`
 
 ### Determinism
 
@@ -211,6 +223,8 @@ Python generating functions and the registry symbols instead; see
 
 - Parent: [Dendro](index.md)
 - Depends on: [Gridfunctions, Naming, And Loops](gridfunctions-naming-and-loops.md)
+- Depends on: [Octree Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md)
+- Depends on: [Finite-Difference Profiles And Dendro Conformance](finite-difference-profiles-and-dendro-conformance.md)
 - Validated by: [Validation, Standalone Host, And Deferred Tests](validation-standalone-host-and-deferral-gates.md)
 - Contrasts with: [superB Lifecycle And Project Assembly](../superb/lifecycle-and-project-assembly.md)
 - See also: [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)

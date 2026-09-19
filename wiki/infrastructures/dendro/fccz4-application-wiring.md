@@ -33,8 +33,10 @@ diagnostics. Kernel and reference inputs are the same exactly emitted binary64
 samples; the reference applies the stencil and actual CSE graph at 80 and 100
 digits and derives a componentwise roundoff bound from their scale and operation
 count. Order 6 with KO is the default; `--no-ko` retains the nondissipative
-generation profile. KO base order is two below the regular derivative order,
-so both profiles use 2, 3, or 4 ghost points per side.
+generation profile. [Finite-Difference Profiles And Dendro
+Conformance](finite-difference-profiles-and-dendro-conformance.md) defines the
+supported order pairs, stencil reach, Dendro-GR comparison, and qualification
+limits.
 
 ### Right-hand side
 
@@ -46,8 +48,7 @@ centered derivatives, and runs `c_codegen` with the `DendroScalar` alias. Point 
 emitted through the Dendro loop helpers. It provides three registered CFunction
 bodies — per-block, all-block, and a local-time-stepping flat-block adapter
 that reuses the same numerical body — and records the ghost points its emitted
-operators reach. The explicit KO base order is two below the regular derivative
-order, so centered regular derivatives and KO terms have the same reach.
+operators reach.
 
 ### Enforcing det(gammabar) = det(gammahat) and tr(Abar) = 0
 
@@ -138,6 +139,7 @@ the lowering. For the equations themselves see
 
 - Parent: [Dendro](index.md)
 - Depends on: [Fully Covariant Conformal Z4](../../equations/general-relativity/fccz4.md)
+- Depends on: [Finite-Difference Profiles And Dendro Conformance](finite-difference-profiles-and-dendro-conformance.md)
 - Implements: [Gridfunctions, Naming, And Loops](gridfunctions-naming-and-loops.md)
 - Contrasts with: [GR Application Wiring](../bhah/gr-application-wiring.md)
 - Validated by: [Validation, Standalone Host, And Deferred Tests](validation-standalone-host-and-deferral-gates.md)

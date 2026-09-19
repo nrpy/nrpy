@@ -110,7 +110,10 @@ one-point read helper uses for every read, along with the interior coordinates
 `xx0`, `xx1`, and `xx2`. The block loop iterates the local block list supplied
 by Dendro and invokes the registered per-block CFunction for each block. Both
 are emitted by NRPy through the generic loop helper; the Dendro runtime supplies
-only the block list and its count. `require_serial_parallelization` keeps the
+only the block list and its count. The [grid and AMR
+page](grid-amr-and-time-stepping.md) distinguishes this loop unit from
+Dendro's refinement unit.
+`require_serial_parallelization` keeps the
 emitted loop free of a parallelization directive NRPy is not entitled to choose
 for the host: the point kernel runs inside Dendro's own block traversal, so an
 inner OpenMP pragma would nest parallelism.
@@ -146,6 +149,7 @@ to `nrpy.finite_difference`.
 
 - Parent: [Dendro](index.md)
 - Depends on: [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
+- Depends on: [Octree Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md)
 - See also: [Project Assembly And Generating Functions](project-assembly-and-emitters.md)
 - Example: [fCCZ4 Application Wiring](fccz4-application-wiring.md)
 - See also: [Finite Difference](../../core/finite-difference.md)

@@ -31,9 +31,10 @@ a nonflat fixed block, component by component, for the RHS block kernel, flat
 adapter, and constraint diagnostics.
 The expected values use the same exactly emitted binary64 samples as the kernels
 and an independent 80/100-digit stencil-and-CSE evaluation. Order 6 is the
-configured default. KO-off is the BSSN default; KO-on uses KO base order two
-below the regular derivative order, so both cases fit the same 2-, 3-, or
-4-point block padding.
+configured default, and KO-off is the BSSN default. [Finite-Difference Profiles
+And Dendro Conformance](finite-difference-profiles-and-dendro-conformance.md)
+defines the supported order pairs, stencil reach, Dendro-GR comparison, and
+qualification limits.
 
 ### Shared assembly and registration
 
@@ -58,7 +59,15 @@ of its dictionary, Kreiss-Oliger terms through the shared
 and centered advection after normalizing the equation factory's directional
 derivative symbols. It then emits all of it through `block_kernel_helpers`,
 asserts the 24-field bijection against the registry, and records the exact
-padding implied by the selected regular and KO operators.
+padding implied by the selected regular and KO operators. NRPy-generated
+kernels do not implement Dendro-GR's `bflag`-dependent physical-boundary
+derivative closures; the conformance page owns the exact comparison.
+
+Claim evidence:
+- Claim: NRPy-generated Dendro BSSN kernels use padded centered stencils and do not implement Dendro-GR's `bflag`-dependent physical-boundary derivative closures.
+- Role: descriptive behavior
+- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `build_rhs_eval`; [simple_loop.py](../../../nrpy/infrastructures/Dendro/simple_loop.py), `loop`
+- Corroboration: [Dendro-GR derivs.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/derivs.cpp), derivative routines that consume `bflag`
 
 `general_relativity/constraints_eval.py`'s BSSN builder emits the Hamiltonian
 constraint and the three momentum constraint components from the established
@@ -164,6 +173,7 @@ defects that a single-formulation tree could not expose:
 
 - Parent: [Dendro](index.md)
 - Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)
+- Depends on: [Finite-Difference Profiles And Dendro Conformance](finite-difference-profiles-and-dendro-conformance.md)
 - Implements: [Gridfunctions, Naming, And Loops](gridfunctions-naming-and-loops.md)
 - Contrasts with: [fCCZ4 Application Wiring](fccz4-application-wiring.md)
 - Validated by: [Validation, Standalone Host, And Deferred Tests](validation-standalone-host-and-deferral-gates.md)

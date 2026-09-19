@@ -81,7 +81,7 @@ pages where a first-pass owner exists.
 | SDAG | Charm++ structured dagger notation for coordinating asynchronous entry-method control flow; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
 | CkIO | Charm++ parallel I/O library used by superB diagnostic output paths; see [Diagnostics And Observables](infrastructures/superb/diagnostics-and-observables.md). |
 | JAX | Generated Python/JAX infrastructure target used by `sebobv1_jax`; see [JAX](infrastructures/jax/index.md). |
-| Dendro | Generated solver infrastructure target for a Dendro-GR checkout; NRPy generates the `nrpy_fccz4` and `nrpy_bssn` modules, one per formulation, and both modules expose Dendrolib-backed production targets when `dendro5` is present; enabling `NRPY_DENDRO_BUILD_DRIVERS` adds real-host qualification targets that require MPI and `toml11`; see [Dendro](infrastructures/dendro/index.md). |
+| Dendro | Generated solver infrastructure target for a Dendro-GR checkout. Dendrolib represents spatial AMR with 2:1 balanced octants and decomposes them into regular padded blocks for stencil evaluation; an octant is the refinement unit, while `ot::Block` is the stencil-evaluation unit. NRPy generates the `nrpy_fccz4` and `nrpy_bssn` modules, which expose Dendrolib-backed production targets when `dendro5` is present. Enabling `NRPY_DENDRO_BUILD_DRIVERS` adds real-host qualification targets that require MPI and `toml11`; see [Dendro](infrastructures/dendro/index.md) and [Octree Grid, AMR, And Time Stepping](infrastructures/dendro/grid-amr-and-time-stepping.md). |
 | NRPyElliptic | Hyperbolic-relaxation elliptic initial-data solver family spanning equation modules, BHaH workflows, and superB examples; see [NRPyElliptic Workflow](infrastructures/bhah/nrpyelliptic-workflow.md). |
 | SEBOB | SEOBNR-plus-BOB waveform example family (SEBOBv1, SEBOBv2) spanning generated C library and JAX routes; see [SEOBNR BOB Generated Library](infrastructures/bhah/seobnr-bob-generated-library.md). |
 | Kreiss-Oliger | Numerical dissipation scheme applied through `dKOD` finite-difference operators in evolution RHS wiring; see [Finite Difference](core/finite-difference.md). |
@@ -126,6 +126,8 @@ pages where a first-pass owner exists.
 - [timestepping_chare.py](../nrpy/infrastructures/superB/timestepping_chare.py) - `CkIndex_Timestepping::report_sums_for_volume`, `CkReduction::sum_double`, CkIO callbacks.
 - [interpolator3d_chare.py](../nrpy/infrastructures/superB/interpolator3d_chare.py) - `InterpBufMsg`, `CkArrayIndex3D`.
 - [cmake_helpers.py](../nrpy/infrastructures/Dendro/cmake_helpers.py) - `output_solver_cmake`.
+- [Dendro block.h](https://github.com/paralab/Dendro-5.01/blob/master/include/block.h) - `ot::Block` and balanced-octree decomposition.
+- [Dendro mesh.h](https://github.com/paralab/Dendro-5.01/blob/master/include/mesh.h) - `ot::Mesh` and mesh refinement flags.
 - [Charm++ language manual](https://charm.readthedocs.io/en/v8.0.0/charm%2B%2B/manual.html) - `Charm++ Interface (.ci) Files`, `Execution Model`, readonly variables, reductions, array maps, structured dagger, PUP.
 - [Charm++ and Converse libraries manual](https://charm.readthedocs.io/en/v8.0.0/libraries/manual.html) - `CkIO`, `Using CkIO`, `Parallel Output API`
 
