@@ -1,6 +1,6 @@
 # nrpy/infrastructures/Dendro/CFunction_roles.py
 """
-Dendro CFunction roles, plus the padding, upwind-control and registry-order records the emitters read.
+Dendro CFunction roles, plus padding and registry-order records the emitters read.
 
 A Dendro kernel is an ordinary NRPy CFunction plus scheduling metadata keyed
 by the registered function name.  The sidecar (stored in
@@ -93,36 +93,6 @@ def required_padding() -> int:
             "right-hand-side CFunctions before emitting the project."
         )
     return cast(int, padding)
-
-
-def set_upwind_control_fields(names: Tuple[str, ...]) -> None:
-    """
-    Record the EVOL fields that drive the emitted upwind stencil selection.
-
-    The right-hand-side builder derives these from the shared expression
-    factory's upwind control vector.  The state header renders their registry
-    positions, so recording them here keeps the emitted table and the emitted
-    kernel derived from one value.
-
-    :param names: Exact registered EVOL names, in registry order.
-    """
-    _extras()["upwind_control_fields"] = tuple(names)
-
-
-def upwind_control_fields() -> Tuple[str, ...]:
-    """
-    Return the recorded upwind control field names.
-
-    :return: The recorded EVOL names, in registry order.
-    :raises ValueError: If no kernel has recorded an upwind control set.
-    """
-    names = _extras().get("upwind_control_fields")
-    if names is None:
-        raise ValueError(
-            "No Dendro kernel has recorded an upwind control set; register the "
-            "right-hand-side CFunctions before emitting the state header."
-        )
-    return cast(Tuple[str, ...], names)
 
 
 def set_CFunction_role(name: str, role: str) -> None:

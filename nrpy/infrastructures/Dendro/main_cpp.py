@@ -219,7 +219,7 @@ int main(int argc, char** argv) {
         [](double x, double y, double z) {
           return std::exp(-(x*x + y*y + z*z) / 0.5);
         };  // END LAMBDA: choose initial octree refinement
-    const unsigned order = 2 * $NAMESPACE::generated::REQUIRED_PADDING;
+    const unsigned order = $NAMESPACE::generated::FD_ORDER;
     function2Octree(refine, octree, 5, 1e-3, order, MPI_COMM_WORLD);
     std::unique_ptr<ot::Mesh> mesh(ot::createMesh(
         octree.data(), octree.size(), order, MPI_COMM_WORLD, 0,
@@ -255,13 +255,31 @@ int main(int argc, char** argv) {
           const auto& profile = app.at("profile");
           for (const auto& item : profile.as_table())
             if (item.first != "name" && item.first != "fd_order" &&
+                item.first != "ko_fd_order" &&
+                item.first != "ko_effective_difference_order" &&
                 item.first != "required_padding" && item.first != "ko_enabled")
               throw std::runtime_error("unknown profile key");
-          if (toml::find<std::string>(profile, "name") != "$PROFILE_NAME" ||
-              toml::find<unsigned>(profile, "fd_order") != $NAMESPACE::generated::FD_ORDER ||
-              toml::find<unsigned>(profile, "required_padding") != $NAMESPACE::generated::REQUIRED_PADDING ||
-              toml::find<bool>(profile, "ko_enabled") != $NAMESPACE::generated::KO_ENABLED)
-            throw std::runtime_error("parameter profile does not match generated kernels");
+          const auto require_unsigned = [&](const char* name, unsigned expected) {
+            const unsigned observed = toml::find<unsigned>(profile, name);
+            if (observed != expected)
+              throw std::runtime_error(std::string("profile ") + name +
+                  " mismatch: expected " + std::to_string(expected) +
+                  ", observed " + std::to_string(observed));
+          }; // END LAMBDA: validate unsigned profile values
+          const std::string observed_name = toml::find<std::string>(profile, "name");
+          if (observed_name != "$PROFILE_NAME")
+            throw std::runtime_error("profile name mismatch: expected $PROFILE_NAME, observed " +
+                                     observed_name);
+          require_unsigned("fd_order", $NAMESPACE::generated::FD_ORDER);
+          require_unsigned("ko_fd_order", $NAMESPACE::generated::KO_FD_ORDER);
+          require_unsigned("ko_effective_difference_order",
+                           $NAMESPACE::generated::KO_EFFECTIVE_DIFFERENCE_ORDER);
+          require_unsigned("required_padding", $NAMESPACE::generated::REQUIRED_PADDING);
+          const bool observed_ko = toml::find<bool>(profile, "ko_enabled");
+          if (observed_ko != $NAMESPACE::generated::KO_ENABLED)
+            throw std::runtime_error(std::string("profile ko_enabled mismatch: expected ") +
+                ($NAMESPACE::generated::KO_ENABLED ? "true" : "false") +
+                ", observed " + (observed_ko ? "true" : "false"));
         }  // END IF: validate generated profile
         if (document.contains("params")) {
           const auto& table = document.at("params");
@@ -358,7 +376,7 @@ def output_main_cpp(
     ...         all(token not in wave for token in (
     ...             "minkowski", "detgtrazero", "max_constraints"
     ...         )),
-    ...         'toml::find<std::string>(profile, "name") != "wave_cartesian_vacuum"' in wave,
+    ...         'observed_name != "wave_cartesian_vacuum"' in wave,
     ...     )
     ... finally:
     ...     cfc.CFunction_dict.clear()

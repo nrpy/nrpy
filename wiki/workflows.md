@@ -160,6 +160,19 @@ results, limits, and cleanup in active review or CI evidence, not as KB
 snapshots. Network, installs, remote CI, and external toolchains need
 user authority. Never reset or clean shared `project/` output.
 
+### Protected CI Workflow
+
+`.github/workflows/main.yml` may be modified only when the user explicitly
+authorizes changes to that exact file in the current request. A general request
+to add tests, improve validation, or implement a plan does not authorize this
+file.
+
+Claim evidence:
+- Claim: `.github/workflows/main.yml` may be modified only with explicit user authorization for that exact file in the current request; general implementation or validation requests do not supply that authorization.
+- Role: normative rule
+- Deciding authority: [AGENTS.md](../AGENTS.md), `## Protected Workflow File`
+- Corroboration: none available; root repository governance is the sole authority for this write restriction.
+
 ## Deterministic Checks
 
 Run:
@@ -205,6 +218,7 @@ registered as frozen evidence.
 
 ## Sources
 
+- [AGENTS.md](../AGENTS.md) - `## Protected Workflow File`
 - [kb-instructions.md](../raw/source-docs/kb-instructions.md) - section 7.6 for `wiki/workflows.md`
 - [coding_style.md](../coding_style.md) - `## Python Coding Style`, `### Formatting`
 - [original-agents.md](../raw/source-docs/original-agents.md) - historical `## Required Checks`; current `coding_style.md` decides conflicts

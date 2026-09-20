@@ -15,7 +15,6 @@ from mpmath import mp, mpf  # type: ignore[import-untyped]
 import nrpy.grid as gri
 import nrpy.params as par
 from nrpy.finite_difference import (
-    compute_fdcoeffs_fdstencl,
     extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars,
 )
 from nrpy.infrastructures.Dendro import CFunction_roles as roles
@@ -67,17 +66,13 @@ def test_sections() -> Tuple[str, ...]:
         "state",
         "params",
         "offsets",
-        "upwind",
+        "stencil_reach",
         "rhs",
         "init",
         "names",
         "detgtrazero",
     )
-    if int(par.parval_from_str("fd_order")) == 4:
-        sections += ("address_values", "parameter_forwarding", "gr_nonflat_reference")
-    else:
-        sections += ("address_values", "parameter_forwarding")
-    return sections
+    return sections + ("address_values", "parameter_forwarding", "gr_nonflat_reference")
 
 
 _GR_SCIENTIFIC_TESTS = r"""
@@ -171,26 +166,19 @@ int test_offsets() {
 }  // END FUNCTION: test_offsets
 
 /**
- * Check upwind direction and declared stencil reach on every axis.
+ * Check centered sensitivity and declared stencil reach on every axis.
  *
- * @return 0 on success; 1 for missing controls or 2 for a sensitivity failure.
+ * @return 0 on success; 1 for a sensitivity or reach failure.
  */
-int test_upwind() {
-  if ($NAMESPACE::generated::NUM_UPWIND_CONTROL_GFS < 3) return 1;
+int test_stencil_reach() {
   $NAMESPACE::generated::params_struct params;
   $PARAMS_STRUCT_SET_TO_DEFAULT(params);
   const unsigned reach = $NAMESPACE::generated::REQUIRED_PADDING;
-  // Centered FD reaches FD_ORDER/2 cells; upwind and KO add one.  One more
-  // cell is needed to probe that the declared reach is not exceeded.
-  const unsigned generated_family_reach =
-      $NAMESPACE::generated::FD_ORDER / 2 + 1;
-  const unsigned safe_padding =
-      std::max(reach, generated_family_reach) + 1;
+  const unsigned safe_padding = reach + 1;
   for (unsigned axis = 0; axis < 3; ++axis) {
-    double sensitivity[2][2] = {{0.0, 0.0}, {0.0, 0.0}};
+    double sensitivity[2] = {0.0, 0.0};
     double outside_sensitivity = 0.0;
-    for (int sign_index = 0; sign_index < 2; ++sign_index)
-      for (int side = 0; side < 2; ++side) {
+    for (int side = 0; side < 2; ++side) {
         GRTestBlock block(1, safe_padding);
         std::vector<$SCALAR*> state = block.state_pointers();
         $MINKOWSKI_INITIAL_DATA_BLOCK(block.geometry, state.data());
@@ -200,18 +188,7 @@ int test_upwind() {
               for (unsigned i = 0; i < block.extent; ++i)
                 block.state[field][block.index(i, j, k)] +=
                     static_cast<$SCALAR>(1e-3 * (i + j + k));
-        for (unsigned control = 0;
-             control < $NAMESPACE::generated::NUM_UPWIND_CONTROL_GFS;
-             ++control) {
-          const unsigned field =
-              $NAMESPACE::generated::EVOL_UPWIND_CONTROL_INDICES[control];
-          const double value = control == axis
-                                   ? (sign_index == 0 ? 0.5 : -0.5)
-                                   : 0.5;
-          std::fill(block.state[field].begin(), block.state[field].end(),
-                    static_cast<$SCALAR>(value));
-        }  // END LOOP: set upwind controls
-        const unsigned p = block.geometry.padding;
+        const unsigned p = safe_padding + 1;
         const unsigned moved = side == 0 ? p + reach : p - reach;
         std::size_t moved_cell = block.index(moved, p, p);
         if (axis == 1) moved_cell = block.index(p, moved, p);
@@ -231,8 +208,8 @@ int test_upwind() {
               moved_values[field] + static_cast<$SCALAR>(0.25);
         $RHS_EVAL_BLOCK(block.geometry, input.data(), output.data()$RHS_EVAL_BLOCK_TAIL);
         for (unsigned field = 0; field < NUM_EVOL_GFS; ++field)
-          sensitivity[sign_index][side] = std::max(
-              sensitivity[sign_index][side],
+          sensitivity[side] = std::max(
+              sensitivity[side],
               std::fabs(static_cast<double>(block.rhs[field][probe]) -
                         before[field]));
         for (unsigned field = 0; field < NUM_EVOL_GFS; ++field)
@@ -250,17 +227,12 @@ int test_upwind() {
               outside_sensitivity,
               std::fabs(static_cast<double>(block.rhs[field][probe]) -
                         before[field]));
-      }  // END LOOP: test shifted stencil side
-    const double scale = std::max(
-        std::max(sensitivity[0][0], sensitivity[0][1]),
-        std::max(sensitivity[1][0], sensitivity[1][1]));
-    const double margin = 1e-6 * scale;
-    if (!(scale > 0.0) || outside_sensitivity != 0.0 ||
-        !(sensitivity[0][0] - sensitivity[0][1] > margin) ||
-        !(sensitivity[1][1] - sensitivity[1][0] > margin)) return 2;
-  }  // END LOOP: test upwind axes
+    }  // END LOOP: test both centered stencil sides
+    if (!(sensitivity[0] > 0.0) || !(sensitivity[1] > 0.0) ||
+        outside_sensitivity != 0.0) return 1;
+  }  // END LOOP: test centered axes
   return 0;
-}  // END FUNCTION: test_upwind
+}  // END FUNCTION: test_stencil_reach
 
 int test_rhs() {
   $NAMESPACE::generated::params_struct params;
@@ -339,14 +311,14 @@ int test_detgtrazero() {
 """
 
 _GR_DISPATCH = r"""  if (std::strcmp(section, "offsets") == 0) return test_offsets();
-  if (std::strcmp(section, "upwind") == 0) return test_upwind();
+  if (std::strcmp(section, "stencil_reach") == 0) return test_stencil_reach();
   if (std::strcmp(section, "rhs") == 0) return test_rhs();
   if (std::strcmp(section, "init") == 0) return test_init();
   if (std::strcmp(section, "detgtrazero") == 0) return test_detgtrazero();
 """
 
 _GR_ALL = (
-    "+ test_offsets() + test_upwind() + test_rhs() "
+    "+ test_offsets() + test_stencil_reach() + test_rhs() "
     "+ test_init() + test_detgtrazero()"
 )
 
@@ -361,7 +333,7 @@ def _coordinates(
     :param spacings: Grid spacing in each coordinate direction.
     :return: Physical coordinates about the fixed test centre.
     """
-    centres = (6, 7, 8)
+    centres = (8, 9, 10)
     return (
         (point[0] - centres[0]) * spacings[0],
         (point[1] - centres[1]) * spacings[1],
@@ -375,7 +347,6 @@ def _field_value(
     x: float,
     y: float,
     z: float,
-    upwind_controls: Tuple[str, ...],
 ) -> float:
     """
     Return deterministic, algebraically admissible GR block data.
@@ -385,16 +356,12 @@ def _field_value(
     :param x: Physical x coordinate.
     :param y: Physical y coordinate.
     :param z: Physical z coordinate.
-    :param upwind_controls: Scientific names controlling upwind selection.
     :return: Once-rounded field value at the requested coordinate.
     """
-    if name in upwind_controls:
-        value = (field_index + 1) * (x + x**6)
-        return float(value)
     if name == "nrpy_reference_quadratic":
         return float(x * x + x * y)
-    if name == "nrpy_reference_degree6":
-        return float(x**6)
+    if name == "nrpy_reference_degree8":
+        return float(x**8)
     q = 1.0e-3 * (x + 0.5 * y * y - 0.25 * z + 0.1 * x * y)
     amplitude = 2.0e-4 * (1.0 + x * x + y + 0.2 * z * z)
     if name == "hDD00":
@@ -416,9 +383,9 @@ def _field_value(
             + 0.3 * y * y
             - 0.2 * z
             + 0.05 * x * y
-            + 0.02 * x**6
-            + 0.015 * y**6
-            + 0.01 * z**6
+            + 0.02 * x**8
+            + 0.015 * y**8
+            + 0.01 * z**8
         )
         asymptotic = float(gri.glb_gridfcs_dict[name].f_infinity)
         value = asymptotic + 1.0e-4 * (field_index + 1) * polynomial
@@ -431,7 +398,6 @@ def _sample_value(
     field_index: int,
     point: Tuple[int, int, int],
     spacings: Tuple[float, float, float],
-    upwind_controls: Tuple[str, ...],
 ) -> float:
     """
     Return and retain the one binary64 sample shared by both oracle paths.
@@ -441,7 +407,6 @@ def _sample_value(
     :param field_index: Canonical evolved component index.
     :param point: Integer grid indices of the sample.
     :param spacings: Grid spacing in each coordinate direction.
-    :param upwind_controls: Scientific names controlling upwind selection.
     :return: The cached binary64 value.
     """
     key = (name, point)
@@ -450,7 +415,6 @@ def _sample_value(
             name,
             field_index,
             *_coordinates(point, spacings),
-            upwind_controls,
         )
     return samples[key]
 
@@ -475,8 +439,8 @@ def _evaluate_reference(
     point: Tuple[int, int, int],
     spacings: Tuple[float, float, float],
     evol_order: Tuple[str, ...],
-    upwind_controls: Tuple[str, ...],
     fd_order: int,
+    ko_fd_order: int,
     samples: SampleMap,
 ) -> ReferenceValue:
     """
@@ -486,8 +450,8 @@ def _evaluate_reference(
     :param point: Integer grid indices at which to evaluate.
     :param spacings: Grid spacing in each coordinate direction.
     :param evol_order: Canonical evolved-field order.
-    :param upwind_controls: Scientific names controlling upwind selection.
     :param fd_order: Finite-difference order.
+    :param ko_fd_order: Base order of the KO difference.
     :param samples: Binary64 samples shared with the generated executable.
     :return: Stable reference and a scale-derived binary64 error allowance.
     :raises ValueError: If evaluation is complex or precision is unstable.
@@ -519,7 +483,6 @@ def _evaluate_reference(
                             field_indices[name],
                             point,
                             spacings,
-                            upwind_controls,
                         )
                     )
                 elif name in par.glb_code_params_dict:
@@ -535,26 +498,12 @@ def _evaluate_reference(
                         )
                     )
                     base_name, operator = bases[0], operators[0]
-                    selected_operator = operator
-                    if operator.startswith("dupD"):
-                        axis = int(operator[-1])
-                        control_name = upwind_controls[axis]
-                        control_index = evol_order.index(control_name)
-                        control = _sample_value(
-                            samples,
-                            control_name,
-                            control_index,
-                            point,
-                            spacings,
-                            upwind_controls,
+                    if operator.startswith(("dupD", "ddnD")):
+                        raise ValueError(
+                            f"Directional operator {operator!r} remains in centered GR reference."
                         )
-                        selected_operator = (
-                            operator
-                            if control > 0.0
-                            else operator.replace("dupD", "ddnD")
-                        )
-                    coefficients, offsets = compute_fdcoeffs_fdstencl(
-                        selected_operator, fd_order
+                    coefficients, offsets = generic_tests._independent_stencil(
+                        operator, fd_order, ko_fd_order
                     )
                     value = mp.mpf(0)
                     absolute_sum = mp.mpf(0)
@@ -571,7 +520,6 @@ def _evaluate_reference(
                                 field_indices[base_name],
                                 shifted,
                                 spacings,
-                                upwind_controls,
                             )
                         )
                         value += term
@@ -635,7 +583,6 @@ def output_self_test_artifacts(
     solver_namespace: str,
     rhs_build: RHSBuild,
     constraints_build: ConstraintsEvalBuild,
-    enable_ko: bool,
 ) -> Dict[str, str]:
     """
     Return the GR test source and companion headers.
@@ -645,62 +592,38 @@ def output_self_test_artifacts(
     :param rhs_build: Canonical scientific RHS expressions and field order.
     :param constraints_build: Canonical diagnostic expressions registered for
         the generated solver.
-    :param enable_ko: Whether this generation profile includes KO dissipation.
     :return: Solver-root-relative paths mapped to complete file contents.
     :raises ValueError: If configuration or reference validation is invalid.
     """
-    fd_order = int(par.parval_from_str("fd_order"))
-    if fd_order != 4:
-        artifacts = generic_tests.output_self_test_artifacts(
-            solver_stem,
-            solver_namespace,
-            application_test_functions=_GR_SCIENTIFIC_TESTS,
-            application_dispatch=_GR_DISPATCH,
-            application_all=_GR_ALL,
-        )
-        source_path = f"tests/{solver_stem}_self_tests.cpp"
-        artifacts[source_path] = substitute_application_identifiers(
-            artifacts[source_path]
-        )
-        return artifacts
+    fd_order = rhs_build.fd_order
+    ko_fd_order = rhs_build.ko_fd_order
+    enable_ko = rhs_build.ko_enabled
+    if fd_order not in (4, 6, 8) or ko_fd_order != fd_order - 2:
+        raise ValueError("GR reference requires a Dendro FD4/6/8 profile.")
     evol_order = tuple(rhs_build.evol_order)
-    upwind_controls = tuple(rhs_build.upwind_control_fields)
-    if len(upwind_controls) < 3:
-        raise ValueError("GR nonflat reference requires three upwind controls.")
     spacings = (0.125, 0.25, 0.5)
     analytic_evol_order = (
         "nrpy_reference_quadratic",
-        "nrpy_reference_degree6",
-        "nrpy_reference_control0",
-        "nrpy_reference_control1",
-        "nrpy_reference_control2",
+        "nrpy_reference_degree8",
     )
-    analytic_controls = analytic_evol_order[2:]
     analytic_expression = (
         sp.Symbol("nrpy_reference_quadratic_dD0")
         + sp.Symbol("nrpy_reference_quadratic_dDD01")
-        + sp.Symbol("nrpy_reference_degree6_dupD0")
-        + sp.Symbol("nrpy_reference_degree6_dKOD0")
+        + sp.Symbol("nrpy_reference_degree8_dD0")
+        + sp.Symbol("nrpy_reference_degree8_dKOD0")
     )
     analytic_samples: SampleMap = {}
-    for analytic_point in ((3, 3, 3), (6, 7, 8), (9, 11, 13)):
+    for analytic_point in ((4, 4, 4), (8, 9, 10), (12, 14, 16)):
         x, y, _z = _coordinates(analytic_point, spacings)
-        control = _sample_value(
-            analytic_samples,
-            analytic_controls[0],
-            2,
-            analytic_point,
-            spacings,
-            analytic_controls,
+        centered_coefficients, centered_offsets = generic_tests._independent_stencil(
+            "dD0", fd_order, ko_fd_order
         )
-        upwind_operator = "dupD0" if control > 0.0 else "ddnD0"
-        upwind_coefficients, upwind_offsets = compute_fdcoeffs_fdstencl(
-            upwind_operator, 4
+        ko_coefficients, ko_offsets = generic_tests._independent_stencil(
+            "dKOD0", fd_order, ko_fd_order
         )
-        ko_coefficients, ko_offsets = compute_fdcoeffs_fdstencl("dKOD0", 4)
-        upwind = mp.mpf(0)
+        centered = mp.mpf(0)
         ko = mp.mpf(0)
-        for coefficient, offset in zip(upwind_coefficients, upwind_offsets):
+        for coefficient, offset in zip(centered_coefficients, centered_offsets):
             shifted = (
                 analytic_point[0] + offset[0],
                 analytic_point[1],
@@ -712,9 +635,8 @@ def output_self_test_artifacts(
                 1,
                 shifted,
                 spacings,
-                analytic_controls,
             )
-            upwind += _exact_mpf(coefficient) * _exact_mpf(sample)
+            centered += _exact_mpf(coefficient) * _exact_mpf(sample)
         for coefficient, offset in zip(ko_coefficients, ko_offsets):
             shifted = (
                 analytic_point[0] + offset[0],
@@ -727,41 +649,29 @@ def output_self_test_artifacts(
                 1,
                 shifted,
                 spacings,
-                analytic_controls,
             )
             ko += _exact_mpf(coefficient) * _exact_mpf(sample)
-        upwind /= _exact_mpf(spacings[0])
+        centered /= _exact_mpf(spacings[0])
         ko /= _exact_mpf(spacings[0])
-        analytic = _exact_mpf(2.0 * x + y) + 1 + upwind + ko
+        analytic = _exact_mpf(2.0 * x + y) + 1 + centered + ko
         reference = _evaluate_reference(
             analytic_expression,
             analytic_point,
             spacings,
             analytic_evol_order,
-            analytic_controls,
-            4,
+            fd_order,
+            ko_fd_order,
             analytic_samples,
         )
         if abs(reference.value - float(analytic)) > reference.bound:
             raise ValueError(
-                "Complete FD4 reference calculation failed an analytic identity."
+                f"Complete FD{fd_order} reference calculation failed an analytic identity."
             )
         if abs(ko) <= _exact_mpf(1.0e-12):
-            raise ValueError("Independent FD4 reference has a zero KO discriminator.")
-    points = ((3, 3, 3), (6, 7, 8), (9, 11, 13))
-    first_control = upwind_controls[0]
-    first_control_index = evol_order.index(first_control)
-    signs = []
-    for point in points:
-        coordinates = _coordinates(point, spacings)
-        control = _field_value(
-            first_control, first_control_index, *coordinates, upwind_controls
-        )
-        signs.append(1 if control > 0.0 else -1 if control < 0.0 else 0)
-    if tuple(signs) != (-1, 0, 1):
-        raise ValueError(
-            "GR reference points do not cover negative, zero, positive upwind controls."
-        )
+            raise ValueError(
+                f"Independent FD{fd_order} reference has a zero KO discriminator."
+            )
+    points = ((4, 4, 4), (8, 9, 10), (12, 14, 16))
     expression_by_field = {
         gf_names.rhs_symbol_to_gridfunction_name(name): expression
         for name, expression in rhs_build.rhs_by_symbol_name.items()
@@ -786,8 +696,8 @@ def output_self_test_artifacts(
                 point,
                 spacings,
                 evol_order,
-                upwind_controls,
                 fd_order,
+                ko_fd_order,
                 samples,
             )
             references.append(reference)
@@ -801,8 +711,8 @@ def output_self_test_artifacts(
                     point,
                     spacings,
                     evol_order,
-                    upwind_controls,
                     fd_order,
+                    ko_fd_order,
                     samples,
                 )
             )
@@ -830,8 +740,8 @@ def output_self_test_artifacts(
                     point,
                     spacings,
                     evol_order,
-                    upwind_controls,
                     fd_order,
+                    ko_fd_order,
                     samples,
                 )
                 on_reference = reference_by_field_point[(name, point)]
@@ -903,9 +813,7 @@ def output_self_test_artifacts(
         "  const double amplitude = 2.0e-4*(1.0 + x*x + y + 0.2*z*z);",
     ]
     for index, name in enumerate(evol_order):
-        if name in upwind_controls:
-            value = f"{index + 1}.0*(x + std::pow(x, 6))"
-        elif name == "hDD00":
+        if name == "hDD00":
             value = "std::exp(2.0*q) - 1.0"
         elif name in ("hDD11", "hDD22"):
             value = "std::exp(-q) - 1.0"
@@ -921,8 +829,8 @@ def output_self_test_artifacts(
             asymptotic = float(gri.glb_gridfcs_dict[name].f_infinity)
             value = (
                 f"{asymptotic:.17g} + 1.0e-4*{index + 1}.0*"
-                "(0.1+x+0.3*y*y-0.2*z+0.05*x*y+0.02*std::pow(x,6)"
-                "+0.015*std::pow(y,6)+0.01*std::pow(z,6))"
+                "(0.1+x+0.3*y*y-0.2*z+0.05*x*y+0.02*std::pow(x,8)"
+                "+0.015*std::pow(y,8)+0.01*std::pow(z,8))"
             )
         value_lines.append(f"  if (f == {index}u) return {value};  // {name}")
     value_lines.extend(("  return 0.0;", "}  // END FUNCTION: gr_reference_value"))
@@ -951,7 +859,8 @@ def output_self_test_artifacts(
  * flat sentinel corruption, or 6 for diagnostic-reference mismatch.
  */
 int test_gr_nonflat_reference() {{
-  constexpr unsigned nx=13, ny=15, nz=17, pad=3;
+  constexpr unsigned nx=17, ny=19, nz=21;
+  constexpr unsigned pad=$NAMESPACE::generated::REQUIRED_PADDING;
   constexpr std::size_t offset=11;
   constexpr std::size_t vol=static_cast<std::size_t>(nx)*ny*nz;
   constexpr double sentinel=-54321.25;
@@ -968,9 +877,9 @@ int test_gr_nonflat_reference() {{
   }};
   for (unsigned c=0;c<nz;++c) for (unsigned b=0;b<ny;++b)
     for (unsigned a=0;a<nx;++a) {{
-      const double x=(static_cast<int>(a)-6)*dx[0];
-      const double y=(static_cast<int>(b)-7)*dx[1];
-      const double z=(static_cast<int>(c)-8)*dx[2];
+      const double x=(static_cast<int>(a)-8)*dx[0];
+      const double y=(static_cast<int>(b)-9)*dx[1];
+      const double z=(static_cast<int>(c)-10)*dx[2];
       for (unsigned f=0;f<NUM_EVOL_GFS;++f)
         input[f][offset+index(a,b,c)]=gr_reference_value(f,x,y,z);
     }}  // END LOOP: populate reference input
@@ -1006,7 +915,7 @@ int test_gr_nonflat_reference() {{
   const double expected_diagnostic_bounds[]={{
       {expected_diagnostic_bounds}
   }};
-  const unsigned points[][3]={{{{3,3,3}},{{6,7,8}},{{9,11,13}}}};
+  const unsigned points[][3]={{{{4,4,4}},{{8,9,10}},{{12,14,16}}}};
   // Per-component bounds were fixed before execution from each actual CSE DAG,
   // its exact scaled stencil sums, all inputs and CSE temporaries. Across this
   // profile: max operations={maximum_operation_count}, max scale={maximum_evaluation_scale:.17g},
@@ -1018,7 +927,7 @@ int test_gr_nonflat_reference() {{
     const double reference=expected[p*NUM_EVOL_GFS+f];
     const double bound=expected_bounds[p*NUM_EVOL_GFS+f];
     if (!std::isfinite(actual) || std::fabs(actual-reference)>bound) {{
-      std::fprintf(stderr,"FAIL: {formulation} FD4 KO={'on' if enable_ko else 'off'} "
+      std::fprintf(stderr,"FAIL: {formulation} FD{fd_order} KO={'on' if enable_ko else 'off'} "
           "component %u point %u actual %.17g reference %.17g bound %.17g\\n",
           f,p,actual,reference,bound); return 1;
     }}  // END IF: block reference mismatch
@@ -1044,7 +953,7 @@ int test_gr_nonflat_reference() {{
     const double bound=expected_diagnostic_bounds[
         p*$NAMESPACE::generated::NUM_DIAG_GFS+f];
     if(!std::isfinite(actual) || std::fabs(actual-reference)>bound) {{
-      std::fprintf(stderr,"FAIL: {formulation} FD4 diagnostic component %u "
+      std::fprintf(stderr,"FAIL: {formulation} FD{fd_order} diagnostic component %u "
           "point %u actual %.17g reference %.17g bound %.17g\\n",
           f,p,actual,reference,bound); return 6;
     }}  // END IF: diagnostic reference mismatch
@@ -1083,7 +992,7 @@ int test_gr_nonflat_reference() {{
     const double reference=expected[p*NUM_EVOL_GFS+f];
     const double bound=expected_bounds[p*NUM_EVOL_GFS+f];
     if (!std::isfinite(actual) || std::fabs(actual-reference)>bound) {{
-      std::fprintf(stderr,"FAIL: {formulation} flat FD4 KO={'on' if enable_ko else 'off'} "
+      std::fprintf(stderr,"FAIL: {formulation} flat FD{fd_order} KO={'on' if enable_ko else 'off'} "
           "component %u point %u actual %.17g reference %.17g bound %.17g\\n",
           f,p,actual,reference,bound); return 4;
     }}  // END IF: flat reference mismatch

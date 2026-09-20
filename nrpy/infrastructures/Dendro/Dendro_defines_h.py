@@ -2,10 +2,9 @@
 """
 Emit the ``<stem>_defines.h`` header every generated CFunction source includes.
 
-It pulls in the host header, the generated scalar/state/parameter/constant
-headers and the generated CFunction declarations, and defines the upwind
-selection macro defined by NRPy.  It carries no field name, no finite-difference
-coefficient and no numerical loop.
+It pulls in the host header and generated scalar/state/parameter/constant
+headers plus generated CFunction declarations.  It carries no field name,
+finite-difference coefficient, or numerical loop.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -36,8 +35,8 @@ def output_Dendro_defines_h(solver_stem: str) -> str:
     True
     >>> [line for line in header.splitlines() if line.startswith('#include "bssn')]
     ['#include "bssn_types.h"', '#include "bssn_constants.h"', '#include "bssn_parameters.h"', '#include "bssn_state.h"', '#include "bssn_function_prototypes.h"']
-    >>> "#define UPWIND_ALG(UpwindVecU) ((UpwindVecU) > 0.0 ? 1.0 : 0.0)" in header
-    True
+    >>> "UPWIND_ALG" in header
+    False
     >>> '#include "block_geometry.h"' in header
     True
     """
@@ -68,16 +67,6 @@ def output_Dendro_defines_h(solver_stem: str) -> str:
 #include "{solver_stem}_state.h"
 #include "{solver_stem}_function_prototypes.h"
 // clang-format on
-
-// NRPy selects the upwind direction in the canonical backend, so the generated
-// definition must win over any host definition -- matching
-// nrpy/helpers/simd_intrinsics.h and cuda_intrinsics.h, which also #undef
-// first.  A host macro with the opposite orientation would silently invert
-// every advection term.
-#ifdef UPWIND_ALG
-#undef UPWIND_ALG
-#endif
-#define UPWIND_ALG(UpwindVecU) ((UpwindVecU) > 0.0 ? 1.0 : 0.0)
 
 {closing}
 """

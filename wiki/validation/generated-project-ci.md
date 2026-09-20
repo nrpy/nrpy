@@ -20,7 +20,7 @@ Configured GitHub job map:
 | `codegen-ubuntu` | Configured Ubuntu/Python matrix | Installs NRPy, generates in `tmp/`, and builds the selected default C/library projects with `make`, spanning elliptic, wave, black-hole, PN, SEOBNR, TOV, hydro, BHaHAHA, and `sebobv2` routes. It generates `sebobv1_jax` without package install/build. | The `make` builds run no generated executable, and `make clean` follows each; MANGA commands are commented out. |
 | `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation as Ubuntu; no Dendro generation or build; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
 | `einsteintoolkit-validation` | Configured Ubuntu/Apptainer Einstein Toolkit image | Generates `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs the configured Baikal, BaikalVacuum, and WaveToyNRPy Cactus testsuites and fails on reported failures. No `carpetx_*` generation/build/run. |
-| `dendro-validation` | Configured Ubuntu/Apptainer image, digest-verified before use; 30-minute job limit, five-minute real-run limit, and one OpenMP thread per rank | Generates default fourth-order, KO-enabled fCCZ4; builds its standalone self-test target; then links the same generated solver into the image's real Dendro-GR host | Runs one nonflat generated RHS-and-diagnostics check against its multiprecision oracle, then runs one two-rank, one-step Minkowski evolution initialized through Dendro-GR. The real solver enforces rank count, finite values, flat-state bounds, projection schedule, and bounded drift. |
+| `dendro-validation` | Configured Ubuntu/Apptainer image, digest-verified before use; 60-minute job limit, five-minute limit per MPI invocation, and one OpenMP thread per rank | Generates BSSN and fCCZ4 at finite-difference orders 4, 6, and 8 with KO dissipation enabled and disabled; builds and runs every generated standalone CTest check; runs focused AddressSanitizer and UndefinedBehaviorSanitizer storage checks for every profile; embeds both formulations in Dendro-GR for FD4/6/8 with KO and FD6 without KO | Runs each selected real-host profile on one and two MPI ranks, runs one two-rank Minkowski step, checks injected transport, callback, element-order, and TOML-profile failures, and rejects mesh-sized allocation by the block-local RHS callback. |
 | `charmpp-validation` | Configured Ubuntu/Apptainer Charm++ context | Generates and builds the configured superB elliptic, spectroscopy, and collision projects | Runs the configured collision executable through `charmrun`; no explicit scientific-output assertion beyond process success. |
 | `sebob-consistency-test` | Configured Ubuntu matrix | Checks out the workflow-selected trusted revision; generates/builds trusted and current SEOBNRv5 variants | Each helper invocation rebuilds both executables, uses exactly ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed the perturbation-derived baseline. |
 | `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the workflow-selected trusted revision | Uses the same ten-input and median-error criterion. |
@@ -89,31 +89,34 @@ cell is an ordinary C build. The helper installs no CUDA toolkit, declares no
 GPU runner, runs no generated executable, and checks no GPU result. Treat it as
 a local command recipe requiring a prepared environment, not CI pass evidence.
 
-Dendro has a dedicated configured job on every workflow invocation. It uses
-default fourth-order, KO-enabled fCCZ4. One standalone case compares the
-generated nonflat RHS and constraint diagnostics against multiprecision
-evaluations of the canonical expressions and verifies resolvable KO
-contributions. The same generated
-solver then links into the real host and runs one Minkowski step on exactly two
-MPI ranks. Dendro-GR's Minkowski initial-data routine supplies the real-host
-state; the solver checks rank count, finite values, flat-state numerical bounds,
-projection schedule, and drift before returning success. The image checksum
-fixes the consumed image bytes. The durable proof boundaries and local
-reproduction route live in [Validation,
-Standalone Host, And Deferred Tests](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md).
+Dendro has a dedicated configured job on every workflow invocation. Separate
+generated projects cover the complete BSSN/fCCZ4, finite-difference-order
+4/6/8, and KO-on/off matrix. Each project runs its full generated standalone
+CTest set. Focused sanitizer builds check nonzero offsets and flat storage for
+every profile. The job then reconfigures one Dendro-GR build for both
+formulations at FD4/6/8 with KO and FD6 without KO. The real-host test programs
+exercise block geometry, data transfer, callbacks, parameter forwarding, and
+failure termination on one and two MPI ranks. Each qualification executable
+also evolves Minkowski data for one RK4 step on two ranks. Host element-order
+and TOML-profile mismatches must emit their expected diagnostics. The
+block-local callback check rejects mesh-sized allocation. Shared-runner
+wall time is not treated as a performance measurement. These commands establish
+configured checks, not a stored run result. Reproduction details and
+proof limits live in [Validation, Standalone Host, And Deferred
+Tests](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md).
 
 Claim evidence:
-- Claim: the configured Dendro job runs one nonflat fCCZ4 RHS-and-diagnostics numerical oracle and one bounded two-rank real-host Minkowski evolution; configuration does not establish a particular run's outcome.
+- Claim: the configured Dendro job runs every standalone BSSN/fCCZ4 order-and-KO profile, focused sanitizer storage checks, and the selected real-host order/KO matrix on one and two MPI ranks; this configuration does not establish a latest successful run.
 - Role: CI behavior
 - Deciding authority: [main.yml](../../.github/workflows/main.yml), `dendro-validation`
-- Corroboration: [general_relativity/self_tests_cpp.py](../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py), nonflat reference oracle; [general_relativity/main_cpp.py](../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py), real-host acceptance checks
+- Corroboration: [general_relativity/self_tests_cpp.py](../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py), generated numerical checks; [runtime_integration_test.cpp](../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), real-host block and failure checks; [general_relativity/main_cpp.py](../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py), Minkowski acceptance checks
 
 Explicitly unsupported or unverified by these configurations: CarpetX build or
 runtime; JAX generated-package install/import/basic test or accelerator runtime;
 any CUDA executable/GPU result; Dendro general boundaries, distributed
-transport qualification, remeshing, local time stepping, restart, output,
-threaded kernels, or BSSN real-host execution;
-long-time or nonlinear Dendro evolution; Dendro convergence;
+remeshing, local time stepping, restart, output, GPU execution, or threaded
+kernels;
+long-time or nonlinear Dendro evolution;
 geodesic/raytracing projects; GRoovy; active MANGA build; Kasner; and scientific
 correctness beyond the stated regression, property, and waveform assertions.
 

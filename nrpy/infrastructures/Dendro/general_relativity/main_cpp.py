@@ -68,7 +68,10 @@ _STANDALONE_BEFORE_STEPS = r"""  if (global_max(ctx.enforce_detgbar_equals_detgh
   }  // END IF: perturbed RHS vanished
   const double order = $NAMESPACE::observed_convergence_order(dx, ctx.params);
   if (rank == 0) std::printf("ORDER %.3f\n", order);
-  if (!(order >= static_cast<double>($NAMESPACE::generated::FD_ORDER) - 0.5)) {
+  const double minimum_order =
+      static_cast<double>($NAMESPACE::generated::FD_ORDER) -
+      ($NAMESPACE::generated::KO_ENABLED ? 1.5 : 0.5);
+  if (!(order >= minimum_order)) {
     if (rank == 0)
       std::fprintf(stderr, "FAIL: observed convergence order %.3f is too low\n", order);
     MPI_Finalize();
@@ -130,7 +133,7 @@ _REAL_FINAL_CHECKS = r"""      const double rhs = context.max_rhs();
       const double derivative_tolerance =
           256 * std::numeric_limits<double>::epsilon() / (spacing * spacing);
       unsigned long long initial_data_calls = 0;
-      MPI_Allreduce(&context.dendrogr_initial_data_calls, &initial_data_calls,
+      MPI_Allreduce(&context.initial_data_calls, &initial_data_calls,
                     1, MPI_UNSIGNED_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
       int active = mesh->isActive(), active_ranks = 0;
       MPI_Allreduce(&active, &active_ranks, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
@@ -138,7 +141,7 @@ _REAL_FINAL_CHECKS = r"""      const double rhs = context.max_rhs();
           size == 2 && active_ranks == 2 &&
           (!mesh->isActive() ||
            (context.projection_passes == 1 + 5ULL * steps &&
-            context.dendrogr_initial_data_calls > 0)) &&
+            context.initial_data_calls > 0)) &&
           stepper.curr_step() == steps &&
           std::abs(stepper.curr_time() - dt * steps) <=
               1e-11 * std::max(1.0, dt * steps) &&
@@ -148,7 +151,7 @@ _REAL_FINAL_CHECKS = r"""      const double rhs = context.max_rhs();
       MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
       if (rank == 0)
         std::printf("REAL_MINKOWSKI %s active_ranks=%d steps=%u "
-                    "initial_data=dendrogr_minkowski initial_data_calls=%llu "
+                    "initial_data=generated_minkowski initial_data_calls=%llu "
                     "time=%.17g rhs=%.17g constraints=%.17g drift=%.17g "
                     "projection=%.17g hmin=%.17g derivative_tolerance=%.17g\n",
                     global_ok ? "PASS" : "FAIL", active_ranks, steps,
