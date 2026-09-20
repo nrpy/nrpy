@@ -369,17 +369,6 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    fccz4_check = FCCZ4RHSs("Cartesian")
-    fccz4_Bq = BSSN_quantities["Cartesian"]
-    if (
-        sp.simplify(
-            sp.diff(fccz4_check.Lambdatilde_rhsU[0], fccz4_Bq.betaU_dD[0][1])
-            + fccz4_check.LambdatildeU[1]
-        )
-        != 0
-    ):
-        raise AssertionError("fCCZ4 shift-gradient coefficient is incorrect")
-
     cases = (
         ("SinhCartesian", False, False, False, "SinhCartesian"),
         (

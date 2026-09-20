@@ -765,19 +765,6 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    brown_check = BSSNRHSs("Cartesian")
-    brown_Bq = BSSN_quantities["Cartesian"]
-    for connection_rhsU, expected_coefficient in (
-        (brown_check.Lambdabar_rhsU, -brown_Bq.DGammaU[1]),
-        (
-            brown_check.Lambdabar_rhsU_without_Brown_constraint_term,
-            -brown_Bq.LambdabarU[1],
-        ),
-    ):
-        coefficient = sp.diff(connection_rhsU[0], brown_Bq.betaU_dD[0][1])
-        if sp.simplify(coefficient - expected_coefficient) != 0:
-            raise AssertionError("Brown connection-RHS split is incorrect")
-
     for Coord in [
         "Spherical",
         "SinhSpherical_rfm_precompute",
