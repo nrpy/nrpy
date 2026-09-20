@@ -9,7 +9,6 @@ from typing import List, Tuple
 
 import sympy as sp
 
-import nrpy.reference_metric as refmetric
 from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.fCCZ4_RHSs import fCCZ4_RHSs
@@ -38,37 +37,23 @@ def fCCZ4_gauge_RHSs(
     :return: Lapse RHS and rescaled shift and driver RHS vectors.
 
     """
-    alpha_rhs, vet_rhsU, bssn_bet_rhsU = BSSN_gauge_RHSs(
+    suffix = CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
+    rhs = fCCZ4_RHSs.get_rhs(
+        suffix + ("_T4munu" if enable_T4munu else ""),
+        enable_YBS_Gamma_constraint_adjustment=(enable_YBS_Gamma_constraint_adjustment),
+    )
+    alpha_rhs, vet_rhsU, bet_rhsU = BSSN_gauge_RHSs(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_T4munu=enable_T4munu,
         LapseEvolutionOption=LapseEvolutionOption,
         ShiftEvolutionOption=ShiftEvolutionOption,
         enable_YBS_Gamma_constraint_adjustment=(enable_YBS_Gamma_constraint_adjustment),
+        evolved_connection_rhsU=rhs.Lambdatilde_rhsU,
     )
-    suffix = CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
     Bq = BSSN_quantities[suffix]
-    rhs = fCCZ4_RHSs.get_rhs(
-        suffix + ("_T4munu" if enable_T4munu else ""),
-        enable_YBS_Gamma_constraint_adjustment=(enable_YBS_Gamma_constraint_adjustment),
-    )
     if LapseEvolutionOption == "OnePlusLog":
         alpha_rhs += 4 * Bq.alpha * rhs.Theta
-
-    bet_rhsU = [bssn_bet_rhsU[i] for i in range(3)]
-    if ShiftEvolutionOption in (
-        "GammaDriving2ndOrder_NoCovariant",
-        "GammaDriving2ndOrder_Covariant",
-        "GammaDriving2ndOrder_Covariant__Hatted",
-        "NonAdvectingGammaDriving",
-    ):
-        rfm = refmetric.reference_metric[
-            CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
-        ]
-        for i in range(3):
-            bet_rhsU[i] += (
-                sp.Rational(3, 4) * rhs.Lambdatilde_rhsU_delta[i] / rfm.ReU[i]
-            )
     return alpha_rhs, vet_rhsU, bet_rhsU
 
 
