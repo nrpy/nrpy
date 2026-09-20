@@ -855,18 +855,18 @@ class GeodesicEquations:
         Generate the observer-ray null normalization ``C`` and energy scale ``q``.
 
         Let ``e_a^mu`` be a metric-orthonormal observer tetrad with signature
-        ``(-,+,+,+)``.  For screen-plane offsets ``h`` and ``v``, the paper
-        constructs the future-directed null tetrad vector
+        ``(-,+,+,+)``.  For width and height camera offsets ``w_cam`` and
+        ``h_cam``, the paper constructs the future-directed null tetrad vector
 
-        ``chi^mu = C e_0^mu - e_1^mu - v e_2^mu - h e_3^mu``.
+        ``chi^mu = C e_0^mu - e_1^mu - h_cam e_2^mu - w_cam e_3^mu``.
 
         The tetrad orthonormality relations reduce its metric norm to
 
-        ``g_mu_nu chi^mu chi^nu = -C^2 + 1 + v^2 + h^2``.
+        ``g_mu_nu chi^mu chi^nu = -C^2 + 1 + w_cam^2 + h_cam^2``.
 
         Setting this expression to zero gives
 
-        ``C = sqrt(1 + v^2 + h^2)``.
+        ``C = sqrt(1 + w_cam^2 + h_cam^2)``.
 
         The physical future-directed photon momentum is ``p^mu = q chi^mu``.
         A tetrad observer with four-velocity ``e_0^mu`` measures photon energy
@@ -882,9 +882,9 @@ class GeodesicEquations:
         :meth:`photon_observer_ray_past_directed_tetrad_coefficients` and must be
         kept consistent with the state initialization and evolution code.
 
-        ``h`` and ``v`` are deliberately generic symbolic placeholders.  The
-        numerical initializer supplies their pixel-dependent values after it
-        computes the horizontal and vertical fields of view.
+        ``w_cam`` and ``h_cam`` are symbolic rightward and upward camera
+        offsets.  The numerical initializer supplies their pixel-dependent
+        values from the width and height fields of view.
 
         Reference:
         ``What does a binary black hole merger look like?``, Section II.B,
@@ -892,15 +892,14 @@ class GeodesicEquations:
 
         :return: Tuple containing the symbolic ``C`` and ``q`` expressions.
         """
-        # Step 1: Declare screen-plane angular offsets.  Both symbols are real
-        # because they represent horizontal and vertical image-plane offsets.
-        h = sp.Symbol("h", real=True)
-        v = sp.Symbol("v", real=True)
+        # Step 1: Declare real width and height camera offsets.
+        w_cam = sp.Symbol("w_cam", real=True)
+        h_cam = sp.Symbol("h_cam", real=True)
 
         # Step 2: Compute squared spatial magnitude of the screen direction in
         # the orthonormal observer frame.  The tetrad makes this Euclidean-looking
         # expression valid even when the coordinate metric is non-Euclidean.
-        screen_norm_squared = sp.sympify(1) + h**2 + v**2
+        screen_norm_squared = sp.sympify(1) + w_cam**2 + h_cam**2
 
         # Step 3: Enforce chi_mu chi^mu = 0.  The positive root is required so
         # C represents the positive temporal magnitude of the future-directed
@@ -920,19 +919,19 @@ class GeodesicEquations:
 
         The future-directed vector used in the observer construction is
 
-        ``p^mu = q (C e_0^mu - e_1^mu - v e_2^mu - h e_3^mu)``.
+        ``p^mu = q (C e_0^mu - e_1^mu - h_cam e_2^mu - w_cam e_3^mu)``.
 
         Reverse ray tracing starts at the observer and integrates outward into
         the past.  It therefore evolves ``k^mu = -p^mu``:
 
-        ``k^mu = -q C e_0^mu + q e_1^mu + q v e_2^mu + q h e_3^mu``.
+        ``k^mu = -q C e_0^mu + q e_1^mu + q h_cam e_2^mu + q w_cam e_3^mu``.
 
         With unit observer-frame energy, ``q C = 1``.  In tetrad ordering
         ``(e_0, e_1, e_2, e_3)``, the coefficients are therefore
 
-        ``(-1, 1/C, v/C, h/C)``.
+        ``(-1, 1/C, h_cam/C, w_cam/C)``.
 
-        The central ray has ``h = v = 0`` and becomes
+        The central ray has ``w_cam = h_cam = 0`` and becomes
 
         ``k^mu = -e_0^mu + e_1^mu``.
 
@@ -953,14 +952,14 @@ class GeodesicEquations:
 
         # Step 2: Declare the same screen offsets used by the C and q helper.
         # SymPy symbols with the same name and assumptions represent the same
-        # symbolic quantities, allowing q*v and q*h to combine correctly.
-        h = sp.Symbol("h", real=True)
-        v = sp.Symbol("v", real=True)
+        # symbolic quantities, allowing q*h_cam and q*w_cam to combine correctly.
+        w_cam = sp.Symbol("w_cam", real=True)
+        h_cam = sp.Symbol("h_cam", real=True)
 
         # Step 3: Negate the future-directed tetrad vector.  The e_0 coefficient
         # is written as -q*C to expose its origin; with q=1/C it evaluates to
-        # -1.  Remaining coefficients preserve pixel-dependent h and v factors.
-        past_directed_coefficients = [-q * C, q, q * v, q * h]
+        # -1.  Remaining coefficients preserve the pixel-dependent camera offsets.
+        past_directed_coefficients = [-q * C, q, q * h_cam, q * w_cam]
 
         return past_directed_coefficients
 

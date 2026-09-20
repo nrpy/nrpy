@@ -283,8 +283,8 @@ def set_initial_conditions_kernel(normalized_eom: bool = False) -> None:
     # initializes event-side history for batch paths.
 
     # Step 2: Pull universal C and q expressions from the equation layer.  The
-    # generated ray loop supplies screen offsets through C variables named h
-    # and v, matching the symbols declared by geodesics.py.
+    # generated ray loop supplies camera offsets through C variables named
+    # w_cam and h_cam, matching the symbols declared by geodesics.py.
     observer_C_expr, observer_q_expr = (
         geo.GeodesicEquations.photon_observer_ray_C_and_q()
     )
@@ -395,8 +395,8 @@ __TETRAD_LOADS__
     // Pixel-center sampling uses half-cell offsets. Increasing the column
     // increases the width offset and therefore moves the ray toward e_3;
     // increasing the row increases the height offset and moves it toward e_2.
-    const double h = (2.0 * a - 1.0) * tan(0.5 * __CD_ACCESS__alpha_w);
-    const double v = (2.0 * b - 1.0) * tan(0.5 * __CD_ACCESS__alpha_h);
+    const double w_cam = (2.0 * a - 1.0) * tan(0.5 * __CD_ACCESS__alpha_w);
+    const double h_cam = (2.0 * b - 1.0) * tan(0.5 * __CD_ACCESS__alpha_h);
 
     // Generate C and q from geodesics.py.  ray_C enforces nullness; ray_q
     // sets the observer-frame energy magnitude to one.
@@ -412,22 +412,22 @@ __OBSERVER_RAY_MATH__
     d_f_bundle[IDX_F(2, c)] = __CD_ACCESS__observer_y;
     d_f_bundle[IDX_F(3, c)] = __CD_ACCESS__observer_z;
     // Reverse ray tracing evolves the past-directed vector
-    // k^mu = -e_0^mu + (e_1^mu + v e_2^mu + h e_3^mu)/C.
+    // k^mu = -e_0^mu + (e_1^mu + h_cam e_2^mu + w_cam e_3^mu)/C.
     // Writing -ray_q*ray_C exposes the paper's q chi construction and avoids
     // solving a separate quadratic for p^0.
     const double past_e0_coefficient = -ray_q * ray_C;
     d_f_bundle[IDX_F(4, c)] =
         past_e0_coefficient * e0[0] +
-        ray_q * (e1[0] + v * e2[0] + h * e3[0]);
+        ray_q * (e1[0] + h_cam * e2[0] + w_cam * e3[0]);
     d_f_bundle[IDX_F(5, c)] =
         past_e0_coefficient * e0[1] +
-        ray_q * (e1[1] + v * e2[1] + h * e3[1]);
+        ray_q * (e1[1] + h_cam * e2[1] + w_cam * e3[1]);
     d_f_bundle[IDX_F(6, c)] =
         past_e0_coefficient * e0[2] +
-        ray_q * (e1[2] + v * e2[2] + h * e3[2]);
+        ray_q * (e1[2] + h_cam * e2[2] + w_cam * e3[2]);
     d_f_bundle[IDX_F(7, c)] =
         past_e0_coefficient * e0[3] +
-        ray_q * (e1[3] + v * e2[3] + h * e3[3]);
+        ray_q * (e1[3] + h_cam * e2[3] + w_cam * e3[3]);
 
     // Affine-distance diagnostic starts at zero in both direct and normalized
     // state layouts.
