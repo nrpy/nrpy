@@ -87,6 +87,7 @@ def test_example_BSSN() -> bool:
             % \Delta^k = \bar{\gamma}^{ij} \Delta^k_{ij}
             % replace "\partial_t \mathrm{lambda}" -> "\mathrm{Lambdabar_rhs}"
             \partial_t \bar{\Lambda}^i &= \mathcal{L}_\beta \bar{\Lambda}^i + \bar{\gamma}^{jk} \hat{D}_j \hat{D}_k \beta^i
+                + (\bar{\Lambda}^k - \Delta^k) \hat{D}_k \beta^i
                 + \frac{2}{3} \Delta^i \bar{D}_k \beta^k + \frac{1}{3} \bar{D}^i \bar{D}_k \beta^k \\%
                 &\qquad- 2 \bar{A}^{ij} \left(\partial_j \alpha - 6 \alpha \partial_j \phi\right)
                 + 2 \alpha \bar{A}^{jk} \Delta^i_{jk} - \frac{4}{3} \alpha \bar{\gamma}^{ij} \partial_j K \\
