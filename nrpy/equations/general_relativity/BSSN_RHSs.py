@@ -244,11 +244,11 @@ class BSSNRHSs:
         DGammaU = Bq.DGammaU  # From Bq.RicciBar__gammabarDD_dHatD__DGammaUDD__DGammaU()
         for i in range(3):
             for k in range(3):
-                Dhat_beta = betaU_dD[i][k]
+                betaU_dHatD = betaU_dD[i][k]
                 for m in range(3):
-                    Dhat_beta += rfm.GammahatUDD[i][m][k] * betaU[m]
+                    betaU_dHatD += rfm.GammahatUDD[i][m][k] * betaU[m]
                 self.Lambdabar_rhsU[i] += betaU[k] * self.LambdabarU_dupD[i][k] - betaU_dD[i][k] * LambdabarU[k]
-                Brown_constraint_rhsU[i] += (LambdabarU[k] - DGammaU[k]) * Dhat_beta
+                Brown_constraint_rhsU[i] += (LambdabarU[k] - DGammaU[k]) * betaU_dHatD
 
         # Step 6.b: Term 2 of \partial_t \bar{\Lambda}^i = \bar{\gamma}^{jk} (Term 2a + Term 2b + Term 2c)
         # Term 2a: \bar{\gamma}^{jk} \beta^i_{,kj}
@@ -778,10 +778,8 @@ if __name__ == "__main__":
             enable_YBS_Gamma_constraint_adjustment=True,
             enable_YBS_momentum_constraint_adjustment=True,
         )
-        tested_expressions = dict(brhs.__dict__)
-        del tested_expressions["Lambdabar_rhsU_without_Brown_constraint_term"]
         results_dict = ve.process_dictionary_of_expressions(
-            tested_expressions, fixed_mpfs_for_free_symbols=True
+            brhs.__dict__, fixed_mpfs_for_free_symbols=True
         )
         ve.compare_or_generate_trusted_results(
             os.path.abspath(__file__),

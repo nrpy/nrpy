@@ -31,6 +31,15 @@ trusted_dict = {
     "Lambdabar_rhsU_0": mpf("-1044801.34983983075195563579186188"),
     "Lambdabar_rhsU_1": mpf("1199322.38029423044883005137714225"),
     "Lambdabar_rhsU_2": mpf("-631304.665073950482251040493816998"),
+    "Lambdabar_rhsU_without_Brown_constraint_term_0": mpf(
+        "-1039199.25003030677574977237165909"
+    ),
+    "Lambdabar_rhsU_without_Brown_constraint_term_1": mpf(
+        "1194035.42906969554171557424343557"
+    ),
+    "Lambdabar_rhsU_without_Brown_constraint_term_2": mpf(
+        "-629165.093976685562610183891415816"
+    ),
     "MD_0": mpf("-6286.27929533959068781096674552521"),
     "MD_1": mpf("4374.21653245148336991990624567027"),
     "MD_2": mpf("-2964.67520603628262152902135794939"),
