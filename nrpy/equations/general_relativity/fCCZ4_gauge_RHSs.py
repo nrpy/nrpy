@@ -71,11 +71,11 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    _, _, gauge_check = fCCZ4_gauge_RHSs()
+    _alpha_rhs, _vet_rhsU, gauge_bet_rhsU = fCCZ4_gauge_RHSs()
     gauge_Bq = BSSN_quantities["Cartesian"]
     if (
         sp.simplify(
-            sp.diff(gauge_check[0], gauge_Bq.betaU_dD[0][1])
+            sp.diff(gauge_bet_rhsU[0], gauge_Bq.betaU_dD[0][1])
             + sp.Rational(3, 4) * fCCZ4_RHSs["Cartesian"].LambdatildeU[1]
         )
         != 0
