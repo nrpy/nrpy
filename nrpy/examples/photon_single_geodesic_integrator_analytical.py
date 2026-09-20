@@ -30,9 +30,7 @@ from nrpy.infrastructures.BHaH import (
 )
 from nrpy.infrastructures.BHaH import CodeParameters as CPs
 from nrpy.infrastructures.BHaH import Makefile_helpers as Makefile
-from nrpy.infrastructures.BHaH import (
-    cmdline_input_and_parfiles,
-)
+from nrpy.infrastructures.BHaH import cmdline_input_and_parfiles
 from nrpy.infrastructures.BHaH.general_relativity.geodesics import (
     connections,
     conserved_quantities,
