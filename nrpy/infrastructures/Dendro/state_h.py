@@ -16,7 +16,6 @@ from typing import List, Tuple, cast
 import sympy as sp
 
 import nrpy.grid as gri
-from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
 from nrpy.infrastructures.Dendro.generated_file_banner import generated_file_banner
 from nrpy.infrastructures.Dendro.header_guards import header_guard
@@ -110,8 +109,6 @@ def output_state_h(solver_stem: str, solver_namespace: str) -> str:
     :param solver_namespace: NRPy-qualified solver namespace, e.g.
         ``nrpy::bssn``.
     :return: The complete C++ header text.
-    :raises ValueError: If a recorded upwind control field is not an EVOL field.
-
     """
     evol = [
         (index, name, gri.glb_gridfcs_dict[name])
@@ -185,33 +182,6 @@ def output_state_h(solver_stem: str, solver_namespace: str) -> str:
             f"    {_cxx_scalar_literal(str(gf.wavespeed), name, 'wavespeed')},"
         )
     lines.append("};  // END ARRAY: EVOL_GF_WAVESPEED")
-    lines.append("")
-    # The control fields come from the right-hand-side builder, which derives
-    # them from the shared expression factory's upwind control vector, so this
-    # renderer invents nothing.  Reading them through
-    # roles.upwind_control_fields() means an unrecorded set raises here rather
-    # than emitting an empty table that would silently disable the generated
-    # upwind self-test.
-    evol_positions = {name: index for index, (_i, name, _g) in enumerate(evol)}
-    control_index_list: List[int] = []
-    for control_name in roles.upwind_control_fields():
-        if control_name not in evol_positions:
-            raise ValueError(
-                f"Upwind control field {control_name!r} is not a registered EVOL field."
-            )
-        control_index_list.append(evol_positions[control_name])
-    control_indices = tuple(sorted(control_index_list))
-    lines.append("// Indices of the evolved fields that drive NRPy's upwind selection.")
-    lines.append(
-        "inline constexpr unsigned NUM_UPWIND_CONTROL_GFS = " f"{len(control_indices)};"
-    )
-    lines.append(
-        "inline constexpr std::array<unsigned, NUM_UPWIND_CONTROL_GFS>"
-        " EVOL_UPWIND_CONTROL_INDICES = {"
-    )
-    for index in control_indices:
-        lines.append(f"    {index},")
-    lines.append("};  // END ARRAY: EVOL_UPWIND_CONTROL_INDICES")
     lines.append("")
     # The strict, case-sensitive exact-name lookup.
     # Matching is case-sensitive because NRPy tensor-variance suffixes are, and

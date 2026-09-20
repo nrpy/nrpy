@@ -3,8 +3,8 @@
 Lower a registered NRPy expression set into Dendro kernel bodies.
 
 Everything here is formulation-agnostic: it turns a mapping of right-hand-side
-symbol to SymPy expression, plus an optional upwind control vector, into the
-pointer bindings, point loop and parameter lists a Dendro CFunction needs.  The
+symbol to SymPy expression into the pointer bindings, point loop and parameter
+lists a Dendro CFunction needs.  The
 physics that produces those expressions lives under ``general_relativity/``;
 this module authors no field name, no physics default and no expression.
 
@@ -12,7 +12,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Callable, Iterable, List, Optional, Sequence, Set, Tuple, Union
+from typing import Callable, Iterable, List, Optional, Sequence, Set, Tuple
 
 import sympy as sp
 
@@ -341,7 +341,6 @@ def point_loop(kernel: str, padding: str = "geom.padding") -> str:
 
 def emitted_derivative_operators(
     expressions: Iterable[sp.Expr],
-    upwind_control_vec: Union[List[sp.Basic], sp.Basic, str],
 ) -> Tuple[str, ...]:
     """
     Return the distinct derivative operators the expressions require.
@@ -352,9 +351,7 @@ def emitted_derivative_operators(
     same naming scheme.
 
     :param expressions: The expressions the kernel is generated from.
-    :param upwind_control_vec: The upwind control vector, or the string sentinel
-        when upwinding is not enabled.
-    :return: The operators, sorted, e.g. ``('dD0', 'dKOD1', 'dupD2')``.
+    :return: The operators, sorted, e.g. ``('dD0', 'dKOD1')``.
 
     Doctests:
     >>> import nrpy.indexedexp as ixp
@@ -364,7 +361,7 @@ def emitted_derivative_operators(
     >>> _ = gri.register_gridfunctions("cf", group="EVOL")
     >>> cf_dD = ixp.declarerank1("cf_dD")
     >>> cf_dKOD = ixp.declarerank1("cf_dKOD")
-    >>> emitted_derivative_operators([cf_dD[0] + cf_dKOD[1]], "unset")
+    >>> emitted_derivative_operators([cf_dD[0] + cf_dKOD[1]])
     ('dD0', 'dKOD1')
     >>> gri.glb_gridfcs_dict.clear()
     """
@@ -372,7 +369,7 @@ def emitted_derivative_operators(
     for expr in expressions:
         free_symbols.extend(expr.free_symbols)
     deriv_vars = extract_list_of_deriv_var_strings_from_sympyexpr_list(
-        free_symbols, upwind_control_vec, families=DERIVATIVE_FAMILIES
+        free_symbols, "unset", families=DERIVATIVE_FAMILIES
     )
     _base_gridfunctions, deriv_operators = (
         extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(deriv_vars)
@@ -382,8 +379,9 @@ def emitted_derivative_operators(
 
 def padding_from_derivative_operators(
     expressions: Sequence[sp.Expr],
-    upwind_control_vec: Union[List[sp.Basic], sp.Basic, str],
     fd_order: int,
+    *,
+    ko_fd_order: Optional[int] = None,
 ) -> int:
     """
     Return the ghost points the expressions' derivatives reach.
@@ -392,18 +390,22 @@ def padding_from_derivative_operators(
     ``geom.padding`` and Dendro sizes a block's padding from its element order,
     so the host block geometry cannot represent per-axis padding.
 
-    This is not ``fd_order // 2``: the upwinded and Kreiss-Oliger families reach
-    one point further than the centered ones (at fd_order 4, ``dupD`` reaches 3
-    while ``dD`` reaches 2), so a radius-derived padding would read past the end
-    of a Dendro block.  The reach itself comes from
+    The reach comes from
     :func:`nrpy.finite_difference.stencil_reach_per_axis`, which reads the same
     coefficient source the kernel's C code is generated from.
 
     :param expressions: The expressions the kernel is generated from.
-    :param upwind_control_vec: The upwind control vector, or the string sentinel
-        when upwinding is not enabled.
     :param fd_order: The finite-difference order.
+    :param ko_fd_order: ``None`` or a non-Boolean positive even integer used
+        as the base order for ``dKOD``.
     :return: The widest numerical stencil reach over all axes.
+    :raises ValueError: If derivative operators are present and
+        ``ko_fd_order`` is neither ``None`` nor a non-Boolean positive even
+        integer.
+
+    Darglint cannot infer the ``ValueError`` propagated by numerical-stencil
+    construction.
+    # noqa: DAR402
 
     Doctests:
     >>> import nrpy.indexedexp as ixp
@@ -412,60 +414,29 @@ def padding_from_derivative_operators(
     >>> par.set_parval_from_str("Infrastructure", "Dendro")
     >>> _ = gri.register_gridfunctions("cf", group="EVOL")
     >>> cf_dD = ixp.declarerank1("cf_dD")
-    >>> padding_from_derivative_operators([cf_dD[0] + cf_dD[1] + cf_dD[2]], "unset", 4)
+    >>> padding_from_derivative_operators([cf_dD[0] + cf_dD[1] + cf_dD[2]], 4)
     2
-
-    The per-order reach is pinned in
-    :func:`nrpy.finite_difference.stencil_reach_per_axis`.  This wrapper takes
-    the maximum across axes, so the case below mixes a centered axis with an
-    upwinded one: a uniform expression would pass just as well if this returned
-    the minimum.
-
-    >>> cf_dupD = ixp.declarerank1("cf_dupD")
-    >>> mixed_axes = cf_dD[0] + cf_dupD[1] + cf_dD[2]
-    >>> padding_from_derivative_operators([mixed_axes], "unset", 4)
-    3
 
     Algebraic expressions require no numerical neighbours.  A derivative may
     use only one axis; Dendro still represents its reach with one uniform
     number.
 
-    >>> padding_from_derivative_operators([sp.Symbol("cf")], "unset", 4)
+    >>> padding_from_derivative_operators([sp.Symbol("cf")], 4)
     0
-    >>> padding_from_derivative_operators([cf_dD[0]], "unset", 4)
+    >>> padding_from_derivative_operators([cf_dD[0]], 4)
     2
     >>> cf_dKOD = ixp.declarerank1("cf_dKOD")
-    >>> padding_from_derivative_operators([cf_dKOD[2]], "unset", 4)
+    >>> padding_from_derivative_operators([cf_dKOD[2]], 4)
     3
     >>> gri.glb_gridfcs_dict.clear()
     """
-    padding = stencil_reach_per_axis(expressions, upwind_control_vec, fd_order)
+    padding = stencil_reach_per_axis(
+        expressions,
+        "unset",
+        fd_order,
+        ko_fd_order=ko_fd_order,
+    )
     return max(padding)
-
-
-def upwind_control_fields_from_control_vec(
-    upwind_control_vec: Iterable[sp.Expr], evol_order: Sequence[str]
-) -> Tuple[str, ...]:
-    """
-    Return the EVOL fields that appear in the upwind control vector.
-
-    Derived from the expressions rather than hardcoded, so the generated
-    upwind-selection self-test drives exactly the fields the kernel switches
-    on.
-
-    :param upwind_control_vec: The control vector components.
-    :param evol_order: The EVOL names, in registry order.
-    :return: The control field names, in registry order.
-    """
-    # ``str`` round-trips the component so every control symbol is rebuilt
-    # under SymPy's default assumptions, matching the plain ``sp.Symbol(name)``
-    # built below: two symbols of the same name compare equal only when their
-    # assumptions agree.  SymPy types ``free_symbols`` as a set of ``Basic``,
-    # so the accumulator is annotated ``Set[sp.Basic]``.
-    control_symbols: Set[sp.Basic] = set()
-    for component in upwind_control_vec:
-        control_symbols |= sp.sympify(str(component)).free_symbols
-    return tuple(name for name in evol_order if sp.Symbol(name) in control_symbols)
 
 
 if __name__ == "__main__":

@@ -88,12 +88,10 @@ source path, because the CFunction registry is the only body and signature
 store. Duplicate names are rejected by `cfc.register_CFunction` itself.
 
 The registered EVOL, AUXEVOL, and DIAG orders are queried from the gridfunction
-registry rather than restated. The right-hand-side builder records two derived
-values there as well: the ghost points its operators reach, through
-`set_required_padding`, and the EVOL fields its kernel upwinds on, through
-`set_upwind_control_fields`. Both readers raise when nothing is recorded, so a
-lost writer fails generation rather than emitting a zero padding or an empty
-upwind table. `registered_evol_order` raises on an empty EVOL registry for the
+registry rather than restated. The right-hand-side builder also records the
+ghost points its regular and KO operators reach through `set_required_padding`.
+The reader raises when nothing is recorded, so a lost writer fails generation
+rather than emitting zero padding. `registered_evol_order` raises on an empty EVOL registry for the
 same reason: a builder that reached it with nothing registered would emit a
 well-formed kernel with an empty body, which is the one failure a generated
 solver cannot report.
@@ -112,7 +110,10 @@ one-point read helper uses for every read, along with the interior coordinates
 `xx0`, `xx1`, and `xx2`. The block loop iterates the local block list supplied
 by Dendro and invokes the registered per-block CFunction for each block. Both
 are emitted by NRPy through the generic loop helper; the Dendro runtime supplies
-only the block list and its count. `require_serial_parallelization` keeps the
+only the block list and its count. The [grid and AMR
+page](grid-amr-and-time-stepping.md) distinguishes this loop unit from
+Dendro's refinement unit.
+`require_serial_parallelization` keeps the
 emitted loop free of a parallelization directive NRPy is not entitled to choose
 for the host: the point kernel runs inside Dendro's own block traversal, so an
 inner OpenMP pragma would nest parallelism.
@@ -139,7 +140,7 @@ to `nrpy.finite_difference`.
 
 - [grid.py](../../../nrpy/grid.py) - `DendroGridFunction`, `input_pointer`, `access_gf`, `read_gf_from_memory_Ccode_onept`
 - [gridfunction_name_decorations.py](../../../nrpy/infrastructures/Dendro/gridfunction_name_decorations.py) - `input_pointer`, `rhs_pointer`, `out_pointer`, `enum_member`, `rhs_symbol_to_gridfunction_name`, `validate_cpp_identifier`, `tensor_family_of`
-- [CFunction_roles.py](../../../nrpy/infrastructures/Dendro/CFunction_roles.py) - `set_CFunction_role`, `CFunction_name_for_role`, `registered_evol_order`, `set_required_padding`, `set_upwind_control_fields`
+- [CFunction_roles.py](../../../nrpy/infrastructures/Dendro/CFunction_roles.py) - `set_CFunction_role`, `CFunction_name_for_role`, `registered_evol_order`, `set_required_padding`
 - [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `emitted_parameter_names`, `runtime_parameter_names`, `register_CFunctions_parameters`
 - [simple_loop.py](../../../nrpy/infrastructures/Dendro/simple_loop.py) - `simple_loop`, `block_loop`, `require_serial_parallelization`
 - [generation_parameters.py](../../../nrpy/infrastructures/Dendro/general_relativity/generation_parameters.py) - `validate_generation_parameters`
@@ -148,6 +149,7 @@ to `nrpy.finite_difference`.
 
 - Parent: [Dendro](index.md)
 - Depends on: [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
+- Depends on: [Octree Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md)
 - See also: [Project Assembly And Generating Functions](project-assembly-and-emitters.md)
 - Example: [fCCZ4 Application Wiring](fccz4-application-wiring.md)
 - See also: [Finite Difference](../../core/finite-difference.md)

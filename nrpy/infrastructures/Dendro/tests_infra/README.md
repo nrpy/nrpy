@@ -33,13 +33,13 @@ mpicxx -std=gnu++17 -O2 -fopenmp $DEF $INC \
 ```bash
 mpirun -n 1 ./captest      # prints one PROVEN/FAILED line per axis
 mpirun -n 2 ./captest      # same axes across a distributed block list
-CAPTEST_ORDERS=10 mpirun -n 1 ./captest   # padding 5, the eighth-order probe
+CAPTEST_ORDERS=4,6,8 mpirun -n 1 ./captest   # generated profile orders
 ```
 
 A clean run completes every requested order, ends with `CAPABILITY_TESTS_OK`,
 and exits zero on every rank. Rank zero selects `CAPTEST_ORDERS`: a nonempty,
-comma-separated list of positive even element orders (for example `2,4` or
-`10`). Empty, nonnumeric, or malformed overrides fail qualification.
+comma-separated list of positive even element orders (for example `4,6` or
+`4,6,8`). Empty, nonnumeric, or malformed overrides fail qualification.
 Mesh/vector setup status is checked collectively before halo exchange, so a
 local setup failure fails the MPI-wide result without stranding peer ranks.
 
@@ -71,12 +71,13 @@ done
 
 ## Generated real-host qualification
 
-The generated fCCZ4 solver has a separate real-host build selected by
-`FCCZ4_STANDALONE_HOST=OFF`. It uses actual blocks and vectors, synchronous
-Dendrolib halo exchange, and the selected host's `ts::ETS` RK4 initialization,
-stage updates, and cleanup. This is a
-fixed-mesh, serial-CPU-per-rank Minkowski qualification with analytic exterior
-data. It does not qualify general physical boundaries, remeshing, LTS,
+Each generated formulation exposes a production library when its module is
+added to a CMake tree containing `dendro5`. Enabling
+`NRPY_DENDRO_BUILD_DRIVERS` also builds its real-host qualification executable.
+It uses actual blocks and vectors, synchronous Dendrolib halo exchange, and the
+selected host's `ts::ETS` RK4 initialization, stage updates, and cleanup. This
+is a fixed-mesh, serial-CPU-per-rank Minkowski qualification with generated
+analytic exterior data. It does not qualify general physical boundaries, remeshing, LTS,
 checkpoint/restart, output routines, GPU execution, or threaded kernels.
 
 Use an isolated working directory. Set `NRPY_SOURCE` to the absolute path of
@@ -96,17 +97,25 @@ cat >> host/CMakeLists.txt <<'CMAKE'
 add_subdirectory("${NRPY_GENERATED}/Dendro-GR/nrpy_fccz4" nrpy_fccz4)
 add_executable(nrpy_runtime_test
   "${NRPY_SOURCE}/nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp")
-target_link_libraries(nrpy_runtime_test PRIVATE fccz4_common MPI::MPI_CXX)
+target_link_libraries(nrpy_runtime_test PRIVATE nrpy_fccz4_dendro MPI::MPI_CXX)
 target_compile_definitions(nrpy_runtime_test PRIVATE
   RUNTIME_HEADER="fccz4Ctx.h" RUNTIME_NAMESPACE=nrpy::fccz4)
 CMAKE
-cmake -S host -B build -DWITH_CUDA=OFF -DFCCZ4_STANDALONE_HOST=OFF \
+cmake -S host -B build -DWITH_CUDA=OFF -DNRPY_DENDRO_BUILD_DRIVERS=ON \
+  -DNRPY_DENDRO_BUILD_TESTS=OFF \
   -DNRPY_SOURCE="$NRPY_SOURCE" -DNRPY_GENERATED="$PWD/generated" \
   -DDENDRO_dendrolib_DIR="$PWD/dendrolib"
-cmake --build build --target fccz4Solver nrpy_runtime_test -j2
+cmake --build build --target nrpy_fccz4_dendro_qualify nrpy_runtime_test -j2
+OMP_NUM_THREADS=1 timeout 300 mpiexec -n 1 build/nrpy_runtime_test
 OMP_NUM_THREADS=1 timeout 300 mpiexec -n 2 build/nrpy_runtime_test
-OMP_NUM_THREADS=1 timeout 300 mpiexec -n 2 build/nrpy_fccz4/fccz4Solver
+OMP_NUM_THREADS=1 timeout 300 mpiexec -n 2 \
+  build/nrpy_fccz4/nrpy_fccz4_dendro_qualify
 ```
+
+For BSSN, generate with `nrpy.examples.dendro_bssn`, use
+`nrpy_bssn_dendro`, `nrpy_bssn_dendro_qualify`, `bssnCtx.h`, and
+`nrpy::bssn`. Both generated modules may be added to the same parent CMake
+project because their production and qualification target names are distinct.
 
 The host's usual BLAS/LAPACK, MPI, C++17, and dependency-fetch requirements
 apply. Cached `toml11` and `spdlog` source directories may be supplied through
@@ -120,9 +129,36 @@ storage before exchange. It checks every node in the host receive scatter map,
 all in-domain padded block values against component-distinct affine data,
 physical padded origins, nonzero block offsets, and nonconstant zip results.
 The MPI mesh can reserve unused ghost slots; those are not promised receive
-nodes. The test also changes `eta` from zero to one on a state with `B^0=0.01`
-and checks the analytic RHS difference `-0.01`, with other components unchanged.
-A passing run prints `REAL_TRANSPORT PASS` and `REAL_PARAMETER PASS`.
+nodes. It calls `rhs_blkwise` on one block with a nonzero component offset,
+proves all other storage retains a sentinel, and compares that result with
+the same selected-block interior retained from whole-vector `rhs`. This
+comparison uses `B^0=0.01` and `eta=1`, and requires a nonzero RHS magnitude,
+so zero Minkowski data cannot hide a component-routing error. The test then
+compares with zero-offset component-major storage passed to `rhs_blk`. It also
+proves the three no-op block hooks preserve their input bytes and compares
+`post_timestep_blk` with whole-vector algebraic projection. Finally, the test
+changes `eta` from zero to one on a state with `B^0=0.01` and checks the
+analytic RHS difference `-0.01`, with other components unchanged. A passing
+run prints `REAL_TRANSPORT PASS`, `REAL_CALLBACKS PASS`, and
+`REAL_PARAMETER PASS`.
+
+The CI real-host matrix repeats these checks for BSSN and fCCZ4 at FD4, FD6,
+and FD8 with KO enabled, then at FD6 with KO disabled. Each profile runs the
+direct callback test on one and two MPI ranks and one two-rank Minkowski step.
+The FD6 KO-off runs also inject a host element order that differs from
+`FD_ORDER` and a TOML `fd_order` that differs from the compiled profile. Both
+must fail with their named diagnostics before RHS evaluation.
+
+The direct callback test records the C++ allocation count and allocated bytes
+for one `rhs_blk` call. It rejects an allocation as large as the
+component-major block slab. Shared-runner wall time, compile time, and binary
+size are not performance checks and are not reported by Dendro CI.
+
+Separate AddressSanitizer and UndefinedBehaviorSanitizer builds run the
+standalone `offsets`, `address_values`, and `gr_nonflat_reference` sections for
+all twelve formulation, order, and KO profiles. These sections exercise nonzero
+component offsets, component-major flat storage, writable interiors, and
+sentinel regions.
 
 Exercise the negative cases before relying on these checkers:
 
@@ -137,12 +173,27 @@ for fault in offset halo nonfinite; do
     test "$status" -ne 124 || exit 1  # a hang is not successful detection
   fi
 done
+
+for fault in blockwise_null_ids blockwise_bad_id blockwise_bad_dof \
+             block_null block_bad_dof block_bad_id \
+             projection_null projection_bad_dof projection_bad_id; do
+  if OMP_NUM_THREADS=1 timeout 60 mpiexec -n 1 build/nrpy_runtime_test "$fault" \
+      > "$fault.txt" 2>&1; then
+    echo "ERROR: $fault escaped detection"
+    exit 1
+  else
+    status=$?
+    test "$status" -ne 124 || exit 1
+  fi
+done
 ```
 
 Inspect the diagnostics as well as exit status: offset/halo must produce a
 transport mismatch or unfilled block diagnostic, and nonfinite must report
-`nonfinite evolved state`. Each fault is injected on rank 1 only; failure must
-terminate the entire MPI job without waiting for a timeout.
+`nonfinite evolved state`. Transport faults are injected on the last rank, so
+the same source runs on one or two ranks. Callback faults check null pointers,
+wrong field counts, and out-of-range local block identifiers. Every failure
+must terminate the entire MPI job without waiting for a timeout.
 
 The solver defaults to 100 steps of `dt=0.001`; `--steps N` and `--dt T` change
 those values. `-t FILE` reads TOML on rank 0, broadcasts its contents, binds
