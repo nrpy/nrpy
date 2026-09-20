@@ -30,7 +30,7 @@ from nrpy.infrastructures.BHaH import (
 )
 from nrpy.infrastructures.BHaH import CodeParameters as CPs
 from nrpy.infrastructures.BHaH import Makefile_helpers as Makefile
-from nrpy.infrastructures.BHaH import cmdline_input_and_parfiles
+from nrpy.infrastructures.BHaH import cmdline_input_and_parfiles as cmdline_parfiles
 from nrpy.infrastructures.BHaH.general_relativity.geodesics import (
     connections,
     conserved_quantities,
@@ -493,10 +493,10 @@ if __name__ == "__main__":
     CPs.write_CodeParameters_h_files(set_commondata_only=True, project_dir=project_dir)
     CPs.register_CFunctions_params_commondata_struct_set_to_default()
 
-    cmdline_input_and_parfiles.generate_default_parfile(
+    cmdline_parfiles.generate_default_parfile(
         project_dir=project_dir, project_name=project_name
     )
-    cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
+    cmdline_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
         project_name=project_name
     )
 
