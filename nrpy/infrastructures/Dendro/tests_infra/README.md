@@ -117,6 +117,79 @@ For BSSN, generate with `nrpy.examples.dendro_bssn`, use
 `nrpy::bssn`. Both generated modules may be added to the same parent CMake
 project because their production and qualification target names are distinct.
 
+## Full Dendro-GR BSSN application
+
+The BSSN generator can also emit an adapter for the production Dendro-GR BSSN
+application. This path retains Dendro-GR's parameter reader, initial data,
+octree construction, Berger--Oliger mesh changes, Runge--Kutta driver,
+physical-boundary routine, diagnostics, checkpointing, and output. It replaces
+only the legacy `bssnRHS` call with the generated NRPy block kernel.
+
+Generate the FD6 profile used by `q1.par.lowres.toml`. `DENDRO_GR` must name a
+checkout of the public [Dendro-GR repository](https://github.com/paralab/Dendro-GR).
+The project directory is its parent because the generator writes
+`Dendro-GR/nrpy_bssn` below that directory.
+
+```bash
+export NRPY_SOURCE=/absolute/path/to/NRPy
+export DENDRO_GR=/absolute/path/to/Dendro-GR
+PYTHONPATH="$NRPY_SOURCE" python -m nrpy.examples.dendro_bssn \
+  --project-dir "$(dirname "$DENDRO_GR")" \
+  --fd-order 6 --ko --dendro-gr-host
+```
+
+Add the generated directory immediately after `add_subdirectory(BSSN_GR)` in
+Dendro-GR's root `CMakeLists.txt`:
+
+```cmake
+add_subdirectory(BSSN_GR)
+add_subdirectory(nrpy_bssn)
+```
+
+Configure and build the new executable. Existing local Dendrolib, `toml11`,
+and `spdlog` source directories may be passed with the same CMake variables
+listed in the preceding section.
+
+```bash
+cmake -S "$DENDRO_GR" -B "$DENDRO_GR/build-nrpy-bssn" \
+  -DWITH_CUDA=OFF -DBSSN_ENABLE_CUDA=OFF \
+  -DNRPY_DENDRO_BUILD_DRIVERS=OFF \
+  -DNRPY_DENDRO_BUILD_TESTS=OFF \
+  -DNRPY_BSSN_BUILD_DENDRO_GR_DRIVER=ON
+cmake --build "$DENDRO_GR/build-nrpy-bssn" \
+  --target nrpy_bssnSolver -j2
+```
+
+Run from a directory where Dendro-GR may write its configured file prefixes:
+
+```bash
+mkdir -p run/{vtu,cp,dat}
+cd run
+mpiexec -n 1 "$DENDRO_GR/build-nrpy-bssn/nrpy_bssn/nrpy_bssnSolver" \
+  "$DENDRO_GR/build/BSSN_GR/q1.par.lowres.toml" 1
+```
+
+The quoted `q1.par.lowres.toml` has `BSSN_RESTORE_SOLVER=1`. A fresh run must
+set it to `0`; otherwise Dendro-GR expects a compatible checkpoint. Its
+`BSSN_ID_TYPE=0` and `TPID_FILEPREFIX="tp_q001"` also require
+`tp_q001_tpid_sol.bin` in the run directory. These are existing Dendro-GR
+input requirements, not generated-module inputs.
+
+The adapter requires the parameter file's `BSSN_ELE_ORDER` and block padding
+to match the generated profile. It maps `ETA_CONST` to the generated `eta`
+parameter and maps `KO_DISS_SIGMA` to both generated KO strengths. Generated
+KO profiles require `BSSN_KO_SIGMA_SCALE_BY_CONFORMAL=false`. The generated
+RHS uses NRPy's centered-advection BSSN equations and lower-base-order KO
+profile. Dendro-GR compile definitions for its legacy SSL or CAHD RHS terms do
+not add those terms to the generated NRPy equations. CUDA host execution is
+rejected.
+
+For a short integration check that needs no TwoPunctures solution file, use
+Dendro-GR's `BSSN_GR/pars/q1.smoke.par.toml`. It exercises FD6, KO, adaptive
+mesh construction, Runge--Kutta stages, remeshing, and grid transfer through
+`nrpy_bssnSolver`; it is not a physical validation of the binary-black-hole
+evolution.
+
 The host's usual BLAS/LAPACK, MPI, C++17, and dependency-fetch requirements
 apply. Cached `toml11` and `spdlog` source directories may be supplied through
 CMake's `FETCHCONTENT_SOURCE_DIR_TOML11` and

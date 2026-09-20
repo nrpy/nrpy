@@ -49,6 +49,7 @@ from nrpy.infrastructures.Dendro import (
     types_h,
 )
 from nrpy.infrastructures.Dendro.general_relativity import (
+    bssn_host_adapter,
     constraints_eval,
     enforce_detgbar_equals_detghat_trAzero,
     initial_data,
@@ -96,6 +97,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ko", dest="ko", action="store_true")
     parser.add_argument("--no-ko", dest="ko", action="store_false")
     parser.set_defaults(ko=False)
+    parser.add_argument(
+        "--dendro-gr-host",
+        action="store_true",
+        help="emit the adapter and CMake target for the Dendro-GR BSSN application",
+    )
     # No --parallelization flag: the qualified CPU profile is serial point
     # loops (the kernel runs inside Dendro's own block traversal), and the
     # builders assert that.
@@ -114,7 +120,9 @@ def main() -> None:
     # "openmp", so pin it here; the builders assert it.
     par.set_parval_from_str("parallelization", "none")
     par.set_parval_from_str("fd_order", args.fd_order)
-    par.set_parval_from_str("EvolvedConformalFactor_cf", "W")
+    par.set_parval_from_str(
+        "EvolvedConformalFactor_cf", "chi" if args.dendro_gr_host else "W"
+    )
     par.set_parval_from_str("detgbarOverdetghat_equals_one", True)
 
     #########################################################
@@ -231,6 +239,15 @@ def main() -> None:
             ).items()
         }
     )
+    if args.dendro_gr_host:
+        artifacts.update(
+            {
+                layout.root + relative_path: text
+                for relative_path, text in bssn_host_adapter.output_bssn_host_files(
+                    args.ko
+                ).items()
+            }
+        )
     artifacts.update(
         cmake_helpers.output_CFunctions_function_prototypes_and_construct_CMakeLists(
             solver_name,
@@ -241,6 +258,7 @@ def main() -> None:
             self_tests_cpp.test_sections(),
             main_cpp.standalone_ctest_statements(solver_stem, qualification_target),
             main_cpp.real_ctest_statements(solver_stem, qualification_target),
+            (("generated/cmake/dendro_gr_host.cmake",) if args.dendro_gr_host else ()),
         )
     )
     for relative_path, text in sorted(artifacts.items()):
@@ -283,6 +301,8 @@ def main() -> None:
         f"{'enabled' if rhs_build.ko_enabled else 'disabled'}"
     )
     print(f"  required ghost points: {roles.required_padding()}")
+    if args.dendro_gr_host:
+        print("  Dendro-GR host target: nrpy_bssnSolver")
     print("Now build and run the generated self-tests with:")
     print(f"  cmake -S {args.project_dir}/Dendro-GR/{solver_name} -B build")
     print("  cmake --build build && ctest --test-dir build")

@@ -150,6 +150,7 @@ def output_CFunctions_function_prototypes_and_construct_CMakeLists(
     test_sections: Sequence[str],
     standalone_application_ctest: Sequence[str],
     real_application_ctest: Sequence[str],
+    module_cmake_includes: Sequence[str] = (),
 ) -> Dict[str, str]:
     """
     Emit the CFunction sources, the prototypes header and the CMake files.
@@ -167,6 +168,8 @@ def output_CFunctions_function_prototypes_and_construct_CMakeLists(
     :param test_sections: Explicit application-owned self-test section names.
     :param standalone_application_ctest: Standalone application CTest lines.
     :param real_application_ctest: Real-host application CTest lines.
+    :param module_cmake_includes: Solver-relative CMake files to include after
+        the production library and qualification-driver definitions.
     :return: Mapping of ``Dendro-GR/<solver_name>/<path>`` to file text.
     """
     layout = module_layout(solver_name)
@@ -202,6 +205,7 @@ def output_CFunctions_function_prototypes_and_construct_CMakeLists(
         qualification_target,
         standalone_application_ctest,
         real_application_ctest,
+        module_cmake_includes,
     )
     return artifacts
 
@@ -246,6 +250,7 @@ def output_solver_cmake(
     qualification_target: str,
     standalone_application_ctest: Sequence[str],
     real_application_ctest: Sequence[str],
+    module_cmake_includes: Sequence[str] = (),
 ) -> str:
     """
     Emit the generated solver's ``CMakeLists.txt``.
@@ -257,12 +262,15 @@ def output_solver_cmake(
     :param qualification_target: Name of the generated qualification driver.
     :param standalone_application_ctest: Standalone application CTest lines.
     :param real_application_ctest: Real-host application CTest lines.
+    :param module_cmake_includes: Solver-relative CMake files to include after
+        the standard generated targets.
     :return: The CMake file text.
 
     >>> text = output_solver_cmake(
     ...     "nrpy_bssn", "BSSN", "bssn", "nrpy_bssn_dendro",
     ...     "nrpy_bssn_dendro_qualify", ("add_test(NAME bssn_standalone)",),
     ...     ("add_test(NAME bssn_real_minkowski)",),
+    ...     ("generated/cmake/dendro_gr_host.cmake",),
     ... )
     >>> all(name in text for name in ("nrpy_bssn_dendro", "nrpy_bssn_dendro_qualify"))
     True
@@ -271,6 +279,8 @@ def output_solver_cmake(
     >>> obsolete = ("BSSN_STANDALONE_HOST", "bssnSolver", "_nrpy_dendro_legacy_driver_request")
     >>> any(name in text for name in obsolete)
     False
+    >>> 'include("${CMAKE_CURRENT_LIST_DIR}/generated/cmake/dendro_gr_host.cmake")' in text
+    True
 
     """
     stem = solver_stem
@@ -343,6 +353,15 @@ def output_solver_cmake(
         '  message(FATAL_ERROR "This generated profile is CPU-qualified only")',
         "endif()",
         "",
+    ]
+    for cmake_include in module_cmake_includes:
+        lines.extend(
+            (
+                f'include("${{CMAKE_CURRENT_LIST_DIR}}/{cmake_include}")',
+                "",
+            )
+        )
+    lines += [
         "if(NRPY_DENDRO_BUILD_TESTS)",
         "  if(_nrpy_dendro_top_level)",
         "    enable_testing()",
