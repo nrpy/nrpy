@@ -15,12 +15,15 @@ Author: Zachariah B. Etienne
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Mapping
+from inspect import currentframe as cfr
+from types import FrameType as FT
+from typing import Dict, List, Mapping, Union, cast
 
 import sympy as sp
 
 import nrpy.c_function as cfc
 import nrpy.grid as gri
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.c_codegen import c_codegen
 from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
@@ -54,9 +57,8 @@ class ConstraintsEvalBuild:
     :param block_params: The per-block CFunction parameter list.
     :param all_blocks_body: The all-block CFunction body (NRPy block loop).
     :param all_blocks_params: The all-block CFunction parameter list.
-    :param diagnostics_by_name: The assembled symbolic diagnostics, kept
-        so generated-project tests can independently evaluate every diagnostic
-        without reassembling them.
+    :param diagnostics_by_name: The assembled symbolic diagnostics used by
+        direct builder callers and owner validation.
     """
 
     block_body: str
@@ -64,6 +66,51 @@ class ConstraintsEvalBuild:
     all_blocks_body: str
     all_blocks_params: str
     diagnostics_by_name: Mapping[str, sp.Expr]
+
+
+def diagnostic_expressions(
+    *,
+    enable_fCCZ4: bool = False,
+    CoordSystem: str = "Cartesian",
+    LapseEvolutionOption: str = "OnePlusLog",
+    ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant__Hatted",
+    enable_KreissOliger_dissipation: bool = False,
+) -> Mapping[str, sp.Expr]:
+    """
+    Assemble the BSSN or fCCZ4 constraint expressions.
+
+    :param enable_fCCZ4: Assemble fCCZ4 instead of BSSN diagnostics.
+    :param CoordSystem: Reference-metric coordinate system.
+    :param LapseEvolutionOption: Lapse evolution option.
+    :param ShiftEvolutionOption: Shift evolution option.
+    :param enable_KreissOliger_dissipation: Forwarded to the fCCZ4 factory.
+    :return: Constraint expressions keyed by diagnostic gridfunction name.
+    :raises ValueError: If the fCCZ4 factory returns no diagnostics.
+    """
+    if enable_fCCZ4:
+        expressions = dict(
+            build_fccz4_expression_bundle(
+                CoordSystem=CoordSystem,
+                LapseEvolutionOption=LapseEvolutionOption,
+                ShiftEvolutionOption=ShiftEvolutionOption,
+                enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
+                enable_diagnostics=True,
+            ).diagnostics_by_name
+        )
+        if not expressions:
+            raise ValueError("The shared fCCZ4 factory supplied no diagnostics.")
+        return expressions
+
+    gate = "register_M_and_LAMBDA_CONSTRAINT_gridfunctions"
+    previous_gate = par.parval_from_str(gate)
+    par.set_parval_from_str(gate, False)
+    try:
+        constraints = BSSN_constraints[CoordSystem]
+    finally:
+        par.set_parval_from_str(gate, previous_gate)
+    expressions = {"H": constraints.H}
+    expressions.update({f"MU{i}": constraints.MU[i] for i in range(3)})
+    return expressions
 
 
 def build_constraints_eval(
@@ -188,16 +235,15 @@ def build_constraints_eval(
     fp_type = str(par.parval_from_str("fp_type"))
 
     if enable_fCCZ4:
-        bundle = build_fccz4_expression_bundle(
-            CoordSystem=CoordSystem,
-            LapseEvolutionOption=LapseEvolutionOption,
-            ShiftEvolutionOption=ShiftEvolutionOption,
-            enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
-            enable_diagnostics=True,
+        expressions: Dict[str, sp.Expr] = dict(
+            diagnostic_expressions(
+                enable_fCCZ4=True,
+                CoordSystem=CoordSystem,
+                LapseEvolutionOption=LapseEvolutionOption,
+                ShiftEvolutionOption=ShiftEvolutionOption,
+                enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
+            )
         )
-        expressions: Dict[str, sp.Expr] = dict(bundle.diagnostics_by_name)
-        if not expressions:
-            raise ValueError("The shared fCCZ4 factory supplied no diagnostics.")
         diagnostic_names = tuple(expressions)
     else:
         diagnostic_names = ("H",) + tuple(f"MU{i}" for i in range(3))
@@ -218,16 +264,14 @@ def build_constraints_eval(
         if f"{base}{'0' * rank}" not in gri.glb_gridfcs_dict:
             gri.register_gridfunctions_for_single_rankN(base, rank=rank, group="DIAG")
     if not enable_fCCZ4:
-        gate = "register_M_and_LAMBDA_CONSTRAINT_gridfunctions"
-        previous_gate = par.parval_from_str(gate)
-        par.set_parval_from_str(gate, False)
-        try:
-            constraints = BSSN_constraints[CoordSystem]
-        finally:
-            par.set_parval_from_str(gate, previous_gate)
-        expressions = {"H": constraints.H}
-        for i in range(3):
-            expressions[f"MU{i}"] = constraints.MU[i]
+        expressions = dict(
+            diagnostic_expressions(
+                CoordSystem=CoordSystem,
+                LapseEvolutionOption=LapseEvolutionOption,
+                ShiftEvolutionOption=ShiftEvolutionOption,
+                enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
+            )
+        )
     _evol, _auxevol, diag, _aux = gri.GridFunction.gridfunction_lists()
     diag_order = tuple(diag)
     missing = sorted(set(expressions) - set(diag_order))
@@ -312,7 +356,7 @@ def register_CFunctions_constraints_eval(
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant__Hatted",
     enable_KreissOliger_dissipation: bool = False,
-) -> ConstraintsEvalBuild:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the constraint-diagnostic CFunctions for one formulation.
 
@@ -323,8 +367,13 @@ def register_CFunctions_constraints_eval(
     :param LapseEvolutionOption: Lapse evolution option.
     :param ShiftEvolutionOption: Shift evolution option.
     :param enable_KreissOliger_dissipation: Forwarded to the fCCZ4 builder.
-    :return: The expressions and emitted bodies used for registration.
+    :return: The NRPy registries after registration, or ``None`` while
+        collecting parallel work.
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
     build = build_constraints_eval(
         solver_stem,
         enable_fCCZ4=enable_fCCZ4,
@@ -374,7 +423,7 @@ def register_CFunctions_constraints_eval(
         body=build.all_blocks_body,
     )
     roles.set_CFunction_role(all_blocks_name, "constraints_eval")
-    return build
+    return pcg.NRPyEnv()
 
 
 if __name__ == "__main__":

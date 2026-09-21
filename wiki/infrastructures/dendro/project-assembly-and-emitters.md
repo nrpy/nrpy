@@ -6,10 +6,13 @@
 ## Summary
 
 A Dendro run has two halves. Builders register gridfunctions, CodeParameters,
-and CFunctions into NRPy's registries; then `main` walks a fixed map
+and CFunctions into NRPy's registries; the BSSN and fCCZ4 examples run the
+independent right-hand-side and constraint registrations in separate Python
+worker processes. Then `main` walks a fixed map
 of project-relative paths to generated text and writes it. Generating functions read the
 registries and Dendro CFunction-role metadata at the point of use. There is no
-intermediate copy of the registries or multi-step installation process.
+intermediate generated solver tree or multi-step file installation. Worker
+registries are copied and merged into the parent process before file generation.
 
 ## Detail
 
@@ -38,10 +41,32 @@ Modules are named for what they generate, following BHaH's `BHaH_defines_h.py` a
 The example generator shows how the inputs are combined. It passes GR
 declarations, context choices, test sections, and CTest statements into generic
 generating functions.
-`main` holds no hidden state: it maps
-generated text onto project-relative paths and writes it, then copies the
-standalone host header and shared `block_geometry.h` through `nrpy.helpers.generic.copy_files`, exactly as
-BHaH copies `simd_intrinsics.h`.
+The BSSN and fCCZ4 examples first collect the right-hand-side and constraint
+registration calls, execute those calls in parallel worker processes, and merge
+the resulting gridfunction, CodeParameter, CFunction, and CFunction-role
+registries. After the merge, the examples assemble the right-hand-side and
+diagnostic expressions from the same equation functions used by the generated
+kernels. These expressions calculate independent generated-test reference
+values; they are not stored in a second process-global registry. Initial-data
+and algebraic-enforcement functions are registered after the merge because they read the complete
+evolved-gridfunction registry. Smooth-perturbation registration then adds its
+amplitude and wavelength CodeParameters, so parameter C functions are
+registered only after all other registrations finish. This concurrency applies
+only while Python generates source files. Generated Dendro point loops remain
+serial because Dendro owns the outer block traversal.
+`main` reads the merged process-global registries, maps generated text onto
+project-relative paths, and writes it. It then copies the
+package file
+`nrpy.infrastructures.Dendro.standalone_host/dendro_standalone_host.h` to
+`<project-dir>/Dendro-GR/<solver_name>/standalone_host/dendro_standalone_host.h`
+and copies the shared `block_geometry.h` to the generated solver's `include/`
+directory through `nrpy.helpers.generic.copy_files`.
+
+Claim evidence:
+- Claim: the BSSN and fCCZ4 examples register the independent right-hand-side and constraint functions in parallel, merge the authoritative registries, assemble the symbolic expressions needed by generated tests from the same equation functions, and register dependent functions after the merge; generated point loops remain serial.
+- Role: descriptive behavior
+- Deciding authority: [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py), `main`
+- Corroboration: [parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py), `register_func_call` and `do_parallel_codegen`; [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `register_CFunctions_rhs_eval`; [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), `register_CFunctions_constraints_eval`
 
 ### Names come from the caller, not from a parameter registry
 
@@ -204,6 +229,10 @@ Python generating functions and the registry symbols instead; see
 
 - [generated_file_banner.py](../../../nrpy/infrastructures/Dendro/generated_file_banner.py) - `generated_file_banner`
 - [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - `main`, the inline project-assembly block and command-line profile
+- [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) - `main`, parallel function registration and project assembly
+- [parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py) - registration-call collection and worker-result merge
+- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - right-hand-side registration and symbolic-expression assembly
+- [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py) - constraint registration and symbolic-expression assembly
 - [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py) - `module_layout`, `ModuleLayout`, `output_CFunctions_function_prototypes_and_construct_CMakeLists`, `CFunction_cmake_source_list`, `derived_source_path`, `output_solver_cmake`, `output_generated_sources_cmake`, `output_tests_cmake`
 - [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `output_parameters_h`, `emitted_parameter_names`, `runtime_parameter_names`, `output_toml_bindings`
 - [CFunction_roles.py](../../../nrpy/infrastructures/Dendro/CFunction_roles.py) - CFunction roles and CodeParameter sidecars

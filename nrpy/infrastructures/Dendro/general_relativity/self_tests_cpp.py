@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 """
 
 import math
-from typing import Dict, List, NamedTuple, Tuple, Union, cast
+from typing import Dict, List, Mapping, NamedTuple, Tuple, Union, cast
 
 import sympy as sp
 from mpmath import mp, mpf  # type: ignore[import-untyped]
@@ -21,10 +21,6 @@ from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
 from nrpy.infrastructures.Dendro import self_tests_cpp as generic_tests
 from nrpy.infrastructures.Dendro import solver_context as generic_context
-from nrpy.infrastructures.Dendro.general_relativity.constraints_eval import (
-    ConstraintsEvalBuild,
-)
-from nrpy.infrastructures.Dendro.general_relativity.rhs_eval import RHSBuild
 from nrpy.infrastructures.Dendro.general_relativity.solver_context import (
     substitute_application_identifiers,
 )
@@ -581,26 +577,29 @@ def _evaluate_reference(
 def output_self_test_artifacts(
     solver_stem: str,
     solver_namespace: str,
-    rhs_build: RHSBuild,
-    constraints_build: ConstraintsEvalBuild,
+    rhs_by_symbol_name: Mapping[str, sp.Expr],
+    diagnostics_by_name: Mapping[str, sp.Expr],
+    *,
+    fd_order: int,
+    ko_fd_order: int,
+    enable_ko: bool,
 ) -> Dict[str, str]:
     """
     Return the GR test source and companion headers.
 
     :param solver_stem: Lowercase formulation stem used in emitted paths.
     :param solver_namespace: Namespace containing the production solver.
-    :param rhs_build: Canonical scientific RHS expressions and field order.
-    :param constraints_build: Canonical diagnostic expressions registered for
-        the generated solver.
+    :param rhs_by_symbol_name: Scientific RHS expressions keyed by output name.
+    :param diagnostics_by_name: Diagnostic expressions keyed by gridfunction.
+    :param fd_order: Centered finite-difference order.
+    :param ko_fd_order: Base order supplied to the KO difference operator.
+    :param enable_ko: Whether the RHS contains Kreiss-Oliger dissipation.
     :return: Solver-root-relative paths mapped to complete file contents.
     :raises ValueError: If configuration or reference validation is invalid.
     """
-    fd_order = rhs_build.fd_order
-    ko_fd_order = rhs_build.ko_fd_order
-    enable_ko = rhs_build.ko_enabled
     if fd_order not in (4, 6, 8) or ko_fd_order != fd_order - 2:
         raise ValueError("GR reference requires a Dendro FD4/6/8 profile.")
-    evol_order = tuple(rhs_build.evol_order)
+    evol_order = roles.registered_evol_order()
     spacings = (0.125, 0.25, 0.5)
     analytic_evol_order = (
         "nrpy_reference_quadratic",
@@ -674,10 +673,10 @@ def output_self_test_artifacts(
     points = ((4, 4, 4), (8, 9, 10), (12, 14, 16))
     expression_by_field = {
         gf_names.rhs_symbol_to_gridfunction_name(name): expression
-        for name, expression in rhs_build.rhs_by_symbol_name.items()
+        for name, expression in rhs_by_symbol_name.items()
     }
     diag_order = tuple(gri.GridFunction.gridfunction_lists()[2])
-    diagnostic_expressions = dict(constraints_build.diagnostics_by_name)
+    diagnostic_expressions = dict(diagnostics_by_name)
     if set(diag_order) != set(diagnostic_expressions):
         raise ValueError(
             "GR nonflat reference diagnostic order does not match the "

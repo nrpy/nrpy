@@ -16,25 +16,22 @@ is ``bssnCtx.cpp``.
 
 Run as a module:
 
-    python -m nrpy.examples.dendro_bssn \
-        --project-dir project/dendro_bssn --fd-order 6 --no-ko
-
-Doctests:
->>> (solver_name, solver_namespace)
-('nrpy_bssn', 'nrpy::bssn')
->>> (solver_stem, production_target, qualification_target)
-('bssn', 'nrpy_bssn_dendro', 'nrpy_bssn_dendro_qualify')
+    python -m nrpy.examples.dendro_bssn --project-dir project/dendro_bssn --fd-order 6 --no-ko
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+#########################################################
+# Step P1: Import needed Python modules, then set codegen
+#         and compile-time parameters.
 import argparse
 import os
 from pathlib import Path
 from typing import Dict
 
 import nrpy.grid as gri
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.conditional_file_updater import ConditionalFileUpdater
 from nrpy.helpers.generic import copy_files
@@ -59,6 +56,7 @@ from nrpy.infrastructures.Dendro.general_relativity import (
     solver_context,
 )
 
+# Code-generation-time parameters:
 # NRPy authors the module directory, CMake project, and C++ namespace.  Names
 # inside that module retain the conventional BSSN stem and Dendro target names.
 # These are arguments to the infrastructure, not registered CodeParameters.
@@ -73,6 +71,7 @@ profile_name = "bssn_cartesian_vacuum"
 CoordSystem = "Cartesian"
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant__Hatted"
+enable_parallel_codegen = True
 
 
 def parse_args() -> argparse.Namespace:
@@ -110,10 +109,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """Generate the complete Dendro BSSN project."""
+    #########################################################
+    # Step 1: Parse arguments and set NRPy code-generation parameters.
     args = parse_args()
 
-    #########################################################
-    # Step 1: Set the generation profile.
     par.set_parval_from_str("Infrastructure", "Dendro")
     par.set_parval_from_str("fp_type", "double")
     # The qualified CPU profile emits serial point loops.  The NRPy default is
@@ -124,13 +123,11 @@ def main() -> None:
         "EvolvedConformalFactor_cf", "chi" if args.dendro_gr_host else "W"
     )
     par.set_parval_from_str("detgbarOverdetghat_equals_one", True)
+    par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 
     #########################################################
-    # Step 2: Register the generated C functions.  The right-hand side goes
-    #         first: it registers the exact gridfunctions and physics
-    #         CodeParameters, and records the ghost points the emitted
-    #         operators reach.
-    rhs_build = rhs_eval.register_CFunctions_rhs_eval(
+    # Step 2: Register independent right-hand-side and constraint C functions.
+    rhs_eval.register_CFunctions_rhs_eval(
         solver_stem=solver_stem,
         fd_order=args.fd_order,
         enable_KreissOliger_dissipation=args.ko,
@@ -138,10 +135,33 @@ def main() -> None:
         LapseEvolutionOption=LapseEvolutionOption,
         ShiftEvolutionOption=ShiftEvolutionOption,
     )
+    constraints_eval.register_CFunctions_constraints_eval(
+        solver_stem=solver_stem, CoordSystem=CoordSystem
+    )
 
-    # Minkowski initial data and the smooth analytic perturbation the
-    # evolution tests advance.  Both are formulation-agnostic: they write every
-    # registered EVOL field to its registered asymptotic value.
+    #########################################################
+    # Step 3: Generate functions in parallel.
+    #         This Python multiprocessing does not change the serial point
+    #         loops generated for Dendro block traversal.
+    if enable_parallel_codegen:
+        pcg.do_parallel_codegen()
+
+    rhs_by_symbol_name = rhs_eval.rhs_expressions(
+        CoordSystem=CoordSystem,
+        LapseEvolutionOption=LapseEvolutionOption,
+        ShiftEvolutionOption=ShiftEvolutionOption,
+        enable_KreissOliger_dissipation=args.ko,
+    )
+    diagnostics_by_name = constraints_eval.diagnostic_expressions(
+        CoordSystem=CoordSystem
+    )
+    ko_fd_order = rhs_eval.DENDRO_FD_PROFILES[args.fd_order][0]
+
+    #########################################################
+    # Step 4: Register C functions that consume the merged EVOL registry.
+    # Smooth perturbation also registers its amplitude and wavelength
+    # CodeParameters. Register the parameter C functions after all other
+    # registrations finish.
     initial_data.register_CFunctions_minkowski_initial_data(solver_stem=solver_stem)
     initial_data.register_CFunctions_smooth_perturbation(solver_stem=solver_stem)
 
@@ -157,20 +177,13 @@ def main() -> None:
         CoordSystem=CoordSystem,
     )
 
-    # The constraint diagnostics: the Hamiltonian constraint and the three
-    # momentum constraint components, registered as DIAG gridfunctions.
-    constraints_build = constraints_eval.register_CFunctions_constraints_eval(
-        solver_stem=solver_stem, CoordSystem=CoordSystem
-    )
-
     # The parameter C functions come last, after every CodeParameter the
     # scientific kernels register is in the registry.
     CodeParameters.register_CFunctions_parameters(solver_stem, solver_namespace)
 
     #########################################################
-    # Step 3: Assemble and write the project.  The assembly lives here, in the
-    # example, exactly as it does for BHaH, ETLegacy, CarpetX and superB: an
-    # example reads top to bottom as the complete recipe for one solver.
+    # Step 5: Generate Dendro header and source files, parameter files, tests,
+    #         and CMakeLists.txt.
     layout = cmake_helpers.module_layout(solver_name)
     required_padding = roles.required_padding()
     artifacts: Dict[str, str] = {
@@ -184,11 +197,11 @@ def main() -> None:
         + f"{solver_stem}_constants.h": constants_h.output_constants_h(
             solver_stem,
             solver_namespace,
-            rhs_build.fd_order,
-            rhs_build.ko_fd_order,
-            rhs_build.ko_fd_order + 2,
+            args.fd_order,
+            ko_fd_order,
+            ko_fd_order + 2,
             required_padding,
-            rhs_build.ko_enabled,
+            args.ko,
         ),
         layout.generated_include
         + f"{solver_stem}_state.h": state_h.output_state_h(
@@ -221,11 +234,11 @@ def main() -> None:
         + f"{solver_stem}_minkowski.par": parfile.generate_default_parfile(
             solver_stem,
             profile_name,
-            rhs_build.fd_order,
-            rhs_build.ko_fd_order,
-            rhs_build.ko_fd_order + 2,
+            args.fd_order,
+            ko_fd_order,
+            ko_fd_order + 2,
             required_padding,
-            rhs_build.ko_enabled,
+            args.ko,
         ),
     }
     artifacts.update(
@@ -234,8 +247,11 @@ def main() -> None:
             for relative_path, text in self_tests_cpp.output_self_test_artifacts(
                 solver_stem,
                 solver_namespace,
-                rhs_build,
-                constraints_build,
+                rhs_by_symbol_name,
+                diagnostics_by_name,
+                fd_order=args.fd_order,
+                ko_fd_order=ko_fd_order,
+                enable_ko=args.ko,
             ).items()
         }
     )
@@ -273,19 +289,30 @@ def main() -> None:
             do_format=target.suffix in (".h", ".hpp", ".c", ".cpp", ".cu"),
         ) as file:
             file.write(text)
-    # The standalone-host header is a fixed source asset of this package, copied
-    # verbatim exactly as BHaH copies simd_intrinsics.h in this same position.
+    solver_dir = Path(args.project_dir) / layout.root
+    if not args.dendro_gr_host:
+        resolved_solver_dir = solver_dir.resolve()
+        for relative_path in (
+            "generated/cmake/dendro_gr_host.cmake",
+            "src/bssn_dendro_gr_adapter.cpp",
+        ):
+            target = resolved_solver_dir / relative_path
+            if target.exists() or target.is_symlink():
+                target.unlink()
+
+    # Copy nrpy.infrastructures.Dendro.standalone_host/dendro_standalone_host.h
+    # to <project-dir>/Dendro-GR/<solver_name>/standalone_host/dendro_standalone_host.h.
     copy_files(
         package="nrpy.infrastructures.Dendro.standalone_host",
         filenames_list=["dendro_standalone_host.h"],
-        project_dir=str(Path(args.project_dir) / layout.root),
+        project_dir=str(solver_dir),
         subdirectory="standalone_host",
     )
 
     copy_files(
         package="nrpy.infrastructures.Dendro",
         filenames_list=["block_geometry.h"],
-        project_dir=str(Path(args.project_dir) / layout.root),
+        project_dir=str(solver_dir),
         subdirectory="include",
     )
 
@@ -294,18 +321,16 @@ def main() -> None:
     print(f"  profile: {profile_name}")
     print(f"  evolved variables: {len(EVOL)}")
     print(f"  finite-difference order: {args.fd_order}")
-    print(f"  KO finite-difference order: {rhs_build.ko_fd_order}")
-    print(f"  effective KO difference order: {rhs_build.ko_fd_order + 2}")
-    print(
-        "  Kreiss-Oliger dissipation: "
-        f"{'enabled' if rhs_build.ko_enabled else 'disabled'}"
-    )
+    print(f"  KO finite-difference order: {ko_fd_order}")
+    print(f"  effective KO difference order: {ko_fd_order + 2}")
+    print(f"  Kreiss-Oliger dissipation: {'enabled' if args.ko else 'disabled'}")
     print(f"  required ghost points: {roles.required_padding()}")
     if args.dendro_gr_host:
         print("  Dendro-GR host target: nrpy_bssnSolver")
     print("Now build and run the generated self-tests with:")
-    print(f"  cmake -S {args.project_dir}/Dendro-GR/{solver_name} -B build")
-    print("  cmake --build build && ctest --test-dir build")
+    build_dir = solver_dir / "build"
+    print(f"  cmake -S {solver_dir} -B {build_dir}")
+    print(f"  cmake --build {build_dir} && ctest --test-dir {build_dir}")
 
 
 if __name__ == "__main__":
