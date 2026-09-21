@@ -5,16 +5,8 @@ This module implements the three-dimensional reference-metric formulation of
 Mewes et al. (2020), with the Lagrangian conformal-determinant condition and
 ``kappa1`` damping terms that contain no additional lapse factor.
 
-Mewes et al. appear to contain a convention error in the shift sector.  They
-define ``partial_0 = partial_t - L_beta``, whose full vector Lie derivative
-stretches the evolved connection by
-``-Lambdatilde^k Dhat_k beta^i``.  Since
-``Lambdatilde^i = DeltaGamma^i + C^i``, that stretch already contains
-``-C^k Dhat_k beta^i``, but the printed ``kappa3=1`` bracket adds this term
-again.  NRPy corrects that apparent paper error, not a discretionary
-formulation departure.  It retains ``+(2/3) C^i Dhat_k beta^k`` because the
-reused BSSN base divergence contains geometric ``DeltaGamma`` and needs
-promotion to evolved ``Lambdatilde``.
+The fCCZ4 equation reuses the BSSN base before Brown's BSSN-only connection
+adjustment, retaining one evolved-connection stretch.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -188,13 +180,7 @@ class FCCZ4RHSs:
             for ell in range(3):
                 Dhat_div_beta += rfm.GammahatUDD[k][ell][k] * Bq.betaU[ell]
 
-        # Brhs already applies the full vector Lie derivative to its evolved
-        # connection slot, which stores LambdatildeU here.  Mewes et al.
-        # define partial_0 = partial_t - L_beta but then print an additional
-        # -C^k Dhat_k beta^i in the kappa3=1 bracket, duplicating that stretch
-        # for C^i = LambdatildeU^i - DeltaGamma^i.  Omit the apparent paper
-        # error.  Keep +2 C^i Dhat_k beta^k/3 because the BSSN base divergence
-        # contains geometric DeltaGamma and needs promotion to LambdatildeU.
+        # Retain the divergence promotion; the reused base excludes Brown's term.
         self.Lambdatilde_rhsU_delta = ixp.zerorank1()
         for i in range(3):
             for j in range(3):
@@ -213,7 +199,8 @@ class FCCZ4RHSs:
         self.lambda_rhsU = ixp.zerorank1()
         for i in range(3):
             self.Lambdatilde_rhsU[i] = (
-                Brhs.Lambdabar_rhsU[i] + self.Lambdatilde_rhsU_delta[i]
+                Brhs.Lambdabar_rhsU_without_Brown_constraint_term[i]
+                + self.Lambdatilde_rhsU_delta[i]
             )
             self.lambda_rhsU[i] = self.Lambdatilde_rhsU[i] / rfm.ReU[i]
 
