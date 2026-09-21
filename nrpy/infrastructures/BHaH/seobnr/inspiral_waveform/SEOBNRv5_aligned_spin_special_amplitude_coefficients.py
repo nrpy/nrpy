@@ -412,7 +412,7 @@ if (!equal_mass_equal_spin) {
   commondata->c_21 = c21;
   commondata->c_43 = c43;
   commondata->c_55 = c55;
-} // END IF: not equal mass with equal spins
+} // END IF: unequal mass or spin
 
 
 free(times);

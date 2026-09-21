@@ -41,6 +41,15 @@ the input orbital frequency subtracted from `dHreal_dpphi_circ`, form the
 residual of the circular-orbit root solve, and the three second derivatives are
 the entries of its Jacobian.
 
+Claim evidence:
+- Claim: `SEOBNRv5_aligned_spin_Hamiltonian_quantities`'s circular first
+  Hamiltonian derivatives (`dHreal_dr_circ`, `dHreal_dpphi_circ`) are divided
+  by `nu`, and each circular second derivative differentiates one of those
+  already-normalized first derivatives without a second division by `nu`.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py), `SEOBNRv5_aligned_spin_Hamiltonian_quantities.__init__`
+- Corroboration: [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_Hamiltonian.py), `trusted_dict`, pins the sampled circular-derivative outputs against the module's own default-constructor evaluation
+
 Validation is module-local. Running the Hamiltonian source as a script executes
 doctests, processes the class `__dict__` through the trusted-expression helper,
 and compares the resulting expression dictionary against the sibling trusted

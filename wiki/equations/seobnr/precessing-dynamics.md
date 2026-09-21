@@ -42,6 +42,16 @@ These outputs are the symbolic interface for ODE
 integration, circular initial-data solves, and waveform or flux consumers that
 need instantaneous Hamiltonian derivatives.
 
+Claim evidence:
+- Claim: `SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities`'s circular
+  first Hamiltonian derivatives (`dHreal_dr_circ`, `dHreal_dpphi_circ`) are
+  divided by `nu`, and each circular second derivative differentiates one of
+  those already-normalized first derivatives without a second division by
+  `nu`.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_quasi_precessing_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py), `SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities.__init__`
+- Corroboration: [SEOBNRv5_quasi_precessing_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py), `trusted_dict`, pins the sampled circular-derivative outputs against the module's own default-constructor evaluation
+
 `SEOBNRv5_spin_evolution_equations` declares masses, orbital frequency
 `omega`, spin-vector components, and the Newtonian angular-momentum unit vector
 `ln_x`, `ln_y`, and `ln_z`. It builds SymPy matrices for the spin vectors and

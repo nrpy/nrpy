@@ -67,8 +67,10 @@ REAL initial_r = commondata->r;
 
 // Step 0: Skip post-adiabatic integration when the binary starts at or inside final_r.
 // The radial grid runs from initial_r down to final_r, so there is nothing to integrate;
-// evolve the initial conditions with the ODE integrator alone.
+// initialize the dissipative radial momentum at the conservative r and pphi, then
+// evolve the initial conditions with the ODE integrator.
 if (initial_r <= final_r) {
+  SEOBNRv5_aligned_spin_initial_conditions_dissipative(commondata);
   SEOBNRv5_aligned_spin_ode_integration(commondata);
   return;
 } // END IF: initial_r <= final_r, PA integration bypassed

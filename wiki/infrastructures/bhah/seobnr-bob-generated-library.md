@@ -39,9 +39,23 @@ Dynamics generation is split into equation kernels and integration managers.
 radius `final_r = max(10, (2.7 + chi_eff (1 - 4 nu)) r_ISCO)`. If the starting
 radius `commondata->r` satisfies `initial_r <= final_r`, the radial grid
 from `initial_r` down to `final_r` is empty, so the function calls
-`SEOBNRv5_aligned_spin_ode_integration` on the initial conditions in `commondata`
-and returns without a post-adiabatic stage or time offset. Otherwise it builds a
-radial grid,
+`SEOBNRv5_aligned_spin_initial_conditions_dissipative` to set `commondata->prstar`
+at the conservative `r` and `pphi`, then calls
+`SEOBNRv5_aligned_spin_ode_integration` on the resulting initial conditions in
+`commondata` and returns without a post-adiabatic stage or time offset.
+
+Claim evidence:
+- Claim: When `commondata->r` (`initial_r`) satisfies `initial_r <= final_r`,
+  `SEOBNRv5_aligned_spin_pa_integration` calls
+  `SEOBNRv5_aligned_spin_initial_conditions_dissipative` to set
+  `commondata->prstar` at the conservative `r` and `pphi` before calling
+  `SEOBNRv5_aligned_spin_ode_integration`, and returns without a
+  post-adiabatic stage or time offset.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_pa_integration.py](../../../nrpy/infrastructures/BHaH/seobnr/dynamics/SEOBNRv5_aligned_spin_pa_integration.py), `register_CFunction_SEOBNRv5_aligned_spin_pa_integration`
+- Corroboration: `none available` - this generated-C control-flow branch has no module-local trusted-expression or generated-project numerical check that isolates it; verification requires inspecting the generated `SEOBNRv5_aligned_spin_pa_integration` source directly
+
+Otherwise it builds a radial grid,
 solves alternating post-adiabatic `pphi` and `prstar` updates with one-dimensional
 root finding, differentiates radial arrays, integrates time and phase, calls
 `SEOBNRv5_aligned_spin_ode_integration`, merges post-adiabatic and ODE dynamics,
@@ -75,6 +89,16 @@ the equal-mass branch of the odd-mode factors) with equal spins
 leaves the registered defaults `c_21 = c_43 = c_55 = 0`. The odd inspiral modes
 stay in `waveform_low` and `waveform_fine`; `waveform_IMR` holds only `(2,2)`,
 so its other mode slots are not evidence about the odd modes.
+
+Claim evidence:
+- Claim: When `fabs(delta) <= 1e-14` (the equal-mass branch of the odd-mode
+  factors) and `fabs(chiA) < 1e-14`, `register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients`
+  skips the `K = |h| / |rho|` divisions that would otherwise be `0/0`, and
+  leaves `commondata->c_21`, `commondata->c_43`, and `commondata->c_55` at
+  their registered zero defaults instead.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_special_amplitude_coefficients.py](../../../nrpy/infrastructures/BHaH/seobnr/inspiral_waveform/SEOBNRv5_aligned_spin_special_amplitude_coefficients.py), `register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients`
+- Corroboration: `none available` - this generated-C control-flow branch has no module-local trusted-expression or generated-project numerical check that isolates it; verification requires inspecting the generated `SEOBNRv5_aligned_spin_special_amplitude_coefficients` source directly
 
 Merger and IMR assembly sit above the inspiral arrays. The aligned-spin
 `SEOBNRv5_aligned_spin_IMR_waveform` interpolates inspiral modes at the

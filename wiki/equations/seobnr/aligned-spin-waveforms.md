@@ -49,6 +49,16 @@ the `(3,3)` term adds `fspinimag**2` to the square of the real correction,
 which is the squared magnitude of that complex factor. No other mode has an
 imaginary spin correction.
 
+Claim evidence:
+- Claim: The `(3,3)` mode's PN amplitude factor is the real correction plus
+  `I * fspinimag` (with the equal-mass limit `fspinimag_limit`); `strain()`
+  returns that complex factor directly, and `flux()` adds `fspinimag**2` to the
+  square of the real correction as the squared magnitude of the complex
+  factor. No other mode has an imaginary spin correction.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_waveform_quantities.py), `flux`, `strain`
+- Corroboration: [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_waveform_quantities.py), `trusted_dict`, pins the sampled `fspinimag`/`fspinimag_limit` symbolic values; it does not corroborate the full generated-waveform numerical output (see the [SEOBNR BOB Generated Library](../../infrastructures/bhah/seobnr-bob-generated-library.md) generated-executable consistency check for that separate boundary)
+
 `SEOBNRv5_aligned_spin_merger_quantities` owns the native aligned-spin
 merger-ringdown attachment surface for the `(2,2)` mode. It builds symbolic
 amplitude and phase outputs `h` and `phi`, then exposes attachment quantities
