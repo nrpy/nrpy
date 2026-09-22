@@ -19,12 +19,6 @@ Author: Dalton J. Moone
 import nrpy.c_function as cfc
 import nrpy.params as par
 from nrpy.infrastructures.BHaH import BHaH_defines_h
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.handle_non_terminal_plane_intersection import (
-    register_non_terminal_plane_parameters,
-)
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.handle_terminal_plane_intersection import (
-    register_terminal_plane_parameters,
-)
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.set_initial_conditions_kernel import (
     register_photon_batch_structs,
 )
@@ -78,8 +72,6 @@ def single_integrator_analytical(
     >>> cache_dir.cleanup()
     """
     register_photon_batch_structs()
-    register_terminal_plane_parameters()
-    register_non_terminal_plane_parameters()
 
     macro_defs = r"""
     #undef BUNDLE_CAPACITY
@@ -87,7 +79,7 @@ def single_integrator_analytical(
     """
     BHaH_defines_h.register_BHaH_defines("single_photon_macros", macro_defs)
 
-    # The shared initializer expects the batch tiling contract.  This
+    # The shared initializer expects the batch tile-sampling parameters. This
     # standalone path is fixed to one tile containing one ray; the active
     # indices and scan density are registered by set_initial_conditions_kernel.
     par.register_CodeParameters(
@@ -450,10 +442,29 @@ connection, and right-hand-side stages of each trial in execution order.
 
     normalized_momentum_conversion = (
         """    photon_momentum_to_normalized_kernel(
-      f, metric, chunk_size, stream_idx
+      f, metric, chunk_size
     );"""
         if normalized_eom
         else ""
+    )
+    initial_state_report = (
+        '    printf("  Normalized state (u=%.4f, Pi_1=%.4f, Pi_2=%.4f, Pi_3=%.4f)\\n", f[4], f[5], f[6], f[7]);'
+        if normalized_eom
+        else '    printf("  Mom (%.4f, %.4f, %.4f, %.4f)\\n", f[4], f[5], f[6], f[7]);'
+    )
+    final_parameter_report = (
+        """    printf(
+      "Integration finished after %d steps. Final lambda = %.4f, final coordinate time = %.4f\\n",
+      steps,
+      f[0],
+      *integration_param
+    );"""
+        if normalized_eom
+        else """    printf(
+      "Integration finished after %d steps. Final lambda = %.4f\\n",
+      steps,
+      *integration_param
+    );"""
     )
 
     body = rf"""
@@ -550,7 +561,7 @@ connection, and right-hand-side stages of each trial in execution order.
     f[8] = 0.0;
 
     // Single-ray execution is the one-tile, one-sample specialization of the
-    // shared angular sampling contract.  Tile origins and pixel dimensions are
+    // shared angular sample mapping. Tile origins and pixel dimensions are
     // deliberately not part of commondata.
     commondata.tiles_width = 1;
     commondata.tiles_height = 1;
@@ -578,7 +589,7 @@ connection, and right-hand-side stages of each trial in execution order.
 
     printf("Initial State:\n");
     printf("  Pos (%.4f, %.4f, %.4f)\n", f[1], f[2], f[3]);
-    printf("  Mom (%.4f, %.4f, %.4f, %.4f)\n", f[4], f[5], f[6], f[7]);
+{initial_state_report}
 
     // ==========================================
     // PRE-INTEGRATION DIAGNOSTICS
@@ -689,13 +700,15 @@ connection, and right-hand-side stages of each trial in execution order.
         );
         break;
       }} // END IF: RKF45 rejection limit was reached
+
+      if (steps >= max_accepted_steps)
+        printf(
+          "Termination: reached maximum accepted step count (%ld).\n",
+          max_accepted_steps
+        );
     }} // END WHILE: integrate the photon geodesic
 
-    printf(
-      "Integration finished after %d steps. Final lambda = %.4f\n",
-      steps,
-      *integration_param
-    );
+{final_parameter_report}
 
     // ==========================================
     // POST-INTEGRATION DIAGNOSTICS

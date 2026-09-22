@@ -623,7 +623,7 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
                 nr_codegen_output = ccg.c_codegen(
                     nr_processed_exprs,
                     [f"f_of_xx{i}", f"fprime_of_xx{i}"],
-                    include_braces=True,
+                    include_braces=False,
                     verbose=False,
                 )
                 core_body_list.append(f"""
@@ -635,12 +635,16 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
   REAL xx{i} = xx{i}_lo;
   REAL f_of_xx{i}, fprime_of_xx{i};
 
+  {{
 {nr_codegen_output}
+  }} // END BLOCK: lower endpoint residual
   REAL f_of_xx{i}_lo = f_of_xx{i};
 
   xx{i} = xx{i}_hi;
 
+  {{
 {nr_codegen_output}
+  }} // END BLOCK: upper endpoint residual
   REAL f_of_xx{i}_hi = f_of_xx{i};
 
   if(fabs(f_of_xx{i}_lo) <= F_OF_XX_TOLERANCE) {{
@@ -655,7 +659,9 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     xx{i} = (REAL)0.5 * (xx{i}_lo + xx{i}_hi);
     while(iter < ITER_MAX && !tolerance_has_been_met) {{
 
+      {{
 {nr_codegen_output}
+      }} // END BLOCK: Newton residual
       if(fabs(f_of_xx{i}) <= F_OF_XX_TOLERANCE) {{
         tolerance_has_been_met = 1;
       }} // END IF: Newton iterate is inverse root

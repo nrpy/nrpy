@@ -169,9 +169,9 @@ def normalization_constraint_photon_normalized(norm_expr: sp.Expr) -> None:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "math.h"]
 
     desc = r""" Computes the normalized photon constraint for a batch of trajectories.
-    @param d_f_bundle The pointer array containing the normalized photon state vectors.
-    @param d_metric_bundle The pointer array containing the symmetric metric tensor $g_{\mu\nu}$.
-    @param d_norm_bundle The array of diagnostic constraint structures to be populated.
+    @param[in] d_f_bundle The pointer array containing the normalized photon state vectors.
+    @param[in] d_metric_bundle The pointer array containing the symmetric metric tensor $g_{\mu\nu}$.
+    @param[out] d_norm_bundle The array of diagnostic constraint structures to be populated.
     @param current_chunk_size The dynamically sized operational boundary for the active chunk.
 
     Expected Value: 1.0 for normalized photon trajectories."""

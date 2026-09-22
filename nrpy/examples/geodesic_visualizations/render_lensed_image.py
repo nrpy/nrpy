@@ -548,7 +548,7 @@ def generate_static_lensed_image(
         debug_term_types = np.empty((0, 0), dtype=np.int8)
 
     if not blueprint_filenames:
-        raise ValueError("At least one blueprint artifact is required")
+        raise ValueError("At least one blueprint binary file is required")
     headers = [
         blueprint_io.read_blueprint_header(filename) for filename in blueprint_filenames
     ]
@@ -561,7 +561,7 @@ def generate_static_lensed_image(
     }
     actual_tiles = {(header.tile_x, header.tile_y) for header in headers}
     if len(headers) != len(expected_tiles) or actual_tiles != expected_tiles:
-        raise ValueError("Blueprint artifacts do not form the complete tile set")
+        raise ValueError("Blueprint files do not form the complete tile-file set")
     if any(
         header.tiles_width != tiles_width
         or header.tiles_height != tiles_height

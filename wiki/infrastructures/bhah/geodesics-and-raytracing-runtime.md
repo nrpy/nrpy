@@ -5,17 +5,18 @@
 
 ## Summary
 
-BHaH has two distinct raytracing-facing paths. The standalone photon geodesic
-runtime builds a generated `main`, initializes observer and independent plane
-parameters, tiles the angular pixel grid, integrates batches of photon geodesics with RKF45,
-and serializes per-tile light-blueprint results. The evolution-time export path is
-part of diagnostics: it writes mode-selected Cartesian `g4DD`, `g4DD_d0`, and
-`Gamma4UDD` time-slice data from a live BSSN evolution, then a combiner validates
-and stacks those slices for later numerical-spacetime interpolation.
+BHaH has standalone single- and batch-photon geodesic programs plus an
+evolution-time raytracing-data export. Single-photon programs integrate one
+trajectory without event-plane options. The batch program initializes observer
+and independent plane parameters, tiles the angular pixel grid, integrates
+photon groups with RKF45, and writes per-tile light-blueprint binary files. The
+evolution-time export writes mode-selected Cartesian `g4DD`, `g4DD_d0`, and
+`Gamma4UDD` time-slice data from a live BSSN evolution; a combiner validates and
+stacks those slices for later numerical-spacetime interpolation.
 
 ## Detail
 
-The standalone photon entrypoint is `main` in the photon geodesics package. It
+The standalone batch-photon entrypoint is `main` in the photon geodesics package. It
 registers angular tile-grid parameters, initializes `commondata`, parses
 command-line and parfile input, loops over `(tx, ty)` tile indices, and calls
 the selected batch integrator. The shared initializer invoked by that integrator
@@ -25,24 +26,31 @@ coordinates before serialization; image placement does not depend on integer
 pixel identity fields.
 This path is a standalone geodesic program; it is not the same as
 diagnostics emitted by an evolving BHaH spacetime.
+Single-photon generators instead use the particle-independent forwarding
+`main` from `geodesics/main_single.py` and do not register event-plane
+parameters or call the event-detection manager.
 
 Claim evidence:
-- Claim: The standalone photon entrypoint registers angular tile-grid controls, delegates observer-tetrad construction to the shared initializer, assigns normalized image-sample coordinates, and is distinct from evolution-time diagnostics.
+- Claim: The standalone batch-photon entrypoint registers angular tile-grid controls, delegates observer-tetrad construction to the shared initializer, assigns normalized image-sample coordinates, and is distinct from both single-photon programs and evolution-time diagnostics.
 - Role: generated evidence
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/main_batch.py` — `main`
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/calculate_and_fill_blueprint_data_universal.py` — normalized record fields
 
 The shared `set_initial_conditions_kernel` receives one metric evaluated at the
-observer event and constructs one validated metric-orthonormal tetrad per tile
-batch call. It uses that tetrad for every ray in the call, writes complete
-contravariant `p^mu`, and only then performs any requested normalized-variable
-conversion. The event-coordinate-independent plane bases serve event-coordinate
-diagnostics; they are not the metric tetrad used to initialize momentum.
-The generated ray construction sets the initial normal-observer photon energy
-to `E_obs = 1` before any normalized-variable conversion.
+observer event and constructs one validated metric-orthonormal tetrad per call.
+It uses that tetrad for every requested ray, writes complete contravariant
+`p^mu`, and only then performs any requested normalized-variable conversion.
+Batch generators also request initialization of each ray's event-plane-side
+history. Single-photon generators disable that calculation and require no
+event-plane parameters. Event-plane bases used by batch crossing handlers are
+not the metric tetrad used to initialize momentum.
+The generated ray construction sets the initial camera-tetrad photon energy
+magnitude to `E_camera = 1` before any normalized-variable conversion. This
+affine normalization is distinct from the hypersurface-normal measure
+`|alpha p^0|` used by later termination diagnostics.
 
 Claim evidence:
-- Claim: `set_initial_conditions_kernel` constructs one validated metric-orthonormal observer tetrad per batch call, initializes unit normal-observer energy `E_obs=1`, writes complete contravariant momentum, and performs normalized-variable conversion afterward when requested.
+- Claim: `set_initial_conditions_kernel` constructs one validated metric-orthonormal camera tetrad per call, initializes unit camera-tetrad energy magnitude `E_camera=1`, writes complete contravariant momentum, optionally initializes batch event-plane-side history, and performs normalized-variable conversion afterward when requested; the later hypersurface-normal energy magnitude is `|alpha p^0|`.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/set_initial_conditions_kernel.py` — observer initialization
 - Corroboration: `nrpy/examples/photon_batch_geodesic_integrator_numerical.py` — shared observer initialization arguments
@@ -102,7 +110,7 @@ Claim evidence:
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py` — `event_detection_manager_kernel`
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/find_event_time_and_state.py` — event reconstruction
 
-Blueprint headers carry tile identity/counts, `alpha_w`, `alpha_h`, and schema
+Blueprint headers carry tile identity/counts, `alpha_w`, `alpha_h`, and binary-layout
 version 6. Records carry plane diagnostics, final angles, termination times,
 and normalized image-sample fractions. Final records admit spatial- and
 temporal-interpolation failure statuses in addition to the existing physical
@@ -114,9 +122,9 @@ vertical raster flip, while plane diagnostics remain available to
 normalization sidecars and plots their magnitudes by termination status.
 
 Claim evidence:
-- Claim: Blueprint schema version 6 records tile/header geometry, plane diagnostics, termination times, final angles, and normalized image-sample fractions; the renderer preserves the documented vertical raster flip.
+- Claim: Blueprint binary-layout version 6 records tile/header geometry, plane diagnostics, termination times, final angles, and normalized image-sample fractions; the renderer preserves the documented vertical raster flip.
 - Role: generated evidence
-- Deciding authority: `nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py` — schema constants and dtype
+- Deciding authority: `nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py` — binary-layout constants and dtype
 - Corroboration: `nrpy/examples/geodesic_visualizations/visualize_lensed_image.py` — image placement
 
 Metric and connection generation is shared by photon and massive geodesic
@@ -183,7 +191,7 @@ sidecar entries as `NAN` without replacing a physical termination status.
 Claim evidence:
 - Claim: Numerical interpolation uses authoritative combined-container slice times, preserves the full logical grid including ghost zones, performs two-dimensional native spatial Lagrange interpolation with analytic basis derivatives and azimuthal tensor rotation, uses a nonuniform temporal barycentric basis, reuses caller-supplied trial-locked spatial centers, supplies RK stage coordinate time for normalized EOM, classifies ray-local spatial and temporal interpolation failures separately, and uses nominal spacing only for approximate synthetic temporal-stencil edge times.
 - Role: public/scientific contract
-- Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/azimuthal_symmetry_spatial_lagrange_interpolation.py`, `temporal_lagrange_interpolation.py`, and `time_window_manager_numerical.py` — spatial, temporal, and window contracts
+- Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/azimuthal_symmetry_spatial_lagrange_interpolation.py`, `temporal_lagrange_interpolation.py`, and `time_window_manager_numerical.py` — spatial interpolation, temporal interpolation, and time-window behavior
 - Corroboration: `nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py` — combined layout and metadata; `nrpy/infrastructures/BHaH/interpolation/differentiate_interpolation_lagrange_uniform.h` — uniform-basis derivative helper
 
 Numerical endpoint dispatch is piecewise constant. At or below the first stored

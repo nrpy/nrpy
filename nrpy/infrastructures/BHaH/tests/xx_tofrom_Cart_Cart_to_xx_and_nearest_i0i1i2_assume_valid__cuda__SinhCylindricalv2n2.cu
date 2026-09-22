@@ -49,8 +49,8 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCy
         const REAL tmp4 = tmp2 - tmp3;
         f_of_xx0 = params->rho_slope * xx0 + tmp4 * tmp7 - sqrt(((Cartx) * (Cartx)) + ((Carty) * (Carty)));
         fprime_of_xx0 = params->rho_slope + 2 * tmp4 * tmp5 * tmp6 * xx0 + tmp7 * (tmp0 * tmp2 + tmp0 * tmp3);
-      }
 
+      } // END BLOCK: lower endpoint residual
       REAL f_of_xx0_lo = f_of_xx0;
 
       xx0 = xx0_hi;
@@ -65,8 +65,8 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCy
         const REAL tmp4 = tmp2 - tmp3;
         f_of_xx0 = params->rho_slope * xx0 + tmp4 * tmp7 - sqrt(((Cartx) * (Cartx)) + ((Carty) * (Carty)));
         fprime_of_xx0 = params->rho_slope + 2 * tmp4 * tmp5 * tmp6 * xx0 + tmp7 * (tmp0 * tmp2 + tmp0 * tmp3);
-      }
 
+      } // END BLOCK: upper endpoint residual
       REAL f_of_xx0_hi = f_of_xx0;
 
       if (fabs(f_of_xx0_lo) <= F_OF_XX_TOLERANCE) {
@@ -91,8 +91,8 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCy
             const REAL tmp4 = tmp2 - tmp3;
             f_of_xx0 = params->rho_slope * xx0 + tmp4 * tmp7 - sqrt(((Cartx) * (Cartx)) + ((Carty) * (Carty)));
             fprime_of_xx0 = params->rho_slope + 2 * tmp4 * tmp5 * tmp6 * xx0 + tmp7 * (tmp0 * tmp2 + tmp0 * tmp3);
-          }
 
+          } // END BLOCK: Newton residual
           if (fabs(f_of_xx0) <= F_OF_XX_TOLERANCE) {
             tolerance_has_been_met = 1;
           } // END IF: Newton iterate is inverse root
@@ -150,8 +150,8 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCy
         const REAL tmp4 = tmp2 - tmp3;
         f_of_xx2 = -Cartz + params->z_slope * xx2 + tmp4 * tmp7;
         fprime_of_xx2 = params->z_slope + 2 * tmp4 * tmp5 * tmp6 * xx2 + tmp7 * (tmp0 * tmp2 + tmp0 * tmp3);
-      }
 
+      } // END BLOCK: lower endpoint residual
       REAL f_of_xx2_lo = f_of_xx2;
 
       xx2 = xx2_hi;
@@ -166,8 +166,8 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCy
         const REAL tmp4 = tmp2 - tmp3;
         f_of_xx2 = -Cartz + params->z_slope * xx2 + tmp4 * tmp7;
         fprime_of_xx2 = params->z_slope + 2 * tmp4 * tmp5 * tmp6 * xx2 + tmp7 * (tmp0 * tmp2 + tmp0 * tmp3);
-      }
 
+      } // END BLOCK: upper endpoint residual
       REAL f_of_xx2_hi = f_of_xx2;
 
       if (fabs(f_of_xx2_lo) <= F_OF_XX_TOLERANCE) {
@@ -192,8 +192,8 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCy
             const REAL tmp4 = tmp2 - tmp3;
             f_of_xx2 = -Cartz + params->z_slope * xx2 + tmp4 * tmp7;
             fprime_of_xx2 = params->z_slope + 2 * tmp4 * tmp5 * tmp6 * xx2 + tmp7 * (tmp0 * tmp2 + tmp0 * tmp3);
-          }
 
+          } // END BLOCK: Newton residual
           if (fabs(f_of_xx2) <= F_OF_XX_TOLERANCE) {
             tolerance_has_been_met = 1;
           } // END IF: Newton iterate is inverse root

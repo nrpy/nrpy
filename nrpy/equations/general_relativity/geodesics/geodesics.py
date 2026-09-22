@@ -398,33 +398,23 @@ class GeodesicEquations:
 
         return pos_rhs + mom_rhs + path_len_rhs
 
-    @staticmethod
-    def _placeholder_adm_quantities_from_metric_and_connection() -> Tuple[
-        sp.Expr,
-        List[sp.Expr],
-        List[List[sp.Expr]],
-        List[List[sp.Expr]],
-        List[List[sp.Expr]],
-        List[sp.Expr],
-        List[List[sp.Expr]],
-        List[List[List[sp.Expr]]],
-    ]:
+    def geodesic_eom_rhs_photon_normalized_christoffel(self) -> List[sp.Expr]:
         r"""
-        Reconstruct normalized-EOM quantities from metric and connection data.
+        Generate normalized photon equations from four-Christoffel symbols.
 
-        The normalized photon equations need ADM quantities that are not stored
-        in the raytracing payload. Metric compatibility reconstructs the metric
-        derivatives from the supplied four-Christoffels.
+        The state ordering matches the existing normalized numerical calculation:
+        ``(lambda, x, y, z, u, Pi_1, Pi_2, Pi_3, L_normal)``. Coordinate time is
+        the independent variable. This method preserves the existing metric-based
+        normalized method while accepting Christoffel-based geometry inputs.
 
-        :return: Lapse, shift, spatial metric, inverse spatial metric,
-            extrinsic curvature, lapse derivatives, shift derivatives, and
-            inverse spatial-metric derivatives.
+        :return: A list of 9 SymPy expressions for the normalized photon RHS.
         """
+        # Step 1: Reconstruct the ADM quantities needed by the normalized EOM.
         g4DD = ixp.declarerank2("metric_g4DD", symmetry="sym01", dimension=4)
         g4UU, _ = ixp.symm_matrix_inverter4x4(g4DD)
         Gamma4UDD = ixp.declarerank3("conn_Gamma4UDD", dimension=4, symmetry="sym12")
 
-        # Step 1: Recover the spatial metric, inverse spatial metric, and shift.
+        # Step 1.a: Recover the spatial metric, inverse metric, shift, and lapse.
         gammaDD = ixp.zerorank2(dimension=3)
         for i in range(3):
             for j in range(3):
@@ -441,7 +431,7 @@ class GeodesicEquations:
 
         alpha = sp.sympify(1) / sp.sqrt(-g4UU[0][0])
 
-        # Step 2: Use metric compatibility to reconstruct partial derivatives.
+        # Step 1.b: Use metric compatibility to reconstruct partial derivatives.
         g4DD_dD = ixp.zerorank3(dimension=4)
         for mu in range(4):
             for nu in range(mu, 4):
@@ -459,7 +449,7 @@ class GeodesicEquations:
                     g4DD_dD[mu][nu][derivative_direction] = derivative
                     g4DD_dD[nu][mu][derivative_direction] = derivative
 
-        # Step 3: Reconstruct the spatial derivatives needed by the normalized EOM.
+        # Step 1.c: Reconstruct the spatial derivatives needed by the equations.
         alpha_dD = ixp.zerorank1(dimension=3)
         gammaUU_dD = ixp.zerorank3(dimension=3)
         betaU_dD = ixp.zerorank2(dimension=3)
@@ -493,40 +483,7 @@ class GeodesicEquations:
                         + gammaUU[k][j] * g4DD_dD[0][j + 1][i + 1]
                     )
 
-        return (
-            alpha,
-            betaU,
-            gammaDD,
-            gammaUU,
-            KDD,
-            alpha_dD,
-            betaU_dD,
-            gammaUU_dD,
-        )
-
-    def geodesic_eom_rhs_photon_normalized_christoffel(self) -> List[sp.Expr]:
-        r"""
-        Generate normalized photon equations from four-Christoffel symbols.
-
-        The state ordering matches the existing normalized numerical pipeline:
-        ``(lambda, x, y, z, u, Pi_1, Pi_2, Pi_3, L_normal)``. Coordinate time is
-        the independent variable. This method preserves the existing metric-based
-        normalized method while providing the Christoffel-based geometry contract.
-
-        :return: A list of 9 SymPy expressions for the normalized photon RHS.
-        """
-        (
-            alpha,
-            betaU,
-            _gammaDD,
-            gammaUU,
-            KDD,
-            alpha_dD,
-            betaU_dD,
-            gammaUU_dD,
-        ) = self._placeholder_adm_quantities_from_metric_and_connection()
-
-        # Step 1: Raise the normalized covariant spatial momentum.
+        # Step 2: Raise the normalized covariant spatial momentum.
         u = sp.Symbol("u", real=True)
         PiD = ixp.declarerank1("PiD", dimension=3)
         PiU = ixp.zerorank1(dimension=3)
@@ -534,7 +491,7 @@ class GeodesicEquations:
             for j in range(3):
                 PiU[i] += gammaUU[i][j] * PiD[j]
 
-        # Step 2: Build contractions shared by the normalized equations.
+        # Step 3: Build contractions shared by the normalized equations.
         alpha_grad_dot_PiU = sp.sympify(0)
         KDD_contract = sp.sympify(0)
         for i in range(3):
@@ -542,14 +499,14 @@ class GeodesicEquations:
             for j in range(3):
                 KDD_contract += KDD[i][j] * PiU[i] * PiU[j]
 
-        # Step 3: Evolve the affine parameter and spatial coordinates.
+        # Step 4: Evolve the affine parameter and spatial coordinates.
         lambda_rhs = [-alpha * sp.exp(-u)]
         pos_rhs = [alpha * PiU[i] - betaU[i] for i in range(3)]
 
-        # Step 4: Evolve the normalized lapse-momentum variable.
+        # Step 5: Evolve the normalized lapse-momentum variable.
         u_rhs = [-alpha_grad_dot_PiU + alpha * KDD_contract]
 
-        # Step 5: Evolve the covariant normalized spatial momentum.
+        # Step 6: Evolve the covariant normalized spatial momentum.
         Pi_rhs = ixp.zerorank1(dimension=3)
         common_scalar = alpha_grad_dot_PiU - alpha * KDD_contract
         for i in range(3):
@@ -1360,50 +1317,6 @@ class GeodesicEquations:
         return Gamma4UDD_recipe
 
     @staticmethod
-    def _transform_christoffel_recipe_from_grid_basis_data(
-        grid_Gamma4UDD: List[List[List[sp.Expr]]],
-        J4UD: List[List[sp.Expr]],
-        J4UD_dD: List[List[List[sp.Expr]]],
-        K4UD: Optional[List[List[sp.Expr]]] = None,
-    ) -> List[List[List[sp.Expr]]]:
-        r"""
-        Transform Christoffel symbols with a coordinate Jacobian.
-
-        :param grid_Gamma4UDD: Christoffel symbols in the source basis.
-        :param J4UD: Jacobian from source coordinates to target coordinates.
-        :param J4UD_dD: Source-coordinate derivatives of ``J4UD``.
-        :param K4UD: Optional inverse Jacobian. If omitted, compute it.
-        :return: Christoffel symbols in the target basis.
-        """
-        if K4UD is None:
-            K4UD, _ = ixp.generic_matrix_inverter4x4(J4UD)
-
-        Gamma4UDD_recipe = ixp.zerorank3(dimension=4)
-        for alpha in range(4):
-            for mu in range(4):
-                for nu in range(mu, 4):
-                    term = sp.sympify(0)
-                    for grid_a in range(4):
-                        for grid_b in range(4):
-                            for grid_c in range(4):
-                                term += (
-                                    J4UD[alpha][grid_a]
-                                    * K4UD[grid_b][mu]
-                                    * K4UD[grid_c][nu]
-                                    * grid_Gamma4UDD[grid_a][grid_b][grid_c]
-                                )
-                    for grid_b in range(4):
-                        for grid_c in range(4):
-                            term -= (
-                                K4UD[grid_b][mu]
-                                * K4UD[grid_c][nu]
-                                * J4UD_dD[alpha][grid_c][grid_b]
-                            )
-                    Gamma4UDD_recipe[alpha][mu][nu] = term
-                    Gamma4UDD_recipe[alpha][nu][mu] = term
-        return Gamma4UDD_recipe
-
-    @staticmethod
     def symbolic_christoffel_recipe_from_bssn_grid_basis(
         bssn_coord_system: str,
         target_basis: Literal["Cartesian", "Spherical"] = "Cartesian",
@@ -1510,12 +1423,30 @@ class GeodesicEquations:
             if use_static_time_derivatives
             else bssn_to_g4christoffel.Gamma4UDD
         )
-        return GeodesicEquations._transform_christoffel_recipe_from_grid_basis_data(
-            grid_Gamma4UDD=grid_Gamma4UDD,
-            J4UD=J4UD,
-            J4UD_dD=J4UD_dD,
-            K4UD=K4UD,
-        )
+        Gamma4UDD_recipe = ixp.zerorank3(dimension=4)
+        for alpha in range(4):
+            for mu in range(4):
+                for nu in range(mu, 4):
+                    term = sp.sympify(0)
+                    for grid_a in range(4):
+                        for grid_b in range(4):
+                            for grid_c in range(4):
+                                term += (
+                                    J4UD[alpha][grid_a]
+                                    * K4UD[grid_b][mu]
+                                    * K4UD[grid_c][nu]
+                                    * grid_Gamma4UDD[grid_a][grid_b][grid_c]
+                                )
+                    for grid_b in range(4):
+                        for grid_c in range(4):
+                            term -= (
+                                K4UD[grid_b][mu]
+                                * K4UD[grid_c][nu]
+                                * J4UD_dD[alpha][grid_c][grid_b]
+                            )
+                    Gamma4UDD_recipe[alpha][mu][nu] = term
+                    Gamma4UDD_recipe[alpha][nu][mu] = term
+        return Gamma4UDD_recipe
 
 
 _GAMMA4UDD_METRIC_RECIPE = GeodesicEquations.symbolic_numerical_christoffel_recipe()

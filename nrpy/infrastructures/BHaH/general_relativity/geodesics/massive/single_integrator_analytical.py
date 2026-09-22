@@ -265,6 +265,11 @@ conserved-quantity diagnostics.
       steps++;
     }} // END WHILE: integrate massive particle geodesic
 
+    if (steps >= commondata.max_steps && proper_time < proper_time_max)
+      printf(
+          "Termination: reached maximum step count (%d) before proper_time_max.\n",
+          commondata.max_steps);
+
     fclose(fp);
     printf("Integration finished after %d steps. Final proper_time = %.4f\n", steps, proper_time);
 

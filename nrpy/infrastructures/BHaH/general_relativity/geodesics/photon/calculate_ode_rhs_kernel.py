@@ -58,7 +58,7 @@ def calculate_ode_rhs_kernel(
         )
     parallelization = par.parval_from_str("parallelization")
 
-    # Select the generated RHS input contract once for this registration.
+    # Select the generated RHS inputs once for this registration.
     geometry_bundle_arg_name = "d_rhs_geometry_bundle"
     geometry_index_macro = "IDX_RHS_GEOMETRY"
     if rhs_uses_metric_derivatives:
@@ -347,21 +347,21 @@ def calculate_ode_rhs_kernel(
     desc_lines = [
         r"""Orchestrates the memory kernel for computing photon geodesic ODE right-hand sides.
 
-@param d_f_temp_bundle Pointer to the intermediate state bundle $f^{\mu}$ in memory.
-@param d_metric_bundle Pointer to the pre-calculated metric bundle $g_{\mu\nu}$ in memory.""",
-        f"@param {geometry_bundle_arg_name} Pointer to the pre-calculated "
+@param[in] d_f_temp_bundle Pointer to the intermediate state array $f^{\mu}$ in memory.
+@param[in] d_metric_bundle Pointer to the pre-calculated metric-component array $g_{\mu\nu}$ in memory.""",
+        f"@param[in] {geometry_bundle_arg_name} Pointer to the pre-calculated "
         f"{geometry_bundle_description} in memory.",
     ]
     if normalized_eom:
         desc_lines.extend(
             [
-                "@param d_integration_param_bundle Pointer to the base coordinate-time bundle.",
-                "@param d_h Pointer to the per-ray RKF45 step-size bundle.",
+                "@param[in] d_integration_param_bundle Pointer to the coordinate-time array.",
+                "@param[in] d_h Pointer to the per-ray RKF45 step-size array.",
             ]
         )
     desc_lines.extend(
         [
-            "@param d_k_bundle Pointer to the flattened derivative bundle.",
+            "@param[out] d_k_bundle Pointer to the flattened derivative array.",
             "@param stage Current RKF45 stage index used to select the write offset.",
             "@param chunk_size Number of active rays in the bundle batch.",
             "@param stream_idx Active execution stream identifier.",

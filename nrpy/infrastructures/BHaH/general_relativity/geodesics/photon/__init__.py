@@ -1,4 +1,3 @@
-# pylint: disable=missing-module-docstring
 from . import (
     batch_integrator_analytical,
     batch_integrator_numerical,
@@ -10,7 +9,6 @@ from . import (
     handle_terminal_plane_intersection,
     interpolation_kernel,
     main_batch,
-    main_single,
     normal_observer_log_energy,
     normalization_constraint_photon_normalized,
     photon_momentum_to_normalized_kernel,

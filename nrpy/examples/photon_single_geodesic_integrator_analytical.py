@@ -4,7 +4,7 @@ Generate a standalone C project for integrating a single photon geodesic.
 
 The generated project evolves one massless test particle in a symbolic
 spacetime recipe using the split RKF45 photon pipeline. Its one-ray initialization
-uses the observer metric tetrad and the shared one-tile sampling contract. It
+uses the observer metric tetrad and the shared one-tile angular sample mapping. It
 writes trajectory samples and reports normalization and conserved-quantity
 diagnostics while preserving the Structure of Arrays layout expected by the
 shared geodesic kernels. RKF45 trial and stage diagnostics are enabled by
@@ -35,13 +35,12 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics import (
     connections,
     conserved_quantities,
     g4DD_metric,
+    main_single,
     normalization_constraint,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     calculate_ode_rhs_kernel,
-    event_detection_manager_kernel,
     interpolation_kernel,
-    main_single,
     normal_observer_log_energy,
     normalization_constraint_photon_normalized,
     photon_momentum_to_normalized_kernel,
@@ -133,55 +132,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Coordinate-radius termination threshold.",
     )
     parser.add_argument(
-        "--terminal-plane-center",
-        nargs=3,
-        type=float,
-        metavar=("X", "Y", "Z"),
-        help="Terminal-plane center; requires all terminal-plane options.",
-    )
-    parser.add_argument(
-        "--terminal-plane-normal",
-        nargs=3,
-        type=float,
-        metavar=("NX", "NY", "NZ"),
-        help="Terminal-plane normal; requires all terminal-plane options.",
-    )
-    parser.add_argument(
-        "--terminal-plane-up",
-        nargs=3,
-        type=float,
-        metavar=("UX", "UY", "UZ"),
-        help="Terminal-plane up direction; requires all terminal-plane options.",
-    )
-    parser.add_argument(
-        "--terminal-plane-radius",
-        nargs=2,
-        type=float,
-        metavar=("MIN_RADIUS", "MAX_RADIUS"),
-        help="Terminal-plane accepted coordinate-radius range.",
-    )
-    parser.add_argument(
-        "--non-terminal-plane-center",
-        nargs=3,
-        type=float,
-        metavar=("X", "Y", "Z"),
-        help="Nonterminal-plane center; requires all nonterminal-plane options.",
-    )
-    parser.add_argument(
-        "--non-terminal-plane-normal",
-        nargs=3,
-        type=float,
-        metavar=("NX", "NY", "NZ"),
-        help="Nonterminal-plane normal; requires all nonterminal-plane options.",
-    )
-    parser.add_argument(
-        "--non-terminal-plane-up",
-        nargs=3,
-        type=float,
-        metavar=("UX", "UY", "UZ"),
-        help="Nonterminal-plane up direction; requires all nonterminal-plane options.",
-    )
-    parser.add_argument(
         "--initial-step",
         type=float,
         metavar="H",
@@ -249,29 +199,6 @@ if __name__ == "__main__":
     if args.escape_radius <= 0.0:
         raise ValueError("--escape-radius must be positive.")
     normalized_eom = args.eom == "normalized"
-    terminal_plane_values = (
-        args.terminal_plane_center,
-        args.terminal_plane_normal,
-        args.terminal_plane_up,
-        args.terminal_plane_radius,
-    )
-    if any(value is not None for value in terminal_plane_values) and not all(
-        value is not None for value in terminal_plane_values
-    ):
-        raise ValueError(
-            "Terminal-plane options must be supplied as one complete group."
-        )
-    non_terminal_plane_values = (
-        args.non_terminal_plane_center,
-        args.non_terminal_plane_normal,
-        args.non_terminal_plane_up,
-    )
-    if any(value is not None for value in non_terminal_plane_values) and not all(
-        value is not None for value in non_terminal_plane_values
-    ):
-        raise ValueError(
-            "Nonterminal-plane options must be supplied as one complete group."
-        )
 
     # Step 1: Select the BHaH OpenMP backend for this example.
     par.set_parval_from_str("Infrastructure", "BHaH")
@@ -316,9 +243,8 @@ if __name__ == "__main__":
 
     set_initial_conditions_kernel.register_photon_batch_structs()
     set_initial_conditions_kernel.set_initial_conditions_kernel(
-        normalized_eom=normalized_eom
+        normalized_eom=normalized_eom, initialize_event_history=False
     )
-    event_detection_manager_kernel.register_event_plane_parameters()
     interpolation_kernel.interpolation_kernel(SPACETIME)
     geodesic_rhs = (
         geodesic_data.geodesic_eom_rhs_photon_normalized_christoffel()
@@ -382,67 +308,6 @@ if __name__ == "__main__":
     par.adjust_CodeParam_default("initial_h", -0.1 if normalized_eom else 0.1)
     par.adjust_CodeParam_default("r_escape", args.escape_radius)
     par.adjust_CodeParam_default("evolution_measure_max", 3.0)
-
-    terminal_defaults = {
-        "terminal_plane_center_x": -1.0e4,
-        "terminal_plane_center_y": 0.0,
-        "terminal_plane_center_z": 0.0,
-        "terminal_plane_normal_x": 1.0,
-        "terminal_plane_normal_y": 0.0,
-        "terminal_plane_normal_z": 0.0,
-        "terminal_plane_up_x": 0.0,
-        "terminal_plane_up_y": 0.0,
-        "terminal_plane_up_z": 1.0,
-        "terminal_plane_min_coord_radius": 0.0,
-        "terminal_plane_max_coord_radius": 1.0,
-        "terminal_plane_enabled": False,
-    }
-    if args.terminal_plane_center is not None:
-        terminal_defaults.update(
-            {
-                "terminal_plane_center_x": args.terminal_plane_center[0],
-                "terminal_plane_center_y": args.terminal_plane_center[1],
-                "terminal_plane_center_z": args.terminal_plane_center[2],
-                "terminal_plane_normal_x": args.terminal_plane_normal[0],
-                "terminal_plane_normal_y": args.terminal_plane_normal[1],
-                "terminal_plane_normal_z": args.terminal_plane_normal[2],
-                "terminal_plane_up_x": args.terminal_plane_up[0],
-                "terminal_plane_up_y": args.terminal_plane_up[1],
-                "terminal_plane_up_z": args.terminal_plane_up[2],
-                "terminal_plane_min_coord_radius": args.terminal_plane_radius[0],
-                "terminal_plane_max_coord_radius": args.terminal_plane_radius[1],
-                "terminal_plane_enabled": True,
-            }
-        )
-    non_terminal_defaults = {
-        "non_terminal_plane_center_x": -1.0e4,
-        "non_terminal_plane_center_y": 0.0,
-        "non_terminal_plane_center_z": 0.0,
-        "non_terminal_plane_normal_x": 1.0,
-        "non_terminal_plane_normal_y": 0.0,
-        "non_terminal_plane_normal_z": 0.0,
-        "non_terminal_plane_up_x": 0.0,
-        "non_terminal_plane_up_y": 0.0,
-        "non_terminal_plane_up_z": 1.0,
-        "non_terminal_plane_enabled": False,
-    }
-    if args.non_terminal_plane_center is not None:
-        non_terminal_defaults.update(
-            {
-                "non_terminal_plane_center_x": args.non_terminal_plane_center[0],
-                "non_terminal_plane_center_y": args.non_terminal_plane_center[1],
-                "non_terminal_plane_center_z": args.non_terminal_plane_center[2],
-                "non_terminal_plane_normal_x": args.non_terminal_plane_normal[0],
-                "non_terminal_plane_normal_y": args.non_terminal_plane_normal[1],
-                "non_terminal_plane_normal_z": args.non_terminal_plane_normal[2],
-                "non_terminal_plane_up_x": args.non_terminal_plane_up[0],
-                "non_terminal_plane_up_y": args.non_terminal_plane_up[1],
-                "non_terminal_plane_up_z": args.non_terminal_plane_up[2],
-                "non_terminal_plane_enabled": True,
-            }
-        )
-    for name, value in {**terminal_defaults, **non_terminal_defaults}.items():
-        par.adjust_CodeParam_default(name, value)
 
     if args.initial_step is not None:
         if args.initial_step <= 0.0:

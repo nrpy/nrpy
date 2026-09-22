@@ -10,9 +10,10 @@ ray's normalized image-sample coordinates for ray construction. Batch struct
 definitions are registered separately so analytical single-ray code can retain
 its smaller state layout.
 
-The generated CPU/CUDA path initializes chunked state buffers, records each ray's
-initial side of the independent event planes, and copies the completed state back
-to the caller-owned Structure-of-Arrays storage.
+The generated CPU/CUDA path initializes chunked state buffers and copies the
+completed state back to the caller-owned Structure-of-Arrays storage. Batch
+generators can additionally request initialization of each ray's event-plane
+side history.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -58,7 +59,7 @@ batch_structs_c_code = r"""
 
     // Native same-build metadata for one serialized blueprint tile.
     #define BLUEPRINT_MAGIC "NRPYBP01"
-    // Schema v6 stores fields of view once in the tile header and stores each
+    // Binary-layout version 6 stores fields of view once in the tile header and stores each
     // ray's normalized image sample directly in the record.
     #define BLUEPRINT_SCHEMA_VERSION 6U
     typedef struct {
@@ -186,7 +187,7 @@ batch_structs_c_code = r"""
 
 def register_photon_batch_structs() -> None:
     """
-    Register the shared photon batch structs and blueprint schema.
+    Register the shared photon batch structs and blueprint field definitions.
 
     Batch and single-ray generators call this before registering code that
     consumes the shared PhotonStateSoA. The shared definition includes the
@@ -197,7 +198,9 @@ def register_photon_batch_structs() -> None:
         Bdefines_h.register_BHaH_defines("photon_batch_structs", batch_structs_c_code)
 
 
-def set_initial_conditions_kernel(normalized_eom: bool = False) -> None:
+def set_initial_conditions_kernel(
+    normalized_eom: bool = False, initialize_event_history: bool = True
+) -> None:
     """
     Register shared photon initialization from one observer-event metric.
 
@@ -218,6 +221,8 @@ def set_initial_conditions_kernel(normalized_eom: bool = False) -> None:
 
     :param normalized_eom: Whether to initialize the normalized photon state
         layout.
+    :param initialize_event_history: Whether to validate event-plane parameters
+        and initialize the batch event-side arrays.
     """
     # Step 1: Register tile-sampling state.  Tile indices are the only mutable
     # tile state.  Each tile origin is derived below from the active indices;
@@ -485,8 +490,8 @@ __OBSERVER_RAY_MATH__
                         check_i,
                         check_component);
                     exit(EXIT_FAILURE);
-                }
-            }
+                } // END IF: nonfinite initialized state
+            } // END LOOP: initialized state components
             if (!isfinite(all_photons->h[check_i])) {
                 fprintf(
                     stderr,
@@ -494,8 +499,8 @@ __OBSERVER_RAY_MATH__
                     "step size at ray %ld.\n",
                     check_i);
                 exit(EXIT_FAILURE);
-            }
-        }
+            } // END IF: nonfinite initialized step
+        } // END LOOP: initialized rays
 """
     if parallelization == "cuda":
         sync_and_transfer_code = r"""
@@ -870,13 +875,71 @@ static void nrpy_photon_construct_observer_tetrad(
 """
 
     # Step 9: Build the host orchestration around one observer metric and one
-    # tetrad.  Plane-side flags remain initialized for current event detection;
-    # they do not define ray direction.
+    # tetrad.
     tetrad_scalar_declarations = "\n".join(
         f"    const double observer_tetrad_{basis}_{mu} = "
         f"observer_tetrad_out[{basis}][{mu}];"
         for basis in range(4)
         for mu in range(4)
+    )
+    event_history_initialization = (
+        r"""
+    //==========================================
+    // INITIAL EVENT-SIDE FLAGS
+    //==========================================
+    // Event detection uses each plane's own normal and center. The observer
+    // direction and observer up seed are deliberately not used here.
+    const double non_terminal_plane_normal_norm = sqrt(
+        commondata->non_terminal_plane_normal_x * commondata->non_terminal_plane_normal_x +
+        commondata->non_terminal_plane_normal_y * commondata->non_terminal_plane_normal_y +
+        commondata->non_terminal_plane_normal_z * commondata->non_terminal_plane_normal_z);
+    const double terminal_plane_normal_norm = sqrt(
+        commondata->terminal_plane_normal_x * commondata->terminal_plane_normal_x +
+        commondata->terminal_plane_normal_y * commondata->terminal_plane_normal_y +
+        commondata->terminal_plane_normal_z * commondata->terminal_plane_normal_z);
+    if (!isfinite(non_terminal_plane_normal_norm) ||
+        !isfinite(terminal_plane_normal_norm) ||
+        non_terminal_plane_normal_norm <= 1.0e-14 ||
+        terminal_plane_normal_norm <= 1.0e-14) {
+        fprintf(stderr, "ERROR: an event-plane normal is degenerate.\n");
+        exit(EXIT_FAILURE);
+    }
+    if (!isfinite(commondata->terminal_plane_min_coord_radius) ||
+        !isfinite(commondata->terminal_plane_max_coord_radius) ||
+        commondata->terminal_plane_min_coord_radius < 0.0 ||
+        commondata->terminal_plane_max_coord_radius <
+            commondata->terminal_plane_min_coord_radius) {
+        fprintf(
+            stderr,
+            "ERROR: terminal-plane coordinate-radius bounds are invalid.\n");
+        exit(EXIT_FAILURE);
+    }
+    const double non_terminal_plane_side_value =
+        commondata->non_terminal_plane_normal_x *
+            (commondata->observer_x - commondata->non_terminal_plane_center_x) +
+        commondata->non_terminal_plane_normal_y *
+            (commondata->observer_y - commondata->non_terminal_plane_center_y) +
+        commondata->non_terminal_plane_normal_z *
+            (commondata->observer_z - commondata->non_terminal_plane_center_z);
+    const bool init_non_terminal_plane_side = (non_terminal_plane_side_value > 0.0);
+    const double terminal_plane_side_value =
+        commondata->terminal_plane_normal_x *
+            (commondata->observer_x - commondata->terminal_plane_center_x) +
+        commondata->terminal_plane_normal_y *
+            (commondata->observer_y - commondata->terminal_plane_center_y) +
+        commondata->terminal_plane_normal_z *
+            (commondata->observer_z - commondata->terminal_plane_center_z);
+    const bool init_terminal_plane_side = (terminal_plane_side_value > 0.0);
+    if (all_photons->on_positive_side_of_non_terminal_plane_prev != NULL &&
+        all_photons->on_positive_side_of_terminal_plane_prev != NULL) {
+        for (long int plane_i = 0; plane_i < num_rays; ++plane_i) {
+            all_photons->on_positive_side_of_non_terminal_plane_prev[plane_i] = init_non_terminal_plane_side;
+            all_photons->on_positive_side_of_terminal_plane_prev[plane_i] = init_terminal_plane_side;
+        }
+    }
+"""
+        if initialize_event_history
+        else ""
     )
     body = r"""
     //==========================================
@@ -953,59 +1016,7 @@ __TETRAD_SCALAR_DECLARATIONS__
         exit(EXIT_FAILURE);
     }
 
-    //==========================================
-    // INITIAL EVENT-SIDE FLAGS
-    //==========================================
-    // Event detection uses each plane's own normal and center. The observer
-    // direction and observer up seed are deliberately not used here.
-    const double non_terminal_plane_normal_norm = sqrt(
-        commondata->non_terminal_plane_normal_x * commondata->non_terminal_plane_normal_x +
-        commondata->non_terminal_plane_normal_y * commondata->non_terminal_plane_normal_y +
-        commondata->non_terminal_plane_normal_z * commondata->non_terminal_plane_normal_z);
-    const double terminal_plane_normal_norm = sqrt(
-        commondata->terminal_plane_normal_x * commondata->terminal_plane_normal_x +
-        commondata->terminal_plane_normal_y * commondata->terminal_plane_normal_y +
-        commondata->terminal_plane_normal_z * commondata->terminal_plane_normal_z);
-    if (!isfinite(non_terminal_plane_normal_norm) ||
-        !isfinite(terminal_plane_normal_norm) ||
-        non_terminal_plane_normal_norm <= 1.0e-14 ||
-        terminal_plane_normal_norm <= 1.0e-14) {
-        fprintf(stderr, "ERROR: an event-plane normal is degenerate.\n");
-        exit(EXIT_FAILURE);
-    }
-    if (!isfinite(commondata->terminal_plane_min_coord_radius) ||
-        !isfinite(commondata->terminal_plane_max_coord_radius) ||
-        commondata->terminal_plane_min_coord_radius < 0.0 ||
-        commondata->terminal_plane_max_coord_radius <
-            commondata->terminal_plane_min_coord_radius) {
-        fprintf(
-            stderr,
-            "ERROR: terminal-plane coordinate-radius bounds are invalid.\n");
-        exit(EXIT_FAILURE);
-    }
-    const double non_terminal_plane_side_value =
-        commondata->non_terminal_plane_normal_x *
-            (commondata->observer_x - commondata->non_terminal_plane_center_x) +
-        commondata->non_terminal_plane_normal_y *
-            (commondata->observer_y - commondata->non_terminal_plane_center_y) +
-        commondata->non_terminal_plane_normal_z *
-            (commondata->observer_z - commondata->non_terminal_plane_center_z);
-    const bool init_non_terminal_plane_side = (non_terminal_plane_side_value > 0.0);
-    const double terminal_plane_side_value =
-        commondata->terminal_plane_normal_x *
-            (commondata->observer_x - commondata->terminal_plane_center_x) +
-        commondata->terminal_plane_normal_y *
-            (commondata->observer_y - commondata->terminal_plane_center_y) +
-        commondata->terminal_plane_normal_z *
-            (commondata->observer_z - commondata->terminal_plane_center_z);
-    const bool init_terminal_plane_side = (terminal_plane_side_value > 0.0);
-    if (all_photons->on_positive_side_of_non_terminal_plane_prev != NULL &&
-        all_photons->on_positive_side_of_terminal_plane_prev != NULL) {
-        for (long int plane_i = 0; plane_i < num_rays; ++plane_i) {
-            all_photons->on_positive_side_of_non_terminal_plane_prev[plane_i] = init_non_terminal_plane_side;
-            all_photons->on_positive_side_of_terminal_plane_prev[plane_i] = init_terminal_plane_side;
-        }
-    }
+__EVENT_HISTORY_INITIALIZATION__
 
     //==========================================
     // STAGING ALLOCATION AND RAY INITIALIZATION
@@ -1022,6 +1033,9 @@ __TETRAD_SCALAR_DECLARATIONS__
 __NORMALIZED_TRACKER_INITIALIZATION__
 """
     body = body.replace("__TETRAD_SCALAR_DECLARATIONS__", tetrad_scalar_declarations)
+    body = body.replace(
+        "__EVENT_HISTORY_INITIALIZATION__", event_history_initialization
+    )
     body = body.replace("__HOST_LOOP_CODE__", str(host_loop_code))
     body = body.replace(
         "__NORMALIZED_TRACKER_INITIALIZATION__", normalized_tracker_initialization
@@ -1053,9 +1067,10 @@ __NORMALIZED_TRACKER_INITIALIZATION__
     performs only normalized sample-coordinate mapping, C/q evaluation, and
     the linear tetrad combination for the past-directed momentum.
 
-    @param[in] commondata Observer, image, plane, and integration parameters.
+    @param[in] commondata Observer, image, and integration parameters; batch
+        generation can additionally include event-plane parameters.
     @param num_rays Number of rays in the current tile.
-    @param[in,out] all_photons Host Structure of Arrays state and event flags.
+    @param[in,out] all_photons Host Structure of Arrays state and optional event flags.
     @param[in] observer_metric Ten independent covariant metric components at the
         observer event, ordered ``(g00,g01,g02,g03,g11,g12,g13,g22,g23,g33)``.
     @param[out] observer_tetrad_out Output tetrad with indexing ``[a][mu]``.

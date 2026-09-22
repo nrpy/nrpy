@@ -1,7 +1,7 @@
 """
-Read and validate native geodesic blueprint artifacts.
+Read and validate native geodesic blueprint binary files.
 
-The reader is shared by the renderer and diagnostics so native artifact layout,
+The reader is shared by the renderer and diagnostics so the native record layout,
 tile identity, record counts, and terminal-status rules have one owner.
 
 Author: Dalton J. Moone
@@ -43,10 +43,10 @@ def read_blueprint_header(
     """
     Read and validate a blueprint header and exact payload length.
 
-    :param filename: Native blueprint artifact path.
+    :param filename: Native blueprint binary-file path.
     :param expected_tile: Optional expected ``(tile_x, tile_y)`` pair.
     :return: Validated blueprint metadata.
-    :raises ValueError: If the artifact is malformed or has the wrong tile.
+    :raises ValueError: If the binary file is malformed or has the wrong tile.
     """
     with open(filename, "rb") as blueprint_file:
         raw_header = blueprint_file.read(cfg.BLUEPRINT_HEADER_SIZE)
@@ -57,7 +57,9 @@ def read_blueprint_header(
     if header.magic != cfg.BLUEPRINT_MAGIC:
         raise ValueError(f"Blueprint '{filename}' has an invalid magic value")
     if header.schema_version != cfg.BLUEPRINT_SCHEMA_VERSION:
-        raise ValueError(f"Blueprint '{filename}' has an unsupported schema version")
+        raise ValueError(
+            f"Blueprint '{filename}' has an unsupported binary-layout version"
+        )
     if header.header_size != cfg.BLUEPRINT_HEADER_SIZE:
         raise ValueError(f"Blueprint '{filename}' has an invalid header size")
     if header.record_size != cfg.BLUEPRINT_RECORD_SIZE:
@@ -91,19 +93,24 @@ def iter_blueprint_chunks(
     filename: str,
     chunk_records: int,
     expected_tile: Optional[Tuple[int, int]] = None,
+    allow_active_termination: bool = False,
 ) -> Iterator[Tuple[BlueprintHeader, int, npt.NDArray[np.void]]]:
     """
     Stream validated blueprint records with their tile-local ordinal.
 
-    :param filename: Native blueprint artifact path.
+    :param filename: Native blueprint binary-file path.
     :param chunk_records: Maximum records yielded per chunk.
     :param expected_tile: Optional expected ``(tile_x, tile_y)`` pair.
+    :param allow_active_termination: Permit active rays in partial output files.
     :yield: Header, starting ordinal, and structured record chunks.
-    :raises ValueError: If the chunk size or artifact is invalid.
+    :raises ValueError: If the chunk size or binary file is invalid.
     """
     if chunk_records <= 0:
         raise ValueError("chunk_records must be positive")
     header = read_blueprint_header(filename, expected_tile)
+    permitted_termination_types = cfg.FINAL_TERMINATION_TYPES
+    if allow_active_termination:
+        permitted_termination_types = (*permitted_termination_types, cfg.ACTIVE)
     with open(filename, "rb") as blueprint_file:
         blueprint_file.seek(cfg.BLUEPRINT_HEADER_SIZE)
         record_start = 0
@@ -130,7 +137,7 @@ def iter_blueprint_chunks(
                     f"Blueprint '{filename}' has invalid normalized image coordinates"
                 )
             termination_types = records["termination_type"]
-            if np.any(~np.isin(termination_types, cfg.FINAL_TERMINATION_TYPES)):
+            if np.any(~np.isin(termination_types, permitted_termination_types)):
                 raise ValueError(
                     f"Blueprint '{filename}' has an invalid termination type"
                 )

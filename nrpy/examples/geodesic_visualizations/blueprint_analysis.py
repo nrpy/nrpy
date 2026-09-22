@@ -1,5 +1,5 @@
 """
-Validate and visualize native geodesic blueprint artifacts.
+Validate and visualize native geodesic blueprint binary files.
 
 This utility checks the native tile headers and streams records for integrity,
 termination-status, coordinate, and optional normalization diagnostics before
@@ -230,7 +230,7 @@ def diagnose_blueprint() -> None:
     Read every metadata-described tile and print integrity/physics diagnostics.
 
     :raises FileNotFoundError: If an expected tile is missing.
-    :raises ValueError: If an artifact or normalization sidecar is malformed.
+    :raises ValueError: If a blueprint binary file or normalization sidecar is malformed.
     """
     first_tile = os.path.join(script_dir, "light_blueprint_00_00.bin")
     if not os.path.exists(first_tile):
@@ -392,7 +392,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         description=(
-            "Diagnose blueprint artifacts using tile counts and fields of view "
+            "Diagnose blueprint binary files using tile counts and fields of view "
             "stored in their headers."
         )
     )
@@ -401,7 +401,7 @@ if __name__ == "__main__":
     first_blueprint_tile = os.path.join(script_dir, "light_blueprint_00_00.bin")
     if not os.path.exists(first_blueprint_tile):
         print(
-            f"No native blueprint artifacts found in {script_dir}; nothing to diagnose."
+            f"No native blueprint binary files found in {script_dir}; nothing to diagnose."
         )
     else:
         diagnose_blueprint()

@@ -179,7 +179,6 @@ def photon_momentum_to_normalized_kernel(
     launch_dict = {
         "threads_per_block": ["256", "1", "1"],
         "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
-        "stream": "stream_idx",
     }
 
     prefunc, launch_code = parallel_utils.generate_kernel_and_launch_code(
@@ -200,7 +199,6 @@ def photon_momentum_to_normalized_kernel(
     @param[in,out] d_f_bundle Photon state-vector bundle updated in place.
     @param[in] d_metric_bundle Pre-calculated metric bundle $g_{\mu\nu}$.
     @param chunk_size The number of active rays in the current bundle batch.
-    @param stream_idx Unused placeholder kept only for interface compatibility with other photon helpers.
     """
 
     cfunc_type = "void"
@@ -208,8 +206,7 @@ def photon_momentum_to_normalized_kernel(
     params = (
         "double *restrict d_f_bundle, "
         "const double *restrict d_metric_bundle, "
-        "const int chunk_size, "
-        "const int stream_idx"
+        "const int chunk_size"
     )
 
     cfc.register_CFunction(

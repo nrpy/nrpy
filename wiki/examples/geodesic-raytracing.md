@@ -1,6 +1,6 @@
 # Geodesic Raytracing
 
-> Explain standalone massive and photon geodesic examples plus batch photon raytracing visualization artifacts. · Status: confirmed
+> Explain standalone massive and photon geodesic examples plus batch photon raytracing visualization files. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
@@ -9,20 +9,21 @@ NRPy has five checked-in geodesic example generators. `massive_single_geodesic_i
 builds a single massive-particle Kerr-Schild Cartesian trajectory and uses GSL's
 RKF45 ODE path. `photon_single_geodesic_integrator_analytical` builds a single photon trajectory
 from either the Kerr-Schild recipe or the static coincident Brill-Lindquist
-recipe and uses the split-pipeline photon RKF45 kernels directly.
+recipe and uses the split photon RKF45 kernels directly.
 `photon_batch_geodesic_integrator_analytical` builds a tiled photon
 raytracing project, defaults to OpenMP, can generate CUDA code with `--cuda`,
-honors `--outdir`, and writes per-tile light-blueprint binary artifacts for the
+honors `--outdir`, and writes per-tile light-blueprint binary files for the
 lensed-image renderer and diagnostic scripts. The numerical single- and batch-
 photon generators use the same photon runtime with a combined numerical-
 spacetime `.bin` dataset and currently support CPU/OpenMP
 `SinhCylindricalv2n2` interpolation.
 
-All four photon generators initialize rays with a metric-orthonormal observer
-tetrad and unit initial normal-observer energy, `E_obs = 1`. Direct and
-normalized photon EOMs use the same upper-only normal-observer log-energy
-termination measure: direct states evaluate `ln|alpha p^0|`, while normalized
-states use `u`.
+All four photon generators initialize rays with a metric-orthonormal camera
+tetrad and unit initial camera-tetrad energy magnitude, `E_camera = 1`. This
+affine normalization differs from the hypersurface-normal measure
+`|alpha p^0|`. Direct and normalized photon EOMs use the corresponding
+upper-only log-energy termination measure: direct states evaluate
+`ln|alpha p^0|`, while normalized states use `u`.
 
 All generation, build, executable, trajectory, and rendering commands on this
 page are manual/source-supported. Neither GitHub workflow nor the local full-CI
@@ -77,7 +78,7 @@ The analytical single-photon path defaults to `KerrSchild_Cartesian` and also
 accepts `BrillLindquist_InitialData_Static_Cartesian` through `--spacetime`.
 It accepts direct or normalized photon equations through `--eom` and does not
 use GSL. It allocates one Structure-of-Arrays photon state, constructs the complete
-initial momentum from the observer tetrad, and runs the split RKF45 pipeline through
+initial momentum from the observer tetrad, and evaluates the split RKF45 stages through
 `interpolation_kernel`, `calculate_ode_rhs_kernel`, `rkf45_stage_update`, and
 `rkf45_finalize_and_control`, writes `trajectory.txt`, and reports null
 normalization and conserved-quantity errors. Accepted states also use the
@@ -86,6 +87,8 @@ normal-observer log-energy cutoff, whose default `--evolution-measure-max` is
 `visualize_trajectory.py` into the generated project and print
 `pip install matplotlib numpy`; those Python visualization dependencies are
 source-limited to the checked-in script imports and generator message.
+Single-photon generators do not accept terminal- or nonterminal-plane options;
+plane-crossing detection and event records belong to the batch integrators.
 
 Both single-photon generators enable RKF45 trial and stage diagnostics by
 default. Their generated executables write adaptive-step controller values to
@@ -96,12 +99,12 @@ the interpolated geometry used at each stage. Pass
 code; use `--enable-rkf45-trial-debug` to select it explicitly.
 
 Claim evidence:
-- Claim: The analytical and numerical single-photon generators construct unit-energy initial momentum from the observer tetrad, run the split RKF45 pipeline, apply the upper-only log-energy cutoff, write `trajectory.txt`, and enable trial/stage diagnostics by default.
+- Claim: The analytical and numerical single-photon generators construct unit camera-tetrad-energy initial momentum, run the split RKF45 calculation, apply the upper-only log-energy cutoff, write `trajectory.txt`, omit batch event-plane handling, and enable trial/stage diagnostics by default.
 - Role: generated evidence
 - Deciding authority: `nrpy/examples/photon_single_geodesic_integrator_analytical.py` and `nrpy/examples/photon_single_geodesic_integrator_numerical.py` — generator registration and debug-option defaults
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/set_initial_conditions_kernel.py` — observer-tetrad initialization
 
-`trajectory.txt` is the handoff artifact for the single-ray visualization. The
+`trajectory.txt` is the input file for the single-ray visualization. The
 massive file header is `# proper_time t x y z u^t u^x u^y u^z`. Direct photon
 output uses `# lambda t x y z p^t p^x p^y p^z L_normal`; normalized output uses
 `# lambda t x y z u Pi_1 Pi_2 Pi_3 L_normal`. Numerical photon output appends a
@@ -178,19 +181,18 @@ after each accepted state. Its direct-EOM path refreshes the accepted-state
 metric before computing `ln|alpha p^0|`; normalized mode uses `u` directly.
 
 The batch executable produces tiled `light_blueprint_XX_YY.bin` files in its
-project directory. Those binary files are generated artifacts, not KB sources.
-The native same-build blueprint schema is version 6 with 100-byte records. The
+project directory. Those binary files are generated output, not KB sources.
+The native same-build blueprint binary layout is version 6 with 100-byte records. The
 header stores tile identity/counts and `alpha_w`/`alpha_h`. Each record stores
 nonterminal/terminal-plane diagnostics, final sphere angles, affine/time values,
 and normalized `image_width_fraction`/`image_height_fraction` sample coordinates.
-The Python
-schema in `blueprint_config_and_schema.py` explicitly says the dtype must match the C
+The Python field definitions in `blueprint_config_and_schema.py` explicitly say the dtype must match the C
 `blueprint_data_t` layout and that termination enum constants must stay
-synchronized with generated C headers; this is the main schema synchronization
+synchronized with generated C headers; this is the main binary-layout synchronization
 risk.
 
 Claim evidence:
-- Claim: Analytical batch artifacts use native same-build blueprint schema version 6 with 100-byte records, and Python `BLUEPRINT_DTYPE` must match the generated C `blueprint_data_t` layout and termination enums.
+- Claim: Analytical batch blueprint files use native same-build binary-layout version 6 with 100-byte records, and Python `BLUEPRINT_DTYPE` must match the generated C `blueprint_data_t` layout and termination enums.
 - Role: generated evidence
 - Deciding authority: `nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py` — `BLUEPRINT_SCHEMA_VERSION`, `BLUEPRINT_DTYPE`
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/calculate_and_fill_blueprint_data_universal.py` — generated record layout
@@ -212,23 +214,23 @@ fallback if import fails, but the batch generator still prints
 source-limited to the checked-in files.
 
 Claim evidence:
-- Claim: `visualize_lensed_image.py` consumes per-tile binary artifacts, discovers tile geometry from headers, maps normalized image fractions to pixels, and delegates final rendering to `render_lensed_image.py`.
+- Claim: `visualize_lensed_image.py` consumes per-tile binary files, discovers tile geometry from headers, maps normalized image fractions to pixels, and delegates final rendering to `render_lensed_image.py`.
 - Role: generated evidence
 - Deciding authority: `nrpy/examples/geodesic_visualizations/visualize_lensed_image.py` — `main`; `render_lensed_image.py` — `generate_static_lensed_image`
 - Corroboration: `nrpy/examples/geodesic_visualizations/blueprint_io.py` — binary header and record readers
 
-`blueprint_analysis.py` is the diagnostic script for the same binary artifacts.
+`blueprint_analysis.py` is the diagnostic script for the same binary files.
 It streams each tile, counts raw termination enums, compares them to
 `blueprint_config_and_schema.py`, reports nonterminal-plane diagnostic statistics,
 prints early records, and displays heatmaps for nonterminal-plane, terminal-plane,
 and celestial-sphere coordinates. When every matching
 `light_blueprint_norm_abs_XX_YY.bin` sidecar is present and correctly sized, it
 also plots normalization-magnitude histograms grouped by termination status.
-Its warning text directs maintainers to update the schema file when raw enum
+Its warning text directs maintainers to update the field-definition file when raw enum
 values do not match current Python constants.
 
 Claim evidence:
-- Claim: `blueprint_analysis.py` streams blueprint artifacts, reports termination diagnostics against the configured enum names, provides plane/celestial heatmaps, and consumes complete matching normalization sidecars when available.
+- Claim: `blueprint_analysis.py` streams blueprint binary files, reports termination diagnostics against the configured enum names, provides plane/celestial heatmaps, and consumes complete matching normalization sidecars when available.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/examples/geodesic_visualizations/blueprint_analysis.py` — `diagnose_blueprint`, `plot_heatmaps`
 - Corroboration: `nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py` — termination constants and record fields
@@ -323,7 +325,7 @@ Claim evidence:
 - Claim: Numerical photon generators expose direct and normalized EOM modes with a common upper-only log-energy cutoff and direct-scale-equivalent normalized norm sidecars; numerical batch RK stages reuse one spatial interpolation center per trial.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/examples/photon_single_geodesic_integrator_numerical.py` and `nrpy/examples/photon_batch_geodesic_integrator_numerical.py` — CLI and parameter wiring
-- Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/batch_integrator_numerical.py` and `numerical_interpolation.py` — generated integration and interpolation contracts
+- Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/batch_integrator_numerical.py` and `numerical_interpolation.py` — generated integration and interpolation behavior
 
 ## Sources
 

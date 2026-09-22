@@ -254,7 +254,7 @@ def batch_integrator_numerical(
 
     normalized_momentum_conversion = (
         "photon_momentum_to_normalized_kernel("
-        "d_f_bundle[0], d_metric_bundle[0], chunk_size, 0);"
+        "d_f_bundle[0], d_metric_bundle[0], chunk_size);"
         if normalized_eom
         else ""
     )

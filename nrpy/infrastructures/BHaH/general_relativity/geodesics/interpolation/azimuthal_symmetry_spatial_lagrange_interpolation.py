@@ -89,15 +89,9 @@ _METRIC_COMPONENT_ORDER: Tuple[Tuple[int, int], ...] = (
     (2, 3),
     (3, 3),
 )
-_METRIC_COMPONENT_INDEX: Dict[Tuple[int, int], int] = {
-    component: idx for idx, component in enumerate(_METRIC_COMPONENT_ORDER)
-}
 _GAMMA_COMPONENT_ORDER: Tuple[Tuple[int, int, int], ...] = tuple(
     (alpha, mu, nu) for alpha in range(4) for mu in range(4) for nu in range(mu, 4)
 )
-_GAMMA_COMPONENT_INDEX: Dict[Tuple[int, int, int], int] = {
-    component: idx for idx, component in enumerate(_GAMMA_COMPONENT_ORDER)
-}
 
 
 def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
@@ -156,7 +150,7 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     ...     else:
     ...         _ = os.environ.__setitem__("XDG_CACHE_HOME", old_cache_home)
     """
-    # Step 1: Validate the fixed coordinate-system and payload contracts.
+    # Step 1: Validate the coordinate system and interpolation-array layout.
     if CoordSystem != "SinhCylindricalv2n2":
         raise ValueError(
             "azimuthal_symmetry_spatial_lagrange_interpolation is currently "
@@ -269,60 +263,112 @@ static int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_ind
 } // END FUNCTION: azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_indices
 """
 
-    if is_gamma_method:
-        direct_gamma_metric_assignments = "\n".join(
-            _emit_wrapped_assignment(
-                f"g4dd_rot[{idx}]",
-                _build_metric_rotation_terms(mu, nu, "g4dd_ref"),
-            )
-            for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
-        )
-        direct_gamma_assignment_lines: List[str] = []
-        for idx, (alpha, mu, nu) in enumerate(_GAMMA_COMPONENT_ORDER):
-            term_map: Dict[Tuple[int, int, int], int] = {}
-            for (
-                source_alpha,
-                sign_alpha,
-                cos_alpha,
-                sin_alpha,
-            ) in _rotation_source_terms(alpha):
-                for source_mu, sign_mu, cos_mu, sin_mu in _rotation_source_terms(mu):
-                    for source_nu, sign_nu, cos_nu, sin_nu in _rotation_source_terms(
-                        nu
-                    ):
-                        source_lower_mu, source_lower_nu = source_mu, source_nu
-                        if source_lower_mu > source_lower_nu:
-                            source_lower_mu, source_lower_nu = (
-                                source_lower_nu,
-                                source_lower_mu,
-                            )
-                        source_idx = _GAMMA_COMPONENT_INDEX[
-                            (source_alpha, source_lower_mu, source_lower_nu)
-                        ]
-                        term_key = (
-                            source_idx,
-                            cos_alpha + cos_mu + cos_nu,
-                            sin_alpha + sin_mu + sin_nu,
-                        )
-                        term_map[term_key] = term_map.get(term_key, 0) + (
-                            sign_alpha * sign_mu * sign_nu
-                        )
-            terms: List[str] = []
-            for source_idx, cos_power, sin_power in sorted(term_map):
-                coefficient = term_map[(source_idx, cos_power, sin_power)]
-                if coefficient:
-                    terms.append(
-                        _format_scaled_source_term(
-                            f"gamma_ref[{source_idx}]",
-                            coefficient,
-                            cos_power,
-                            sin_power,
-                        )
+    rotation_angle = sp.Symbol("rotation_angle", real=True)
+    cos_rotation = sp.cos(rotation_angle)
+    sin_rotation = sp.sin(rotation_angle)
+    rotation_matrix = sp.eye(4)
+    rotation_matrix[1, 1] = cos_rotation
+    rotation_matrix[1, 2] = -sin_rotation
+    rotation_matrix[2, 1] = sin_rotation
+    rotation_matrix[2, 2] = cos_rotation
+    trigonometric_symbols = {
+        cos_rotation: sp.Symbol("cos_delta", real=True),
+        sin_rotation: sp.Symbol("sin_delta", real=True),
+    }
+
+    metric_rotation_assignments: Dict[str, str] = {}
+    metric_phi_derivative_assignments = ""
+    for source_array, output_array in (
+        ("g4dd_ref", "g4dd_rot"),
+        ("g4dd_interp_0_ref", f"g4dd_native_derivatives_rot[{interp_dim0}]"),
+        ("g4dd_interp_1_ref", f"g4dd_native_derivatives_rot[{interp_dim1}]"),
+    ):
+        source_metric = [[sp.sympify(0) for _ in range(4)] for _ in range(4)]
+        for source_idx, (source_mu, source_nu) in enumerate(_METRIC_COMPONENT_ORDER):
+            source_symbol = sp.Symbol(f"{source_array}[{source_idx}]", real=True)
+            source_metric[source_mu][source_nu] = source_symbol
+            source_metric[source_nu][source_mu] = source_symbol
+
+        rotated_metric_expressions: List[sp.Expr] = []
+        metric_output_names: List[str] = []
+        phi_derivative_expressions: List[sp.Expr] = []
+        phi_derivative_names: List[str] = []
+        for output_idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER):
+            rotated_expression = sp.sympify(0)
+            for source_mu in range(4):
+                for source_nu in range(4):
+                    rotated_expression += (
+                        rotation_matrix[mu, source_mu]
+                        * rotation_matrix[nu, source_nu]
+                        * source_metric[source_mu][source_nu]
                     )
-            direct_gamma_assignment_lines.append(
-                _emit_wrapped_assignment(f"gamma_rot[{idx}]", terms or ["0.0"])
+            rotated_expression = sp.expand(rotated_expression)
+            rotated_metric_expressions.append(
+                rotated_expression.xreplace(trigonometric_symbols)
             )
-        direct_gamma_assignments = "\n".join(direct_gamma_assignment_lines)
+            metric_output_names.append(f"{output_array}[{output_idx}]")
+            if source_array == "g4dd_ref":
+                phi_derivative_expressions.append(
+                    sp.expand(sp.diff(rotated_expression, rotation_angle)).xreplace(
+                        trigonometric_symbols
+                    )
+                )
+                phi_derivative_names.append(
+                    f"g4dd_native_derivatives_rot[{phi_dim}][{output_idx}]"
+                )
+
+        metric_rotation_assignments[source_array] = c_codegen(
+            rotated_metric_expressions,
+            metric_output_names,
+            enable_cse=False,
+            include_braces=False,
+            verbose=False,
+        ).rstrip()
+        if source_array == "g4dd_ref":
+            metric_phi_derivative_assignments = c_codegen(
+                phi_derivative_expressions,
+                phi_derivative_names,
+                enable_cse=False,
+                include_braces=False,
+                verbose=False,
+            ).rstrip()
+
+    if is_gamma_method:
+        direct_gamma_metric_assignments = metric_rotation_assignments["g4dd_ref"]
+        source_gamma = [
+            [[sp.sympify(0) for _ in range(4)] for _ in range(4)] for _ in range(4)
+        ]
+        for source_idx, (source_alpha, source_mu, source_nu) in enumerate(
+            _GAMMA_COMPONENT_ORDER
+        ):
+            source_symbol = sp.Symbol(f"gamma_ref[{source_idx}]", real=True)
+            source_gamma[source_alpha][source_mu][source_nu] = source_symbol
+            source_gamma[source_alpha][source_nu][source_mu] = source_symbol
+
+        gamma_rotation_expressions: List[sp.Expr] = []
+        gamma_output_names: List[str] = []
+        for idx, (alpha, mu, nu) in enumerate(_GAMMA_COMPONENT_ORDER):
+            rotated_expression = sp.sympify(0)
+            for source_alpha in range(4):
+                for source_mu in range(4):
+                    for source_nu in range(4):
+                        rotated_expression += (
+                            rotation_matrix[alpha, source_alpha]
+                            * rotation_matrix[mu, source_mu]
+                            * rotation_matrix[nu, source_nu]
+                            * source_gamma[source_alpha][source_mu][source_nu]
+                        )
+            gamma_rotation_expressions.append(
+                sp.expand(rotated_expression).xreplace(trigonometric_symbols)
+            )
+            gamma_output_names.append(f"gamma_rot[{idx}]")
+        direct_gamma_assignments = c_codegen(
+            gamma_rotation_expressions,
+            gamma_output_names,
+            enable_cse=False,
+            include_braces=False,
+            verbose=False,
+        ).rstrip()
         prefunc = (
             point_index_prefunc
             + r"""
@@ -407,59 +453,14 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_gamma_about_z(
             include_braces=False,
             verbose=False,
         ).rstrip()
-        direct_metric_assignments = "\n".join(
-            _emit_wrapped_assignment(
-                f"g4dd_rot[{idx}]",
-                _build_metric_rotation_terms(mu, nu, "g4dd_ref"),
-            )
-            for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
-        )
-        direct_interp_0_derivative_assignments = "\n".join(
-            _emit_wrapped_assignment(
-                f"g4dd_native_derivatives_rot[{interp_dim0}][{idx}]",
-                _build_metric_rotation_terms(mu, nu, "g4dd_interp_0_ref"),
-            )
-            for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
-        )
-        direct_phi_derivative_assignment_lines: List[str] = []
-        for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER):
-            derivative_map: Dict[Tuple[int, int, int], int] = {}
-            for (
-                source_idx,
-                cos_power,
-                sin_power,
-            ), coefficient in _metric_rotation_term_map(mu, nu).items():
-                if cos_power > 0:
-                    key = (source_idx, cos_power - 1, sin_power + 1)
-                    derivative_map[key] = (
-                        derivative_map.get(key, 0) - coefficient * cos_power
-                    )
-                if sin_power > 0:
-                    key = (source_idx, cos_power + 1, sin_power - 1)
-                    derivative_map[key] = (
-                        derivative_map.get(key, 0) + coefficient * sin_power
-                    )
-            derivative_map = {
-                key: coefficient
-                for key, coefficient in derivative_map.items()
-                if coefficient
-            }
-            direct_phi_derivative_assignment_lines.append(
-                _emit_wrapped_assignment(
-                    f"g4dd_native_derivatives_rot[{phi_dim}][{idx}]",
-                    _format_metric_term_map(derivative_map, "g4dd_ref"),
-                )
-            )
-        direct_phi_derivative_assignments = "\n".join(
-            direct_phi_derivative_assignment_lines
-        )
-        direct_interp_1_derivative_assignments = "\n".join(
-            _emit_wrapped_assignment(
-                f"g4dd_native_derivatives_rot[{interp_dim1}][{idx}]",
-                _build_metric_rotation_terms(mu, nu, "g4dd_interp_1_ref"),
-            )
-            for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
-        )
+        direct_metric_assignments = metric_rotation_assignments["g4dd_ref"]
+        direct_interp_0_derivative_assignments = metric_rotation_assignments[
+            "g4dd_interp_0_ref"
+        ]
+        direct_phi_derivative_assignments = metric_phi_derivative_assignments
+        direct_interp_1_derivative_assignments = metric_rotation_assignments[
+            "g4dd_interp_1_ref"
+        ]
         metric_time_derivative_argument = (
             """    REAL g4dd_dt_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_DT_COMPONENT_COUNT],"""
             if is_metric_time_derivative_method
@@ -772,7 +773,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
         metric_derivative_slice_out[
             4 * metric_component + cartesian_direction + 1] =
             cartesian_derivative;
-      } // END LOOP: for cartesian_direction over x, y,
+      } // END LOOP: Cartesian directions x y z
     } // END LOOP: for metric_component over symmetric g4DD
   } // END LOOP: for which_slice over requested slice
 """.replace("{metric_time_declarations}", metric_time_declarations)
@@ -977,132 +978,6 @@ for the two metric methods or Christoffel components for ``GammaUDD``.
         body=body,
     )
     return pcg.NRPyEnv()
-
-
-# These Python-side helpers generate the inverse reference-metric Jacobian and
-# pre-expand metric rotations so the emitted C stays reviewable.
-
-
-def _rotation_source_terms(output_index: int) -> List[Tuple[int, int, int, int]]:
-    """
-    Return sparse source-index terms for one active z-axis rotation row.
-
-    :param output_index: Cartesian tensor index after rotation.
-    :return: Source index, sign, cosine power, and sine power tuples.
-    :raises ValueError: If ``output_index`` is unsupported.
-    """
-    if output_index == 0:
-        return [(0, 1, 0, 0)]
-    if output_index == 1:
-        return [(1, 1, 1, 0), (2, -1, 0, 1)]
-    if output_index == 2:
-        return [(1, 1, 0, 1), (2, 1, 1, 0)]
-    if output_index == 3:
-        return [(3, 1, 0, 0)]
-    raise ValueError(f"Unsupported rotated tensor index: {output_index}")
-
-
-def _format_scaled_source_term(
-    source_expr: str,
-    coefficient: int,
-    cos_power: int,
-    sin_power: int,
-) -> str:
-    """
-    Format one signed trigonometric monomial times a source component.
-
-    :param source_expr: Source-array expression for the monomial.
-    :param coefficient: Signed integer coefficient.
-    :param cos_power: Power of ``cos_delta``.
-    :param sin_power: Power of ``sin_delta``.
-    :return: Formatted C expression for the monomial.
-    """
-    factors: List[str] = []
-    coefficient_abs = abs(coefficient)
-    if coefficient_abs != 1:
-        factors.append(f"{coefficient_abs}.0")
-    factors.extend(["cos_delta"] * cos_power)
-    factors.extend(["sin_delta"] * sin_power)
-    factors.append(source_expr)
-    term = " * ".join(factors)
-    return f"-{term}" if coefficient < 0 else term
-
-
-def _emit_wrapped_assignment(lhs: str, terms: List[str]) -> str:
-    """
-    Emit one wrapped C assignment from signed monomial terms.
-
-    :param lhs: Left-hand-side C expression.
-    :param terms: Signed monomial expressions to add.
-    :return: Wrapped C assignment.
-    :raises ValueError: If ``terms`` is empty.
-    """
-    if not terms:
-        raise ValueError("Cannot emit an assignment from an empty term list.")
-    lines = [f"  {lhs} = {terms[0]}"]
-    for term in terms[1:]:
-        if term.startswith("-"):
-            lines.append(f"      - {term[1:]}")
-        else:
-            lines.append(f"      + {term}")
-    lines[-1] += ";"
-    return "\n".join(lines)
-
-
-def _metric_rotation_term_map(mu: int, nu: int) -> Dict[Tuple[int, int, int], int]:
-    """
-    Collect polynomial rotation coefficients for one metric component.
-
-    :param mu: First Cartesian metric index.
-    :param nu: Second Cartesian metric index.
-    :return: Source-index and trigonometric-power coefficient map.
-    """
-    term_map: Dict[Tuple[int, int, int], int] = {}
-    for source_mu, sign_mu, cos_mu, sin_mu in _rotation_source_terms(mu):
-        for source_nu, sign_nu, cos_nu, sin_nu in _rotation_source_terms(nu):
-            metric_mu, metric_nu = source_mu, source_nu
-            if metric_mu > metric_nu:
-                metric_mu, metric_nu = metric_nu, metric_mu
-            source_idx = _METRIC_COMPONENT_INDEX[(metric_mu, metric_nu)]
-            term_key = (source_idx, cos_mu + cos_nu, sin_mu + sin_nu)
-            term_map[term_key] = term_map.get(term_key, 0) + sign_mu * sign_nu
-    return {key: coefficient for key, coefficient in term_map.items() if coefficient}
-
-
-def _format_metric_term_map(
-    term_map: Dict[Tuple[int, int, int], int], source_array: str
-) -> List[str]:
-    """
-    Format a collected metric rotation term map for emitted C code.
-
-    :param term_map: Source-index and trigonometric-power coefficient map.
-    :param source_array: C array holding unrotated metric components.
-    :return: Formatted C expressions for nonzero rotation terms.
-    """
-    terms: List[str] = []
-    for source_idx, cos_power, sin_power in sorted(term_map):
-        coefficient = term_map[(source_idx, cos_power, sin_power)]
-        terms.append(
-            _format_scaled_source_term(
-                f"{source_array}[{source_idx}]",
-                coefficient,
-                cos_power,
-                sin_power,
-            )
-        )
-    return terms or ["0.0"]
-
-
-def _build_metric_rotation_terms(mu: int, nu: int, source_array: str) -> List[str]:
-    """
-    Build terms for one rotated serialized metric component.
-
-    :param mu: First Cartesian metric index.
-    :param nu: Second Cartesian metric index.
-    :param source_array: C array holding unrotated metric components.
-    :return: Formatted C expressions for the rotated metric component.
-    """
-    return _format_metric_term_map(_metric_rotation_term_map(mu, nu), source_array)
 
 
 if __name__ == "__main__":

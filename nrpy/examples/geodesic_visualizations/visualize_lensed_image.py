@@ -115,7 +115,7 @@ def main() -> None:
     first_tile = os.path.join(script_dir, "light_blueprint_00_00.bin")
     if not os.path.exists(first_tile):
         print(
-            f"No native blueprint artifacts found in {script_dir}; nothing to render."
+            f"No native blueprint binary files found in {script_dir}; nothing to render."
         )
         return
 

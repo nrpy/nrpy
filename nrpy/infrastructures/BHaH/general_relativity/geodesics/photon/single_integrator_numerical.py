@@ -26,6 +26,7 @@ from nrpy.infrastructures.BHaH import CodeParameters as CPs
 from nrpy.infrastructures.BHaH import Makefile_helpers as Makefile
 from nrpy.infrastructures.BHaH import cmdline_input_and_parfiles
 from nrpy.infrastructures.BHaH.general_relativity.geodesics import (
+    main_single,
     normalization_constraint,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation import (
@@ -33,9 +34,8 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation import
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     calculate_ode_rhs_kernel,
-    handle_non_terminal_plane_intersection,
-    handle_terminal_plane_intersection,
-    main_single,
+    normal_observer_log_energy,
+    photon_momentum_to_normalized_kernel,
     rkf45_finalize_and_control_kernel,
     rkf45_stage_update,
 )
@@ -138,11 +138,11 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     #define BUNDLE_CAPACITY 1
     """,
     )
-    set_initial_conditions_kernel(normalized_eom=normalized_eom)
-    handle_terminal_plane_intersection.register_terminal_plane_parameters()
-    handle_non_terminal_plane_intersection.register_non_terminal_plane_parameters()
+    set_initial_conditions_kernel(
+        normalized_eom=normalized_eom, initialize_event_history=False
+    )
 
-    # The shared initializer uses the batch tiling contract.  Expose the tile
+    # The shared initializer uses the batch tile-sampling rules. Expose the tile
     # counts and active tile indices so one single-ray process can reproduce
     # any batch-camera sample exactly.  The defaults remain the center ray of
     # one tile.  This registration intentionally replaces the non-parfile tile
@@ -229,8 +229,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         interpolation_initial_arguments = "NULL, NULL, integration_param, h, 1,"
         rhs_integration_arguments = "integration_param, h,"
         momentum_conversion_call = (
-            "photon_momentum_to_normalized_kernel("
-            "f, metric, chunk_size, stream_idx);"
+            "photon_momentum_to_normalized_kernel(" "f, metric, chunk_size);"
         )
         normalization_kernel_name = "normalization_constraint_photon_normalized"
         normalization_diagnostic_expression = "normalization.C - 1.0"
@@ -724,7 +723,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   // command-line momentum is the observer look-forward direction seed, while q
   // sets the initial observer-frame energy to one.
   // Single-ray execution is the one-sample-per-tile specialization of the
-  // shared angular sampling contract.  Runtime tile counts and indices permit
+  // shared angular sample mapping. Runtime tile counts and indices permit
   // exact reproduction of any batch-camera pixel; their defaults select the
   // center ray of a one-tile camera.
   commondata.scan_density = 1;
@@ -1252,6 +1251,14 @@ if __name__ == "__main__":
             if NORMALIZED_EOM
             else geodesic_data.geodesic_eom_rhs_photon_christoffel()
         )
+
+    u_expr, PiD_exprs = geodesic_data.photon_momentum_to_normalized_quantities()
+    if NORMALIZED_EOM:
+        photon_momentum_to_normalized_kernel.photon_momentum_to_normalized_kernel(
+            u_expr, PiD_exprs
+        )
+    else:
+        normal_observer_log_energy.normal_observer_log_energy(u_expr)
 
     normalization_constraint.normalization_constraint(
         geodesic_data.norm_constraint_expr, PARTICLE

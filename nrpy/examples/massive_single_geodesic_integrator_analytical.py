@@ -45,11 +45,11 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.conserved_quantities
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.g4DD_metric import (
     g4DD_metric,
 )
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.main_single import (
+    main_single,
+)
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.massive.calculate_ode_rhs_massive import (
     calculate_ode_rhs_massive,
-)
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.massive.main_single import (
-    main_single,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.massive.ode_gsl_wrapper_massive import (
     ode_gsl_wrapper_massive,

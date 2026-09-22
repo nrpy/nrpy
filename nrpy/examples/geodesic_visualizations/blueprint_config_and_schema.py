@@ -22,8 +22,8 @@ import struct
 
 import numpy as np
 
-# Native, same-build artifact contract. Cross-endian persistence is intentionally
-# outside this contract. Schema v6 stores the two fields of view once per tile
+# Native same-build binary layout. Cross-endian persistence is intentionally
+# unsupported. Binary-layout version 6 stores both fields of view once per tile
 # header; per-ray records retain event diagnostics, final-state metadata, and
 # normalized image-sample coordinates.
 # Nonterminal coordinates are crossing diagnostics; terminal coordinates are

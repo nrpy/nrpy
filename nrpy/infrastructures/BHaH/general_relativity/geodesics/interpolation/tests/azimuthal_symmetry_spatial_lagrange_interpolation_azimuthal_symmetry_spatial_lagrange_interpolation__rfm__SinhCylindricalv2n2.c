@@ -136,55 +136,55 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
       g4dd_native_derivatives_rot[native_direction][comp] = 0.0;
 
   g4dd_rot[0] = g4dd_ref[0];
-  g4dd_rot[1] = cos_delta * g4dd_ref[1] - sin_delta * g4dd_ref[2];
-  g4dd_rot[2] = sin_delta * g4dd_ref[1] + cos_delta * g4dd_ref[2];
+  g4dd_rot[1] = cos_delta * g4dd_ref[1] - g4dd_ref[2] * sin_delta;
+  g4dd_rot[2] = cos_delta * g4dd_ref[2] + g4dd_ref[1] * sin_delta;
   g4dd_rot[3] = g4dd_ref[3];
-  g4dd_rot[4] = cos_delta * cos_delta * g4dd_ref[4] - 2.0 * cos_delta * sin_delta * g4dd_ref[5] + sin_delta * sin_delta * g4dd_ref[7];
-  g4dd_rot[5] = cos_delta * sin_delta * g4dd_ref[4] - sin_delta * sin_delta * g4dd_ref[5] + cos_delta * cos_delta * g4dd_ref[5] -
-                cos_delta * sin_delta * g4dd_ref[7];
-  g4dd_rot[6] = cos_delta * g4dd_ref[6] - sin_delta * g4dd_ref[8];
-  g4dd_rot[7] = sin_delta * sin_delta * g4dd_ref[4] + 2.0 * cos_delta * sin_delta * g4dd_ref[5] + cos_delta * cos_delta * g4dd_ref[7];
-  g4dd_rot[8] = sin_delta * g4dd_ref[6] + cos_delta * g4dd_ref[8];
+  g4dd_rot[4] = ((cos_delta) * (cos_delta)) * g4dd_ref[4] - 2 * cos_delta * g4dd_ref[5] * sin_delta + g4dd_ref[7] * ((sin_delta) * (sin_delta));
+  g4dd_rot[5] = ((cos_delta) * (cos_delta)) * g4dd_ref[5] + cos_delta * g4dd_ref[4] * sin_delta - cos_delta * g4dd_ref[7] * sin_delta -
+                g4dd_ref[5] * ((sin_delta) * (sin_delta));
+  g4dd_rot[6] = cos_delta * g4dd_ref[6] - g4dd_ref[8] * sin_delta;
+  g4dd_rot[7] = ((cos_delta) * (cos_delta)) * g4dd_ref[7] + 2 * cos_delta * g4dd_ref[5] * sin_delta + g4dd_ref[4] * ((sin_delta) * (sin_delta));
+  g4dd_rot[8] = cos_delta * g4dd_ref[8] + g4dd_ref[6] * sin_delta;
   g4dd_rot[9] = g4dd_ref[9];
   g4dd_native_derivatives_rot[0][0] = g4dd_interp_0_ref[0];
-  g4dd_native_derivatives_rot[0][1] = cos_delta * g4dd_interp_0_ref[1] - sin_delta * g4dd_interp_0_ref[2];
-  g4dd_native_derivatives_rot[0][2] = sin_delta * g4dd_interp_0_ref[1] + cos_delta * g4dd_interp_0_ref[2];
+  g4dd_native_derivatives_rot[0][1] = cos_delta * g4dd_interp_0_ref[1] - g4dd_interp_0_ref[2] * sin_delta;
+  g4dd_native_derivatives_rot[0][2] = cos_delta * g4dd_interp_0_ref[2] + g4dd_interp_0_ref[1] * sin_delta;
   g4dd_native_derivatives_rot[0][3] = g4dd_interp_0_ref[3];
-  g4dd_native_derivatives_rot[0][4] = cos_delta * cos_delta * g4dd_interp_0_ref[4] - 2.0 * cos_delta * sin_delta * g4dd_interp_0_ref[5] +
-                                      sin_delta * sin_delta * g4dd_interp_0_ref[7];
-  g4dd_native_derivatives_rot[0][5] = cos_delta * sin_delta * g4dd_interp_0_ref[4] - sin_delta * sin_delta * g4dd_interp_0_ref[5] +
-                                      cos_delta * cos_delta * g4dd_interp_0_ref[5] - cos_delta * sin_delta * g4dd_interp_0_ref[7];
-  g4dd_native_derivatives_rot[0][6] = cos_delta * g4dd_interp_0_ref[6] - sin_delta * g4dd_interp_0_ref[8];
-  g4dd_native_derivatives_rot[0][7] = sin_delta * sin_delta * g4dd_interp_0_ref[4] + 2.0 * cos_delta * sin_delta * g4dd_interp_0_ref[5] +
-                                      cos_delta * cos_delta * g4dd_interp_0_ref[7];
-  g4dd_native_derivatives_rot[0][8] = sin_delta * g4dd_interp_0_ref[6] + cos_delta * g4dd_interp_0_ref[8];
+  g4dd_native_derivatives_rot[0][4] = ((cos_delta) * (cos_delta)) * g4dd_interp_0_ref[4] - 2 * cos_delta * g4dd_interp_0_ref[5] * sin_delta +
+                                      g4dd_interp_0_ref[7] * ((sin_delta) * (sin_delta));
+  g4dd_native_derivatives_rot[0][5] = ((cos_delta) * (cos_delta)) * g4dd_interp_0_ref[5] + cos_delta * g4dd_interp_0_ref[4] * sin_delta -
+                                      cos_delta * g4dd_interp_0_ref[7] * sin_delta - g4dd_interp_0_ref[5] * ((sin_delta) * (sin_delta));
+  g4dd_native_derivatives_rot[0][6] = cos_delta * g4dd_interp_0_ref[6] - g4dd_interp_0_ref[8] * sin_delta;
+  g4dd_native_derivatives_rot[0][7] = ((cos_delta) * (cos_delta)) * g4dd_interp_0_ref[7] + 2 * cos_delta * g4dd_interp_0_ref[5] * sin_delta +
+                                      g4dd_interp_0_ref[4] * ((sin_delta) * (sin_delta));
+  g4dd_native_derivatives_rot[0][8] = cos_delta * g4dd_interp_0_ref[8] + g4dd_interp_0_ref[6] * sin_delta;
   g4dd_native_derivatives_rot[0][9] = g4dd_interp_0_ref[9];
-  g4dd_native_derivatives_rot[1][0] = 0.0;
-  g4dd_native_derivatives_rot[1][1] = -sin_delta * g4dd_ref[1] - cos_delta * g4dd_ref[2];
-  g4dd_native_derivatives_rot[1][2] = cos_delta * g4dd_ref[1] - sin_delta * g4dd_ref[2];
-  g4dd_native_derivatives_rot[1][3] = 0.0;
-  g4dd_native_derivatives_rot[1][4] = -2.0 * cos_delta * sin_delta * g4dd_ref[4] + 2.0 * sin_delta * sin_delta * g4dd_ref[5] -
-                                      2.0 * cos_delta * cos_delta * g4dd_ref[5] + 2.0 * cos_delta * sin_delta * g4dd_ref[7];
-  g4dd_native_derivatives_rot[1][5] = -sin_delta * sin_delta * g4dd_ref[4] + cos_delta * cos_delta * g4dd_ref[4] -
-                                      4.0 * cos_delta * sin_delta * g4dd_ref[5] + sin_delta * sin_delta * g4dd_ref[7] -
-                                      cos_delta * cos_delta * g4dd_ref[7];
-  g4dd_native_derivatives_rot[1][6] = -sin_delta * g4dd_ref[6] - cos_delta * g4dd_ref[8];
-  g4dd_native_derivatives_rot[1][7] = 2.0 * cos_delta * sin_delta * g4dd_ref[4] - 2.0 * sin_delta * sin_delta * g4dd_ref[5] +
-                                      2.0 * cos_delta * cos_delta * g4dd_ref[5] - 2.0 * cos_delta * sin_delta * g4dd_ref[7];
-  g4dd_native_derivatives_rot[1][8] = cos_delta * g4dd_ref[6] - sin_delta * g4dd_ref[8];
-  g4dd_native_derivatives_rot[1][9] = 0.0;
+  g4dd_native_derivatives_rot[1][0] = 0;
+  g4dd_native_derivatives_rot[1][1] = -cos_delta * g4dd_ref[2] - g4dd_ref[1] * sin_delta;
+  g4dd_native_derivatives_rot[1][2] = cos_delta * g4dd_ref[1] - g4dd_ref[2] * sin_delta;
+  g4dd_native_derivatives_rot[1][3] = 0;
+  g4dd_native_derivatives_rot[1][4] = -2 * ((cos_delta) * (cos_delta)) * g4dd_ref[5] - 2 * cos_delta * g4dd_ref[4] * sin_delta +
+                                      2 * cos_delta * g4dd_ref[7] * sin_delta + 2 * g4dd_ref[5] * ((sin_delta) * (sin_delta));
+  g4dd_native_derivatives_rot[1][5] = ((cos_delta) * (cos_delta)) * g4dd_ref[4] - ((cos_delta) * (cos_delta)) * g4dd_ref[7] -
+                                      4 * cos_delta * g4dd_ref[5] * sin_delta - g4dd_ref[4] * ((sin_delta) * (sin_delta)) +
+                                      g4dd_ref[7] * ((sin_delta) * (sin_delta));
+  g4dd_native_derivatives_rot[1][6] = -cos_delta * g4dd_ref[8] - g4dd_ref[6] * sin_delta;
+  g4dd_native_derivatives_rot[1][7] = 2 * ((cos_delta) * (cos_delta)) * g4dd_ref[5] + 2 * cos_delta * g4dd_ref[4] * sin_delta -
+                                      2 * cos_delta * g4dd_ref[7] * sin_delta - 2 * g4dd_ref[5] * ((sin_delta) * (sin_delta));
+  g4dd_native_derivatives_rot[1][8] = cos_delta * g4dd_ref[6] - g4dd_ref[8] * sin_delta;
+  g4dd_native_derivatives_rot[1][9] = 0;
   g4dd_native_derivatives_rot[2][0] = g4dd_interp_1_ref[0];
-  g4dd_native_derivatives_rot[2][1] = cos_delta * g4dd_interp_1_ref[1] - sin_delta * g4dd_interp_1_ref[2];
-  g4dd_native_derivatives_rot[2][2] = sin_delta * g4dd_interp_1_ref[1] + cos_delta * g4dd_interp_1_ref[2];
+  g4dd_native_derivatives_rot[2][1] = cos_delta * g4dd_interp_1_ref[1] - g4dd_interp_1_ref[2] * sin_delta;
+  g4dd_native_derivatives_rot[2][2] = cos_delta * g4dd_interp_1_ref[2] + g4dd_interp_1_ref[1] * sin_delta;
   g4dd_native_derivatives_rot[2][3] = g4dd_interp_1_ref[3];
-  g4dd_native_derivatives_rot[2][4] = cos_delta * cos_delta * g4dd_interp_1_ref[4] - 2.0 * cos_delta * sin_delta * g4dd_interp_1_ref[5] +
-                                      sin_delta * sin_delta * g4dd_interp_1_ref[7];
-  g4dd_native_derivatives_rot[2][5] = cos_delta * sin_delta * g4dd_interp_1_ref[4] - sin_delta * sin_delta * g4dd_interp_1_ref[5] +
-                                      cos_delta * cos_delta * g4dd_interp_1_ref[5] - cos_delta * sin_delta * g4dd_interp_1_ref[7];
-  g4dd_native_derivatives_rot[2][6] = cos_delta * g4dd_interp_1_ref[6] - sin_delta * g4dd_interp_1_ref[8];
-  g4dd_native_derivatives_rot[2][7] = sin_delta * sin_delta * g4dd_interp_1_ref[4] + 2.0 * cos_delta * sin_delta * g4dd_interp_1_ref[5] +
-                                      cos_delta * cos_delta * g4dd_interp_1_ref[7];
-  g4dd_native_derivatives_rot[2][8] = sin_delta * g4dd_interp_1_ref[6] + cos_delta * g4dd_interp_1_ref[8];
+  g4dd_native_derivatives_rot[2][4] = ((cos_delta) * (cos_delta)) * g4dd_interp_1_ref[4] - 2 * cos_delta * g4dd_interp_1_ref[5] * sin_delta +
+                                      g4dd_interp_1_ref[7] * ((sin_delta) * (sin_delta));
+  g4dd_native_derivatives_rot[2][5] = ((cos_delta) * (cos_delta)) * g4dd_interp_1_ref[5] + cos_delta * g4dd_interp_1_ref[4] * sin_delta -
+                                      cos_delta * g4dd_interp_1_ref[7] * sin_delta - g4dd_interp_1_ref[5] * ((sin_delta) * (sin_delta));
+  g4dd_native_derivatives_rot[2][6] = cos_delta * g4dd_interp_1_ref[6] - g4dd_interp_1_ref[8] * sin_delta;
+  g4dd_native_derivatives_rot[2][7] = ((cos_delta) * (cos_delta)) * g4dd_interp_1_ref[7] + 2 * cos_delta * g4dd_interp_1_ref[5] * sin_delta +
+                                      g4dd_interp_1_ref[4] * ((sin_delta) * (sin_delta));
+  g4dd_native_derivatives_rot[2][8] = cos_delta * g4dd_interp_1_ref[8] + g4dd_interp_1_ref[6] * sin_delta;
   g4dd_native_derivatives_rot[2][9] = g4dd_interp_1_ref[9];
 } // END FUNCTION: azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_about_z
 
@@ -382,7 +382,7 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
           cartesian_derivative +=
               inverse_jacobian[native_direction][cartesian_direction] * g4dd_native_derivatives_rot[native_direction][metric_component];
         metric_derivative_slice_out[4 * metric_component + cartesian_direction + 1] = cartesian_derivative;
-      } // END LOOP: for cartesian_direction over x, y,
+      } // END LOOP: Cartesian directions x y z
     } // END LOOP: for metric_component over symmetric g4DD
   } // END LOOP: for which_slice over requested slice
 
