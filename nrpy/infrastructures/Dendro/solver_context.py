@@ -1,1119 +1,1067 @@
-# nrpy/infrastructures/Dendro/solver_context.py
 """
-Emit standalone and real Dendro runtime contexts for a generated solver.
-
-The context allocates the generated-count vectors, runs the startup checks and
-invokes the registered generated CFunctions.  It carries no formulation
-content: every count, name and constant comes from a generated header, and
-every kernel name is read back from the Dendro role registry.
-
-SCOPE OF EVIDENCE.  This test program checks allocation with generated counts,
-the registered CFunction calls, agreement between the block and flat-block entry
-points, per-rank decomposition, and an application-supplied fixed point.  It cannot
-detect a uniform sign or scale error in the finite-difference coefficients:
-such a kernel approximates a different continuum operator and still converges
-at the requested order.  Pointwise correctness is established against an
-independent evaluator, never here.
+Emit the Dendro time-stepper context for generated relativity modules.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+from typing import List
+
+import sympy as sp
+
+import nrpy.c_function as cfc
 import nrpy.grid as gri
-from nrpy.infrastructures.Dendro import CFunction_roles as roles
-from nrpy.infrastructures.Dendro.generated_file_banner import generated_file_banner
-from nrpy.infrastructures.Dendro.header_guards import header_guard
-
-BANNER = generated_file_banner()
-
-_HEADER = """// The umbrella header carries the host declarations behind their guard, the
-// generated types, constants, parameters and state, and the CFunction
-// prototypes this context calls, so the guard lives in exactly one place.
-#include "$STEM_defines.h"
-
-namespace $NAMESPACE {
-
-class Ctx {
- public:
-  /**
-   * Release the standalone vectors and application-owned storage.
-   *
-   */
-  ~Ctx();
-  /**
-   * Allocate this rank's standalone mesh and generated-count vectors.
-   *
-   * The rank shifts its subdomain so ranks own disjoint physical blocks.
-   *
-   * @param n_blocks Number of padded blocks owned by this rank.
-   * @param extent Number of points per block axis, including padding.
-   * @param dx Positive uniform grid spacing.
-   * @param rank MPI rank used to place this rank's subdomain.
-   * @param[in] parfile_path Optional parameter-file path; unsupported standalone.
-   * @return 0 on success; 1 for invalid mesh dimensions, spacing, or a supplied parameter file.
-   */
-  int initialize_mesh(int n_blocks, int extent, double dx, int rank,
-                       const char* parfile_path);
-  /**
-   * Check generated state, padding, finite-difference, and parameter requirements.
-   *
-   * @param rank MPI rank; only rank zero prints effective parameters.
-   * @return 0 when every startup check passes; 1 otherwise.
-   */
-  int startup_checks(int rank);
-$STANDALONE_APPLICATION_DECLARATIONS
-  // Generated all-block RHS.
-  int rhs_eval_all_blocks();
-  // RHS magnitude at the current state, maximised over this rank's interior.
-  double max_interior_rhs();
-  /**
-   * Compare the per-block and flat-block RHS adapters on the same state.
-   *
-   * @return Largest absolute interior difference over all evolved components.
-   */
-  double flat_adapter_max_difference();
-  /**
-   * Advance the host-owned state by one explicit-Euler step.
-   *
-   * @param dt Timestep multiplying the generated RHS.
-   * @return 0 after completing the step.
-   */
-  int euler_step(double dt);
-  /**
-   * Reduce the maximum absolute field value over local block interiors.
-   *
-   * @param[in] fields Component pointers spanning every local block.
-   * @param ncomp Number of components to inspect.
-   * @return Maximum absolute interior value.
-   */
-  double max_interior_value(const $SCALAR* const* fields, unsigned ncomp);
-  /**
-   * Resolve host-supplied exact NRPy variable names.
-   *
-   * @param[in] names Case-sensitive variable names to resolve.
-   * @param count Number of supplied names.
-   * @return 0 if every name resolves; 1 after reporting any unknown name.
-   */
-  int select_variables(const char* const* names, unsigned count);
-
-  // Host mesh and EVOL vectors (in / rhs / out) for standalone evolution.
-  // Value-initialized: standalone_host::dvector_struct is an aggregate with no default member
-  // initializers, and ~Ctx frees all four vectors unconditionally.  When
-  // initialize_mesh rejects its inputs it returns before assigning them, so
-  // without the braces the destructor would free indeterminate pointers.
-  standalone_host::ctx_struct host{};
-  // Generated runtime parameter table, owned by the context.
-  $NAMESPACE::generated::params_struct params;
-$STANDALONE_APPLICATION_MEMBERS
-};  // END CLASS: Ctx
-
-$STANDALONE_APPLICATION_FREE_DECLARATIONS
-
-// clang-format off
-}  // END NAMESPACE: $NAMESPACE
-// clang-format on
-"""
-
-_SOURCE = """// Host allocation, reductions, and time integration only.  Loops here are
-// sweeps; they carry their own index names (`bx`, `by`, `bz`, `cell`) because
-// `i0`/`i1`/`i2`/`blk_id` are reserved for NRPy-emitted numerical loops, which
-// never appear in this emitter.
-
-#include "$STEMCtx.h"
-
-#include <cmath>
-#include <cstdio>
-#include <cstring>
-#include <optional>
-#include <string_view>
-#include <vector>
-
-namespace $NAMESPACE {
-
-namespace {
-
-/**
- * Exchange two standalone vectors without moving their component storage.
- *
- * @param[in,out] a First vector, receiving the second vector's storage.
- * @param[in,out] b Second vector, receiving the first vector's storage.
- */
-void swap_vectors(standalone_host::dvector_struct& a, standalone_host::dvector_struct& b) {
-  $SCALAR** tmp_comp = a.comp;
-  unsigned tmp_b = a.num_blocks;
-  unsigned tmp_c = a.num_components;
-  a.comp = b.comp;
-  a.num_blocks = b.num_blocks;
-  a.num_components = b.num_components;
-  b.comp = tmp_comp;
-  b.num_blocks = tmp_b;
-  b.num_components = tmp_c;
-}  // END FUNCTION: swap_vectors
-
-void free_vector(standalone_host::dvector_struct& vec) {
-  if (vec.comp == nullptr) return;
-  for (unsigned f = 0; f < vec.num_components; ++f) delete[] vec.comp[f];
-  delete[] vec.comp;
-  vec.comp = nullptr;
-}  // END FUNCTION: free_vector
-
-// clang-format off
-}  // END NAMESPACE: internal linkage
-// clang-format on
-
-Ctx::~Ctx() {
-  free_vector(host.in);
-  free_vector(host.rhs);
-  free_vector(host.out);
-  free_vector(host.diag);
-$STANDALONE_APPLICATION_DESTRUCTOR
-}  // END FUNCTION: Ctx::~Ctx
-
-int Ctx::initialize_mesh(int n_blocks, int extent, double dx, int rank,
-                          const char* parfile_path) {
-  const int pad = static_cast<int>($NAMESPACE::generated::REQUIRED_PADDING);
-  if (n_blocks < 1 || n_blocks > static_cast<int>(standalone_host::MAX_STANDALONE_HOST_BLOCKS) ||
-      extent < 2 * pad + 1 ||
-      extent > static_cast<int>(standalone_host::MAX_STANDALONE_HOST_EXTENT) ||
-      !std::isfinite(dx) || dx <= 0.0) {
-    std::fprintf(stderr,
-                 "ERROR: standalone-host mesh needs 1..%d blocks, extent in "
-                 "[2*padding+1 (%d), %d], and finite positive dx; got n_blocks=%d "
-                 "extent=%d dx=%g\\n",
-                 static_cast<int>(standalone_host::MAX_STANDALONE_HOST_BLOCKS), 2 * pad + 1,
-                 static_cast<int>(standalone_host::MAX_STANDALONE_HOST_EXTENT),
-                 n_blocks, extent, dx);
-    return 1;
-  }  // END IF: mesh request rejected
-  host.mesh.num_blocks = static_cast<unsigned>(n_blocks);
-  // Each rank owns a disjoint physical subdomain: rank r starts where rank
-  // r-1's blocks end.  Without this every rank would evolve an identical
-  // private copy and a multi-rank run would prove nothing beyond a repeated
-  // serial run.
-  const double rank_origin =
-      static_cast<double>(rank) * static_cast<double>(n_blocks) * extent * dx;
-  for (int b = 0; b < n_blocks; ++b) {
-    block_geometry_struct& g = host.mesh.geom[b];
-    g.nx = g.ny = g.nz = static_cast<unsigned>(extent);
-    g.padding = static_cast<unsigned>(pad);
-    g.component_offset =
-        static_cast<std::size_t>(b) * extent * extent * extent;
-    g.pmin_padded[0] = rank_origin + static_cast<double>(b) * extent * dx;
-    g.pmin_padded[1] = 0.0;
-    g.pmin_padded[2] = 0.0;
-    g.dx[0] = g.dx[1] = g.dx[2] = dx;
-  }  // END LOOP: for b over local blocks
-  const unsigned ncomp = $NAMESPACE::generated::NUM_EVOL_GFS;
-  const std::size_t vol = static_cast<std::size_t>(extent) * extent * extent;
-  standalone_host::dvector_struct* vectors[] = {&host.in, &host.rhs, &host.out, &host.diag};
-  // The diagnostic vector carries the generated DIAG count, which is a
-  // different cardinality from the evolved vectors.
-  const unsigned counts[] = {ncomp, ncomp, ncomp,
-                             $NAMESPACE::generated::NUM_DIAG_GFS};
-  for (unsigned v = 0; v < sizeof(vectors) / sizeof(vectors[0]); ++v) {
-    standalone_host::dvector_struct* vec = vectors[v];
-    vec->num_blocks = static_cast<unsigned>(n_blocks);
-    vec->num_components = counts[v];
-    vec->comp = new $SCALAR*[counts[v]];
-    for (unsigned f = 0; f < counts[v]; ++f) {
-      vec->comp[f] = new $SCALAR[static_cast<std::size_t>(n_blocks) * vol];
-      std::memset(vec->comp[f], 0,
-                  sizeof($SCALAR) * static_cast<std::size_t>(n_blocks) * vol);
-    }  // END LOOP: for f over vector components
-  }  // END LOOP: for v over host vectors
-  // The registered parameter CFunctions set and update the parameters.
-  $PARAMS_STRUCT_SET_TO_DEFAULT(params);
-$STANDALONE_APPLICATION_POST_MESH
-  if (parfile_path != nullptr) {
-    std::fprintf(stderr,
-                 "ERROR: a parameter file was supplied (%s), but parameter-file "
-                 "parsing belongs to the Dendro-GR host, which reads its own "
-                 "TOML and calls the generated setters.  The standalone build "
-                 "runs on the compiled defaults; rerun without -t.\\n",
-                 parfile_path);
-    return 1;
-  }  // END IF: a parameter file was supplied
-  return 0;
-}  // END FUNCTION: Ctx::initialize_mesh
-
-int Ctx::startup_checks(int rank) {
-  // Check the generated scalar type, state counts, padding, and finite-difference
-  // requirements for every local block and vector.
-  if (host.in.num_components != $NAMESPACE::generated::NUM_EVOL_GFS ||
-      host.rhs.num_components != $NAMESPACE::generated::NUM_EVOL_GFS ||
-      host.out.num_components != $NAMESPACE::generated::NUM_EVOL_GFS ||
-      host.diag.num_components != $NAMESPACE::generated::NUM_DIAG_GFS) {
-    std::fprintf(stderr, "ERROR: vector component count mismatch\\n");
-    return 1;
-  }  // END IF: component count mismatch
-  for (unsigned b = 0; b < host.mesh.num_blocks; ++b) {
-    if (host.mesh.geom[b].padding !=
-        $NAMESPACE::generated::REQUIRED_PADDING) {
-      std::fprintf(stderr,
-                   "ERROR: block %u padding does not match generated profile\\n", b);
-      return 1;
-    }  // END IF: block padding mismatch
-  }  // END LOOP: for b over local blocks
-$STANDALONE_APPLICATION_STARTUP_CHECKS
-  if (!$VALIDATE(params)) {
-    std::fprintf(stderr, "ERROR: parameter validation failed\\n");
-    return 1;
-  }  // END IF: parameter validation failed
-  // Rank-0 only, as every other diagnostic in the entry point is: an N-rank
-  // run printing N identical parameter tables buries the check output.
-  if (rank == 0) $PRINT_EFFECTIVE(params);
-  return 0;
-}  // END FUNCTION: Ctx::startup_checks
-
-$STANDALONE_APPLICATION_INITIALIZATION
-
-int Ctx::rhs_eval_all_blocks() {
-  $RHS_EVAL(host.mesh, host.in.comp, host.rhs.comp$RHS_EVAL_TAIL);
-  return 0;
-}  // END FUNCTION: Ctx::rhs_eval_all_blocks
-
-double Ctx::max_interior_rhs() {
-  rhs_eval_all_blocks();
-  return max_interior_value(host.rhs.comp,
-                            $NAMESPACE::generated::NUM_EVOL_GFS);
-}  // END FUNCTION: Ctx::max_interior_rhs
-
-double Ctx::flat_adapter_max_difference() {
-  // The LTS flat-block adapter must invoke the same numerical body as the
-  // per-block entry point.  Evaluate both on this rank's first block and
-  // compare pointwise.
-  const unsigned ncomp = $NAMESPACE::generated::NUM_EVOL_GFS;
-  const block_geometry_struct& g = host.mesh.geom[0];
-  const std::size_t vol = static_cast<std::size_t>(g.nx) * g.ny * g.nz;
-  std::vector<$SCALAR> flat_in(static_cast<std::size_t>(ncomp) * vol, 0.0);
-  std::vector<$SCALAR> flat_rhs(static_cast<std::size_t>(ncomp) * vol, 0.0);
-  for (unsigned f = 0; f < ncomp; ++f) {
-    std::memcpy(&flat_in[static_cast<std::size_t>(f) * vol],
-                host.in.comp[f] + g.component_offset,
-                sizeof($SCALAR) * vol);
-  }  // END LOOP: for f over evolved components
-  block_geometry_struct flat_geom = g;
-  flat_geom.component_offset = 0;
-  $RHS_EVAL_FLAT_BLOCK(flat_geom, flat_in.data(), flat_rhs.data()$RHS_EVAL_TAIL);
-  std::vector<const $SCALAR*> block_in(ncomp);
-  std::vector<$SCALAR*> block_rhs(ncomp);
-  std::vector<std::vector<$SCALAR>> storage(
-      ncomp, std::vector<$SCALAR>(vol, 0.0));
-  for (unsigned f = 0; f < ncomp; ++f) {
-    block_in[f] = host.in.comp[f] + g.component_offset;
-    block_rhs[f] = storage[f].data();
-  }  // END LOOP: for f over evolved components
-  $RHS_EVAL_BLOCK(flat_geom, block_in.data(), block_rhs.data()$RHS_EVAL_TAIL);
-  double worst = 0.0;
-  for (unsigned f = 0; f < ncomp; ++f) {
-    for (unsigned bz = g.padding; bz < g.nz - g.padding; ++bz) {
-      for (unsigned by = g.padding; by < g.ny - g.padding; ++by) {
-        for (unsigned bx = g.padding; bx < g.nx - g.padding; ++bx) {
-          const std::size_t cell = bx + g.nx * (by + g.ny * bz);
-          const double d = std::fabs(
-              static_cast<double>(block_rhs[f][cell]) -
-              static_cast<double>(
-                  flat_rhs[static_cast<std::size_t>(f) * vol + cell]));
-          if (d > worst) worst = d;
-        }  // END LOOP: for bx over interior x
-      }  // END LOOP: for by over interior y
-    }  // END LOOP: for bz over interior z
-  }  // END LOOP: for f over evolved components
-  return worst;
-}  // END FUNCTION: Ctx::flat_adapter_max_difference
-
-int Ctx::euler_step(double dt) {
-  rhs_eval_all_blocks();
-  // Host integrator: u_out = u_in + dt * rhs.  No formulation content here:
-  // every derivative and equation term was computed by the registered
-  // generated CFunctions.
-  const unsigned ncomp = $NAMESPACE::generated::NUM_EVOL_GFS;
-  const unsigned nb = host.in.num_blocks;
-  const unsigned extent = host.mesh.geom[0].nx;
-  const std::size_t vol = static_cast<std::size_t>(extent) * extent * extent;
-  const std::size_t total = static_cast<std::size_t>(nb) * vol;
-  for (unsigned f = 0; f < ncomp; ++f) {
-    const $SCALAR* u = host.in.comp[f];
-    const $SCALAR* f_rhs = host.rhs.comp[f];
-    $SCALAR* u_new = host.out.comp[f];
-    for (std::size_t cell = 0; cell < total; ++cell) {
-      u_new[cell] = u[cell] + static_cast<$SCALAR>(dt) * f_rhs[cell];
-    }
-  }  // END LOOP: for f over evolved components
-  swap_vectors(host.in, host.out);
-  return 0;
-}  // END FUNCTION: Ctx::euler_step
-
-double Ctx::max_interior_value(const $SCALAR* const* fields, unsigned ncomp) {
-  double worst = 0.0;
-  for (unsigned b = 0; b < host.mesh.num_blocks; ++b) {
-    const block_geometry_struct& g = host.mesh.geom[b];
-    const std::size_t base = g.component_offset;
-    for (unsigned f = 0; f < ncomp; ++f) {
-      const $SCALAR* v = fields[f];
-      for (unsigned bz = g.padding; bz < g.nz - g.padding; ++bz) {
-        for (unsigned by = g.padding; by < g.ny - g.padding; ++by) {
-          for (unsigned bx = g.padding; bx < g.nx - g.padding; ++bx) {
-            const double a = std::fabs(static_cast<double>(
-                v[base + bx + g.nx * (by + g.ny * bz)]));
-            if (a > worst) worst = a;
-          }  // END LOOP: for bx over interior x
-        }  // END LOOP: for by over interior y
-      }  // END LOOP: for bz over interior z
-    }  // END LOOP: for f over vector components
-  }  // END LOOP: for b over local blocks
-  return worst;
-}  // END FUNCTION: Ctx::max_interior_value
-
-$STANDALONE_APPLICATION_AFTER_RHS
-
-int Ctx::select_variables(const char* const* names, unsigned count) {
-  // Output and refinement candidates are selected by exact NRPy name.
-  // Matching is case-sensitive, and an unknown name is fatal.
-  int rc = 0;
-  for (unsigned k = 0; k < count; ++k) {
-    const std::optional<$NAMESPACE::generated::VariableRef> ref =
-        $NAMESPACE::generated::find_variable(names[k]);
-    if (!ref.has_value()) {
-      std::fprintf(stderr, "ERROR: unknown variable name '%s'\\n", names[k]);
-      rc = 1;
-      continue;
-    }  // END IF: name did not resolve
-    std::printf("SELECTED %s group=%u index=%u\\n", names[k],
-                static_cast<unsigned>(ref->group), ref->index);
-  }  // END LOOP: for k over selected names
-  if (rc != 0) {
-    std::fprintf(stderr, "Valid generated variable names:\\n");
-    for (const $NAMESPACE::generated::VariableRef::Group group :
-         $NAMESPACE::generated::VARIABLE_GROUPS) {
-      const unsigned n = $NAMESPACE::generated::variable_count(group);
-      for (unsigned index = 0; index < n; ++index) {
-        const std::string_view name =
-            $NAMESPACE::generated::variable_name(group, index);
-        std::fprintf(stderr, "  %.*s\\n", static_cast<int>(name.size()),
-                     name.data());
-      }  // END LOOP: for index over group names
-    }  // END LOOP: for group over generated groups
-  }  // END IF: an unknown name was supplied
-  return rc;
-}  // END FUNCTION: Ctx::select_variables
-
-$STANDALONE_APPLICATION_FREE_DEFINITIONS
-
-// clang-format off
-}  // END NAMESPACE: $NAMESPACE
-// clang-format on
-"""
-
-
-_REAL_HEADER = r"""#include "$STEM_defines.h"
-#include "ctx.h"
-#include "meshUtils.h"
-#include <vector>
-namespace $NAMESPACE {
-using DVec = ot::DVector<DendroScalar, unsigned int>;
-/**
- * Normalize a real block allocation, component offset, and physical padded origin.
- *
- * @param[in] mesh Mesh providing the unzip stride and coordinate transformation.
- * @param[in] block Local block whose padded allocation is described.
- * @param[in] minimum Physical domain minimum used to compute spacing.
- * @param[in] maximum Physical domain maximum used to compute spacing.
- * @return Validated geometry with an offset relative to each component base.
- *
- * @note Throws std::runtime_error for invalid allocation or padding.
- */
-block_geometry_struct block_geometry(const ot::Mesh& mesh, const ot::Block& block,
-                             const Point& minimum, const Point& maximum);
-// The fixed-mesh context owns storage. DVector itself is a shallow handle.
-class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {
- public:
-  generated::params_struct params{};
-  DVec state, unzipped, unzipped_rhs, diagnostics;
-  /**
-   * Allocate owned vectors and communication buffers for a fixed mesh.
-   *
-   * @param[in,out] mesh Borrowed mesh used for storage and communication setup.
-   * @param[in] minimum Physical domain minimum, matching the mesh domain bounds.
-   * @param[in] maximum Physical domain maximum, matching the mesh domain bounds.
-   * @param dt Positive finite timestep used by the host time integrator.
-   *
-   * @note The caller retains mesh ownership and must outlive this context.
-   */
-  Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum, double dt);
-  ~Ctx();
-  Ctx(const Ctx&) = delete;
-  Ctx& operator=(const Ctx&) = delete;
-  DVec& get_evolution_vars() { return state; }
-$REAL_APPLICATION_DECLARATIONS
-  /**
-   * Exchange halos, evaluate generated block RHS kernels, and zip the result.
-   *
-   * @param[in,out] in One packed evolution vector; unzip updates its ghost nodes.
-   * @param[out] out One packed vector receiving the zipped RHS.
-   * @param count Number of packed evolution vectors; must equal one.
-   * @param time Host stage time; unused by this autonomous generated profile.
-   * @return 0 on success or an inactive rank; invalid data aborts MPI_COMM_WORLD.
-   */
-  int rhs(DVec* in, DVec* out, unsigned int count, DendroScalar time);
-  /**
-   * Evaluate generated RHS kernels for selected unzipped local blocks.
-   *
-   * Reads component-major DVec storage using each block's component offset and
-   * writes only selected block interiors. The caller performs halo exchange,
-   * unzip, exterior-value assignment, and zip operations.
-   *
-   * @param in Already-unzipped component-major input storage; read only.
-   * @param out Unzipped output storage receiving selected interior RHS values.
-   * @param[in] blkIDs Local block identifiers to evaluate.
-   * @param numIds Number of entries in blkIDs.
-   * @param[in,out] blk_time Host-owned block-time pointer retained unchanged.
-   * @return 0 on success or an inactive rank; invalid input aborts MPI_COMM_WORLD.
-   *
-   * @note The caller owns the DVec storage and all communication operations.
-   */
-  int rhs_blkwise(DVec in, DVec out,
-                  const unsigned int* const blkIDs, unsigned int numIds,
-                  DendroScalar* blk_time);
-  /**
-   * Evaluate the generated RHS kernel on one flat local-block array.
-   *
-   * Input and output use zero-offset component-major storage. The caller owns
-   * halo exchange, unzip, exterior-value assignment, and zip operations.
-   *
-   * @param[in] in Flat component-major evolved fields; read only.
-   * @param[out] out Flat component-major interior RHS values.
-   * @param dof Number of field components; must equal NUM_EVOL_GFS.
-   * @param local_blk_id Local block identifier used for block geometry.
-   * @param blk_time Host block time; unused by this autonomous profile.
-   * @return 0 on success; invalid input aborts MPI_COMM_WORLD.
-   *
-   * @note The caller retains ownership of both flat arrays.
-   */
-  int rhs_blk(const DendroScalar* in, DendroScalar* out, unsigned int dof,
-              unsigned int local_blk_id, DendroScalar blk_time);
- private:
-  /**
-   * Prescribe application values outside the physical domain only.
-   *
-   * @note Updates unzipped exterior points; preserves all in-domain halo values.
-   */
-  void fill_exterior();
-  void require_finite(DVec& value);
-}; // END CLASS: fixed mesh Dendro context
-// clang-format off
-}  // END NAMESPACE: $NAMESPACE
-// clang-format on
-"""
-
-_REAL_SOURCE = r"""#include "$STEMCtx.h"
-$REAL_APPLICATION_INCLUDES
-#include <algorithm>
-#include <cstdlib>
-#include <limits>
-#include <stdexcept>
-namespace $NAMESPACE {
-namespace {
-[[noreturn]] void fail(const char* reason) {
-  int rank = 0;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  std::fprintf(stderr, "rank %d: %s\n", rank, reason);
-  // ETS ignores callback return codes. Abort the parent communicator, including
-  // inactive ranks, so one failed rank cannot strand peers in a halo exchange.
-  MPI_Abort(MPI_COMM_WORLD, 1);
-  std::abort();
-} // END FUNCTION: abort all parent ranks
-double maximum(double local) {
-  double global = 0.0;
-  MPI_Allreduce(&local, &global, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-  return global;
-} // END FUNCTION: reduce world maximum
-/**
- * Measure finite generated values over block interiors.
- *
- * @param[in] mesh Mesh providing local block interiors and component offsets.
- * @param[in] values Unzipped generated values inspected without modification.
- * @return Local maximum absolute value, or zero on an inactive rank.
- *
- * @note Nonfinite interior values abort MPI_COMM_WORLD.
- */
-double interior_max(const ot::Mesh& mesh, DVec& values) {
-  double result = 0.0;
-  if (!mesh.isActive()) return result;
-  std::vector<DendroScalar*> pointers(values.get_dof());
-  values.to_2d(pointers.data());
-  for (const auto& b : mesh.getLocalBlockList()) {
-    const unsigned p = b.get1DPadWidth();
-    const unsigned nx = b.getAllocationSzX(), ny = b.getAllocationSzY();
-    for (unsigned f = 0; f < values.get_dof(); ++f)
-      for (unsigned k = p; k < b.getAllocationSzZ() - p; ++k)
-        for (unsigned j = p; j < ny - p; ++j)
-          for (unsigned i = p; i < nx - p; ++i) {
-            const auto v = pointers[f][b.getOffset() + i + std::size_t(nx) * (j + std::size_t(ny) * k)];
-            if (!std::isfinite(v)) fail("nonfinite generated output");
-            result = std::max(result, std::abs(v));
-          } // END LOOP: inspect interior values
-  } // END LOOP: visit local blocks
-  return result;
-} // END FUNCTION: measure interior maximum
-// clang-format off
-}  // END NAMESPACE: internal linkage
-// clang-format on
-block_geometry_struct block_geometry(const ot::Mesh& mesh, const ot::Block& block,
-                             const Point& minimum, const Point& maximum) {
-  block_geometry_struct g{};
-  g.nx = block.getAllocationSzX();
-  g.ny = block.getAllocationSzY();
-  g.nz = block.getAllocationSzZ();
-  g.padding = block.get1DPadWidth();
-  g.component_offset = block.getOffset();
-  g.dx[0] = block.computeDx(minimum, maximum);
-  g.dx[1] = block.computeDy(minimum, maximum);
-  g.dx[2] = block.computeDz(minimum, maximum);
-  Point origin;
-  const auto node = block.getBlockNode();
-  mesh.octCoordToDomainCoord(Point(node.minX(), node.minY(), node.minZ()), origin);
-  g.pmin_padded[0] = origin.x() - g.padding * g.dx[0];
-  g.pmin_padded[1] = origin.y() - g.padding * g.dx[1];
-  g.pmin_padded[2] = origin.z() - g.padding * g.dx[2];
-  if (g.padding != generated::REQUIRED_PADDING ||
-      g.nx <= 2 * g.padding || g.ny <= 2 * g.padding ||
-      g.nz <= 2 * g.padding || !std::isfinite(g.dx[0]) ||
-      !std::isfinite(g.dx[1]) || !std::isfinite(g.dx[2]) ||
-      g.dx[0] <= 0.0 || g.dx[1] <= 0.0 || g.dx[2] <= 0.0)
-    throw std::runtime_error("invalid Dendro block allocation or padding");
-  const std::size_t maximum_size = std::numeric_limits<std::size_t>::max();
-  if (g.ny > maximum_size / g.nx ||
-      g.nz > maximum_size / (std::size_t(g.nx) * g.ny))
-    throw std::runtime_error("Dendro block volume overflows size_t");
-  const std::size_t volume = std::size_t(g.nx) * g.ny * g.nz;
-  const std::size_t allocation = mesh.getDegOfFreedomUnZip();
-  if (g.component_offset > allocation ||
-      volume > allocation - g.component_offset)
-    throw std::runtime_error("Dendro block component interval is out of bounds");
-  return g;
-} // END FUNCTION: normalize real block geometry
-Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum, double dt) {
-  if (mesh == nullptr) throw std::invalid_argument("Dendro mesh is null");
-  if (!std::isfinite(dt) || dt <= 0.0)
-    throw std::invalid_argument("Dendro timestep must be finite and positive");
-  if (mesh->getElementOrder() != generated::FD_ORDER)
-    throw std::invalid_argument("Dendro element order does not match generated FD_ORDER");
-  set_mesh(mesh);
-  m_uiElementOrder = mesh->getElementOrder();
-  m_uiMinPt = minimum;
-  m_uiMaxPt = maximum;
-  m_uiTinfo = {};
-  m_uiTinfo._m_uiTh = dt;
-  $PARAMS_STRUCT_SET_TO_DEFAULT(params);
-  state.create_vector(mesh, ot::DVEC_TYPE::OCT_SHARED_NODES, ot::DVEC_LOC::HOST, generated::NUM_EVOL_GFS, true);
-  unzipped.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST, generated::NUM_EVOL_GFS, true);
-  unzipped_rhs.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST, generated::NUM_EVOL_GFS, true);
-  diagnostics.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST, generated::NUM_DIAG_GFS, true);
-  if (mesh->isActive()) {
-    for (DVec* v : {&state, &unzipped, &unzipped_rhs, &diagnostics})
-      std::fill_n(v->get_vec_ptr(), v->get_size(), 0.0);
-    for (const auto& block : mesh->getLocalBlockList())
-      block_geometry(*mesh, block, minimum, maximum);
-  } // END IF: initialize active storage
-  ot::alloc_mpi_ctx<DendroScalar>(mesh, m_mpi_ctx, generated::NUM_EVOL_GFS, 1);
-} // END FUNCTION: construct fixed mesh context
-Ctx::~Ctx() {
-  ot::dealloc_mpi_ctx<DendroScalar>(m_uiMesh, m_mpi_ctx, generated::NUM_EVOL_GFS, 1);
-  for (DVec* v : {&state, &unzipped, &unzipped_rhs, &diagnostics}) v->destroy_vector();
-} // END FUNCTION: release owned host storage
-void Ctx::require_finite(DVec& value) {
-  if (!m_uiMesh->isActive()) return;
-  std::vector<DendroScalar*> pointers(value.get_dof());
-  value.to_2d(pointers.data());
-  for (const auto* ptr : pointers)
-    for (unsigned i = m_uiMesh->getNodeLocalBegin(); i < m_uiMesh->getNodeLocalEnd(); ++i)
-      if (!std::isfinite(ptr[i])) fail("nonfinite evolved state");
-} // END FUNCTION: validate owned evolved values
-$REAL_APPLICATION_INITIALIZATION
-void Ctx::fill_exterior() {
-  // Only points outside the physical domain are prescribed. Interior halos
-  // remain the output of real unzip. The application supplies field values;
-  // host boundary flags and padded storage indices select exterior points.
-  std::vector<DendroScalar*> pointers(generated::NUM_EVOL_GFS);
-  unzipped.to_2d(pointers.data());
-  std::vector<DendroScalar> flat(generated::NUM_EVOL_GFS);
-$APPLICATION_EXTERIOR_VALUES
-  for (const auto& b : m_uiMesh->getLocalBlockList()) {
-    const auto g = block_geometry(*m_uiMesh, b, m_uiMinPt, m_uiMaxPt);
-    const unsigned bflag = b.getBlkNodeFlag();
-    for (unsigned k = 0; k < g.nz; ++k)
-      for (unsigned j = 0; j < g.ny; ++j)
-        for (unsigned i = 0; i < g.nx; ++i) {
-          const bool exterior =
-              ((bflag & (1u << OCT_DIR_LEFT)) && i < g.padding) ||
-              ((bflag & (1u << OCT_DIR_RIGHT)) && i >= g.nx - g.padding) ||
-              ((bflag & (1u << OCT_DIR_DOWN)) && j < g.padding) ||
-              ((bflag & (1u << OCT_DIR_UP)) && j >= g.ny - g.padding) ||
-              ((bflag & (1u << OCT_DIR_BACK)) && k < g.padding) ||
-              ((bflag & (1u << OCT_DIR_FRONT)) && k >= g.nz - g.padding);
-          if (exterior)
-            for (unsigned f = 0; f < flat.size(); ++f)
-              pointers[f][g.component_offset + i + std::size_t(g.nx)*(j + std::size_t(g.ny)*k)] = flat[f];
-        } // END LOOP: prescribe exterior points
-  } // END LOOP: visit exterior block padding
-} // END FUNCTION: fill application exterior
-int Ctx::rhs(DVec* in, DVec* out, unsigned int count, DendroScalar) {
-  if (count != 1) fail("RHS requires one packed evolution vector");
-  if (!m_uiMesh->isActive()) return 0;
-  require_finite(*in);
-  unzip(*in, unzipped, 1);
-  fill_exterior();
-  std::fill_n(unzipped_rhs.get_vec_ptr(), unzipped_rhs.get_size(), 0.0);
-  std::vector<DendroScalar*> input(generated::NUM_EVOL_GFS), output(generated::NUM_EVOL_GFS);
-  unzipped.to_2d(input.data());
-  unzipped_rhs.to_2d(output.data());
-  for (const auto& b : m_uiMesh->getLocalBlockList()) {
-    const auto g = block_geometry(*m_uiMesh, b, m_uiMinPt, m_uiMaxPt);
-    $RHS_EVAL_BLOCK(g, input.data(), output.data()$RHS_EVAL_BLOCK_TAIL);
-  } // END LOOP: evaluate generated block RHS
-  interior_max(*m_uiMesh, unzipped_rhs);
-  zip(unzipped_rhs, *out);
-  require_finite(*out);
-  return 0;
-} // END FUNCTION: unzip evaluate and zip
-int Ctx::rhs_blkwise(DVec in, DVec out,
-                     const unsigned int* const blkIDs, unsigned int numIds,
-                     DendroScalar* blk_time) {
-  if (in.get_dof() != generated::NUM_EVOL_GFS ||
-      out.get_dof() != generated::NUM_EVOL_GFS)
-    fail("blockwise RHS field count does not match generated state");
-  if (numIds != 0 && blkIDs == nullptr)
-    fail("blockwise RHS received null block identifiers");
-  const auto& blocks = m_uiMesh->getLocalBlockList();
-  for (unsigned index = 0; index < numIds; ++index)
-    if (blkIDs[index] >= blocks.size())
-      fail("blockwise RHS block identifier is out of range");
-  if (!m_uiMesh->isActive()) return 0;
-  std::vector<DendroScalar*> input(generated::NUM_EVOL_GFS);
-  std::vector<DendroScalar*> output(generated::NUM_EVOL_GFS);
-  in.to_2d(input.data());
-  out.to_2d(output.data());
-  for (unsigned index = 0; index < numIds; ++index) {
-    const auto g = block_geometry(*m_uiMesh, blocks[blkIDs[index]], m_uiMinPt,
-                                  m_uiMaxPt);
-    $RHS_EVAL_BLOCK(g, input.data(), output.data()$RHS_EVAL_BLOCK_TAIL);
-  } // END LOOP: evaluate selected block RHS
-  (void)blk_time;
-  return 0;
-} // END FUNCTION: evaluate selected unzipped blocks
-int Ctx::rhs_blk(const DendroScalar* in, DendroScalar* out, unsigned int dof,
-                 unsigned int local_blk_id, DendroScalar blk_time) {
-  if (in == nullptr || out == nullptr)
-    fail("flat block RHS received a null field array");
-  if (dof != generated::NUM_EVOL_GFS)
-    fail("flat block RHS field count does not match generated state");
-  const auto& blocks = m_uiMesh->getLocalBlockList();
-  if (local_blk_id >= blocks.size())
-    fail("flat block RHS block identifier is out of range");
-  auto g = block_geometry(*m_uiMesh, blocks[local_blk_id], m_uiMinPt, m_uiMaxPt);
-  g.component_offset = 0;
-  $RHS_EVAL_FLAT_BLOCK(g, in, out$RHS_EVAL_FLAT_BLOCK_TAIL);
-  (void)blk_time;
-  return 0;
-} // END FUNCTION: evaluate one block-local flat slab
-$REAL_APPLICATION_AFTER_RHS
-// clang-format off
-}  // END NAMESPACE: $NAMESPACE
-// clang-format on
-"""
-
-
-def codeparameter_tail(cfunction_name: str, table: str) -> str:
-    """
-    Render the trailing CodeParameter arguments one host call must forward.
-
-    :param cfunction_name: Registered CFunction the host calls.
-    :param table: C++ expression naming the generated parameter table.
-    :return: ``", table.a, table.b"``, or the empty string when the signature
-        declares no CodeParameter.
-    """
-    names = roles.CFunction_codeparameters(cfunction_name)
-    if not names:
-        return ""
-    return ", " + ", ".join(f"{table}.{name}" for name in names)
-
-
-def substitute_solver_identifiers(
-    text: str,
-    solver_stem: str,
-    solver_namespace: str,
-) -> str:
-    """
-    Substitute the solver identifiers and registered kernel names into one body.
-
-    Every kernel name is read back from the Dendro role registry, so a renamed
-    kernel cannot leave a stale call behind in the host adapter.
-
-    :param text: The emitter body carrying ``$`` placeholders.
-    :param solver_stem: Lowercase formulation stem for emitted file names.
-    :param solver_namespace: Solver namespace.
-    :return: The substituted text.
-
-    Doctests:
-    >>> substitute_solver_identifiers("namespace $NAMESPACE { using T = $SCALAR; }", "wave", "wave")
-    'namespace wave { using T = DendroScalar; }'
-    >>> import nrpy.c_function as cfc
-    >>> import nrpy.params as par
-    >>> _saved_cfuncs = dict(cfc.CFunction_dict)
-    >>> _saved_dendro = par.glb_extras_dict.get("Dendro")
-    >>> cfc.CFunction_dict.clear()
-    >>> par.glb_extras_dict.pop("Dendro", None)
-    >>> cfc.register_CFunction(desc="rhs", name="wave_rhs", params="", body="(void)0;")
-    >>> roles.set_CFunction_role("wave_rhs", "rhs_eval")
-    >>> roles.set_CFunction_codeparameters(
-    ...     "wave_rhs", ("amplitude", "num_steps", "enable_filter")
-    ... )
-    >>> codeparameter_tail("wave_rhs", "runtime")
-    ', runtime.amplitude, runtime.num_steps, runtime.enable_filter'
-    >>> substitute_solver_identifiers("call $RHS_EVAL$RHS_EVAL_TAIL;", "wave", "wave")
-    'call wave_rhs, params.amplitude, params.num_steps, params.enable_filter;'
-    >>> cfc.CFunction_dict.clear(); cfc.CFunction_dict.update(_saved_cfuncs)
-    >>> _ = par.glb_extras_dict.pop("Dendro", None)
-    >>> _ = par.glb_extras_dict.setdefault("Dendro", _saved_dendro) if _saved_dendro is not None else None
-    """
-    replacements = (
-        (
-            "$PARAMS_STRUCT_SET_TO_DEFAULT",
-            f"{solver_stem}_params_struct_set_to_default",
-        ),
-        ("$VALIDATE", f"{solver_stem}_params_validate"),
-        ("$PRINT_EFFECTIVE", f"{solver_stem}_params_print_effective"),
-        ("$NAMESPACE", solver_namespace),
-        ("$STEM", solver_stem),
-        ("$SCALAR", gri.DENDRO_SCALAR_TYPE),
-    )
-    for placeholder, value in replacements:
-        text = text.replace(placeholder, value)
-
-    role_tokens = (
-        ("$RHS_EVAL_FLAT_BLOCK_TAIL", "rhs_eval_flat_block", True),
-        ("$RHS_EVAL_FLAT_BLOCK", "rhs_eval_flat_block", False),
-        ("$RHS_EVAL_BLOCK_TAIL", "rhs_eval_block", True),
-        ("$RHS_EVAL_BLOCK", "rhs_eval_block", False),
-        ("$RHS_EVAL_TAIL", "rhs_eval", True),
-        ("$RHS_EVAL", "rhs_eval", False),
-    )
-    for placeholder, role, is_tail in role_tokens:
-        if placeholder not in text:
-            continue
-        function_name = roles.CFunction_name_for_role(role)
-        value = (
-            codeparameter_tail(function_name, "params") if is_tail else function_name
-        )
-        text = text.replace(placeholder, value)
-    return text
+import nrpy.params as par
+from nrpy.c_codegen import c_codegen
 
 
 def output_solver_context_h(
     solver_stem: str,
     solver_namespace: str,
-    standalone_application_declarations: str,
-    standalone_application_members: str,
-    standalone_application_free_declarations: str,
-    real_application_declarations: str,
+    fd_order: int,
+    *,
+    enable_fCCZ4: bool,
 ) -> str:
-    r"""
-    Emit the context header with explicit host selection.
-
-    :param solver_stem: Lowercase formulation stem for emitted file names.
-    :param solver_namespace: Solver namespace.
-    :param standalone_application_declarations: Application methods for the
-        standalone context public interface.
-    :param standalone_application_members: Application-owned standalone state.
-    :param standalone_application_free_declarations: Application free-function
-        declarations in the solver namespace.
-    :param real_application_declarations: Real-host application methods and
-        state, inserted before the context's private generic helpers.
-    :return: The complete C++ header text.
-    :raises ValueError: If an application declaration remains unresolved.
-
-    Doctests:
-    >>> _HEADER.count("// clang-format off") == _HEADER.count("}  // END NAMESPACE:")
-    True
-    >>> _HEADER.count("}  // END NAMESPACE:")
-    1
-    >>> _SOURCE.count("// clang-format off") == _SOURCE.count("}  // END NAMESPACE:")
-    True
-    >>> _SOURCE.count("}  // END NAMESPACE:")
-    2
-    >>> unrelated = output_solver_context_h(
-    ...     "wave", "wave", "  int initialize_scalar();", "", "", "  int initialize();"
-    ... )
-    >>> "initialize_scalar" in unrelated and "detgtrazero" not in unrelated
-    True
     """
-    opening, closing = header_guard(f"{solver_stem}Ctx.h")
-    body = (
-        "#if defined(NRPY_DENDRO_STANDALONE_HOST)\n"
-        + _HEADER
-        + "\n#else\n"
-        + _REAL_HEADER
-        + "\n#endif\n"
-    )
-    for token, value in (
-        ("$STANDALONE_APPLICATION_DECLARATIONS", standalone_application_declarations),
-        ("$STANDALONE_APPLICATION_MEMBERS", standalone_application_members),
-        (
-            "$STANDALONE_APPLICATION_FREE_DECLARATIONS",
-            standalone_application_free_declarations,
-        ),
-        ("$REAL_APPLICATION_DECLARATIONS", real_application_declarations),
-    ):
-        body = body.replace(token, value)
-    unresolved = tuple(
-        token
-        for token in (
-            "$STANDALONE_APPLICATION_DECLARATIONS",
-            "$STANDALONE_APPLICATION_MEMBERS",
-            "$STANDALONE_APPLICATION_FREE_DECLARATIONS",
-            "$REAL_APPLICATION_DECLARATIONS",
-        )
-        if token in body
-    )
-    if unresolved:
-        raise ValueError(f"Application declarations were not resolved: {unresolved}")
-    return (
-        BANNER
-        + f"{opening}\n\n"
-        + substitute_solver_identifiers(
-            body,
-            solver_stem,
-            solver_namespace,
-        )
-        + f"\n{closing}\n"
-    )
+    Emit the application-owned Dendro context declaration.
+
+    :param solver_stem: Lowercase formulation name used in generated files.
+    :param solver_namespace: C++ namespace owning the generated context.
+    :param fd_order: Selected finite-difference order.
+    :param enable_fCCZ4: Whether the emitted state is fCCZ4.
+    :return: Complete context header.
+    """
+    del fd_order, enable_fCCZ4
+    guard = f"{solver_stem.upper()}CTX_H"
+    return f"""// GENERATED FILE - DO NOT EDIT
+// AUTOMATICALLY GENERATED BY NRPy
+#ifndef {guard}
+#define {guard}
+#include "{solver_stem}_defines.h"
+#include "ctx.h"
+#include "dvec.h"
+#include "meshUtils.h"
+#include <array>
+#include <functional>
+#include <string>
+#include <vector>
+namespace {solver_namespace} {{
+using DVec = ot::DVector<DendroScalar, unsigned int>;
+class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
+ public:
+  generated::params_struct params{{}};
+  Ctx(ot::Mesh*, const Point&, const Point&, DendroScalar, DendroScalar,
+      unsigned int, unsigned int, unsigned int, unsigned int,
+      const std::string&, const std::string&, const std::string&,
+      const std::array<Point, 2>&, const std::array<DendroScalar, 2>&,
+      const std::array<DendroScalar, 2>&,
+      const std::array<DendroScalar, 2>&,
+      const std::array<unsigned int, 2>&, DendroScalar, unsigned int,
+      unsigned int, dendro_aeh::AEH_BHaHAHA*, unsigned int,
+      const std::vector<DendroScalar>&, unsigned int, const Point&);
+  ~Ctx();
+  Ctx(const Ctx&) = delete;
+  Ctx& operator=(const Ctx&) = delete;
+  int initialize(const commondata_struct&, const params_struct&,
+                 const ID_persist_struct&);
+  int initialize() {{ return 0; }}
+  int rhs(DVec*, DVec*, unsigned int, DendroScalar);
+  int rhs_blkwise(DVec, DVec, const unsigned int*, unsigned int,
+                  DendroScalar*);
+  int rhs_blk(const DendroScalar*, DendroScalar*, unsigned int, unsigned int,
+              DendroScalar) {{ return 0; }}
+  int pre_stage_blk(DendroScalar*, unsigned int, unsigned int, DendroScalar) {{ return 0; }}
+  int post_stage_blk(DendroScalar*, unsigned int, unsigned int, DendroScalar) {{ return 0; }}
+  int pre_timestep_blk(DendroScalar*, unsigned int, unsigned int, DendroScalar) {{ return 0; }}
+  int post_timestep_blk(DendroScalar*, unsigned int, unsigned int, DendroScalar) {{ return 0; }}
+  int pre_stage(DVec&) {{ return 0; }}
+  int post_stage(DVec&) {{ return 0; }}
+  int pre_timestep(DVec&) {{ return 0; }}
+  int post_timestep(DVec&);
+  int diagnostic_output();
+  int evolve_excision_centers();
+  int gravitational_wave_output();
+  int adm_output();
+  int apparent_horizon_output();
+  bool is_remesh(bool initial_grid = false);
+  int grid_transfer(const ot::Mesh*);
+  int write_vtu();
+  int write_checkpt();
+  int restore_checkpt(unsigned int);
+  int finalize() {{ return 0; }}
+  int terminal_output();
+  DVec& get_evolution_vars() {{ return state_; }}
+  DVec& get_constraint_vars() {{ return constraints_; }}
+  DVec& get_primitive_vars() {{ return state_; }}
+  unsigned int get_async_batch_sz() {{ return 1; }}
+  unsigned int get_num_refine_vars() {{ return generated::NUM_EVOL_GFS; }}
+  const unsigned int* get_refine_var_ids() {{ return refinement_variables_.data(); }}
+  std::function<double(double, double, double)> get_wtol_function();
+  void compute_lts_ts_offset() {{}}
+  static unsigned int getBlkTimestepFac(unsigned int, unsigned int, unsigned int) {{ return 1; }}
+ private:
+  DendroScalar algebraic_residual(ot::Mesh*, DVec&);
+  Point domain_minimum_, domain_maximum_;
+  std::array<Point, 2> excision_centers_{{}};
+  DendroScalar excision_center_time_ = 0.0;
+  std::array<DendroScalar, 2> excision_radii_{{}};
+  std::array<DendroScalar, 2> black_hole_masses_{{}};
+  std::array<DendroScalar, 2> black_hole_amr_radii_{{}};
+  std::array<unsigned int, 2> black_hole_maximum_levels_{{}};
+  DendroScalar black_hole_amr_ratio_ = 2.0;
+  unsigned int minimum_depth_ = 0;
+  DVec state_, unzipped_state_, unzipped_rhs_, ricci_;
+  DVec adm_, unzipped_adm_;
+  DVec psi4_, unzipped_psi4_;
+  DVec adm_surface_, unzipped_adm_surface_;
+  DVec constraints_, unzipped_constraints_;
+  DendroScalar wavelet_tolerance_ = 1.0e-5;
+  unsigned int remesh_frequency_ = 10;
+  unsigned int diagnostic_frequency_ = 8;
+  unsigned int vtu_frequency_ = 8;
+  unsigned int checkpoint_frequency_ = 0;
+  unsigned int apparent_horizon_frequency_ = 0;
+  dendro_aeh::AEH_BHaHAHA* apparent_horizon_finder_ = nullptr;
+  unsigned int gravitational_wave_frequency_ = 0;
+  std::vector<DendroScalar> gravitational_wave_radii_{{}};
+  unsigned int gravitational_wave_maximum_l_ = 2;
+  Point extraction_center_{{0.0, 0.0, 0.0}};
+  std::string output_prefix_ = "nrpy";
+  std::string vtu_prefix_ = "vtu/nrpy";
+  std::string checkpoint_prefix_ = "cp/nrpy";
+  std::array<unsigned int, generated::NUM_EVOL_GFS> refinement_variables_{{}};
+}};
+int {solver_stem}_write_checkpoint(
+    const std::string&, unsigned int, ot::Mesh*, DVec&,
+    const generated::params_struct&, unsigned int, DendroScalar,
+    DendroScalar, const Point&, const Point&, const std::array<Point, 2>&,
+    DendroScalar);
+int {solver_stem}_restore_checkpoint(
+    const std::string&, unsigned int, MPI_Comm, const Point&, const Point&,
+    ot::Mesh*&, DVec&, const generated::params_struct&, unsigned int&,
+    DendroScalar&, DendroScalar&, std::array<Point, 2>&, DendroScalar);
+}}  // namespace {solver_namespace}
+#endif  // {guard}
+"""
 
 
 def output_solver_context_cpp(
     solver_stem: str,
     solver_namespace: str,
-    standalone_application_destructor: str,
-    standalone_application_post_mesh: str,
-    standalone_application_startup_checks: str,
-    standalone_application_initialization: str,
-    standalone_application_after_rhs: str,
-    standalone_application_free_definitions: str,
-    real_application_initialization: str,
-    real_application_exterior_values: str,
-    real_application_after_rhs: str,
-    real_application_includes: str,
+    fd_order: int,
+    *,
+    enable_fCCZ4: bool,
+    enable_SSL: bool,
+    enable_CAHD: bool,
 ) -> str:
-    r"""
-    Emit the context implementation with explicit host selection.
-
-    :param solver_stem: Lowercase formulation stem for emitted file names.
-    :param solver_namespace: Solver namespace.
-    :param standalone_application_destructor: Cleanup of application-owned
-        standalone context state.
-    :param standalone_application_post_mesh: Application setup after generic
-        standalone mesh and parameter initialization.
-    :param standalone_application_startup_checks: Additional application
-        qualification checks.
-    :param standalone_application_initialization: Application initialization
-        method definitions before the generic RHS methods.
-    :param standalone_application_after_rhs: Application diagnostics and
-        accepted-step policy definitions after generic reductions.
-    :param standalone_application_free_definitions: Application free-function
-        definitions emitted before the standalone namespace closes.
-    :param real_application_initialization: Application initialization method
-        definitions inserted after generic storage setup.
-    :param real_application_exterior_values: Application statements that fill
-        the existing ``flat`` value vector before generic exterior traversal.
-    :param real_application_after_rhs: Application hook and diagnostic method
-        definitions inserted after the generic RHS callback.
-    :param real_application_includes: Real-host-only application headers,
-        inserted before the solver namespace opens.
-    :return: The complete C++ source text.
-    :raises ValueError: If an application insertion remains unresolved.
-
-    An unrelated scalar/vector application crosses every generic assembly
-    boundary without importing GR policy.  The live registries and sidecars are
-    restored by object identity afterward.
-
-    >>> import nrpy.c_function as cfc
-    >>> import nrpy.params as par
-    >>> from nrpy.infrastructures.Dendro import main_cpp as generic_main
-    >>> from nrpy.infrastructures.Dendro import state_h, types_h
-    >>> _saved_infrastructure = par.parval_from_str("Infrastructure")
-    >>> _saved_fd_order = par.parval_from_str("fd_order")
-    >>> _saved_fields = dict(gri.glb_gridfcs_dict)
-    >>> _saved_parameters = dict(par.glb_code_params_dict)
-    >>> _saved_cfuncs = dict(cfc.CFunction_dict)
-    >>> _saved_extras = dict(par.glb_extras_dict)
-    >>> _saved_dendro_present = "Dendro" in par.glb_extras_dict
-    >>> _saved_dendro = par.glb_extras_dict.pop("Dendro", None)
-    >>> _saved_roles_present = _saved_dendro is not None and "CFunction_roles" in _saved_dendro
-    >>> _saved_roles = None if _saved_dendro is None else _saved_dendro.get("CFunction_roles")
-    >>> _saved_codeparameters_present = _saved_dendro is not None and "CFunction_codeparameters" in _saved_dendro
-    >>> _saved_codeparameters = None if _saved_dendro is None else _saved_dendro.get("CFunction_codeparameters")
-    >>> try:
-    ...     gri.glb_gridfcs_dict.clear()
-    ...     cfc.CFunction_dict.clear()
-    ...     par.set_parval_from_str("Infrastructure", "Dendro")
-    ...     _ = gri.register_gridfunctions("wave_scalar", group="EVOL")
-    ...     _ = gri.register_gridfunctions_for_single_rank1(
-    ...         "waveU", dimension=2, group="EVOL"
-    ...     )
-    ...     _function_specs = (
-    ...         ("wave_rhs", "rhs_eval",
-    ...          "const standalone_host_mesh_struct& mesh, const DendroScalar* const* in_gfs, DendroScalar* const* rhs_gfs",
-    ...          "(void)mesh; rhs_gfs[0][0] = in_gfs[0][0] + in_gfs[1][0];"),
-    ...         ("wave_rhs_block", "rhs_eval_block",
-    ...          "const block_geometry_struct& geom, const DendroScalar* const* in_gfs, DendroScalar* const* rhs_gfs",
-    ...          "const auto p = geom.component_offset; rhs_gfs[0][p] = in_gfs[0][p] + in_gfs[1][p];"),
-    ...         ("wave_rhs_flat", "rhs_eval_flat_block",
-    ...          "const block_geometry_struct& geom, const DendroScalar* in_gfs, DendroScalar* rhs_gfs",
-    ...          "const auto v = geom.nx*geom.ny*geom.nz; rhs_gfs[0] = in_gfs[0] + in_gfs[v];"),
-    ...     )
-    ...     for _name, _role, _params, _body in _function_specs:
-    ...         cfc.register_CFunction(
-    ...             desc="wave-equation test function", name=_name, params=_params, body=_body
-    ...         )
-    ...         roles.set_CFunction_role(_name, _role)
-    ...     _types = types_h.output_types_h(
-    ...         "wave", "wave", "struct wave_status { int accepted = 0; };"
-    ...     )
-    ...     _state = state_h.output_state_h("wave", "wave")
-    ...     _header = output_solver_context_h(
-    ...         "wave", "wave",
-    ...         "  int initialize_scalar_vector();\n  double max_wave_rhs();\n  void apply_wave_boundary();",
-    ...         "  double energy = 0.0;", "", "  double max_wave_rhs();"
-    ...     )
-    ...     _source = output_solver_context_cpp(
-    ...         "wave", "wave", "  energy = 0.0;", "  energy = dx;", "  if (energy < 0.0) return 1;",
-    ...         "int Ctx::initialize_scalar_vector() { energy = 1.0; return 0; }\nvoid Ctx::apply_wave_boundary() { energy += 1.0; }",
-    ...         "double Ctx::max_wave_rhs() { return max_interior_rhs(); }", "", "",
-    ...         "  flat[0] = 1.0; flat[1] = 2.0; flat[2] = 3.0;",
-    ...         "double Ctx::max_wave_rhs() { return interior_max(*m_uiMesh, unzipped_rhs); }", ""
-    ...     )
-    ...     _main = generic_main.output_main_cpp(
-    ...         "wave", "wave", "waveSolver", "wave_cartesian_vacuum",
-    ...         "  if (ctx.initialize_scalar_vector()) return 1;",
-    ...         "  const double wave_norm = ctx.max_wave_rhs();", "    ctx.apply_wave_boundary();",
-    ...         "  if (!std::isfinite(wave_norm)) return 1;", "4", "0.25*dx",
-    ...         "      if (!std::isfinite(context.max_wave_rhs())) return 1;"
-    ...     )
-    ...     assert all(name in _state for name in ("wave_scalar", "waveU0", "waveU1"))
-    ...     assert "struct wave_status" in _types
-    ...     assert _header.count("double max_wave_rhs();") == 2
-    ...     assert _source.count("double Ctx::max_wave_rhs()") == 2
-    ...     assert "int Ctx::initialize_scalar_vector()" in _source
-    ...     assert "void Ctx::apply_wave_boundary()" in _source
-    ...     assert "ctx.initialize_scalar_vector()" in _main
-    ...     assert "ctx.apply_wave_boundary()" in _main
-    ...     assert "context.max_wave_rhs()" in _main
-    ...     assert "in_gfs[0][p] + in_gfs[1][p]" in cfc.CFunction_dict["wave_rhs_block"].body
-    ...     assert all(token in _source for token in ("wave_rhs", "wave_rhs_block", "wave_rhs_flat"))
-    ...     assert "flat[0] = 1.0" in _source
-    ...     assert all(token not in (_types + _state + _header + _source + _main)
-    ...                for token in ("minkowski", "detgtrazero", "constraints_eval"))
-    ... finally:
-    ...     gri.glb_gridfcs_dict.clear(); gri.glb_gridfcs_dict.update(_saved_fields)
-    ...     cfc.CFunction_dict.clear(); cfc.CFunction_dict.update(_saved_cfuncs)
-    ...     _ = par.glb_extras_dict.pop("Dendro", None)
-    ...     _ = par.glb_extras_dict.setdefault("Dendro", _saved_dendro) if _saved_dendro is not None else None
-    ...     par.set_parval_from_str("Infrastructure", _saved_infrastructure)
-    >>> set(gri.glb_gridfcs_dict) == set(_saved_fields)
-    True
-    >>> all(gri.glb_gridfcs_dict[name] is value for name, value in _saved_fields.items())
-    True
-    >>> set(par.glb_code_params_dict) == set(_saved_parameters)
-    True
-    >>> all(par.glb_code_params_dict[name] is value for name, value in _saved_parameters.items())
-    True
-    >>> set(cfc.CFunction_dict) == set(_saved_cfuncs)
-    True
-    >>> all(cfc.CFunction_dict[name] is value for name, value in _saved_cfuncs.items())
-    True
-    >>> set(par.glb_extras_dict) == set(_saved_extras)
-    True
-    >>> all(par.glb_extras_dict[name] is value for name, value in _saved_extras.items())
-    True
-    >>> ("Dendro" in par.glb_extras_dict) == _saved_dendro_present
-    True
-    >>> par.glb_extras_dict.get("Dendro") is _saved_dendro
-    True
-    >>> (_saved_dendro is not None and "CFunction_roles" in _saved_dendro) == _saved_roles_present
-    True
-    >>> _saved_dendro is None or _saved_dendro.get("CFunction_roles") is _saved_roles
-    True
-    >>> (_saved_dendro is not None and "CFunction_codeparameters" in _saved_dendro) == _saved_codeparameters_present
-    True
-    >>> _saved_dendro is None or _saved_dendro.get("CFunction_codeparameters") is _saved_codeparameters
-    True
-    >>> par.parval_from_str("Infrastructure") == _saved_infrastructure
-    True
-    >>> par.parval_from_str("fd_order") == _saved_fd_order
-    True
     """
-    text = (
-        "#if defined(NRPY_DENDRO_STANDALONE_HOST)\n"
-        + _SOURCE
-        + "\n#else\n"
-        + _REAL_SOURCE
-        + "\n#endif\n"
-    )
-    for token, value in (
-        ("$REAL_APPLICATION_INCLUDES", real_application_includes),
-        ("$STANDALONE_APPLICATION_DESTRUCTOR", standalone_application_destructor),
-        ("$STANDALONE_APPLICATION_POST_MESH", standalone_application_post_mesh),
-        (
-            "$STANDALONE_APPLICATION_STARTUP_CHECKS",
-            standalone_application_startup_checks,
-        ),
-        (
-            "$STANDALONE_APPLICATION_INITIALIZATION",
-            standalone_application_initialization,
-        ),
-        ("$STANDALONE_APPLICATION_AFTER_RHS", standalone_application_after_rhs),
-        (
-            "$STANDALONE_APPLICATION_FREE_DEFINITIONS",
-            standalone_application_free_definitions,
-        ),
-        ("$REAL_APPLICATION_INITIALIZATION", real_application_initialization),
-        ("$APPLICATION_EXTERIOR_VALUES", real_application_exterior_values),
-        ("$REAL_APPLICATION_AFTER_RHS", real_application_after_rhs),
+    Emit direct Dendro storage, initial-data, RHS, and diagnostic calls.
+
+    :param solver_stem: Lowercase formulation name used in generated files.
+    :param solver_namespace: C++ namespace owning the generated context.
+    :param fd_order: Selected finite-difference order.
+    :param enable_fCCZ4: Whether the emitted state is fCCZ4.
+    :param enable_SSL: Whether slow-start lapse is enabled.
+    :param enable_CAHD: Whether constraint-advection Hamiltonian damping is enabled.
+    :return: Complete context implementation.
+    :raises ValueError: If any required ordered kernel is not registered.
+    """
+    del enable_SSL, enable_CAHD
+    production_orders = (4, 6, 8)
+    constraint_stem = "fCCZ4_constraints" if enable_fCCZ4 else "BSSN_constraints"
+    for order in production_orders:
+        for kernel_stem in (
+            "Ricci_eval",
+            "rhs_eval",
+            "ADM_to_BSSN",
+            "initial_data_lambdaU",
+            constraint_stem,
+        ):
+            name = f"{kernel_stem}_order_{order}"
+            if name not in cfc.CFunction_dict:
+                raise ValueError(f"Missing registered Dendro kernel {name!r}.")
+        for kernel_stem in ("psi4_eval", "adm_quantities_surface_data"):
+            name = f"{kernel_stem}_order_{order}"
+            if name not in cfc.CFunction_dict:
+                raise ValueError(f"Missing registered Dendro kernel {name!r}.")
+    for name in (
+        "BSSN_to_ADM",
+        "floor_the_lapse_and_conformal_factor",
+        "gravitational_waves",
+        "adm_quantities",
     ):
-        text = text.replace(token, value)
-    unresolved = tuple(
-        token
-        for token in (
-            "$STANDALONE_APPLICATION_DESTRUCTOR",
-            "$STANDALONE_APPLICATION_POST_MESH",
-            "$STANDALONE_APPLICATION_STARTUP_CHECKS",
-            "$STANDALONE_APPLICATION_INITIALIZATION",
-            "$STANDALONE_APPLICATION_AFTER_RHS",
-            "$STANDALONE_APPLICATION_FREE_DEFINITIONS",
-            "$REAL_APPLICATION_INITIALIZATION",
-            "$APPLICATION_EXTERIOR_VALUES",
-            "$REAL_APPLICATION_AFTER_RHS",
-            "$REAL_APPLICATION_INCLUDES",
+        if name not in cfc.CFunction_dict:
+            raise ValueError(f"Missing registered Dendro service {name!r}.")
+    parameter_names: List[str] = list(
+        cfc.CFunction_dict[
+            f"rhs_eval_order_{fd_order}"
+        ].ET_current_thorn_CodeParams_used
+        or []
+    )
+    for order in production_orders:
+        order_parameters = list(
+            cfc.CFunction_dict[
+                f"rhs_eval_order_{order}"
+            ].ET_current_thorn_CodeParams_used
+            or []
         )
-        if token in text
+        if order_parameters != parameter_names:
+            raise ValueError("All Dendro RHS orders must use the same parameters.")
+    rhs_parameters = "".join(f", params.{name}" for name in parameter_names)
+    g00, g01, g02, g11, g12, g22 = sp.symbols("g00 g01 g02 g11 g12 g22")
+    a00, a01, a02, a11, a12, a22 = sp.symbols("a00 a01 a02 a11 a12 a22")
+    conformal_metric = sp.Matrix(((g00, g01, g02), (g01, g11, g12), (g02, g12, g22)))
+    conformal_extrinsic_curvature = sp.Matrix(
+        ((a00, a01, a02), (a01, a11, a12), (a02, a12, a22))
     )
-    if unresolved:
-        raise ValueError(f"Application insertions were not resolved: {unresolved}")
-    return BANNER + substitute_solver_identifiers(
-        text,
-        solver_stem,
-        solver_namespace,
+    determinant = conformal_metric.det()
+    inverse_metric = conformal_metric.adjugate() / determinant
+    trace_a = sum(
+        inverse_metric[i, j] * conformal_extrinsic_curvature[i, j]
+        for i in range(3)
+        for j in range(3)
     )
-
-
-if __name__ == "__main__":
-    import doctest
-    import sys
-
-    results = doctest.testmod()
-
-    if results.failed > 0:
-        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-        sys.exit(1)
-    else:
-        print(f"Doctest passed: All {results.attempted} test(s) passed")
+    algebraic_residual_expressions = c_codegen(
+        [determinant, trace_a],
+        ["determinant", "trace_a"],
+        include_braces=False,
+        enable_simd=False,
+        fp_type=str(par.parval_from_str("fp_type")),
+        fp_type_alias=gri.DENDRO_SCALAR_TYPE,
+        cse_sorting="none",
+        verbose=False,
+    )
+    return f"""// GENERATED FILE - DO NOT EDIT
+// AUTOMATICALLY GENERATED BY NRPy
+#include "{solver_stem}Ctx.h"
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdio>
+#include <fstream>
+#include <limits>
+#include <stdexcept>
+#include <vector>
+#include "daUtils.h"
+#include "lebedev.h"
+#include "oct2vtk.h"
+namespace {solver_namespace} {{
+Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum,
+         DendroScalar time_step, DendroScalar wavelet_tolerance,
+         unsigned int remesh_frequency, unsigned int diagnostic_frequency,
+         unsigned int vtu_frequency, unsigned int checkpoint_frequency,
+         const std::string& output_prefix, const std::string& vtu_prefix,
+         const std::string& checkpoint_prefix,
+         const std::array<Point, 2>& excision_centers,
+         const std::array<DendroScalar, 2>& excision_radii,
+         const std::array<DendroScalar, 2>& black_hole_masses,
+         const std::array<DendroScalar, 2>& black_hole_amr_radii,
+         const std::array<unsigned int, 2>& black_hole_maximum_levels,
+         DendroScalar black_hole_amr_ratio, unsigned int minimum_depth,
+         unsigned int apparent_horizon_frequency,
+         dendro_aeh::AEH_BHaHAHA* apparent_horizon_finder,
+         unsigned int gravitational_wave_frequency,
+         const std::vector<DendroScalar>& gravitational_wave_radii,
+         unsigned int gravitational_wave_maximum_l,
+         const Point& extraction_center)
+    : domain_minimum_(minimum), domain_maximum_(maximum),
+      excision_centers_(excision_centers), excision_radii_(excision_radii),
+      black_hole_masses_(black_hole_masses),
+      black_hole_amr_radii_(black_hole_amr_radii),
+      black_hole_maximum_levels_(black_hole_maximum_levels),
+      black_hole_amr_ratio_(black_hole_amr_ratio),
+      minimum_depth_(minimum_depth),
+      wavelet_tolerance_(wavelet_tolerance),
+      remesh_frequency_(remesh_frequency),
+      diagnostic_frequency_(diagnostic_frequency),
+      vtu_frequency_(vtu_frequency),
+      checkpoint_frequency_(checkpoint_frequency), output_prefix_(output_prefix) {{
+  apparent_horizon_frequency_ = apparent_horizon_frequency;
+  apparent_horizon_finder_ = apparent_horizon_finder;
+  gravitational_wave_frequency_ = gravitational_wave_frequency;
+  gravitational_wave_radii_ = gravitational_wave_radii;
+  gravitational_wave_maximum_l_ = gravitational_wave_maximum_l;
+  extraction_center_ = extraction_center;
+  vtu_prefix_ = vtu_prefix;
+  checkpoint_prefix_ = checkpoint_prefix;
+  if (mesh == nullptr ||
+      (mesh->getElementOrder() != 4 && mesh->getElementOrder() != 6 &&
+       mesh->getElementOrder() != 8) ||
+      !(time_step > 0.0) || !std::isfinite(time_step) ||
+      !(wavelet_tolerance > 0.0) || !std::isfinite(wavelet_tolerance) ||
+      !(black_hole_amr_ratio > 1.0) ||
+      !std::isfinite(black_hole_amr_ratio) ||
+      !(black_hole_masses[0] > 0.0) || !std::isfinite(black_hole_masses[0]) ||
+      !(black_hole_masses[1] > 0.0) || !std::isfinite(black_hole_masses[1]) ||
+      black_hole_maximum_levels[0] < std::max(minimum_depth, 2u) ||
+      black_hole_maximum_levels[1] < std::max(minimum_depth, 2u) ||
+      black_hole_maximum_levels[0] > m_uiMaxDepth ||
+      black_hole_maximum_levels[1] > m_uiMaxDepth || m_uiMaxDepth < 2 ||
+      gravitational_wave_maximum_l < 2 ||
+      gravitational_wave_maximum_l > 8)
+    throw std::invalid_argument("invalid generated Dendro context");
+  for (const DendroScalar radius : gravitational_wave_radii_) {{
+    if (!(radius > 0.0) || !std::isfinite(radius))
+      throw std::invalid_argument("invalid gravitational-wave extraction radius");
+  }}
+  set_mesh(mesh);
+  m_uiElementOrder = mesh->getElementOrder();
+  m_uiMinPt = minimum;
+  m_uiMaxPt = maximum;
+  m_uiTinfo = {{}};
+  m_uiTinfo._m_uiTh = time_step;
+  {solver_stem}_params_struct_set_to_default(params);
+  state_.create_vector(mesh, ot::DVEC_TYPE::OCT_SHARED_NODES,
+                       ot::DVEC_LOC::HOST, generated::NUM_EVOL_GFS, true);
+  unzipped_state_.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
+      ot::DVEC_LOC::HOST, generated::NUM_EVOL_GFS, true);
+  unzipped_rhs_.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
+      ot::DVEC_LOC::HOST, generated::NUM_EVOL_GFS, true);
+  ricci_.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
+      ot::DVEC_LOC::HOST, generated::NUM_AUXEVOL_GFS, true);
+  constraints_.create_vector(mesh, ot::DVEC_TYPE::OCT_SHARED_NODES,
+      ot::DVEC_LOC::HOST, generated::NUM_DIAG_GFS, true);
+  unzipped_constraints_.create_vector(mesh,
+      ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST,
+      generated::NUM_DIAG_GFS, true);
+  adm_.create_vector(mesh, ot::DVEC_TYPE::OCT_SHARED_NODES,
+                     ot::DVEC_LOC::HOST, 18, true);
+  unzipped_adm_.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
+                             ot::DVEC_LOC::HOST, 18, true);
+  psi4_.create_vector(mesh, ot::DVEC_TYPE::OCT_SHARED_NODES,
+                      ot::DVEC_LOC::HOST, 2, true);
+  unzipped_psi4_.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
+                              ot::DVEC_LOC::HOST, 2, true);
+  adm_surface_.create_vector(mesh, ot::DVEC_TYPE::OCT_SHARED_NODES,
+                            ot::DVEC_LOC::HOST, 9, true);
+  unzipped_adm_surface_.create_vector(
+      mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST, 9,
+      true);
+  for (unsigned int i = 0; i < generated::NUM_EVOL_GFS; ++i)
+    refinement_variables_[i] = i;
+  ot::alloc_mpi_ctx<DendroScalar>(mesh, m_mpi_ctx,
+                                  generated::NUM_EVOL_GFS, 1);
+}}
+Ctx::~Ctx() {{
+  ot::dealloc_mpi_ctx<DendroScalar>(m_uiMesh, m_mpi_ctx,
+                                    generated::NUM_EVOL_GFS, 1);
+  state_.destroy_vector(); unzipped_state_.destroy_vector();
+  unzipped_rhs_.destroy_vector(); ricci_.destroy_vector();
+  constraints_.destroy_vector(); unzipped_constraints_.destroy_vector();
+  adm_.destroy_vector(); unzipped_adm_.destroy_vector();
+  psi4_.destroy_vector(); unzipped_psi4_.destroy_vector();
+  adm_surface_.destroy_vector(); unzipped_adm_surface_.destroy_vector();
+}}
+int Ctx::initialize(const commondata_struct& commondata,
+                    const params_struct& tp_params,
+                    const ID_persist_struct& punctures) {{
+  DVec adm, psi;
+  adm.create_vector(m_uiMesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
+                    ot::DVEC_LOC::HOST, 18, true);
+  psi.create_vector(m_uiMesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
+                    ot::DVEC_LOC::HOST, 1, true);
+  std::fill_n(adm.get_vec_ptr(), adm.get_size(), 0.0);
+  std::fill_n(psi.get_vec_ptr(), psi.get_size(), 0.0);
+  std::fill_n(unzipped_state_.get_vec_ptr(), unzipped_state_.get_size(), 0.0);
+  std::fill_n(unzipped_rhs_.get_vec_ptr(), unzipped_rhs_.get_size(), 0.0);
+  std::array<DendroScalar*, 18> adm_fields{{}};
+  std::array<DendroScalar*, generated::NUM_EVOL_GFS> input{{}}, output{{}};
+  adm.to_2d(adm_fields.data());
+  unzipped_state_.to_2d(input.data());
+  unzipped_rhs_.to_2d(output.data());
+  for (const ot::Block& block : m_uiMesh->getLocalBlockList()) {{
+    twopunctures(block, &commondata, &tp_params, &punctures,
+                 adm_fields.data(), psi.get_vec_ptr(), domain_minimum_,
+                 domain_maximum_);
+    switch (m_uiElementOrder) {{
+      case 4: ADM_to_BSSN_order_4(block, adm_fields.data(), output.data(),
+                                  domain_minimum_, domain_maximum_); break;
+      case 6: ADM_to_BSSN_order_6(block, adm_fields.data(), output.data(),
+                                  domain_minimum_, domain_maximum_); break;
+      case 8: ADM_to_BSSN_order_8(block, adm_fields.data(), output.data(),
+                                  domain_minimum_, domain_maximum_); break;
+      default: throw std::logic_error("unsupported Dendro element order");
+    }}
+  }}
+  zip(unzipped_rhs_, state_);
+  std::copy_n(unzipped_rhs_.get_vec_ptr(), unzipped_rhs_.get_size(),
+              unzipped_state_.get_vec_ptr());
+  unzip(state_, unzipped_state_, 1);
+  std::copy_n(unzipped_state_.get_vec_ptr(), unzipped_state_.get_size(),
+              unzipped_rhs_.get_vec_ptr());
+  for (const ot::Block& block : m_uiMesh->getLocalBlockList()) {{
+    switch (m_uiElementOrder) {{
+      case 4: initial_data_lambdaU_order_4(block, input.data(), output.data(),
+                                           domain_minimum_, domain_maximum_); break;
+      case 6: initial_data_lambdaU_order_6(block, input.data(), output.data(),
+                                           domain_minimum_, domain_maximum_); break;
+      case 8: initial_data_lambdaU_order_8(block, input.data(), output.data(),
+                                           domain_minimum_, domain_maximum_); break;
+      default: throw std::logic_error("unsupported Dendro element order");
+    }}
+    floor_the_lapse_and_conformal_factor(
+        block, output.data(), params.chi_floor, domain_minimum_, domain_maximum_);
+    enforce_detgbar_equals_detghat_trAzero(
+        block, output.data(), domain_minimum_, domain_maximum_);
+  }}
+  zip(unzipped_rhs_, state_);
+  adm.destroy_vector(); psi.destroy_vector();
+  return 0;
+}}
+int Ctx::rhs(DVec* in, DVec* out, unsigned int count, DendroScalar time) {{
+  if (count != 1) throw std::invalid_argument("ETS supplied multiple states");
+  if (!m_uiMesh->isActive()) return 0;
+  unzip(*in, unzipped_state_, 1);
+  std::fill_n(unzipped_rhs_.get_vec_ptr(), unzipped_rhs_.get_size(), 0.0);
+  std::fill_n(ricci_.get_vec_ptr(), ricci_.get_size(), 0.0);
+  std::array<DendroScalar*, generated::NUM_EVOL_GFS> input{{}}, output{{}};
+  std::array<DendroScalar*, generated::NUM_AUXEVOL_GFS> ricci{{}};
+  unzipped_state_.to_2d(input.data()); unzipped_rhs_.to_2d(output.data());
+  ricci_.to_2d(ricci.data());
+  for (const ot::Block& block : m_uiMesh->getLocalBlockList()) {{
+    switch (m_uiElementOrder) {{
+      case 4:
+        Ricci_eval_order_4(block, input.data(), ricci.data(), domain_minimum_, domain_maximum_);
+        rhs_eval_order_4(block, input.data(), ricci.data(), output.data(), domain_minimum_,
+                         domain_maximum_, time, m_uiTinfo._m_uiTh{rhs_parameters});
+        break;
+      case 6:
+        Ricci_eval_order_6(block, input.data(), ricci.data(), domain_minimum_, domain_maximum_);
+        rhs_eval_order_6(block, input.data(), ricci.data(), output.data(), domain_minimum_,
+                         domain_maximum_, time, m_uiTinfo._m_uiTh{rhs_parameters});
+        break;
+      case 8:
+        Ricci_eval_order_8(block, input.data(), ricci.data(), domain_minimum_, domain_maximum_);
+        rhs_eval_order_8(block, input.data(), ricci.data(), output.data(), domain_minimum_,
+                         domain_maximum_, time, m_uiTinfo._m_uiTh{rhs_parameters});
+        break;
+      default: throw std::logic_error("unsupported Dendro element order");
+    }}
+    physical_boundary(block, input.data(), output.data(), domain_minimum_,
+                      domain_maximum_);
+  }}
+  zip(unzipped_rhs_, *out);
+  return 0;
+}}
+int Ctx::rhs_blkwise(DVec in, DVec out, const unsigned int* ids,
+                     unsigned int count, DendroScalar* block_time) {{
+  if (!m_uiMesh->isActive()) return 0;
+  std::array<DendroScalar*, generated::NUM_EVOL_GFS> input{{}}, output{{}};
+  std::array<DendroScalar*, generated::NUM_AUXEVOL_GFS> ricci{{}};
+  in.to_2d(input.data()); out.to_2d(output.data()); ricci_.to_2d(ricci.data());
+  const auto& blocks = m_uiMesh->getLocalBlockList();
+  for (unsigned int i = 0; i < count; ++i) {{
+    const ot::Block& block = blocks.at(ids[i]);
+    const DendroScalar time = block_time == nullptr ? m_uiTinfo._m_uiT
+                                                     : block_time[i];
+    switch (m_uiElementOrder) {{
+      case 4:
+        Ricci_eval_order_4(block, input.data(), ricci.data(), domain_minimum_, domain_maximum_);
+        rhs_eval_order_4(block, input.data(), ricci.data(), output.data(), domain_minimum_,
+                         domain_maximum_, time, m_uiTinfo._m_uiTh{rhs_parameters});
+        break;
+      case 6:
+        Ricci_eval_order_6(block, input.data(), ricci.data(), domain_minimum_, domain_maximum_);
+        rhs_eval_order_6(block, input.data(), ricci.data(), output.data(), domain_minimum_,
+                         domain_maximum_, time, m_uiTinfo._m_uiTh{rhs_parameters});
+        break;
+      case 8:
+        Ricci_eval_order_8(block, input.data(), ricci.data(), domain_minimum_, domain_maximum_);
+        rhs_eval_order_8(block, input.data(), ricci.data(), output.data(), domain_minimum_,
+                         domain_maximum_, time, m_uiTinfo._m_uiTh{rhs_parameters});
+        break;
+      default: throw std::logic_error("unsupported Dendro element order");
+    }}
+    physical_boundary(block, input.data(), output.data(), domain_minimum_,
+                      domain_maximum_);
+  }}
+  return 0;
+}}
+int Ctx::post_timestep(DVec& stage) {{
+  if (!m_uiMesh->isActive()) return 0;
+  unzip(stage, unzipped_state_, 1);
+  std::array<DendroScalar*, generated::NUM_EVOL_GFS> fields{{}};
+  unzipped_state_.to_2d(fields.data());
+  for (const ot::Block& block : m_uiMesh->getLocalBlockList()) {{
+    floor_the_lapse_and_conformal_factor(
+        block, fields.data(), params.chi_floor, domain_minimum_, domain_maximum_);
+    enforce_detgbar_equals_detghat_trAzero(
+        block, fields.data(), domain_minimum_, domain_maximum_);
+  }}
+  zip(unzipped_state_, stage);
+  return 0;
+}}
+int Ctx::evolve_excision_centers() {{
+  const DendroScalar elapsed_time =
+      m_uiTinfo._m_uiT - excision_center_time_;
+  if (!(elapsed_time > 0.0)) return 0;
+  std::array<DendroScalar, 6> local_shift{{}};
+  if (m_uiMesh->isActive()) {{
+    std::array<DendroScalar*, generated::NUM_EVOL_GFS> fields{{}};
+    state_.to_2d(fields.data());
+    const Point grid_limits[2] = {{
+        Point(0.0, 0.0, 0.0),
+        Point(1u << m_uiMaxDepth, 1u << m_uiMaxDepth,
+              1u << m_uiMaxDepth)}};
+    const Point domain_limits[2] = {{domain_minimum_, domain_maximum_}};
+    const DendroScalar coordinates[6] = {{
+        excision_centers_[0].x(), excision_centers_[0].y(),
+        excision_centers_[0].z(), excision_centers_[1].x(),
+        excision_centers_[1].y(), excision_centers_[1].z()}};
+    const generated::EvolVar shift_fields[3] = {{
+        generated::EvolVar::betU0, generated::EvolVar::betU1,
+        generated::EvolVar::betU2}};
+    for (unsigned component = 0; component < 3; ++component) {{
+      DendroScalar interpolated[2]{{}};
+      std::vector<unsigned> valid_indices;
+      ot::da::interpolateToCoords(
+          m_uiMesh, fields[generated::to_index(shift_fields[component])],
+          coordinates, 6, grid_limits, domain_limits, interpolated,
+          valid_indices);
+      for (const unsigned black_hole : valid_indices) {{
+        if (black_hole >= excision_centers_.size())
+          throw std::out_of_range(
+              "puncture-center interpolation index is out of range");
+        local_shift[3 * black_hole + component] =
+            interpolated[black_hole];
+      }}
+    }}
+  }}
+  std::array<DendroScalar, 6> global_shift{{}};
+  MPI_Allreduce(local_shift.data(), global_shift.data(),
+                static_cast<int>(global_shift.size()), MPI_DOUBLE, MPI_SUM,
+                m_uiMesh->getMPIGlobalCommunicator());
+  for (unsigned black_hole = 0; black_hole < excision_centers_.size();
+       ++black_hole) {{
+    for (unsigned component = 0; component < 3; ++component)
+      if (!std::isfinite(global_shift[3 * black_hole + component]))
+        throw std::runtime_error(
+            "puncture-center interpolation returned a nonfinite shift");
+    excision_centers_[black_hole] = Point(
+        excision_centers_[black_hole].x() -
+            elapsed_time * global_shift[3 * black_hole],
+        excision_centers_[black_hole].y() -
+            elapsed_time * global_shift[3 * black_hole + 1],
+        excision_centers_[black_hole].z() -
+            elapsed_time * global_shift[3 * black_hole + 2]);
+  }}
+  excision_center_time_ = m_uiTinfo._m_uiT;
+  return 0;
+}}
+int Ctx::diagnostic_output() {{
+  if (!m_uiMesh->isActive() || diagnostic_frequency_ == 0 ||
+      m_uiTinfo._m_uiStep % diagnostic_frequency_ != 0) return 0;
+  unzip(state_, unzipped_state_, 1);
+  std::fill_n(unzipped_constraints_.get_vec_ptr(),
+              unzipped_constraints_.get_size(), 0.0);
+  std::array<DendroScalar*, generated::NUM_EVOL_GFS> state{{}};
+  std::array<DendroScalar*, generated::NUM_DIAG_GFS> diagnostic{{}};
+  unzipped_state_.to_2d(state.data());
+  unzipped_constraints_.to_2d(diagnostic.data());
+  for (const ot::Block& block : m_uiMesh->getLocalBlockList()) {{
+    switch (m_uiElementOrder) {{
+      case 4: {constraint_stem}_order_4(block, state.data(), diagnostic.data(),
+                                         domain_minimum_, domain_maximum_); break;
+      case 6: {constraint_stem}_order_6(block, state.data(), diagnostic.data(),
+                                         domain_minimum_, domain_maximum_); break;
+      case 8: {constraint_stem}_order_8(block, state.data(), diagnostic.data(),
+                                         domain_minimum_, domain_maximum_); break;
+      default: throw std::logic_error("unsupported Dendro element order");
+    }}
+  }}
+  DendroScalar sum[generated::NUM_DIAG_GFS]{{}}, maximum[generated::NUM_DIAG_GFS]{{}};
+  DendroScalar volume = 0.0;
+  for (const ot::Block& block : m_uiMesh->getLocalBlockList())
+    diagnostics(block, diagnostic.data(), state.data(), domain_minimum_,
+                domain_maximum_, excision_centers_.data(),
+                excision_radii_.data(), excision_centers_.size(), sum,
+                maximum, &volume);
+  DendroScalar global_sum[generated::NUM_DIAG_GFS]{{}}, global_max[generated::NUM_DIAG_GFS]{{}};
+  DendroScalar global_volume = 0.0;
+  MPI_Allreduce(sum, global_sum, generated::NUM_DIAG_GFS, MPI_DOUBLE, MPI_SUM,
+                m_uiMesh->getMPICommunicator());
+  MPI_Allreduce(maximum, global_max, generated::NUM_DIAG_GFS, MPI_DOUBLE,
+                MPI_MAX, m_uiMesh->getMPICommunicator());
+  MPI_Allreduce(&volume, &global_volume, 1, MPI_DOUBLE, MPI_SUM,
+                m_uiMesh->getMPICommunicator());
+  if (!(global_volume > 0.0) || !std::isfinite(global_volume))
+    throw std::runtime_error("constraint diagnostics found a nonfinite conformal factor");
+  for (unsigned int i = 0; i < generated::NUM_DIAG_GFS; ++i)
+    if (!std::isfinite(global_sum[i]) || !std::isfinite(global_max[i]))
+      throw std::runtime_error("constraint diagnostics found a nonfinite constraint");
+  if (m_uiMesh->getMPIRank() == 0) {{
+    std::ofstream file(output_prefix_ + "_constraints.tsv", std::ios::app);
+    file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT;
+    for (unsigned int i = 0; i < generated::NUM_DIAG_GFS; ++i)
+      file << '\\t' << std::sqrt(global_sum[i] / global_volume)
+           << '\\t' << global_max[i];
+    file << '\\n';
+  }}
+  zip(unzipped_constraints_, constraints_);
+  return 0;
+}}
+int Ctx::gravitational_wave_output() {{
+  if (!m_uiMesh->isActive() || gravitational_wave_frequency_ == 0 ||
+      gravitational_wave_radii_.empty() ||
+      m_uiTinfo._m_uiStep % gravitational_wave_frequency_ != 0) return 0;
+  unzip(state_, unzipped_state_, 1);
+  std::fill_n(unzipped_psi4_.get_vec_ptr(), unzipped_psi4_.get_size(), 0.0);
+  std::array<DendroScalar*, generated::NUM_EVOL_GFS> state{{}};
+  std::array<DendroScalar*, 2> psi4{{}};
+  unzipped_state_.to_2d(state.data());
+  unzipped_psi4_.to_2d(psi4.data());
+  for (const ot::Block& block : m_uiMesh->getLocalBlockList()) {{
+    switch (m_uiElementOrder) {{
+      case 4: psi4_eval_order_4(block, state.data(), psi4.data(),
+                                domain_minimum_, domain_maximum_); break;
+      case 6: psi4_eval_order_6(block, state.data(), psi4.data(),
+                                domain_minimum_, domain_maximum_); break;
+      case 8: psi4_eval_order_8(block, state.data(), psi4.data(),
+                                domain_minimum_, domain_maximum_); break;
+      default: throw std::logic_error("unsupported Dendro element order");
+    }}
+  }}
+  zip(unzipped_psi4_, psi4_);
+  std::array<DendroScalar*, 2> zipped_psi4{{}};
+  psi4_.to_2d(zipped_psi4.data());
+  m_uiMesh->readFromGhostBegin(zipped_psi4[0], 2);
+  m_uiMesh->readFromGhostEnd(zipped_psi4[0], 2);
+  const unsigned mode_stride =
+      (gravitational_wave_maximum_l_ + 1) *
+      (gravitational_wave_maximum_l_ + 1);
+  const std::size_t mode_count =
+      gravitational_wave_radii_.size() * mode_stride;
+  std::vector<DendroScalar> modes_real(mode_count, 0.0);
+  std::vector<DendroScalar> modes_imag(mode_count, 0.0);
+  const Point grid_minimum(0.0, 0.0, 0.0);
+  const Point grid_maximum(1u << m_uiMaxDepth, 1u << m_uiMaxDepth,
+                           1u << m_uiMaxDepth);
+  gravitational_waves(
+      m_uiMesh, zipped_psi4[0], zipped_psi4[1],
+      gravitational_wave_radii_.data(),
+      static_cast<unsigned>(gravitational_wave_radii_.size()),
+      gravitational_wave_maximum_l_, mode_stride, extraction_center_,
+      grid_minimum, grid_maximum, domain_minimum_, domain_maximum_,
+      modes_real.data(), modes_imag.data());
+  if (m_uiMesh->getMPIRank() == 0) {{
+    std::ofstream file(output_prefix_ + "_psi4.tsv", std::ios::app);
+    for (unsigned radius_index = 0;
+         radius_index < gravitational_wave_radii_.size(); ++radius_index) {{
+      for (unsigned ell = 2; ell <= gravitational_wave_maximum_l_; ++ell) {{
+        for (int mode = -static_cast<int>(ell);
+             mode <= static_cast<int>(ell); ++mode) {{
+          const unsigned index = radius_index * mode_stride +
+              static_cast<unsigned>(static_cast<int>(ell * ell + ell) + mode);
+          file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT << '\\t'
+               << gravitational_wave_radii_[radius_index] << '\\t' << ell << '\\t'
+               << mode << '\\t' << modes_real[index] << '\\t' << modes_imag[index]
+               << '\\n';
+        }}
+      }}
+    }}
+  }}
+  return 0;
+}}
+int Ctx::adm_output() {{
+  if (!m_uiMesh->isActive() || diagnostic_frequency_ == 0 ||
+      gravitational_wave_radii_.empty() ||
+      m_uiTinfo._m_uiStep % diagnostic_frequency_ != 0) return 0;
+  unzip(state_, unzipped_state_, 1);
+  std::fill_n(unzipped_adm_.get_vec_ptr(), unzipped_adm_.get_size(), 0.0);
+  std::array<DendroScalar*, generated::NUM_EVOL_GFS> state{{}};
+  std::array<DendroScalar*, 18> unzipped_adm{{}};
+  unzipped_state_.to_2d(state.data());
+  unzipped_adm_.to_2d(unzipped_adm.data());
+  for (const ot::Block& block : m_uiMesh->getLocalBlockList())
+    BSSN_to_ADM(block, state.data(), unzipped_adm.data(), domain_minimum_,
+                domain_maximum_);
+  zip(unzipped_adm_, adm_);
+  unzip(adm_, unzipped_adm_, 1);
+  std::fill_n(unzipped_adm_surface_.get_vec_ptr(),
+              unzipped_adm_surface_.get_size(), 0.0);
+  std::array<DendroScalar*, 9> unzipped_surface{{}};
+  unzipped_adm_surface_.to_2d(unzipped_surface.data());
+  for (const ot::Block& block : m_uiMesh->getLocalBlockList()) {{
+    switch (m_uiElementOrder) {{
+      case 4: adm_quantities_surface_data_order_4(
+          block, unzipped_adm.data(), unzipped_surface.data(),
+          domain_minimum_, domain_maximum_); break;
+      case 6: adm_quantities_surface_data_order_6(
+          block, unzipped_adm.data(), unzipped_surface.data(),
+          domain_minimum_, domain_maximum_); break;
+      case 8: adm_quantities_surface_data_order_8(
+          block, unzipped_adm.data(), unzipped_surface.data(),
+          domain_minimum_, domain_maximum_); break;
+      default: throw std::logic_error("unsupported Dendro element order");
+    }}
+  }}
+  zip(unzipped_adm_surface_, adm_surface_);
+  std::array<DendroScalar*, 9> zipped_surface{{}};
+  adm_surface_.to_2d(zipped_surface.data());
+  m_uiMesh->readFromGhostBegin(zipped_surface[0], 9);
+  m_uiMesh->readFromGhostEnd(zipped_surface[0], 9);
+  constexpr unsigned num_points = LEBEDEV_025_NUM_PTS;
+  const DendroScalar radius = gravitational_wave_radii_.back();
+  std::vector<DendroScalar> coordinates(3 * num_points);
+  std::vector<DendroScalar> normals(3 * num_points);
+  std::vector<DendroScalar> weights(num_points);
+  for (unsigned point = 0; point < num_points; ++point) {{
+    const DendroScalar theta = LEBEDEV_025_THETA[point];
+    const DendroScalar phi = LEBEDEV_025_PHI[point];
+    const DendroScalar normal[3] = {{
+        std::sin(theta) * std::cos(phi),
+        std::sin(theta) * std::sin(phi), std::cos(theta)}};
+    normals[3 * point] = normal[0];
+    normals[3 * point + 1] = normal[1];
+    normals[3 * point + 2] = normal[2];
+    coordinates[3 * point] = extraction_center_.x() + radius * normal[0];
+    coordinates[3 * point + 1] = extraction_center_.y() + radius * normal[1];
+    coordinates[3 * point + 2] = extraction_center_.z() + radius * normal[2];
+    weights[point] = 4.0 * M_PI * radius * radius * LEBEDEV_025_WEIGHT[point];
+  }}
+  const Point grid_limits[2] = {{
+      Point(0.0, 0.0, 0.0),
+      Point(1u << m_uiMaxDepth, 1u << m_uiMaxDepth, 1u << m_uiMaxDepth)}};
+  const Point domain_limits[2] = {{domain_minimum_, domain_maximum_}};
+  std::array<std::vector<DendroScalar>, 9> surface_data;
+  std::array<const DendroScalar*, 9> surface_data_pointers{{}};
+  std::vector<unsigned> valid_indices;
+  for (unsigned field = 0; field < surface_data.size(); ++field) {{
+    surface_data[field].resize(num_points);
+    std::vector<unsigned> field_valid_indices;
+    ot::da::interpolateToCoords(
+        m_uiMesh, zipped_surface[field], coordinates.data(), 3 * num_points,
+        grid_limits, domain_limits, surface_data[field].data(),
+        field_valid_indices);
+    if (field == 0) valid_indices = field_valid_indices;
+    else if (field_valid_indices != valid_indices)
+      throw std::runtime_error("ADM interpolation ownership changed by field");
+    surface_data_pointers[field] = surface_data[field].data();
+  }}
+  DendroScalar local_quantities[7]{{}};
+  const DendroScalar center[3] = {{extraction_center_.x(),
+                                   extraction_center_.y(),
+                                   extraction_center_.z()}};
+  adm_quantities(num_points, static_cast<unsigned>(valid_indices.size()),
+                 valid_indices.data(), coordinates.data(), normals.data(),
+                 weights.data(), surface_data_pointers.data(), center,
+                 local_quantities);
+  DendroScalar global_quantities[7]{{}};
+  MPI_Allreduce(local_quantities, global_quantities, 7, MPI_DOUBLE, MPI_SUM,
+                m_uiMesh->getMPICommunicator());
+  if (m_uiMesh->getMPIRank() == 0) {{
+    std::ofstream file(output_prefix_ + "_adm.tsv", std::ios::app);
+    file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT << '\\t' << radius;
+    for (const DendroScalar quantity : global_quantities) file << '\\t' << quantity;
+    file << '\\n';
+  }}
+  return 0;
+}}
+int Ctx::write_vtu() {{
+  if (!m_uiMesh->isActive() || vtu_frequency_ == 0 ||
+      m_uiTinfo._m_uiStep % vtu_frequency_ != 0) return 0;
+  std::array<DendroScalar*, generated::NUM_EVOL_GFS> fields{{}};
+  state_.to_2d(fields.data());
+  std::array<const DendroScalar*, generated::NUM_EVOL_GFS> output{{}};
+  std::array<const char*, generated::NUM_EVOL_GFS> names{{}};
+  for (unsigned int field = 0; field < generated::NUM_EVOL_GFS; ++field) {{
+    output[field] = fields[field];
+    names[field] = generated::EVOL_GF_NAMES[field].data();
+  }}
+  const char* metadata_names[2] = {{"Time", "Cycle"}};
+  const DendroScalar metadata[2] = {{m_uiTinfo._m_uiT,
+      static_cast<DendroScalar>(m_uiTinfo._m_uiStep)}};
+  const std::string prefix = vtu_prefix_ + "_" +
+      std::to_string(m_uiTinfo._m_uiStep);
+  io::vtk::mesh2vtuFine(m_uiMesh, prefix.c_str(), 2, metadata_names, metadata,
+                        generated::NUM_EVOL_GFS, names.data(), output.data());
+  return 0;
+}}
+int Ctx::apparent_horizon_output() {{
+  if (!m_uiMesh->isActive() || apparent_horizon_frequency_ == 0 ||
+      apparent_horizon_finder_ == nullptr ||
+      m_uiTinfo._m_uiStep % apparent_horizon_frequency_ != 0) return 0;
+  std::array<DendroScalar*, generated::NUM_EVOL_GFS> state{{}};
+  std::array<const double*, generated::NUM_EVOL_GFS> horizon_state{{}};
+  state_.to_2d(state.data());
+  m_uiMesh->readFromGhostBegin(state[0], generated::NUM_EVOL_GFS);
+  m_uiMesh->readFromGhostEnd(state[0], generated::NUM_EVOL_GFS);
+  for (unsigned field = 0; field < generated::NUM_EVOL_GFS; ++field)
+    horizon_state[field] = state[field];
+  const std::vector<Point> tracked_locations(excision_centers_.begin(),
+                                             excision_centers_.end());
+  apparent_horizon(*apparent_horizon_finder_, m_uiMesh,
+                   horizon_state.data(),
+                   m_uiTinfo._m_uiStep, m_uiTinfo._m_uiT,
+                   tracked_locations);
+  return 0;
+}}
+bool Ctx::is_remesh(bool initial_grid) {{
+  if (!initial_grid &&
+      (remesh_frequency_ == 0 || m_uiTinfo._m_uiStep == 0 ||
+       m_uiTinfo._m_uiStep % remesh_frequency_ != 0))
+    return false;
+  unzip(state_, unzipped_state_, 1);
+  std::array<DendroScalar*, generated::NUM_EVOL_GFS> fields{{}};
+  std::array<const DendroScalar*, generated::NUM_EVOL_GFS> const_fields{{}};
+  unzipped_state_.to_2d(fields.data());
+  for (unsigned int i = 0; i < generated::NUM_EVOL_GFS; ++i)
+    const_fields[i] = fields[i];
+  const DendroScalar tolerance = wavelet_tolerance_;
+  const bool wavelet_change = m_uiMesh->isReMeshUnzip(
+      const_fields.data(), refinement_variables_.data(),
+      generated::NUM_EVOL_GFS,
+      [tolerance](double, double, double, double*) {{ return tolerance; }});
+  bool local_geometry_change = false;
+  if (m_uiMesh->isActive()) {{
+    std::vector<unsigned int> refinement_flags =
+        m_uiMesh->getAllRefinementFlags();
+    const ot::TreeNode* elements = m_uiMesh->getAllElements().data();
+    const unsigned int local_begin = m_uiMesh->getElementLocalBegin();
+    const unsigned int local_end = m_uiMesh->getElementLocalEnd();
+    const DendroScalar separation =
+        (excision_centers_[0] - excision_centers_[1]).abs();
+    const DendroScalar orbital_radius =
+        std::max(black_hole_masses_[0], black_hole_masses_[1]) /
+            (black_hole_masses_[0] + black_hole_masses_[1]) * separation +
+        8.0;
+    for (unsigned int element = local_begin; element < local_end; ++element) {{
+      const unsigned int relative_element = element - local_begin;
+      const unsigned int width =
+          1u << (m_uiMaxDepth - elements[element].getLevel());
+      DendroScalar minimum_center_radius =
+          std::numeric_limits<DendroScalar>::max();
+      std::array<DendroScalar, 2> minimum_black_hole_radius{{
+          std::numeric_limits<DendroScalar>::max(),
+          std::numeric_limits<DendroScalar>::max()}};
+      for (unsigned int k = 0; k < 2; ++k)
+        for (unsigned int j = 0; j < 2; ++j)
+          for (unsigned int i = 0; i < 2; ++i) {{
+            Point physical_point;
+            m_uiMesh->octCoordToDomainCoord(
+                Point(elements[element].minX() + i * width,
+                      elements[element].minY() + j * width,
+                      elements[element].minZ() + k * width),
+                physical_point);
+            minimum_center_radius =
+                std::min(minimum_center_radius, physical_point.abs());
+            for (unsigned int black_hole = 0; black_hole < 2; ++black_hole)
+              minimum_black_hole_radius[black_hole] = std::min(
+                  minimum_black_hole_radius[black_hole],
+                  (physical_point - excision_centers_[black_hole]).abs());
+          }}
+      unsigned int required_level = minimum_depth_;
+      if (minimum_center_radius <= orbital_radius)
+        required_level = std::max(required_level, 9u);
+      for (unsigned int black_hole = 0; black_hole < 2; ++black_hole) {{
+        DendroScalar radius = black_hole_amr_radii_[black_hole];
+        unsigned int level = black_hole_maximum_levels_[black_hole] - 2;
+        while (level > 9 && minimum_black_hole_radius[black_hole] > radius) {{
+          radius *= black_hole_amr_ratio_;
+          --level;
+        }}
+        if (minimum_black_hole_radius[black_hole] <= orbital_radius)
+          required_level = std::max(required_level, level);
+      }}
+      required_level = std::min(required_level, m_uiMaxDepth - 2);
+      const unsigned int current_level = elements[element].getLevel();
+      if (current_level < required_level)
+        refinement_flags[relative_element] = OCT_SPLIT;
+      else if (current_level == required_level &&
+               refinement_flags[relative_element] == OCT_COARSE)
+        refinement_flags[relative_element] = OCT_NO_CHANGE;
+    }}
+    local_geometry_change =
+        m_uiMesh->setMeshRefinementFlags(refinement_flags);
+  }}
+  bool global_geometry_change = false;
+  MPI_Allreduce(&local_geometry_change, &global_geometry_change, 1,
+                MPI_CXX_BOOL, MPI_LOR,
+                m_uiMesh->getMPIGlobalCommunicator());
+  return wavelet_change || global_geometry_change;
+}}
+int Ctx::grid_transfer(const ot::Mesh* mesh) {{
+  DVec::grid_transfer(m_uiMesh, mesh, state_);
+  unzipped_state_.destroy_vector(); unzipped_rhs_.destroy_vector();
+  ricci_.destroy_vector(); constraints_.destroy_vector();
+  unzipped_constraints_.destroy_vector();
+  adm_.destroy_vector(); unzipped_adm_.destroy_vector();
+  psi4_.destroy_vector(); unzipped_psi4_.destroy_vector();
+  adm_surface_.destroy_vector(); unzipped_adm_surface_.destroy_vector();
+  unzipped_state_.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
+      ot::DVEC_LOC::HOST, generated::NUM_EVOL_GFS, true);
+  unzipped_rhs_.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
+      ot::DVEC_LOC::HOST, generated::NUM_EVOL_GFS, true);
+  ricci_.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
+      ot::DVEC_LOC::HOST, generated::NUM_AUXEVOL_GFS, true);
+  constraints_.create_vector(mesh, ot::DVEC_TYPE::OCT_SHARED_NODES,
+      ot::DVEC_LOC::HOST, generated::NUM_DIAG_GFS, true);
+  unzipped_constraints_.create_vector(mesh,
+      ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST,
+      generated::NUM_DIAG_GFS, true);
+  adm_.create_vector(mesh, ot::DVEC_TYPE::OCT_SHARED_NODES,
+                     ot::DVEC_LOC::HOST, 18, true);
+  unzipped_adm_.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
+                             ot::DVEC_LOC::HOST, 18, true);
+  psi4_.create_vector(mesh, ot::DVEC_TYPE::OCT_SHARED_NODES,
+                      ot::DVEC_LOC::HOST, 2, true);
+  unzipped_psi4_.create_vector(mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
+                              ot::DVEC_LOC::HOST, 2, true);
+  adm_surface_.create_vector(mesh, ot::DVEC_TYPE::OCT_SHARED_NODES,
+                            ot::DVEC_LOC::HOST, 9, true);
+  unzipped_adm_surface_.create_vector(
+      mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST, 9,
+      true);
+  ot::dealloc_mpi_ctx<DendroScalar>(m_uiMesh, m_mpi_ctx,
+                                    generated::NUM_EVOL_GFS, 1);
+  ot::alloc_mpi_ctx<DendroScalar>(mesh, m_mpi_ctx,
+                                  generated::NUM_EVOL_GFS, 1);
+  m_uiIsETSSynced = false;
+  return 0;
+}}
+int Ctx::write_checkpt() {{
+  if (checkpoint_frequency_ == 0 || m_uiTinfo._m_uiStep == 0 ||
+      m_uiTinfo._m_uiStep % checkpoint_frequency_ != 0) return 0;
+  return {solver_stem}_write_checkpoint(checkpoint_prefix_,
+      (m_uiTinfo._m_uiStep / checkpoint_frequency_) % 2, m_uiMesh, state_,
+      params, m_uiTinfo._m_uiStep, m_uiTinfo._m_uiT, m_uiTinfo._m_uiTh,
+      domain_minimum_, domain_maximum_, excision_centers_,
+      algebraic_residual(m_uiMesh, state_));
+}}
+int Ctx::restore_checkpt(unsigned int checkpoint_index) {{
+  ot::Mesh* restored_mesh = nullptr;
+  DVec restored_state;
+  unsigned int iteration = 0;
+  DendroScalar time = 0.0;
+  DendroScalar time_step = 0.0;
+  const int status = {solver_stem}_restore_checkpoint(
+      checkpoint_prefix_, checkpoint_index,
+      m_uiMesh->getMPIGlobalCommunicator(), domain_minimum_, domain_maximum_,
+      restored_mesh, restored_state, params, iteration, time, time_step,
+      excision_centers_,
+      1.0e-10);
+  if (status != 0) return status;
+  if (algebraic_residual(restored_mesh, restored_state) > 1.0e-10) {{
+    restored_state.destroy_vector();
+    delete restored_mesh;
+    return 1;
+  }}
+  ot::Mesh* old_mesh = m_uiMesh;
+  ot::dealloc_mpi_ctx<DendroScalar>(old_mesh, m_mpi_ctx,
+                                    generated::NUM_EVOL_GFS, 1);
+  state_.destroy_vector();
+  DendroScalar* restored_values = restored_state.get_vec_ptr();
+  state_.set_vec_ptr(restored_values, restored_mesh,
+                     ot::DVEC_TYPE::OCT_SHARED_NODES, ot::DVEC_LOC::HOST,
+                     generated::NUM_EVOL_GFS, true);
+  restored_state.restore_vec_ptr(nullptr);
+  set_mesh(restored_mesh);
+  m_uiElementOrder = restored_mesh->getElementOrder();
+  unzipped_state_.destroy_vector(); unzipped_rhs_.destroy_vector();
+  ricci_.destroy_vector(); constraints_.destroy_vector();
+  unzipped_constraints_.destroy_vector();
+  adm_.destroy_vector(); unzipped_adm_.destroy_vector();
+  psi4_.destroy_vector(); unzipped_psi4_.destroy_vector();
+  adm_surface_.destroy_vector(); unzipped_adm_surface_.destroy_vector();
+  unzipped_state_.create_vector(restored_mesh,
+      ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST,
+      generated::NUM_EVOL_GFS, true);
+  unzipped_rhs_.create_vector(restored_mesh,
+      ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST,
+      generated::NUM_EVOL_GFS, true);
+  ricci_.create_vector(restored_mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
+      ot::DVEC_LOC::HOST, generated::NUM_AUXEVOL_GFS, true);
+  constraints_.create_vector(restored_mesh, ot::DVEC_TYPE::OCT_SHARED_NODES,
+      ot::DVEC_LOC::HOST, generated::NUM_DIAG_GFS, true);
+  unzipped_constraints_.create_vector(restored_mesh,
+      ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST,
+      generated::NUM_DIAG_GFS, true);
+  adm_.create_vector(restored_mesh, ot::DVEC_TYPE::OCT_SHARED_NODES,
+                     ot::DVEC_LOC::HOST, 18, true);
+  unzipped_adm_.create_vector(restored_mesh,
+      ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST, 18, true);
+  psi4_.create_vector(restored_mesh, ot::DVEC_TYPE::OCT_SHARED_NODES,
+                      ot::DVEC_LOC::HOST, 2, true);
+  unzipped_psi4_.create_vector(restored_mesh,
+      ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST, 2, true);
+  adm_surface_.create_vector(restored_mesh, ot::DVEC_TYPE::OCT_SHARED_NODES,
+                            ot::DVEC_LOC::HOST, 9, true);
+  unzipped_adm_surface_.create_vector(
+      restored_mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
+      ot::DVEC_LOC::HOST, 9, true);
+  ot::alloc_mpi_ctx<DendroScalar>(restored_mesh, m_mpi_ctx,
+                                  generated::NUM_EVOL_GFS, 1);
+  delete old_mesh;
+  m_uiTinfo._m_uiStep = iteration;
+  m_uiTinfo._m_uiT = time;
+  m_uiTinfo._m_uiTh = time_step;
+  excision_center_time_ = time;
+  m_uiIsETSSynced = false;
+  return 0;
+}}
+DendroScalar Ctx::algebraic_residual(ot::Mesh* mesh, DVec& state) {{
+  if (!mesh->isActive()) return 0.0;
+  std::array<DendroScalar*, generated::NUM_EVOL_GFS> fields{{}};
+  state.to_2d(fields.data());
+  const DendroScalar* h00 = fields[generated::to_index(generated::EvolVar::hDD00)];
+  const DendroScalar* h01 = fields[generated::to_index(generated::EvolVar::hDD01)];
+  const DendroScalar* h02 = fields[generated::to_index(generated::EvolVar::hDD02)];
+  const DendroScalar* h11 = fields[generated::to_index(generated::EvolVar::hDD11)];
+  const DendroScalar* h12 = fields[generated::to_index(generated::EvolVar::hDD12)];
+  const DendroScalar* h22 = fields[generated::to_index(generated::EvolVar::hDD22)];
+  const DendroScalar* a00_field = fields[generated::to_index(generated::EvolVar::aDD00)];
+  const DendroScalar* a01_field = fields[generated::to_index(generated::EvolVar::aDD01)];
+  const DendroScalar* a02_field = fields[generated::to_index(generated::EvolVar::aDD02)];
+  const DendroScalar* a11_field = fields[generated::to_index(generated::EvolVar::aDD11)];
+  const DendroScalar* a12_field = fields[generated::to_index(generated::EvolVar::aDD12)];
+  const DendroScalar* a22_field = fields[generated::to_index(generated::EvolVar::aDD22)];
+  DendroScalar local_residual = 0.0;
+  for (unsigned int pp = mesh->getNodeLocalBegin();
+       pp < mesh->getNodeLocalEnd(); ++pp) {{
+    const DendroScalar g00 = 1.0 + h00[pp];
+    const DendroScalar g01 = h01[pp];
+    const DendroScalar g02 = h02[pp];
+    const DendroScalar g11 = 1.0 + h11[pp];
+    const DendroScalar g12 = h12[pp];
+    const DendroScalar g22 = 1.0 + h22[pp];
+    const DendroScalar a00 = a00_field[pp];
+    const DendroScalar a01 = a01_field[pp];
+    const DendroScalar a02 = a02_field[pp];
+    const DendroScalar a11 = a11_field[pp];
+    const DendroScalar a12 = a12_field[pp];
+    const DendroScalar a22 = a22_field[pp];
+    DendroScalar determinant = 0.0;
+    DendroScalar trace_a = 0.0;
+{algebraic_residual_expressions}
+    if (!(determinant > 0.0) || !std::isfinite(determinant)) {{
+      local_residual = std::numeric_limits<DendroScalar>::infinity();
+      break;
+    }}
+    local_residual = std::max(
+        local_residual, std::max(std::abs(determinant - 1.0), std::abs(trace_a)));
+  }}
+  DendroScalar global_residual = 0.0;
+  MPI_Allreduce(&local_residual, &global_residual, 1, MPI_DOUBLE, MPI_MAX,
+                mesh->getMPICommunicator());
+  return global_residual;
+}}
+int Ctx::terminal_output() {{
+  if (!m_uiMesh->isActive()) return 0;
+  DendroScalar local = 0.0;
+  for (unsigned int i = m_uiMesh->getNodeLocalBegin();
+       i < m_uiMesh->getNodeLocalEnd(); ++i)
+    local = std::max(local, std::abs(state_.get_vec_ptr()[i]));
+  DendroScalar global = 0.0;
+  MPI_Allreduce(&local, &global, 1, MPI_DOUBLE, MPI_MAX,
+                m_uiMesh->getMPICommunicator());
+  if (m_uiMesh->getMPIRank() == 0)
+    std::printf("iteration=%u time=%.17g max_alpha=%.17g\\n",
+                m_uiTinfo._m_uiStep, m_uiTinfo._m_uiT, global);
+  return std::isfinite(global) ? 0 : 1;
+}}
+std::function<double(double, double, double)> Ctx::get_wtol_function() {{
+  const double tolerance = wavelet_tolerance_;
+  return [tolerance](double, double, double) {{ return tolerance; }};
+}}
+}}  // namespace {solver_namespace}
+"""

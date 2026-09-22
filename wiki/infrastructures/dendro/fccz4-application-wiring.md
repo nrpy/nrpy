@@ -1,146 +1,54 @@
 # fCCZ4 Application Wiring
 
-> Explain the Dendro fCCZ4 builders: the direct finite-difference right-hand side, the det(gammabar)/tr(Abar) enforcement, initial-data conversion, and constraint diagnostics. · Status: provisional
+> Describe fCCZ4 equations, initial data, conversions, and runtime services in `NRPy_fCCZ4_GR`. · Status: provisional
 > Up: [Dendro](index.md)
 
 ## Summary
 
-The application builders lower the shared fCCZ4 expression factory into Dendro kernels.
-The scientific formulation comes from the shared factory and from established
-NRPy constraint factories and conversions, and every field name is read back from the
-registry rather than written down. What the builders do author is bounded and
-deliberate: the analytic test perturbation profile, the two algebraic residuals
-the enforcement reports, and the rescaled connection relation — all assembled
-from registered quantities, and all registered as CFunctions rather than written
-into a fixed template. Each family
-pairs a pure `build_*` function with a `register_CFunctions_*` function so one
-profile can assemble a different subset without the builders knowing about each
-other. The established infrastructures do the same where they need it: BHaH's
-`general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py` carries three
-pure `build_*` helpers beside both a `register_CFunction_*` and a
-`register_CFunctions_*`, and `diagnostics/combine_raytracing_time_slices.py`
-returns a frozen dataclass from one. What is Dendro's own is the scale: every
-kernel family is shaped this way.
+`nrpy.examples.dendro_fccz4` emits a complete W-form fCCZ4 application. Its
+24-component BSSN-compatible state is followed by `Theta_fCCZ4`. It uses SSL,
+constant default `eta=1`, centered derivatives, its fCCZ4 CAHD contribution,
+and separate conformal Ricci and RHS kernels.
 
 ## Detail
 
-The example passes GR-owned context, lifecycle, status, and scientific-test
-content into generic Dendro emitters explicitly. fCCZ4/chi is checked at regular
-finite-difference orders 4, 6, and 8 on a nonflat fixed block, component by
-component, against an independent
-high-precision reference for the RHS block kernel, flat adapter, and constraint
-diagnostics. Kernel and reference inputs are the same exactly emitted binary64
-samples; the reference applies the stencil and actual CSE graph at 80 and 100
-digits and derives a componentwise roundoff bound from their scale and operation
-count. Order 6 with KO is the default; `--no-ko` retains the nondissipative
-generation profile. [Finite-Difference Profiles And Dendro
-Conformance](finite-difference-profiles-and-dendro-conformance.md) defines the
-supported order pairs, stencil reach, Dendro-GR comparison, and qualification
-limits.
+The fCCZ4 CAHD contribution is
 
-### Right-hand side
+```text
+W_rhs += 2 C_CAHD W H dt,  C_CAHD = 0.15.
+```
 
-The RHS builder maps each RHS symbol to its registered EVOL gridfunction name
-algorithmically and asserts the bijection against the registry, derives the
-output lvalues and the `in_` and `rhs_` pointer bindings from the gridfunction
-registry, normalizes the equation factory's directional derivative symbols to
-centered derivatives, and runs `c_codegen` with the `DendroScalar` alias. Point and block loops are
-emitted through the Dendro loop helpers. It provides three registered CFunction
-bodies — per-block, all-block, and a local-time-stepping flat-block adapter
-that reuses the same numerical body — and records the ghost points its emitted
-operators reach.
+This equation is not the BSSN CAHD equation. fCCZ4 retains its formulation's
+Lambda RHS rather than adding Brown's BSSN adjustment. Order-specific
+constraint kernels are named `fCCZ4_constraints_order_N`.
 
-### Enforcing det(gammabar) = det(gammahat) and tr(Abar) = 0
+Initial data uses the same TwoPunctures ADM data, full
+`psi=psi_background+u`, `alpha=W=psi^(-2)`, ADM conversion, halo exchange,
+physical-boundary fill, separate `initial_data_lambdaU`, and algebraic
+projection sequence as BSSN. `Theta_fCCZ4` receives its formulation-defined
+initial value.
 
-The kernel restores the two algebraic constraints of the conformal
-decomposition at every point of a block: the conformal metric determinant ratio
-returns to one, and the trace of the conformal traceless extrinsic curvature
-returns to zero. The projected values come from the established NRPy module
-`BSSN_algebraic_constraints`, so the module contributes no new formulation
-content; it lowers those expressions into a Dendro point loop and adds the
-structured status record the generated host lifecycle consumes. The kernel never
-calls `exit()`.
+After initialization, every RK stage, and AMR transfer, `alpha` is floored at
+`CHI_FLOOR` and W at `sqrt(CHI_FLOOR)` before algebraic projection.
 
-Because the enforcement is pointwise, it needs no padding, and computing every
-projected value into a local before storing is what makes an in-place call
-safe: the input and output pointers may alias the same block arrays. That
-argument is specific to a pointwise kernel and does not extend to the stencil
-kernels on this page.
-
-Every written field name is read back from the registered BSSN quantities, so
-no field name is hardcoded. Only `hDD` and `aDD` are written: the enforcement is
-purely algebraic in those two families, and `lambdaU` and `Theta_fCCZ4` are
-never touched by it.
-
-### Initial data
-
-The Minkowski fill writes every EVOL field to its asymptotic value through
-exact-name `out_` bindings derived from the registered EVOL gridfunctions. The role is
-`out_` rather than `rhs_` because this writer produces state, not a right-hand
-side; reusing `rhs_` would make the generated signature claim it fills the
-right-hand-side vector, which is how a caller silently zeroes the state. No field name,
-count, or asymptotic value is hardcoded: all three come from the registered
-records.
-
-Claim evidence:
-- Claim: the generated Minkowski initial-data writer binds its outputs through `out_<name>` pointers, not `rhs_<name>`, because it produces state rather than a right-hand side.
-- Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/initial_data.py`, `_block_pointer_bindings`
-- Corroboration: `nrpy/infrastructures/Dendro/gridfunction_name_decorations.py`, `out_pointer` docstring recording why `rhs_` was rejected
-
-A separate builder emits the smooth analytic perturbation that makes the
-stencils observable. Its profile is authored in NRPy and lowered by `c_codegen`,
-so it is formulation content and therefore belongs in a registered CFunction
-rather than in a fixed template. It is the only physics *profile* a builder
-authors, as distinct from the two algebraic residuals and the connection
-relation named above. The generated Minkowski lifecycle uses it for
-the perturbed-RHS and convergence-order gates, which a flat state cannot
-exercise.
-
-The smooth ADM-to-fCCZ4 conversion reuses the established `ADM_to_BSSN` map, so
-the registered `EvolvedConformalFactor_cf` choice governs the conformal
-convention in exactly one place. A separate pass initializes the connection as
-`lambdaU^i = DeltaGamma^i / ReU^i`, which is the statement that the connection
-constraint holds at the initial slice. Splitting the connection pass out is
-deliberate: it depends on derivatives of quantities the conversion pass has just
-written, so it cannot share the conversion's point loop.
-
-### Constraint diagnostics
-
-The first diagnostic set is the Hamiltonian constraint of the fCCZ4 system and
-the spatial Z4 connection constraint. Both come from the shared expression
-factory with diagnostics enabled, so a Dendro kernel and any other
-infrastructure lower the same expressions. The diagnostic gridfunctions are
-registered in the DIAG group: they are recomputed from the evolved state and are
-never authoritative checkpoint state. The kernel uses the same
-finite-difference order and the same memory-access mechanism as the RHS, so no
-separate diagnostic profile exists.
-
-### Shared factory boundary
-
-The formulation itself — evolution equations, gauge, algebraic constraints,
-diagnostics, and the Kreiss-Oliger terms — belongs to the equations layer and is
-validated there against trusted expression dictionaries. This page covers only
-the lowering. For the equations themselves see
-[Fully Covariant Conformal Z4](../../equations/general-relativity/fccz4.md).
+Solver context evaluates Ricci and RHS consecutively for each block after one
+halo exchange and boundary fill. Six `RbarDD` values remain scratch storage,
+not evolved state. Apparent-horizon searches interpolate selected evolved
+W-BSSN fields and convert each search point to ADM variables. ADM surface
+quantities use grid fields from `BSSN_to_ADM`; waveform extraction evaluates
+Psi4 directly from the evolved fields.
 
 ## Sources
 
-- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - `build_rhs_eval`, `register_CFunctions_rhs_eval`, `RHSBuild`
-- [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/Dendro/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `build_enforce_detgbar_equals_detghat_trAzero`, `register_CFunctions_enforce_detgbar_equals_detghat_trAzero`
-- [initial_data.py](../../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py) - `build_minkowski_initial_data`, `build_ADM_to_BSSN`, `build_initial_data_lambdaU`
-- [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py) - `build_constraints_eval`, `register_CFunctions_constraints_eval`
-- [fCCZ4_system.py](../../../nrpy/equations/general_relativity/fCCZ4_system.py) - `build_fccz4_expression_bundle`
-- [kreiss_oliger_terms.py](../../../nrpy/equations/general_relativity/kreiss_oliger_terms.py) - Kreiss-Oliger dissipation terms
-- [BSSN_algebraic_constraints.py](../../../nrpy/equations/general_relativity/BSSN_algebraic_constraints.py) - `BSSN_algebraic_constraints`
-- [ADM_to_BSSN.py](../../../nrpy/equations/general_relativity/ADM_to_BSSN.py) - `ADM_to_BSSN`
+- [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - fCCZ4 generation profile.
+- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - fCCZ4 RHS and CAHD registration.
+- [fCCZ4_constraints.py](../../../nrpy/infrastructures/Dendro/general_relativity/fCCZ4_constraints.py) - fCCZ4 constraint registration.
+- [Ricci_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/Ricci_eval.py) - separate conformal Ricci kernel.
+- [ADM_to_BSSN.py](../../../nrpy/infrastructures/Dendro/general_relativity/ADM_to_BSSN.py) - ADM conversion.
+- [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - traversal and runtime scheduling.
 
 ## See Also
 
 - Parent: [Dendro](index.md)
-- Depends on: [Fully Covariant Conformal Z4](../../equations/general-relativity/fccz4.md)
-- Depends on: [Finite-Difference Profiles And Dendro Conformance](finite-difference-profiles-and-dendro-conformance.md)
-- Implements: [Gridfunctions, Naming, And Loops](gridfunctions-naming-and-loops.md)
-- Contrasts with: [GR Application Wiring](../bhah/gr-application-wiring.md)
-- Validated by: [Validation, Standalone Host, And Deferred Tests](validation-standalone-host-and-deferral-gates.md)
-- See also: [C Codegen](../../core/c-codegen.md)
+- Depends on: [fCCZ4 System](../../equations/general-relativity/fccz4.md)
+- Contrasts with: [BSSN Application Wiring](bssn-application-wiring.md)

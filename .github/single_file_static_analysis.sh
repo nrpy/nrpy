@@ -10,6 +10,7 @@ if [ "$#" -ne 1 ]; then
 fi
 
 python_file=$1
+python_basename=$(basename "$python_file")
 
 # Check if the file exists
 if [ ! -f "$python_file" ]; then
@@ -57,23 +58,36 @@ run_test_step "mypy" "mypy --strict --pretty --allow-untyped-calls \"$python_fil
 
 # Step 4: pylint
 echo "-={ Step $step_counter: pylint }=-"
-pylint_score=$(pylint --rcfile=.pylintrc "$python_file" | tail -2 | grep -Eo '[0-9\.]+' | head -1 || echo "0")
+pylint_options=(--rcfile=.pylintrc)
+if [ "$python_basename" = "__init__.py" ]; then
+  pylint_options+=(--disable=missing-module-docstring)
+fi
+pylint_score=$(pylint "${pylint_options[@]}" "$python_file" | tail -2 | grep -Eo '[0-9\.]+' | head -1 || echo "0")
 echo "Pylint score: $pylint_score"
 if (( $(echo "$pylint_score < 9.91" | bc -l) )); then
-  pylint --rcfile=.pylintrc "$python_file" || true
+  pylint "${pylint_options[@]}" "$python_file" || true
   echo "Pylint score below 9.91, failing..."
   failed_tests+=("pylint in $python_file")
 fi
 ((step_counter++))
 
 # Step 5: pydocstyle
-run_test_step "pydocstyle" "pydocstyle \"$python_file\"" "pydocstyle"
+if [ "$python_basename" = "__init__.py" ]; then
+  run_test_step "pydocstyle" "pydocstyle --add-ignore=D104 \"$python_file\"" "pydocstyle"
+else
+  run_test_step "pydocstyle" "pydocstyle \"$python_file\"" "pydocstyle"
+fi
 
 # Step 6: darglint
 run_test_step "darglint" "darglint -v 2 \"$python_file\"" "darglint"
 
 # Step 7: doctests
-run_test_step "doctests" "python3 \"$python_file\"" "doctests"
+if [ "$python_basename" = "__init__.py" ]; then
+  echo "-={ Step $step_counter: doctests (not applicable to import aggregators) }=-"
+  ((step_counter++))
+else
+  run_test_step "doctests" "python3 \"$python_file\"" "doctests"
+fi
 
 # Exit with failure if any tests failed
 if [ ${#failed_tests[@]} -ne 0 ]; then

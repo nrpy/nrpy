@@ -1,308 +1,349 @@
 """
-Generate an NRPy-authored fCCZ4 solver for Dendro-GR.
+Generate the complete NRPy fCCZ4 application beside Dendro-GR's BSSN_GR.
 
-Run as a module:
-
-    python -m nrpy.examples.dendro_fccz4 --project-dir project/dendro_fccz4 --fd-order 6
+Run as ``python -m nrpy.examples.dendro_fccz4``.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-#########################################################
-# Step P1: Import needed Python modules, then set codegen
-#         and compile-time parameters.
 import argparse
-import os
+import tempfile
 from pathlib import Path
 from typing import Dict
 
-import nrpy.grid as gri
+import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.conditional_file_updater import ConditionalFileUpdater
-from nrpy.helpers.generic import copy_files
-from nrpy.infrastructures.Dendro import CFunction_roles as roles
+from nrpy.infrastructures.BHaH import BHaH_defines_h
+from nrpy.infrastructures.BHaH.general_relativity import (
+    ADM_Initial_Data_Reader__BSSN_Converter,
+)
+from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import (
+    ID_persist_struct,
+    TwoPunctures_lib,
+)
 from nrpy.infrastructures.Dendro import (
+    CMakeLists,
     CodeParameters,
     Dendro_defines_h,
-    cmake_helpers,
+    checkpoint,
     constants_h,
-    parfile,
+    main_cpp,
+    param_toml,
+    solver_context,
     state_h,
     types_h,
 )
 from nrpy.infrastructures.Dendro.general_relativity import (
-    constraints_eval,
+    ADM_to_BSSN,
+    BSSN_to_ADM,
+    Ricci_eval,
+    adm_quantities,
+    adm_quantities_surface_data,
+    apparent_horizon,
+    diagnostics,
     enforce_detgbar_equals_detghat_trAzero,
-    initial_data,
-    main_cpp,
+    fCCZ4_constraints,
+    floor_the_lapse_and_conformal_factor,
+    gravitational_waves,
+    initial_data_lambdaU,
+    physical_boundary,
+    psi4_eval,
     rhs_eval,
-    self_tests_cpp,
-    solver_context,
+    twopunctures,
 )
 
-# Code-generation-time parameters:
-# NRPy authors the module directory, CMake project, and C++ namespace.  Names
-# inside that module retain the conventional fCCZ4 stem and Dendro target names.
-# These are arguments to the infrastructure, not registered CodeParameters.
-solver_name = "nrpy_fccz4"
-solver_prefix = "FCCZ4"
-solver_stem = "fccz4"
-solver_namespace = "nrpy::fccz4"
-production_target = "nrpy_fccz4_dendro"
-qualification_target = "nrpy_fccz4_dendro_qualify"
-profile_name = "fccz4_cartesian_vacuum"
-
-CoordSystem = "Cartesian"
-LapseEvolutionOption = "OnePlusLog"
-ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant__Hatted"
-enable_parallel_codegen = True
+SOLVER_NAME = "NRPy_fCCZ4_GR"
+SOLVER_PREFIX = "FCCZ4"
+SOLVER_STEM = "fccz4"
+SOLVER_NAMESPACE = "nrpy::fccz4"
+EXECUTABLE_NAME = "nrpyFccz4Solver"
+PROFILE_NAME = "fccz4_twopunctures"
+COORD_SYSTEM = "Cartesian"
+LAPSE_EVOLUTION_OPTION = "OnePlusLog"
+SHIFT_EVOLUTION_OPTION = "GammaDriving2ndOrder_Covariant__Hatted"
+FD_ORDERS = (4, 6, 8)
 
 
 def parse_args() -> argparse.Namespace:
     """
-    Parse the command line.
+    Parse the generation options.
 
-    :return: The parsed argument namespace.
+    :return: Parsed command-line arguments.
     """
     parser = argparse.ArgumentParser(
-        description="Generate an NRPy-authored fCCZ4 solver for Dendro-GR"
+        description="Generate the complete NRPy fCCZ4 application for Dendro-GR"
     )
     parser.add_argument(
-        "--project-dir", default=os.path.join("project", "dendro_fccz4")
+        "--project-dir",
+        type=Path,
+        help="Dendro-GR root; by default, locate the nearest enclosing checkout",
     )
     parser.add_argument(
         "--fd-order",
         type=int,
-        choices=(4, 6, 8),
+        choices=FD_ORDERS,
         default=6,
-        help="centered finite-difference order; Dendro padding is 2, 3, or 4",
+        help="runtime finite-difference profile; all production orders are emitted",
     )
-    # argparse.BooleanOptionalAction needs Python 3.9; the supported floor is
-    # 3.7, so the two flags are declared explicitly.
     parser.add_argument("--ko", dest="ko", action="store_true")
     parser.add_argument("--no-ko", dest="ko", action="store_false")
     parser.set_defaults(ko=True)
-    # No --parallelization flag: the qualified CPU profile is serial point
-    # loops (the kernel runs inside Dendro's own block traversal), and the
-    # builders assert that.  Offering a flag the generator discards would
-    # silently produce an unqualified configuration.
     return parser.parse_args()
 
 
 def main() -> None:
-    """Generate the complete Dendro fCCZ4 project."""
-    #########################################################
-    # Step 1: Parse arguments and set NRPy code-generation parameters.
+    """
+    Generate the complete Dendro fCCZ4 application.
+
+    :raises ValueError: If no enclosing Dendro-GR root can be found.
+    """
     args = parse_args()
+    if args.project_dir is None:
+        project_dir = next(
+            (
+                candidate
+                for candidate in (Path.cwd(), *Path.cwd().parents)
+                if (candidate / "CMakeLists.txt").is_file()
+                and (candidate / "BSSN_GR").is_dir()
+            ),
+            None,
+        )
+        if project_dir is None:
+            raise ValueError(
+                "No enclosing Dendro-GR root contains CMakeLists.txt and BSSN_GR/. "
+                "Pass --project-dir explicitly."
+            )
+    else:
+        project_dir = args.project_dir.resolve()
 
     par.set_parval_from_str("Infrastructure", "Dendro")
     par.set_parval_from_str("fp_type", "double")
-    # The qualified CPU profile emits serial point loops.  The NRPy default is
-    # "openmp", so pin it here; the builders assert it.
     par.set_parval_from_str("parallelization", "none")
     par.set_parval_from_str("fd_order", args.fd_order)
-    par.set_parval_from_str("EvolvedConformalFactor_cf", "chi")
+    par.set_parval_from_str("EvolvedConformalFactor_cf", "W")
     par.set_parval_from_str("detgbarOverdetghat_equals_one", True)
-    par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
-
-    #########################################################
-    # Step 2: Register independent right-hand-side and constraint C functions.
-    rhs_eval.register_CFunctions_rhs_eval(
-        solver_stem=solver_stem,
-        enable_fCCZ4=True,
-        fd_order=args.fd_order,
-        enable_KreissOliger_dissipation=args.ko,
-        CoordSystem=CoordSystem,
-        LapseEvolutionOption=LapseEvolutionOption,
-        ShiftEvolutionOption=ShiftEvolutionOption,
+    par.set_parval_from_str("enable_parallel_codegen", True)
+    par.register_CodeParameter(
+        "REAL",
+        "nrpy.equations.general_relativity.BSSN_gauge_RHSs",
+        "eta",
+        1.0,
+        commondata=True,
     )
-    constraints_eval.register_CFunctions_constraints_eval(
-        solver_stem=solver_stem,
-        enable_fCCZ4=True,
-        CoordSystem=CoordSystem,
-        LapseEvolutionOption=LapseEvolutionOption,
-        ShiftEvolutionOption=ShiftEvolutionOption,
-        enable_KreissOliger_dissipation=args.ko,
+    state_h.register_canonical_gridfunctions(enable_fCCZ4=True)
+
+    for fd_order in FD_ORDERS:
+        Ricci_eval.register_CFunction_Ricci_eval(
+            SOLVER_STEM, fd_order=fd_order, CoordSystem=COORD_SYSTEM
+        )
+        rhs_eval.register_CFunction_rhs_eval(
+            SOLVER_STEM,
+            enable_fCCZ4=True,
+            fd_order=fd_order,
+            enable_KreissOliger_dissipation=args.ko,
+            CoordSystem=COORD_SYSTEM,
+            LapseEvolutionOption=LAPSE_EVOLUTION_OPTION,
+            ShiftEvolutionOption=SHIFT_EVOLUTION_OPTION,
+            enable_SSL=True,
+            enable_CAHD=True,
+        )
+        fCCZ4_constraints.register_CFunction_fCCZ4_constraints(
+            SOLVER_STEM, fd_order=fd_order, CoordSystem=COORD_SYSTEM
+        )
+        initial_data_lambdaU.register_CFunction_initial_data_lambdaU(
+            SOLVER_STEM,
+            enable_fCCZ4=True,
+            fd_order=fd_order,
+            CoordSystem=COORD_SYSTEM,
+        )
+        ADM_to_BSSN.register_CFunction_ADM_to_BSSN(
+            SOLVER_STEM,
+            fd_order=fd_order,
+            enable_fCCZ4=True,
+            CoordSystem=COORD_SYSTEM,
+        )
+    BSSN_to_ADM.register_CFunction_BSSN_to_ADM(
+        SOLVER_STEM, enable_fCCZ4=True, CoordSystem=COORD_SYSTEM
     )
-
-    #########################################################
-    # Step 3: Generate functions in parallel.
-    #         This Python multiprocessing does not change the serial point
-    #         loops generated for Dendro block traversal.
-    if enable_parallel_codegen:
-        pcg.do_parallel_codegen()
-
-    rhs_by_symbol_name = rhs_eval.rhs_expressions(
-        enable_fCCZ4=True,
-        CoordSystem=CoordSystem,
-        LapseEvolutionOption=LapseEvolutionOption,
-        ShiftEvolutionOption=ShiftEvolutionOption,
-        enable_KreissOliger_dissipation=args.ko,
+    enforce_detgbar_equals_detghat_trAzero.register_CFunction_enforce_detgbar_equals_detghat_trAzero(
+        SOLVER_STEM, enable_fCCZ4=True, CoordSystem=COORD_SYSTEM
     )
-    diagnostics_by_name = constraints_eval.diagnostic_expressions(
-        enable_fCCZ4=True,
-        CoordSystem=CoordSystem,
-        LapseEvolutionOption=LapseEvolutionOption,
-        ShiftEvolutionOption=ShiftEvolutionOption,
-        enable_KreissOliger_dissipation=args.ko,
+    floor_the_lapse_and_conformal_factor.register_CFunction_floor_the_lapse_and_conformal_factor(
+        SOLVER_STEM, enable_fCCZ4=True
     )
-    ko_fd_order = rhs_eval.DENDRO_FD_PROFILES[args.fd_order][0]
-
-    #########################################################
-    # Step 4: Register C functions that consume the merged EVOL registry.
-    # Smooth perturbation also registers its amplitude and wavelength
-    # CodeParameters. Register the parameter C functions after all other
-    # registrations finish.
-    initial_data.register_CFunctions_minkowski_initial_data(solver_stem=solver_stem)
-    initial_data.register_CFunctions_smooth_perturbation(solver_stem=solver_stem)
-
-    # The smooth ADM conversion, the separate connection-initialization pass,
-    # and the det(gammabar)/tr(Abar) enforcement.  The conversion registers the ADM source
-    # fields as AUXEVOL; the enforcement is scheduled after initial data and
-    # after every accepted timestep by the host context.
-    initial_data.register_CFunctions_ADM_to_BSSN(
-        solver_stem=solver_stem, CoordSystem=CoordSystem
+    twopunctures.register_CFunction_twopunctures(SOLVER_STEM)
+    ADM_Initial_Data_Reader__BSSN_Converter.register_BHaH_defines_h(
+        ID_persist_struct.ID_persist_str()
     )
-    enforce_detgbar_equals_detghat_trAzero.register_CFunctions_enforce_detgbar_equals_detghat_trAzero(
-        solver_stem=solver_stem,
-        solver_namespace=solver_namespace,
-        CoordSystem=CoordSystem,
+    physical_boundary.register_CFunction_physical_boundary(
+        SOLVER_STEM, enable_fCCZ4=True
     )
+    diagnostics.register_CFunction_diagnostics(SOLVER_STEM, enable_fCCZ4=True)
+    apparent_horizon.register_CFunction_apparent_horizon(SOLVER_STEM)
+    psi4_eval.register_CFunction_psi4_eval(SOLVER_STEM)
+    gravitational_waves.register_CFunction_gravitational_waves(SOLVER_STEM)
+    adm_quantities_surface_data.register_CFunction_adm_quantities_surface_data(
+        SOLVER_STEM
+    )
+    adm_quantities.register_CFunction_adm_quantities(SOLVER_STEM)
+    pcg.do_parallel_codegen()
 
-    # The parameter C functions come last, after every CodeParameter the
-    # scientific kernels register is in the registry.
-    CodeParameters.register_CFunctions_parameters(solver_stem, solver_namespace)
+    state_h.validate_registered_state(enable_fCCZ4=True)
+    CodeParameters.register_CFunctions_parameters(SOLVER_STEM, SOLVER_NAMESPACE)
 
-    #########################################################
-    # Step 5: Generate Dendro header and source files, parameter files, tests,
-    #         and CMakeLists.txt.
-    layout = cmake_helpers.module_layout(solver_name)
-    required_padding = roles.required_padding()
+    par.set_parval_from_str("parallelization", "openmp")
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        BHaH_defines_h.output_BHaH_defines_h(
+            project_dir=temporary_directory,
+            enable_rfm_precompute=False,
+        )
+        bhah_defines = (Path(temporary_directory) / "BHaH_defines.h").read_text(
+            encoding="utf-8"
+        )
+    bhah_defines = f"""#ifndef NRPY_PACKAGED_BHAH_DEFINES_H
+#define NRPY_PACKAGED_BHAH_DEFINES_H
+#include "TwoPunctures.h"
+{bhah_defines}
+#undef NUM_EVOL_GFS
+#undef NUM_AUXEVOL_GFS
+#undef NUM_AUX_GFS
+#undef NUM_SCRATCH_GFS
+#undef REAL
+#undef DOUBLE
+typedef double REAL;
+typedef double DOUBLE;
+#endif  // NRPY_PACKAGED_BHAH_DEFINES_H
+"""
+    par.set_parval_from_str("parallelization", "none")
+    bhah_prototypes = [
+        "#ifndef BHAH_FUNCTION_PROTOTYPES_H",
+        "#define BHAH_FUNCTION_PROTOTYPES_H",
+        "",
+        '#include "BHaH_defines.h"',
+        "",
+    ]
+    bhah_prototypes.extend(
+        cfunction.function_prototype
+        for name, cfunction in sorted(cfc.CFunction_dict.items())
+        if cfunction.subdirectory == "TwoPunctures"
+        or name
+        in (
+            "initialize_ID_persist_struct",
+            "NRPyPN_quasicircular_momenta",
+        )
+    )
+    bhah_prototypes.extend(("", "#endif  // BHAH_FUNCTION_PROTOTYPES_H", ""))
+
+    ko_fd_order = args.fd_order - 2
+    required_padding = args.fd_order // 2
+    module_root = f"{SOLVER_NAME}/"
+    application_sources = (
+        f"src/{SOLVER_STEM}_main.cpp",
+        f"src/{SOLVER_STEM}Ctx.cpp",
+        "src/checkpoint.cpp",
+    )
     artifacts: Dict[str, str] = {
-        layout.generated_include
-        + f"{solver_stem}_types.h": types_h.output_types_h(
-            solver_stem,
-            solver_namespace,
-            enforce_detgbar_equals_detghat_trAzero.status_struct_declaration(),
+        module_root + "twopunctures/include/BHaH_defines.h": bhah_defines,
+        module_root
+        + "twopunctures/include/BHaH_function_prototypes.h": "\n".join(bhah_prototypes),
+        module_root
+        + "twopunctures/include/TP_utilities.h": (
+            Path(TwoPunctures_lib.__file__).parent / "TP_utilities.h"
+        ).read_text(encoding="utf-8"),
+        module_root
+        + "twopunctures/include/TwoPunctures.h": (
+            Path(TwoPunctures_lib.__file__).parent / "TwoPunctures.h"
+        ).read_text(encoding="utf-8"),
+        module_root
+        + f"generated/include/{SOLVER_STEM}_types.h": types_h.output_types_h(
+            SOLVER_STEM, SOLVER_NAMESPACE
         ),
-        layout.generated_include
-        + f"{solver_stem}_constants.h": constants_h.output_constants_h(
-            solver_stem,
-            solver_namespace,
+        module_root
+        + f"generated/include/{SOLVER_STEM}_constants.h": constants_h.output_constants_h(
+            SOLVER_STEM,
+            SOLVER_NAMESPACE,
             args.fd_order,
             ko_fd_order,
-            ko_fd_order + 2,
+            args.fd_order,
             required_padding,
             args.ko,
+            FD_ORDERS,
+            {order: order // 2 for order in FD_ORDERS},
         ),
-        layout.generated_include
-        + f"{solver_stem}_state.h": state_h.output_state_h(
-            solver_stem, solver_namespace
+        module_root
+        + f"generated/include/{SOLVER_STEM}_state.h": state_h.output_state_h(
+            SOLVER_STEM, SOLVER_NAMESPACE, enable_fCCZ4=True
         ),
-        layout.generated_include
-        + f"{solver_stem}_parameters.h": CodeParameters.output_parameters_h(
-            solver_stem, solver_namespace
+        module_root
+        + f"generated/include/{SOLVER_STEM}_parameters.h": CodeParameters.output_parameters_h(
+            SOLVER_STEM, SOLVER_NAMESPACE
         ),
-        layout.generated_include
-        + f"{solver_stem}_defines.h": Dendro_defines_h.output_Dendro_defines_h(
-            solver_stem
+        module_root
+        + f"generated/include/{SOLVER_STEM}_defines.h": Dendro_defines_h.output_Dendro_defines_h(
+            SOLVER_STEM
         ),
-        layout.include
-        + f"{solver_stem}Ctx.h": solver_context.output_solver_context_h(
-            solver_stem, solver_namespace
+        module_root
+        + f"include/{SOLVER_STEM}Ctx.h": solver_context.output_solver_context_h(
+            SOLVER_STEM,
+            SOLVER_NAMESPACE,
+            args.fd_order,
+            enable_fCCZ4=True,
         ),
-        layout.src
-        + f"{solver_stem}Ctx.cpp": solver_context.output_solver_context_cpp(
-            solver_stem, solver_namespace
+        module_root
+        + f"src/{SOLVER_STEM}Ctx.cpp": solver_context.output_solver_context_cpp(
+            SOLVER_STEM,
+            SOLVER_NAMESPACE,
+            args.fd_order,
+            enable_fCCZ4=True,
+            enable_SSL=True,
+            enable_CAHD=True,
         ),
-        layout.src
-        + f"{solver_stem}_main.cpp": main_cpp.output_main_cpp(
-            solver_stem,
-            solver_namespace,
-            qualification_target,
-            profile_name,
+        module_root
+        + f"src/{SOLVER_STEM}_main.cpp": main_cpp.output_main_cpp(
+            SOLVER_STEM, SOLVER_NAMESPACE, EXECUTABLE_NAME, PROFILE_NAME
         ),
-        layout.pars
-        + f"{solver_stem}_minkowski.par": parfile.generate_default_parfile(
-            solver_stem,
-            profile_name,
+        module_root
+        + "src/checkpoint.cpp": checkpoint.output_checkpoint_cpp(
+            SOLVER_STEM, SOLVER_NAMESPACE, "fCCZ4", enable_fCCZ4=True
+        ),
+        module_root
+        + f"pars/{SOLVER_STEM}.toml": param_toml.generate_default_parfile(
+            SOLVER_STEM,
+            PROFILE_NAME,
             args.fd_order,
             ko_fd_order,
-            ko_fd_order + 2,
+            args.fd_order,
             required_padding,
             args.ko,
         ),
     }
     artifacts.update(
-        {
-            layout.root + relative_path: text
-            for relative_path, text in self_tests_cpp.output_self_test_artifacts(
-                solver_stem,
-                solver_namespace,
-                rhs_by_symbol_name,
-                diagnostics_by_name,
-                fd_order=args.fd_order,
-                ko_fd_order=ko_fd_order,
-                enable_ko=args.ko,
-            ).items()
-        }
-    )
-    artifacts.update(
-        cmake_helpers.output_CFunctions_function_prototypes_and_construct_CMakeLists(
-            solver_name,
-            solver_stem,
-            solver_prefix,
-            production_target,
-            qualification_target,
-            self_tests_cpp.test_sections(),
-            main_cpp.standalone_ctest_statements(solver_stem, qualification_target),
-            main_cpp.real_ctest_statements(solver_stem, qualification_target),
+        CMakeLists.output_CFunctions_function_prototypes_and_construct_CMakeLists(
+            SOLVER_NAME,
+            SOLVER_STEM,
+            SOLVER_PREFIX,
+            EXECUTABLE_NAME,
+            application_sources,
         )
     )
-    for relative_path, text in sorted(artifacts.items()):
-        target = Path(args.project_dir) / relative_path
+    for relative_path, contents in sorted(artifacts.items()):
+        target = project_dir / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
-        # Generated C and C++ source files are clang-formatted, as every other NRPy
-        # infrastructure formats what it emits; CMake and TOML are left as
-        # written.
         with ConditionalFileUpdater(
             target,
             encoding="utf-8",
             do_format=target.suffix in (".h", ".hpp", ".c", ".cpp", ".cu"),
-        ) as file:
-            file.write(text)
-    solver_dir = Path(args.project_dir) / layout.root
-    # Copy nrpy.infrastructures.Dendro.standalone_host/dendro_standalone_host.h
-    # to <project-dir>/Dendro-GR/<solver_name>/standalone_host/dendro_standalone_host.h.
-    copy_files(
-        package="nrpy.infrastructures.Dendro.standalone_host",
-        filenames_list=["dendro_standalone_host.h"],
-        project_dir=str(solver_dir),
-        subdirectory="standalone_host",
-    )
+        ) as output_file:
+            output_file.write(contents)
 
-    copy_files(
-        package="nrpy.infrastructures.Dendro",
-        filenames_list=["block_geometry.h"],
-        project_dir=str(solver_dir),
-        subdirectory="include",
-    )
-
-    EVOL, _AUXEVOL, _DIAG, _AUX = gri.GridFunction.gridfunction_lists()
-    print(f"Finished generating {solver_name} in {args.project_dir}.")
-    print(f"  profile: {profile_name}")
-    print(f"  evolved variables: {len(EVOL)}")
-    print(f"  finite-difference order: {args.fd_order}")
-    print(f"  KO finite-difference order: {ko_fd_order}")
-    print(f"  effective KO difference order: {ko_fd_order + 2}")
-    print(f"  Kreiss-Oliger dissipation: {'enabled' if args.ko else 'disabled'}")
-    print(f"  required ghost points: {roles.required_padding()}")
-    print("Now build and run the generated self-tests with:")
-    build_dir = solver_dir / "build"
-    print(f"  cmake -S {solver_dir} -B {build_dir}")
-    print(f"  cmake --build {build_dir} && ctest --test-dir {build_dir}")
+    solver_dir = project_dir / SOLVER_NAME
+    print(f"Finished generating {SOLVER_NAME} in {solver_dir}.")
+    print("Generated centered FD/KO profiles: 4/2, 6/4, 8/6.")
+    print(f"Selected runtime profile: FD{args.fd_order}/KO{ko_fd_order}.")
+    print("W evolution, SSL, fCCZ4 CAHD, TwoPunctures alpha=W, and eta=1 enabled.")
 
 
 if __name__ == "__main__":

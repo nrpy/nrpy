@@ -13,8 +13,7 @@ ETLegacy take ``loop_region``, ``enable_OpenMP``, ``OMP_custom_pragma`` and
 padding, padded origin and spacing instead, because a Dendro point loop runs
 inside Dendro's own block traversal over one padded block: the interior is the
 only region a generated kernel writes, and an inner OpenMP pragma would nest
-parallelism, which ``require_serial_parallelization`` refuses rather than
-silently dropping.
+parallelism.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -25,36 +24,14 @@ import nrpy.helpers.loop as lp
 import nrpy.params as par
 
 
-def require_serial_parallelization() -> None:
-    """
-    Require the qualified serial point-loop profile.
-
-    The generated point kernel runs inside Dendro's own block traversal, so an
-    inner OpenMP pragma would nest parallelism.  Builders assert this rather
-    than overwriting the registered value: silently discarding a caller's
-    request would produce an unqualified configuration whose manifest
-    disagrees with the invocation.
-
-    :raises ValueError: If ``parallelization`` is not ``"none"``.
-    """
-    parallelization = par.parval_from_str("parallelization")
-    if parallelization != "none":
-        raise ValueError(
-            f"Dendro generation requires parallelization='none', got "
-            f"{parallelization!r}: the generated point loop runs inside "
-            "Dendro's own block traversal, and nested parallelism is not "
-            "qualified."
-        )
-
-
 def simple_loop(
     loop_body: str,
-    nx: str,
-    ny: str,
-    nz: str,
-    padding: str,
-    pmin_padded: str,
-    dx: str,
+    nx: str = "geom.nx",
+    ny: str = "geom.ny",
+    nz: str = "geom.nz",
+    padding: str = "geom.padding",
+    pmin_padded: str = "geom.pmin_padded",
+    dx: str = "geom.dx",
 ) -> str:
     """
     Emit a Dendro interior point loop (x-fastest) around a loop body.
@@ -71,15 +48,11 @@ def simple_loop(
         zero, an array of three.
     :param dx: C expression for the spacing, an array of three.
     :return: The generated nested-loop C code string.
+    :raises ValueError: If nested point-loop parallelism is requested.
 
     Doctests:
     >>> import nrpy.params as par
     >>> par.set_parval_from_str("parallelization", "none")
-    >>> try:
-    ...     simple_loop("f(xx0, xx1, xx2)")
-    ... except TypeError:
-    ...     print("Geometry expressions required. Good.")
-    Geometry expressions required. Good.
     >>> print(simple_loop("f(xx0, xx1, xx2, invdxx1, invdxx2)", nx="NX", ny="NY", nz="NZ", padding="PAD", pmin_padded="PMIN", dx="DX"))  # doctest: +ELLIPSIS
     const std::ptrdiff_t nx = ...
     ...
@@ -88,7 +61,14 @@ def simple_loop(
     } // END LOOP: for i2 over ...
     <BLANKLINE>
     """
-    require_serial_parallelization()
+    parallelization = par.parval_from_str("parallelization")
+    if parallelization != "none":
+        raise ValueError(
+            f"Dendro generation requires parallelization='none', got "
+            f"{parallelization!r}: the generated point loop runs inside "
+            "Dendro's own block traversal, and nested parallelism is not "
+            "qualified."
+        )
     # One spelling of the scalar alias, the core constant every Dendro emitter
     # reads.
     scalar_type = gri.DENDRO_SCALAR_TYPE
@@ -129,33 +109,6 @@ def simple_loop(
             increment=["1", "1", "1"],
             pragma=["", "", ""],
             loop_body=point_body,
-        )
-    )
-
-
-def block_loop(loop_body: str, num_blocks: str = "numBlocks") -> str:
-    """
-    Emit a Dendro numerical block loop around a loop body.
-
-    :param loop_body: C code executed once per block; has access to ``blk``.
-    :param num_blocks: C expression for the number of local blocks.
-    :return: The generated loop C code string.
-
-    Doctests:
-    >>> print(block_loop("rhs_block(blk);", num_blocks="NBLK"))
-    for (int blk = 0; blk < static_cast<std::ptrdiff_t>(NBLK); blk++) {
-    rhs_block(blk);
-    } // END LOOP: for blk over [0, static_cast<std::ptrdiff_t>(NBLK))
-    <BLANKLINE>
-    """
-    return str(
-        lp.loop(
-            idx_var="blk",
-            lower_bound="0",
-            upper_bound=f"static_cast<std::ptrdiff_t>({num_blocks})",
-            increment="1",
-            pragma="",
-            loop_body=loop_body,
         )
     )
 

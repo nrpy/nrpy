@@ -20,7 +20,7 @@ Configured GitHub job map:
 | `codegen-ubuntu` | Configured Ubuntu/Python matrix | Installs NRPy, generates in `tmp/`, and builds the selected default C/library projects with `make`, spanning elliptic, wave, black-hole, PN, SEOBNR, TOV, hydro, BHaHAHA, and `sebobv2` routes. It generates `sebobv1_jax` without package install/build. | The `make` builds run no generated executable, and `make clean` follows each; MANGA commands are commented out. |
 | `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation as Ubuntu; no Dendro generation or build; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
 | `einsteintoolkit-validation` | Configured Ubuntu/Apptainer Einstein Toolkit image | Generates `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs the configured Baikal, BaikalVacuum, and WaveToyNRPy Cactus testsuites and fails on reported failures. No `carpetx_*` generation/build/run. |
-| `dendro-validation` | Configured Ubuntu/Apptainer image, digest-verified before use; 60-minute job limit, five-minute limit per MPI invocation, and one OpenMP thread per rank | Generates BSSN and fCCZ4 at finite-difference orders 4, 6, and 8 with KO dissipation enabled and disabled; builds and runs every generated standalone CTest check; runs focused AddressSanitizer and UndefinedBehaviorSanitizer storage checks for every profile; embeds both formulations in Dendro-GR for FD4/6/8 with KO and FD6 without KO | Runs each selected real-host profile on one and two MPI ranks, runs one two-rank Minkowski step, checks injected transport, callback, element-order, and TOML-profile failures, and rejects mesh-sized allocation by the block-local RHS callback. |
+| `dendro-validation` | Configured Ubuntu/Apptainer image | This checked-in job still invokes the removed mock-host/library generation interface and obsolete generated target names. It does not describe the complete sibling applications now emitted by the Dendro examples. | No current Dendro production result can be inferred from this stale job. Required replacement checks are deterministic generation, complete builds, and MPI TwoPunctures runs for both applications at FD4/6/8. |
 | `charmpp-validation` | Configured Ubuntu/Apptainer Charm++ context | Generates and builds the configured superB elliptic, spectroscopy, and collision projects | Runs the configured collision executable through `charmrun`; no explicit scientific-output assertion beyond process success. |
 | `sebob-consistency-test` | Configured Ubuntu matrix | Checks out the workflow-selected trusted revision; generates/builds trusted and current SEOBNRv5 variants | Each helper invocation rebuilds both executables, uses exactly ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed the perturbation-derived baseline. |
 | `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the workflow-selected trusted revision | Uses the same ten-input and median-error criterion. |
@@ -89,27 +89,24 @@ cell is an ordinary C build. The helper installs no CUDA toolkit, declares no
 GPU runner, runs no generated executable, and checks no GPU result. Treat it as
 a local command recipe requiring a prepared environment, not CI pass evidence.
 
-Dendro has a dedicated configured job on every workflow invocation. Separate
-generated projects cover the complete BSSN/fCCZ4, finite-difference-order
-4/6/8, and KO-on/off matrix. Each project runs its full generated standalone
-CTest set. Focused sanitizer builds check nonzero offsets and flat storage for
-every profile. The job then reconfigures one Dendro-GR build for both
-formulations at FD4/6/8 with KO and FD6 without KO. The real-host test programs
-exercise block geometry, data transfer, callbacks, parameter forwarding, and
-failure termination on one and two MPI ranks. Each qualification executable
-also evolves Minkowski data for one RK4 step on two ranks. Host element-order
-and TOML-profile mismatches must emit their expected diagnostics. The
-block-local callback check rejects mesh-sized allocation. Shared-runner
-wall time is not treated as a performance measurement. These commands establish
-configured checks, not a stored run result. Reproduction details and
-proof limits live in [Validation, Standalone Host, And Deferred
-Tests](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md).
+Dendro's checked-in job predates complete sibling applications. It names
+removed generation options, library targets, qualification executables, and
+mock-host checks. Therefore it is a migration reminder, not configured coverage
+for `NRPy_BSSN_GR` or `NRPy_fCCZ4_GR`. Replacement workflow work requires
+explicit authorization for `.github/workflows/main.yml`.
+
+Current required checks live in [Production Validation And Deferred
+Checks](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md).
+They cover deterministic generation, explicit source lists, complete builds,
+MPI TwoPunctures initialization and diagnostics at FD4/6/8, remeshing,
+checkpoint/restart, constraints, waves, and horizons. This page records those
+requirements without claiming a configured or successful CI run.
 
 Claim evidence:
-- Claim: the configured Dendro job runs every standalone BSSN/fCCZ4 order-and-KO profile, focused sanitizer storage checks, and the selected real-host order/KO matrix on one and two MPI ranks; this configuration does not establish a latest successful run.
+- Claim: the checked-in Dendro job targets the removed mock-host/library interface and does not validate the complete sibling applications.
 - Role: CI behavior
-- Deciding authority: [main.yml](../../.github/workflows/main.yml), `dendro-validation`
-- Corroboration: [general_relativity/self_tests_cpp.py](../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py), generated numerical checks; [runtime_integration_test.cpp](../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), real-host block and failure checks; [general_relativity/main_cpp.py](../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py), Minkowski acceptance checks
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py), current command-line interface; [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py), current command-line interface
+- Corroboration: [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), current generated target and source emission
 
 Explicitly unsupported or unverified by these configurations: CarpetX build or
 runtime; JAX generated-package install/import/basic test or accelerator runtime;
@@ -128,11 +125,11 @@ generated file has been deliberately registered as frozen evidence.
 
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`; [.github/full_nrpy_local_ci.sh](../../.github/full_nrpy_local_ci.sh) - `example_scripts`, `cuda_example_scripts`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-mac`
-- [cmake_helpers.py](../../nrpy/infrastructures/Dendro/cmake_helpers.py) - `output_solver_cmake`, `output_tests_cmake`, their `add_test` registrations
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `einsteintoolkit-validation`; official Einstein Toolkit [Adding a test case](https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case) - `A test case is...`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `dendro-validation`
-- [general_relativity/self_tests_cpp.py](../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py) - nonflat RHS, diagnostics, and KO multiprecision oracle
-- [general_relativity/main_cpp.py](../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py) - real-host Minkowski acceptance checks
+- [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) - current BSSN generation interface
+- [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - current fCCZ4 generation interface
+- [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py) - current generated source and target emission
 - [test.ccl](../../nrpy/examples/et_WaveToyfiles/test/test.ccl) - `TEST WaveToyNRPy_test`, `RELTOL 1e-11`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `charmpp-validation`; official Charm++ [Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html) - `Compiling the Example`, `Running the Example`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `sebob-consistency-test`
