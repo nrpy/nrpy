@@ -199,14 +199,14 @@ class SEOBNR_aligned_spin_constants:
         )
 
         self.hNR["(3 , 3)"] = sp.Abs(
-            -0.088371 * chi**2 * delta * nu
-            + 0.036258 * chi33**2 * delta
-            + 1.057731 * chi33 * nu**2
-            - 0.466709 * chi33 * nu
-            + 0.99546 * chi33
-            + 1.96267 * delta * nu**2
-            + 0.027833 * delta * nu
-            + 0.558808 * delta
+            f2r(-0.088371) * chi33**2 * delta * nu
+            + f2r(0.036258) * chi33**2 * delta
+            + f2r(1.057731) * chi33 * nu**2
+            - f2r(0.466709) * chi33 * nu
+            + f2r(0.099546) * chi33
+            + f2r(1.96267) * delta * nu**2
+            + f2r(0.027833) * delta * nu
+            + f2r(0.558808) * delta
         )
 
         self.omegaNR["(3 , 3)"] = (
@@ -539,7 +539,9 @@ class SEOBNR_aligned_spin_constants:
         nu2 = nu * nu
         nu3 = nu2 * nu
         nu4 = nu3 * nu
-        sqrt1m4nu = sp.sqrt(1 - 4 * nu)
+        # 1 - 4 nu = delta^2 is never negative; clamp the rounding error that nu
+        # = m1 m2 / (m1 + m2)^2 can have for mass ratios extremely close to 1.
+        sqrt1m4nu = sp.sqrt(sp.Max(1 - 4 * nu, 0))
         Deltachi = chi1 - chi2
         Deltachi2 = Deltachi * Deltachi
         a2 = f2r(0.5609904135313374)

@@ -20,12 +20,15 @@ Author: Zachariah B. Etienne
 
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Dict, Mapping, Tuple
+from inspect import currentframe as cfr
+from types import FrameType as FT
+from typing import Dict, Mapping, Tuple, Union, cast
 
 import sympy as sp
 
 import nrpy.c_function as cfc
 import nrpy.grid as gri
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.c_codegen import c_codegen
 from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
@@ -85,9 +88,8 @@ class RHSBuild:
     :param flat_block_params: The flat-block adapter CFunction parameter list.
     :param used_codeparameters: The CodeParameters the signatures forward, in
         signature order, computed from the expression free symbols.
-    :param rhs_by_symbol_name: The assembled symbolic right-hand sides, kept so
-        the module's ``__main__`` can pin them against trusted values without
-        reassembling them.
+    :param rhs_by_symbol_name: The assembled symbolic right-hand sides used by
+        direct builder callers and owner validation.
     """
 
     evol_order: Tuple[str, ...]
@@ -171,6 +173,78 @@ def BSSN_rhs_expressions(
         )
 
     return rhs_by_symbol_name
+
+
+def rhs_expressions(
+    *,
+    enable_fCCZ4: bool = False,
+    CoordSystem: str = "Cartesian",
+    LapseEvolutionOption: str = "OnePlusLog",
+    ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant__Hatted",
+    enable_KreissOliger_dissipation: bool = True,
+) -> Mapping[str, sp.Expr]:
+    """
+    Assemble the BSSN or fCCZ4 right-hand-side expressions.
+
+    Replace directional upwind and downwind derivative symbols with the
+    centered derivative symbols emitted by the Dendro kernels.
+
+    :param enable_fCCZ4: Assemble fCCZ4 instead of BSSN expressions.
+    :param CoordSystem: Reference-metric coordinate system.
+    :param LapseEvolutionOption: Lapse evolution option.
+    :param ShiftEvolutionOption: Shift evolution option.
+    :param enable_KreissOliger_dissipation: Enable Kreiss-Oliger dissipation.
+    :return: RHS expressions keyed by symbolic output name.
+    """
+    if enable_fCCZ4:
+        expressions = build_fccz4_expression_bundle(
+            CoordSystem=CoordSystem,
+            LapseEvolutionOption=LapseEvolutionOption,
+            ShiftEvolutionOption=ShiftEvolutionOption,
+            enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
+        ).rhs_by_symbol_name
+    else:
+        expressions = BSSN_rhs_expressions(
+            CoordSystem=CoordSystem,
+            LapseEvolutionOption=LapseEvolutionOption,
+            ShiftEvolutionOption=ShiftEvolutionOption,
+            enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
+        )
+
+    free_symbols = [
+        symbol
+        for expression in expressions.values()
+        for symbol in expression.free_symbols
+    ]
+    derivative_symbols = extract_list_of_deriv_var_strings_from_sympyexpr_list(
+        free_symbols, "unset"
+    )
+    replacements: Dict[sp.Basic, sp.Basic] = {}
+    for symbol in derivative_symbols:
+        name = str(symbol)
+        separator = name.rfind("_")
+        suffix_position = separator + 1
+        suffix = name[suffix_position:]
+        prefix = next(
+            (
+                candidate
+                for candidate in ("dupD", "ddnD")
+                if suffix.startswith(candidate) and suffix[len(candidate) :].isdigit()
+            ),
+            None,
+        )
+        if prefix is None:
+            continue
+        # Preserve every tensor-component digit following the derivative
+        # suffix. For example, aDD_dupD000 becomes aDD_dD000, not
+        # aDD00_dD0. Canonical extraction above validates the derivative
+        # symbol; this replacement changes only its final operator suffix.
+        replacement_name = name[:suffix_position] + "dD" + suffix[len(prefix) :]
+        replacements[symbol] = sp.Symbol(replacement_name, **symbol.assumptions0)
+    return OrderedDict(
+        (rhs_name, expression.xreplace(replacements))
+        for rhs_name, expression in expressions.items()
+    )
 
 
 def build_rhs_eval(
@@ -326,56 +400,13 @@ def build_rhs_eval(
     require_serial_parallelization()
     formulation = "fCCZ4" if enable_fCCZ4 else "BSSN"
     expected_evol_count = 25 if enable_fCCZ4 else BSSN_EVOL_COUNT
-    if enable_fCCZ4:
-        bundle = build_fccz4_expression_bundle(
-            CoordSystem=CoordSystem,
-            LapseEvolutionOption=LapseEvolutionOption,
-            ShiftEvolutionOption=ShiftEvolutionOption,
-            enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
-        )
-        rhs_by_symbol_name = bundle.rhs_by_symbol_name
-    else:
-        rhs_by_symbol_name = BSSN_rhs_expressions(
-            CoordSystem=CoordSystem,
-            LapseEvolutionOption=LapseEvolutionOption,
-            ShiftEvolutionOption=ShiftEvolutionOption,
-            enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
-        )
-    free_symbols = [
-        symbol
-        for expression in rhs_by_symbol_name.values()
-        for symbol in expression.free_symbols
-    ]
-    derivative_symbols = extract_list_of_deriv_var_strings_from_sympyexpr_list(
-        free_symbols, "unset"
+    rhs_by_symbol_name = rhs_expressions(
+        enable_fCCZ4=enable_fCCZ4,
+        CoordSystem=CoordSystem,
+        LapseEvolutionOption=LapseEvolutionOption,
+        ShiftEvolutionOption=ShiftEvolutionOption,
+        enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     )
-    replacements: Dict[sp.Basic, sp.Basic] = {}
-    for symbol in derivative_symbols:
-        name = str(symbol)
-        separator = name.rfind("_")
-        suffix_position = separator + 1
-        suffix = name[suffix_position:]
-        prefix = next(
-            (
-                candidate
-                for candidate in ("dupD", "ddnD")
-                if suffix.startswith(candidate) and suffix[len(candidate) :].isdigit()
-            ),
-            None,
-        )
-        if prefix is None:
-            continue
-        # Preserve every tensor-component digit following the derivative
-        # suffix. For example, aDD_dupD000 becomes aDD_dD000, not
-        # aDD00_dD0. Canonical extraction above validates the derivative
-        # symbol; this replacement changes only its final operator suffix.
-        replacement_name = name[:suffix_position] + "dD" + suffix[len(prefix) :]
-        replacements[symbol] = sp.Symbol(replacement_name, **symbol.assumptions0)
-    centered: Dict[str, sp.Expr] = OrderedDict(
-        (rhs_name, expression.xreplace(replacements))
-        for rhs_name, expression in rhs_by_symbol_name.items()
-    )
-    rhs_by_symbol_name = centered
     kernel_expressions = list(rhs_by_symbol_name.values())
     operators = bkh.emitted_derivative_operators(kernel_expressions)
     remaining_directional = tuple(
@@ -535,7 +566,7 @@ def register_CFunctions_rhs_eval(
     CoordSystem: str = "Cartesian",
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant__Hatted",
-) -> RHSBuild:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand-side CFunctions for one formulation.
 
@@ -547,8 +578,13 @@ def register_CFunctions_rhs_eval(
     :param CoordSystem: Reference-metric coordinate system.
     :param LapseEvolutionOption: Lapse evolution option.
     :param ShiftEvolutionOption: Shift evolution option.
-    :return: Registered RHS build record with canonical expressions and order.
+    :return: The NRPy registries after registration, or ``None`` while
+        collecting parallel work.
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
     build = build_rhs_eval(
         solver_stem,
         enable_fCCZ4=enable_fCCZ4,
@@ -603,7 +639,7 @@ def register_CFunctions_rhs_eval(
     )
     roles.set_CFunction_role(flat_block_name, "rhs_eval_flat_block")
     roles.set_CFunction_codeparameters(flat_block_name, build.used_codeparameters)
-    return build
+    return pcg.NRPyEnv()
 
 
 if __name__ == "__main__":

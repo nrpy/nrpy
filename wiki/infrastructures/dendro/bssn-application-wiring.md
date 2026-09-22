@@ -73,6 +73,47 @@ Claim evidence:
 constraint and the three momentum constraint components from the established
 `BSSN_constraints` factory.
 
+### Production Dendro-GR application adapter
+
+`nrpy.examples.dendro_bssn --dendro-gr-host` selects `chi` as the evolved
+conformal factor and emits an opt-in `nrpy_bssnSolver` target for the public
+[Dendro-GR repository](https://github.com/paralab/Dendro-GR). The target
+compiles Dendro-GR's BSSN application and context, but renames that context's
+`bssnRHS` reference to `nrpy_bssnRHS`. The adapter therefore replaces only the
+right-hand-side evaluation. Dendro-GR still owns parameter input,
+TwoPunctures or approximate initial data, octree construction, mesh changes,
+Runge--Kutta evolution, physical-boundary treatment, algebraic projection,
+diagnostics, checkpoints, and output.
+
+Claim evidence:
+- Claim: `--dendro-gr-host` emits an opt-in `nrpy_bssnSolver` that retains the Dendro-GR BSSN application and replaces its `bssnRHS` call with the generated block kernel.
+- Role: public generated application interface
+- Deciding authority: [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py), `parse_args` and `main`; [bssn_host_adapter.py](../../../nrpy/infrastructures/Dendro/general_relativity/bssn_host_adapter.py), `output_bssn_host_files`
+- Corroboration: [host test README](../../../nrpy/infrastructures/Dendro/tests_infra/README.md#full-dendro-gr-bssn-application), generation, build, and short-run procedure against the public host
+
+Dendro-GR stores the full conformal metric in its legacy 24-component order.
+The generated BSSN kernel stores `hDD = gammabarDD - deltaDD` in NRPy's
+registry order. The adapter remaps component pointers and subtracts one from
+only the three diagonal metric inputs. Their right-hand sides need no value
+conversion because the time derivative of the Cartesian reference metric is
+zero. It maps `ETA_CONST` to generated `eta` and maps `KO_DISS_SIGMA` to both
+generated KO strengths.
+
+The adapter checks the host element order, block padding, scalar type, field
+count, block geometry, and generated parameters before evaluation. It applies
+the generated centered block kernel, then Dendro-GR's radiative physical
+boundary routine. A KO-enabled profile adds Dendro-GR's boundary KO values
+only at physical-boundary points because generated KO already covers the
+remaining block interior. Conformal-factor-scaled KO and CUDA host execution
+are rejected.
+
+This path changes the equations evaluated by the Dendro-GR application. It
+uses NRPy's centered-advection BSSN equations and lower-base-order KO profile.
+Dendro-GR compile definitions for legacy SSL or CAHD right-hand-side terms do
+not add those terms to the generated equations. The host's initial-lapse
+choice and all retained mesh and output operations remain active. Exact build,
+input, and run commands live in the [host test README](../../../nrpy/infrastructures/Dendro/tests_infra/README.md#full-dendro-gr-bssn-application).
+
 ### The DIAG-before-factory ordering, and why
 
 `BSSN_constraints` registers `H`, `M` and `LAMBDA_CONSTRAINT` into the **AUX**
@@ -168,6 +209,8 @@ defects that a single-formulation tree could not expose:
 - [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py) - `BSSN_gauge_RHSs`
 - [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py) - `BSSNconstraints`
 - [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) - generation entry point and command-line profile
+- [bssn_host_adapter.py](../../../nrpy/infrastructures/Dendro/general_relativity/bssn_host_adapter.py) - Dendro-GR application target, component mapping, physical boundaries, and host parameter mapping
+- [tests_infra/README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md) - Dendro-GR application generation, build, and run procedure
 
 ## See Also
 
