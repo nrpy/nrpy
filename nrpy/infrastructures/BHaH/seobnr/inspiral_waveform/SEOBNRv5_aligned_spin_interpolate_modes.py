@@ -118,9 +118,12 @@ gsl_spline_init(spline_imag,times_old,h22_nophase_imag, nsteps_inspiral_old);
 commondata->nsteps_inspiral = nsteps_new;
 commondata->waveform_inspiral = (double complex *)realloc(commondata->waveform_inspiral,commondata->nsteps_inspiral * NUMMODES * sizeof(double complex));
 if (commondata->waveform_inspiral == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_modes(), malloc() failed to for waveform_inspiral\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_modes(), realloc() failed for waveform_inspiral\\n");
   exit(1);
 }
+// realloc() does not zero new memory; only TIME and the (2,2)-strain slot are
+// filled below, so higher-mode slots must be reset to zero here.
+memset(commondata->waveform_inspiral, 0, commondata->nsteps_inspiral * NUMMODES * sizeof(double complex));
 for (i = 0; i < commondata->nsteps_inspiral; i++){
   time = tstart + i * dT;
   commondata->waveform_inspiral[IDX_WF(i,TIME)] = time;

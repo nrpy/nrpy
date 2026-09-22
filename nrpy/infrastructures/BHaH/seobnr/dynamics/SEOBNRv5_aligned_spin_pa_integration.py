@@ -152,13 +152,34 @@ for (int j = 1; j <= PA_ORDER; j++) {
     commondata->dpphi_dr = dpphi_dr[i];
     commondata->dprstar_dr = dprstar_dr[i];
     switch (j % 2) {
-    case 0:
+    case 0: {
       // even order, compute pphi
       x_lo = pphi[i] * 0.95;
       x_hi = pphi[i] * 1.05;
+      // The 5% window above is not guaranteed to bracket the root, so confirm
+      // a sign change first and, if needed, expand geometrically within the
+      // physical pphi > 0 domain before calling GSL's bracketed solver.
+      REAL f_lo = GSL_FN_EVAL(&F_pphi, x_lo);
+      REAL f_hi = GSL_FN_EVAL(&F_pphi, x_hi);
+      int pa_bracket_found = (f_lo * f_hi <= 0.);
+      int pa_expand_iter = 0;
+      const int pa_max_expand_iter = 60;
+      while (!pa_bracket_found && pa_expand_iter < pa_max_expand_iter && x_lo > 0.) {
+        x_lo *= 0.9; // widen downward, staying inside the physical pphi > 0 domain
+        x_hi *= 1.1; // widen upward
+        f_lo = GSL_FN_EVAL(&F_pphi, x_lo);
+        f_hi = GSL_FN_EVAL(&F_pphi, x_hi);
+        pa_bracket_found = (f_lo * f_hi <= 0.);
+        pa_expand_iter++;
+      } // END WHILE: expand the pphi bracket until a sign change is found or bounds are exhausted
+      if (!pa_bracket_found || x_lo <= 0.) {
+        fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_pa_integration(), failed to bracket the pphi post-adiabatic root at radial point %zu (r=%.15e)\\n", i, r[i]);
+        exit(1);
+      } // END IF: pphi bracket could not be established
       pphi[i] = root_finding_1d(x_lo, x_hi, &F_pphi);
       break;
-    case 1:
+    }
+    case 1: {
       // odd order, compute prstar
       // note that prstar is always negative (inspiral)
       // Since upper and lower bounds are a 5% window of current prstar
@@ -166,8 +187,28 @@ for (int j = 1; j <= PA_ORDER; j++) {
       // If prstar ~ 0, we can use the bounds from the ODE initial conditions
       x_hi = fabs(prstar[i]) > 1e-14 ? prstar[i] * 0.95 : 0.;
       x_lo = fabs(prstar[i]) > 1e-14 ? prstar[i] * 1.05 : -3e-2;
+      // As with pphi, confirm a sign change before calling GSL, expanding
+      // geometrically within the physical prstar <= 0 (inward) domain.
+      REAL f_lo = GSL_FN_EVAL(&F_prstar, x_lo);
+      REAL f_hi = GSL_FN_EVAL(&F_prstar, x_hi);
+      int pa_bracket_found = (f_lo * f_hi <= 0.);
+      int pa_expand_iter = 0;
+      const int pa_max_expand_iter = 60;
+      while (!pa_bracket_found && pa_expand_iter < pa_max_expand_iter && x_hi <= 0.) {
+        x_lo *= 1.1; // widen the inward (more negative) bound
+        x_hi *= 0.9; // widen the outward bound toward the prstar <= 0 domain boundary
+        f_lo = GSL_FN_EVAL(&F_prstar, x_lo);
+        f_hi = GSL_FN_EVAL(&F_prstar, x_hi);
+        pa_bracket_found = (f_lo * f_hi <= 0.);
+        pa_expand_iter++;
+      } // END WHILE: expand the prstar bracket until a sign change is found or bounds are exhausted
+      if (!pa_bracket_found || x_hi > 0.) {
+        fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_pa_integration(), failed to bracket the prstar post-adiabatic root at radial point %zu (r=%.15e)\\n", i, r[i]);
+        exit(1);
+      } // END IF: prstar bracket could not be established
       prstar[i] = root_finding_1d(x_lo, x_hi, &F_prstar);
       break;
+    }
     default:
       break;
     } // END SWITCH: choose PA variable to solve at this order

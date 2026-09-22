@@ -56,6 +56,13 @@ REAL y[4], dydt[4];
 int status = 0;
 int i;
 int stop = 0;
+
+// Step 0: Reject an unusable starting orbital frequency before setting up the ODE state.
+if (!isfinite(commondata->initial_omega) || commondata->initial_omega <= 0.0){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), initial_omega must be finite and positive, got %.15e\\n", commondata->initial_omega);
+  exit(1);
+}
+
 y[0] = commondata->r;
 y[1] = commondata->phi;
 y[2] = commondata->prstar;
@@ -63,8 +70,22 @@ y[3] = commondata->pphi;
 status = SEOBNRv5_aligned_spin_right_hand_sides(t, y, dydt, commondata);
 int rhs_status[1] = {GSL_SUCCESS};
 char rhs_name[] = "gsl_odeiv2_evolve_apply";
+
+// Step 0.a: Require a finite, positive orbital-frequency derivative and a finite,
+// positive derived step size before either value reaches GSL's adaptive evolution.
+if (!isfinite(dydt[1]) || dydt[1] <= 0.0){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), dydt[1] must be finite and positive, got %.15e\\n", dydt[1]);
+  exit(1);
+}
 REAL h = 2.0 * M_PI / dydt[1] / 5.0;
-size_t bufferlength = (size_t)(tmax / h); // runs up to 0.01x maximum time (we should not ideally run that long)
+if (!isfinite(h) || h <= 0.0){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), initial step size h must be finite and positive, got %.15e\\n", h);
+  exit(1);
+}
+
+// Step 0.b: Start the dynamics buffer at a modest fixed capacity and grow it
+// geometrically (Step 2.a) instead of reserving a full-duration sample count.
+size_t bufferlength = 4096;
 REAL *restrict dynamics_RK = (REAL *)malloc(bufferlength * (NUMVARS)*sizeof(REAL));
 if (dynamics_RK == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), malloc() failed for dynamics_RK\\n");
@@ -96,7 +117,15 @@ while (t < tmax && stop == 0) {
 
   // Step 2.a: Grow the dynamics buffer when the trajectory outpaces it.
   if (nsteps >= bufferlength) {
+    if (bufferlength > SIZE_MAX / 2){
+      fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), dynamics_RK buffer capacity overflowed while doubling\\n");
+      exit(1);
+    }
     bufferlength = 2 * bufferlength;
+    if (bufferlength > SIZE_MAX / (NUMVARS * sizeof(REAL))){
+      fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), dynamics_RK allocation size overflowed\\n");
+      exit(1);
+    }
     dynamics_RK = (REAL *)realloc(dynamics_RK, bufferlength * (NUMVARS) * sizeof(REAL));
     if (dynamics_RK == NULL){
       fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), realloc() failed for dynamics_RK\\n");
@@ -150,6 +179,10 @@ gsl_odeiv2_evolve_free(e);
 
 // Step 4: Save the time samples as a separate array.
 REAL *restrict times = malloc(nsteps * sizeof(REAL));
+if (times == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), malloc() failed for times\\n");
+  exit(1);
+}
 for (i = 0; i < nsteps; i++){
   times[i] = dynamics_RK[IDX(i,TIME)];
 } // END LOOP: for i over raw dynamics samples

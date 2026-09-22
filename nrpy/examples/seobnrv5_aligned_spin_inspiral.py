@@ -63,6 +63,10 @@ Step 2: Compute Hamiltonian and derivatives."""
     params = "int argc, const char *argv[]"
     body = r"""  commondata_struct commondata; // commondata contains parameters common to all grids.
 //Step 0: Initialize a loop parameter for outputs
+// Step 0.a: Disable GSL's default abort-on-error handler so every GSL call's
+// returned status reaches this project's own status handling instead of
+// terminating the process via SIGABRT.
+gsl_set_error_handler_off();
 // Step 1.a: Set each commondata CodeParameter to default.
 commondata_struct_set_to_default(&commondata);
 // Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
