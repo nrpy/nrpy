@@ -125,12 +125,15 @@ Claim evidence:
 
 Its covariant conformal connection constraint vector is
 `LambdaConstraintU = LambdabarU - DGammaU`.
+Brown's connection equation adds `C^k Dhat_k beta^i` to the coordinate-time
+RHS. Combined with the Lie stretch, its shift-gradient part is
+`-DGammaU[k] Dhat_k betaU[i]`; the change vanishes when `C^i=0`.
 
 Claim evidence:
-- Claim: `BSSNconstraints.LambdaConstraintU` represents the covariant conformal connection constraint vector: evolved `LambdabarU` minus `DGammaU`, where `DGammaU` contracts the conformal/reference connection difference with the inverse conformal metric.
-- Role: public/scientific contract
-- Deciding authority: [Brown, *Covariant formulations of BSSN and the standard gauge*, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2), Eqs. (12a), (12b), and (15)
-- Corroboration: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints_dict.__getitem__` doctest
+- Claim: `BSSNconstraints.LambdaConstraintU` is the covariant conformal connection constraint, and `BSSNRHSs` includes Brown's `C^k Dhat_k beta^i` adjustment.
+- Role: public scientific equation definition
+- Deciding authority: [Brown, *Covariant formulations of BSSN and the standard gauge*, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2), Eqs. (12a), (12b), (15), (21e), and (22e)
+- Corroboration: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`; [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints_dict.__getitem__`
 
 ### Opt-in YBS Gamma-constraint adjustment
 
@@ -177,13 +180,13 @@ With `Theta = Dbar_j beta^j`, the corresponding constraint propagation has
 the lower-order addition `-YBS_chi*Theta*C^i`:
 
 ```text
-partial_t C^i = beta^j partial_j C^i - C^j partial_j beta^i
+partial_t C^i = beta^j Dhat_j C^i
                 + 2 alpha exp(4 phi) M^i - YBS_chi Theta C^i.
 ```
 
 This term attenuates its isolated local factor only where
 `YBS_chi*Theta > 0`; it amplifies where that product is negative and is neutral
-where it vanishes. Shift shear and the momentum-constraint source can dominate,
+where it vanishes. Advection and the momentum-constraint source can dominate,
 so a globally positive `YBS_chi` is not a uniform damping guarantee when
 `Theta` changes sign. Because the addition is lower order, it does not change
 the current second-order system's principal symbol or high-frequency
@@ -242,7 +245,7 @@ corresponding trusted files.
 
 ## Sources
 
-- [Brown, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2) - Eqs. (12a), (12b), and (15); published as [Phys. Rev. D 79, 104029](https://doi.org/10.1103/PhysRevD.79.104029) (secondary metadata)
+- [Brown, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2) - Eqs. (12a), (12b), (15), (21e), and (22e); published as [Phys. Rev. D 79, 104029](https://doi.org/10.1103/PhysRevD.79.104029) (secondary metadata)
 - [Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066v2](https://arxiv.org/pdf/gr-qc/0209066v2) - Eq. (45), adjusted Gamma-constraint coefficient
 - [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2) - Eq. (47), `xi` parameterization of the adjusted coefficient
 - [Baumgarte and de Oliveira, arXiv:2201.08857v1](https://arxiv.org/pdf/2201.08857v1) - Eq. (1), Bona-Masso slicing and the `f(alpha)=1` harmonic specialization

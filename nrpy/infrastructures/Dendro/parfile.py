@@ -62,6 +62,9 @@ def output_parfile_sample() -> str:
 def generate_default_parfile(
     solver_stem: str,
     profile_name: str,
+    fd_order: int,
+    ko_fd_order: int,
+    ko_effective_difference_order: int,
     required_padding: int,
     enable_KreissOliger_dissipation: bool,
 ) -> str:
@@ -70,17 +73,21 @@ def generate_default_parfile(
 
     :param solver_stem: Lowercase formulation stem, used as the table prefix.
     :param profile_name: Name of the generation profile.
+    :param fd_order: Centered finite-difference order.
+    :param ko_fd_order: Base order supplied to NRPy's ``dKOD`` construction.
+    :param ko_effective_difference_order: Actual even KO difference order.
     :param required_padding: Ghost points required on every axis.
     :param enable_KreissOliger_dissipation: Whether the generated profile emits
         Kreiss-Oliger dissipation, passed by the caller that built the kernels
         rather than read from a global parameter.
     :return: The complete parameter-file text.
+    :raises ValueError: If the finite-difference order, KO order, effective KO
+        difference order, and required padding do not define a supported
+        Dendro profile.
 
     Doctests:
-    >>> import nrpy.finite_difference  # noqa: F401
     >>> import nrpy.c_function as cfc
     >>> from nrpy.infrastructures.Dendro import CFunction_roles as roles
-    >>> par.set_parval_from_str("fd_order", 4)
     >>> _saved_functions = dict(cfc.CFunction_dict)
     >>> _saved_extras = dict(par.glb_extras_dict)
     >>> try:
@@ -88,7 +95,7 @@ def generate_default_parfile(
     ...     _ = par.glb_extras_dict.pop("Dendro", None)
     ...     cfc.register_CFunction(desc="test RHS", name="fixture_rhs", body="(void)0;")
     ...     roles.set_CFunction_role("fixture_rhs", "rhs_eval_block")
-    ...     text = generate_default_parfile("bssn", "vacuum", 3, False)
+    ...     text = generate_default_parfile("bssn", "vacuum", 4, 2, 4, 2, False)
     ... finally:
     ...     cfc.CFunction_dict.clear()
     ...     cfc.CFunction_dict.update(_saved_functions)
@@ -98,10 +105,23 @@ def generate_default_parfile(
     ...         if "Dendro" in _saved_extras
     ...         else None
     ...     )
-    >>> [line for line in text.splitlines() if not line.startswith("#")][1:6]
-    ['[bssn.profile]', 'name = "vacuum"', 'fd_order = 4', 'required_padding = 3', 'ko_enabled = false']
+    >>> [line for line in text.splitlines() if not line.startswith("#")][1:8]
+    ['[bssn.profile]', 'name = "vacuum"', 'fd_order = 4', 'ko_fd_order = 2', 'ko_effective_difference_order = 4', 'required_padding = 2', 'ko_enabled = false']
     """
-    fd_order = int(par.parval_from_str("fd_order"))
+    fd_order = int(fd_order)
+    ko_order = int(ko_fd_order)
+    ko_effective_order = int(ko_effective_difference_order)
+    if (
+        fd_order not in (4, 6, 8)
+        or ko_order != fd_order - 2
+        or ko_effective_order != fd_order
+        or int(required_padding) != fd_order // 2
+    ):
+        raise ValueError(
+            "Dendro profile requires fd_order in (4, 6, 8), "
+            "ko_fd_order=fd_order-2, effective KO order equal to fd_order, "
+            "and padding equal to fd_order/2."
+        )
     enable_ko = bool(enable_KreissOliger_dissipation)
     sample = output_parfile_sample()
     return BANNER + f"""#
@@ -113,6 +133,8 @@ def generate_default_parfile(
 [{solver_stem}.profile]
 name = "{profile_name}"
 fd_order = {fd_order}
+ko_fd_order = {ko_order}
+ko_effective_difference_order = {ko_effective_order}
 required_padding = {int(required_padding)}
 ko_enabled = {"true" if enable_ko else "false"}
 

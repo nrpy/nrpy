@@ -2,13 +2,13 @@
 """
 CMake emitters for a generated Dendro solver.
 
-Every emitted name derives from the ``solver_name``, ``solver_prefix`` and
-``exec_or_library_name`` arguments threaded from the calling example, matching
+Every emitted name derives from the solver and target names threaded from the
+calling example, matching
 how BHaH threads ``project_name`` and ETLegacy threads ``thorn_name``.
 
 NRPy provenance appears in each generated module directory and CMake project.
 Names inside the module retain the formulation stem and required Dendro target
-names, such as ``BSSN_ENABLE_CUDA``, ``bssn_common``, and ``bssnCtx.cpp``.
+names, such as ``BSSN_ENABLE_CUDA``, ``nrpy_bssn_dendro``, and ``bssnCtx.cpp``.
 
 No field list, physics parameter, finite-difference coefficient or numerical
 loop appears here; the generated source list is read from the CFunction
@@ -26,7 +26,7 @@ from nrpy.infrastructures.Dendro.generated_file_banner import generated_file_ban
 from nrpy.infrastructures.Dendro.header_guards import header_guard
 
 BANNER = generated_file_banner("#").splitlines()
-SRC = "${CMAKE_CURRENT_SOURCE_DIR}"
+SRC = "${CMAKE_CURRENT_LIST_DIR}"
 
 
 class ModuleLayout(NamedTuple):
@@ -145,11 +145,12 @@ def output_CFunctions_function_prototypes_and_construct_CMakeLists(
     solver_name: str,
     solver_stem: str,
     solver_prefix: str,
-    exec_or_library_name: str,
+    production_target: str,
+    qualification_target: str,
     test_sections: Sequence[str],
     standalone_application_ctest: Sequence[str],
     real_application_ctest: Sequence[str],
-    real_host_available: bool,
+    module_cmake_includes: Sequence[str] = (),
 ) -> Dict[str, str]:
     """
     Emit the CFunction sources, the prototypes header and the CMake files.
@@ -162,12 +163,13 @@ def output_CFunctions_function_prototypes_and_construct_CMakeLists(
     :param solver_name: NRPy module directory name, e.g. ``nrpy_bssn``.
     :param solver_stem: Lowercase formulation stem for emitted header names.
     :param solver_prefix: Bare formulation prefix for the CMake variables.
-    :param exec_or_library_name: Name of the solver executable target.
+    :param production_target: Name of the Dendro production library target.
+    :param qualification_target: Name of the generated qualification driver.
     :param test_sections: Explicit application-owned self-test section names.
     :param standalone_application_ctest: Standalone application CTest lines.
     :param real_application_ctest: Real-host application CTest lines.
-    :param real_host_available: Whether this formulation has qualified real-host
-        integration.
+    :param module_cmake_includes: Solver-relative CMake files to include after
+        the production library and qualification-driver definitions.
     :return: Mapping of ``Dendro-GR/<solver_name>/<path>`` to file text.
     """
     layout = module_layout(solver_name)
@@ -199,10 +201,11 @@ def output_CFunctions_function_prototypes_and_construct_CMakeLists(
         solver_name,
         solver_prefix,
         solver_stem,
-        exec_or_library_name,
+        production_target,
+        qualification_target,
         standalone_application_ctest,
         real_application_ctest,
-        real_host_available,
+        module_cmake_includes,
     )
     return artifacts
 
@@ -243,10 +246,11 @@ def output_solver_cmake(
     solver_name: str,
     solver_prefix: str,
     solver_stem: str,
-    exec_or_library_name: str,
+    production_target: str,
+    qualification_target: str,
     standalone_application_ctest: Sequence[str],
     real_application_ctest: Sequence[str],
-    real_host_available: bool,
+    module_cmake_includes: Sequence[str] = (),
 ) -> str:
     """
     Emit the generated solver's ``CMakeLists.txt``.
@@ -254,124 +258,94 @@ def output_solver_cmake(
     :param solver_name: NRPy module directory and CMake project name, e.g. ``nrpy_bssn``.
     :param solver_prefix: Bare formulation prefix for CMake variables, e.g. ``BSSN``.
     :param solver_stem: Lowercase stem the emitters use for solver file names.
-    :param exec_or_library_name: Name of the solver executable target.
+    :param production_target: Name of the Dendro production library target.
+    :param qualification_target: Name of the generated qualification driver.
     :param standalone_application_ctest: Standalone application CTest lines.
     :param real_application_ctest: Real-host application CTest lines.
-    :param real_host_available: Whether to emit the selectable real-host branch.
+    :param module_cmake_includes: Solver-relative CMake files to include after
+        the standard generated targets.
     :return: The CMake file text.
 
-    A formulation without qualified real-host support has no selectable host
-    mode or real-host tests:
-
-    >>> standalone_only = output_solver_cmake(
-    ...     "nrpy_bssn", "BSSN", "bssn", "bssnSolver",
-    ...     ("add_test(NAME bssn_standalone)",), (),
-    ...     real_host_available=False,
+    >>> text = output_solver_cmake(
+    ...     "nrpy_bssn", "BSSN", "bssn", "nrpy_bssn_dendro",
+    ...     "nrpy_bssn_dendro_qualify", ("add_test(NAME bssn_standalone)",),
+    ...     ("add_test(NAME bssn_real_minkowski)",),
+    ...     ("generated/cmake/dendro_gr_host.cmake",),
     ... )
-    >>> "BSSN_STANDALONE_HOST" in standalone_only
-    False
-    >>> "bssn_real_minkowski" in standalone_only
-    False
-
-    A qualified formulation retains the selectable real-host branch:
-
-    >>> selectable = output_solver_cmake(
-    ...     "fCCZ4", "FCCZ4", "fccz4", "fccz4Solver",
-    ...     ("add_test(NAME fccz4_standalone)",),
-    ...     ("add_test(NAME fccz4_real_minkowski)",),
-    ...     real_host_available=True,
-    ... )
-    >>> "option(FCCZ4_STANDALONE_HOST" in selectable
+    >>> all(name in text for name in ("nrpy_bssn_dendro", "nrpy_bssn_dendro_qualify"))
     True
-    >>> "fccz4_real_minkowski" in selectable
+    >>> "bssn_common" in text
+    False
+    >>> obsolete = ("BSSN_STANDALONE_HOST", "bssnSolver", "_nrpy_dendro_legacy_driver_request")
+    >>> any(name in text for name in obsolete)
+    False
+    >>> 'include("${CMAKE_CURRENT_LIST_DIR}/generated/cmake/dendro_gr_host.cmake")' in text
     True
 
     """
-    # The file names come from solver_stem, which the examples also use to
-    # name the emitted sources; deriving a second stem from solver_prefix
-    # would emit a target whose sources do not exist whenever the two differ.
     stem = solver_stem
     lines: List[str] = list(BANNER) + [
         "cmake_minimum_required(VERSION 3.13)",
-        f"project({solver_name} CXX)",
+        "set(_nrpy_dendro_top_level OFF)",
+        "if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)",
+        f"  project({solver_name} CXX)",
+        "  set(_nrpy_dendro_top_level ON)",
+        "endif()",
         "",
-        "# The solver runs under MPI so the checks can compare all ranks.",
-        "# MPI is a standard host dependency, not Dendrolib; the real Dendro-GR",
-        "# build also provides it.",
-        "find_package(MPI REQUIRED COMPONENTS CXX)",
+        "set(_nrpy_dendro_option_default OFF)",
+        "if(_nrpy_dendro_top_level)",
+        "  set(_nrpy_dendro_option_default ON)",
+        "endif()",
+        "option(NRPY_DENDRO_BUILD_DRIVERS",
+        '       "Build generated Dendro qualification drivers"',
+        "       ${_nrpy_dendro_option_default})",
+        "option(NRPY_DENDRO_BUILD_TESTS",
+        '       "Build generated Dendro numerical tests"',
+        "       ${_nrpy_dendro_option_default})",
         "",
-    ]
-    if real_host_available:
-        lines += [
-            f'option({solver_prefix}_STANDALONE_HOST "Build the solver standalone, against the NRPy-supplied Dendro host declarations rather than a real Dendro-GR build" ON)',
-            "",
-        ]
-    lines += [
-        f"set({solver_prefix}_MODULE_ROOT {SRC})",
-        f"include({SRC}/generated/cmake/generated_sources.cmake)",
+        f'set({solver_prefix}_MODULE_ROOT "{SRC}")',
+        f'include("{SRC}/generated/cmake/generated_sources.cmake")',
         "",
-        f"add_library({stem}_common OBJECT",
-        f"  src/{stem}Ctx.cpp",
+        "if(TARGET dendro5)",
+        f"  add_library({production_target}",
+        f'    "{SRC}/src/{stem}Ctx.cpp"',
         "  ${" + solver_prefix + "_NRPY_GENERATED_SOURCES}",
-        ")",
+        "  )",
+        f"  target_compile_features({production_target} PUBLIC cxx_std_17)",
+        f"  target_compile_options({production_target} PRIVATE -Wall)",
+        f"  target_include_directories({production_target} PUBLIC",
+        f'    "{SRC}/include"',
+        f'    "{SRC}/generated/include"',
+        "  )",
+        f"  target_link_libraries({production_target} PUBLIC dendro5)",
+        "elseif(NOT _nrpy_dendro_top_level)",
+        f'  message(FATAL_ERROR "{production_target} requires the Dendro target dendro5")',
+        "endif()",
         "",
-        f"target_compile_features({stem}_common PUBLIC cxx_std_17)",
-    ]
-    standalone_host_lines = [
-        "# The standalone host declarations are reached only through this",
-        "# definition, so a real-host build cannot pull them in silently.",
-        f"target_compile_definitions({stem}_common PUBLIC NRPY_DENDRO_STANDALONE_HOST)",
-        f"target_include_directories({stem}_common PUBLIC",
-        f"  {SRC}/standalone_host",
-        ")",
-    ]
-    if real_host_available:
-        lines += [f"if({solver_prefix}_STANDALONE_HOST)"]
-        lines += [f"  {line}" if line else line for line in standalone_host_lines]
-        lines += [
-            "else()",
-            "  if(NOT TARGET dendro5 OR NOT TARGET dendro_config OR NOT TARGET toml11::toml11 OR NOT TARGET bssn_common)",
-            '    message(FATAL_ERROR "Real GR host requires Dendro-GR targets dendro5, dendro_config, toml11::toml11, and bssn_common")',
-            "  endif()",
-            f"  target_link_libraries({stem}_common PUBLIC dendro5 toml11::toml11 bssn_common)",
-            "  get_target_property(NRPY_DENDRO_INCLUDE_DIRS dendro_config INTERFACE_INCLUDE_DIRECTORIES)",
-            "  get_target_property(NRPY_BSSN_INCLUDE_DIRS bssn_common INTERFACE_INCLUDE_DIRECTORIES)",
-            "  # Keep -Wall useful for generated sources without diagnosing the",
-            "  # fixed external host's headers as though NRPy owned them.",
-            f"  target_include_directories({stem}_common SYSTEM PRIVATE",
-            "    ${NRPY_DENDRO_INCLUDE_DIRS}",
-            "    ${NRPY_BSSN_INCLUDE_DIRS}",
-            "  )",
-            "endif()",
-        ]
-    else:
-        lines += standalone_host_lines
-    lines += [
-        f"target_compile_options({stem}_common PRIVATE -Wall)",
-        "",
-        f"target_include_directories({stem}_common PUBLIC",
-        f"  {SRC}/include",
-        f"  {SRC}/generated/include",
-        ")",
-        "",
-        f"if(TARGET {exec_or_library_name})",
-        f'  message(FATAL_ERROR "{exec_or_library_name} target already defined; use a unique generated solver target")',
-        "else()",
-        f"  add_executable({exec_or_library_name} src/{stem}_main.cpp)",
-        f"  target_compile_options({exec_or_library_name} PRIVATE -Wall)",
-        f"  target_link_libraries({exec_or_library_name} PRIVATE {stem}_common MPI::MPI_CXX)",
-    ]
-    if real_host_available:
-        lines += [
-            f"  if(NOT {solver_prefix}_STANDALONE_HOST)",
-            f"    target_link_libraries({exec_or_library_name} PRIVATE bssn_common)",
-            f"    target_include_directories({exec_or_library_name} SYSTEM PRIVATE",
-            "      ${NRPY_DENDRO_INCLUDE_DIRS}",
-            "      ${NRPY_BSSN_INCLUDE_DIRS}",
-            "    )",
-            "  endif()",
-        ]
-    lines += [
+        "if(NRPY_DENDRO_BUILD_DRIVERS)",
+        "  find_package(MPI REQUIRED COMPONENTS CXX)",
+        "  if(_nrpy_dendro_top_level)",
+        f"    add_executable({qualification_target}",
+        f'      "{SRC}/src/{stem}_main.cpp"',
+        f'      "{SRC}/src/{stem}Ctx.cpp"',
+        "      ${" + solver_prefix + "_NRPY_GENERATED_SOURCES}",
+        "    )",
+        f"    target_compile_definitions({qualification_target} PRIVATE NRPY_DENDRO_STANDALONE_HOST)",
+        f"    target_include_directories({qualification_target} PRIVATE",
+        f'      "{SRC}/standalone_host"',
+        f'      "{SRC}/include"',
+        f'      "{SRC}/generated/include"',
+        "    )",
+        f"    target_link_libraries({qualification_target} PRIVATE MPI::MPI_CXX)",
+        "  else()",
+        "    if(NOT TARGET toml11::toml11)",
+        f'      message(FATAL_ERROR "{qualification_target} requires toml11::toml11")',
+        "    endif()",
+        f'    add_executable({qualification_target} "{SRC}/src/{stem}_main.cpp")',
+        f"    target_link_libraries({qualification_target} PRIVATE {production_target} MPI::MPI_CXX toml11::toml11)",
+        "  endif()",
+        f"  target_compile_features({qualification_target} PRIVATE cxx_std_17)",
+        f"  target_compile_options({qualification_target} PRIVATE -Wall)",
         "endif()",
         "",
         f'option({solver_prefix}_ENABLE_CUDA "Build a qualified generated CUDA backend" OFF)',
@@ -379,18 +353,26 @@ def output_solver_cmake(
         '  message(FATAL_ERROR "This generated profile is CPU-qualified only")',
         "endif()",
         "",
-        "enable_testing()",
     ]
-    if real_host_available:
-        lines += [f"if({solver_prefix}_STANDALONE_HOST)", "add_subdirectory(tests)", ""]
-        lines.extend(standalone_application_ctest)
-        lines.append("else()")
-        lines.extend(real_application_ctest)
-        lines.extend(("endif()", ""))
-    else:
-        lines += ["add_subdirectory(tests)", ""]
-        lines.extend(standalone_application_ctest)
-        lines.append("")
+    for cmake_include in module_cmake_includes:
+        lines.extend(
+            (
+                f'include("${{CMAKE_CURRENT_LIST_DIR}}/{cmake_include}")',
+                "",
+            )
+        )
+    lines += [
+        "if(NRPY_DENDRO_BUILD_TESTS)",
+        "  if(_nrpy_dendro_top_level)",
+        "    enable_testing()",
+        "  endif()",
+        f'  add_subdirectory("{SRC}/tests" "${{CMAKE_CURRENT_BINARY_DIR}}/{stem}_tests")',
+    ]
+    lines += ["  if(NRPY_DENDRO_BUILD_DRIVERS)", "    if(_nrpy_dendro_top_level)"]
+    lines.extend(f"      {line}" for line in standalone_application_ctest)
+    lines.append("    else()")
+    lines.extend(f"      {line}" for line in real_application_ctest)
+    lines.extend(("    endif()", "  endif()", "endif()", ""))
     return "\n".join(lines)
 
 
@@ -413,17 +395,17 @@ def output_tests_cmake(
     """
     stem = solver_stem
     lines: List[str] = list(BANNER) + [
-        f"set({solver_prefix}_MODULE_ROOT {SRC}/..)",
-        f"include({SRC}/../generated/cmake/generated_sources.cmake)",
+        f'get_filename_component({solver_prefix}_MODULE_ROOT "{SRC}/.." ABSOLUTE)',
+        f'include("${{{solver_prefix}_MODULE_ROOT}}/generated/cmake/generated_sources.cmake")',
         f"add_executable({stem}_self_tests",
-        f"  {SRC}/{stem}_self_tests.cpp",
+        f'  "{SRC}/{stem}_self_tests.cpp"',
         "  ${" + solver_prefix + "_NRPY_GENERATED_SOURCES}",
         ")",
         f"target_include_directories({stem}_self_tests PRIVATE",
-        f"  {SRC}/../standalone_host",
-        f"  {SRC}/../include",
-        f"  {SRC}/../generated/include",
-        f"  {SRC}",
+        f'  "{SRC}/../standalone_host"',
+        f'  "{SRC}/../include"',
+        f'  "{SRC}/../generated/include"',
+        f'  "{SRC}"',
         ")",
         f"target_compile_features({stem}_self_tests PRIVATE cxx_std_17)",
         "# This target compiles the generated sources directly rather than",

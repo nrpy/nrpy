@@ -7,17 +7,17 @@
 
 NRPy's fCCZ4 implementation expresses the fully covariant conformal Z4
 system as corrections to option-matched cached reference-metric BSSN
-expressions, read without mutation. A canonical constraint module owns the
+expressions, read without mutation. A canonical constraint module defines the
 connection constraint, spatial Z4 vectors, Z4 Ricci tensor, and Hamiltonian
-expression; the evolution module consumes that cache and exposes 18 baseline
-RHS components while evolving the normal Z4 projection in storage named
+expression; the evolution module reads that cache and exposes the baseline RHS
+components while evolving the normal Z4 projection in storage named
 `Theta_fCCZ4`. YBS-MOM changes the existing conformal-extrinsic-curvature
-outputs without adding state, so the enabled dictionary also has 18 entries. Existing conformal
-connection storage represents `LambdatildeU`. A separate gauge module reuses
-the BSSN gauge implementation and adds only the fCCZ4 lapse and Gamma-driver
-corrections.
+outputs without adding state. Existing conformal
+connection storage represents `LambdatildeU`. The gauge module passes the
+complete fCCZ4 connection RHS to the shared BSSN gauge implementation and
+adds only the fCCZ4 lapse correction.
 
-The scientific contract follows the three-dimensional formulation in Mewes et
+The scientific equations follow the three-dimensional formulation in Mewes et
 al. Eqs. (3)-(41), except for an apparent convention error in the printed
 connection shift sector. Mewes et al. define their time operator using the full
 vector Lie derivative, which already stretches the evolved connection, and
@@ -345,23 +345,16 @@ deltaLambda^i = 2 gammabar^ij
 partial_t Lambdatilde^i = LambdaBase^i + deltaLambda^i.
 ```
 
-This composition has exactly one vector stretch. The base advection-stretch
-pair is the full vector Lie pair, which may be written equivalently as
+fCCZ4 reuses `Lambdabar_rhsU_without_Brown_constraint_term` and therefore
+retains the full evolved-connection stretch
 
 ```text
-beta^k partial_k Lambdatilde^i
-  - Lambdatilde^k partial_k beta^i
-= beta^k Dhat_k Lambdatilde^i
-  - Lambdatilde^k Dhat_k beta^i.
+beta^k Dhat_k Lambdatilde^i - Lambdatilde^k Dhat_k beta^i.
 ```
 
-Since `Lambdatilde^i=DeltaGamma^i+C^i`, the covariant form already contains
-the constraint-vector stretch `-C^k Dhat_k beta^i`. Adding the same term from
-Mewes et al.'s printed `kappa3=1` bracket would count that contribution twice.
-The retained `+2 C^i Dhat_k beta^k/3` is required:
-the BSSN base divergence uses geometric `DeltaGamma^i`, so this correction
-promotes its coefficient to evolved `Lambdatilde^i`. In Cartesian coordinates,
-for shift-gradient component `partial_b beta^a`, the aggregate coefficient is
+This gives exactly one vector stretch. The retained divergence term promotes
+the BSSN base coefficient from `DeltaGamma^i` to
+`Lambdatilde^i`. For Cartesian `partial_b beta^a`, the coefficient is
 
 ```text
 -Lambdatilde^b delta^i_a + (2/3) Lambdatilde^i delta^a_b.
@@ -462,11 +455,9 @@ partial_t B^i    = 3 partial_t Lambdatilde^i / 4 - eta B^i.
 ```
 
 The default is the hatted covariant second-order driver, and `eta=2` is reused
-from BSSN. The wrapper delegates all named choices to `BSSN_gauge_RHSs`. Its
-fCCZ4 additions are `4 alpha Theta` for `OnePlusLog` and
-`3 deltaLambda^i/4` in the driver RHS for all three second-order drivers and
-the nonadvecting driver, before standard vector rescaling. The two first-order
-drivers and the other three lapse choices receive no local fCCZ4 addition.
+from BSSN. The wrapper passes the complete fCCZ4 connection RHS to
+`BSSN_gauge_RHSs`, so Brown's BSSN-only term never enters the driver. It adds
+`4 alpha Theta` for `OnePlusLog`; other lapse choices need no local change.
 
 The YBS Boolean is forwarded through both the BSSN gauge base and the matching
 fCCZ4 RHS cache. The three second-order drivers plus the nonadvecting driver
@@ -480,7 +471,7 @@ Claim evidence:
 - Corroboration: [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` and `FCCZ4RHSsDict.get_rhs`
 
 Claim evidence:
-- Claim: `fCCZ4_gauge_RHSs` accepts the exact four lapse and seven shift names listed above, defaults to `OnePlusLog` with `GammaDriving2ndOrder_Covariant__Hatted`, reuses the BSSN default `eta=2`, and applies the listed fCCZ4 additions only to `OnePlusLog` and the three second-order plus nonadvecting driver RHSs.
+- Claim: `fCCZ4_gauge_RHSs` accepts the listed lapse and shift names, defaults to `OnePlusLog` with the hatted second-order driver, passes the complete fCCZ4 connection RHS to derivative-based drivers, and adds `4 alpha Theta` only to `OnePlusLog`.
 - Role: descriptive behavior
 - Deciding authority: [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), `fCCZ4_gauge_RHSs`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`
 - Corroboration: [fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_SinhSpherical_rfm_precompute_T4munu.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_SinhSpherical_rfm_precompute_T4munu.py), `trusted_dict`; [fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py), `trusted_dict`; [fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py), `trusted_dict`
@@ -611,9 +602,8 @@ composition through Sec. II, Eq. (19), and the discussion following Eq. (23).
 Mewes et al.'s printed off-constraint shift bracket is not authoritative where
 it conflicts with the result obtained from its own full-Lie time-operator
 definition: it contains the duplicate constraint-vector stretch documented
-above. Brown Eqs. (12a),
-(12b), and (15) supply the tensorial
-reference-connection viewpoint used by both NRPy BSSN and fCCZ4.
+above. Brown Eqs. (12a), (12b), and (15) define the connection constraint;
+Eqs. (21e) and (22e) supply the BSSN-only RHS term excluded from fCCZ4.
 
 ### BHaH spectroscopy application boundary
 
@@ -676,7 +666,7 @@ Claim evidence:
 - [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2) - Eqs. (3)-(41), including the unnumbered evolution system after Eq. (32); principal reference-metric fCCZ4 source, with the documented apparent connection-sector convention error corrected locally
 - [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1) - Eqs. (2.1)-(2.29), reference-metric covariance, constraints, nonadvective lapse-factor corroboration, and BSSN limit
 - [Alic et al., arXiv:1106.2254v2](https://arxiv.org/pdf/1106.2254v2) - Sec. II, Eqs. (19)-(20) and the covariance discussion following Eq. (23)
-- [Brown, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2) - Eqs. (12a), (12b), and (15), covariant BSSN reference-connection construction
+- [Brown, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2) - Eqs. (12a), (12b), (15), (21e), and (22e), covariant BSSN connection and RHS adjustment
 - [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py) - `BSSNconstraints.MU`, unchanged momentum-constraint diagnostic
 - [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py) - `BSSNQuantities`, inherited conformal variables and reference-metric quantities
 - [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py) - `BSSNRHSs`, inherited BSSN evolution expressions
