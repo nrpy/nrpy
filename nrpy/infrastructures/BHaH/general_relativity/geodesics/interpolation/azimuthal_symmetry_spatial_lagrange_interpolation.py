@@ -283,7 +283,9 @@ static int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_ind
         ("g4dd_interp_0_ref", f"g4dd_native_derivatives_rot[{interp_dim0}]"),
         ("g4dd_interp_1_ref", f"g4dd_native_derivatives_rot[{interp_dim1}]"),
     ):
-        source_metric = [[sp.sympify(0) for _ in range(4)] for _ in range(4)]
+        source_metric: List[List[sp.Expr]] = [
+            [sp.sympify(0) for _ in range(4)] for _ in range(4)
+        ]
         for source_idx, (source_mu, source_nu) in enumerate(_METRIC_COMPONENT_ORDER):
             source_symbol = sp.Symbol(f"{source_array}[{source_idx}]", real=True)
             source_metric[source_mu][source_nu] = source_symbol
@@ -335,7 +337,7 @@ static int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_ind
 
     if is_gamma_method:
         direct_gamma_metric_assignments = metric_rotation_assignments["g4dd_ref"]
-        source_gamma = [
+        source_gamma: List[List[List[sp.Expr]]] = [
             [[sp.sympify(0) for _ in range(4)] for _ in range(4)] for _ in range(4)
         ]
         for source_idx, (source_alpha, source_mu, source_nu) in enumerate(
