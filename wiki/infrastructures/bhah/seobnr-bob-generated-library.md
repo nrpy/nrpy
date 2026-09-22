@@ -35,7 +35,27 @@ support family, while `root_finding_1d` and `root_finding_multidimensional`
 provide reusable GSL wrappers used later by post-adiabatic and NQC stages.
 
 Dynamics generation is split into equation kernels and integration managers.
-`register_CFunction_SEOBNRv5_aligned_spin_pa_integration` builds a radial grid,
+`register_CFunction_SEOBNRv5_aligned_spin_pa_integration` first sets the final
+radius `final_r = max(10, (2.7 + chi_eff (1 - 4 nu)) r_ISCO)`. If the starting
+radius `commondata->r` satisfies `initial_r <= final_r`, the radial grid
+from `initial_r` down to `final_r` is empty, so the function calls
+`SEOBNRv5_aligned_spin_initial_conditions_dissipative` to set `commondata->prstar`
+at the conservative `r` and `pphi`, then calls
+`SEOBNRv5_aligned_spin_ode_integration` on the resulting initial conditions in
+`commondata` and returns without a post-adiabatic stage or time offset.
+
+Claim evidence:
+- Claim: When `commondata->r` (`initial_r`) satisfies `initial_r <= final_r`,
+  `SEOBNRv5_aligned_spin_pa_integration` calls
+  `SEOBNRv5_aligned_spin_initial_conditions_dissipative` to set
+  `commondata->prstar` at the conservative `r` and `pphi` before calling
+  `SEOBNRv5_aligned_spin_ode_integration`, and returns without a
+  post-adiabatic stage or time offset.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_pa_integration.py](../../../nrpy/infrastructures/BHaH/seobnr/dynamics/SEOBNRv5_aligned_spin_pa_integration.py), `register_CFunction_SEOBNRv5_aligned_spin_pa_integration`
+- Corroboration: `none available` - this generated-C control-flow branch has no module-local trusted-expression or generated-project numerical check that isolates it; verification requires inspecting the generated `SEOBNRv5_aligned_spin_pa_integration` source directly
+
+Otherwise it builds a radial grid,
 solves alternating post-adiabatic `pphi` and `prstar` updates with one-dimensional
 root finding, differentiates radial arrays, integrates time and phase, calls
 `SEOBNRv5_aligned_spin_ode_integration`, merges post-adiabatic and ODE dynamics,
@@ -53,6 +73,36 @@ strain modes by `IDX_WF`. SEBOBv2 uses the higher-mode variants in the same
 subtree and defines mode indices such as `STRAIN22`, `STRAIN21`, `STRAIN33`,
 `STRAIN32`, `STRAIN44`, `STRAIN43`, and `STRAIN55` in generated
 `BHaH_defines.h`.
+
+The SEBOBv2 example calls `SEOBNRv5_aligned_spin_special_coefficients` between
+post-adiabatic integration and waveform generation.
+`register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients` builds
+cubic splines of the fine dynamics, locates the `(2,2)` attachment time from the
+ISCO crossing, and evaluates the `(2,1)`, `(4,3)`, and `(5,5)` factors `rho` and
+modes `h` with the coefficients still zero. It forms `K = |h| / |rho|` and
+chooses `c_21`, `c_43`, and `c_55` so that each mode amplitude equals the
+NR-fit amplitude `hNR` (with the amplitude floors in the routine), then stores
+the three coefficients in `commondata`. At exact `chiA = 0`, equal masses
+(`fabs(delta) <= 1e-14`, the equal-mass branch of the odd-mode factors) give
+zero `rho` and `h` for these three modes, so `K` is `0/0`. The routine applies
+the same zero coefficients throughout `fabs(chiA) < 1e-14`: the selected
+equal-mass factors can depend on nonzero `chiA`, but do not use `c_21`, `c_43`,
+or `c_55`. It therefore skips the three divisions and leaves the registered
+defaults `c_21 = c_43 = c_55 = 0`. The odd inspiral modes stay in
+`waveform_low` and `waveform_fine`; `waveform_IMR` holds only `(2,2)`, so its
+other mode slots are not evidence about the odd modes.
+
+Claim evidence:
+- Claim: At exact `chiA = 0`, `fabs(delta) <= 1e-14` (the equal-mass branch
+  of the odd-mode factors) makes the three `K = |h| / |rho|` divisions `0/0`.
+  `register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients`
+  bypasses them throughout `fabs(chiA) < 1e-14` and leaves
+  `commondata->c_21`, `commondata->c_43`, and `commondata->c_55` at their
+  registered zero defaults because the selected equal-mass factors do not use
+  those coefficients.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_special_amplitude_coefficients.py](../../../nrpy/infrastructures/BHaH/seobnr/inspiral_waveform/SEOBNRv5_aligned_spin_special_amplitude_coefficients.py), `register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients`
+- Corroboration: `none available` - this generated-C control-flow branch has no module-local trusted-expression or generated-project numerical check that isolates it; verification requires inspecting the generated `SEOBNRv5_aligned_spin_special_amplitude_coefficients` source directly
 
 Merger and IMR assembly sit above the inspiral arrays. The aligned-spin
 `SEOBNRv5_aligned_spin_IMR_waveform` interpolates inspiral modes at the
@@ -102,6 +152,7 @@ consistency scripts.
 - [SEOBNRv5_aligned_spin_pa_integration.py](../../../nrpy/infrastructures/BHaH/seobnr/dynamics/SEOBNRv5_aligned_spin_pa_integration.py) - `register_CFunction_SEOBNRv5_aligned_spin_pa_integration`
 - [SEOBNRv5_aligned_spin_ode_integration.py](../../../nrpy/infrastructures/BHaH/seobnr/dynamics/SEOBNRv5_aligned_spin_ode_integration.py) - `register_CFunction_SEOBNRv5_aligned_spin_ode_integration`
 - [SEOBNRv5_aligned_spin_waveform_from_dynamics.py](../../../nrpy/infrastructures/BHaH/seobnr/inspiral_waveform/SEOBNRv5_aligned_spin_waveform_from_dynamics.py) - `register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics`
+- [SEOBNRv5_aligned_spin_special_amplitude_coefficients.py](../../../nrpy/infrastructures/BHaH/seobnr/inspiral_waveform/SEOBNRv5_aligned_spin_special_amplitude_coefficients.py) - `register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients`
 - [SEOBNRv5_aligned_spin_IMR_waveform.py](../../../nrpy/infrastructures/BHaH/seobnr/SEOBNRv5_aligned_spin_IMR_waveform.py) - `register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform`
 - [SEBOBv2_IMR_waveform.py](../../../nrpy/infrastructures/BHaH/seobnr/SEBOBv2_IMR_waveform.py) - `register_CFunction_SEBOBv2_IMR_waveform`
 - [BOB_v2_waveform_from_times.py](../../../nrpy/infrastructures/BHaH/seobnr/merger_waveform/BOB_v2_waveform_from_times.py) - `register_CFunction_BOB_v2_waveform_from_times`
