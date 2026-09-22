@@ -82,20 +82,24 @@ ISCO crossing, and evaluates the `(2,1)`, `(4,3)`, and `(5,5)` factors `rho` and
 modes `h` with the coefficients still zero. It forms `K = |h| / |rho|` and
 chooses `c_21`, `c_43`, and `c_55` so that each mode amplitude equals the
 NR-fit amplitude `hNR` (with the amplitude floors in the routine), then stores
-the three coefficients in `commondata`. For equal masses (`fabs(delta) <= 1e-14`,
-the equal-mass branch of the odd-mode factors) with equal spins
-(`fabs(chiA) < 1e-14`), `rho` and `h` of these three modes are zero, so
-`K` would be `0/0`. In that case the routine skips the three divisions and
-leaves the registered defaults `c_21 = c_43 = c_55 = 0`. The odd inspiral modes
-stay in `waveform_low` and `waveform_fine`; `waveform_IMR` holds only `(2,2)`,
-so its other mode slots are not evidence about the odd modes.
+the three coefficients in `commondata`. At exact `chiA = 0`, equal masses
+(`fabs(delta) <= 1e-14`, the equal-mass branch of the odd-mode factors) give
+zero `rho` and `h` for these three modes, so `K` is `0/0`. The routine applies
+the same zero coefficients throughout `fabs(chiA) < 1e-14`: the selected
+equal-mass factors can depend on nonzero `chiA`, but do not use `c_21`, `c_43`,
+or `c_55`. It therefore skips the three divisions and leaves the registered
+defaults `c_21 = c_43 = c_55 = 0`. The odd inspiral modes stay in
+`waveform_low` and `waveform_fine`; `waveform_IMR` holds only `(2,2)`, so its
+other mode slots are not evidence about the odd modes.
 
 Claim evidence:
-- Claim: When `fabs(delta) <= 1e-14` (the equal-mass branch of the odd-mode
-  factors) and `fabs(chiA) < 1e-14`, `register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients`
-  skips the `K = |h| / |rho|` divisions that would otherwise be `0/0`, and
-  leaves `commondata->c_21`, `commondata->c_43`, and `commondata->c_55` at
-  their registered zero defaults instead.
+- Claim: At exact `chiA = 0`, `fabs(delta) <= 1e-14` (the equal-mass branch
+  of the odd-mode factors) makes the three `K = |h| / |rho|` divisions `0/0`.
+  `register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients`
+  bypasses them throughout `fabs(chiA) < 1e-14` and leaves
+  `commondata->c_21`, `commondata->c_43`, and `commondata->c_55` at their
+  registered zero defaults because the selected equal-mass factors do not use
+  those coefficients.
 - Role: descriptive behavior
 - Deciding authority: [SEOBNRv5_aligned_spin_special_amplitude_coefficients.py](../../../nrpy/infrastructures/BHaH/seobnr/inspiral_waveform/SEOBNRv5_aligned_spin_special_amplitude_coefficients.py), `register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients`
 - Corroboration: `none available` - this generated-C control-flow branch has no module-local trusted-expression or generated-project numerical check that isolates it; verification requires inspecting the generated `SEOBNRv5_aligned_spin_special_amplitude_coefficients` source directly

@@ -390,8 +390,9 @@ double complex h55 = inspiral_modes[STRAIN55 - 1];
 
 // Step 6: Store special amplitude coefficients for later inspiral mode generation.
 // For equal masses (fabs(delta) <= 1e-14, the branch where the odd-mode waveform factors use their
-// equal-mass limit) and equal spins (chiA = 0), rho and h vanish for the (2,1), (4,3), and (5,5) modes,
-// so K = |h|/|rho| is 0/0. In that case keep c_21 = c_43 = c_55 = 0, the registered defaults.
+// equal-mass limit) and chiA = 0, rho and h vanish for the (2,1), (4,3), and (5,5) modes, so
+// K = |h|/|rho| is 0/0. The wider chiA tolerance is safe because the selected equal-mass factors do not
+// use c_21, c_43, or c_55; keep their registered zero defaults.
 const REAL delta = (m1 - m2) / (m1 + m2);
 const int equal_mass_equal_spin = (fabs(delta) <= 1e-14 && fabs(chiA) < 1e-14);
 if (!equal_mass_equal_spin) {
