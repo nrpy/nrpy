@@ -91,7 +91,8 @@ def process_input_set(
     must therefore succeed or fail consistently: any asymmetry between them,
     in either direction, is a genuine regression and is reported as such
     instead of letting the crash propagate and abort the whole comparison
-    run.
+    run. If the trusted executable aborts on the roundoff-perturbed input,
+    no baseline error exists and the input set is skipped.
 
     :param nominal_args: Tuple containing the nominal input paramters, path to trusted executable, and path to current executable.
     :return: Tuple containing the baseline error, the test error (both None if no comparison was performed), and whether this input set is a trusted/current success-vs-failure regression.
@@ -132,7 +133,14 @@ def process_input_set(
     perturbed_inputs[0] = nominal_inputs[0] * (1 + perturbation[0])
     perturbed_inputs[1] = nominal_inputs[1] * (1 + perturbation[1])
     perturbed_inputs[2] = nominal_inputs[2] * (1 + perturbation[2])
-    perturbed_output = run_sebob(nominal_trusted_exec, perturbed_inputs)
+    try:
+        perturbed_output = run_sebob(nominal_trusted_exec, perturbed_inputs)
+    except subprocess.CalledProcessError:
+        if not is_calibration_mode:
+            raise
+        # Trusted aborted on the perturbed input: no roundoff baseline exists,
+        # and this is not a trusted/current disagreement, so skip this set.
+        return None, None, False
 
     # Calculate errors
     baseline_error = calculate_rmse(trusted_output, perturbed_output)
@@ -222,7 +230,7 @@ if __name__ == "__main__":
             continue
         if baseline_err is None or test_err is None:
             print(
-                f"  Input set {i+1}: trusted and current both failed; skipping from median."
+                f"  Input set {i+1}: calibration run aborted consistently; skipping from median."
             )
             continue
         baseline_errors.append(baseline_err)
