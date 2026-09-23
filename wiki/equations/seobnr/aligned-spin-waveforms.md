@@ -1,6 +1,6 @@
 # Aligned-Spin Waveforms
 
-> Map SEOBNRv5 aligned-spin factorized modes, flux, strain, and merger attachment quantities. · Status: confirmed · Last reconciled: 07-13-2026
+> Map SEOBNRv5 aligned-spin factorized modes, flux, strain, and merger attachment quantities. · Status: confirmed
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
@@ -12,9 +12,9 @@ Hamiltonian outputs and calibration/remnant quantities but does not own those
 fits.
 
 These are current symbolic ingredients associated with the quasi-circular,
-spinning, nonprecessing binary-black-hole SEOBNRv5HM model. The relationship to
-the unversioned current-latest paper page is unaudited model background;
-model-wide calibration and accuracy claims neither decide this transcription's
+spinning, nonprecessing binary-black-hole SEOBNRv5HM model. The unversioned paper
+landing page is model background; model-wide calibration and accuracy claims
+neither decide this transcription's
 contract nor validate every generated consumer.
 
 ## Detail
@@ -40,6 +40,24 @@ effective sources, tail terms, and PN factors, and returns the factorized
 resummed flux divided by `nu`. `strain()` returns an `hlms` dictionary for the
 implemented strain modes `(2,2)`, `(2,1)`, `(3,3)`, `(3,2)`, `(4,4)`, `(4,3)`,
 and `(5,5)`.
+
+The `(3,3)` mode has an imaginary spin correction, `fspinimag`, with the
+equal-mass limit `fspinimag_limit`. Both `strain()` and `flux()` select between
+them with `noneqcond` and `eqcond`, as for the real corrections. In `strain()`
+the `(3,3)` PN factor is the real correction plus `I * fspinimag`. In `flux()`
+the `(3,3)` term adds `fspinimag**2` to the square of the real correction,
+which is the squared magnitude of that complex factor. No other mode has an
+imaginary spin correction.
+
+Claim evidence:
+- Claim: The `(3,3)` mode's PN amplitude factor is the real correction plus
+  `I * fspinimag` (with the equal-mass limit `fspinimag_limit`); `strain()`
+  returns that complex factor directly, and `flux()` adds `fspinimag**2` to the
+  square of the real correction as the squared magnitude of the complex
+  factor. No other mode has an imaginary spin correction.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_waveform_quantities.py), `flux`, `strain`
+- Corroboration: [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_waveform_quantities.py), `trusted_dict`, pins the sampled `fspinimag`/`fspinimag_limit` symbolic values; it does not corroborate the full generated-waveform numerical output (see the [SEOBNR BOB Generated Library](../../infrastructures/bhah/seobnr-bob-generated-library.md) generated-executable consistency check for that separate boundary)
 
 `SEOBNRv5_aligned_spin_merger_quantities` owns the native aligned-spin
 merger-ringdown attachment surface for the `(2,2)` mode. It builds symbolic
@@ -70,7 +88,7 @@ build generated code, integrate dynamics, or measure waveform accuracy.
 - [SEOBNRv5_aligned_spin_merger_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_merger_quantities.py) - `SEOBNRv5_aligned_spin_merger_quantities`
 - [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_waveform_quantities.py) - `trusted_dict`
 - [SEOBNRv5_aligned_spin_merger_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_merger_quantities.py) - `trusted_dict`
-- [SEOBNRv5HM current latest paper page](https://arxiv.org/abs/2303.18039) - background orientation only; aligned-spin waveform/calibration claims are not yet audited to a pinned revision
+- [SEOBNRv5HM paper landing page](https://arxiv.org/abs/2303.18039) - background orientation only; aligned-spin waveform/calibration claims have no exact revision mapping here
 
 ## See Also
 

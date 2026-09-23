@@ -126,7 +126,11 @@ def get_params_commondata_symbols_from_expr_list(
 
 
 def generate_definition_header(
-    str_list: List[str], enable_intrinsics: bool = False, var_access: str = "params->"
+    str_list: List[str],
+    enable_intrinsics: bool = False,
+    var_access: str = "params->",
+    fp_type_alias: str = "REAL",
+    simd_type_alias: str = "REAL_SIMD_ARRAY",
 ) -> str:
     """
     Generate the string header for parameter definitions.
@@ -134,15 +138,17 @@ def generate_definition_header(
     :param str_list: List of Symbol strings to include in the header
     :param enable_intrinsics: Whether to modify str based on hardware intrinsics.
     :param var_access: The variable access string
+    :param fp_type_alias: Scalar type alias for non-intrinsic definitions.
+    :param simd_type_alias: SIMD vector type alias for intrinsic definitions.
     :return: The definition string
     """
     return "\n".join(
         [
             (
-                f"const REAL {p} = {var_access}{p};"
+                f"const {fp_type_alias} {p} = {var_access}{p};"
                 if not enable_intrinsics
-                else f"const REAL NOSIMD{p} = {var_access}{p};\n"
-                f"MAYBE_UNUSED const REAL_SIMD_ARRAY {p} = ConstSIMD(NOSIMD{p});\n"
+                else f"const {fp_type_alias} NOSIMD{p} = {var_access}{p};\n"
+                f"MAYBE_UNUSED const {simd_type_alias} {p} = ConstSIMD(NOSIMD{p});\n"
             )
             for p in str_list
         ]

@@ -427,7 +427,7 @@ Style rules:
 
 ### Prohibited Dependencies
 
-- **`import re` — FORBIDDEN WHEN `.replace()` SUFFICES**: Regex may be used only when genuine pattern matching is required (e.g., detecting coordinate-system variants by name or matching variable text layouts that cannot be handled robustly with direct string replacement). It is forbidden for simple string manipulation that `.replace()` can handle. If `.replace()` or another plain-string method is sufficient, do not `import re`. Five core files (`reference_metric.py`, `rfm_wrapper_functions.py`, `CarpetX/general_relativity/rhs_eval.py`, `BHaH/general_relativity/constraints_eval.py`, `ETLegacy/general_relativity/rhs_eval.py`) use `re` for legitimate reasons; follow their pattern and add a comment explaining why `.replace()` is insufficient.
+- **`import re` — FORBIDDEN under `nrpy/`**: Do not `import re` anywhere in the `nrpy/` package. Repository tooling outside it (`tools/kb_lint.py`) is not in scope. Regex is brittle and obscures what the code is doing, and NRPy needs no additional abstraction layer for the developers working on it. Use plain string methods instead: `.replace()`, `.split()`, `.startswith()`, `.endswith()`, `.rfind()`, `.rstrip()`, `.isidentifier()`, slicing, and explicit character-set tests. Five legacy modules still import it (`reference_metric.py`, `rfm_wrapper_functions.py`, `CarpetX/general_relativity/rhs_eval.py`, `BHaH/general_relativity/constraints_eval.py`, `ETLegacy/general_relativity/rhs_eval.py`), as do two doctests that assert on escape sequences and emitted recipe blocks (`helpers/colorize_text.py`, `BHaH/general_relativity/diagnostics_volume_integration.py`); all seven are grandfathered, not precedent, and their patterns should be removed when each file is next materially edited. Do not attach that removal to unrelated work in another infrastructure.
 
 - **`numpy` — FORBIDDEN IN CORE NRPY, ALLOWED IN VISUALIZATION SCRIPTS**: Core NRPy code must not depend on numpy. The workflow is: symbolic expression → C code. All core computation is done symbolically with SymPy, then code-generated to C. Exception: visualization/post-processing scripts may depend on numpy when needed for image handling, plotting, binary parsing, or similar non-core analysis tasks.
 
@@ -541,6 +541,23 @@ guard is needed.
 
 Example failure mode: registering a GRoovy-only parameter such as `C2P_diagnostics_every` at module scope can cause an unrelated `from nrpy.infrastructures import BHaH` doctest to alter the global registry. Then `BHaH_defines.h` gains a GRoovy field and unrelated trusted-string tests fail, even though the tested module did not request GRoovy code generation.
 
+### External-Host Test Harnesses
+
+A test that measures a separately-built external host's behavior cannot run as
+an owner doctest and cannot run in NRPy's own CI, because the host is not
+present in either. Such a harness is allowed, and only such a harness: it lives
+in a `tests_infra/` directory beside the infrastructure that depends on that
+host, it is built and run by hand against the host, and it records the platform,
+but its repository documentation records only durable setup, scope, assertions,
+and reproduction instructions. Do not store host revisions, dates, environment
+snapshots, or run results in the knowledge base. It is not a route for ordinary
+compile or build coverage, which stays in scoped CI.
+
+Its C/C++ sources are read and edited beside the host's own, so they follow the
+host project's layout: the indent width is the host's four spaces rather than
+the two [Section 1](#1-indentation) prescribes. The mandatory
+[Section 10](#10-end-curly-brace-comments) markers still apply.
+
 ### Doctest Conventions
 
 #### `Doctests:` section label
@@ -581,12 +598,13 @@ Doctests:
 Key points:
 - `clang_format` normalizes whitespace before comparison; always apply it to `full_function` before passing to `validate_strings`.
 - `validate_strings` compares against a trusted file in `tests/` (auto-generated on first run).
-- Set `file_ext="cu"` when the generated code is CUDA, `"c"` otherwise.
+- Set `file_ext="cu"` when the generated code is CUDA, `"cpp"` when it is C++, and `"c"` otherwise. The extension records the language the trusted baseline is written in, so a reader opening the file gets the right syntax.
 - Import `validate_strings` (and `clang_format` if needed) inside the doctest, not at module level.
 - Doctests that drive Python-based C/C++ generation are most appropriate in `nrpy/infrastructures/*/*.py`, where registration functions are a core public interface.
 - Outside `nrpy/infrastructures/*/*.py`, such doctests are discouraged but still allowed when they verify meaningful behavior that cheaper symbolic, structural, or non-codegen checks would miss.
 - **Exception — generated-kernel-dominated C functions**: Do **not** generate or check trusted output files for C functions whose bodies primarily consist of generated kernels, especially large kernels emitted from SymPy expressions. Such output is too sensitive to SymPy version and codegen details for exact string comparison to be a reliable unit-test signal.
 - For these generated-kernel-heavy functions, prefer validation at the symbolic-expression level or with cheaper structural/sanity checks instead of outputting a golden C file under `tests/`.
+- **Size is part of that rule, and it is not negotiable.** A right-hand side, a Ricci or constraint evaluation, or any comparable SymPy-lowered kernel never gets a trusted C/C++ file: those run to hundreds of kilobytes each, and there is no precedent for one in this repository -- every tracked oracle file is a few kilobytes to about eighty. A trusted generated-source baseline is for small, largely structural emitted code: initial-data fills, algebraic-constraint enforcement, pointer bindings and loop scaffolding, headers, parameter files. Prove a large kernel symbolically instead, with `validate_expressions=True` and `nrpy.validate_expressions.compare_or_generate_trusted_results`, as `BHaH/general_relativity/rhs_eval.py` does in its own `__main__` sweep. A task document that asks for kernel baselines does not override this.
 
 #### Doctest placeholders
 
@@ -1032,7 +1050,20 @@ subset for every closing brace that ends a non-trivial block:
 - A colon separates the keyword from the description.
 - The description is accurate, meaningful, and preserves high-signal semantic
   context.
-- The description contains at most five words.
+- The description contains at most five words. The single exception is the loop
+  footer that `nrpy/helpers/loop.py` emits, which substitutes the loop's own
+  bound expressions and so runs longer for every infrastructure that calls it.
+  That emitter's own footers are exempt and nothing else is: a marker a builder
+  hand-assembles around `c_codegen` output is subject to the limit.
+
+A C++ namespace closer that NRPy generates or ships into a host project wraps
+its marker in a `// clang-format off` / `// clang-format on` guard. clang-format's
+`FixNamespaceComments` rewrites `}  // END NAMESPACE: ns` to
+`} // namespace ns`, and to `} // namespace` for an unnamed namespace — no
+`END` keyword and no colon either way. The option is on in NRPy's own formatter
+options and in Dendro-GR's `.clang-format`, so an artifact generated into a host
+project can be reformatted there too; the guard is what keeps the required
+marker in the file a reader receives.
 
 Do not review or enforce exact whitespace (including the single-space
 convention), alignment, wrapping, placement, or brace shape for generated

@@ -331,6 +331,8 @@ Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties.
     body = """
 REAL q = commondata->mass_ratio;
 REAL eta = q / (1.0 + q) / (1.0 + q);
+// eta = q / (1 + q)^2 is at most 0.25, so an excess is floating-point rounding for q close to 1.
+// Snap q to 1.0 when it agrees with 1.0 to within 1e-13.
 if (eta > 0.25){
   if (fabs(q - 1.) < 1e-13){
     q = 1.;
@@ -352,7 +354,7 @@ commondata->dT = commondata->dt / commondata->total_mass / 4.9254909476412669781
 """
     body += ccg.c_codegen(
         [
-            v5_const.pyseobnr_a6,
+            v5_const.a6,
             v5_const.pyseobnr_dSO,
             v5_const.Delta_t,
             v5_const.M_f,

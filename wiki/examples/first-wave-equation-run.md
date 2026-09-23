@@ -1,6 +1,6 @@
 # First Wave Equation Run
 
-> Describe the first standalone project generation, build, run, and output milestone. · Status: confirmed · Last reconciled: 07-12-2026
+> Describe the first standalone project generation, build, run, and output milestone. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
@@ -31,8 +31,7 @@ make
 The generator creates a parameter file named `wave_equation_cartesian.par`.
 The important first milestone is that project generation succeeds, `make`
 succeeds, and the executable runs without manual edits inside the generated
-project. This is a user-run milestone, not a claim reproduced during this KB
-audit. Configured Ubuntu/macOS CI generates and builds the default project but
+project. Configured Ubuntu/macOS CI generates and builds the default project but
 does not run the executable or inspect its numerical output. The README also
 documents a simple command-line override:
 `./wave_equation_cartesian 2.0`, which uses `convergence_factor` and writes

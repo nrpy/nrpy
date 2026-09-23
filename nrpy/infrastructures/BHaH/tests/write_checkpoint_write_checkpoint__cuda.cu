@@ -12,13 +12,13 @@
 #endif // __CUDACC__
 
 /**
- * Write one complete checkpoint payload or terminate on failure.
+ * Write one complete checkpoint data block or terminate on failure.
  *
- * @param[in] ptr Payload address.
- * @param size Size of one payload element.
- * @param nmemb Number of payload elements.
+ * @param[in] ptr Data address.
+ * @param size Size of one data element.
+ * @param nmemb Number of data elements.
  * @param[in,out] fp Open checkpoint stream.
- * @param[in] what Payload description for diagnostics.
+ * @param[in] what Data description for diagnostics.
  * @param[in] file Caller source filename.
  * @param line Caller source line.
  * @param[in] func Caller function name.

@@ -1,6 +1,6 @@
 # Thorn Assembly And CCL Files
 
-> Explain how ETLegacy writes Cactus CCL files, `make.code.defn`, and thorn-local C sources from registered generator state. · Status: confirmed · Last reconciled: 07-12-2026
+> Explain how ETLegacy writes Cactus CCL files, `make.code.defn`, and thorn-local C sources from registered generator state. · Status: confirmed
 > Up: [ETLegacy](index.md)
 
 ## Summary
@@ -73,8 +73,7 @@ configured `einsteintoolkit-validation` job generates the ETLegacy Carpet
 WaveToy and Baikal thorns, links them into the pinned ET environment, builds
 that toolkit, and requests three testsuites. This workflow configuration proves
 the job shape, not its latest success, and does not establish arbitrary thorn,
-platform, GPU, or restart behavior. No generator, ET build, or testsuite was run
-during this KB audit.
+platform, GPU, or restart behavior.
 
 ## Sources
 
@@ -85,7 +84,7 @@ during this KB audit.
 - [make_code_defn.py](../../../nrpy/infrastructures/ETLegacy/make_code_defn.py) - `output_CFunctions_and_construct_make_code_defn`
 - [c_function.py](../../../nrpy/c_function.py) - `CFunction`, `CFunction_dict`, `full_function`, `ET_schedule_bins_entries`, `ET_current_thorn_CodeParams_used`
 - [main.yml](../../../.github/workflows/main.yml) - `einsteintoolkit-validation`
-- [Cactus Users Guide chapter C1](https://www.cactuscode.org/documentation/usersguide/UsersGuidech9.html) - `C1.1.1 Thorns`, `C1.2 Anatomy of a Thorn`, `make.code.defn based thorn building`; accessed 07-12-2026
+- [Cactus Users Guide chapter C1](https://www.cactuscode.org/documentation/usersguide/UsersGuidech9.html) - `C1.1.1 Thorns`, `C1.2 Anatomy of a Thorn`, `make.code.defn based thorn building`
 
 ## See Also
 

@@ -3,8 +3,8 @@
 Generates the core C function for advancing the solution one full time step using the Method of Lines.
 
 This module is responsible for constructing the main driver function,
-`MoL_step_forward_in_time`, which orchestrates the sequence of
-operations needed to evolve all gridfunctions over a single time step, `dt`.
+`MoL_step_forward_in_time`, which orders the operations needed to evolve all
+gridfunctions over one time step, `dt`.
 
 The function `register_CFunction_MoL_step_forward_in_time` assembles the
 complete time step by:

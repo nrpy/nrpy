@@ -1,6 +1,12 @@
 void pup_commondata_struct(PUP::er &p, commondata_struct &cd);
 void pup_params_struct(PUP::er &p, params_struct &ps);
 void pup_innerpt_bc_struct(PUP::er &p, innerpt_bc_struct &ibc);
+/**
+ * Serialize outer boundary indices, face signs, and cached geometry at the boundary and interior points.
+ *
+ * @param[in,out] p PUP archive used for sizing, packing, or unpacking.
+ * @param[in,out] obc Outer boundary record containing indices, face signs, and both cached geometry samples.
+ */
 void pup_outerpt_bc_struct(PUP::er &p, outerpt_bc_struct &obc);
 void pup_bc_info_struct(PUP::er &p, bc_info_struct &bci);
 void pup_bc_struct(PUP::er &p, bc_struct &bc);

@@ -8,7 +8,7 @@ Author: Zachariah B. Etienne
 
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import nrpy.grid as gri
 import nrpy.helpers.parallelization.utilities as parallel_utils
@@ -80,41 +80,6 @@ typedef struct __griddata__ {
     return griddata_struct_def
 
 
-def parse_cparam_type(cparam_type: str) -> Tuple[str, Optional[str], bool]:
-    """
-    Parse a cparam_type string into its base type, size, and array status.
-
-    :param cparam_type: The raw CParam type string, e.g., "REAL[8]".
-    :return: A tuple (base, size, is_array).
-    :raises ValueError: If the array size is not a numeric string.
-
-    Doctests:
-    >>> parse_cparam_type("int")
-    ('int', None, False)
-    >>> parse_cparam_type("REAL[8]")
-    ('REAL', '8', True)
-    >>> parse_cparam_type("char[100]")
-    ('char', '100', True)
-    >>> parse_cparam_type("  REAL[ 16 ] ")
-    ('REAL', '16', True)
-    >>> parse_cparam_type("char[NAME]")  # doctest: +IGNORE_EXCEPTION_DETAIL
-    Traceback (most recent call last):
-    ...
-    ValueError: Invalid array size 'NAME'
-    """
-    if "[" not in cparam_type or "]" not in cparam_type:
-        return cparam_type.strip(), None, False
-
-    base, after = cparam_type.split("[", 1)
-    size_str, _ = after.split("]", 1)
-    size = size_str.strip()
-
-    if not size.isdigit():
-        raise ValueError(f"Invalid array size '{size}'")
-
-    return base.strip(), size, True
-
-
 def register_BHaH_defines(module: str, bhah_defines_str: str) -> None:
     """
     Register C-code definitions for a given module.
@@ -160,6 +125,20 @@ def _register_general_defines(
     general_defines_str += f"""#define REAL {real_means}
 #define DOUBLE {double_means}"""
     general_defines_str += """
+#if defined(__INTEL_COMPILER) && !defined(__INTEL_LLVM_COMPILER)
+// Intel classic compiler fallback avoids statement expressions that can trigger compiler failures.
+#ifndef NRPYMIN
+#define NRPYMIN(A, B) (((A) < (B)) ? (A) : (B))
+#endif // END ifndef NRPYMIN
+
+#ifndef NRPYMAX
+#define NRPYMAX(A, B) (((A) > (B)) ? (A) : (B))
+#endif // END ifndef NRPYMAX
+
+#ifndef NRPYSQR
+#define NRPYSQR(A) ((A) * (A))
+#endif // END ifndef NRPYSQR
+#else
 // These macros for NRPYMIN(), NRPYMAX(), and NRPYSQR() ensure that if the arguments inside
 //   are a function/complex expression, the function/expression is evaluated
 //   *only once* per argument. See https://lwn.net/Articles/983965/ for details.
@@ -189,6 +168,7 @@ def _register_general_defines(
     _a * _a;                      \
 })
 #endif // END ifndef NRPYSQR
+#endif // END Intel classic compiler fallback
 #ifndef MAYBE_UNUSED
 #if __cplusplus >= 201703L
 #define MAYBE_UNUSED [[maybe_unused]]
@@ -229,7 +209,7 @@ def _register_param_structs() -> None:
         :param description: The description of the variable.
         :return: A formatted C declaration string with comments.
         """
-        base, size, is_array = parse_cparam_type(c_type)
+        base, size, is_array = par.parse_cparam_type(c_type)
         decl = (
             f"  char {var_name}[{size}];"
             if is_array and base.startswith("char")
@@ -290,15 +270,6 @@ def _register_finite_difference_defines(add_one_for_upwinding: bool) -> None:
 // Set the number of ghost zones
 // Note that upwinding in e.g., BSSN requires that NGHOSTS = fd_order/2 + 1 <- Notice the +1.
 #define NGHOSTS {nghosts}
-
-// Declare NO_INLINE macro, used in FD functions. GCC v10+ compilations hang on complex RHS expressions (like BSSN) without this.
-#if defined(__GNUC__) || defined(__clang__) || defined(__INTEL_COMPILER)
-    #define NO_INLINE __attribute__((noinline))
-#elif defined(_MSC_VER)
-    #define NO_INLINE __declspec(noinline)
-#else
-    #define NO_INLINE // Fallback for unknown compilers
-#endif // NO_INLINE definition
 
 #ifndef UPWIND_ALG
 // When enable_intrinsics = False, this is the UPWIND_ALG() macro:

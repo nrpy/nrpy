@@ -64,7 +64,7 @@ CoordSystem = "Spherical"
 
 OMP_collapse = 1
 enable_rfm_precompute = True
-enable_fd_functions = False
+enable_fd_functions = True
 MoL_method = "SSPRK33"
 enable_simd = False  # Does not work, as the SIMD vector would be in the radial direction, where only a single point is sampled.
 enable_parallel_codegen = True
@@ -262,10 +262,6 @@ if use_cpp:
     )
     cpp_compatibility_epilogue = "\n#ifdef __cplusplus\n" "}\n" "#endif"
     BHaHAHA_h = cpp_compatibility_preamble + BHaHAHA_h + cpp_compatibility_epilogue
-
-    # Convert fixed-size parameter to pointer
-    BHaHAHA_h = BHaHAHA_h.replace("REAL radii[Nr_interp_max]", "REAL radii[]")
-
 
 # Write the updated content to the output file
 with Path(project_dir, "BHaHAHA.h").open("w", encoding="utf-8") as output_file:

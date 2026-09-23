@@ -1,6 +1,6 @@
 # YBS-MOM Timestep-Scaled Momentum Adjustment
 
-> Status: confirmed · Last reconciled: 08-30-2026
+> Status: confirmed
 > Up: [General Relativity](index.md)
 
 ## Summary
@@ -39,8 +39,6 @@ Claim evidence:
 - Role: public/scientific contract
 - Deciding authority: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS momentum branch
 - Corroboration: [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (56); [Etienne, Phys. Rev. D 110, 064045](https://doi.org/10.1103/PhysRevD.110.064045), Eq. (26)
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction plus BHaH OpenMP/CUDA source generation; precision=exact symbolic source plus 30-significant-digit deterministic trusted sampling; GPU=generation pass, execution not-run; restart=not-applicable because no new state; distributed=not-run; error_path=pass for unsupported non-fisheye GeneralRFM spacing; options=YBS Gamma and YBS-MOM enabled jointly in 6 BSSN, 6 fCCZ4, and 8 BHaH rhs_eval trusted cases; public defaults disabled; date=08-30-2026`
 
 ## Detail
 
@@ -68,8 +66,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [numerical_grids_and_timestep.py](../../../nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py), `ds_min_single_pt_exprs`; [dsmin_gf.py](../../../nrpy/infrastructures/BHaH/general_relativity/dsmin_gf.py), `register_CFunction_dsmin_auxevol_gridfunction`
 - Corroboration: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), CAHD scaling and YBS-MOM registration branches
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, SymPy 1.14.0; backend=BHaH OpenMP/CUDA source generation; precision=exact symbolic comparison; GPU=generation pass, execution not-run; restart=not-applicable; distributed=not-run; error_path=pass; options=ordinary orthogonal, fisheye GeneralRFM, and rejected non-fisheye GeneralRFM routes; date=08-30-2026`
 
 ### Ownership and defaults
 

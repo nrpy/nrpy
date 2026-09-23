@@ -223,6 +223,7 @@ class BSSNRHSs:
 
         # Step 6: right-hand side of \partial_t \bar{\Lambda}^i:
         # \partial_t \bar{\Lambda}^i = \beta^k \partial_k \bar{\Lambda}^i - \partial_k \beta^i \bar{\Lambda}^k <- TERM 1
+        #                            + C^k \hat{D}_k \beta^i <- BROWN CONSTRAINT TERM
         #                            + \bar{\gamma}^{j k} \hat{D}_{j} \hat{D}_{k} \beta^{i} <- TERM 2
         #                            + \frac{2}{3} \Delta^{i} \bar{D}_{j} \beta^{j} <- TERM 3
         #                            + \frac{1}{3} \bar{D}^{i} \bar{D}_{j} \beta^{j} <- TERM 4
@@ -230,7 +231,7 @@ class BSSNRHSs:
         #                            + 2 \alpha \bar{A}^{j k} \Delta_{j k}^{i} <- TERM 6
         #                            - \frac{4}{3} \alpha \bar{\gamma}^{i j} \partial_{j} K <- TERM 7
 
-        # Step 6.a: Term 1 of \partial_t \bar{\Lambda}^i: \beta^k \partial_k \bar{\Lambda}^i - \partial_k \beta^i \bar{\Lambda}^k
+        # Step 6.a: Lie-shift and Brown connection-constraint terms
         # First we declare \bar{\Lambda}^i and \bar{\Lambda}^i_{,j} in terms of \lambda^i and \lambda^i_{,j}
         self.LambdabarU_dupD = ixp.zerorank2()  # Used on the RHS of the Gamma-driving shift conditions
         lambdaU_dupD = ixp.declarerank2("lambdaU_dupD", symmetry="nosym")
@@ -239,9 +240,15 @@ class BSSNRHSs:
                 self.LambdabarU_dupD[i][j] = lambdaU_dupD[i][j] * rfm.ReU[i] + lambdaU[i] * rfm.ReUdD[i][j]
 
         self.Lambdabar_rhsU = ixp.zerorank1()  # Used on the RHS of the Gamma-driving shift conditions
+        Brown_constraint_rhsU = ixp.zerorank1()
+        DGammaU = Bq.DGammaU  # From Bq.RicciBar__gammabarDD_dHatD__DGammaUDD__DGammaU()
         for i in range(3):
             for k in range(3):
-                self.Lambdabar_rhsU[i] += betaU[k] * self.LambdabarU_dupD[i][k] - betaU_dD[i][k] * LambdabarU[k]  # Term 1
+                betaU_dHatD = betaU_dD[i][k]
+                for m in range(3):
+                    betaU_dHatD += rfm.GammahatUDD[i][m][k] * betaU[m]
+                self.Lambdabar_rhsU[i] += betaU[k] * self.LambdabarU_dupD[i][k] - betaU_dD[i][k] * LambdabarU[k]
+                Brown_constraint_rhsU[i] += (LambdabarU[k] - DGammaU[k]) * betaU_dHatD
 
         # Step 6.b: Term 2 of \partial_t \bar{\Lambda}^i = \bar{\gamma}^{jk} (Term 2a + Term 2b + Term 2c)
         # Term 2a: \bar{\gamma}^{jk} \beta^i_{,kj}
@@ -271,19 +278,14 @@ class BSSNRHSs:
                             Term2cUDD[i][j][k] += (rfm.GammahatUDD[i][d][j] * rfm.GammahatUDD[d][m][k]
                                                    - rfm.GammahatUDD[d][k][j] * rfm.GammahatUDD[i][m][d]) * betaU[m]
 
-        Lambdabar_rhsUpieceU = ixp.zerorank1()
-
         # Put it all together to get Term 2:
         for i in range(3):
             for j in range(3):
                 for k in range(3):
                     self.Lambdabar_rhsU[i] += gammabarUU[j][k] * (Term2aUDD[i][j][k] + Term2bUDD[i][j][k] + Term2cUDD[i][j][k])
-                    Lambdabar_rhsUpieceU[i] += gammabarUU[j][k] * (
-                                Term2aUDD[i][j][k] + Term2bUDD[i][j][k] + Term2cUDD[i][j][k])
 
         # Step 6.c: Term 3 of \partial_t \bar{\Lambda}^i:
         #    \frac{2}{3} \Delta^{i} \bar{D}_{j} \beta^{j}
-        DGammaU = Bq.DGammaU  # From Bq.RicciBar__gammabarDD_dHatD__DGammaUDD__DGammaU()
         for i in range(3):
             self.Lambdabar_rhsU[i] += sp.Rational(2, 3) * DGammaU[i] * Dbarbetacontraction  # Term 3
 
@@ -388,7 +390,7 @@ class BSSNRHSs:
                             / exp_m4phi
                         )
 
-            # Build the first partial derivative of M_i from already-owned
+            # Build the first partial derivative of M_i from already computed
             # BSSN tensors and the one newly required second derivative of aDD.
             gammabarDD_dD = Bq.gammabarDD_dD
             gammabarDD_dDD = Bq.gammabarDD_dDD
@@ -536,6 +538,12 @@ class BSSNRHSs:
                     Abar_rhsDD[i][j] += ell_M * self.DbarM_STFDD[i][j]
 
 
+        self.Lambdabar_rhsU_without_Brown_constraint_term = list(
+            self.Lambdabar_rhsU
+        )
+        for i in range(3):
+            self.Lambdabar_rhsU[i] += Brown_constraint_rhsU[i]
+
         # Step 8: Rescale the RHS quantities so that the evolved
         #         variables are smooth across coord singularities
         self.h_rhsDD = ixp.zerorank2()
@@ -546,12 +554,6 @@ class BSSNRHSs:
             for j in range(3):
                 self.h_rhsDD[i][j] = gammabar_rhsDD[i][j] / rfm.ReDD[i][j]
                 self.a_rhsDD[i][j] = Abar_rhsDD[i][j] / rfm.ReDD[i][j]
-        # print(str(Abar_rhsDD[2][2]).replace("**","^").replace("_","").replace("xx","x").replace("sin(x2)","Sin[x2]").replace("sin(2*x2)","Sin[2*x2]").replace("cos(x2)","Cos[x2]").replace("detgbaroverdetghat","detg"))
-        # print(str(Dbarbetacontraction).replace("**","^").replace("_","").replace("xx","x").replace("sin(x2)","Sin[x2]").replace("detgbaroverdetghat","detg"))
-        # print(betaU_dD)
-        # print(str(trK_rhs).replace("xx2","xx3").replace("xx1","xx2").replace("xx0","xx1").replace("**","^").replace("_","").replace("sin(xx2)","Sinx2").replace("xx","x").replace("sin(2*x2)","Sin2x2").replace("cos(x2)","Cosx2").replace("detgbaroverdetghat","detg"))
-        # print(str(bet_rhsU[0]).replace("xx2","xx3").replace("xx1","xx2").replace("xx0","xx1").replace("**","^").replace("_","").replace("sin(xx2)","Sinx2").replace("xx","x").replace("sin(2*x2)","Sin2x2").replace("cos(x2)","Cosx2").replace("detgbaroverdetghat","detg"))
-
         self.BSSN_RHSs_varname_to_expr_dict: Dict[str, sp.Expr] = OrderedDict()
         self.BSSN_RHSs_varname_to_expr_dict["cf_rhs"] = self.cf_rhs
         self.BSSN_RHSs_varname_to_expr_dict["trK_rhs"] = self.trK_rhs

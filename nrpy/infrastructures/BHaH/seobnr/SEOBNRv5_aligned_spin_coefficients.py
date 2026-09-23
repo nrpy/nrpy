@@ -139,6 +139,7 @@ gsl_interp_accel_free(acc);
 def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
     calibration_no_spin: bool = False,
     calibration_spin: bool = False,
+    nrpy_calibrated: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register CFunction for evaluating the masses and SEOBNRv5 coefficients.
@@ -151,11 +152,17 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
     The generated coefficient function calls ``SEOBNRv5_evaluate_l2m2_qnm``;
     composition roots must register that helper before code generation.
 
-    :param calibration_no_spin: If True, the non-spinning calibration coefficients are added to the parfile.
-                                pySEOBNR v5 calibration coefficients are used if False.
-    :param calibration_spin: If True, the spin-dependent calibration coefficients are added to the parfile.
-                                pySEOBNR v5 calibration coefficients are used if False.
-    :raises ValueError: If both calibration_no_spin and calibration_spin are True.
+    :param calibration_no_spin: If True, expose external `a6` and `Delta_t_NS`
+                            inputs for nonspinning calibration; `dSO` and
+                            `Delta_t_S` are set to zero. If False, use fitted
+                            production values for these coefficients.
+    :param calibration_spin: If True, expose external `a6`, `Delta_t_NS`, `dSO`,
+                            and `Delta_t_S` inputs for spin calibration. If False,
+                            use fitted production values for these coefficients.
+    :param nrpy_calibrated: In production mode, select the NRPy-calibrated fits
+                            instead of the default pySEOBNR fits. This option cannot
+                            be combined with either calibration mode.
+    :raises ValueError: If both calibration_no_spin and calibration_spin are True, or if nrpy_calibrated is True together with either calibration mode.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     # The calibration process for the SEOBNRv5 is done in two steps:
@@ -166,6 +173,10 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
         raise ValueError(
             "calibration_no_spin and calibration_spin cannot both be True."
         )
+    # Add an error flag if nrpy_calibrated and either of the calibration flags are true
+    # as we can either generate a "calibration" code or a "calibrated" code.
+    if (calibration_no_spin or calibration_spin) and nrpy_calibrated:
+        raise ValueError("cannot use nrpy_calibrated=True values in calibration mode.")
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
@@ -245,7 +256,12 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
         add_to_parfile=False,
     )
 
-    # Register the calibration coefficients conditionally
+    # Register the calibration coefficients conditionally.
+    # In the case of spin-dependent calibrations,
+    # the values of the corresponding non-spinning calibration coefficients
+    # are supplied by the external calibration algorithm.
+    # Thus, we want to keep the non-spinning calibrations in the parfile
+    # to maintain consistency with the external calibration algorithm.
     if calibration_no_spin:
         par.register_CodeParameters(
             "REAL",
@@ -270,7 +286,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
             ["Delta_t_NS", "a6"],
             [0.0, 0.0],
             commondata=True,
-            add_to_parfile=False,
+            add_to_parfile=True,
         )
         par.register_CodeParameters(
             "REAL",
@@ -380,19 +396,17 @@ Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties.
     name = "SEOBNRv5_aligned_spin_coefficients"
     params = "commondata_struct *restrict commondata"
     v5_const = SEOBNRv5_const.SEOBNR_aligned_spin_constants(
-        calibration_no_spin, calibration_spin
+        calibration_no_spin, calibration_spin, nrpy_calibrated
     )
     body = """
 REAL q = commondata->mass_ratio;
 REAL eta = q / (1.0 + q) / (1.0 + q);
-// Ensure eta is consistent if we snap q to 1.0
+// eta = q / (1 + q)^2 is at most 0.25, so an excess is floating-point rounding for q close to 1.
+// Clamp eta, and snap q to 1.0 when it agrees with 1.0 to within 1e-13.
 if (eta > 0.25){
+  eta = 0.25;
   if (fabs(q - 1.) < 1e-13){
     q = 1.;
-    eta = 0.25;
-  } else {
-    printf("mass ratio = %.15e causes eta = %.15e > 0.25\\n",q,eta);
-    exit(EXIT_FAILURE);
   }
 }
 commondata->m1 = q / (1.0 + q);
@@ -427,11 +441,11 @@ const REAL Delta_t_NS = commondata->Delta_t_NS;
         )
     elif calibration_spin:
         body += """
+const REAL Delta_t_NS = commondata->Delta_t_NS;
 const REAL Delta_t_S = commondata->Delta_t_S;
 """
         body += ccg.c_codegen(
             [
-                v5_const.pyseobnr_a6,
                 v5_const.Delta_t,
                 v5_const.M_f,
                 v5_const.a_f,
@@ -439,7 +453,6 @@ const REAL Delta_t_S = commondata->Delta_t_S;
                 v5_const.rstop,
             ],
             [
-                "commondata->a6",
                 "commondata->Delta_t",
                 "commondata->M_f",
                 "commondata->a_f",
@@ -452,7 +465,7 @@ const REAL Delta_t_S = commondata->Delta_t_S;
     else:
         body += ccg.c_codegen(
             [
-                v5_const.pyseobnr_a6,
+                v5_const.a6,
                 v5_const.pyseobnr_dSO,
                 v5_const.Delta_t,
                 v5_const.M_f,

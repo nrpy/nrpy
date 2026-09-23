@@ -1,6 +1,6 @@
 # Waveform JAX PN Generators
 
-> Map SEOBNR/SEBOB waveform, JAX, and PN momentum example generators to generated project names, dependency classes, and example-owned consistency checks. · Status: confirmed · Last reconciled: 07-12-2026
+> Map SEOBNR/SEBOB waveform, JAX, and PN momentum example generators to generated project names, dependency classes, and example-owned consistency checks. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
@@ -19,14 +19,21 @@ The SEOB/SEBOB consistency scripts are example-owned validation helpers. They
 build trusted and current generated executable directories, run matching
 waveform outputs, compute amplitude-plus-phase RMSE-style differences, and
 require the current-vs-trusted median error to stay within a perturbation-based
-roundoff baseline.
+roundoff baseline. For calibration-mode SEOBNRv5 approximants, the
+SEOBNRv5-family script additionally requires the trusted and current
+executables to succeed or fail consistently on each input; any asymmetry
+(one succeeds, the other crashes) fails the run independently of the median
+check.
 
 ## Detail
 
 `nrpy.examples.seobnrv5_aligned_spin_inspiral` is the flag-driven SEOBNRv5
 aligned-spin generator. If no approximant flag is supplied, it defaults to
 `-seobnrv5_bob`. Normal use chooses one approximant flag, then optionally adds
-one calibration flag:
+one of three mutually exclusive calibration/selector flags:
+`-calibration_no_spin`, `-calibration_spin`, or `-nrpy_calibrated`
+(`-nrpy_calibrated` selects the NRPy-calibrated `a6`/`Delta_t_NS` fit in
+production mode and cannot be combined with either calibration flag):
 
 | Flag family | Generated project name | NQC choice | Merger-ringdown choice | Dependency class |
 | --- | --- | --- | --- | --- |
@@ -34,15 +41,29 @@ one calibration flag:
 | `-seobnrv5_nrnqc_bob` | `seobnrv5_nrnqc_bob` | native numerical-relativity NQC | BOB-informed merger-ringdown | BHaH C project with GSL |
 | `-seobnrv5_nrpy` | `seobnrv5_nrpy` | native numerical-relativity NQC | native SEOBNRv5 merger-ringdown | BHaH C project with GSL |
 
+Claim evidence:
+- Claim: `nrpy.examples.seobnrv5_aligned_spin_inspiral` defaults to `-seobnrv5_bob` when no approximant flag is supplied, then optionally accepts one of three mutually exclusive calibration/selector flags (`-calibration_no_spin`, `-calibration_spin`, `-nrpy_calibrated`), where `-nrpy_calibrated` selects the NRPy-calibrated `a6`/`Delta_t_NS` fit in production mode and cannot be combined with either calibration flag; the three approximant flags map to generated project names `seobnrv5_bob`, `seobnrv5_nrnqc_bob`, and `seobnrv5_nrpy` with the NQC/merger-ringdown/dependency-class combinations in the adjacent table.
+- Role: descriptive behavior
+- Deciding authority: [seobnrv5_aligned_spin_inspiral.py](../../nrpy/examples/seobnrv5_aligned_spin_inspiral.py), `argparse` flag block and the `project_name` base-name assignment in the module `__main__` body
+- Corroboration: none available; no registered test exercises this generator's flag parsing or table-mapped output
+
 Project-name expansion is string-based. The script starts from the approximant
-base name, then appends `_calibration_no_spin` for `-calibration_no_spin` or
-`_calibration_spin` for `-calibration_spin`. It rejects using both calibration
-flags at once. Thus `-seobnrv5_bob -calibration_no_spin` writes
-`project/seobnrv5_bob_calibration_no_spin/`, while
-`-seobnrv5_nrpy -calibration_spin` writes
-`project/seobnrv5_nrpy_calibration_spin/`. The calibration flags also flow into
-SEOBNRv5 aligned-spin coefficient registration, so they are not only naming
-suffixes.
+base name, then appends `_calibration_no_spin` for `-calibration_no_spin`,
+`_calibration_spin` for `-calibration_spin`, or `_nrpy_calibrated` for
+`-nrpy_calibrated`. It rejects combining the two calibration flags, and
+rejects combining `-nrpy_calibrated` with either calibration flag. Thus
+`-seobnrv5_bob -calibration_no_spin` writes
+`project/seobnrv5_bob_calibration_no_spin/`, `-seobnrv5_nrpy -calibration_spin`
+writes `project/seobnrv5_nrpy_calibration_spin/`, and
+`-seobnrv5_bob -nrpy_calibrated` writes
+`project/seobnrv5_bob_nrpy_calibrated/`. These flags also flow into SEOBNRv5
+aligned-spin coefficient registration, so they are not only naming suffixes.
+
+Claim evidence:
+- Claim: Project-name expansion is string-based: the generator starts from the approximant base name, then appends `_calibration_no_spin`, `_calibration_spin`, or `_nrpy_calibrated`; it rejects combining the two calibration flags and rejects combining `-nrpy_calibrated` with either calibration flag, so `-seobnrv5_bob -calibration_no_spin` writes `project/seobnrv5_bob_calibration_no_spin/`, `-seobnrv5_nrpy -calibration_spin` writes `project/seobnrv5_nrpy_calibration_spin/`, and `-seobnrv5_bob -nrpy_calibrated` writes `project/seobnrv5_bob_nrpy_calibrated/`.
+- Role: descriptive behavior
+- Deciding authority: [seobnrv5_aligned_spin_inspiral.py](../../nrpy/examples/seobnrv5_aligned_spin_inspiral.py), `project_name` string-assignment block and the `calibration_no_spin`/`calibration_spin`/`nrpy_calibrated` `ValueError` guards
+- Corroboration: none available; no registered test exercises this generator's project-name string construction
 
 The SEOBNRv5 waveform projects are GSL-backed C projects. The generator sets
 `Infrastructure` to `BHaH`, registers C functions for commondata I/O,
@@ -107,6 +128,24 @@ sets, form complex `h22` from stdout columns, unwrap phase, interpolate both
 waveforms over the shared time interval, and compute normalized RMSE-style
 amplitude and phase errors. A run passes only when the median current-vs-trusted
 error is no larger than the median trusted-vs-perturbed baseline error.
+
+For calibration-mode approximants (`_calibration_no_spin`/`_calibration_spin`
+in the directory name), the SEOBNRv5-family script treats each input set's
+trusted/current executable run as its own success/failure outcome instead of
+letting a crash propagate: an input set where both executables succeed or
+both fail contributes no regression signal (a consistent failure is excluded
+from the median rather than aborting the script), but an input set where one
+succeeds and the other crashes is reported as a regression and fails the run
+regardless of the median comparison. This accounts for calibration-mode
+approximants depending on externally supplied calibration coefficients that
+this harness runs with placeholder parfile defaults. `sebobv2_consistency_check`
+has no calibration-mode variants and is unaffected by this behavior.
+
+Claim evidence:
+- Claim: For calibration-mode approximants (`_calibration_no_spin`/`_calibration_spin` in the directory name), the SEOBNRv5-family consistency script treats each input set's trusted/current executable run as its own success/failure outcome instead of letting a crash propagate: an input set where both executables succeed or both fail contributes no regression signal (excluded from the median rather than aborting the script), but an input set where one succeeds and the other crashes is reported as a regression and fails the run regardless of the median comparison; `sebobv2_consistency_check` has no calibration-mode variants and is unaffected.
+- Role: descriptive behavior
+- Deciding authority: [sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py), `process_input_set`, `__main__` (asymmetric-failure and consistent-failure branches)
+- Corroboration: none available; reproducing this branch requires built trusted/current SEOBNRv5 calibration-mode executables not rebuilt in this pass
 
 These consistency scripts document the example workflow, not a new validation
 subsystem. The broader CI page is context for where generated projects are

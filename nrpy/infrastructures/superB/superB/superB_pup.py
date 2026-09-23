@@ -30,7 +30,7 @@ def generate_pup_serialization_lines_for_CodeParams(
     :return:               A list of C++ lines (strings) performing p| or PUParray calls
                            for this field.
     """
-    base, size, is_array = BHaH.BHaH_defines_h.parse_cparam_type(codeparam.cparam_type)
+    base, size, is_array = par.parse_cparam_type(codeparam.cparam_type)
     lines: List[str] = []
     comment = f"  // {codeparam.module}::{field_name}"
     target = f"{struct_prefix}.{field_name}"
@@ -169,7 +169,7 @@ static void pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, 
 /**
  * PUP allocation state for the optional BHaHAHA input metric workspace.
  *
- * The workspace payload is intentionally not serialized here. At the normal
+ * The workspace data are intentionally not serialized here. At the normal
  * migration/checkpoint wait point, BHaHAHA_transform_BSSN_to_ADM() has not yet
  * filled this scratch buffer; it will be recomputed after interpolation data
  * are restored.
@@ -306,7 +306,15 @@ void pup_outerpt_bc_struct(PUP::er &p, outerpt_bc_struct &obc) {
   p | obc.FACEX0;
   p | obc.FACEX1;
   p | obc.FACEX2;
-}
+  p | obc.r;
+  p | obc.partial_x0_partial_r;
+  p | obc.partial_x1_partial_r;
+  p | obc.partial_x2_partial_r;
+  p | obc.r_int;
+  p | obc.partial_x0_partial_r_int;
+  p | obc.partial_x1_partial_r_int;
+  p | obc.partial_x2_partial_r_int;
+} // END FUNCTION: pup_outerpt_bc_struct
 
 // PUP routine for struct bc_info_struct
 void pup_bc_info_struct(PUP::er &p, bc_info_struct &bci) {

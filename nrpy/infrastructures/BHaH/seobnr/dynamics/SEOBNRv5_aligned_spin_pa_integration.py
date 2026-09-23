@@ -64,6 +64,17 @@ const REAL chi_eff = (m1 * chi1 + m2 * chi2) / (m1 + m2);
 const REAL r_final_prefactor = 2.7 + chi_eff * (1.0 - 4.0 * nu);
 REAL final_r = fmax(10.0, r_final_prefactor * commondata->r_ISCO);
 REAL initial_r = commondata->r;
+
+// Step 0: Skip post-adiabatic integration when the binary starts at or inside final_r.
+// The radial grid runs from initial_r down to final_r, so there is nothing to integrate;
+// initialize the dissipative radial momentum at the conservative r and pphi, then
+// evolve the initial conditions with the ODE integrator.
+if (initial_r <= final_r) {
+  SEOBNRv5_aligned_spin_initial_conditions_dissipative(commondata);
+  SEOBNRv5_aligned_spin_ode_integration(commondata);
+  return;
+} // END IF: initial_r <= final_r, PA integration bypassed
+
 // Step 1: Build the radial grid for post-adiabatic integration.
 REAL dr = .3;
 size_t nsteps = (size_t)((initial_r - final_r) / dr + 1);

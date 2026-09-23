@@ -156,7 +156,7 @@ SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
 // Eqs. (15)-(17), and the direct polarization rotation of Sec. III C,
 // Eqs. (26)-(28), for fixed observer angles. It does not implement the
 // merger-ringdown angle extension of Eqs. (18)-(20), and it does not alter
-// the IMR waveform pipeline.
+// the IMR waveform calculation.
 {
   const size_t n_low = commondata.nsteps_low;
   const size_t n_fine = commondata.nsteps_fine;
