@@ -122,6 +122,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/BHaH/read_checkpoint.py` | living |
 | `nrpy/infrastructures/BHaH/write_checkpoint.py` | living |
 | `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/normal_observer_log_energy.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/__init__.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/register_all.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_vector.py` | living |
@@ -241,9 +242,11 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/examples/superB_two_blackholes_collide.py` | living |
 | `nrpy/examples/superB_blackhole_spectroscopy.py` | living |
 | `nrpy/examples/superB_nrpyelliptic_conformally_flat.py` | living |
-| `nrpy/examples/mass_geodesic_integrator.py` | living |
-| `nrpy/examples/photon_geodesic_integrator.py` | living |
-| `nrpy/examples/photon_geodesic_batch_integrator.py` | living |
+| `nrpy/examples/massive_single_geodesic_integrator_analytical.py` | living |
+| `nrpy/examples/photon_single_geodesic_integrator_analytical.py` | living |
+| `nrpy/examples/photon_batch_geodesic_integrator_analytical.py` | living |
+| `nrpy/examples/photon_single_geodesic_integrator_numerical.py` | living |
+| `nrpy/examples/photon_batch_geodesic_integrator_numerical.py` | living |
 | `nrpy/examples/tovola_neutron_star.py` | living |
 | `nrpy/examples/hydro_without_hydro.py` | living |
 | `nrpy/examples/groovy_TOV_BSSN.py` | living |
@@ -254,8 +257,10 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/examples/et_WaveToyfiles/test/test.ccl` | living |
 | `nrpy/examples/et_WaveToyfiles/test/WaveToyNRPy_test.par` | living |
 | `nrpy/examples/et_WaveToyfiles/test/WaveToyNRPy_test/uuGF.x.asc` | living |
+| `nrpy/examples/geodesic_visualizations/__init__.py` | living |
 | `nrpy/examples/geodesic_visualizations/visualize_trajectory.py` | living |
 | `nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py` | living |
+| `nrpy/examples/geodesic_visualizations/blueprint_io.py` | living |
 | `nrpy/examples/geodesic_visualizations/render_lensed_image.py` | living |
 | `nrpy/examples/geodesic_visualizations/visualize_lensed_image.py` | living |
 | `nrpy/examples/geodesic_visualizations/blueprint_analysis.py` | living |
@@ -292,6 +297,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/equations/general_relativity/geodesics/geodesic_diagnostics/tests/conserved_quantities_KerrSchild_Cartesian_massive.py` | living |
 | `nrpy/equations/general_relativity/geodesics/geodesic_diagnostics/tests/conserved_quantities_KerrSchild_Cartesian_photon.py` | living |
 | `nrpy/equations/general_relativity/geodesics/geodesics.py` | living |
+| `nrpy/equations/general_relativity/geodesics/tests/analytic_spacetimes_BrillLindquist_InitialData_Static_Cartesian.py` | living |
 | `nrpy/equations/general_relativity/geodesics/tests/analytic_spacetimes_KerrSchild_Cartesian.py` | living |
 | `nrpy/equations/general_relativity/geodesics/tests/geodesics_KerrSchild_Cartesian_massive.py` | living |
 | `nrpy/equations/general_relativity/geodesics/tests/geodesics_KerrSchild_Cartesian_photon.py` | living |
