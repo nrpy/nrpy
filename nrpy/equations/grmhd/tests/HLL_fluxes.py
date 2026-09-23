@@ -1,0 +1,11 @@
+from mpmath import mpf  # type: ignore
+
+trusted_dict = {
+    "S_star_HLL_flux": mpf("0.082754447833617550192730495361843"),
+    "Stilde_flux_HLLD_0": mpf("-0.168512614668720832249688170132828"),
+    "Stilde_flux_HLLD_1": mpf("-0.0167566038231977120597159106486498"),
+    "Stilde_flux_HLLD_2": mpf("-0.0668835110268215426892979704232399"),
+    "Ye_star_HLL_flux": mpf("0.0000379205635598264065177259004397511"),
+    "rho_star_HLL_flux": mpf("0.0414720253257083411126595624320034"),
+    "tau_tilde_HLL_flux": mpf("0.129843809715614961866376678088113"),
+}
