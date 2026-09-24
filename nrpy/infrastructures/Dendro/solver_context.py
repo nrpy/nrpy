@@ -946,6 +946,29 @@ bool Ctx::is_remesh(bool initial_grid) {{
   unzipped_state_.to_2d(fields.data());
   for (const ot::Block& block : m_uiMesh->getLocalBlockList())
     physical_boundary_ghosts(block, fields.data(), generated::NUM_EVOL_GFS);
+  // Compatibility with Dendro-GR BSSN_GR remeshing. BSSN_GR evolves the
+  // Gamma-driver shift as d_t beta^i = (3/4) B^i + advection with
+  // BSSN_LAMBDA_F = (1, 0), while this solver evolves d_t beta^i = B^i +
+  // advection. With BSSN_LAMBDA = (1, 1, 1, 1) and the same damping eta, the
+  // auxiliary fields satisfy B^i(BSSN_GR) = (4/3) B^i(NRPy). The wavelet
+  // refinement test compares each refinement field's wavelet coefficients
+  // with one tolerance, so B is scaled by 4/3 here to test it in BSSN_GR's
+  // normalization. BSSN_GR's default eta varies with radius (RIT profile),
+  // while this solver uses a constant eta, so the two fields agree only where
+  // the damping agrees. The scaling acts on unzipped_state_, which every
+  // other user refills with unzip before reading; the evolved state is not
+  // changed.
+  {{
+    const std::size_t unzipped_points =
+        unzipped_state_.get_size() / generated::NUM_EVOL_GFS;
+    for (const generated::EvolVar component :
+         {{generated::EvolVar::betU0, generated::EvolVar::betU1,
+          generated::EvolVar::betU2}}) {{
+      DendroScalar* const field = fields[generated::to_index(component)];
+      for (std::size_t point = 0; point < unzipped_points; ++point)
+        field[point] *= DendroScalar(4) / DendroScalar(3);
+    }}
+  }}
   for (unsigned int i = 0; i < generated::NUM_EVOL_GFS; ++i)
     const_fields[i] = fields[i];
   const auto wavelet_tolerance = get_wtol_function();

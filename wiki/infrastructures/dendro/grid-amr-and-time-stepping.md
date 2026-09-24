@@ -94,6 +94,28 @@ Claim evidence:
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::get_wtol_function` and `Ctx::is_remesh` within `output_solver_context_cpp`.
 - Corroboration: `BSSN_GR/src/grUtils.cpp`, `punctureDataPhysicalCoord`; `BSSN_GR/src/dataUtils.cpp`, `calculate_relative_position_history` and `isRemeshBH`.
 
+For compatibility with Dendro-GR BSSN_GR remeshing, the wavelet refinement
+test sees the Gamma-driver auxiliary field `betU` scaled by 4/3. BSSN_GR
+evolves the shift as `d_t beta^i = (3/4) B^i` with `BSSN_LAMBDA_F = (1, 0)`,
+while BSSN and fCCZ4 here use `GammaDriving2ndOrder_Covariant__Hatted`, which
+evolves `d_t beta^i = B^i`; with `BSSN_LAMBDA = (1, 1, 1, 1)` and the same
+damping `eta` the two auxiliary fields satisfy
+`B^i(BSSN_GR) = (4/3) B^i(NRPy)`. BSSN_GR's default damping is the
+radius-dependent RIT profile (2.0 near the origin, about 0.25 beyond
+r ≈ 60), while NRPy uses the constant `eta`, so the relation holds only where
+the two agree. Because the test compares every refinement field's wavelet
+coefficients with one tolerance, an unscaled `B` can coarsen earlier than
+BSSN_GR where `B` determines the refinement decision. `Ctx::is_remesh`
+multiplies `betU0`–`betU2` by 4/3 in the unzipped work vector, which every
+other user refills with `unzip` before reading, after the physical-boundary
+fill and before `isReMeshUnzip`; the evolved state is not changed.
+
+Claim evidence:
+- Claim: `Ctx::is_remesh` scales `betU` by 4/3 in its unzipped work vector before the wavelet refinement test, which puts the tested auxiliary shift-driver field in BSSN_GR's normalization (equal to BSSN_GR's `B` for `BSSN_LAMBDA_F = (1, 0)`, `BSSN_LAMBDA = (1, 1, 1, 1)` and equal `eta`); the evolved state is unchanged.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::is_remesh` within `output_solver_context_cpp`.
+- Corroboration: `nrpy/equations/general_relativity/BSSN_gauge_RHSs.py`, `GammaDriving2ndOrder_Covariant__Hatted`; `BSSN_GR/src/bssneqs_SSL_HD_dxsq.cpp`, `b_rhs` and `B_rhs`; `BSSN_GR/src/rhs.cpp`, RIT `eta` profile.
+
 Puncture-center tracking reads the evolved `vetU` shift components, not the
 `betU` auxiliary shift-driver components. The tracked centers set excision
 regions and puncture-centered AMR. Diagnostics are scheduled after a remesh
