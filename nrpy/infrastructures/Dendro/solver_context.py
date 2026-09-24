@@ -422,13 +422,9 @@ Ctx::~Ctx() {{
 int Ctx::initialize(const commondata_struct& commondata,
                     const params_struct& tp_params,
                     const ID_persist_struct& punctures) {{
-  DVec adm, psi;
+  DVec adm;
   adm.create_vector(m_uiMesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
                     ot::DVEC_LOC::HOST, 18, true);
-  psi.create_vector(m_uiMesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING,
-                    ot::DVEC_LOC::HOST, 1, true);
-  std::fill_n(adm.get_vec_ptr(), adm.get_size(), 0.0);
-  std::fill_n(psi.get_vec_ptr(), psi.get_size(), 0.0);
   std::fill_n(unzipped_state_.get_vec_ptr(), unzipped_state_.get_size(), 0.0);
   std::fill_n(unzipped_rhs_.get_vec_ptr(), unzipped_rhs_.get_size(), 0.0);
   std::array<DendroScalar*, 18> adm_fields{{}};
@@ -438,7 +434,7 @@ int Ctx::initialize(const commondata_struct& commondata,
   unzipped_rhs_.to_2d(output.data());
   for (const ot::Block& block : m_uiMesh->getLocalBlockList()) {{
     twopunctures(block, &commondata, &tp_params, &punctures,
-                 adm_fields.data(), psi.get_vec_ptr(), domain_minimum_,
+                 adm_fields.data(), domain_minimum_,
                  domain_maximum_);
     switch (m_uiElementOrder) {{
       case 4: ADM_to_BSSN_order_4(block, adm_fields.data(), output.data(),
@@ -451,8 +447,6 @@ int Ctx::initialize(const commondata_struct& commondata,
     }}
   }}
   zip(unzipped_rhs_, state_);
-  std::copy_n(unzipped_rhs_.get_vec_ptr(), unzipped_rhs_.get_size(),
-              unzipped_state_.get_vec_ptr());
   unzip(state_, unzipped_state_, 1);
   std::copy_n(unzipped_state_.get_vec_ptr(), unzipped_state_.get_size(),
               unzipped_rhs_.get_vec_ptr());
@@ -476,7 +470,7 @@ int Ctx::initialize(const commondata_struct& commondata,
   enforce_detgbar_equals_detghat_trAzero(
       output.data(), m_uiMesh->getNodeLocalBegin(),
       m_uiMesh->getNodeLocalEnd());
-  adm.destroy_vector(); psi.destroy_vector();
+  adm.destroy_vector();
   return 0;
 }}
 int Ctx::rhs(DVec* in, DVec* out, unsigned int count, DendroScalar time) {{

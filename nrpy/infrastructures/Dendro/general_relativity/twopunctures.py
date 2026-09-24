@@ -31,8 +31,8 @@ def register_CFunction_twopunctures(
 
     The generated solver loads coefficients computed by its single-rank
     ``--tpid`` mode. This function then fills the eighteen ADM scratch fields
-    consumed by ``ADM_to_BSSN`` and records the full conformal factor. The
-    required TwoPunctures lapse is ``alpha=psi**(-2)=W``.
+    consumed by ``ADM_to_BSSN``. The required TwoPunctures lapse is
+    ``alpha=psi**(-2)=W``.
 
     :param solver_stem: Lowercase formulation name used by generated headers.
     :param tp_orientation: Fixed-frame orientation used by TwoPunctures.
@@ -77,7 +77,7 @@ def register_CFunction_twopunctures(
         for index, value in enumerate(assignments)
     )
     body = f"""if (commondata == nullptr || params == nullptr || punctures == nullptr ||
-    adm_gfs == nullptr || full_psi == nullptr)
+    adm_gfs == nullptr)
     throw std::invalid_argument("twopunctures received a null argument");
 if (std::strcmp(punctures->initial_lapse, "W") != 0)
     throw std::invalid_argument("twopunctures requires alpha=W=(psi+u)^(-2)");
@@ -109,7 +109,6 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
 {copy_to_adm}
             if (!(sample.alpha > 0.0) || !std::isfinite(sample.alpha))
                 throw std::runtime_error("TwoPunctures returned invalid W lapse");
-            full_psi[pp] = 1.0 / std::sqrt(sample.alpha);
         }}
     }}
 }}"""
@@ -126,7 +125,7 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
         params=(
             "const ot::Block& block, const commondata_struct* commondata, "
             "const params_struct* params, const ID_persist_struct* punctures, "
-            f"{scalar_type}* const* adm_gfs, {scalar_type}* full_psi, "
+            f"{scalar_type}* const* adm_gfs, "
             "const Point& domain_min, const Point& domain_max"
         ),
         body=body,
