@@ -171,14 +171,14 @@ for (int j = 1; j <= PA_ORDER; j++) {
         f_hi = GSL_FN_EVAL(&F_pphi, x_hi);
         pa_bracket_found = (f_lo * f_hi <= 0.);
         pa_expand_iter++;
-      } // END WHILE: expand the pphi bracket until a sign change is found or bounds are exhausted
+      } // END WHILE: widening pphi root bracket
       if (!pa_bracket_found || x_lo <= 0.) {
         fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_pa_integration(), failed to bracket the pphi post-adiabatic root at radial point %zu (r=%.15e)\\n", i, r[i]);
         exit(1);
-      } // END IF: pphi bracket could not be established
+      } // END IF: pphi root bracket not found
       pphi[i] = root_finding_1d(x_lo, x_hi, &F_pphi);
       break;
-    }
+    } // END BLOCK: even-order pphi root solve
     case 1: {
       // odd order, compute prstar
       // note that prstar is always negative (inspiral)
@@ -201,14 +201,14 @@ for (int j = 1; j <= PA_ORDER; j++) {
         f_hi = GSL_FN_EVAL(&F_prstar, x_hi);
         pa_bracket_found = (f_lo * f_hi <= 0.);
         pa_expand_iter++;
-      } // END WHILE: expand the prstar bracket until a sign change is found or bounds are exhausted
+      } // END WHILE: widening prstar root bracket
       if (!pa_bracket_found || x_hi > 0.) {
         fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_pa_integration(), failed to bracket the prstar post-adiabatic root at radial point %zu (r=%.15e)\\n", i, r[i]);
         exit(1);
-      } // END IF: prstar bracket could not be established
+      } // END IF: prstar root bracket not found
       prstar[i] = root_finding_1d(x_lo, x_hi, &F_prstar);
       break;
-    }
+    } // END BLOCK: odd-order prstar root solve
     default:
       break;
     } // END SWITCH: choose PA variable to solve at this order

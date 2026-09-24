@@ -127,10 +127,10 @@ for (size_t buf_idx = 0; buf_idx < 17; buf_idx++){
     fprintf(stderr,"Error: in SEOBNRv5_quasi_precessing_spin_dynamics(), malloc() failed for %s\\n", spin_dynamics_buf_names[buf_idx]);
     for (size_t freed_idx = 0; freed_idx < buf_idx; freed_idx++){
       free(*(spin_dynamics_bufs[freed_idx]));
-    } // END LOOP: free arrays allocated before the failing one
+    } // END LOOP: for freed_idx over allocated buffers
     exit(1);
   } // END IF: allocation of spin_dynamics_bufs[buf_idx] failed
-} // END LOOP: allocate all seventeen spin-dynamics sample buffers
+} // END LOOP: for buf_idx over spin buffers
 size_t nsteps = 0;
 
 // Step 4: Store the initial spin-dynamics sample.

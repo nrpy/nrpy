@@ -95,7 +95,7 @@ if (status != GSL_SUCCESS){
   gsl_multiroot_fsolver_free (s);
   gsl_vector_free (x);
   exit(1);
-} // END IF: multidimensional solve failed to converge within the iteration cap
+} // END IF: multidimensional root not converged
 for (i = 0; i < n; i++){
 x_result[i] = gsl_vector_get(s->x , i);
 }

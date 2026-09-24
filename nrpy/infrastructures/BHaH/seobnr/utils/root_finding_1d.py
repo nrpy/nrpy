@@ -80,7 +80,7 @@ if (status != GSL_SUCCESS){
           max_iter, x_lo, x_hi);
   gsl_root_fsolver_free (s);
   exit(1);
-} // END IF: 1-dimensional solve failed to converge within the iteration cap
+} // END IF: 1D root not converged
 
 gsl_root_fsolver_free (s);
 return x;
