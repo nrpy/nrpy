@@ -18,6 +18,20 @@
 #include <time.h>    // Time-related functions and types, such as time(), clock(),
 #define REAL double
 #define DOUBLE double
+#if defined(__INTEL_COMPILER) && !defined(__INTEL_LLVM_COMPILER)
+// Intel classic compiler fallback avoids statement expressions that can trigger compiler failures.
+#ifndef NRPYMIN
+#define NRPYMIN(A, B) (((A) < (B)) ? (A) : (B))
+#endif // END ifndef NRPYMIN
+
+#ifndef NRPYMAX
+#define NRPYMAX(A, B) (((A) > (B)) ? (A) : (B))
+#endif // END ifndef NRPYMAX
+
+#ifndef NRPYSQR
+#define NRPYSQR(A) ((A) * (A))
+#endif // END ifndef NRPYSQR
+#else
 // These macros for NRPYMIN(), NRPYMAX(), and NRPYSQR() ensure that if the arguments inside
 //   are a function/complex expression, the function/expression is evaluated
 //   *only once* per argument. See https://lwn.net/Articles/983965/ for details.
@@ -50,6 +64,7 @@
     _a *_a;                                                                                                                                          \
   })
 #endif // END ifndef NRPYSQR
+#endif // END Intel classic compiler fallback
 #ifndef MAYBE_UNUSED
 #if __cplusplus >= 201703L
 #define MAYBE_UNUSED [[maybe_unused]]

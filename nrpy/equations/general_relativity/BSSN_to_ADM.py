@@ -2,6 +2,9 @@
 """
 Construct expressions for ADM quantities in terms of BSSN quantities.
 
+The conformal metric and extrinsic-curvature relations are Mewes et al.,
+https://arxiv.org/abs/2002.06225v2, Eqs. (7) and (10).
+
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
@@ -22,6 +25,10 @@ class BSSN_to_ADM:
     ):
         """
         Initialize the BSSN_to_ADM class, sets: betaU, gammaDD, gammaDDdD, gammaDDdDD, gammaUU, detgamma, GammaUDD, KDD, KDDdD.
+
+        gamma_ij = e^(4 phi) gammabar_ij and K_ij follow by rearranging
+        Mewes et al., Eqs. (7) and (10). Metric and curvature derivatives
+        below follow by the chain and product rules.
 
         :param CoordSystem: Coordinate system to use.
         :param enable_rfm_precompute: Boolean flag to enable reference metric precomputation

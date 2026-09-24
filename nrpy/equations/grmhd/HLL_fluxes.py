@@ -1,151 +1,25 @@
 """
-Construct fluxes from the HLL approximate Riemann solver at cell interfaces.
+Construct GRMHD fluid fluxes from the HLL approximate Riemann solver at cell interfaces.
 
-Author: Terrence Pierre Jacques
-        terrencepierrej **at** gmail **dot* com
+Magnetic stress-energy follows Duez et al., Phys. Rev. D 72, 024028
+(2005), Eqs. (32)-(33); its HLL flux is Eq. (48),
+https://arxiv.org/abs/astro-ph/0503420v2.
+
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import sympy as sp
 
 import nrpy.indexedexp as ixp
-from nrpy.equations.grhd.characteristic_speeds import find_cmax_cmin
-from nrpy.equations.grhd.GRHD_equations import GRHD_Equations
-
-
-def calculate_Tmunu_and_contractions_from_equations(
-    grhd_eqs: GRHD_Equations,
-    flux_dirn: int,
-    gammaDD: List[List[sp.Expr]],
-    betaU: List[sp.Expr],
-    alpha: sp.Expr,
-    e6phi: sp.Expr,
-    rho_b: sp.Expr,
-    Ye: sp.Expr,
-    S: sp.Expr,
-    P: sp.Expr,
-    h: sp.Expr,
-    u4U: List[sp.Expr],
-) -> Tuple[
-    sp.Expr,
-    sp.Expr,
-    sp.Expr,
-    sp.Expr,
-    sp.Expr,
-    sp.Expr,
-    sp.Expr,
-    sp.Expr,
-    List[sp.Expr],
-    List[sp.Expr],
-]:
-    """
-    Compute conserved quantities and fluxes entering the HLL solver.
-
-    The called equation methods implement Jacques et al., Eqs. (13)-(19),
-    https://arxiv.org/abs/2412.03659v2, with GRHayL-compatible entropy advection.
-
-    :param grhd_eqs: Cartesian equation object; its metric and fluid state are overwritten.
-    :param flux_dirn: Flux direction.
-    :param gammaDD: Spatial metric.
-    :param betaU: Shift vector.
-    :param alpha: Lapse function.
-    :param e6phi: Reference-metric volume factor e^(6 phi), equal to sqrt(gamma/gammahat) when det(gammabar) = det(gammahat); for rescaled face data it equals sqrt(det gammaDD).
-    :param rho_b: Baryon density.
-    :param Ye: Electron fraction.
-    :param S: Primitive entropy variable in the selected EOS convention.
-    :param P: Pressure.
-    :param h: Specific enthalpy.
-    :param u4U: Four-velocity.
-    :return: Conserved quantities and fluxes in the requested direction.
-
-    Note: Written in terms of rescaled quantities, the rescaled fluxes have the
-    same mathematical form as the Cartesian expressions.
-    """
-    # Step 1: Replace the equation object's metric and fluid state.
-    grhd_eqs.gammaDD = gammaDD.copy()
-    grhd_eqs.betaU = betaU.copy()
-    grhd_eqs.u4U = u4U.copy()
-    grhd_eqs.alpha = alpha
-    grhd_eqs.e6phi = e6phi
-    grhd_eqs.rho_b = rho_b
-    grhd_eqs.Ye = Ye
-    grhd_eqs.S = S
-    grhd_eqs.P = P
-    grhd_eqs.h = h
-
-    # Step 2: Compute the transport velocity u^i/u^0 and the stress-energy tensors.
-    grhd_eqs.compute_vU_from_u4U__no_speed_limit()
-    grhd_eqs.VU = grhd_eqs.VU_from_u4U
-    grhd_eqs.compute_T4UU()
-    grhd_eqs.compute_T4UD()
-
-    # Step 3: Compute conserved variables.
-    grhd_eqs.compute_rho_star()
-    grhd_eqs.compute_Ye_star()
-    grhd_eqs.compute_S_star()
-    grhd_eqs.compute_tau_tilde()
-    grhd_eqs.compute_S_tildeD()
-
-    # Step 4: Compute their fluxes.
-    grhd_eqs.compute_rho_star_fluxU()
-    grhd_eqs.compute_Ye_star_fluxU()
-    grhd_eqs.compute_S_star_fluxU()
-    grhd_eqs.compute_tau_tilde_fluxU()
-    grhd_eqs.compute_S_tilde_fluxUD()
-
-    U_rho_star = grhd_eqs.rho_star
-    F_rho_star = grhd_eqs.rho_star_fluxU[flux_dirn]
-
-    U_Ye_star = grhd_eqs.Ye_star
-    F_Ye_star = grhd_eqs.Ye_star_fluxU[flux_dirn]
-
-    U_S_star = grhd_eqs.S_star
-    F_S_star = grhd_eqs.S_star_fluxU[flux_dirn]
-
-    U_tau_tilde = grhd_eqs.tau_tilde
-    F_tau_tilde = grhd_eqs.tau_tilde_fluxU[flux_dirn]
-
-    U_S_tildeD = grhd_eqs.S_tildeD.copy()
-    F_S_tildeD = grhd_eqs.S_tilde_fluxUD[flux_dirn].copy()
-
-    return (
-        U_rho_star,
-        F_rho_star,
-        U_Ye_star,
-        F_Ye_star,
-        U_S_star,
-        F_S_star,
-        U_tau_tilde,
-        F_tau_tilde,
-        U_S_tildeD,
-        F_S_tildeD,
-    )
-
-
-def HLL_solver(
-    cmax: sp.Expr,
-    cmin: sp.Expr,
-    Fr: sp.Expr,
-    Fl: sp.Expr,
-    Ur: sp.Expr,
-    Ul: sp.Expr,
-) -> sp.Expr:
-    """
-    Solve the one-dimensional Riemann problem using the HLL algorithm.
-
-    Duez et al., Phys. Rev. D 72, 024028 (2005), Eq. (48),
-    https://arxiv.org/abs/astro-ph/0503420v2.
-
-    :param cmax: Nonnegative right-going bound, max(0, c_+R, c_+L).
-    :param cmin: Nonnegative left-going magnitude, -min(0, c_-R, c_-L).
-    :param Fr: Hydrodynamic flux at the right state.
-    :param Fl: Hydrodynamic flux at the left state.
-    :param Ur: Conserved variable at the right state.
-    :param Ul: Conserved variable at the left state.
-    :return: HLL flux at the interface.
-    """
-    return (cmin * Fr + cmax * Fl - cmin * cmax * (Ur - Ul)) / (cmax + cmin)
+from nrpy.equations.grhd.HLL_fluxes import (
+    HLL_solver,
+    calculate_Tmunu_and_contractions_from_equations,
+)
+from nrpy.equations.grmhd.characteristic_speeds import find_cmax_cmin
+from nrpy.equations.grmhd.GRMHD_equations import GRMHD_Equations
 
 
 def calculate_HLL_fluxes(
@@ -156,6 +30,8 @@ def calculate_HLL_fluxes(
     e6phi_face: sp.Expr,
     u4rU: List[sp.Expr],
     u4lU: List[sp.Expr],
+    BmagrU: List[sp.Expr],
+    BmaglU: List[sp.Expr],
     rho_b_r: sp.Expr,
     rho_b_l: sp.Expr,
     Ye_r: sp.Expr,
@@ -170,9 +46,14 @@ def calculate_HLL_fluxes(
     cs2_l: sp.Expr,
 ) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr, List[sp.Expr]]:
     """
-    Calculate symbolic HLL fluxes for the GRHD evolution system.
+    Calculate symbolic HLL fluxes for the GRMHD fluid evolution system.
 
     The HLL combination is Duez et al. (2005), Eq. (48); see HLL_solver.
+    For each face state, a Cartesian GRMHD_Equations object supplies the
+    magnetic stress-energy to the GRHD contraction function. All face inputs,
+    including BmagrU and BmaglU, must use the basis of gamma_faceDD; for
+    reference-metric evolutions this is the rescaled basis, and the returned
+    fluxes are rescaled fluxes.
 
     :param flux_dirn: Flux direction.
     :param alpha_face: Lapse on the cell face.
@@ -181,6 +62,8 @@ def calculate_HLL_fluxes(
     :param e6phi_face: Face reference-metric volume factor e^(6 phi), equal to sqrt(gamma/gammahat) when det(gammabar) = det(gammahat); for rescaled face data it equals sqrt(det gamma_faceDD).
     :param u4rU: Four-velocity reconstructed to the right side.
     :param u4lU: Four-velocity reconstructed to the left side.
+    :param BmagrU: Eulerian magnetic field scaled by 1/sqrt(4 pi) on the right side, in the basis of gamma_faceDD.
+    :param BmaglU: Eulerian magnetic field scaled by 1/sqrt(4 pi) on the left side, in the basis of gamma_faceDD.
     :param rho_b_r: Density on the right side.
     :param rho_b_l: Density on the left side.
     :param Ye_r: Electron fraction on the right side.
@@ -197,6 +80,8 @@ def calculate_HLL_fluxes(
         momentum.
     """
     # Step 1: Compute the conserved variables and physical fluxes on each side.
+    grmhd_eqs_r = GRMHD_Equations(CoordSystem="Cartesian", enable_rfm_precompute=False)
+    grmhd_eqs_r.BmagU = BmagrU.copy()
     (
         U_rho_star_r,
         F_rho_star_r,
@@ -209,7 +94,7 @@ def calculate_HLL_fluxes(
         U_S_tilde_rD,
         F_S_tilde_rD,
     ) = calculate_Tmunu_and_contractions_from_equations(
-        GRHD_Equations(CoordSystem="Cartesian", enable_rfm_precompute=False),
+        grmhd_eqs_r,
         flux_dirn,
         gamma_faceDD,
         beta_faceU,
@@ -223,6 +108,8 @@ def calculate_HLL_fluxes(
         u4rU,
     )
 
+    grmhd_eqs_l = GRMHD_Equations(CoordSystem="Cartesian", enable_rfm_precompute=False)
+    grmhd_eqs_l.BmagU = BmaglU.copy()
     (
         U_rho_star_l,
         F_rho_star_l,
@@ -235,7 +122,7 @@ def calculate_HLL_fluxes(
         U_S_tilde_lD,
         F_S_tilde_lD,
     ) = calculate_Tmunu_and_contractions_from_equations(
-        GRHD_Equations(CoordSystem="Cartesian", enable_rfm_precompute=False),
+        grmhd_eqs_l,
         flux_dirn,
         gamma_faceDD,
         beta_faceU,
@@ -251,7 +138,20 @@ def calculate_HLL_fluxes(
 
     # Step 2: Compute the fastest left- and right-going signal speeds.
     cmin, cmax = find_cmax_cmin(
-        flux_dirn, gamma_faceDD, beta_faceU, alpha_face, u4rU, u4lU, cs2_r, cs2_l
+        flux_dirn,
+        gamma_faceDD,
+        beta_faceU,
+        alpha_face,
+        u4rU,
+        u4lU,
+        BmagrU,
+        BmaglU,
+        rho_b_r,
+        rho_b_l,
+        h_r,
+        h_l,
+        cs2_r,
+        cs2_l,
     )
 
     # Step 3: Assemble the HLL fluxes.
@@ -300,6 +200,10 @@ if __name__ == "__main__":
     import nrpy.validate_expressions.validate_expressions as ve
     from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
     from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
+    from nrpy.equations.grhd.HLL_fluxes import (
+        calculate_HLL_fluxes as calculate_grhd_HLL_fluxes,
+    )
+    from nrpy.equations.grmhd.characteristic_speeds import _nrpyAbs_to_Abs
 
     results = doctest.testmod()
     if results.failed > 0:
@@ -307,8 +211,6 @@ if __name__ == "__main__":
         sys.exit(1)
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
-
-    exprs_dict: Dict[str, Any] = {}
 
     rfm = refmetric.reference_metric["Cartesian"]
 
@@ -320,6 +222,8 @@ if __name__ == "__main__":
     # Step 1: Define symbolic right and left interface states.
     rescaledvrU = ixp.declarerank1("rescaledvrU", dimension=3)
     rescaledvlU = ixp.declarerank1("rescaledvlU", dimension=3)
+    BmagrU_test = ixp.declarerank1("BmagrU", dimension=3)
+    BmaglU_test = ixp.declarerank1("BmaglU", dimension=3)
 
     VrU = ixp.zerorank1()
     VlU = ixp.zerorank1()
@@ -373,19 +277,23 @@ if __name__ == "__main__":
             )
 
     # Step 3: Evaluate conserved variables and fluxes symbolically.
+    grmhd_eqs_test = GRMHD_Equations(
+        CoordSystem="Cartesian", enable_rfm_precompute=False
+    )
+    grmhd_eqs_test.BmagU = BmagrU_test.copy()
     (
-        exprs_dict["U_rho_star"],
-        exprs_dict["F_rho_star"],
-        exprs_dict["U_Ye_star"],
-        exprs_dict["F_Ye_star"],
-        exprs_dict["U_S_star"],
-        exprs_dict["F_S_star"],
-        exprs_dict["U_tau_tilde"],
-        exprs_dict["F_tau_tilde"],
-        exprs_dict["U_S_tildeD"],
-        exprs_dict["F_S_tildeD"],
+        U_rho_star_test,
+        F_rho_star_test,
+        U_Ye_star_test,
+        F_Ye_star_test,
+        U_S_star_test,
+        F_S_star_test,
+        U_tau_tilde_test,
+        F_tau_tilde_test,
+        U_S_tildeD_test,
+        F_S_tildeD_test,
     ) = calculate_Tmunu_and_contractions_from_equations(
-        GRHD_Equations(CoordSystem="Cartesian", enable_rfm_precompute=False),
+        grmhd_eqs_test,
         2,
         gamma_faceDD_test,
         beta_faceU_test,
@@ -406,37 +314,44 @@ if __name__ == "__main__":
         alpha_face_test,
         u4rU_test,
         u4lU_test,
+        BmagrU_test,
+        BmaglU_test,
+        rho_b_r_test,
+        rho_b_l_test,
+        h_r_test,
+        h_l_test,
         cs2_r_test,
         cs2_l_test,
     )
 
-    cmin_test = cmin_test.subs(sp.Function("nrpyAbs"), sp.Abs)
-    cmax_test = cmax_test.subs(sp.Function("nrpyAbs"), sp.Abs)
-
-    exprs_dict["HLL_test"] = HLL_solver(
-        cmax_test,
-        cmin_test,
-        exprs_dict["F_rho_star"],
-        exprs_dict["F_Ye_star"],
-        exprs_dict["U_rho_star"],
-        exprs_dict["U_Ye_star"],
+    HLL_test = HLL_solver(
+        _nrpyAbs_to_Abs(cmax_test),
+        _nrpyAbs_to_Abs(cmin_test),
+        F_rho_star_test,
+        F_Ye_star_test,
+        U_rho_star_test,
+        U_Ye_star_test,
     )
 
-    # Step 4: Evaluate the final HLL flux expressions.
+    # Step 4: Evaluate the magnetic HLL flux expressions. In flux direction 1,
+    #         both speed bounds are nonzero at the trusted sample values, so
+    #         both face states and the magnetic signal speeds enter the fluxes.
     (
-        exprs_dict["rho_star_HLL_flux"],
-        exprs_dict["Ye_star_HLL_flux"],
-        exprs_dict["S_star_HLL_flux"],
-        exprs_dict["tau_tilde_HLL_flux"],
-        exprs_dict["Stilde_flux_HLLD"],
+        rho_star_HLL_flux_test,
+        Ye_star_HLL_flux_test,
+        S_star_HLL_flux_test,
+        tau_tilde_HLL_flux_test,
+        Stilde_flux_HLLD_test,
     ) = calculate_HLL_fluxes(
-        0,
+        1,
         alpha_face_test,
         gamma_faceDD_test,
         beta_faceU_test,
         e6phi_face_test,
         u4rU_test,
         u4lU_test,
+        BmagrU_test,
+        BmaglU_test,
         rho_b_r_test,
         rho_b_l_test,
         Ye_r_test,
@@ -451,27 +366,123 @@ if __name__ == "__main__":
         cs2_l_test,
     )
 
-    exprs_dict["rho_star_HLL_flux"] = exprs_dict["rho_star_HLL_flux"].subs(
-        sp.Function("nrpyAbs"), sp.Abs
+    # At the sample values the left state sets both speed bounds, so repeat the
+    #   evaluation with the face states exchanged to test the right-state inputs.
+    (
+        exchanged_rho_star_HLL_flux_test,
+        exchanged_Ye_star_HLL_flux_test,
+        exchanged_S_star_HLL_flux_test,
+        exchanged_tau_tilde_HLL_flux_test,
+        exchanged_Stilde_flux_HLLD_test,
+    ) = calculate_HLL_fluxes(
+        1,
+        alpha_face_test,
+        gamma_faceDD_test,
+        beta_faceU_test,
+        e6phi_face_test,
+        u4lU_test,
+        u4rU_test,
+        BmaglU_test,
+        BmagrU_test,
+        rho_b_l_test,
+        rho_b_r_test,
+        Ye_l_test,
+        Ye_r_test,
+        S_l_test,
+        S_r_test,
+        P_l_test,
+        P_r_test,
+        h_l_test,
+        h_r_test,
+        cs2_l_test,
+        cs2_r_test,
     )
-    exprs_dict["Ye_star_HLL_flux"] = exprs_dict["Ye_star_HLL_flux"].subs(
-        sp.Function("nrpyAbs"), sp.Abs
-    )
-    exprs_dict["S_star_HLL_flux"] = exprs_dict["S_star_HLL_flux"].subs(
-        sp.Function("nrpyAbs"), sp.Abs
-    )
-    exprs_dict["tau_tilde_HLL_flux"] = exprs_dict["tau_tilde_HLL_flux"].subs(
-        sp.Function("nrpyAbs"), sp.Abs
-    )
-    exprs_dict["Stilde_flux_HLLD"][0] = exprs_dict["Stilde_flux_HLLD"][0].subs(
-        sp.Function("nrpyAbs"), sp.Abs
-    )
-    exprs_dict["Stilde_flux_HLLD"][1] = exprs_dict["Stilde_flux_HLLD"][1].subs(
-        sp.Function("nrpyAbs"), sp.Abs
-    )
-    exprs_dict["Stilde_flux_HLLD"][2] = exprs_dict["Stilde_flux_HLLD"][2].subs(
-        sp.Function("nrpyAbs"), sp.Abs
-    )
+
+    exprs_dict: Dict[str, Union[sp.Expr, List[sp.Expr]]] = {
+        "U_rho_star": U_rho_star_test,
+        "F_rho_star": F_rho_star_test,
+        "U_Ye_star": U_Ye_star_test,
+        "F_Ye_star": F_Ye_star_test,
+        "U_S_star": U_S_star_test,
+        "F_S_star": F_S_star_test,
+        "U_tau_tilde": U_tau_tilde_test,
+        "F_tau_tilde": F_tau_tilde_test,
+        "U_S_tildeD": U_S_tildeD_test,
+        "F_S_tildeD": F_S_tildeD_test,
+        "HLL_test": HLL_test,
+        "rho_star_HLL_flux": _nrpyAbs_to_Abs(rho_star_HLL_flux_test),
+        "Ye_star_HLL_flux": _nrpyAbs_to_Abs(Ye_star_HLL_flux_test),
+        "S_star_HLL_flux": _nrpyAbs_to_Abs(S_star_HLL_flux_test),
+        "tau_tilde_HLL_flux": _nrpyAbs_to_Abs(tau_tilde_HLL_flux_test),
+        "Stilde_flux_HLLD": [
+            _nrpyAbs_to_Abs(component) for component in Stilde_flux_HLLD_test
+        ],
+        "exchanged_rho_star_HLL_flux": _nrpyAbs_to_Abs(
+            exchanged_rho_star_HLL_flux_test
+        ),
+        "exchanged_Ye_star_HLL_flux": _nrpyAbs_to_Abs(exchanged_Ye_star_HLL_flux_test),
+        "exchanged_S_star_HLL_flux": _nrpyAbs_to_Abs(exchanged_S_star_HLL_flux_test),
+        "exchanged_tau_tilde_HLL_flux": _nrpyAbs_to_Abs(
+            exchanged_tau_tilde_HLL_flux_test
+        ),
+        "exchanged_Stilde_flux_HLLD": [
+            _nrpyAbs_to_Abs(component) for component in exchanged_Stilde_flux_HLLD_test
+        ],
+    }
+
+    # Step 5: With B^i = 0, the HLL fluxes must equal the GRHD fluxes. Only the
+    #         selected component index depends on flux_dirn, and a flat face
+    #         metric keeps these exact comparisons small.
+    zero_BmagU = ixp.zerorank1(dimension=3)
+    flat_gammaDD = ixp.zerorank2(dimension=3)
+    for i in range(3):
+        flat_gammaDD[i][i] = sp.sympify(1)
+    zero_betaU = ixp.zerorank1(dimension=3)
+    unit_alpha = sp.sympify(1)
+    if calculate_HLL_fluxes(
+        0,
+        unit_alpha,
+        flat_gammaDD,
+        zero_betaU,
+        unit_alpha,
+        u4rU_test,
+        u4lU_test,
+        zero_BmagU,
+        zero_BmagU,
+        rho_b_r_test,
+        rho_b_l_test,
+        Ye_r_test,
+        Ye_l_test,
+        S_r_test,
+        S_l_test,
+        P_r_test,
+        P_l_test,
+        h_r_test,
+        h_l_test,
+        cs2_r_test,
+        cs2_l_test,
+    ) != calculate_grhd_HLL_fluxes(
+        0,
+        unit_alpha,
+        flat_gammaDD,
+        zero_betaU,
+        unit_alpha,
+        u4rU_test,
+        u4lU_test,
+        rho_b_r_test,
+        rho_b_l_test,
+        Ye_r_test,
+        Ye_l_test,
+        S_r_test,
+        S_l_test,
+        P_r_test,
+        P_l_test,
+        h_r_test,
+        h_l_test,
+        cs2_r_test,
+        cs2_l_test,
+    ):
+        raise AssertionError("B=0 HLL fluxes differ from GRHD")
 
     results_dict = ve.process_dictionary_of_expressions(
         exprs_dict, fixed_mpfs_for_free_symbols=True

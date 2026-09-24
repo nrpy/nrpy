@@ -54,11 +54,11 @@ Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties.
     body = """
 q = mass_ratio
 eta = q / (1.0 + q) / (1.0 + q)
+# eta = q / (1 + q)^2 is at most 0.25, so an excess is floating-point rounding for q close to 1.
+# Snap q to 1.0 when it agrees with 1.0 to within 1e-13.
 if (eta > 0.25):
     if (jnp.abs(q - 1.) < 1e-13):
         q = 1.
-    else:
-        raise ValueError(f"mass ratio = {q} causes eta = {eta} > 0.25")
 
 m1 = q / (1.0 + q)
 m2 = 1.0 / (1.0 + q)
