@@ -72,6 +72,7 @@ def generate_default_parfile(
         "BSSN_RK_TIME_BEGIN = 0.0",
         "BSSN_RK_TIME_END = 700.0",
         "INITIAL_LAPSE = 2",
+        'TPID_FILEPREFIX = "tp"',
         "TPID_INITIAL_LAPSE_PSI_EXPONENT = -2.0",
         "TPID_REPLACE_LAPSE_WITH_SQRT_CHI = true",
         "ETA_CONST = 1.0",

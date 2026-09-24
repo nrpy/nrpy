@@ -7,8 +7,9 @@
 
 `DendroGridFunction` supplies the Dendro C++ storage expression directly. The
 Dendro connector maps NRPy's canonical conformal-factor gridfunction `cf` to
-`cf_W_or_chi`; equation modules retain `cf`. Numerical registrars bind pointers
-from fixed component lists and emit direct `ot::Block` loops.
+`cf_W_or_chi`; equation modules retain `cf`. Stencil registrars bind pointers
+from fixed component lists and emit direct `ot::Block` loops. Algebraic floors
+and projection instead operate on owned nodes of zipped evolved vectors.
 
 ## Detail
 
@@ -32,8 +33,16 @@ runtime storage.
 Each registrar emits its pointer declarations once in registry order. It does
 not infer inputs by scanning expressions or rewrite identifiers with strings or
 regular expressions. `simple_loop.py` emits x-fastest padded-block loops without
-a nested OpenMP region. Numerical kernels receive `ot::Block` directly and
+a nested OpenMP region. Stencil kernels receive `ot::Block` directly and
 derive offsets, dimensions, spacing, padding, and interior bounds from it.
+The floor and determinant/trace projection kernels take zipped field pointers
+and the mesh-owned node range instead of block geometry.
+
+Claim evidence:
+- Claim: Dendro's algebraic floor and determinant/trace projection kernels take zipped field pointers and an owned-node range, while stencil kernels retain padded-block geometry.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/floor_the_lapse_and_conformal_factor.py` and `enforce_detgbar_equals_detghat_trAzero.py`, CFunction registrations.
+- Corroboration: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::post_timestep` within `output_solver_context_cpp`, passes the zipped stage and owned-node range.
 
 ## Sources
 
@@ -42,6 +51,8 @@ derive offsets, dimensions, spacing, padding, and interior bounds from it.
 - [simple_loop.py](../../../nrpy/infrastructures/Dendro/simple_loop.py) - padded block point loops.
 - [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - direct input and output pointer binding.
 - [Ricci_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/Ricci_eval.py) - separate Ricci scratch binding.
+- [floor_the_lapse_and_conformal_factor.py](../../../nrpy/infrastructures/Dendro/general_relativity/floor_the_lapse_and_conformal_factor.py) - owned-node floor.
+- [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/Dendro/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - owned-node projection.
 
 ## See Also
 

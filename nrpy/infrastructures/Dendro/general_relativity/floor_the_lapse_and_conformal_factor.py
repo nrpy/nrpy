@@ -14,7 +14,6 @@ import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.infrastructures.Dendro import state_h
-from nrpy.infrastructures.Dendro.simple_loop import simple_loop
 
 
 def register_CFunction_floor_the_lapse_and_conformal_factor(
@@ -23,7 +22,7 @@ def register_CFunction_floor_the_lapse_and_conformal_factor(
     enable_fCCZ4: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register the per-block lapse and conformal-factor floor.
+    Register the owned-node lapse and conformal-factor floor.
 
     Dendro's ``CHI_FLOOR`` is applied directly to the lapse.  Since these
     applications may evolve ``W = sqrt(chi)`` or ``chi``, and the
@@ -72,30 +71,11 @@ def register_CFunction_floor_the_lapse_and_conformal_factor(
         (
             "if (!(chi_floor > 0.0) || !std::isfinite(chi_floor))",
             '    throw std::invalid_argument("CHI_FLOOR must be finite and positive");',
-            "const std::ptrdiff_t offset = "
-            "static_cast<std::ptrdiff_t>(block.getOffset());",
-            "const unsigned nx_block = block.getAllocationSzX();",
-            "const unsigned ny_block = block.getAllocationSzY();",
-            "const unsigned nz_block = block.getAllocationSzZ();",
-            f"const {scalar_type} dx_block[3] = {{",
-            "    block.computeDx(domain_min, domain_max),",
-            "    block.computeDy(domain_min, domain_max),",
-            "    block.computeDz(domain_min, domain_max)};",
-            f"const {scalar_type} pmin_block[3] = {{",
-            "    GRIDX_TO_X(block.getBlockNode().minX()),",
-            "    GRIDY_TO_Y(block.getBlockNode().minY()),",
-            "    GRIDZ_TO_Z(block.getBlockNode().minZ())};",
-            f"{scalar_type}* alpha = in_gfs[{alpha_index}] + offset;",
-            f"{scalar_type}* cf_W_or_chi = in_gfs[{conformal_factor_index}] + offset;",
-            simple_loop(
-                loop_body,
-                nx="nx_block",
-                ny="ny_block",
-                nz="nz_block",
-                padding="0",
-                pmin_padded="pmin_block",
-                dx="dx_block",
-            ),
+            f"{scalar_type}* alpha = in_gfs[{alpha_index}];",
+            f"{scalar_type}* cf_W_or_chi = in_gfs[{conformal_factor_index}];",
+            "for (unsigned pp = node_begin; pp < node_end; ++pp) {",
+            loop_body,
+            "}",
         )
     )
     cfc.register_CFunction(
@@ -105,9 +85,8 @@ def register_CFunction_floor_the_lapse_and_conformal_factor(
         cfunc_type="void",
         name="floor_the_lapse_and_conformal_factor",
         params=(
-            f"const ot::Block& block, {scalar_type}* const* in_gfs, "
-            f"const {scalar_type} chi_floor, const Point& domain_min, "
-            "const Point& domain_max"
+            f"{scalar_type}* const* in_gfs, unsigned node_begin, "
+            f"unsigned node_end, const {scalar_type} chi_floor"
         ),
         body=body,
         ET_current_thorn_CodeParams_used=["chi_floor"],

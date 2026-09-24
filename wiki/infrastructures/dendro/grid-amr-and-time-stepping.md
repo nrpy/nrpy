@@ -39,6 +39,18 @@ interpolation. Wave extraction follows this rule for both Psi4 components.
 Without that exchange, interpolation can read uninitialized ghost storage even
 when every pointwise block value is finite.
 
+Floors and algebraic projection act directly on owned nodes of the zipped
+evolved state, without a padded-block unzip/zip. After the final RK projection
+and any remesh transfer, solver context exchanges evolved-state ghosts before
+puncture tracking and field output. Intermediate RK stages receive their halo
+exchange during the following RHS evaluation.
+
+Claim evidence:
+- Claim: Floors and algebraic projection use owned zipped nodes, and evolved-state ghosts are refreshed after the final projection and any remesh before puncture tracking and output.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::post_timestep` and `Ctx::evolve_excision_centers` within `output_solver_context_cpp`.
+- Corroboration: `nrpy/infrastructures/Dendro/general_relativity/floor_the_lapse_and_conformal_factor.py` and `enforce_detgbar_equals_detghat_trAzero.py`, node-range kernel signatures; `nrpy/infrastructures/Dendro/main_cpp.py`, evolution/remesh/output order.
+
 After initial-data conversion, each RK stage before the next exchange and RHS
 evaluation, and AMR transfer, solver context floors `alpha` at `CHI_FLOOR` and
 W at `sqrt(CHI_FLOOR)` or chi at `CHI_FLOOR`, then applies algebraic
@@ -62,10 +74,11 @@ selected refinement variables, constant or causal mode-6 wavelet tolerance,
 wavelet coarsening factors, puncture-centered level floors, post-merger remesh
 cadence, and optional wave-zone Nyquist refinement. The analytic initial-grid
 seed comes from Dendro-GR's `punctureDataPhysicalCoord`, with its source and
-MIT license embedded in the generated entry point. The TwoPunctures solve
-precedes evolved-state conversion; after any initial-grid remesh, the solver
-reconstructs that state from the same solved data. Grid construction therefore
-remains distinct from evolved initial data. Unsupported refinement or
+MIT license embedded in the generated entry point. A separate single-rank
+`--tpid` run computes TwoPunctures coefficients once. Fresh evolution loads
+those coefficients before evolved-state conversion; after any initial-grid
+remesh, the solver reconstructs that state from the same data. Grid
+construction remains distinct from evolved initial data. Unsupported refinement or
 tolerance modes fail at startup instead of silently substituting a constant
 tolerance. These choices
 target a comparable grid structure under the same parameter file; they do
@@ -76,8 +89,8 @@ into the z component of its relative-position history, so enabling Nyquist
 refinement can produce different remesh decisions even with the same parameters.
 
 Claim evidence:
-- Claim: The generated binary-puncture path parses native-style wavelet/geometric AMR controls and uses the licensed native analytic octree seed; its Nyquist history uses the z-coordinate separation, unlike the native path's duplicated x separation.
-- Role: public/numerical contract
+- Claim: The generated binary-puncture path parses native-style wavelet/geometric AMR controls, loads separately solved TwoPunctures data for evolution, and uses the licensed native analytic octree seed; its Nyquist history uses the z-coordinate separation, unlike the native path's duplicated x separation.
+- Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::get_wtol_function` and `Ctx::is_remesh` within `output_solver_context_cpp`.
 - Corroboration: `BSSN_GR/src/grUtils.cpp`, `punctureDataPhysicalCoord`; `BSSN_GR/src/dataUtils.cpp`, `calculate_relative_position_history` and `isRemeshBH`.
 
@@ -112,6 +125,7 @@ initial data rather than a call into chi-specific `BSSN_GR` code.
 - [physical_boundary.py](../../../nrpy/infrastructures/Dendro/general_relativity/physical_boundary.py) - boundary kernel registration.
 - [BSSN_to_ADM.py](../../../nrpy/infrastructures/Dendro/general_relativity/BSSN_to_ADM.py) - geometry conversion.
 - [floor_the_lapse_and_conformal_factor.py](../../../nrpy/infrastructures/Dendro/general_relativity/floor_the_lapse_and_conformal_factor.py) - representation-dependent lapse and conformal-factor floors.
+- [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/Dendro/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - owned-node algebraic projection.
 - [physical_boundary_ghosts.py](../../../nrpy/infrastructures/Dendro/general_relativity/physical_boundary_ghosts.py) - physical exterior-padding extrapolation.
 - [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - analytic seed, AMR parameters, and scheduling.
 - [Dendro-GR dataUtils.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/dataUtils.cpp) - native black-hole refinement path.

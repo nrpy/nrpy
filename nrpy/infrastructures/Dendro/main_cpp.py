@@ -454,6 +454,7 @@ def output_main_cpp(
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <limits>
@@ -462,21 +463,29 @@ def output_main_cpp(
 #include <string>
 #include <vector>
 
+void allocate_derivs(derivs* derivatives, int count);
+
 """
         + DENDRO_PUNCTURE_SEED
         + r"""
 int main(int argc, char** argv) {
-  if (argc != 2) {
+  const bool generate_tpid =
+      argc == 3 && std::strcmp(argv[1], "--tpid") == 0;
+  if (argc != 2 && !generate_tpid) {
     std::cerr << "usage: """
         + executable_name
-        + r""" PARAM_FILE\n";
+        + r""" [--tpid] PARAM_FILE\n";
     return 2;
   }
   MPI_Init(&argc, &argv);
   int rank = 0;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   try {
-    const toml::value document = toml::parse(argv[1]);
+    int mpi_tasks = 0;
+    MPI_Comm_size(MPI_COMM_WORLD, &mpi_tasks);
+    if (generate_tpid && mpi_tasks != 1)
+      throw std::runtime_error("--tpid requires exactly one MPI task");
+    const toml::value document = toml::parse(argv[generate_tpid ? 2 : 1]);
     const unsigned element_order =
         toml::find_or<unsigned>(document, "BSSN_ELE_ORDER", """
         + solver_namespace
@@ -723,6 +732,131 @@ int main(int argc, char** argv) {
     std::snprintf(punctures.initial_lapse, sizeof(punctures.initial_lapse),
                   "W");
 
+    // Compare only inputs to the puncture solve, before target-mass iteration.
+    const std::array<REAL, 33> tpid_inputs{{
+        static_cast<REAL>(punctures.npoints_A),
+        static_cast<REAL>(punctures.npoints_B),
+        static_cast<REAL>(punctures.npoints_phi),
+        static_cast<REAL>(punctures.Newton_maxit),
+        punctures.adm_tol, punctures.Newton_tol, punctures.TP_epsilon,
+        punctures.TP_Tiny, punctures.TP_Extend_Radius, punctures.par_b,
+        punctures.par_m_plus, punctures.par_m_minus,
+        punctures.target_M_plus, punctures.target_M_minus,
+        punctures.par_P_plus[0], punctures.par_P_plus[1],
+        punctures.par_P_plus[2], punctures.par_P_minus[0],
+        punctures.par_P_minus[1], punctures.par_P_minus[2],
+        punctures.par_S_plus[0], punctures.par_S_plus[1],
+        punctures.par_S_plus[2], punctures.par_S_minus[0],
+        punctures.par_S_minus[1], punctures.par_S_minus[2],
+        punctures.center_offset[0], punctures.center_offset[1],
+        punctures.center_offset[2],
+        static_cast<REAL>(punctures.give_bare_mass),
+        static_cast<REAL>(punctures.use_sources),
+        static_cast<REAL>(punctures.rescale_sources),
+        static_cast<REAL>(punctures.solve_momentum_constraint)}};
+    const std::string tpid_prefix =
+        toml::find_or<std::string>(document, "TPID_FILEPREFIX", "tp");
+    if (tpid_prefix.empty())
+      throw std::runtime_error("TPID_FILEPREFIX must not be empty");
+    const std::filesystem::path tpid_file =
+        tpid_prefix + "_nrpy_tpid_sol.bin";
+    if (generate_tpid || checkpoint_index < 0) {
+      const std::filesystem::path output_file =
+          generate_tpid ? std::filesystem::path(tpid_file.string() + ".tmp")
+                        : tpid_file;
+      std::fstream coefficients(
+          output_file, std::ios::binary |
+                           (generate_tpid ? std::ios::out | std::ios::trunc
+                                          : std::ios::in));
+      if (!coefficients)
+        throw std::runtime_error("cannot open NRPy TwoPunctures file: " +
+                                 output_file.string());
+      constexpr std::array<char, 16> file_tag{{'N', 'R', 'P', 'y', '-', 'T',
+                                               'P', 'I', 'D', '-', '1'}};
+      if (generate_tpid) {
+        TP_solve(&punctures);
+        coefficients.write(file_tag.data(), file_tag.size());
+        coefficients.write(reinterpret_cast<const char*>(tpid_inputs.data()),
+                           sizeof(tpid_inputs));
+        const std::array<REAL, 8> results{{
+            punctures.mp, punctures.mm, punctures.mp_adm, punctures.mm_adm,
+            punctures.E, punctures.J1, punctures.J2, punctures.J3}};
+        coefficients.write(reinterpret_cast<const char*>(results.data()),
+                           sizeof(results));
+      } // END IF: write puncture metadata
+      else {
+        std::array<char, 16> stored_tag{};
+        std::array<REAL, 33> stored_inputs{};
+        std::array<REAL, 8> results{};
+        coefficients.read(stored_tag.data(), stored_tag.size());
+        coefficients.read(reinterpret_cast<char*>(stored_inputs.data()),
+                          sizeof(stored_inputs));
+        coefficients.read(reinterpret_cast<char*>(results.data()),
+                          sizeof(results));
+        if (!coefficients || stored_tag != file_tag ||
+            stored_inputs != tpid_inputs)
+          throw std::runtime_error(
+              "NRPy TwoPunctures file does not match the input parameters; "
+              "run the solver with --tpid first: " + tpid_file.string());
+        punctures.mp = results[0];
+        punctures.mm = results[1];
+        punctures.mp_adm = results[2];
+        punctures.mm_adm = results[3];
+        punctures.E = results[4];
+        punctures.J1 = results[5];
+        punctures.J2 = results[6];
+        punctures.J3 = results[7];
+        punctures.par_m_plus = punctures.mp;
+        punctures.par_m_minus = punctures.mm;
+        const std::size_t coefficient_count =
+            static_cast<std::size_t>(punctures.npoints_A) *
+            static_cast<std::size_t>(punctures.npoints_B) *
+            static_cast<std::size_t>(punctures.npoints_phi);
+        if (coefficient_count > static_cast<std::size_t>(
+                                    std::numeric_limits<int>::max()))
+          throw std::runtime_error("TwoPunctures coefficient count overflows int");
+        allocate_derivs(&punctures.v, static_cast<int>(coefficient_count));
+        allocate_derivs(&punctures.cf_v, static_cast<int>(coefficient_count));
+      } // END ELSE: restore puncture metadata
+      const std::streamsize coefficient_bytes =
+          static_cast<std::streamsize>(punctures.npoints_A) *
+          punctures.npoints_B * punctures.npoints_phi * sizeof(REAL);
+      for (derivs* derivatives : {&punctures.v, &punctures.cf_v}) {
+        for (REAL* values : {derivatives->d0, derivatives->d1,
+                             derivatives->d2, derivatives->d3,
+                             derivatives->d11, derivatives->d12,
+                             derivatives->d13, derivatives->d22,
+                             derivatives->d23, derivatives->d33}) {
+          if (generate_tpid)
+            coefficients.write(reinterpret_cast<const char*>(values),
+                               coefficient_bytes);
+          else
+            coefficients.read(reinterpret_cast<char*>(values),
+                              coefficient_bytes);
+        } // END LOOP: puncture derivative arrays
+      } // END LOOP: puncture coefficient families
+      if (!coefficients)
+        throw std::runtime_error("incomplete NRPy TwoPunctures file: " +
+                                 output_file.string());
+      if (generate_tpid) {
+        coefficients.close();
+        if (!coefficients)
+          throw std::runtime_error("cannot finish NRPy TwoPunctures file");
+        std::filesystem::rename(output_file, tpid_file);
+        std::cout << "wrote NRPy TwoPunctures data: " << tpid_file << '\n';
+      } // END IF: finalize puncture file
+      else {
+        if (coefficients.peek() != std::char_traits<char>::eof())
+          throw std::runtime_error("NRPy TwoPunctures file has extra data");
+        if (rank == 0)
+          std::cout << "loaded NRPy TwoPunctures data: " << tpid_file << '\n';
+      } // END ELSE: validate loaded puncture file
+    } // END IF: produce or load punctures
+    if (generate_tpid) {
+      MPI_Finalize();
+      return 0;
+    } // END IF: exit after puncture solve
+
     const Point domain_minimum(grid_min_x, grid_min_y, grid_min_z);
     const Point domain_maximum(grid_max_x, grid_max_y, grid_max_z);
     m_uiMaxDepth = maximum_depth;
@@ -920,7 +1054,6 @@ int main(int argc, char** argv) {
       restored = true;
     }
     if (!restored) {
-      TP_solve(&punctures);
       if (context.initialize(commondata, tp_params, punctures) != 0)
         throw std::runtime_error("initial-data construction failed");
       const unsigned initial_grid_remesh_passes =

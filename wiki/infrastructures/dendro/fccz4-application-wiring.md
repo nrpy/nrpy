@@ -35,12 +35,19 @@ Claim evidence:
 - Corroboration: `nrpy/infrastructures/Dendro/general_relativity/fCCZ4_constraints.py`, `register_CFunction_fCCZ4_constraints`, emits both `H` and formulation-specific `H_Z4` diagnostics.
 
 The initial octree uses the same analytic Dendro-GR puncture seed as BSSN.
-Evolved initial data uses the same TwoPunctures ADM data, full
+Fresh evolution loads the same precomputed TwoPunctures coefficients as BSSN.
+Evolved initial data uses the resulting ADM data and full
 `psi=psi_background+u`, `alpha=W=psi^(-2)`, ADM conversion, halo exchange,
 physical-boundary fill, separate `initial_data_lambdaU`, and algebraic
 projection sequence as BSSN. `Theta_fCCZ4` receives its formulation-defined
 initial value. W and chi builds have distinct checkpoint formulation IDs and
 reject cross-formulation restores.
+
+Claim evidence:
+- Claim: Fresh fCCZ4 evolution can load the same precomputed TwoPunctures solution as generated BSSN, then converts ADM fields and initializes the fCCZ4 state; checkpoint formulation IDs remain distinct.
+- Role: public/scientific contract
+- Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::initialize` within `output_solver_context_cpp`.
+- Corroboration: `nrpy/examples/dendro_fccz4.py` and `nrpy/examples/dendro_bssn.py`, use the same entry-point generator and TwoPunctures registration.
 
 After initialization, every RK stage, and AMR transfer, `alpha` is floored at
 `CHI_FLOOR` and the evolved conformal factor at `CHI_FLOOR` for chi or

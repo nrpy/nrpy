@@ -29,8 +29,8 @@ def register_CFunction_twopunctures(
     """
     Register TwoPunctures and interpolate its solved data onto one Dendro block.
 
-    ``initialize_ID_persist_struct`` and ``TP_solve`` are called once by the
-    solver context. This function then fills the eighteen ADM scratch fields
+    The generated solver loads coefficients computed by its single-rank
+    ``--tpid`` mode. This function then fills the eighteen ADM scratch fields
     consumed by ``ADM_to_BSSN`` and records the full conformal factor. The
     required TwoPunctures lapse is ``alpha=psi**(-2)=W``.
 

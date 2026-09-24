@@ -40,15 +40,23 @@ Claim evidence:
 The initial octree is seeded with Dendro-GR's analytic
 `punctureDataPhysicalCoord` prescription, adapted into the generated entry
 point with its MIT provenance retained. This is a grid-construction seed,
-not the evolved initial data. TwoPunctures solves for ADM data and full
-`psi=psi_background+u` before the initial-grid remesh passes. Initialization
+not the evolved initial data. Single-rank `--tpid` mode solves for the puncture
+correction `u`, then writes reusable spectral coefficients. Fresh evolution
+loads them and interpolates ADM data using full `psi=psi_background+u` before
+initial-grid remeshing. Initialization
 sets `alpha=W=psi^(-2)` even when the evolved field is `chi=W^2`, and follows
 this sequence on the initial grid and again after an initial-grid remesh:
 
 ```text
 TwoPunctures -> ADM_to_BSSN -> zip/exchange/unzip -> physical boundary
-             -> initial_data_lambdaU -> algebraic projection
+             -> initial_data_lambdaU -> zip -> owned-node floor/projection
 ```
+
+Claim evidence:
+- Claim: Fresh evolution loads a precomputed TwoPunctures solution, converts its ADM data, computes the initial connection field from exchanged block data, then zips and floors/projects owned evolved nodes.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::initialize` within `output_solver_context_cpp`.
+- Corroboration: `nrpy/infrastructures/Dendro/general_relativity/floor_the_lapse_and_conformal_factor.py` and `enforce_detgbar_equals_detghat_trAzero.py`, owned-node CFunction signatures.
 
 Apparent-horizon searches interpolate selected evolved BSSN fields and then
 convert each search point to ADM variables. `BSSN_to_ADM` reconstructs grid

@@ -467,12 +467,15 @@ int Ctx::initialize(const commondata_struct& commondata,
                                            domain_minimum_, domain_maximum_); break;
       default: throw std::logic_error("unsupported Dendro element order");
     }}
-    floor_the_lapse_and_conformal_factor(
-        block, output.data(), params.chi_floor, domain_minimum_, domain_maximum_);
-    enforce_detgbar_equals_detghat_trAzero(
-        block, output.data(), domain_minimum_, domain_maximum_);
   }}
   zip(unzipped_rhs_, state_);
+  state_.to_2d(output.data());
+  floor_the_lapse_and_conformal_factor(
+      output.data(), m_uiMesh->getNodeLocalBegin(),
+      m_uiMesh->getNodeLocalEnd(), params.chi_floor);
+  enforce_detgbar_equals_detghat_trAzero(
+      output.data(), m_uiMesh->getNodeLocalBegin(),
+      m_uiMesh->getNodeLocalEnd());
   adm.destroy_vector(); psi.destroy_vector();
   return 0;
 }}
@@ -549,26 +552,28 @@ int Ctx::rhs_blkwise(DVec in, DVec out, const unsigned int* ids,
 }}
 int Ctx::post_timestep(DVec& stage) {{
   if (!m_uiMesh->isActive()) return 0;
-  unzip(stage, unzipped_state_, 1);
   std::array<DendroScalar*, generated::NUM_EVOL_GFS> fields{{}};
-  unzipped_state_.to_2d(fields.data());
-  for (const ot::Block& block : m_uiMesh->getLocalBlockList()) {{
-    floor_the_lapse_and_conformal_factor(
-        block, fields.data(), params.chi_floor, domain_minimum_, domain_maximum_);
-    enforce_detgbar_equals_detghat_trAzero(
-        block, fields.data(), domain_minimum_, domain_maximum_);
-  }}
-  zip(unzipped_state_, stage);
+  stage.to_2d(fields.data());
+  floor_the_lapse_and_conformal_factor(
+      fields.data(), m_uiMesh->getNodeLocalBegin(),
+      m_uiMesh->getNodeLocalEnd(), params.chi_floor);
+  enforce_detgbar_equals_detghat_trAzero(
+      fields.data(), m_uiMesh->getNodeLocalBegin(),
+      m_uiMesh->getNodeLocalEnd());
   return 0;
 }}
 int Ctx::evolve_excision_centers() {{
+  std::array<DendroScalar*, generated::NUM_EVOL_GFS> fields{{}};
+  if (m_uiMesh->isActive()) {{
+    state_.to_2d(fields.data());
+    m_uiMesh->readFromGhostBegin(fields[0], generated::NUM_EVOL_GFS);
+    m_uiMesh->readFromGhostEnd(fields[0], generated::NUM_EVOL_GFS);
+  }}
   const DendroScalar elapsed_time =
       m_uiTinfo._m_uiT - excision_center_time_;
   if (!(elapsed_time > 0.0)) return 0;
   std::array<DendroScalar, 6> local_shift{{}};
   if (m_uiMesh->isActive()) {{
-    std::array<DendroScalar*, generated::NUM_EVOL_GFS> fields{{}};
-    state_.to_2d(fields.data());
     const Point grid_limits[2] = {{
         Point(0.0, 0.0, 0.0),
         Point(1u << m_uiMaxDepth, 1u << m_uiMaxDepth,

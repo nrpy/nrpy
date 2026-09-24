@@ -18,7 +18,6 @@ from nrpy.equations.general_relativity.BSSN_algebraic_constraints import (
     BSSN_algebraic_constraints,
 )
 from nrpy.infrastructures.Dendro import state_h
-from nrpy.infrastructures.Dendro.simple_loop import simple_loop
 
 
 def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
@@ -28,7 +27,7 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     CoordSystem: str = "Cartesian",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register the per-block determinant and trace-free projection.
+    Register the owned-node determinant and trace-free projection.
 
     :param solver_stem: Lowercase formulation name used by generated headers.
     :param enable_fCCZ4: Select the fCCZ4 state layout when true.
@@ -43,6 +42,8 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
         raise ValueError("Algebraic projection requires Infrastructure='Dendro'.")
     if par.parval_from_str("parallelization") != "none":
         raise ValueError("Dendro point kernels require parallelization='none'.")
+    if CoordSystem != "Cartesian":
+        raise ValueError("Dendro owned-node projection requires Cartesian coordinates.")
 
     state_h.validate_registered_state(enable_fCCZ4)
     hprimeDD, aprimeDD = BSSN_algebraic_constraints(CoordSystem, False)
@@ -75,45 +76,23 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     bindings = []
     for name in component_names:
         index = evolved_names.index(name)
-        bindings.append(f"const {scalar_type}* in_{name} = in_gfs[{index}] + offset;")
-        bindings.append(f"{scalar_type}* out_{name} = in_gfs[{index}] + offset;")
+        bindings.append(f"const {scalar_type}* in_{name} = in_gfs[{index}];")
+        bindings.append(f"{scalar_type}* out_{name} = in_gfs[{index}];")
     body = "\n".join(
         (
-            "const std::ptrdiff_t offset = "
-            "static_cast<std::ptrdiff_t>(block.getOffset());",
-            "const unsigned nx_block = block.getAllocationSzX();",
-            "const unsigned ny_block = block.getAllocationSzY();",
-            "const unsigned nz_block = block.getAllocationSzZ();",
-            f"const {scalar_type} dx_block[3] = {{",
-            "    block.computeDx(domain_min, domain_max),",
-            "    block.computeDy(domain_min, domain_max),",
-            "    block.computeDz(domain_min, domain_max)};",
-            f"const {scalar_type} pmin_block[3] = {{",
-            "    GRIDX_TO_X(block.getBlockNode().minX()),",
-            "    GRIDY_TO_Y(block.getBlockNode().minY()),",
-            "    GRIDZ_TO_Z(block.getBlockNode().minZ())};",
             *bindings,
-            simple_loop(
-                kernel,
-                nx="nx_block",
-                ny="ny_block",
-                nz="nz_block",
-                padding="0",
-                pmin_padded="pmin_block",
-                dx="dx_block",
-            ),
+            "for (unsigned pp = node_begin; pp < node_end; ++pp) {",
+            kernel,
+            "}",
         )
     )
     cfc.register_CFunction(
         subdirectory="generated/src/enforce_detgbar_equals_detghat_trAzero",
         includes=[f"{solver_stem}_defines.h"],
-        desc="Enforce det(gammabar)=det(gammahat) and tr(Abar)=0 per block.",
+        desc="Enforce det(gammabar)=det(gammahat) and tr(Abar)=0 per owned node.",
         cfunc_type="void",
         name="enforce_detgbar_equals_detghat_trAzero",
-        params=(
-            f"const ot::Block& block, {scalar_type}* const* in_gfs, "
-            "const Point& domain_min, const Point& domain_max"
-        ),
+        params=f"{scalar_type}* const* in_gfs, unsigned node_begin, unsigned node_end",
         body=body,
     )
     return pcg.NRPyEnv()
