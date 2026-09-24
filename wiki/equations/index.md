@@ -6,6 +6,7 @@
 | --- | --- |
 | [General Relativity](general-relativity/index.md) | You need GR-specific equation families, conversions, initial data, radiation, geodesics, horizons, or torus data. |
 | [GRHD](grhd.md) | You need general relativistic hydrodynamics conserved variables, fluxes, sources, speeds, or HLL helpers. |
+| [GRMHD](grmhd.md) | You need magnetic stress-energy in GRHD energy and momentum equations, GRMHD speed bounds, or HLL fluid fluxes; these modules have no induction equation. |
 | [Wave Equation](wave-equation.md) | You need scalar wave-equation RHSs or exact initial-data solutions. |
 | [Conformally Flat Elliptic](conformally-flat-elliptic.md) | You need NRPyElliptic conformally flat hyperbolic-relaxation equations or source terms. |
 | [TOV Equations](tov-equations.md) | You need Tolman-Oppenheimer-Volkoff ODE RHSs or their validation hook. |

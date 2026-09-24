@@ -29,7 +29,11 @@ the standard lapse but not the full BSSN state.
 `BSSN_quantities[...]` object for a coordinate system. It reconstructs
 `betaU`, `gammaDD`, `gammaDDdD`, `gammaDDdDD`, `gammaUU`, `detgamma`,
 `GammaUDD`, `KDD`, and `KDDdD`. The conformal-factor branch follows the global
-`EvolvedConformalFactor_cf` parameter for `phi`, `chi`, or `W`.
+`EvolvedConformalFactor_cf` parameter for `phi`, `chi`, or `W`; see
+[CONTR-0005](../../contradictions.md#contr-0005) for the adopted `chi` and `W`
+signs. The spatial metric and extrinsic curvature follow by rearranging
+[Mewes et al., Eqs. (7) and (10)](https://arxiv.org/pdf/2002.06225v2);
+derivative expressions use the chain and product rules.
 
 `g4munu_conversions.py` exposes function-level conversions rather than a state
 class. `ADM_to_g4DD` and `ADM_to_g4UU` build the covariant and contravariant
@@ -38,6 +42,15 @@ four-metric from ADM spatial metric, shift, and lapse. `BSSN_to_g4DD` and
 `gammaDD`, `alpha`, and `betaU` from a four-metric, and `g4DD_to_BSSN` returns
 `hDD`, `cf`, `vetU`, and `alpha` after an ADM-to-BSSN pass with dummy
 extrinsic curvature and shift-driver variables.
+The covariant ADM four-metric is
+[Mewes et al., Eqs. (5)-(6)](https://arxiv.org/pdf/2002.06225v2);
+the inverse and extraction formulas follow by matrix algebra.
+
+Claim evidence:
+- Claim: `BSSN_to_ADM` rearranges Mewes et al. Eqs. (7) and (10) for the spatial metric and extrinsic curvature, and `ADM_to_g4DD` builds the covariant four-metric of Mewes et al. Eqs. (5)-(6); derivative, inverse, and extraction formulas follow by the chain rule, product rule, and matrix algebra rather than from printed equations.
+- Role: public/scientific contract
+- Deciding authority: [Mewes et al.](https://arxiv.org/pdf/2002.06225v2), Eqs. (5)-(7) and (10)
+- Corroboration: [BSSN_to_ADM.py](../../../nrpy/equations/general_relativity/BSSN_to_ADM.py), `BSSN_to_ADM` docstring; [g4munu_conversions.py](../../../nrpy/equations/general_relativity/g4munu_conversions.py), `ADM_to_g4DD` docstring
 
 `BSSN_to_g4Christoffel` reconstructs enough ADM and gauge derivative data to
 build physical spacetime Christoffels from BSSN quantities. Its public state
@@ -65,6 +78,7 @@ variants, matter projections/source terms, and Lorentz-boost tensor outputs.
 
 ## Sources
 
+- [Mewes et al.](https://arxiv.org/pdf/2002.06225v2) - Eqs. (5)-(7), (10)
 - [ADM_to_BSSN.py](../../../nrpy/equations/general_relativity/ADM_to_BSSN.py) - `ADM_to_BSSN`, `compute_cf_only`
 - [BSSN_to_ADM.py](../../../nrpy/equations/general_relativity/BSSN_to_ADM.py) - `BSSN_to_ADM`
 - [g4munu_conversions.py](../../../nrpy/equations/general_relativity/g4munu_conversions.py) - `ADM_to_g4DD`, `BSSN_to_g4DD`, `ADM_to_g4UU`, `BSSN_to_g4UU`, `g4DD_to_ADM`, `g4DD_to_BSSN`
