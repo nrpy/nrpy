@@ -53,12 +53,25 @@ RICCI_GRIDFUNCTIONS = (
     "RbarDD12",
     "RbarDD22",
 )
-BSSN_DIAGNOSTIC_GRIDFUNCTIONS = ("H", "MU0", "MU1", "MU2")
+BSSN_DIAGNOSTIC_GRIDFUNCTIONS = (
+    "H",
+    "MU0",
+    "MU1",
+    "MU2",
+    "M_CONSTRAINT",
+    "LAMBDA_CONSTRAINT",
+)
 FCCZ4_DIAGNOSTIC_GRIDFUNCTIONS = (
     "H_Z4",
     "Z4constraintU0",
     "Z4constraintU1",
     "Z4constraintU2",
+    "H",
+    "MU0",
+    "MU1",
+    "MU2",
+    "M_CONSTRAINT",
+    "LAMBDA_CONSTRAINT",
 )
 
 
@@ -184,9 +197,10 @@ def output_state_h(
     Emit the generated state header.
 
     It carries the EVOL enum, name array, per-field metadata, and exact public
-    Dendro-name lookup over every registered group. Every order, count, and
-    metadata value comes from the gridfunction registry. Each
-    :class:`nrpy.grid.DendroGridFunction` supplies its public Dendro name.
+    Dendro-name lookup over every registered group. Canonical sequences above
+    set the evolved, Ricci, and diagnostic orders; auxiliary fields retain
+    registry order. Each :class:`nrpy.grid.DendroGridFunction` supplies its
+    public Dendro name and metadata.
 
     :param solver_stem: Lowercase formulation stem for emitted header names.
     :param solver_namespace: NRPy-qualified solver namespace, e.g.
@@ -278,7 +292,11 @@ def output_state_h(
         "EVOL": list(evolved_gridfunctions(enable_fCCZ4)),
         "AUXEVOL": list(RICCI_GRIDFUNCTIONS),
         "AUX": group_names("AUX"),
-        "DIAG": group_names("DIAG"),
+        "DIAG": list(
+            FCCZ4_DIAGNOSTIC_GRIDFUNCTIONS
+            if enable_fCCZ4
+            else BSSN_DIAGNOSTIC_GRIDFUNCTIONS
+        ),
     }
     # The member names and their order are fixed:
     # evolved, diagnostic, auxevol, auxiliary.  "evolved" is rendered above.

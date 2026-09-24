@@ -1,3 +1,28 @@
+# MIT License
+# Copied numerical routine: Dendro-GR/BSSN_GR/src/grUtils.cpp,
+# punctureDataPhysicalCoord. The function signature and BH parameter access
+# were adapted for the generated NRPy solver; its numerical body is unchanged.
+#
+# Copyright (c) 2018 DendroGR
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is furnished
+# to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 """
 Emit the executable entry point for a generated Dendro application.
 
@@ -5,8 +30,373 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import nrpy.params as par
 from nrpy.infrastructures.Dendro.CodeParameters import output_toml_bindings
 from nrpy.infrastructures.Dendro.state_h import BSSN_EVOLVED_GRIDFUNCTIONS
+
+DENDRO_LICENSE = """// MIT License
+// Source: Dendro-GR/BSSN_GR/src/grUtils.cpp, punctureDataPhysicalCoord.
+// Adapted signature and parameter access; numerical body unchanged.
+//
+// Copyright (c) 2018 DendroGR
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is furnished
+// to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+"""
+
+
+DENDRO_PUNCTURE_SEED = r"""
+// Dendro-GR BSSN_GR/src/grUtils.cpp: punctureDataPhysicalCoord.
+// Numerical expressions and branch conditions are retained from Dendro-GR.
+namespace nrpy_dendro_seed {
+struct PunctureParameters {
+    double mass, x, y, z, vx, vy, vz, spin, spin_theta, spin_phi;
+};
+namespace VAR {
+enum {
+    U_ALPHA, U_CHI, U_K, U_GT0, U_GT1, U_GT2,
+    U_BETA0, U_BETA1, U_BETA2, U_B0, U_B1, U_B2,
+    U_SYMGT0, U_SYMGT1, U_SYMGT2, U_SYMGT3, U_SYMGT4, U_SYMGT5,
+    U_SYMAT0, U_SYMAT1, U_SYMAT2, U_SYMAT3, U_SYMAT4, U_SYMAT5
+};
+}
+void punctureDataPhysicalCoord(const double xx, const double yy,
+                               const double zz, double* var,
+                               const PunctureParameters& BH1,
+                               const PunctureParameters& BH2,
+                               const double CHI_FLOOR) {
+    /* Define the Levi-Cevita pseudo-tensor and Kroneckar delta */
+    double epijk[3][3][3];
+    int i, j, k;
+    for (k = 0; k < 3; k++) {
+        for (j = 0; j < 3; j++) {
+            for (i = 0; i < 3; i++) {
+                epijk[k][j][i] = 0.0;
+            }
+        }
+    }
+    epijk[0][1][2] = 1.0;
+    epijk[1][2][0] = 1.0;
+    epijk[2][0][1] = 1.0;
+    epijk[0][2][1] = -1.0;
+    epijk[2][1][0] = -1.0;
+    epijk[1][0][2] = -1.0;
+
+    double deltaij[3][3];
+    for (j = 0; j < 3; j++) {
+        for (i = 0; i < 3; i++) {
+            deltaij[j][i] = 0.0;
+        }
+    }
+
+    deltaij[0][0] = 1.0;
+    deltaij[1][1] = 1.0;
+    deltaij[2][2] = 1.0;
+
+    double x1, y1, z1, rv1;
+    double x2, y2, z2, rv2;
+    double vn1[3], vn2[3];
+
+    double vpsibl;
+    double v_u_corr, amp_capj, amp_capr, l_r, u0_j, u2_j, mu_j, p2_mu_j, v_u_j1;
+    double v1, v2, v3, v4, vt1, vt2;
+
+    int i1, i2, i3, i4;
+    double amp_capp, u0_p, u2_p, mu_p, p2_mu_p;
+    double v_u_p1, v_u_c1, v_u_j2, v_u_p2;
+    double v_u_c2, vpsibl_u, vpsibl_u2;
+
+    // bh 1
+    double mass1 = BH1.mass;
+    double bh1x  = BH1.x;
+    double bh1y  = BH1.y;
+    double bh1z  = BH1.z;
+
+    double vp1[3];
+    vp1[0]          = BH1.vx;
+    vp1[1]          = BH1.vy;
+    vp1[2]          = BH1.vz;
+
+    double vp1tot   = sqrt(vp1[0] * vp1[0] + vp1[1] * vp1[1] + vp1[2] * vp1[2]);
+    double spin1    = BH1.spin;
+    double spin1_th = BH1.spin_theta;
+    double spin1_phi = BH1.spin_phi;
+    double vs1[3];
+
+    vs1[0]       = spin1 * sin(spin1_th) * cos(spin1_phi);
+    vs1[1]       = spin1 * sin(spin1_th) * sin(spin1_phi);
+    vs1[2]       = spin1 * cos(spin1_th);
+
+    // bh 2
+    double mass2 = BH2.mass;
+    double bh2x  = BH2.x;
+    double bh2y  = BH2.y;
+    double bh2z  = BH2.z;
+
+    double vp2[3];
+    vp2[0]          = BH2.vx;
+    vp2[1]          = BH2.vy;
+    vp2[2]          = BH2.vz;
+
+    double vp2tot   = sqrt(vp2[0] * vp2[0] + vp2[1] * vp2[1] + vp2[2] * vp2[2]);
+    double spin2    = BH2.spin;
+    double spin2_th = BH2.spin_theta;
+    double spin2_phi = BH2.spin_phi;
+
+    double vs2[3];
+    vs2[0]   = spin2 * sin(spin2_th) * cos(spin2_phi);
+    vs2[1]   = spin2 * sin(spin2_th) * sin(spin2_phi);
+    vs2[2]   = spin2 * cos(spin2_th);
+
+    // coordinates with respect to center of bh1
+    x1       = xx - bh1x;
+    y1       = yy - bh1y;
+    z1       = zz - bh1z;
+
+    // locating as a radial form
+    rv1      = sqrt(x1 * x1 + y1 * y1 + z1 * z1);
+    vn1[0]   = x1 / rv1;
+    vn1[1]   = y1 / rv1;
+    vn1[2]   = z1 / rv1;
+
+    // same as BH2
+    x2       = xx - bh2x;
+    y2       = yy - bh2y;
+    z2       = zz - bh2z;
+
+    rv2      = sqrt(x2 * x2 + y2 * y2 + z2 * z2);
+    vn2[0]   = x2 / rv2;
+    vn2[1]   = y2 / rv2;
+    vn2[2]   = z2 / rv2;
+
+    // Initial data is related with the paper: http://arxiv.org/abs/0711.1165
+    // Brill-Lindquist conformal factor
+    vpsibl   = 1.0 + mass1 / (2.0 * rv1);
+    vpsibl   = vpsibl + mass2 / (2.0 * rv2);
+
+    v_u_corr = 0.0;
+    // bh 1
+
+    // For spinning puncture
+    if (fabs(spin1) > 1.e-6) {
+        amp_capj = 4.0 * spin1 / (mass1 * mass1);
+        amp_capr = 2.0 * rv1 / mass1;
+        l_r      = 1.0 / (1.0 + amp_capr);
+        u0_j =
+            (l_r + l_r * l_r + l_r * l_r * l_r - 4.0 * l_r * l_r * l_r * l_r +
+             2.0 * l_r * l_r * l_r * l_r * l_r) /
+            40.0;
+        u2_j    = -pow(l_r, 5) / 20.0;
+        mu_j    = vn1[0] * vs1[0];
+        mu_j    = mu_j + vn1[1] * vs1[1];
+        mu_j    = (mu_j + vn1[2] * vs1[2]) / fabs(spin1);
+        p2_mu_j = (3.0 * mu_j * mu_j - 1.0) / 2.0;
+        v_u_j1 =
+            amp_capj * amp_capj * (u0_j + u2_j * amp_capr * amp_capr * p2_mu_j);
+        v_u_corr = v_u_corr + v_u_j1;
+    }
+    // For boosting puncture
+    if (vp1tot > 1.e-6) {
+        amp_capp = 2.0 * vp1tot / mass1;
+        amp_capr = 2.0 * rv1 / mass1;
+        l_r      = 1.0 / (1.0 + amp_capr);
+        u0_p     = l_r - 2.0 * l_r * l_r + 2.0 * pow(l_r, 3);
+        u0_p     = (u0_p - pow(l_r, 4) + 0.20 * pow(l_r, 5)) * (5.0 / 32.0);
+        u2_p     = 15.0 * l_r + 132.0 * l_r * l_r + 53.0 * pow(l_r, 3);
+        u2_p     = u2_p + 96.0 * pow(l_r, 4) + 82.0 * pow(l_r, 5);
+        u2_p = u2_p + (84.0 / amp_capr) * (pow(l_r, 5) + log(l_r) / amp_capr);
+        u2_p = (u2_p) / (80.0 * amp_capr);
+        mu_p = vn1[0] * vp1[0] / vp1tot;
+        mu_p = mu_p + vn1[1] * vp1[1] / vp1tot;
+        mu_p = mu_p + vn1[2] * vp1[2] / vp1tot;
+        p2_mu_p  = (3.0 * pow(mu_p, 2) - 1.0) / 2.0;
+        v_u_p1   = pow(amp_capp, 2) * (u0_p + u2_p * p2_mu_p);
+        v_u_corr = v_u_corr + v_u_p1;
+    }
+    // For spinning boosted pucture
+    if (vp1tot > 1.e-6 && fabs(spin1) > 1.e-6) {
+        v1       = (vp1[1] * vs1[2] - vp1[2] * vs1[1]) * vn1[0];
+        v1       = v1 + (vp1[2] * vs1[0] - vp1[0] * vs1[2]) * vn1[1];
+        v1       = v1 + (vp1[0] * vs1[1] - vp1[1] * vs1[0]) * vn1[2];
+        v1       = v1 * (16.0 / pow(mass1, 4)) * rv1;
+
+        amp_capr = 2.0 * rv1 / mass1;
+        l_r      = 1.0 / (1.0 + amp_capr);
+
+        v2       = 1.0 + 5.0 * amp_capr + 10.0 * pow(amp_capr, 2);
+
+        v_u_c1   = (v1 * v2 * pow(l_r, 5)) / 80.0;
+        v_u_corr = v_u_corr + v_u_c1;
+    }
+    // bh 2 same puncture as bh 1
+    if (fabs(spin2) > 1.e-6) {
+        amp_capj = 4.0 * spin2 / (mass2 * mass2);
+        amp_capr = 2.0 * rv2 / mass2;
+        l_r      = 1.0 / (1.0 + amp_capr);
+        u0_j =
+            (l_r + l_r * l_r + l_r * l_r * l_r - 4.0 * l_r * l_r * l_r * l_r +
+             2.0 * l_r * l_r * l_r * l_r * l_r) /
+            40.0;
+        u2_j    = -pow(l_r, 5) / 20.0;
+        mu_j    = vn2[0] * vs2[0];
+        mu_j    = mu_j + vn2[1] * vs2[1];
+        mu_j    = (mu_j + vn2[2] * vs2[2]) / fabs(spin2);
+        p2_mu_j = (3.0 * mu_j * mu_j - 1.0) / 2.0;
+        v_u_j2 =
+            amp_capj * amp_capj * (u0_j + u2_j * amp_capr * amp_capr * p2_mu_j);
+        v_u_corr = v_u_corr + v_u_j2;
+    }
+
+    if (vp2tot > 1.e-6) {
+        amp_capp = 2.0 * vp2tot / mass2;
+        amp_capr = 2.0 * rv2 / mass2;
+        l_r      = 1.0 / (1.0 + amp_capr);
+        u0_p     = l_r - 2.0 * l_r * l_r + 2.0 * pow(l_r, 3);
+        u0_p     = (u0_p - pow(l_r, 4) + 0.20 * pow(l_r, 5)) * (5.0 / 32.0);
+        u2_p     = 15.0 * l_r + 132.0 * l_r * l_r + 53.0 * pow(l_r, 3);
+        u2_p     = u2_p + 96.0 * pow(l_r, 4) + 82.0 * pow(l_r, 5);
+        u2_p = u2_p + (84.0 / amp_capr) * (pow(l_r, 5) + log(l_r) / amp_capr);
+        u2_p = (u2_p) / (80.0 * amp_capr);
+        mu_p = vn2[0] * vp2[0] / vp2tot;
+        mu_p = mu_p + vn2[1] * vp2[1] / vp2tot;
+        mu_p = mu_p + vn2[2] * vp2[2] / vp2tot;
+        p2_mu_p  = (3.0 * pow(mu_p, 2) - 1.0) / 2.0;
+        v_u_p2   = pow(amp_capp, 2) * (u0_p + u2_p * p2_mu_p);
+        v_u_corr = v_u_corr + v_u_p2;
+    }
+
+    if (vp2tot > 1.e-6 && fabs(spin2) > 1.e-6) {
+        v1       = (vp2[1] * vs2[2] - vp2[2] * vs2[1]) * vn2[0];
+        v1       = v1 + (vp2[2] * vs2[0] - vp2[0] * vs2[2]) * vn2[1];
+        v1       = v1 + (vp2[0] * vs2[1] - vp2[1] * vs2[0]) * vn2[2];
+        v1       = v1 * (16.0 / pow(mass2, 4)) * rv2;
+
+        amp_capr = 2.0 * rv2 / mass2;
+        l_r      = 1.0 / (1.0 + amp_capr);
+
+        v2       = 1.0 + 5.0 * amp_capr + 10.0 * pow(amp_capr, 2);
+
+        v_u_c2   = (v1 * v2 * pow(l_r, 5)) / 80.0;
+        v_u_corr = v_u_corr + v_u_c2;
+    }
+
+    // vpsibl_u will be used for the conformal factor,
+    vpsibl_u          = vpsibl + v_u_corr;
+    // vpsibl_u2 is for the Aij terms...
+    // ! since the corrections are first order...
+    // ! adding half of the correction seems to give the best results...
+    // ! update - do a fit for spin = 0.6...
+    vpsibl_u2         = vpsibl + v_u_corr;
+
+    var[VAR::U_ALPHA] = 1.0 / (vpsibl_u * vpsibl_u);
+    // std::cout<<"Alpha: "<<u[U_ALPHA]<<" vpsibl_u: "<< vpsibl_u<<std::endl;
+    var[VAR::U_ALPHA] = std::max(var[VAR::U_ALPHA], CHI_FLOOR);
+
+    v2                = 1.0 / pow(vpsibl_u, 4);
+    var[VAR::U_CHI]   = v2;
+
+    if (var[VAR::U_CHI] < CHI_FLOOR) var[VAR::U_CHI] = CHI_FLOOR;
+
+    var[VAR::U_K]      = 0.0;
+
+    var[VAR::U_BETA0]  = 0.0;
+    var[VAR::U_BETA1]  = 0.0;
+    var[VAR::U_BETA2]  = 0.0;
+
+    var[VAR::U_GT0]    = 0.0;
+    var[VAR::U_GT1]    = 0.0;
+    var[VAR::U_GT2]    = 0.0;
+
+    var[VAR::U_B0]     = 0.0;
+    var[VAR::U_B1]     = 0.0;
+    var[VAR::U_B2]     = 0.0;
+
+    var[VAR::U_SYMGT0] = 1.0;  // XX
+    var[VAR::U_SYMGT1] = 0.0;  // XY
+    var[VAR::U_SYMGT2] = 0.0;  // XZ
+    var[VAR::U_SYMGT3] = 1.0;  // YY
+    var[VAR::U_SYMGT4] = 0.0;  // YZ
+    var[VAR::U_SYMGT5] = 1.0;  // ZZ
+
+    for (i1 = 0; i1 < 3; i1++) {
+        for (i2 = 0; i2 < 3; i2++) {
+            // first BH
+            v2 = 0.0;
+            for (i3 = 0; i3 < 3; i3++) {
+                for (i4 = 0; i4 < 3; i4++) {
+                    vt1 = epijk[i1][i3][i4] * vs1[i3] * vn1[i4] * vn1[i2];
+                    vt2 = epijk[i2][i3][i4] * vs1[i3] * vn1[i4] * vn1[i1];
+                    v2  = v2 + vt1 + vt2;
+                }
+            }
+
+            v3  = vp1[i1] * vn1[i2] + vp1[i2] * vn1[i1];
+            vt1 = 0.0;
+            for (i3 = 0; i3 < 3; i3++) {
+                vt1 = vt1 + vp1[i3] * vn1[i3];
+            }
+            vt1 = vt1 * (vn1[i1] * vn1[i2] - deltaij[i1][i2]);
+            v3  = v3 + vt1;
+
+            v1  = 3.0 / (pow(vpsibl_u2, 6) * pow(rv1, 3));
+            v4  = v1 * (v2 + (rv1 / 2.0) * v3);
+
+            // second BH
+            v2  = 0.0;
+            for (i3 = 0; i3 < 3; i3++) {
+                for (i4 = 0; i4 < 3; i4++) {
+                    vt1 = epijk[i1][i3][i4] * vs2[i3] * vn2[i4] * vn2[i2];
+                    vt2 = epijk[i2][i3][i4] * vs2[i3] * vn2[i4] * vn2[i1];
+                    v2  = v2 + vt1 + vt2;
+                }
+            }
+
+            v3  = vp2[i1] * vn2[i2] + vp2[i2] * vn2[i1];
+            vt1 = 0.0;
+            for (i3 = 0; i3 < 3; i3++) {
+                vt1 = vt1 + vp2[i3] * vn2[i3];
+            }
+            vt1 = vt1 * (vn2[i1] * vn2[i2] - deltaij[i1][i2]);
+            v3  = v3 + vt1;
+
+            v1  = 3.0 / (pow(vpsibl_u2, 6) * pow(rv2, 3));
+            v4  = v4 + v1 * (v2 + (rv2 / 2.0) * v3);
+
+            if (i1 == 0 && i2 == 0) {
+                var[VAR::U_SYMAT0] = v4;  // XX
+            } else if (i1 == 0 && i2 == 1) {
+                var[VAR::U_SYMAT1] = v4;  // XY
+            } else if (i1 == 0 && i2 == 2) {
+                var[VAR::U_SYMAT2] = v4;  // XZ
+            } else if (i1 == 1 && i2 == 1) {
+                var[VAR::U_SYMAT3] = v4;  // YY
+            } else if (i1 == 1 && i2 == 2) {
+                var[VAR::U_SYMAT4] = v4;  // YZ
+            } else if (i1 == 2 && i2 == 2) {
+                var[VAR::U_SYMAT5] = v4;  // ZZ
+            }
+        }
+    }
+}
+}  // namespace nrpy_dendro_seed
+
+"""
 
 
 def output_main_cpp(
@@ -43,8 +433,13 @@ def output_main_cpp(
     horizon_indices = ", ".join(
         str(BSSN_EVOLVED_GRIDFUNCTIONS.index(name)) for name in horizon_fields
     )
+    inverse_chi_expression = (
+        "1.0 / values[0]"
+        if par.parval_from_str("EvolvedConformalFactor_cf") == "chi"
+        else "1.0 / (values[0] * values[0])"
+    )
     return (
-        "// GENERATED FILE - DO NOT EDIT\n"
+        DENDRO_LICENSE + "// GENERATED FILE - DO NOT EDIT\n"
         "// AUTOMATICALLY GENERATED BY NRPy\n"
         f'#include "{solver_stem}Ctx.h"\n'
         r"""#include "BHaH_defines.h"
@@ -67,6 +462,9 @@ def output_main_cpp(
 #include <string>
 #include <vector>
 
+"""
+        + DENDRO_PUNCTURE_SEED
+        + r"""
 int main(int argc, char** argv) {
   if (argc != 2) {
     std::cerr << "usage: """
@@ -93,6 +491,43 @@ int main(int argc, char** argv) {
       throw std::runtime_error("invalid octree depth range");
     const DendroScalar wavelet_tolerance =
         toml::find_or<DendroScalar>(document, "BSSN_WAVELET_TOL", 1.0e-5);
+    const unsigned refinement_mode =
+        toml::find_or<unsigned>(document, "BSSN_REFINEMENT_MODE", 4);
+    const unsigned wavelet_tolerance_mode =
+        toml::find_or<unsigned>(document, "BSSN_USE_WAVELET_TOL_FUNCTION", 0);
+    const DendroScalar maximum_wavelet_tolerance = toml::find_or<DendroScalar>(
+        document, "BSSN_WAVELET_TOL_MAX", wavelet_tolerance);
+    const DendroScalar gravitational_wave_tolerance = toml::find_or<DendroScalar>(
+        document, "BSSN_GW_REFINE_WTOL", wavelet_tolerance);
+    const DendroScalar amr_coarsening_factor = toml::find_or<DendroScalar>(
+        document, "BSSN_DENDRO_AMR_FAC", 0.1);
+    const DendroScalar postmerger_amr_coarsening_factor = toml::find_or<DendroScalar>(
+        document, "BSSN_DENDRO_AMR_FAC_POST_MERGER", 0.0);
+    std::vector<unsigned> refinement_variables;
+    for (unsigned field = 0; field <
+         """
+        + solver_namespace
+        + r"""::generated::NUM_EVOL_GFS; ++field)
+      refinement_variables.push_back(field);
+    refinement_variables = toml::find_or<std::vector<unsigned>>(
+        document, "BSSN_REFINE_VARIABLE_INDICES", refinement_variables);
+    const unsigned number_refinement_variables = toml::find_or<unsigned>(
+        document, "BSSN_NUM_REFINE_VARS",
+        static_cast<unsigned>(refinement_variables.size()));
+    if (number_refinement_variables == 0 ||
+        number_refinement_variables > refinement_variables.size())
+      throw std::runtime_error("invalid BSSN_NUM_REFINE_VARS");
+    refinement_variables.resize(number_refinement_variables);
+    for (const unsigned field : refinement_variables)
+      if (field >= """
+        + solver_namespace
+        + r"""::generated::NUM_EVOL_GFS)
+        throw std::runtime_error("BSSN_REFINE_VARIABLE_INDICES out of range");
+    if (refinement_mode != 4 || (wavelet_tolerance_mode != 0 &&
+                                  wavelet_tolerance_mode != 6))
+      throw std::runtime_error(
+          "generated Dendro solver supports BH_WAMR (mode 4) with "
+          "constant or causal wavelet tolerance (mode 0 or 6)");
     const DendroScalar cfl =
         toml::find_or<DendroScalar>(document, "BSSN_CFL_FACTOR", 0.25);
     const DendroScalar time_begin =
@@ -103,8 +538,16 @@ int main(int argc, char** argv) {
         document, "BSSN_MAX_ITERATIONS", std::numeric_limits<unsigned>::max());
     const unsigned remesh_frequency =
         toml::find_or<unsigned>(document, "BSSN_REMESH_TEST_FREQ", 50);
+    const unsigned postmerger_remesh_frequency = toml::find_or<unsigned>(
+        document, "BSSN_REMESH_TEST_FREQ_AFTER_MERGER", 10);
     const unsigned initial_grid_iterations =
         toml::find_or<unsigned>(document, "BSSN_INIT_GRID_ITER", 10);
+    const bool use_refinement_mode_for_initial_grid = toml::find_or<bool>(
+        document, "BSSN_USE_SET_REF_MODE_FOR_INITIAL_CONVERGE", true);
+    if (initial_grid_iterations > 0 && !use_refinement_mode_for_initial_grid)
+      throw std::runtime_error(
+          "generated BH_WAMR solver requires "
+          "BSSN_USE_SET_REF_MODE_FOR_INITIAL_CONVERGE=true");
     const unsigned grain_size =
         toml::find_or<unsigned>(document, "BSSN_DENDRO_GRAIN_SZ", 1000);
     const DendroScalar load_imbalance_tolerance =
@@ -135,11 +578,18 @@ int main(int argc, char** argv) {
         static_cast<unsigned>(gravitational_wave_l_modes.size()));
     if (gravitational_wave_num_radii != gravitational_wave_radii.size() ||
         gravitational_wave_num_l_modes != gravitational_wave_l_modes.size() ||
-        gravitational_wave_l_modes.empty())
+        gravitational_wave_l_modes.empty() ||
+        gravitational_wave_radii.empty())
       throw std::runtime_error("inconsistent gravitational-wave extraction arrays");
+    if (wavelet_tolerance_mode == 6 &&
+        (!(gravitational_wave_radii.front() > 8.0) ||
+         !(gravitational_wave_radii.back() >= gravitational_wave_radii.front())))
+      throw std::runtime_error("invalid mode-6 wavelet radial interval");
     const unsigned gravitational_wave_maximum_l =
         *std::max_element(gravitational_wave_l_modes.begin(),
                           gravitational_wave_l_modes.end());
+    const unsigned nyquist_mode =
+        toml::find_or<unsigned>(document, "BSSN_NYQUIST_M", 0);
     if (gravitational_wave_maximum_l < 2 || gravitational_wave_maximum_l > 8)
       throw std::runtime_error("BSSN_GW_L_MODES must lie in [2, 8]");
     const bool restore_solver =
@@ -174,7 +624,17 @@ int main(int argc, char** argv) {
         toml::find_or<DendroScalar>(document, "BSSN_GRID_MAX_Y", 400.0);
     const DendroScalar grid_max_z =
         toml::find_or<DendroScalar>(document, "BSSN_GRID_MAX_Z", 400.0);
-    if (!(wavelet_tolerance > 0.0) || !(cfl > 0.0) ||
+    if (!(wavelet_tolerance > 0.0) || !std::isfinite(wavelet_tolerance) ||
+        !(maximum_wavelet_tolerance > 0.0) ||
+        !std::isfinite(maximum_wavelet_tolerance) ||
+        !(gravitational_wave_tolerance > 0.0) ||
+        !std::isfinite(gravitational_wave_tolerance) ||
+        !(amr_coarsening_factor > 0.0) ||
+        !(amr_coarsening_factor <= 1.0) ||
+        !std::isfinite(amr_coarsening_factor) || !(cfl > 0.0) ||
+        !(postmerger_amr_coarsening_factor >= 0.0) ||
+        !(postmerger_amr_coarsening_factor <= 1.0) ||
+        !std::isfinite(postmerger_amr_coarsening_factor) ||
         !(time_end > time_begin) || !(grid_max_x > grid_min_x) ||
         !(grid_max_y > grid_min_y) || !(grid_max_z > grid_min_z))
       throw std::runtime_error("invalid runtime parameter range");
@@ -202,8 +662,8 @@ int main(int argc, char** argv) {
         !std::isfinite(black_hole_amr_radii[1]) ||
         !(black_hole_amr_ratio > 1.0) ||
         !std::isfinite(black_hole_amr_ratio) ||
-        black_hole_maximum_levels[0] < 3 ||
-        black_hole_maximum_levels[1] < 3 ||
+        black_hole_maximum_levels[0] < MAXDEAPTH_LEVEL_DIFF + 2 ||
+        black_hole_maximum_levels[1] < MAXDEAPTH_LEVEL_DIFF + 2 ||
         black_hole_maximum_levels[0] > maximum_depth ||
         black_hole_maximum_levels[1] > maximum_depth)
       throw std::runtime_error("invalid mesh-adaptation parameters");
@@ -214,6 +674,13 @@ int main(int argc, char** argv) {
         Point(toml::find_or<DendroScalar>(document, "BSSN_BH2", "X", -4.0),
               toml::find_or<DendroScalar>(document, "BSSN_BH2", "Y", 0.0),
               toml::find_or<DendroScalar>(document, "BSSN_BH2", "Z", 0.0))}};
+    const std::array<Point, 2> initial_black_hole_velocities{{
+        Point(toml::find_or<DendroScalar>(document, "BSSN_BH1", "V_X", 0.0),
+              toml::find_or<DendroScalar>(document, "BSSN_BH1", "V_Y", 0.0),
+              toml::find_or<DendroScalar>(document, "BSSN_BH1", "V_Z", 0.0)),
+        Point(toml::find_or<DendroScalar>(document, "BSSN_BH2", "V_X", 0.0),
+              toml::find_or<DendroScalar>(document, "BSSN_BH2", "V_Y", 0.0),
+              toml::find_or<DendroScalar>(document, "BSSN_BH2", "V_Z", 0.0))}};
     const std::array<DendroScalar, 2> excision_radii{{
         toml::find_or<DendroScalar>(document, "BSSN_BH1_CONSTRAINT_R", 1.0),
         toml::find_or<DendroScalar>(document, "BSSN_BH2_CONSTRAINT_R", 1.0)}};
@@ -255,7 +722,6 @@ int main(int argc, char** argv) {
     punctures.initial_lapse_psi_exponent = -2.0;
     std::snprintf(punctures.initial_lapse, sizeof(punctures.initial_lapse),
                   "W");
-    if (checkpoint_index < 0) TP_solve(&punctures);
 
     const Point domain_minimum(grid_min_x, grid_min_y, grid_min_z);
     const Point domain_maximum(grid_max_x, grid_max_y, grid_max_z);
@@ -264,28 +730,50 @@ int main(int argc, char** argv) {
     std::vector<ot::TreeNode> octree;
     const DendroScalar octree_coordinate_scale =
         std::ldexp(1.0, -static_cast<int>(maximum_depth));
-    std::function<double(double, double, double)> initial_conformal_factor =
-        [&](double x, double y, double z) {
-          const REAL physical_point[3] = {
-              grid_min_x + x * octree_coordinate_scale *
-                               (grid_max_x - grid_min_x),
-              grid_min_y + y * octree_coordinate_scale *
-                               (grid_max_y - grid_min_y),
-              grid_min_z + z * octree_coordinate_scale *
-                               (grid_max_z - grid_min_z)};
-          initial_data_struct sample{};
-          TP_Interp(&commondata, &tp_params, physical_point, &punctures, &sample);
-          return sample.alpha;
+    const double initial_mesh_chi_floor = toml::find_or<DendroScalar>(
+        document, "CHI_FLOOR", 0.1);
+    const nrpy_dendro_seed::PunctureParameters seed_black_hole_1{
+        mass_1, excision_centers[0].x(), excision_centers[0].y(),
+        excision_centers[0].z(), initial_black_hole_velocities[0].x(),
+        initial_black_hole_velocities[0].y(),
+        initial_black_hole_velocities[0].z(),
+        toml::find_or<DendroScalar>(document, "BSSN_BH1", "SPIN", 0.0),
+        toml::find_or<DendroScalar>(document, "BSSN_BH1", "SPIN_THETA", 0.0),
+        toml::find_or<DendroScalar>(document, "BSSN_BH1", "SPIN_PHI", 0.0)};
+    const nrpy_dendro_seed::PunctureParameters seed_black_hole_2{
+        mass_2, excision_centers[1].x(), excision_centers[1].y(),
+        excision_centers[1].z(), initial_black_hole_velocities[1].x(),
+        initial_black_hole_velocities[1].y(),
+        initial_black_hole_velocities[1].z(),
+        toml::find_or<DendroScalar>(document, "BSSN_BH2", "SPIN", 0.0),
+        toml::find_or<DendroScalar>(document, "BSSN_BH2", "SPIN_THETA", 0.0),
+        toml::find_or<DendroScalar>(document, "BSSN_BH2", "SPIN_PHI", 0.0)};
+    std::function<void(double, double, double, double*)> initial_bssn_fields =
+        [&](double x, double y, double z, double* fields) {
+          const double physical_x = grid_min_x + x * octree_coordinate_scale *
+                                                   (grid_max_x - grid_min_x);
+          const double physical_y = grid_min_y + y * octree_coordinate_scale *
+                                                   (grid_max_y - grid_min_y);
+          const double physical_z = grid_min_z + z * octree_coordinate_scale *
+                                                   (grid_max_z - grid_min_z);
+          nrpy_dendro_seed::punctureDataPhysicalCoord(
+              physical_x, physical_y, physical_z, fields, seed_black_hole_1,
+              seed_black_hole_2, initial_mesh_chi_floor);
         };
+    std::array<unsigned, 24> initial_field_indices{};
+    for (unsigned field = 0; field < initial_field_indices.size(); ++field)
+      initial_field_indices[field] = field;
     const unsigned initial_refinement_depth =
-        std::max(minimum_depth,
-                 std::min(black_hole_maximum_levels[0],
-                          black_hole_maximum_levels[1]) - 3);
+        std::min(black_hole_maximum_levels[0],
+                 black_hole_maximum_levels[1]) - MAXDEAPTH_LEVEL_DIFF - 2;
     if (checkpoint_index >= 0)
       createRegularOctree(octree, minimum_depth, m_uiDim, maximum_depth,
                           MPI_COMM_WORLD);
     else
-      function2Octree(initial_conformal_factor, octree,
+      function2Octree(initial_bssn_fields,
+                      initial_field_indices.size(),
+                      initial_field_indices.data(),
+                      initial_field_indices.size(), octree,
                       initial_refinement_depth, wavelet_tolerance,
                       element_order, MPI_COMM_WORLD);
     ot::Mesh* mesh = ot::createMesh(
@@ -353,7 +841,9 @@ int main(int argc, char** argv) {
         + horizon_indices
         + r"""};
       const auto bssn_to_adm = [](const std::vector<double>& values) {
-        const double inverse_chi = 1.0 / (values[0] * values[0]);
+        const double inverse_chi = """
+        + inverse_chi_expression
+        + r""";
         const double one_third_trK = values[1] / 3.0;
         std::vector<double> adm(12);
         adm[0] = (values[8] + 1.0) * inverse_chi;
@@ -403,13 +893,18 @@ int main(int argc, char** argv) {
         + solver_namespace
         + r"""::Ctx context(
         mesh, domain_minimum, domain_maximum, time_step, wavelet_tolerance,
-        remesh_frequency, diagnostic_frequency, vtu_frequency,
+        wavelet_tolerance_mode, maximum_wavelet_tolerance,
+        gravitational_wave_tolerance, amr_coarsening_factor,
+        postmerger_amr_coarsening_factor, refinement_variables,
+        remesh_frequency, postmerger_remesh_frequency,
+        diagnostic_frequency, vtu_frequency,
         checkpoint_frequency, output_prefix, vtu_prefix, checkpoint_prefix,
         excision_centers, excision_radii, black_hole_masses,
         black_hole_amr_radii, black_hole_maximum_levels,
         black_hole_amr_ratio, minimum_depth, apparent_horizon_frequency,
         apparent_horizon_finder.get(), gravitational_wave_frequency,
-        gravitational_wave_radii, gravitational_wave_maximum_l,
+        gravitational_wave_radii, gravitational_wave_maximum_l, nyquist_mode,
+        initial_black_hole_velocities, time_begin,
         Point(0.0, 0.0, 0.0));
     context.params = params;
     ts::TSInfo time_info{};
@@ -425,15 +920,41 @@ int main(int argc, char** argv) {
       restored = true;
     }
     if (!restored) {
+      TP_solve(&punctures);
       if (context.initialize(commondata, tp_params, punctures) != 0)
         throw std::runtime_error("initial-data construction failed");
-      for (unsigned pass = 0; pass < initial_grid_iterations; ++pass) {
+      const unsigned initial_grid_remesh_passes =
+          initial_grid_iterations > 1 ? initial_grid_iterations - 1
+                                      : initial_grid_iterations;
+      std::array<unsigned long long, 2> local_grid_counts{
+          context.get_mesh()->getNumLocalMeshElements(),
+          context.get_mesh()->getNumLocalMeshNodes()};
+      std::array<unsigned long long, 2> global_grid_counts{};
+      MPI_Allreduce(local_grid_counts.data(), global_grid_counts.data(),
+                    2, MPI_UNSIGNED_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+      bool initial_grid_remeshed = false;
+      for (unsigned pass = 0; pass < initial_grid_remesh_passes; ++pass) {
         if (!context.is_remesh(true)) break;
         context.remesh_and_gridtransfer(
             grain_size, load_imbalance_tolerance, split_fix);
-        if (context.initialize(commondata, tp_params, punctures) != 0)
-          throw std::runtime_error("initial-grid reconstruction failed");
+        initial_grid_remeshed = true;
+        const auto old_grid_counts = global_grid_counts;
+        local_grid_counts = {
+            context.get_mesh()->getNumLocalMeshElements(),
+            context.get_mesh()->getNumLocalMeshNodes()};
+        MPI_Allreduce(local_grid_counts.data(), global_grid_counts.data(),
+                      2, MPI_UNSIGNED_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+        if (rank == 0)
+          std::cout << "initial-grid remesh pass=" << pass + 1
+                    << " elements=" << old_grid_counts[0] << "->"
+                    << global_grid_counts[0] << " nodes="
+                    << old_grid_counts[1] << "->" << global_grid_counts[1]
+                    << std::endl;
+        if (global_grid_counts == old_grid_counts) break;
       }
+      if (initial_grid_remeshed &&
+          context.initialize(commondata, tp_params, punctures) != 0)
+        throw std::runtime_error("initial-grid reconstruction failed");
       unsigned converged_minimum_depth = 0, converged_maximum_depth = 0;
       context.get_mesh()->computeMinMaxLevel(converged_minimum_depth,
                                              converged_maximum_depth);
@@ -478,6 +999,7 @@ int main(int argc, char** argv) {
     while (time_stepper.curr_time() < time_end &&
            time_stepper.curr_step() < maximum_iterations) {
       context.terminal_output();
+      time_stepper.evolve();
       if (context.is_remesh()) {
         context.remesh_and_gridtransfer(
             grain_size, load_imbalance_tolerance, split_fix);
@@ -493,7 +1015,6 @@ int main(int argc, char** argv) {
         remeshed_time_info._m_uiTh = cfl * remeshed_minimum_dx;
         context.set_ts_info(remeshed_time_info);
       }
-      time_stepper.evolve();
       if (context.evolve_excision_centers() != 0)
         throw std::runtime_error("puncture-center evolution failed");
       if (context.diagnostic_output() != 0)

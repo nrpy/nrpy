@@ -30,7 +30,7 @@ def register_CFunction_psi4_eval(
     """
     Register FD4/6/8 Psi4 evaluation kernels.
 
-    Each point kernel evaluates Psi4 from W-BSSN fields with the
+    Each point kernel evaluates Psi4 from BSSN fields with the
     Baker-Campanelli-Lousto tetrad.
 
     :param solver_stem: Lowercase solver name used by the generated header.
@@ -45,8 +45,9 @@ def register_CFunction_psi4_eval(
         raise ValueError("Infrastructure must be 'Dendro' for wave extraction.")
     if par.parval_from_str("parallelization") != "none":
         raise ValueError("Dendro point kernels require parallelization='none'.")
-    if par.parval_from_str("EvolvedConformalFactor_cf") != "W":
-        raise ValueError("Dendro wave extraction requires W as conformal factor.")
+    conformal_factor = par.parval_from_str("EvolvedConformalFactor_cf")
+    if conformal_factor not in ("W", "chi"):
+        raise ValueError("Dendro wave extraction requires W or chi.")
     if CoordSystem != "Cartesian":
         raise ValueError("Dendro wave extraction requires Cartesian coordinates.")
     missing_fields = [
@@ -109,7 +110,8 @@ def register_CFunction_psi4_eval(
             psi4.metric_derivs_varname_arr_list,
         )
     )
-    tetrad = f"""const {scalar_type} inverse_W2 = 1.0 / (cf * cf);
+    inverse_chi_denominator = "cf * cf" if conformal_factor == "W" else "cf"
+    tetrad = f"""const {scalar_type} inverse_W2 = 1.0 / ({inverse_chi_denominator});
 const {scalar_type} gammaDD00 = (1.0 + hDD00) * inverse_W2;
 const {scalar_type} gammaDD01 = hDD01 * inverse_W2;
 const {scalar_type} gammaDD02 = hDD02 * inverse_W2;

@@ -84,8 +84,9 @@ def register_CFunction_rhs_eval(
         )
     if fd_order not in DENDRO_FD_PROFILES:
         raise ValueError(f"Unsupported fd_order={fd_order!r}; allowed: (4, 6, 8).")
-    if par.parval_from_str("EvolvedConformalFactor_cf") != "W":
-        raise ValueError("The generated Dendro applications evolve W.")
+    conformal_factor = par.parval_from_str("EvolvedConformalFactor_cf")
+    if conformal_factor not in ("W", "chi"):
+        raise ValueError("Dendro BSSN and fCCZ4 require W or chi.")
     if par.parval_from_str("parallelization") != "none":
         raise ValueError("Dendro point kernels require parallelization='none'.")
 
@@ -149,7 +150,11 @@ def register_CFunction_rhs_eval(
                 KreissOliger_strength_gauge=0.3,
                 KreissOliger_strength_nongauge=0.3,
                 enable_CAKO=False,
-                W=quantities.cf,
+                W=(
+                    sp.sqrt(quantities.cf)
+                    if conformal_factor == "chi"
+                    else quantities.cf
+                ),
                 include_Theta_fCCZ4=enable_fCCZ4,
             )
 
@@ -161,11 +166,12 @@ def register_CFunction_rhs_eval(
                 [0.6, 20.0],
                 add_to_parfile=True,
             )
+            W = sp.sqrt(quantities.cf) if conformal_factor == "chi" else quantities.cf
             rhs_by_symbol_name["alpha_rhs"] -= (
-                quantities.cf
+                W
                 * SSL_h
                 * sp.exp(-(sp.Symbol("stage_time") ** 2) / (2 * SSL_sigma**2))
-                * (quantities.alpha - quantities.cf)
+                * (quantities.alpha - W)
             )
 
         if enable_CAHD:
@@ -181,7 +187,7 @@ def register_CFunction_rhs_eval(
                     "REAL", __name__, "C_CAHD", 0.15, add_to_parfile=True
                 )
                 rhs_by_symbol_name["cf_rhs"] += (
-                    2
+                    (4 if conformal_factor == "chi" else 2)
                     * c_cahd
                     * quantities.cf
                     * hamiltonian_constraint
@@ -192,7 +198,7 @@ def register_CFunction_rhs_eval(
                     "REAL", __name__, "C_CAHD", 0.06, add_to_parfile=True
                 )
                 rhs_by_symbol_name["cf_rhs"] += (
-                    sp.Rational(1, 2)
+                    (1 if conformal_factor == "chi" else sp.Rational(1, 2))
                     * c_cahd
                     * quantities.cf
                     * hamiltonian_constraint

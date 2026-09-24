@@ -104,6 +104,7 @@ def output_checkpoint_cpp(
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "checkPoint.h"
@@ -125,6 +126,11 @@ int {solver_stem}_write_checkpoint(
     const Point& domain_minimum,
     const Point& domain_maximum,
     const std::array<Point, 2>& excision_centers,
+    const std::vector<DendroScalar>& black_hole_time_history,
+    const std::vector<std::array<DendroScalar, 6>>&
+        black_hole_position_history,
+    DendroScalar black_hole_merge_time,
+    bool merged_checkpoint_written,
     DendroScalar projected_algebraic_residual) {{
     if (!mesh->isActive()) return 0;
 
@@ -217,6 +223,10 @@ int {solver_stem}_write_checkpoint(
         excision_centers[0].x(), excision_centers[0].y(),
         excision_centers[0].z(), excision_centers[1].x(),
         excision_centers[1].y(), excision_centers[1].z()}};
+    metadata["NRPY_BH_HISTORY_TIMES"] = black_hole_time_history;
+    metadata["NRPY_BH_HISTORY_POSITIONS"] = black_hole_position_history;
+    metadata["NRPY_BH_MERGE_TIME"] = black_hole_merge_time;
+    metadata["NRPY_MERGED_CHECKPOINT_WRITTEN"] = merged_checkpoint_written;
     metadata["NRPY_PROJECTED_ALGEBRAIC_RESIDUAL"] =
         projected_algebraic_residual;
     metadata["NRPY_PARAMETER_NAMES"] = std::vector<std::string>{{
@@ -262,6 +272,10 @@ int {solver_stem}_restore_checkpoint(
     DendroScalar& time,
     DendroScalar& time_step,
     std::array<Point, 2>& excision_centers,
+    std::vector<DendroScalar>& black_hole_time_history,
+    std::vector<std::array<DendroScalar, 6>>& black_hole_position_history,
+    DendroScalar& black_hole_merge_time,
+    bool& merged_checkpoint_written,
     DendroScalar algebraic_residual_tolerance) {{
     int global_rank = 0;
     int global_size = 0;
@@ -272,6 +286,10 @@ int {solver_stem}_restore_checkpoint(
     metadata_name << prefix << "_" << checkpoint_index << "_step.cp";
     json metadata;
     std::array<DendroScalar, 6> stored_excision_centers{{}};
+    std::vector<DendroScalar> stored_black_hole_times;
+    std::vector<std::array<DendroScalar, 6>> stored_black_hole_positions;
+    DendroScalar stored_merge_time = 0.0;
+    bool stored_merged_checkpoint_written = false;
     bool metadata_valid = std::filesystem::exists(metadata_name.str());
     try {{
         if (metadata_valid) {{
@@ -325,6 +343,34 @@ int {solver_stem}_restore_checkpoint(
                 .get<std::array<DendroScalar, 3>>();
         stored_excision_centers = metadata.at("NRPY_EXCISION_CENTERS")
             .get<std::array<DendroScalar, 6>>();
+        stored_black_hole_times = metadata.at("NRPY_BH_HISTORY_TIMES")
+            .get<std::vector<DendroScalar>>();
+        stored_black_hole_positions =
+            metadata.at("NRPY_BH_HISTORY_POSITIONS")
+                .get<std::vector<std::array<DendroScalar, 6>>>();
+        stored_merge_time = metadata.at("NRPY_BH_MERGE_TIME")
+            .get<DendroScalar>();
+        stored_merged_checkpoint_written =
+            metadata.at("NRPY_MERGED_CHECKPOINT_WRITTEN").get<bool>();
+        if (stored_black_hole_times.empty() ||
+            stored_black_hole_times.size() !=
+                stored_black_hole_positions.size() ||
+            stored_black_hole_times.back() != stored_time ||
+            !std::isfinite(stored_merge_time))
+            metadata_valid = false;
+        for (std::size_t index = 0;
+             index < stored_black_hole_times.size(); ++index) {{
+            if (!std::isfinite(stored_black_hole_times[index]) ||
+                (index > 0 && stored_black_hole_times[index] <=
+                                  stored_black_hole_times[index - 1]))
+                metadata_valid = false;
+            for (const DendroScalar coordinate :
+                 stored_black_hole_positions[index])
+                if (!std::isfinite(coordinate)) metadata_valid = false;
+        }}
+        if (!stored_black_hole_positions.empty() &&
+            stored_black_hole_positions.back() != stored_excision_centers)
+            metadata_valid = false;
         for (const DendroScalar coordinate : stored_excision_centers) {{
             if (!std::isfinite(coordinate)) metadata_valid = false;
         }}
@@ -417,6 +463,10 @@ int {solver_stem}_restore_checkpoint(
     excision_centers[1] = Point(
         stored_excision_centers[3], stored_excision_centers[4],
         stored_excision_centers[5]);
+    black_hole_time_history = std::move(stored_black_hole_times);
+    black_hole_position_history = std::move(stored_black_hole_positions);
+    black_hole_merge_time = stored_merge_time;
+    merged_checkpoint_written = stored_merged_checkpoint_written;
     return 0;
 }}
 }}  // namespace {solver_namespace}

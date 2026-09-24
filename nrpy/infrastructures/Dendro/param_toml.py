@@ -25,9 +25,10 @@ def generate_default_parfile(
     """
     Emit one flat TOML parameter file accepted by the Dendro application.
 
-    The file uses the same top-level keys as ``q1.par.lowres.toml``. W is the
-    conformal variable and the TwoPunctures lapse is initialized to
-    ``W=(psi_background+u)^(-2)``. The generated eta default is one; an
+    The file uses the same top-level keys as ``q1.par.lowres.toml``. The
+    evolved conformal variable is selected at code generation; the
+    TwoPunctures lapse is initialized to ``W=(psi_background+u)^(-2)``
+    for either W or chi evolution. The generated eta default is one; an
     explicit ``ETA_CONST`` in another input file has normal TOML precedence.
 
     :param solver_stem: Lowercase formulation stem recorded in comments.

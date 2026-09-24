@@ -18,7 +18,7 @@ def register_CFunction_apparent_horizon(
     solver_stem: str,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register dispatch from the evolved W-BSSN state to BHaHAHA.
+    Register dispatch from the evolved BSSN state to BHaHAHA.
 
     The indices selected when constructing ``AEH_BHaHAHA`` name ``cf``,
     ``trK``, ``aDD00..22``, and ``hDD00..22``. BHaHAHA interpolates these
@@ -37,7 +37,7 @@ def register_CFunction_apparent_horizon(
     cfc.register_CFunction(
         subdirectory="generated/src/apparent_horizon",
         includes=[f"{solver_stem}_defines.h", "aeh_bhahaha.h"],
-        desc="Run BHaHAHA on evolved W-BSSN fields with post-interpolation ADM conversion.",
+        desc="Run BHaHAHA on evolved BSSN fields with post-interpolation ADM conversion.",
         cfunc_type="void",
         name="apparent_horizon",
         params=(

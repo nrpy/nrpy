@@ -43,6 +43,7 @@ def output_solver_context_h(
 #include "meshUtils.h"
 #include <array>
 #include <functional>
+#include <limits>
 #include <string>
 #include <vector>
 namespace {solver_namespace} {{
@@ -51,14 +52,17 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
  public:
   generated::params_struct params{{}};
   Ctx(ot::Mesh*, const Point&, const Point&, DendroScalar, DendroScalar,
-      unsigned int, unsigned int, unsigned int, unsigned int,
+      unsigned int, DendroScalar, DendroScalar, DendroScalar, DendroScalar,
+      const std::vector<unsigned int>&,
+      unsigned int, unsigned int, unsigned int, unsigned int, unsigned int,
       const std::string&, const std::string&, const std::string&,
       const std::array<Point, 2>&, const std::array<DendroScalar, 2>&,
       const std::array<DendroScalar, 2>&,
       const std::array<DendroScalar, 2>&,
       const std::array<unsigned int, 2>&, DendroScalar, unsigned int,
       unsigned int, dendro_aeh::AEH_BHaHAHA*, unsigned int,
-      const std::vector<DendroScalar>&, unsigned int, const Point&);
+      const std::vector<DendroScalar>&, unsigned int, unsigned int,
+      const std::array<Point, 2>&, DendroScalar, const Point&);
   ~Ctx();
   Ctx(const Ctx&) = delete;
   Ctx& operator=(const Ctx&) = delete;
@@ -94,7 +98,7 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
   DVec& get_constraint_vars() {{ return constraints_; }}
   DVec& get_primitive_vars() {{ return state_; }}
   unsigned int get_async_batch_sz() {{ return 1; }}
-  unsigned int get_num_refine_vars() {{ return generated::NUM_EVOL_GFS; }}
+  unsigned int get_num_refine_vars() {{ return refinement_variables_.size(); }}
   const unsigned int* get_refine_var_ids() {{ return refinement_variables_.data(); }}
   std::function<double(double, double, double)> get_wtol_function();
   void compute_lts_ts_offset() {{}}
@@ -110,13 +114,25 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
   std::array<unsigned int, 2> black_hole_maximum_levels_{{}};
   DendroScalar black_hole_amr_ratio_ = 2.0;
   unsigned int minimum_depth_ = 0;
+  std::array<Point, 2> initial_black_hole_velocities_{{}};
+  std::vector<std::array<DendroScalar, 6>> black_hole_position_history_{{}};
+  std::vector<DendroScalar> black_hole_time_history_{{}};
+  DendroScalar black_hole_merge_time_ =
+      std::numeric_limits<DendroScalar>::max();
   DVec state_, unzipped_state_, unzipped_rhs_, ricci_;
   DVec adm_, unzipped_adm_;
   DVec psi4_, unzipped_psi4_;
   DVec adm_surface_, unzipped_adm_surface_;
   DVec constraints_, unzipped_constraints_;
   DendroScalar wavelet_tolerance_ = 1.0e-5;
+  unsigned int wavelet_tolerance_mode_ = 0;
+  DendroScalar maximum_wavelet_tolerance_ = 1.0e-5;
+  DendroScalar gravitational_wave_tolerance_ = 1.0e-5;
+  DendroScalar amr_coarsening_factor_ = 0.1;
+  DendroScalar postmerger_amr_coarsening_factor_ = 0.0;
+  bool merged_checkpoint_written_ = false;
   unsigned int remesh_frequency_ = 10;
+  unsigned int postmerger_remesh_frequency_ = 10;
   unsigned int diagnostic_frequency_ = 8;
   unsigned int vtu_frequency_ = 8;
   unsigned int checkpoint_frequency_ = 0;
@@ -125,21 +141,27 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
   unsigned int gravitational_wave_frequency_ = 0;
   std::vector<DendroScalar> gravitational_wave_radii_{{}};
   unsigned int gravitational_wave_maximum_l_ = 2;
+  unsigned int nyquist_mode_ = 0;
   Point extraction_center_{{0.0, 0.0, 0.0}};
   std::string output_prefix_ = "nrpy";
   std::string vtu_prefix_ = "vtu/nrpy";
   std::string checkpoint_prefix_ = "cp/nrpy";
-  std::array<unsigned int, generated::NUM_EVOL_GFS> refinement_variables_{{}};
+  std::vector<unsigned int> refinement_variables_{{}};
 }};
 int {solver_stem}_write_checkpoint(
     const std::string&, unsigned int, ot::Mesh*, DVec&,
     const generated::params_struct&, unsigned int, DendroScalar,
     DendroScalar, const Point&, const Point&, const std::array<Point, 2>&,
+    const std::vector<DendroScalar>&,
+    const std::vector<std::array<DendroScalar, 6>>&, DendroScalar, bool,
     DendroScalar);
 int {solver_stem}_restore_checkpoint(
     const std::string&, unsigned int, MPI_Comm, const Point&, const Point&,
     ot::Mesh*&, DVec&, const generated::params_struct&, unsigned int&,
-    DendroScalar&, DendroScalar&, std::array<Point, 2>&, DendroScalar);
+    DendroScalar&, DendroScalar&, std::array<Point, 2>&,
+    std::vector<DendroScalar>&,
+    std::vector<std::array<DendroScalar, 6>>&, DendroScalar&, bool&,
+    DendroScalar);
 }}  // namespace {solver_namespace}
 #endif  // {guard}
 """
@@ -189,6 +211,7 @@ def output_solver_context_cpp(
         "floor_the_lapse_and_conformal_factor",
         "gravitational_waves",
         "adm_quantities",
+        "physical_boundary_ghosts",
     ):
         if name not in cfc.CFunction_dict:
             raise ValueError(f"Missing registered Dendro service {name!r}.")
@@ -248,7 +271,15 @@ def output_solver_context_cpp(
 namespace {solver_namespace} {{
 Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum,
          DendroScalar time_step, DendroScalar wavelet_tolerance,
-         unsigned int remesh_frequency, unsigned int diagnostic_frequency,
+         unsigned int wavelet_tolerance_mode,
+         DendroScalar maximum_wavelet_tolerance,
+         DendroScalar gravitational_wave_tolerance,
+         DendroScalar amr_coarsening_factor,
+         DendroScalar postmerger_amr_coarsening_factor,
+         const std::vector<unsigned int>& refinement_variables,
+         unsigned int remesh_frequency,
+         unsigned int postmerger_remesh_frequency,
+         unsigned int diagnostic_frequency,
          unsigned int vtu_frequency, unsigned int checkpoint_frequency,
          const std::string& output_prefix, const std::string& vtu_prefix,
          const std::string& checkpoint_prefix,
@@ -263,16 +294,27 @@ Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum,
          unsigned int gravitational_wave_frequency,
          const std::vector<DendroScalar>& gravitational_wave_radii,
          unsigned int gravitational_wave_maximum_l,
+         unsigned int nyquist_mode,
+         const std::array<Point, 2>& initial_black_hole_velocities,
+         DendroScalar time_begin,
          const Point& extraction_center)
     : domain_minimum_(minimum), domain_maximum_(maximum),
-      excision_centers_(excision_centers), excision_radii_(excision_radii),
+      excision_centers_(excision_centers), excision_center_time_(time_begin),
+      excision_radii_(excision_radii),
       black_hole_masses_(black_hole_masses),
       black_hole_amr_radii_(black_hole_amr_radii),
       black_hole_maximum_levels_(black_hole_maximum_levels),
       black_hole_amr_ratio_(black_hole_amr_ratio),
       minimum_depth_(minimum_depth),
+      initial_black_hole_velocities_(initial_black_hole_velocities),
       wavelet_tolerance_(wavelet_tolerance),
+      wavelet_tolerance_mode_(wavelet_tolerance_mode),
+      maximum_wavelet_tolerance_(maximum_wavelet_tolerance),
+      gravitational_wave_tolerance_(gravitational_wave_tolerance),
+      amr_coarsening_factor_(amr_coarsening_factor),
+      postmerger_amr_coarsening_factor_(postmerger_amr_coarsening_factor),
       remesh_frequency_(remesh_frequency),
+      postmerger_remesh_frequency_(postmerger_remesh_frequency),
       diagnostic_frequency_(diagnostic_frequency),
       vtu_frequency_(vtu_frequency),
       checkpoint_frequency_(checkpoint_frequency), output_prefix_(output_prefix) {{
@@ -281,14 +323,33 @@ Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum,
   gravitational_wave_frequency_ = gravitational_wave_frequency;
   gravitational_wave_radii_ = gravitational_wave_radii;
   gravitational_wave_maximum_l_ = gravitational_wave_maximum_l;
+  nyquist_mode_ = nyquist_mode;
   extraction_center_ = extraction_center;
+  black_hole_time_history_.push_back(time_begin);
+  black_hole_position_history_.push_back({{
+      excision_centers_[0].x(), excision_centers_[0].y(),
+      excision_centers_[0].z(), excision_centers_[1].x(),
+      excision_centers_[1].y(), excision_centers_[1].z()}});
   vtu_prefix_ = vtu_prefix;
   checkpoint_prefix_ = checkpoint_prefix;
+  refinement_variables_ = refinement_variables;
   if (mesh == nullptr ||
       (mesh->getElementOrder() != 4 && mesh->getElementOrder() != 6 &&
        mesh->getElementOrder() != 8) ||
       !(time_step > 0.0) || !std::isfinite(time_step) ||
       !(wavelet_tolerance > 0.0) || !std::isfinite(wavelet_tolerance) ||
+      (wavelet_tolerance_mode != 0 && wavelet_tolerance_mode != 6) ||
+      !(maximum_wavelet_tolerance > 0.0) ||
+      !std::isfinite(maximum_wavelet_tolerance) ||
+      !(gravitational_wave_tolerance > 0.0) ||
+      !std::isfinite(gravitational_wave_tolerance) ||
+      !(amr_coarsening_factor > 0.0) ||
+      !(amr_coarsening_factor <= 1.0) ||
+      !std::isfinite(amr_coarsening_factor) ||
+      !(postmerger_amr_coarsening_factor >= 0.0) ||
+      !(postmerger_amr_coarsening_factor <= 1.0) ||
+      !std::isfinite(postmerger_amr_coarsening_factor) ||
+      refinement_variables_.empty() ||
       !(black_hole_amr_ratio > 1.0) ||
       !std::isfinite(black_hole_amr_ratio) ||
       !(black_hole_masses[0] > 0.0) || !std::isfinite(black_hole_masses[0]) ||
@@ -304,6 +365,14 @@ Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum,
     if (!(radius > 0.0) || !std::isfinite(radius))
       throw std::invalid_argument("invalid gravitational-wave extraction radius");
   }}
+  if (wavelet_tolerance_mode_ == 6 &&
+      (gravitational_wave_radii_.empty() ||
+       !(gravitational_wave_radii_.front() > 8.0) ||
+       !(gravitational_wave_radii_.back() >= gravitational_wave_radii_.front())))
+    throw std::invalid_argument("invalid mode-6 wavelet radial interval");
+  for (const unsigned int field : refinement_variables_)
+    if (field >= generated::NUM_EVOL_GFS)
+      throw std::invalid_argument("invalid refinement field index");
   set_mesh(mesh);
   m_uiElementOrder = mesh->getElementOrder();
   m_uiMinPt = minimum;
@@ -337,8 +406,6 @@ Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum,
   unzipped_adm_surface_.create_vector(
       mesh, ot::DVEC_TYPE::OCT_LOCAL_WITH_PADDING, ot::DVEC_LOC::HOST, 9,
       true);
-  for (unsigned int i = 0; i < generated::NUM_EVOL_GFS; ++i)
-    refinement_variables_[i] = i;
   ot::alloc_mpi_ctx<DendroScalar>(mesh, m_mpi_ctx,
                                   generated::NUM_EVOL_GFS, 1);
 }}
@@ -390,6 +457,7 @@ int Ctx::initialize(const commondata_struct& commondata,
   std::copy_n(unzipped_state_.get_vec_ptr(), unzipped_state_.get_size(),
               unzipped_rhs_.get_vec_ptr());
   for (const ot::Block& block : m_uiMesh->getLocalBlockList()) {{
+    physical_boundary_ghosts(block, input.data(), generated::NUM_EVOL_GFS);
     switch (m_uiElementOrder) {{
       case 4: initial_data_lambdaU_order_4(block, input.data(), output.data(),
                                            domain_minimum_, domain_maximum_); break;
@@ -419,6 +487,7 @@ int Ctx::rhs(DVec* in, DVec* out, unsigned int count, DendroScalar time) {{
   unzipped_state_.to_2d(input.data()); unzipped_rhs_.to_2d(output.data());
   ricci_.to_2d(ricci.data());
   for (const ot::Block& block : m_uiMesh->getLocalBlockList()) {{
+    physical_boundary_ghosts(block, input.data(), generated::NUM_EVOL_GFS);
     switch (m_uiElementOrder) {{
       case 4:
         Ricci_eval_order_4(block, input.data(), ricci.data(), domain_minimum_, domain_maximum_);
@@ -454,6 +523,7 @@ int Ctx::rhs_blkwise(DVec in, DVec out, const unsigned int* ids,
     const ot::Block& block = blocks.at(ids[i]);
     const DendroScalar time = block_time == nullptr ? m_uiTinfo._m_uiT
                                                      : block_time[i];
+    physical_boundary_ghosts(block, input.data(), generated::NUM_EVOL_GFS);
     switch (m_uiElementOrder) {{
       case 4:
         Ricci_eval_order_4(block, input.data(), ricci.data(), domain_minimum_, domain_maximum_);
@@ -509,8 +579,8 @@ int Ctx::evolve_excision_centers() {{
         excision_centers_[0].z(), excision_centers_[1].x(),
         excision_centers_[1].y(), excision_centers_[1].z()}};
     const generated::EvolVar shift_fields[3] = {{
-        generated::EvolVar::betU0, generated::EvolVar::betU1,
-        generated::EvolVar::betU2}};
+        generated::EvolVar::vetU0, generated::EvolVar::vetU1,
+        generated::EvolVar::vetU2}};
     for (unsigned component = 0; component < 3; ++component) {{
       DendroScalar interpolated[2]{{}};
       std::vector<unsigned> valid_indices;
@@ -546,6 +616,15 @@ int Ctx::evolve_excision_centers() {{
             elapsed_time * global_shift[3 * black_hole + 2]);
   }}
   excision_center_time_ = m_uiTinfo._m_uiT;
+  black_hole_time_history_.push_back(excision_center_time_);
+  black_hole_position_history_.push_back({{
+      excision_centers_[0].x(), excision_centers_[0].y(),
+      excision_centers_[0].z(), excision_centers_[1].x(),
+      excision_centers_[1].y(), excision_centers_[1].z()}});
+  if (black_hole_merge_time_ ==
+          std::numeric_limits<DendroScalar>::max() &&
+      (excision_centers_[0] - excision_centers_[1]).abs() < 0.1)
+    black_hole_merge_time_ = excision_center_time_;
   return 0;
 }}
 int Ctx::diagnostic_output() {{
@@ -559,6 +638,7 @@ int Ctx::diagnostic_output() {{
   unzipped_state_.to_2d(state.data());
   unzipped_constraints_.to_2d(diagnostic.data());
   for (const ot::Block& block : m_uiMesh->getLocalBlockList()) {{
+    physical_boundary_ghosts(block, state.data(), generated::NUM_EVOL_GFS);
     switch (m_uiElementOrder) {{
       case 4: {constraint_stem}_order_4(block, state.data(), diagnostic.data(),
                                          domain_minimum_, domain_maximum_); break;
@@ -598,6 +678,59 @@ int Ctx::diagnostic_output() {{
     file << '\\n';
   }}
   zip(unzipped_constraints_, constraints_);
+  // Dendro-BSSN's reported norm weights each owned, unexcised CG node equally.
+  // Keep this distinct from the conformal-factor volume-weighted norm above.
+  std::array<DendroScalar *, generated::NUM_DIAG_GFS> zipped_diagnostic{{}};
+  constraints_.to_2d(zipped_diagnostic.data());
+  const unsigned int *e2n_cg = m_uiMesh->getE2NMapping().data();
+  const unsigned int *e2n_dg = m_uiMesh->getE2NMapping_DG().data();
+  const unsigned int nodes_per_element = m_uiMesh->getNumNodesPerElement();
+  const ot::TreeNode *elements = m_uiMesh->getAllElements().data();
+  const unsigned int order = m_uiMesh->getElementOrder();
+  const Point &domain_min = domain_minimum_;
+  const Point &domain_max = domain_maximum_;
+  const unsigned int node_begin = m_uiMesh->getNodeLocalBegin();
+  const unsigned int node_end = m_uiMesh->getNodeLocalEnd();
+  std::vector<unsigned char> counted(m_uiMesh->getDegOfFreedom(), 0);
+  std::array<double, generated::NUM_DIAG_GFS> local_node_sums{{}}, global_node_sums{{}};
+  unsigned long long local_nodes = 0;
+  for (unsigned int element = m_uiMesh->getElementLocalBegin();
+       element < m_uiMesh->getElementLocalEnd(); ++element) {{
+    for (unsigned int index = 0; index < nodes_per_element; ++index) {{
+      const unsigned int cg = e2n_cg[element * nodes_per_element + index];
+      if (cg < node_begin || cg >= node_end || counted[cg]) continue;
+      counted[cg] = 1;
+      const unsigned int dg = e2n_dg[element * nodes_per_element + index];
+      unsigned int owner, i, j, k;
+      m_uiMesh->dg2eijk(dg, owner, i, j, k);
+      const double length = static_cast<double>(1u << (m_uiMaxDepth - elements[owner].getLevel()));
+      const Point point(GRIDX_TO_X(elements[owner].getX() + i * length / order),
+                        GRIDY_TO_Y(elements[owner].getY() + j * length / order),
+                        GRIDZ_TO_Z(elements[owner].getZ() + k * length / order));
+      bool excised = false;
+      for (unsigned int region = 0; region < excision_centers_.size(); ++region)
+        excised = excised || (point - excision_centers_[region]).abs() < excision_radii_[region];
+      if (excised) continue;
+      for (unsigned int field = 0; field < generated::NUM_DIAG_GFS; ++field) {{
+        const double value = zipped_diagnostic[field][cg];
+        local_node_sums[field] += value * value;
+      }}
+      ++local_nodes;
+    }}
+  }}
+  MPI_Allreduce(local_node_sums.data(), global_node_sums.data(), generated::NUM_DIAG_GFS,
+                MPI_DOUBLE, MPI_SUM, m_uiMesh->getMPICommunicator());
+  unsigned long long global_nodes = 0;
+  MPI_Allreduce(&local_nodes, &global_nodes, 1, MPI_UNSIGNED_LONG_LONG, MPI_SUM,
+                m_uiMesh->getMPICommunicator());
+  if (global_nodes == 0) throw std::runtime_error("constraint diagnostics found no unexcised nodes");
+  if (m_uiMesh->getMPIRank() == 0) {{
+    std::ofstream file(output_prefix_ + "_constraints_node_rms.tsv", std::ios::app);
+    file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT;
+    for (unsigned int field = 0; field < generated::NUM_DIAG_GFS; ++field)
+      file << '\\t' << std::sqrt(global_node_sums[field] / static_cast<double>(global_nodes));
+    file << '\\t' << global_nodes << '\\n';
+  }}
   return 0;
 }}
 int Ctx::gravitational_wave_output() {{
@@ -611,6 +744,7 @@ int Ctx::gravitational_wave_output() {{
   unzipped_state_.to_2d(state.data());
   unzipped_psi4_.to_2d(psi4.data());
   for (const ot::Block& block : m_uiMesh->getLocalBlockList()) {{
+    physical_boundary_ghosts(block, state.data(), generated::NUM_EVOL_GFS);
     switch (m_uiElementOrder) {{
       case 4: psi4_eval_order_4(block, state.data(), psi4.data(),
                                 domain_minimum_, domain_maximum_); break;
@@ -677,6 +811,8 @@ int Ctx::adm_output() {{
                 domain_maximum_);
   zip(unzipped_adm_, adm_);
   unzip(adm_, unzipped_adm_, 1);
+  for (const ot::Block& block : m_uiMesh->getLocalBlockList())
+    physical_boundary_ghosts(block, unzipped_adm.data(), 18);
   std::fill_n(unzipped_adm_surface_.get_vec_ptr(),
               unzipped_adm_surface_.get_size(), 0.0);
   std::array<DendroScalar*, 9> unzipped_surface{{}};
@@ -797,21 +933,90 @@ int Ctx::apparent_horizon_output() {{
   return 0;
 }}
 bool Ctx::is_remesh(bool initial_grid) {{
+  const bool black_holes_merged =
+      (excision_centers_[0] - excision_centers_[1]).abs() < 0.1;
+  const unsigned int active_remesh_frequency =
+      black_holes_merged ? postmerger_remesh_frequency_ : remesh_frequency_;
   if (!initial_grid &&
-      (remesh_frequency_ == 0 || m_uiTinfo._m_uiStep == 0 ||
-       m_uiTinfo._m_uiStep % remesh_frequency_ != 0))
+      (active_remesh_frequency == 0 || m_uiTinfo._m_uiStep == 0 ||
+       m_uiTinfo._m_uiStep % active_remesh_frequency != 0))
     return false;
   unzip(state_, unzipped_state_, 1);
   std::array<DendroScalar*, generated::NUM_EVOL_GFS> fields{{}};
   std::array<const DendroScalar*, generated::NUM_EVOL_GFS> const_fields{{}};
   unzipped_state_.to_2d(fields.data());
+  for (const ot::Block& block : m_uiMesh->getLocalBlockList())
+    physical_boundary_ghosts(block, fields.data(), generated::NUM_EVOL_GFS);
   for (unsigned int i = 0; i < generated::NUM_EVOL_GFS; ++i)
     const_fields[i] = fields[i];
-  const DendroScalar tolerance = wavelet_tolerance_;
-  const bool wavelet_change = m_uiMesh->isReMeshUnzip(
+  const auto wavelet_tolerance = get_wtol_function();
+  const DendroScalar active_coarsening_factor =
+      merged_checkpoint_written_ && postmerger_amr_coarsening_factor_ > 0.0
+          ? postmerger_amr_coarsening_factor_
+          : amr_coarsening_factor_;
+  m_uiMesh->isReMeshUnzip(
       const_fields.data(), refinement_variables_.data(),
-      generated::NUM_EVOL_GFS,
-      [tolerance](double, double, double, double*) {{ return tolerance; }});
+      refinement_variables_.size(),
+      [this, wavelet_tolerance](double x, double y, double z, double*) {{
+        DendroScalar tolerance = wavelet_tolerance(x, y, z);
+        const Point point(x, y, z);
+        for (unsigned int black_hole = 0; black_hole < 2; ++black_hole)
+          if ((point - excision_centers_[black_hole]).abs() <=
+              black_hole_amr_radii_[black_hole]) {{
+            tolerance *= 1.0e12;
+            break;
+          }}
+        return tolerance;
+      }}, active_coarsening_factor);
+  std::vector<DendroScalar> clean_wavelength;
+  if (nyquist_mode_ > 0) {{
+    const auto& first = black_hole_position_history_.front();
+    Point initial_separation(first[3] - first[0], first[4] - first[1],
+                             first[5] - first[2]);
+    Point initial_relative_velocity =
+        initial_black_hole_velocities_[1] -
+        initial_black_hole_velocities_[0];
+    const DendroScalar initial_radius = initial_separation.abs();
+    const DendroScalar initial_omega =
+        initial_radius > 0.0
+            ? initial_separation.cross(initial_relative_velocity).abs() /
+                  (initial_radius * initial_radius)
+            : 0.0;
+    clean_wavelength.push_back(
+        initial_omega > std::numeric_limits<DendroScalar>::epsilon()
+            ? 2.0 * M_PI / initial_omega
+            : std::numeric_limits<DendroScalar>::max());
+    for (std::size_t index = 1;
+         index < black_hole_position_history_.size(); ++index) {{
+      const auto& previous = black_hole_position_history_[index - 1];
+      const auto& current = black_hole_position_history_[index];
+      Point old_separation(previous[0] - previous[3],
+                           previous[1] - previous[4],
+                           previous[2] - previous[5]);
+      Point new_separation(current[0] - current[3],
+                           current[1] - current[4],
+                           current[2] - current[5]);
+      const DendroScalar history_dt =
+          black_hole_time_history_[index] -
+          black_hole_time_history_[index - 1];
+      if (!(history_dt > 0.0))
+        throw std::runtime_error("puncture history has nonpositive time step");
+      DendroScalar wavelength = clean_wavelength.back();
+      const DendroScalar radius = new_separation.abs();
+      if (radius > 1.0) {{
+        Point relative_velocity =
+            (new_separation - old_separation) / history_dt;
+        const DendroScalar omega =
+            new_separation.cross(relative_velocity).abs() /
+            (radius * radius);
+        wavelength = omega > std::numeric_limits<DendroScalar>::epsilon()
+            ? 2.0 * M_PI / omega
+            : std::numeric_limits<DendroScalar>::max();
+      }}
+      clean_wavelength.push_back(
+          std::min(clean_wavelength.back(), wavelength));
+    }}
+  }}
   bool local_geometry_change = false;
   if (m_uiMesh->isActive()) {{
     std::vector<unsigned int> refinement_flags =
@@ -853,19 +1058,85 @@ bool Ctx::is_remesh(bool initial_grid) {{
       unsigned int required_level = minimum_depth_;
       if (minimum_center_radius <= orbital_radius)
         required_level = std::max(required_level, 9u);
-      for (unsigned int black_hole = 0; black_hole < 2; ++black_hole) {{
-        DendroScalar radius = black_hole_amr_radii_[black_hole];
-        unsigned int level = black_hole_maximum_levels_[black_hole] - 2;
-        while (level > 9 && minimum_black_hole_radius[black_hole] > radius) {{
-          radius *= black_hole_amr_ratio_;
-          --level;
+      if (separation > 0.1) {{
+        for (unsigned int black_hole = 0; black_hole < 2; ++black_hole) {{
+          if (minimum_black_hole_radius[black_hole] > orbital_radius)
+            continue;
+          DendroScalar radius = black_hole_amr_radii_[black_hole];
+          unsigned int level = black_hole_maximum_levels_[black_hole] - 2;
+          while (level > 9) {{
+            if (minimum_black_hole_radius[black_hole] <= radius) {{
+              required_level = std::max(required_level, level);
+              break;
+            }}
+            radius *= black_hole_amr_ratio_;
+            --level;
+          }}
         }}
-        if (minimum_black_hole_radius[black_hole] <= orbital_radius)
-          required_level = std::max(required_level, level);
+      }} else {{
+        const DendroScalar radius_limit = std::max(
+            std::max(black_hole_amr_radii_[0], black_hole_amr_radii_[1]),
+            1.55 * (black_hole_masses_[0] + black_hole_masses_[1]));
+        const int postmerger_level = static_cast<int>(std::ceil(
+            2.0 + std::log2((domain_maximum_.x() - domain_minimum_.x()) *
+                            25.0 / radius_limit / m_uiElementOrder))) - 2;
+        const DendroScalar black_hole_radius = std::min(
+            minimum_black_hole_radius[0], minimum_black_hole_radius[1]);
+        if (black_hole_radius <= orbital_radius) {{
+          DendroScalar radius = radius_limit;
+          int level = postmerger_level;
+          while (level > 9) {{
+            if (black_hole_radius <= radius) {{
+              required_level = std::max(
+                  required_level, static_cast<unsigned int>(level));
+              break;
+            }}
+            radius *= 2.0;
+            --level;
+          }}
+        }}
+      }}
+      if (nyquist_mode_ > 0 &&
+          std::abs(minimum_center_radius -
+                   gravitational_wave_radii_.back()) <
+              std::sqrt(2.0) *
+                  (black_hole_merge_time_ +
+                   gravitational_wave_radii_.back() + 100.0 -
+                   m_uiTinfo._m_uiT)) {{
+        const DendroScalar retarded_time =
+            m_uiTinfo._m_uiT - minimum_center_radius;
+        DendroScalar wavelength = clean_wavelength.front();
+        if (retarded_time > black_hole_time_history_.front()) {{
+          const auto next = std::lower_bound(
+              black_hole_time_history_.begin(),
+              black_hole_time_history_.end(), retarded_time);
+          if (next == black_hole_time_history_.end()) {{
+            wavelength = clean_wavelength.back();
+          }} else {{
+            const std::size_t index = static_cast<std::size_t>(
+                next - black_hole_time_history_.begin());
+            const DendroScalar fraction =
+                (retarded_time - black_hole_time_history_[index - 1]) /
+                (black_hole_time_history_[index] -
+                 black_hole_time_history_[index - 1]);
+            wavelength =
+                (1.0 - fraction) * clean_wavelength[index - 1] +
+                fraction * clean_wavelength[index];
+          }}
+        }}
+        const int wave_level = static_cast<int>(std::ceil(
+            std::log2(domain_maximum_.x() - domain_minimum_.x()) +
+            std::log2(static_cast<DendroScalar>(nyquist_mode_)) -
+            std::log2(static_cast<DendroScalar>(m_uiElementOrder)) -
+            std::log2(wavelength / 2.0)));
+        if (wave_level > 0)
+          required_level = std::max(
+              required_level, static_cast<unsigned int>(wave_level));
       }}
       required_level = std::min(required_level, m_uiMaxDepth - 2);
       const unsigned int current_level = elements[element].getLevel();
-      if (current_level < required_level)
+      if (current_level < required_level ||
+          refinement_flags[relative_element] == OCT_SPLIT)
         refinement_flags[relative_element] = OCT_SPLIT;
       else if (current_level == required_level &&
                refinement_flags[relative_element] == OCT_COARSE)
@@ -878,7 +1149,7 @@ bool Ctx::is_remesh(bool initial_grid) {{
   MPI_Allreduce(&local_geometry_change, &global_geometry_change, 1,
                 MPI_CXX_BOOL, MPI_LOR,
                 m_uiMesh->getMPIGlobalCommunicator());
-  return wavelet_change || global_geometry_change;
+  return global_geometry_change;
 }}
 int Ctx::grid_transfer(const ot::Mesh* mesh) {{
   DVec::grid_transfer(m_uiMesh, mesh, state_);
@@ -922,11 +1193,19 @@ int Ctx::grid_transfer(const ot::Mesh* mesh) {{
 int Ctx::write_checkpt() {{
   if (checkpoint_frequency_ == 0 || m_uiTinfo._m_uiStep == 0 ||
       m_uiTinfo._m_uiStep % checkpoint_frequency_ != 0) return 0;
-  return {solver_stem}_write_checkpoint(checkpoint_prefix_,
+  const bool merged_checkpoint_written =
+      merged_checkpoint_written_ ||
+      (excision_centers_[0] - excision_centers_[1]).abs() < 0.1;
+  const int status = {solver_stem}_write_checkpoint(checkpoint_prefix_,
       (m_uiTinfo._m_uiStep / checkpoint_frequency_) % 2, m_uiMesh, state_,
       params, m_uiTinfo._m_uiStep, m_uiTinfo._m_uiT, m_uiTinfo._m_uiTh,
       domain_minimum_, domain_maximum_, excision_centers_,
+      black_hole_time_history_, black_hole_position_history_,
+      black_hole_merge_time_, merged_checkpoint_written,
       algebraic_residual(m_uiMesh, state_));
+  if (status == 0)
+    merged_checkpoint_written_ = merged_checkpoint_written;
+  return status;
 }}
 int Ctx::restore_checkpt(unsigned int checkpoint_index) {{
   ot::Mesh* restored_mesh = nullptr;
@@ -934,18 +1213,23 @@ int Ctx::restore_checkpt(unsigned int checkpoint_index) {{
   unsigned int iteration = 0;
   DendroScalar time = 0.0;
   DendroScalar time_step = 0.0;
+  bool restored_merged_checkpoint_written = false;
   const int status = {solver_stem}_restore_checkpoint(
       checkpoint_prefix_, checkpoint_index,
       m_uiMesh->getMPIGlobalCommunicator(), domain_minimum_, domain_maximum_,
       restored_mesh, restored_state, params, iteration, time, time_step,
-      excision_centers_,
+      excision_centers_, black_hole_time_history_,
+      black_hole_position_history_, black_hole_merge_time_,
+      restored_merged_checkpoint_written,
       1.0e-10);
   if (status != 0) return status;
+  excision_center_time_ = time;
   if (algebraic_residual(restored_mesh, restored_state) > 1.0e-10) {{
     restored_state.destroy_vector();
     delete restored_mesh;
     return 1;
   }}
+  merged_checkpoint_written_ = restored_merged_checkpoint_written;
   ot::Mesh* old_mesh = m_uiMesh;
   ot::dealloc_mpi_ctx<DendroScalar>(old_mesh, m_mpi_ctx,
                                     generated::NUM_EVOL_GFS, 1);
@@ -1061,7 +1345,35 @@ int Ctx::terminal_output() {{
 }}
 std::function<double(double, double, double)> Ctx::get_wtol_function() {{
   const double tolerance = wavelet_tolerance_;
-  return [tolerance](double, double, double) {{ return tolerance; }};
+  if (wavelet_tolerance_mode_ == 0)
+    return [tolerance](double, double, double) {{ return tolerance; }};
+  const double maximum_tolerance = maximum_wavelet_tolerance_;
+  const double gravitational_wave_tolerance = gravitational_wave_tolerance_;
+  const double first_wave_radius = gravitational_wave_radii_.front();
+  const double last_wave_radius = gravitational_wave_radii_.back();
+  const double time = m_uiTinfo._m_uiT;
+  return [tolerance, maximum_tolerance, gravitational_wave_tolerance,
+          first_wave_radius, last_wave_radius, time](
+             double x, double y, double z) {{
+    const double radius = std::sqrt(x * x + y * y + z * z);
+    const double causal_time =
+        std::max(radius, (radius + 120.0) / std::sqrt(2.0));
+    double goal_tolerance = maximum_tolerance;
+    if (radius <= 8.0)
+      goal_tolerance = tolerance;
+    else if (radius <= first_wave_radius)
+      goal_tolerance = tolerance * std::pow(
+          gravitational_wave_tolerance / tolerance,
+          std::log(radius / 8.0) / std::log(first_wave_radius / 8.0));
+    else if (radius <= last_wave_radius)
+      goal_tolerance = gravitational_wave_tolerance;
+    if (time < causal_time) return maximum_tolerance;
+    if (time > causal_time + 100.0) return goal_tolerance;
+    const double logarithmic_slope =
+        std::log10(goal_tolerance / maximum_tolerance) / 100.0;
+    return std::pow(10.0, std::log10(maximum_tolerance) +
+                             logarithmic_slope * (time - causal_time));
+  }};
 }}
 }}  // namespace {solver_namespace}
 """

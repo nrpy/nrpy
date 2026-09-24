@@ -1,5 +1,5 @@
 """
-Generate the pointwise W-BSSN-to-ADM conversion for Dendro.
+Generate the pointwise BSSN-to-ADM conversion for Dendro.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -28,7 +28,7 @@ def register_CFunction_BSSN_to_ADM(
     CoordSystem: str = "Cartesian",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register conversion of the evolved W formulation to Cartesian ADM fields.
+    Register conversion of the evolved formulation to Cartesian ADM fields.
 
     The output order is ``gammaDD``, ``KDD``, ``betaU``, then ``BU``. This is
     the exact inverse storage contract consumed by ``ADM_to_BSSN``. ``BU`` is
@@ -39,15 +39,16 @@ def register_CFunction_BSSN_to_ADM(
     :param enable_fCCZ4: Validate the fCCZ4 state instead of the BSSN state.
     :param CoordSystem: Reference-metric coordinate system.
     :return: The NRPy registries, or ``None`` during parallel collection.
-    :raises ValueError: If generation is not configured for Cartesian W data.
+    :raises ValueError: If generation is not configured for Cartesian data.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
     if par.parval_from_str("Infrastructure") != "Dendro":
         raise ValueError("BSSN_to_ADM requires Infrastructure='Dendro'.")
-    if par.parval_from_str("EvolvedConformalFactor_cf") != "W":
-        raise ValueError("The generated Dendro applications evolve W.")
+    conformal_factor = par.parval_from_str("EvolvedConformalFactor_cf")
+    if conformal_factor not in ("W", "chi"):
+        raise ValueError("Dendro BSSN and fCCZ4 require W or chi.")
     if par.parval_from_str("parallelization") != "none":
         raise ValueError("Dendro point kernels require parallelization='none'.")
     if CoordSystem != "Cartesian":
@@ -125,7 +126,7 @@ def register_CFunction_BSSN_to_ADM(
     cfc.register_CFunction(
         subdirectory="generated/src/BSSN_to_ADM",
         includes=[f"{solver_stem}_defines.h"],
-        desc="Pointwise conversion from W-formulation fields to Cartesian ADM fields.",
+        desc="Pointwise conversion from BSSN fields to Cartesian ADM fields.",
         cfunc_type="void",
         name="BSSN_to_ADM",
         params=(

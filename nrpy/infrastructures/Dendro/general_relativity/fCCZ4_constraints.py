@@ -16,6 +16,8 @@ import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.c_codegen import c_codegen
+from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
+from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.fCCZ4_constraints import fCCZ4_constraints
 from nrpy.finite_difference import stencil_reach_per_axis
 from nrpy.infrastructures.Dendro import state_h
@@ -56,11 +58,48 @@ def register_CFunction_fCCZ4_constraints(
             if name not in gri.glb_gridfcs_dict:
                 gri.register_gridfunctions(name, group="DIAG", is_basename=False)
         constraints = fCCZ4_constraints[CoordSystem]
+        previous_register_magnitudes = par.parval_from_str(
+            "register_M_and_LAMBDA_CONSTRAINT_gridfunctions"
+        )
+        previous_register_momentum = par.parval_from_str("register_MU_gridfunctions")
+        par.set_parval_from_str("register_M_and_LAMBDA_CONSTRAINT_gridfunctions", False)
+        par.set_parval_from_str("register_MU_gridfunctions", False)
+        try:
+            bssn_constraints = BSSN_constraints[CoordSystem]
+        finally:
+            par.set_parval_from_str(
+                "register_M_and_LAMBDA_CONSTRAINT_gridfunctions",
+                previous_register_magnitudes,
+            )
+            par.set_parval_from_str(
+                "register_MU_gridfunctions", previous_register_momentum
+            )
+        quantities = BSSN_quantities[CoordSystem]
+        momentum_covariant = [
+            sum(quantities.gammabarDD[i][j] * bssn_constraints.MU[j] for j in range(3))
+            / quantities.exp_m4phi
+            for i in range(3)
+        ]
+        connection_magnitude = sp.sqrt(
+            sum(
+                quantities.gammabarDD[i][j]
+                * constraints.Z4constraintU[i]
+                * constraints.Z4constraintU[j]
+                for i in range(3)
+                for j in range(3)
+            )
+        )
         expressions_by_gridfunction: Dict[str, sp.Expr] = {
             "H_Z4": constraints.H_Z4,
             "Z4constraintU0": constraints.Z4constraintU[0],
             "Z4constraintU1": constraints.Z4constraintU[1],
             "Z4constraintU2": constraints.Z4constraintU[2],
+            "H": bssn_constraints.H,
+            "MU0": momentum_covariant[0],
+            "MU1": momentum_covariant[1],
+            "MU2": momentum_covariant[2],
+            "M_CONSTRAINT": sp.sqrt(bssn_constraints.Msquared),
+            "LAMBDA_CONSTRAINT": connection_magnitude,
         }
         if tuple(expressions_by_gridfunction) != state_h.FCCZ4_DIAGNOSTIC_GRIDFUNCTIONS:
             raise ValueError("fCCZ4 diagnostic expressions are not in canonical order.")

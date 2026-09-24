@@ -1,5 +1,5 @@
 """
-Generate excised, proper-volume constraint reductions for Dendro GR.
+Generate excised, conformal-factor volume-weighted reductions for Dendro GR.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -23,21 +23,23 @@ def register_CFunction_diagnostics(
     Register one-block constraint accumulation outside spherical excisions.
 
     The caller zeroes the output accumulators before visiting blocks and performs
-    MPI reductions afterward. Squared norms and volume use the physical measure
-    ``sqrt(gamma) d^3x = W^-6 d^3x``; maxima are pointwise absolute values.
+    MPI reductions afterward. Squared norms use ``W^-3 d^3x`` or
+    ``chi^-3/2 d^3x``, which equals ``sqrt(gamma) d^3x`` when
+    ``det(gammabar)=1``. Maxima are pointwise absolute values.
 
     :param solver_stem: Lowercase formulation name used by generated headers.
     :param enable_fCCZ4: Select fCCZ4 diagnostics when true.
     :return: The NRPy registries, or ``None`` during parallel collection.
-    :raises ValueError: If the infrastructure, W formulation, or state is invalid.
+    :raises ValueError: If the infrastructure, conformal factor, or state is invalid.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
     if par.parval_from_str("Infrastructure") != "Dendro":
         raise ValueError("diagnostics requires Infrastructure='Dendro'.")
-    if par.parval_from_str("EvolvedConformalFactor_cf") != "W":
-        raise ValueError("Proper-volume diagnostics require W evolution.")
+    conformal_factor = par.parval_from_str("EvolvedConformalFactor_cf")
+    if conformal_factor not in ("W", "chi"):
+        raise ValueError("Dendro BSSN and fCCZ4 require W or chi.")
 
     state_h.validate_registered_state(enable_fCCZ4)
     evolved_names = tuple(state_h.evolved_gridfunctions(enable_fCCZ4))
@@ -48,6 +50,7 @@ def register_CFunction_diagnostics(
         else state_h.BSSN_DIAGNOSTIC_GRIDFUNCTIONS
     )
     scalar_type = gri.DENDRO_SCALAR_TYPE
+    volume_exponent = 3 if conformal_factor == "W" else 1.5
     body = f"""if (diagnostic_gfs == nullptr || state_gfs == nullptr ||
     local_squared_norms == nullptr || local_max_norms == nullptr ||
     local_volume == nullptr)
@@ -91,8 +94,8 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
             if (excised) continue;
             const std::size_t pp = offset + i + static_cast<std::size_t>(nx) *
                                                (j + static_cast<std::size_t>(ny) * k);
-            const {scalar_type} W = state_gfs[{conformal_factor_index}][pp];
-            if (!(W > 0.0) || !std::isfinite(W)) {{
+            const {scalar_type} cf = state_gfs[{conformal_factor_index}][pp];
+            if (!(cf > 0.0) || !std::isfinite(cf)) {{
                 *local_volume = std::numeric_limits<{scalar_type}>::infinity();
                 for (unsigned field = 0; field < {len(diagnostics_names)}; ++field) {{
                     local_squared_norms[field] =
@@ -103,7 +106,7 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
                 continue;
             }}
             const {scalar_type} proper_volume = quadrature_weight * dx[0] * dx[1] *
-                                                dx[2] / std::pow(W, 6);
+                                                dx[2] / std::pow(cf, {volume_exponent});
             *local_volume += proper_volume;
             for (unsigned field = 0; field < {len(diagnostics_names)}; ++field) {{
                 const {scalar_type} value = diagnostic_gfs[field][pp];
@@ -123,7 +126,7 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
     cfc.register_CFunction(
         subdirectory="generated/src/diagnostics",
         includes=[f"{solver_stem}_defines.h", "<limits>"],
-        desc="Accumulate excised physical-volume constraint norms on one block.",
+        desc="Accumulate excised conformal-factor volume-weighted constraint norms on one block.",
         cfunc_type="void",
         name="diagnostics",
         params=(

@@ -13,6 +13,7 @@ from . import (
     gravitational_waves,
     initial_data_lambdaU,
     physical_boundary,
+    physical_boundary_ghosts,
     psi4_eval,
     rhs_eval,
     twopunctures,

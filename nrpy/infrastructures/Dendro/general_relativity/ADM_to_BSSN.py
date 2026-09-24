@@ -34,8 +34,8 @@ def register_CFunction_ADM_to_BSSN(
     Register the pointwise conversion from puncture ADM data to evolved data.
 
     The input component order is ``gammaDD``, ``KDD``, ``betaU``, then ``BU``.
-    The lapse is initialized to the converted conformal factor, so W evolution
-    starts with ``alpha=W``. The derivative-dependent connection is written
+    The lapse is initialized to ``W`` for either evolved conformal factor.
+    The derivative-dependent connection is written
     later by :mod:`initial_data_lambdaU`.
 
     :param solver_stem: Lowercase formulation name used by generated headers.
@@ -51,8 +51,9 @@ def register_CFunction_ADM_to_BSSN(
         return None
     if par.parval_from_str("Infrastructure") != "Dendro":
         raise ValueError("ADM_to_BSSN requires Infrastructure='Dendro'.")
-    if par.parval_from_str("EvolvedConformalFactor_cf") != "W":
-        raise ValueError("The generated Dendro applications evolve W.")
+    conformal_factor = par.parval_from_str("EvolvedConformalFactor_cf")
+    if conformal_factor not in ("W", "chi"):
+        raise ValueError("Dendro BSSN and fCCZ4 require W or chi.")
     if par.parval_from_str("parallelization") != "none":
         raise ValueError("Dendro point kernels require parallelization='none'.")
     if fd_order not in (4, 6, 8):
@@ -73,7 +74,7 @@ def register_CFunction_ADM_to_BSSN(
     )
     quantities = BSSN_quantities[CoordSystem]
     expressions: Dict[str, sp.Expr] = {
-        "alpha": converted.cf,
+        "alpha": sp.sqrt(converted.cf) if conformal_factor == "chi" else converted.cf,
         "cf": converted.cf,
         "trK": converted.trK,
     }
@@ -180,7 +181,7 @@ def register_CFunction_ADM_to_BSSN(
     cfc.register_CFunction(
         subdirectory="generated/src/ADM_to_BSSN",
         includes=[f"{solver_stem}_defines.h"],
-        desc="Pointwise conversion from TwoPunctures ADM fields to W-BSSN fields.",
+        desc="Pointwise conversion from TwoPunctures ADM fields to BSSN fields.",
         cfunc_type="void",
         name=f"ADM_to_BSSN_order_{fd_order}",
         params=(

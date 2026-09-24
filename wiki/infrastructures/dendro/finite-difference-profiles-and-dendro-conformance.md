@@ -11,11 +11,11 @@ generated.
 
 ## Detail
 
-| Regular order | KO finite-difference order | Effective KO difference order | Required padding |
+| Regular order | KO finite-difference order | KO derivative order | Required padding |
 | --- | --- | --- | --- |
-| 4 | 2 | 3 | 2 |
-| 6 | 4 | 5 | 3 |
-| 8 | 6 | 7 | 4 |
+| 4 | 2 | 4 | 2 |
+| 6 | 4 | 6 | 3 |
+| 8 | 6 | 8 | 4 |
 
 One generated application contains every profile. Runtime dispatch accepts
 Dendro element order 4, 6, or 8, selects the matching Ricci, RHS, constraint,

@@ -50,6 +50,7 @@ from nrpy.infrastructures.Dendro.general_relativity import (
     gravitational_waves,
     initial_data_lambdaU,
     physical_boundary,
+    physical_boundary_ghosts,
     psi4_eval,
     rhs_eval,
     twopunctures,
@@ -88,6 +89,12 @@ def parse_args() -> argparse.Namespace:
         default=6,
         help="runtime finite-difference profile; all production orders are emitted",
     )
+    parser.add_argument(
+        "--conformal-factor",
+        choices=("W", "chi"),
+        default="W",
+        help="evolved conformal factor (default: W)",
+    )
     parser.add_argument("--ko", dest="ko", action="store_true")
     parser.add_argument("--no-ko", dest="ko", action="store_false")
     parser.set_defaults(ko=True)
@@ -123,7 +130,7 @@ def main() -> None:
     par.set_parval_from_str("fp_type", "double")
     par.set_parval_from_str("parallelization", "none")
     par.set_parval_from_str("fd_order", args.fd_order)
-    par.set_parval_from_str("EvolvedConformalFactor_cf", "W")
+    par.set_parval_from_str("EvolvedConformalFactor_cf", args.conformal_factor)
     par.set_parval_from_str("detgbarOverdetghat_equals_one", True)
     par.set_parval_from_str("enable_parallel_codegen", True)
     par.register_CodeParameter(
@@ -170,6 +177,7 @@ def main() -> None:
         ID_persist_struct.ID_persist_str()
     )
     physical_boundary.register_CFunction_physical_boundary(SOLVER_STEM)
+    physical_boundary_ghosts.register_CFunction_physical_boundary_ghosts(SOLVER_STEM)
     diagnostics.register_CFunction_diagnostics(SOLVER_STEM)
     apparent_horizon.register_CFunction_apparent_horizon(SOLVER_STEM)
     psi4_eval.register_CFunction_psi4_eval(SOLVER_STEM)
@@ -296,7 +304,10 @@ typedef double DOUBLE;
         ),
         module_root
         + "src/checkpoint.cpp": checkpoint.output_checkpoint_cpp(
-            SOLVER_STEM, SOLVER_NAMESPACE, "BSSN", enable_fCCZ4=False
+            SOLVER_STEM,
+            SOLVER_NAMESPACE,
+            "BSSN" if args.conformal_factor == "W" else "BSSN_chi",
+            enable_fCCZ4=False,
         ),
         module_root
         + f"pars/{SOLVER_STEM}.toml": param_toml.generate_default_parfile(
@@ -332,7 +343,10 @@ typedef double DOUBLE;
     print(f"Finished generating {SOLVER_NAME} in {solver_dir}.")
     print("Generated centered FD/KO profiles: 4/2, 6/4, 8/6.")
     print(f"Selected runtime profile: FD{args.fd_order}/KO{ko_fd_order}.")
-    print("W evolution, SSL, Dendro CAHD, TwoPunctures alpha=W, and eta=1 enabled.")
+    print(
+        f"{args.conformal_factor} evolution, SSL, Dendro CAHD, "
+        "TwoPunctures alpha=W, and eta=1 enabled."
+    )
 
 
 if __name__ == "__main__":

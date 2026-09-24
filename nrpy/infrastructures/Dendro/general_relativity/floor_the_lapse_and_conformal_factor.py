@@ -26,8 +26,8 @@ def register_CFunction_floor_the_lapse_and_conformal_factor(
     Register the per-block lapse and conformal-factor floor.
 
     Dendro's ``CHI_FLOOR`` is applied directly to the lapse.  Since these
-    applications evolve ``W = sqrt(chi)``, the conformal-factor floor is
-    ``sqrt(CHI_FLOOR)``.
+    applications may evolve ``W = sqrt(chi)`` or ``chi``, and the
+    conformal-factor floor follows the evolved variable.
 
     :param solver_stem: Lowercase formulation name used by generated headers.
     :param enable_fCCZ4: Select the fCCZ4 state layout when true.
@@ -41,6 +41,9 @@ def register_CFunction_floor_the_lapse_and_conformal_factor(
         raise ValueError("Field floors require Infrastructure='Dendro'.")
     if par.parval_from_str("parallelization") != "none":
         raise ValueError("Dendro point kernels require parallelization='none'.")
+    conformal_factor = par.parval_from_str("EvolvedConformalFactor_cf")
+    if conformal_factor not in ("W", "chi"):
+        raise ValueError("Dendro BSSN and fCCZ4 require W or chi.")
 
     state_h.validate_registered_state(enable_fCCZ4)
     par.register_CodeParameter(
@@ -60,7 +63,9 @@ def register_CFunction_floor_the_lapse_and_conformal_factor(
     loop_body = "\n".join(
         (
             "alpha[pp] = std::max(alpha[pp], chi_floor);",
-            "cf_W_or_chi[pp] = std::max(cf_W_or_chi[pp], std::sqrt(chi_floor));",
+            "cf_W_or_chi[pp] = std::max(cf_W_or_chi[pp], "
+            + ("std::sqrt(chi_floor)" if conformal_factor == "W" else "chi_floor")
+            + ");",
         )
     )
     body = "\n".join(
@@ -96,7 +101,7 @@ def register_CFunction_floor_the_lapse_and_conformal_factor(
     cfc.register_CFunction(
         subdirectory="generated/src/floor_the_lapse_and_conformal_factor",
         includes=[f"{solver_stem}_defines.h", "<algorithm>", "<cmath>", "<stdexcept>"],
-        desc="Floor alpha and W consistently with Dendro's CHI_FLOOR.",
+        desc="Floor alpha and the conformal factor with Dendro's CHI_FLOOR.",
         cfunc_type="void",
         name="floor_the_lapse_and_conformal_factor",
         params=(
