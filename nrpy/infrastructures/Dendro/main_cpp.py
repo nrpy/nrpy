@@ -567,6 +567,33 @@ int main(int argc, char** argv) {
         toml::find_or<unsigned>(document, "BSSN_TIME_STEP_OUTPUT_FREQ", 25);
     const unsigned vtu_frequency =
         toml::find_or<unsigned>(document, "BSSN_IO_OUTPUT_FREQ", 8);
+    // VTU field selection and slicing, with Dendro-GR BSSN_GR's defaults: the
+    // first entry of each index list, written on the z-normal slice through the
+    // domain center.
+    const bool vtu_z_slice_only =
+        toml::find_or<bool>(document, "BSSN_VTU_Z_SLICE_ONLY", true);
+    std::vector<unsigned> vtu_evolved_fields;
+    for (unsigned field = 0; field <
+         """
+        + solver_namespace
+        + r"""::generated::NUM_EVOL_GFS; ++field)
+      vtu_evolved_fields.push_back(field);
+    vtu_evolved_fields = toml::find_or<std::vector<unsigned>>(
+        document, "BSSN_VTU_OUTPUT_EVOL_INDICES", vtu_evolved_fields);
+    const unsigned number_vtu_evolved_fields = toml::find_or<unsigned>(
+        document, "BSSN_NUM_EVOL_VARS_VTU_OUTPUT", 1);
+    if (number_vtu_evolved_fields > vtu_evolved_fields.size())
+      throw std::runtime_error("invalid BSSN_NUM_EVOL_VARS_VTU_OUTPUT");
+    vtu_evolved_fields.resize(number_vtu_evolved_fields);
+    std::vector<unsigned> vtu_constraint_fields =
+        toml::find_or<std::vector<unsigned>>(
+            document, "BSSN_VTU_OUTPUT_CONST_INDICES",
+            std::vector<unsigned>{0, 1, 2, 3, 4, 5});
+    const unsigned number_vtu_constraint_fields = toml::find_or<unsigned>(
+        document, "BSSN_NUM_CONST_VARS_VTU_OUTPUT", 1);
+    if (number_vtu_constraint_fields > vtu_constraint_fields.size())
+      throw std::runtime_error("invalid BSSN_NUM_CONST_VARS_VTU_OUTPUT");
+    vtu_constraint_fields.resize(number_vtu_constraint_fields);
     const unsigned checkpoint_frequency =
         toml::find_or<unsigned>(document, "BSSN_CHECKPT_FREQ", 100);
     const unsigned apparent_horizon_frequency =
@@ -1033,6 +1060,7 @@ int main(int argc, char** argv) {
         remesh_frequency, postmerger_remesh_frequency,
         diagnostic_frequency, vtu_frequency,
         checkpoint_frequency, output_prefix, vtu_prefix, checkpoint_prefix,
+        vtu_z_slice_only, vtu_evolved_fields, vtu_constraint_fields,
         excision_centers, excision_radii, black_hole_masses,
         black_hole_amr_radii, black_hole_maximum_levels,
         black_hole_amr_ratio, minimum_depth, apparent_horizon_frequency,

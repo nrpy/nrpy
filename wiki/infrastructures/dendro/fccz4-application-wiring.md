@@ -66,6 +66,9 @@ components `MU0..MU2`, `M_CONSTRAINT=sqrt(gamma_ij M^i M^j)`, and
 `LAMBDA_CONSTRAINT=sqrt(gammabar_ij Z4constraintU^i Z4constraintU^j)`.
 The connection residual is reported, not enforced. Both excised physical-volume
 and unique-node RMS files include all ten fields and are emitted after remeshing.
+VTU output uses the shared selection described in [BSSN Application
+Wiring](bssn-application-wiring.md): constraint index 0 writes the BSSN-form
+`H`, and `H_Z4` and `Z4constraintU` are not selectable for VTU output.
 
 The shared runtime parses puncture-centered AMR controls, tracks centers with
 `vetU`, retains puncture history in checkpoints, and computes diagnostics

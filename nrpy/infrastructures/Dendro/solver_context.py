@@ -55,7 +55,8 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
       unsigned int, DendroScalar, DendroScalar, DendroScalar, DendroScalar,
       const std::vector<unsigned int>&,
       unsigned int, unsigned int, unsigned int, unsigned int, unsigned int,
-      const std::string&, const std::string&, const std::string&,
+      const std::string&, const std::string&, const std::string&, bool,
+      const std::vector<unsigned int>&, const std::vector<unsigned int>&,
       const std::array<Point, 2>&, const std::array<DendroScalar, 2>&,
       const std::array<DendroScalar, 2>&,
       const std::array<DendroScalar, 2>&,
@@ -105,6 +106,8 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
   static unsigned int getBlkTimestepFac(unsigned int, unsigned int, unsigned int) {{ return 1; }}
  private:
   DendroScalar algebraic_residual(ot::Mesh*, DVec&);
+  void compute_constraints();
+  void compute_psi4();
   Point domain_minimum_, domain_maximum_;
   std::array<Point, 2> excision_centers_{{}};
   DendroScalar excision_center_time_ = 0.0;
@@ -145,6 +148,9 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
   Point extraction_center_{{0.0, 0.0, 0.0}};
   std::string output_prefix_ = "nrpy";
   std::string vtu_prefix_ = "vtu/nrpy";
+  bool vtu_z_slice_only_ = true;
+  std::vector<unsigned int> vtu_evolved_fields_{{}};
+  std::vector<unsigned int> vtu_constraint_fields_{{}};
   std::string checkpoint_prefix_ = "cp/nrpy";
   std::vector<unsigned int> refinement_variables_{{}};
 }};
@@ -264,11 +270,19 @@ def output_solver_context_cpp(
 #include <fstream>
 #include <limits>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <vector>
 #include "daUtils.h"
 #include "lebedev.h"
 #include "oct2vtk.h"
 namespace {solver_namespace} {{
+namespace {{
+// VTU constraint-field names in Dendro-GR BSSN_GR's numbering: C_HAM,
+// C_MOM0-2, C_PSI4_REAL, C_PSI4_IMG.
+constexpr std::array<std::string_view, 6> vtu_constraint_names{{
+    "H", "MU0", "MU1", "MU2", "psi4_real", "psi4_imag"}};
+}}  // namespace
 Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum,
          DendroScalar time_step, DendroScalar wavelet_tolerance,
          unsigned int wavelet_tolerance_mode,
@@ -282,7 +296,9 @@ Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum,
          unsigned int diagnostic_frequency,
          unsigned int vtu_frequency, unsigned int checkpoint_frequency,
          const std::string& output_prefix, const std::string& vtu_prefix,
-         const std::string& checkpoint_prefix,
+         const std::string& checkpoint_prefix, bool vtu_z_slice_only,
+         const std::vector<unsigned int>& vtu_evolved_fields,
+         const std::vector<unsigned int>& vtu_constraint_fields,
          const std::array<Point, 2>& excision_centers,
          const std::array<DendroScalar, 2>& excision_radii,
          const std::array<DendroScalar, 2>& black_hole_masses,
@@ -331,6 +347,9 @@ Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum,
       excision_centers_[0].z(), excision_centers_[1].x(),
       excision_centers_[1].y(), excision_centers_[1].z()}});
   vtu_prefix_ = vtu_prefix;
+  vtu_z_slice_only_ = vtu_z_slice_only;
+  vtu_evolved_fields_ = vtu_evolved_fields;
+  vtu_constraint_fields_ = vtu_constraint_fields;
   checkpoint_prefix_ = checkpoint_prefix;
   refinement_variables_ = refinement_variables;
   if (mesh == nullptr ||
@@ -373,6 +392,12 @@ Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum,
   for (const unsigned int field : refinement_variables_)
     if (field >= generated::NUM_EVOL_GFS)
       throw std::invalid_argument("invalid refinement field index");
+  for (const unsigned int field : vtu_evolved_fields_)
+    if (field >= generated::NUM_EVOL_GFS)
+      throw std::invalid_argument("invalid VTU evolved-field index");
+  for (const unsigned int field : vtu_constraint_fields_)
+    if (field >= vtu_constraint_names.size())
+      throw std::invalid_argument("invalid VTU constraint-field index");
   set_mesh(mesh);
   m_uiElementOrder = mesh->getElementOrder();
   m_uiMinPt = minimum;
@@ -626,9 +651,7 @@ int Ctx::evolve_excision_centers() {{
     black_hole_merge_time_ = excision_center_time_;
   return 0;
 }}
-int Ctx::diagnostic_output() {{
-  if (!m_uiMesh->isActive() || diagnostic_frequency_ == 0 ||
-      m_uiTinfo._m_uiStep % diagnostic_frequency_ != 0) return 0;
+void Ctx::compute_constraints() {{
   unzip(state_, unzipped_state_, 1);
   std::fill_n(unzipped_constraints_.get_vec_ptr(),
               unzipped_constraints_.get_size(), 0.0);
@@ -648,6 +671,41 @@ int Ctx::diagnostic_output() {{
       default: throw std::logic_error("unsupported Dendro element order");
     }}
   }}
+  zip(unzipped_constraints_, constraints_);
+}}
+void Ctx::compute_psi4() {{
+  unzip(state_, unzipped_state_, 1);
+  std::fill_n(unzipped_psi4_.get_vec_ptr(), unzipped_psi4_.get_size(), 0.0);
+  std::array<DendroScalar*, generated::NUM_EVOL_GFS> state{{}};
+  std::array<DendroScalar*, 2> psi4{{}};
+  unzipped_state_.to_2d(state.data());
+  unzipped_psi4_.to_2d(psi4.data());
+  for (const ot::Block& block : m_uiMesh->getLocalBlockList()) {{
+    physical_boundary_ghosts(block, state.data(), generated::NUM_EVOL_GFS);
+    switch (m_uiElementOrder) {{
+      case 4: psi4_eval_order_4(block, state.data(), psi4.data(),
+                                domain_minimum_, domain_maximum_); break;
+      case 6: psi4_eval_order_6(block, state.data(), psi4.data(),
+                                domain_minimum_, domain_maximum_); break;
+      case 8: psi4_eval_order_8(block, state.data(), psi4.data(),
+                                domain_minimum_, domain_maximum_); break;
+      default: throw std::logic_error("unsupported Dendro element order");
+    }}
+  }}
+  zip(unzipped_psi4_, psi4_);
+  std::array<DendroScalar*, 2> zipped_psi4{{}};
+  psi4_.to_2d(zipped_psi4.data());
+  m_uiMesh->readFromGhostBegin(zipped_psi4[0], 2);
+  m_uiMesh->readFromGhostEnd(zipped_psi4[0], 2);
+}}
+int Ctx::diagnostic_output() {{
+  if (!m_uiMesh->isActive() || diagnostic_frequency_ == 0 ||
+      m_uiTinfo._m_uiStep % diagnostic_frequency_ != 0) return 0;
+  compute_constraints();
+  std::array<DendroScalar*, generated::NUM_EVOL_GFS> state{{}};
+  std::array<DendroScalar*, generated::NUM_DIAG_GFS> diagnostic{{}};
+  unzipped_state_.to_2d(state.data());
+  unzipped_constraints_.to_2d(diagnostic.data());
   DendroScalar sum[generated::NUM_DIAG_GFS]{{}}, maximum[generated::NUM_DIAG_GFS]{{}};
   DendroScalar volume = 0.0;
   for (const ot::Block& block : m_uiMesh->getLocalBlockList())
@@ -676,7 +734,6 @@ int Ctx::diagnostic_output() {{
            << '\\t' << global_max[i];
     file << '\\n';
   }}
-  zip(unzipped_constraints_, constraints_);
   // Dendro-BSSN's reported norm weights each owned, unexcised CG node equally.
   // Keep this distinct from the conformal-factor volume-weighted norm above.
   std::array<DendroScalar *, generated::NUM_DIAG_GFS> zipped_diagnostic{{}};
@@ -736,29 +793,9 @@ int Ctx::gravitational_wave_output() {{
   if (!m_uiMesh->isActive() || gravitational_wave_frequency_ == 0 ||
       gravitational_wave_radii_.empty() ||
       m_uiTinfo._m_uiStep % gravitational_wave_frequency_ != 0) return 0;
-  unzip(state_, unzipped_state_, 1);
-  std::fill_n(unzipped_psi4_.get_vec_ptr(), unzipped_psi4_.get_size(), 0.0);
-  std::array<DendroScalar*, generated::NUM_EVOL_GFS> state{{}};
-  std::array<DendroScalar*, 2> psi4{{}};
-  unzipped_state_.to_2d(state.data());
-  unzipped_psi4_.to_2d(psi4.data());
-  for (const ot::Block& block : m_uiMesh->getLocalBlockList()) {{
-    physical_boundary_ghosts(block, state.data(), generated::NUM_EVOL_GFS);
-    switch (m_uiElementOrder) {{
-      case 4: psi4_eval_order_4(block, state.data(), psi4.data(),
-                                domain_minimum_, domain_maximum_); break;
-      case 6: psi4_eval_order_6(block, state.data(), psi4.data(),
-                                domain_minimum_, domain_maximum_); break;
-      case 8: psi4_eval_order_8(block, state.data(), psi4.data(),
-                                domain_minimum_, domain_maximum_); break;
-      default: throw std::logic_error("unsupported Dendro element order");
-    }}
-  }}
-  zip(unzipped_psi4_, psi4_);
+  compute_psi4();
   std::array<DendroScalar*, 2> zipped_psi4{{}};
   psi4_.to_2d(zipped_psi4.data());
-  m_uiMesh->readFromGhostBegin(zipped_psi4[0], 2);
-  m_uiMesh->readFromGhostEnd(zipped_psi4[0], 2);
   const unsigned mode_stride =
       (gravitational_wave_maximum_l_ + 1) *
       (gravitational_wave_maximum_l_ + 1);
@@ -895,21 +932,76 @@ int Ctx::adm_output() {{
 int Ctx::write_vtu() {{
   if (!m_uiMesh->isActive() || vtu_frequency_ == 0 ||
       m_uiTinfo._m_uiStep % vtu_frequency_ != 0) return 0;
+  // Fields follow Dendro-GR BSSN_GR's VTU selection: evolved fields by index,
+  // then constraint fields in the numbering of vtu_constraint_names.
   std::array<DendroScalar*, generated::NUM_EVOL_GFS> fields{{}};
   state_.to_2d(fields.data());
-  std::array<const DendroScalar*, generated::NUM_EVOL_GFS> output{{}};
-  std::array<const char*, generated::NUM_EVOL_GFS> names{{}};
-  for (unsigned int field = 0; field < generated::NUM_EVOL_GFS; ++field) {{
-    output[field] = fields[field];
-    names[field] = generated::EVOL_GF_NAMES[field].data();
+  m_uiMesh->readFromGhostBegin(fields[0], generated::NUM_EVOL_GFS);
+  m_uiMesh->readFromGhostEnd(fields[0], generated::NUM_EVOL_GFS);
+  std::vector<const DendroScalar*> output;
+  std::vector<std::string> names;
+  for (const unsigned int field : vtu_evolved_fields_) {{
+    output.push_back(fields[field]);
+    names.emplace_back(generated::EVOL_GF_NAMES[field]);
   }}
+  const auto requested = [this](unsigned int first, unsigned int last) {{
+    for (const unsigned int field : vtu_constraint_fields_)
+      if (field >= first && field <= last) return true;
+    return false;
+  }};
+  std::array<DendroScalar*, generated::NUM_DIAG_GFS> constraints{{}};
+  std::array<DendroScalar*, 2> psi4{{}};
+  if (requested(0, 3)) {{
+    compute_constraints();
+    constraints_.to_2d(constraints.data());
+    m_uiMesh->readFromGhostBegin(constraints[0], generated::NUM_DIAG_GFS);
+    m_uiMesh->readFromGhostEnd(constraints[0], generated::NUM_DIAG_GFS);
+  }}
+  if (requested(4, 5)) {{
+    compute_psi4();
+    psi4_.to_2d(psi4.data());
+  }}
+  constexpr std::array<unsigned int, 4> constraint_indices{{
+      generated::find_variable(vtu_constraint_names[0])->index,
+      generated::find_variable(vtu_constraint_names[1])->index,
+      generated::find_variable(vtu_constraint_names[2])->index,
+      generated::find_variable(vtu_constraint_names[3])->index}};
+  static_assert(
+      generated::find_variable(vtu_constraint_names[0])->group ==
+          generated::VariableRef::Group::DIAG &&
+      generated::find_variable(vtu_constraint_names[1])->group ==
+          generated::VariableRef::Group::DIAG &&
+      generated::find_variable(vtu_constraint_names[2])->group ==
+          generated::VariableRef::Group::DIAG &&
+      generated::find_variable(vtu_constraint_names[3])->group ==
+          generated::VariableRef::Group::DIAG,
+      "VTU constraint fields must be diagnostic gridfunctions");
+  for (const unsigned int field : vtu_constraint_fields_) {{
+    output.push_back(field < 4 ? constraints[constraint_indices[field]]
+                               : psi4[field - 4]);
+    names.emplace_back(vtu_constraint_names[field]);
+  }}
+  std::vector<const char*> name_pointers;
+  for (const std::string& name : names) name_pointers.push_back(name.c_str());
   const char* metadata_names[2] = {{"Time", "Cycle"}};
   const DendroScalar metadata[2] = {{m_uiTinfo._m_uiT,
       static_cast<DendroScalar>(m_uiTinfo._m_uiStep)}};
   const std::string prefix = vtu_prefix_ + "_" +
       std::to_string(m_uiTinfo._m_uiStep);
-  io::vtk::mesh2vtuFine(m_uiMesh, prefix.c_str(), 2, metadata_names, metadata,
-                        generated::NUM_EVOL_GFS, names.data(), output.data());
+  if (vtu_z_slice_only_) {{
+    unsigned int slice_point[3] = {{1u << (m_uiMaxDepth - 1),
+                                   1u << (m_uiMaxDepth - 1),
+                                   1u << (m_uiMaxDepth - 1)}};
+    unsigned int slice_normal[3] = {{0, 0, 1}};
+    io::vtk::mesh2vtu_slice(m_uiMesh, slice_point, slice_normal,
+                            prefix.c_str(), 2, metadata_names, metadata,
+                            static_cast<unsigned int>(output.size()),
+                            name_pointers.data(), output.data());
+  }} else {{
+    io::vtk::mesh2vtuFine(m_uiMesh, prefix.c_str(), 2, metadata_names,
+                          metadata, static_cast<unsigned int>(output.size()),
+                          name_pointers.data(), output.data());
+  }}
   return 0;
 }}
 int Ctx::apparent_horizon_output() {{

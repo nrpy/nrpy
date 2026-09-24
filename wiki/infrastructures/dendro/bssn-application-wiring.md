@@ -69,6 +69,29 @@ directly from the selected BSSN fields. Generated runtime services also provide
 physical boundaries, conformal-factor volume-weighted and unique-node constraint diagnostics, checkpoint and
 restart, and scheduled output.
 
+VTU output follows Dendro-GR `BSSN_GR`'s selection and defaults. With
+`BSSN_VTU_Z_SLICE_ONLY` (default true) it writes the elements that touch the
+z-normal plane through the domain center (z = 0 for a domain centered on the
+origin); otherwise it writes the full volume. The first
+`BSSN_NUM_EVOL_VARS_VTU_OUTPUT` entries of `BSSN_VTU_OUTPUT_EVOL_INDICES` select
+evolved fields by generated index. The generated BSSN order corresponds to
+`BSSN_GR`'s variable order position by position, but the fields are NRPy's
+forms: the selected conformal factor in place of chi, `lambdaU`, `hDD` (the
+deviation of the conformal metric from flat) and `aDD` in place of `Gt`, `gt`
+and `At`, and B^i in NRPy's normalization. fCCZ4 adds `Theta_fCCZ4` at index
+24. The first `BSSN_NUM_CONST_VARS_VTU_OUTPUT` entries of
+`BSSN_VTU_OUTPUT_CONST_INDICES` select, in `BSSN_GR` numbering, `H`,
+`MU0..MU2`, `psi4_real` and `psi4_imag`. Both counts default to 1, so a
+parameter file without these keys writes `alpha` and `H`. Requested constraint
+or Psi4 fields are computed at the output step. Field names are NRPy's (`H`,
+not `C_HAM`).
+
+Claim evidence:
+- Claim: With `BSSN_VTU_Z_SLICE_ONLY` true (the default), VTU output writes the z-normal slice through the domain center, and otherwise the full volume. It writes the selected evolved fields followed by the selected constraint and Psi4 fields, and computes constraints or Psi4 only when they are selected. Evolved indices refer to the generated field order; constraint indices use `BSSN_GR`'s order (C_HAM, C_MOM0-2, C_PSI4_REAL, C_PSI4_IMG). Both counts default to 1. This applies to the fCCZ4 application as well.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::write_vtu` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`.
+- Corroboration: Dendro-GR `BSSN_GR/src/bssnCtx.cpp`, `BSSNCtx::write_vtu`; `BSSN_GR/src/parameters.cpp`, VTU parameter defaults.
+
 After one evolved-state halo exchange and physical-boundary fill, solver
 context traverses blocks once. For each block it calls `Ricci_eval_order_N`
 immediately followed by `rhs_eval_order_N`. No synchronization or second block
@@ -128,6 +151,7 @@ Claim evidence:
 - [Dendro-GR TwoPunctures.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/TwoPunctures.cpp) - native initial-lapse replacement.
 - [Dendro-GR parameters.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/parameters.cpp) - native CAKO and lapse settings.
 - [Dendro-GR bssngr_main.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssngr_main.cpp) - post-merger CAKO switch.
+- [Dendro-GR bssnCtx.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssnCtx.cpp) - native VTU field selection and slicing.
 
 ## See Also
 
