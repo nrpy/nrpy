@@ -27,7 +27,7 @@ def register_CFunction_twopunctures(
     tp_orientation: str = "native_cartesian_xy_plane",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register TwoPunctures and interpolate its solved data onto one Dendro block.
+    Register TwoPunctures and interpolate its solved data onto one Dendro block interior.
 
     The generated solver loads coefficients computed by its single-rank
     ``--tpid`` mode. This function then fills the eighteen ADM scratch fields
@@ -93,11 +93,14 @@ const {scalar_type} pmin[3] = {{
     GRIDX_TO_X(block.getBlockNode().minX()) - padding * dx[0],
     GRIDY_TO_Y(block.getBlockNode().minY()) - padding * dx[1],
     GRIDZ_TO_Z(block.getBlockNode().minZ()) - padding * dx[2]}};
-for (unsigned k = 0; k < nz; ++k) {{
+// Interior points only: zip reads only these; the solver refills the padding
+// by unzipping the converted evolved state and extrapolating into
+// physical-boundary padding.
+for (unsigned k = padding; k < nz - padding; ++k) {{
     const {scalar_type} z = pmin[2] + k * dx[2];
-    for (unsigned j = 0; j < ny; ++j) {{
+    for (unsigned j = padding; j < ny - padding; ++j) {{
         const {scalar_type} y = pmin[1] + j * dx[1];
-        for (unsigned i = 0; i < nx; ++i) {{
+        for (unsigned i = padding; i < nx - padding; ++i) {{
             const REAL x[3] = {{pmin[0] + i * dx[0], y, z}};
             initial_data_struct sample{{}};
             TP_Interp(commondata, params, x, punctures, &sample);
@@ -117,7 +120,7 @@ for (unsigned k = 0; k < nz; ++k) {{
             "BHaH_defines.h",
             "BHaH_function_prototypes.h",
         ],
-        desc="Interpolate solved TwoPunctures ADM data onto one Dendro block.",
+        desc="Interpolate solved TwoPunctures ADM data onto one Dendro block interior.",
         cfunc_type="void",
         name="twopunctures",
         params=(

@@ -33,6 +33,8 @@ def register_CFunction_ADM_to_BSSN(
     """
     Register the pointwise conversion from puncture ADM data to evolved data.
 
+    The conversion runs at block-interior points only.
+
     The input component order is ``gammaDD``, ``KDD``, ``betaU``, then ``BU``.
     The lapse is initialized to ``W`` for either evolved conformal factor.
     The derivative-dependent connection is written
@@ -172,7 +174,7 @@ def register_CFunction_ADM_to_BSSN(
                 nx="nx_block",
                 ny="ny_block",
                 nz="nz_block",
-                padding="0",
+                padding="padding_block",
                 pmin_padded="pmin_block",
                 dx="dx_block",
             ),

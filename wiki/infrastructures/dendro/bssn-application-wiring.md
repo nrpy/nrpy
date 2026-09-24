@@ -52,6 +52,10 @@ TwoPunctures -> ADM_to_BSSN -> zip/exchange/unzip -> physical boundary
              -> initial_data_lambdaU -> zip -> owned-node floor/projection
 ```
 
+`twopunctures` and `ADM_to_BSSN` act on block interiors only: `zip` reads
+only interior values, and the following unzip and physical-boundary fill
+supply the padding that `initial_data_lambdaU` differentiates.
+
 Claim evidence:
 - Claim: Fresh evolution loads a precomputed TwoPunctures solution, converts its ADM data, computes the initial connection field from exchanged block data, then zips and floors/projects owned evolved nodes.
 - Role: descriptive behavior
