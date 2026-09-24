@@ -180,26 +180,32 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
         context.rhs_blkwise(context.unzipped, context.unzipped_rhs,
                             selected_ids, 1, &block_time);
 
+        // 1: selected block interior. 2: x padding of an interior row of the
+        // selected block, which a SIMD kernel may write when the row has fewer
+        // interior points than SIMD_WIDTH.
         std::vector<unsigned char> selected_interior(stride, 0);
         for (unsigned k = geometry.padding; k < geometry.nz - geometry.padding;
              ++k)
             for (unsigned j = geometry.padding;
                  j < geometry.ny - geometry.padding; ++j)
-                for (unsigned i = geometry.padding;
-                     i < geometry.nx - geometry.padding; ++i) {
+                for (unsigned i = 0; i < geometry.nx; ++i) {
                     const std::size_t cell =
                         geometry.component_offset + i +
                         std::size_t(geometry.nx) *
                             (j + std::size_t(geometry.ny) * k);
-                    selected_interior[cell] = 1;
-                    ++callback_points;
-                }  // END LOOP: mark selected block interior
+                    const bool interior =
+                        i >= geometry.padding &&
+                        i < geometry.nx - geometry.padding;
+                    selected_interior[cell] = interior ? 1 : 2;
+                    if (interior) ++callback_points;
+                }  // END LOOP: mark selected block interior and row padding
         std::vector<double *> input(dof), output(dof);
         context.unzipped.to_2d(input.data());
         context.unzipped_rhs.to_2d(output.data());
         for (unsigned f = 0; f < dof; ++f)
             for (std::size_t cell = 0; cell < stride; ++cell) {
-                if (selected_interior[cell]) {
+                if (selected_interior[cell] == 2) continue;
+                if (selected_interior[cell] == 1) {
                     whole_rhs_scale = std::max(
                         whole_rhs_scale,
                         std::abs(whole_block[std::size_t(f) * volume + cell -

@@ -56,6 +56,7 @@ def register_CFunction_rhs_eval(
     enable_SSL: bool = False,
     enable_CAHD: bool = False,
     capture_validation_expressions: bool = False,
+    enable_intrinsics: bool = True,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register one order-specific BSSN or fCCZ4 right-hand-side kernel.
@@ -70,6 +71,8 @@ def register_CFunction_rhs_eval(
     :param enable_SSL: Add slow-start lapse.
     :param enable_CAHD: Add formulation-specific Hamiltonian damping.
     :param capture_validation_expressions: Retain expanded expressions for validation.
+    :param enable_intrinsics: Generate SIMD-intrinsic kernels; every vector stays
+        inside its own row.
     :return: Updated NRPy registries, or ``None`` while collecting parallel work.
     :raises ValueError: If the requested configuration or state layout is invalid.
     """
@@ -89,6 +92,8 @@ def register_CFunction_rhs_eval(
         raise ValueError("Dendro BSSN and fCCZ4 require W or chi.")
     if par.parval_from_str("parallelization") != "none":
         raise ValueError("Dendro point kernels require parallelization='none'.")
+    if enable_intrinsics and CoordSystem != "Cartesian":
+        raise ValueError("Dendro SIMD RHS kernels require Cartesian coordinates.")
 
     old_fd_order = par.parval_from_str("fd_order")
     par.set_parval_from_str("fd_order", fd_order)
@@ -158,6 +163,7 @@ def register_CFunction_rhs_eval(
                 include_Theta_fCCZ4=enable_fCCZ4,
             )
 
+        ssl_exponent = sp.Integer(0)
         if enable_SSL:
             SSL_h, SSL_sigma = par.register_CodeParameters(
                 "REAL",
@@ -167,11 +173,9 @@ def register_CFunction_rhs_eval(
                 add_to_parfile=True,
             )
             W = sp.sqrt(quantities.cf) if conformal_factor == "chi" else quantities.cf
+            ssl_exponent = -(sp.Symbol("stage_time") ** 2) / (2 * SSL_sigma**2)
             rhs_by_symbol_name["alpha_rhs"] -= (
-                W
-                * SSL_h
-                * sp.exp(-(sp.Symbol("stage_time") ** 2) / (2 * SSL_sigma**2))
-                * (quantities.alpha - W)
+                W * SSL_h * sp.Symbol("SSL_exp_factor") * (quantities.alpha - W)
             )
 
         if enable_CAHD:
@@ -285,12 +289,13 @@ def register_CFunction_rhs_eval(
         kernel_expressions = list(rhs_by_gridfunction_name.values())
         fp_type = str(par.parval_from_str("fp_type"))
         scalar_type = gri.DENDRO_SCALAR_TYPE
+        prefix = "NOSIMD" if enable_intrinsics else ""
         kernel = c_codegen(
             kernel_expressions,
             lvalues,
+            enable_simd=enable_intrinsics,
             enable_fd_codegen=True,
             enable_fd_functions=False,
-            enable_simd=False,
             fp_type=fp_type,
             fp_type_alias=scalar_type,
             mem_alloc_style="210",
@@ -315,7 +320,9 @@ def register_CFunction_rhs_eval(
             )
 
         parameter_symbols, commondata_symbols = (
-            get_params_commondata_symbols_from_expr_list(kernel_expressions)
+            get_params_commondata_symbols_from_expr_list(
+                kernel_expressions + [ssl_exponent]
+            )
         )
         used_codeparameters = tuple(
             sorted(
@@ -336,8 +343,8 @@ const {scalar_type} dx_block[3] = {{
     block.computeDx(domain_min, domain_max),
     block.computeDy(domain_min, domain_max),
     block.computeDz(domain_min, domain_max)}};
-const {scalar_type} grid_spacing = dx_block[0];
-const {scalar_type} pmin_block[3] = {{
+const {scalar_type} {prefix}grid_spacing = dx_block[0];
+[[maybe_unused]] const {scalar_type} pmin_block[3] = {{
     GRIDX_TO_X(block.getBlockNode().minX()) - padding_block * dx_block[0],
     GRIDY_TO_Y(block.getBlockNode().minY()) - padding_block * dx_block[1],
     GRIDZ_TO_Z(block.getBlockNode().minZ()) - padding_block * dx_block[2]}};"""
@@ -357,12 +364,32 @@ const {scalar_type} pmin_block[3] = {{
             f"const {scalar_type}* in_{name} = ricci_gfs[{index}] + offset;"
             for index, name in enumerate(state_h.RICCI_GRIDFUNCTIONS)
         ]
+        preloop = []
+        if enable_SSL:
+            preloop.append(
+                f"const {scalar_type} {prefix}SSL_exp_factor = "
+                f"std::exp(-({prefix}stage_time * {prefix}stage_time) / "
+                f"(2 * {prefix}SSL_sigma * {prefix}SSL_sigma));"
+            )
+        if enable_intrinsics:
+            broadcast_names = (
+                *used_codeparameters,
+                "stage_time",
+                "time_step",
+                "grid_spacing",
+                *(("SSL_exp_factor",) if enable_SSL else ()),
+            )
+            preloop += [
+                f"[[maybe_unused]] const REAL_SIMD_ARRAY {name} = ConstSIMD(NOSIMD{name});"
+                for name in broadcast_names
+            ]
         block_body = "\n".join(
             (
                 geometry,
                 *input_bindings,
                 *ricci_bindings,
                 *rhs_bindings,
+                *preloop,
                 simple_loop(
                     kernel,
                     nx="nx_block",
@@ -371,25 +398,32 @@ const {scalar_type} pmin_block[3] = {{
                     padding="padding_block",
                     pmin_padded="pmin_block",
                     dx="dx_block",
+                    enable_intrinsics=enable_intrinsics,
                 ),
             )
         )
         cparam_args = ", ".join(
             "const "
-            f"{CodeParameters.c_type(par.glb_code_params_dict[name].cparam_type)} {name}"
+            f"{CodeParameters.c_type(par.glb_code_params_dict[name].cparam_type)} "
+            f"{prefix}{name}"
             for name in used_codeparameters
         )
         block_params = (
             f"const ot::Block& block, const {scalar_type}* const* in_gfs, "
             f"const {scalar_type}* const* ricci_gfs, {scalar_type}* const* rhs_gfs, "
             f"const Point& domain_min, const Point& domain_max, "
-            f"const {scalar_type} stage_time, const {scalar_type} time_step"
+            f"const {scalar_type} {prefix}stage_time, "
+            f"const {scalar_type} {prefix}time_step"
             + (f", {cparam_args}" if cparam_args else "")
         )
         formulation = "fCCZ4" if enable_fCCZ4 else "BSSN"
         cfc.register_CFunction(
             subdirectory="generated/src/rhs_eval",
-            includes=[f"{solver_stem}_defines.h"],
+            # simd_intrinsics.h must precede the definitions header, which can
+            # reach a copy with the same include guard; "./" keeps this order
+            # after clang-format sorts the includes.
+            includes=(["./simd_intrinsics.h"] if enable_intrinsics else [])
+            + [f"{solver_stem}_defines.h"],
             desc=f"Per-block direct-FD {formulation} RHS ({len(evol_order)} fields).",
             cfunc_type="void",
             name=f"rhs_eval_order_{fd_order}",
@@ -427,7 +461,9 @@ const {scalar_type} pmin_block[3] = {{
                 )
             }
             candidates[owner] = {
-                name: expression.xreplace(ricci_substitutions)
+                name: expression.xreplace(
+                    {sp.Symbol("SSL_exp_factor"): sp.exp(ssl_exponent)}
+                ).xreplace(ricci_substitutions)
                 for name, expression in rhs_by_gridfunction_name.items()
             }
     finally:

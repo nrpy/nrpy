@@ -38,7 +38,17 @@ kernel. It uses no source glob, `bssn_common`, or source from `BSSN_GR/`.
 Dendrolib is the shared runtime dependency. Standalone builds default
 `CPU_ARCH` to `native` and apply that architecture to the solver and fetched
 libraries; `generic_avx2` selects `-mavx2 -mfma`. In-tree builds inherit
-Dendro-GR's architecture setting.
+Dendro-GR's architecture setting. The examples emit intrinsic-based Ricci and
+RHS kernels and package NRPy's `simd_intrinsics.h` under `generated/include`;
+`register_CFunction_Ricci_eval` and `register_CFunction_rhs_eval` generate
+scalar kernels only when called with `enable_intrinsics=False`. The generated CMake `NRPY_SIMD_AVX2` option selects 256-bit vectors
+even when `CPU_ARCH=native` enables AVX-512. The slow-start lapse exponential
+is evaluated once per block kernel call in either mode, while its runtime
+`SSL_sigma` parameter remains available to the solver.
+`Ctx::rhs` does not clear the unzipped RHS or Ricci buffers: both kernels
+write every interior value, the RHS kernel reads Ricci only at points that the
+Ricci kernel wrote with the same loop, and `Mesh::zip` reads only interior
+values.
 
 Run `nrpyBssnSolver --tpid PARFILE` or `nrpyFccz4Solver --tpid PARFILE`
 with one MPI task before starting a fresh evolution. This computes the

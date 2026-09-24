@@ -16,7 +16,7 @@
 #endif // END MAYBE_UNUSED
 
 // If compiled with AVX512F SIMD instructions enabled:
-#if defined(__AVX512F__)
+#if defined(__AVX512F__) && !defined(NRPY_SIMD_AVX2)
 #include <immintrin.h>
 
 // SIMD type and width definitions

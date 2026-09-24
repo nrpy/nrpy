@@ -483,8 +483,8 @@ int Ctx::rhs(DVec* in, DVec* out, unsigned int count, DendroScalar time) {{
   if (count != 1) throw std::invalid_argument("ETS supplied multiple states");
   if (!m_uiMesh->isActive()) return 0;
   unzip(*in, unzipped_state_, 1);
-  std::fill_n(unzipped_rhs_.get_vec_ptr(), unzipped_rhs_.get_size(), 0.0);
-  std::fill_n(ricci_.get_vec_ptr(), ricci_.get_size(), 0.0);
+  // Ricci and RHS kernels write every interior value; Mesh::zip reads only
+  // interior values.
   std::array<DendroScalar*, generated::NUM_EVOL_GFS> input{{}}, output{{}};
   std::array<DendroScalar*, generated::NUM_AUXEVOL_GFS> ricci{{}};
   unzipped_state_.to_2d(input.data()); unzipped_rhs_.to_2d(output.data());

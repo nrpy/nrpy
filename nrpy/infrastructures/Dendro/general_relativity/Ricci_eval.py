@@ -27,6 +27,7 @@ def register_CFunction_Ricci_eval(
     *,
     fd_order: int = 6,
     CoordSystem: str = "Cartesian",
+    enable_intrinsics: bool = True,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register one order-specific per-block conformal-Ricci kernel.
@@ -34,6 +35,8 @@ def register_CFunction_Ricci_eval(
     :param solver_stem: Generated application namespace and file-name stem.
     :param fd_order: Centered finite-difference order.
     :param CoordSystem: NRPy reference-metric coordinate system.
+    :param enable_intrinsics: Generate SIMD-intrinsic kernels; every vector stays
+        inside its own row.
     :return: The parallel-codegen environment outside the registration phase.
     :raises ValueError: If the infrastructure, profile, or Ricci layout is invalid.
     """
@@ -46,6 +49,8 @@ def register_CFunction_Ricci_eval(
         raise ValueError(f"Unsupported fd_order={fd_order!r}; allowed: (4, 6, 8).")
     if par.parval_from_str("parallelization") != "none":
         raise ValueError("Dendro point kernels require parallelization='none'.")
+    if enable_intrinsics and CoordSystem != "Cartesian":
+        raise ValueError("Dendro SIMD Ricci kernels require Cartesian coordinates.")
 
     old_fd_order = par.parval_from_str("fd_order")
     par.set_parval_from_str("fd_order", fd_order)
@@ -67,9 +72,9 @@ def register_CFunction_Ricci_eval(
         kernel = c_codegen(
             expressions,
             [f"ricci_{name}[pp]" for name in state_h.RICCI_GRIDFUNCTIONS],
+            enable_simd=enable_intrinsics,
             enable_fd_codegen=True,
             enable_fd_functions=False,
-            enable_simd=False,
             fp_type=str(par.parval_from_str("fp_type")),
             fp_type_alias=scalar_type,
             mem_alloc_style="210",
@@ -102,7 +107,7 @@ const {scalar_type} dx_block[3] = {{
     block.computeDx(domain_min, domain_max),
     block.computeDy(domain_min, domain_max),
     block.computeDz(domain_min, domain_max)}};
-const {scalar_type} pmin_block[3] = {{
+[[maybe_unused]] const {scalar_type} pmin_block[3] = {{
     GRIDX_TO_X(block.getBlockNode().minX()) - padding_block * dx_block[0],
     GRIDY_TO_Y(block.getBlockNode().minY()) - padding_block * dx_block[1],
     GRIDZ_TO_Z(block.getBlockNode().minZ()) - padding_block * dx_block[2]}};"""
@@ -119,12 +124,17 @@ const {scalar_type} pmin_block[3] = {{
                     padding="padding_block",
                     pmin_padded="pmin_block",
                     dx="dx_block",
+                    enable_intrinsics=enable_intrinsics,
                 ),
             )
         )
         cfc.register_CFunction(
             subdirectory="generated/src/Ricci_eval",
-            includes=[f"{solver_stem}_defines.h"],
+            # simd_intrinsics.h must precede the definitions header, which can
+            # reach a copy with the same include guard; "./" keeps this order
+            # after clang-format sorts the includes.
+            includes=(["./simd_intrinsics.h"] if enable_intrinsics else [])
+            + [f"{solver_stem}_defines.h"],
             desc=f"Per-block conformal Ricci tensor at FD order {fd_order}.",
             cfunc_type="void",
             name=f"Ricci_eval_order_{fd_order}",

@@ -35,6 +35,16 @@ not infer inputs by scanning expressions or rewrite identifiers with strings or
 regular expressions. `simple_loop.py` emits x-fastest padded-block loops without
 a nested OpenMP region. Stencil kernels receive `ot::Block` directly and
 derive offsets, dimensions, spacing, padding, and interior bounds from it.
+SIMD gridfunction reads use `ReadSIMD(&in_<name>[pp + offset])`, an unaligned
+load. SIMD Ricci and RHS kernels advance by `SIMD_WIDTH` and start each vector
+at `min(i0_vector, max(0, nx - padding - SIMD_WIDTH))`. When a row has at
+least `SIMD_WIDTH` interior points, its final vector ends at the last interior
+point and recomputes a few interior points with identical arithmetic. A row
+with fewer interior points than `SIMD_WIDTH` (FD6 13³ or FD4 9³ blocks at
+width 8) has one vector, which covers the interior and padding points of the
+same row (on both sides for FD4 9³ blocks). Every load stays inside the block,
+every store stays inside its own row, and no remainder loop is needed. SIMD kernels omit the
+unused scalar coordinates.
 The floor and determinant/trace projection kernels take zipped field pointers
 and the mesh-owned node range instead of block geometry.
 

@@ -203,7 +203,9 @@ all in-domain padded block values against component-distinct affine data,
 physical padded origins, nonzero block offsets, and nonconstant zip results.
 The MPI mesh can reserve unused ghost slots; those are not promised receive
 nodes. It calls `rhs_blkwise` on one block with a nonzero component offset,
-proves all other storage retains a sentinel, and compares that result with
+proves that all other storage retains a sentinel, except the x padding of the
+selected block's interior rows, which a SIMD row shorter than one vector may
+write, and compares that result with
 the same selected-block interior retained from whole-vector `rhs`. This
 comparison uses `B^0=0.01` and `eta=1`, and requires a nonzero RHS magnitude,
 so zero Minkowski data cannot hide a component-routing error. The test then

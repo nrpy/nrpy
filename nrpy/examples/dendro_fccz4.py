@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Dict
 
 import nrpy.c_function as cfc
+import nrpy.helpers
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.conditional_file_updater import ConditionalFileUpdater
@@ -144,7 +145,9 @@ def main() -> None:
 
     for fd_order in FD_ORDERS:
         Ricci_eval.register_CFunction_Ricci_eval(
-            SOLVER_STEM, fd_order=fd_order, CoordSystem=COORD_SYSTEM
+            SOLVER_STEM,
+            fd_order=fd_order,
+            CoordSystem=COORD_SYSTEM,
         )
         rhs_eval.register_CFunction_rhs_eval(
             SOLVER_STEM,
@@ -331,6 +334,9 @@ typedef double DOUBLE;
             args.ko,
         ),
     }
+    artifacts[module_root + "generated/include/simd_intrinsics.h"] = (
+        Path(nrpy.helpers.__file__).parent / "simd_intrinsics.h"
+    ).read_text(encoding="utf-8")
     artifacts.update(
         CMakeLists.output_CFunctions_function_prototypes_and_construct_CMakeLists(
             SOLVER_NAME,
