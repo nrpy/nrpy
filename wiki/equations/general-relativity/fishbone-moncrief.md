@@ -43,7 +43,7 @@ four-vector `smallbU` includes that division; the stored `smallb2` follows the
 same convention. To use `FishboneMoncriefID.BmagU` with the
 [GRMHD](../grmhd.md) speed or HLL functions, transform its contravariant
 components into the same basis as the supplied face metric and
-four-velocities, then divide by `sqrt(4*pi)`. For `GRMHDEquations`, transform
+four-velocities, then divide by `sqrt(4*pi)`. For `GRMHD_Equations`, transform
 to the evolved `CoordSystem` basis. If `F^i` denotes the transformed
 Fishbone-Moncrief field, substitute `F^i / (sqrt(4*pi) * ReU[i])` for each
 `rescaledBmagU` symbol. To assign expressions after constructing the class,
@@ -56,7 +56,7 @@ trusted test performs this comparison.
 Claim evidence:
 - Claim: Fishbone-Moncrief stores densitized `BtildeU` and `BmagU = BtildeU / sqrt(gamma)` in spherical Kerr-Schild components without the `sqrt(4*pi)` division, while its local `smallbU` and stored `smallb2` include that convention. GRMHD callers transform `BmagU` to the basis of their metric and four-velocity, divide by `sqrt(4*pi)`, and additionally divide by `ReU[i]` when substituting `rescaledBmagU` symbols.
 - Role: descriptive behavior
-- Deciding authority: [fishbone_moncrief.py](../../../nrpy/equations/general_relativity/fishbone_moncrief/fishbone_moncrief.py), `FishboneMoncriefID._compute_initial_data`; [GRMHD_equations.py](../../../nrpy/equations/grmhd/GRMHD_equations.py), `GRMHDEquations.__init__` and `compute_smallb4U`
+- Deciding authority: [fishbone_moncrief.py](../../../nrpy/equations/general_relativity/fishbone_moncrief/fishbone_moncrief.py), `FishboneMoncriefID._compute_initial_data`; [GRMHD_equations.py](../../../nrpy/equations/grmhd/GRMHD_equations.py), `GRMHD_Equations.__init__` and `compute_smallb4U`
 - Corroboration: [GRMHD HLL_fluxes.py](../../../nrpy/equations/grmhd/HLL_fluxes.py), `calculate_HLL_fluxes` magnetic input scaling
 
 The representative trusted dictionary records outputs such as `rho_initial`,

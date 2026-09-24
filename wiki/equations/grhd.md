@@ -11,7 +11,7 @@ variables, stress-energy tensors, fluxes, source terms, connection terms, and
 reference-metric rescalings; companion modules compute characteristic speeds,
 HLL interface fluxes, and no-branch min/max expressions used by generated C
 code. This equation slice does not add magnetic-field terms or primitive-state
-recovery; `GRMHDEquations` in [GRMHD](grmhd.md) subclasses `GRHD_Equations` to
+recovery; `GRMHD_Equations` in [GRMHD](grmhd.md) subclasses `GRHD_Equations` to
 add magnetic stress-energy.
 
 ## Detail
@@ -109,7 +109,7 @@ Cartesian equation object's metric and fluid attributes, then computes its
 conserved variables and physical fluxes for one reconstructed face state.
 `grhd.HLL_fluxes.calculate_HLL_fluxes` passes a Cartesian `GRHD_Equations`
 object for each state. `grmhd.HLL_fluxes.calculate_HLL_fluxes` passes a
-Cartesian `GRMHDEquations` object with its magnetic field assigned.
+Cartesian `GRMHD_Equations` object with its magnetic field assigned.
 The GRHD `calculate_HLL_fluxes` obtains `cmin` and `cmax` and applies
 `HLL_solver` to `rho_star`, `Ye_star`, `S_star`, `tau_tilde`, and each
 component of `S_tildeD`.

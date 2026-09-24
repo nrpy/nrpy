@@ -52,7 +52,7 @@ symbols; this page owns the common caller flow and family inventory.
 - [BSSN_RHSs.py](../../nrpy/equations/general_relativity/BSSN_RHSs.py) - `BSSNRHSs`, `BSSN_RHSs`
 - [BSSN_RHSs_Cartesian.py](../../nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py) - `trusted_dict`
 - [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py) - `GRHD_Equations`, `construct_all_equations`
-- [GRMHD_equations.py](../../nrpy/equations/grmhd/GRMHD_equations.py) - `GRMHDEquations.compute_T4UU`, `compute_smallb4U`, `compute_smallb2`
+- [GRMHD_equations.py](../../nrpy/equations/grmhd/GRMHD_equations.py) - `GRMHD_Equations.compute_T4UU`, `compute_smallb4U`, `compute_smallb2`
 - [WaveEquation_RHSs.py](../../nrpy/equations/wave_equation/WaveEquation_RHSs.py) - `WaveEquation_RHSs`
 - [SEOBNRv5_aligned_spin_Hamiltonian.py](../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py) - `SEOBNRv5_aligned_spin_Hamiltonian_quantities`
 - [jacobians.py](../../nrpy/equations/basis_transforms/jacobians.py) - `BasisTransforms`

@@ -329,6 +329,11 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/equations/grmhd/HLL_fluxes.py` | living |
 | `nrpy/equations/grmhd/characteristic_speeds.py` | living |
 | `nrpy/equations/grmhd/tests/GRMHD_equations_Cartesian.py` | living |
+| `nrpy/equations/grmhd/tests/GRMHD_equations_SinhCartesian.py` | living |
+| `nrpy/equations/grmhd/tests/GRMHD_equations_SinhCylindrical.py` | living |
+| `nrpy/equations/grmhd/tests/GRMHD_equations_SinhSpherical.py` | living |
+| `nrpy/equations/grmhd/tests/GRMHD_equations_SinhSpherical_rfm_precompute.py` | living |
+| `nrpy/equations/grmhd/tests/GRMHD_equations_SinhSymTP.py` | living |
 | `nrpy/equations/grmhd/tests/GRMHD_equations_Spherical.py` | living |
 | `nrpy/equations/grmhd/tests/HLL_fluxes.py` | living |
 | `nrpy/equations/grmhd/tests/characteristic_speeds.py` | living |
