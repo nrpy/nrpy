@@ -166,15 +166,7 @@ while (t < tmax && stop == 0) {
 
   // Step 5.a: Grow all spin-dynamics sample buffers when needed.
   if (nsteps >= bufferlength) {
-    if (bufferlength > SIZE_MAX / 2){
-      fprintf(stderr,"Error: in SEOBNRv5_quasi_precessing_spin_dynamics(), spin-dynamics buffer capacity overflowed while doubling\\n");
-      exit(1);
-    } // END IF: capacity doubling would overflow
     bufferlength = 2 * bufferlength;
-    if (bufferlength > SIZE_MAX / sizeof(REAL)){
-      fprintf(stderr,"Error: in SEOBNRv5_quasi_precessing_spin_dynamics(), spin-dynamics allocation size overflowed\\n");
-      exit(1);
-    } // END IF: allocation byte count overflows
     chi1_lnhat = seobnr_realloc_real_or_exit(chi1_lnhat, bufferlength);
     chi2_lnhat = seobnr_realloc_real_or_exit(chi2_lnhat, bufferlength);
     chi1_l = seobnr_realloc_real_or_exit(chi1_l, bufferlength);

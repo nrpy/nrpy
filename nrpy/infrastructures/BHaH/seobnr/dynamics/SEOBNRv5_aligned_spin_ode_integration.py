@@ -117,15 +117,7 @@ while (t < tmax && stop == 0) {
 
   // Step 2.a: Grow the dynamics buffer when the trajectory outpaces it.
   if (nsteps >= bufferlength) {
-    if (bufferlength > SIZE_MAX / 2){
-      fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), dynamics_RK buffer capacity overflowed while doubling\\n");
-      exit(1);
-    } // END IF: capacity doubling would overflow
     bufferlength = 2 * bufferlength;
-    if (bufferlength > SIZE_MAX / (NUMVARS * sizeof(REAL))){
-      fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), dynamics_RK allocation size overflowed\\n");
-      exit(1);
-    } // END IF: allocation byte count overflows
     dynamics_RK = (REAL *)realloc(dynamics_RK, bufferlength * (NUMVARS) * sizeof(REAL));
     if (dynamics_RK == NULL){
       fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), realloc() failed for dynamics_RK\\n");
