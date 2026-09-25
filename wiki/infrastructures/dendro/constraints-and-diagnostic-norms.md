@@ -66,19 +66,25 @@ diagnostic field over locally owned, unique continuous-Galerkin nodes outside
 the same spherical excision regions. It counts a shared node once and weights
 each retained node equally, matching the native Dendro-BSSN reporting
 convention. The file also records the node count after all diagnostic RMS
-columns (six for BSSN and ten for fCCZ4), and a step-0 header names the
-columns. For BSSN, columns 3-6 (`H`, `MU0..MU2`) correspond to native
-`C_HAM` and `C_MOM0..2`; fCCZ4 lists its four Z4 fields first. Rows in both
-files begin with the step and physical time; only `*_Constraints.dat` has a
-header. Compare against native results by physical time, not merely step
-number. Both files print floating-point values with up to ten significant
-digits (default notation, trailing zeros dropped).
+columns (six for BSSN and ten for fCCZ4). For BSSN, columns 3-6 (`H`,
+`MU0..MU2`) correspond to native `C_HAM` and `C_MOM0..2`; fCCZ4 lists its four
+Z4 fields first. Rows in both files begin with the step and physical time. Each
+file opens with column labels in the style of BHaHAHA's horizon diagnostics
+files: a title line naming the formulation and evolved conformal factor, then
+one `# column N = <name>: <meaning>` line per column. `*_Constraints.dat` names
+its columns `TimeStep` and `time`, as native `BSSN_GR`'s header does, then the
+generated diagnostic names and `unexcised_nodes`; the volume-weighted file names
+each field's pair `<name>_rms` and `<name>_max`. The volume-weighted title
+states its weight, `W^-3 dx dy dz` or `chi^-3/2 dx dy dz`. Compare against
+native results by physical time, not merely step number. Both files print
+floating-point values with up to ten significant digits (default notation,
+trailing zeros dropped).
 
 Claim evidence:
-- Claim: The generated solver reports distinct excised conformal-factor volume-weighted and unique-owned-node RMS norms, and only the latter matches native Dendro-BSSN's node-weighting convention. The unique-node norm goes to `*_Constraints.dat`, native `BSSN_GR`'s file name, with a step-0 header of the generated diagnostic names followed by `unexcised_nodes`; for BSSN its columns 3-6 correspond to native `C_HAM` and `C_MOM0..2`. The volume-weighted norm goes to `*_Constraints_volweighted.dat`, which has no header. Both files print floating-point values with up to ten significant digits.
+- Claim: The generated solver reports distinct excised conformal-factor volume-weighted and unique-owned-node RMS norms, and only the latter matches native Dendro-BSSN's node-weighting convention. The unique-node norm goes to `*_Constraints.dat`, native `BSSN_GR`'s file name, labelled `TimeStep` and `time` (native `BSSN_GR`'s names), the generated diagnostic names, and `unexcised_nodes`; for BSSN its columns 3-6 correspond to native `C_HAM` and `C_MOM0..2`. The volume-weighted norm goes to `*_Constraints_volweighted.dat`, which labels an RMS and a maximum absolute value per field. A new or empty file of either kind first receives a title line and one `# column N = <name>: <meaning>` line per column. Both files print floating-point values with up to ten significant digits.
 - Role: public/scientific contract
-- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `output_solver_context_cpp` / `Ctx::diagnostic_output`; `nrpy/infrastructures/Dendro/general_relativity/diagnostics.py`, `register_CFunction_diagnostics`.
-- Corroboration: `BSSN_GR/include/grUtils.tcc`, `bssn::computeConstraintL2Norm(const ot::Mesh*,...)`, native ownership, excision, and RMS reduction, and `bssn::extractConstraints`, native file name and step-0 header; `nrpy/infrastructures/Dendro/state_h.py`, diagnostic component order.
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `output_solver_context_cpp` / `Ctx::diagnostic_output`, `open_labeled_output`, and `diagnostic_meanings`; `nrpy/infrastructures/Dendro/general_relativity/diagnostics.py`, `register_CFunction_diagnostics`.
+- Corroboration: `BSSN_GR/include/grUtils.tcc`, `bssn::computeConstraintL2Norm(const ot::Mesh*,...)`, native ownership, excision, and RMS reduction, and `bssn::extractConstraints`, native file name and its `TimeStep` and `time` header names; `nrpy/infrastructures/Dendro/state_h.py`, diagnostic component order.
 
 The generated main loop evolves, remeshes and transfers when scheduled, then
 advances puncture centers before diagnostic output. This ordering prevents a

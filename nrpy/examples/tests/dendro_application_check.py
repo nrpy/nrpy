@@ -370,31 +370,37 @@ def apply_overrides(base_text: str, overrides: Dict[str, str]) -> str:
 
 def parse_table(path: Path) -> Tuple[List[str], List[List[float]]]:
     r"""
-    Parse a whitespace-separated numeric table with an optional header line.
+    Parse a whitespace-separated numeric table and its column names.
+
+    Column names come from the "# column N = <name>: <meaning>" label lines;
+    other "#" lines are skipped.
 
     :param path: File to parse.
-    :return: Header names (empty if none) and numeric rows.
+    :return: Column names (empty if none) and numeric rows.
 
     >>> import tempfile
     >>> with tempfile.TemporaryDirectory() as d:
     ...     p = Path(d) / "t.dat"
-    ...     _ = p.write_text("TimeStep\t time\t H\t\n0\t0\t1e-6\n4\t0.5\tnan\n")
+    ...     _ = p.write_text(
+    ...         "# title\n#\n# column  1 = TimeStep: iteration number\n"
+    ...         "# column  2 = time: simulation time\n# column  3 = H: RMS\n"
+    ...         "0\t0\t1e-6\n4\t0.5\tnan\n"
+    ...     )
     ...     h, rows = parse_table(p)
     ...     h, rows[0], math.isnan(rows[1][2])
     (['TimeStep', 'time', 'H'], [0.0, 0.0, 1e-06], True)
     """
-    header: List[str] = []
+    labels: List[str] = []
     rows: List[List[float]] = []
     for line in path.read_text().splitlines():
         fields = line.split()
+        if fields[:2] == ["#", "column"] and "=" in line:
+            labels.append(line.partition("=")[2].partition(":")[0].strip())
+            continue
         if not fields or fields[0].startswith("#"):
             continue
-        try:
-            rows.append([float(x) for x in fields])
-        except ValueError:
-            if not header:
-                header = fields
-    return header, rows
+        rows.append([float(x) for x in fields])
+    return labels, rows
 
 
 def parse_modes(path: Path) -> List[Tuple[int, List[complex]]]:
@@ -407,14 +413,17 @@ def parse_modes(path: Path) -> List[Tuple[int, List[complex]]]:
     >>> import tempfile
     >>> with tempfile.TemporaryDirectory() as d:
     ...     p = Path(d) / "m.dat"
-    ...     _ = p.write_text("TimeStep\t t\tr0\t\n4\t1e-1\t(1e-7,-2e-7)\t\n")
+    ...     _ = p.write_text(
+    ...         "# title\n#\n# column  1 = TimeStep: iteration number\n"
+    ...         "4\t1e-1\t(1e-7,-2e-7)\t\n"
+    ...     )
     ...     parse_modes(p)
     [(4, [(1e-07-2e-07j)])]
     """
     result = []
-    for line in path.read_text().splitlines()[1:]:
+    for line in path.read_text().splitlines():
         fields = [f for f in line.split("\t") if f.strip()]
-        if not fields:
+        if not fields or fields[0].startswith("#"):
             continue
         values = []
         for field in fields[2:]:

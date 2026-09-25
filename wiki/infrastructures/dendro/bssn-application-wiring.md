@@ -66,12 +66,18 @@ Apparent-horizon searches interpolate selected evolved BSSN fields and then
 convert each search point to ADM variables. `BSSN_to_ADM` reconstructs grid
 fields used by ADM surface quantities; waveform extraction evaluates Psi4
 directly from the selected BSSN fields. Generated runtime services also provide
-physical boundaries, conformal-factor volume-weighted and unique-node constraint diagnostics, checkpoint and
-restart, and scheduled output. ADM surface quantities are written to
-`*_ADM.dat`: every `BSSN_TIME_STEP_OUTPUT_FREQ` steps, when `BSSN_GW_RADAII` is
-non-empty, one row with the step, time, outermost extraction radius, and the ADM
-energy, linear momentum, and angular momentum, printed with up to ten
-significant digits (default notation, trailing zeros dropped).
+physical boundaries, conformal-factor volume-weighted and unique-node constraint
+diagnostics, checkpoint and restart, and scheduled output. ADM surface
+quantities are written to `*_ADM.dat`: every `BSSN_TIME_STEP_OUTPUT_FREQ` steps,
+when `BSSN_GW_RADAII` is non-empty, one row with the step, time, outermost
+extraction radius, and the ADM energy, linear momentum, and angular momentum,
+printed with up to ten significant digits (default notation, trailing zeros
+dropped). Every ASCII diagnostic file the application writes (`*_ADM.dat`, the
+two constraint files, and the Psi4 mode files) opens with column labels in the
+style of BHaHAHA's horizon diagnostics files: when the file is missing or empty,
+rank 0 first writes a title line naming the formulation and evolved conformal
+factor, then one `# column N = <name>: <meaning>` line per column. A restart
+appends below the existing labels.
 
 Claim evidence:
 - Claim: Every `BSSN_TIME_STEP_OUTPUT_FREQ` steps, when `BSSN_GW_RADAII` is non-empty, rank 0 appends one row to `<BSSN_PROFILE_FILE_PREFIX>_ADM.dat` with the step, time, the last listed extraction radius, and the seven ADM surface quantities (energy, three linear-momentum and three angular-momentum components), printed with up to ten significant digits in default notation. This applies to the fCCZ4 application as well.
@@ -79,14 +85,24 @@ Claim evidence:
 - Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::adm_output` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`, the `BSSN_TIME_STEP_OUTPUT_FREQ` and `BSSN_GW_RADAII` reads.
 - Corroboration: `nrpy/infrastructures/Dendro/general_relativity/adm_quantities.py`, `register_CFunction_adm_quantities`, the order of the seven quantities; `nrpy/examples/tests/dendro_application_check.py`, `Leg.check_run_a` column use.
 
+Claim evidence:
+- Claim: When `*_ADM.dat`, `*_Constraints.dat`, `*_Constraints_volweighted.dat`, or a `*_GW_l<l>_m<m>.dat` file is missing or empty, rank 0 writes `# <title>`, `#`, and one `# column N = <name>: <meaning>` line per column before the first row; a file that already has content receives no further labels. The step and time columns are named `TimeStep` and `time` (`t` in the Psi4 files) and the Psi4 radius columns `r0`, `r1`, ..., as in native `BSSN_GR`'s headers; the constraint columns use the generated diagnostic names. This applies to the fCCZ4 application as well.
+- Role: public/scientific contract
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `open_labeled_output` and its four callers within `output_solver_context_cpp`, and `diagnostic_meanings`.
+- Corroboration: `nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_file_output.py`, the horizon diagnostics header this format follows; `nrpy/examples/tests/dendro_application_check.py`, `parse_table` and `parse_modes`, which read the labels.
+
 Each Psi4 mode goes to its own `*_GW_l<l>_m<m>.dat` file, with Dendro-GR
-`BSSN_GR`'s name and layout: a step-0 header, then the step, time and one
-complex `(Re,Im)` pair per extraction radius. Files are written for every `l`
-from 2 to the largest entry of `BSSN_GW_L_MODES`; native `BSSN_GR` writes only
-the listed `l` values, which is the same set for the default list.
+`BSSN_GR`'s name and row layout: the step, time and one complex `(Re,Im)` pair
+per extraction radius. Instead of native's uncommented step-0 header line, the
+column labels keep its names (`TimeStep`, `t`, `r0`, `r1`, ...) and give each
+radius's value. A reader that takes column names from native's first line, such
+as `BSSN_GR/scripts/getstrain.py` with `pandas.read_csv(sep='\t')`, must instead
+skip `#` lines and name the columns from the labels. Files are written for every
+`l` from 2 to the largest entry of `BSSN_GW_L_MODES`; native `BSSN_GR` writes
+only the listed `l` values, which is the same set for the default list.
 
 Claim evidence:
-- Claim: Rank 0 appends each (l, m) mode, for l = 2..max(`BSSN_GW_L_MODES`) and m = -l..l, to `<BSSN_PROFILE_FILE_PREFIX>_GW_l<l>_m<m>.dat`: a step-0 header, then one row per extraction step with the step, time and one `(Re,Im)` pair per extraction radius, in scientific notation with 10 digits after the decimal point. Native `BSSN_GR` uses the same name and layout but writes only the listed l values. This applies to the fCCZ4 application as well.
+- Claim: Rank 0 appends each (l, m) mode, for l = 2..max(`BSSN_GW_L_MODES`) and m = -l..l, to `<BSSN_PROFILE_FILE_PREFIX>_GW_l<l>_m<m>.dat`: column labels, then one row per extraction step with the step, time and one `(Re,Im)` pair per extraction radius, in scientific notation with 10 digits after the decimal point. Native `BSSN_GR` uses the same name and row layout, with an uncommented step-0 header line instead of the labels, and writes only the listed l values. This applies to the fCCZ4 application as well.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::gravitational_wave_output` within `output_solver_context_cpp`.
 - Corroboration: Dendro-GR `BSSN_GR/include/gwExtract.h`, `GW::extractFarFieldPsi4`, per-mode file writer.
@@ -175,6 +191,7 @@ Claim evidence:
 - [Dendro-GR bssngr_main.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssngr_main.cpp) - post-merger CAKO switch.
 - [Dendro-GR bssnCtx.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssnCtx.cpp) - native VTU field selection and slicing.
 - [Dendro-GR gwExtract.h](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/include/gwExtract.h) - native per-mode Psi4 file names and layout.
+- [diagnostics_file_output.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_file_output.py) - BHaHAHA horizon diagnostics header, the column-label format.
 
 ## See Also
 
