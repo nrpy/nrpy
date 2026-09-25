@@ -58,7 +58,8 @@ halo exchange and physical exterior-ghost fill. Six `RbarDD` values remain scrat
 not evolved state. Apparent-horizon searches interpolate the evolved
 fCCZ4 fields and convert each search point to ADM variables. ADM surface
 quantities use grid fields from `BSSN_to_ADM`; waveform extraction evaluates
-Psi4 directly from the evolved fields.
+Psi4 directly from the evolved fields and writes the per-mode files described
+in [BSSN Application Wiring](bssn-application-wiring.md).
 
 The diagnostic kernel retains `H_Z4` and the three `Z4constraintU` components
 as its first four fields. It then reports `H`, physical lower-index momentum

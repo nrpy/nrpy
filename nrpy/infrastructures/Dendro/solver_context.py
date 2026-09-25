@@ -266,6 +266,7 @@ def output_solver_context_cpp(
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <complex>
 #include <cstdio>
 #include <fstream>
 #include <limits>
@@ -727,7 +728,7 @@ int Ctx::diagnostic_output() {{
     if (!std::isfinite(global_sum[i]) || !std::isfinite(global_max[i]))
       throw std::runtime_error("constraint diagnostics found a nonfinite constraint");
   if (m_uiMesh->getMPIRank() == 0) {{
-    std::ofstream file(output_prefix_ + "_constraints.tsv", std::ios::app);
+    std::ofstream file(output_prefix_ + "_Constraints_volweighted.dat", std::ios::app);
     file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT;
     for (unsigned int i = 0; i < generated::NUM_DIAG_GFS; ++i)
       file << '\\t' << std::sqrt(global_sum[i] / global_volume)
@@ -781,7 +782,14 @@ int Ctx::diagnostic_output() {{
                 m_uiMesh->getMPICommunicator());
   if (global_nodes == 0) throw std::runtime_error("constraint diagnostics found no unexcised nodes");
   if (m_uiMesh->getMPIRank() == 0) {{
-    std::ofstream file(output_prefix_ + "_constraints_node_rms.tsv", std::ios::app);
+    // Dendro-GR BSSN_GR's constraint file name and step-0 header layout.
+    std::ofstream file(output_prefix_ + "_Constraints.dat", std::ios::app);
+    if (m_uiTinfo._m_uiStep == 0) {{
+      file << "TimeStep\\t time\\t";
+      for (const std::string_view name : generated::DIAG_GF_NAMES)
+        file << ' ' << name << '\\t';
+      file << " unexcised_nodes\\t\\n";
+    }}
     file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT;
     for (unsigned int field = 0; field < generated::NUM_DIAG_GFS; ++field)
       file << '\\t' << std::sqrt(global_node_sums[field] / static_cast<double>(global_nodes));
@@ -814,19 +822,32 @@ int Ctx::gravitational_wave_output() {{
       grid_minimum, grid_maximum, domain_minimum_, domain_maximum_,
       modes_real.data(), modes_imag.data());
   if (m_uiMesh->getMPIRank() == 0) {{
-    std::ofstream file(output_prefix_ + "_psi4.tsv", std::ios::app);
-    for (unsigned radius_index = 0;
-         radius_index < gravitational_wave_radii_.size(); ++radius_index) {{
-      for (unsigned ell = 2; ell <= gravitational_wave_maximum_l_; ++ell) {{
-        for (int mode = -static_cast<int>(ell);
-             mode <= static_cast<int>(ell); ++mode) {{
+    // One file per (l, m) mode in Dendro-GR BSSN_GR's name and layout: a
+    // step-0 header, then the step, time and one (Re, Im) pair per radius.
+    for (unsigned ell = 2; ell <= gravitational_wave_maximum_l_; ++ell) {{
+      for (int mode = -static_cast<int>(ell);
+           mode <= static_cast<int>(ell); ++mode) {{
+        std::ofstream file(output_prefix_ + "_GW_l" + std::to_string(ell) +
+                               "_m" + std::to_string(mode) + ".dat",
+                           std::ios::app);
+        if (m_uiTinfo._m_uiStep == 0) {{
+          file << "TimeStep\\t t\\t";
+          for (unsigned radius_index = 0;
+               radius_index < gravitational_wave_radii_.size(); ++radius_index)
+            file << 'r' << radius_index << '\\t';
+          file << '\\n';
+        }}
+        file.precision(10);
+        file << std::scientific << m_uiTinfo._m_uiStep << '\\t'
+             << m_uiTinfo._m_uiT << '\\t';
+        for (unsigned radius_index = 0;
+             radius_index < gravitational_wave_radii_.size(); ++radius_index) {{
           const unsigned index = radius_index * mode_stride +
               static_cast<unsigned>(static_cast<int>(ell * ell + ell) + mode);
-          file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT << '\\t'
-               << gravitational_wave_radii_[radius_index] << '\\t' << ell << '\\t'
-               << mode << '\\t' << modes_real[index] << '\\t' << modes_imag[index]
-               << '\\n';
+          file << std::complex<DendroScalar>(modes_real[index],
+                                             modes_imag[index]) << '\\t';
         }}
+        file << '\\n';
       }}
     }}
   }}
@@ -922,7 +943,7 @@ int Ctx::adm_output() {{
   MPI_Allreduce(local_quantities, global_quantities, 7, MPI_DOUBLE, MPI_SUM,
                 m_uiMesh->getMPICommunicator());
   if (m_uiMesh->getMPIRank() == 0) {{
-    std::ofstream file(output_prefix_ + "_adm.tsv", std::ios::app);
+    std::ofstream file(output_prefix_ + "_ADM.dat", std::ios::app);
     file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT << '\\t' << radius;
     for (const DendroScalar quantity : global_quantities) file << '\\t' << quantity;
     file << '\\n';

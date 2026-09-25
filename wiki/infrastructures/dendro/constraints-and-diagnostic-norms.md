@@ -50,7 +50,7 @@ Claim evidence:
 - Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/fCCZ4_constraints.py`, `register_CFunction_fCCZ4_constraints`; `nrpy/infrastructures/Dendro/state_h.py`, `FCCZ4_DIAGNOSTIC_GRIDFUNCTIONS`.
 - Corroboration: `nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py`, `register_CFunction_rhs_eval`, uses the same BSSN-shaped `H` in CAHD.
 
-`*_constraints.tsv` contains a conformal-factor volume-weighted RMS and
+`*_Constraints_volweighted.dat` contains a conformal-factor volume-weighted RMS and
 pointwise maximum for each diagnostic field, including both new scalars. The
 quadrature excludes spherical puncture regions and weights each retained
 quadrature point by a tensor-product trapezoidal factor times
@@ -61,20 +61,23 @@ diagnostic points. The earlier W-only `W^-6` weight is not the physical
 volume element even under that condition. This norm answers a geometric-volume
 question; it is not interchangeable with Dendro's node norm.
 
-`*_constraints_node_rms.tsv` contains one RMS per diagnostic field over
-locally owned, unique continuous-Galerkin nodes outside the same spherical
-excision regions. It counts a shared node once and weights each retained node
-equally, matching the native Dendro-BSSN reporting convention. The file also
-records the node count after all diagnostic RMS columns (six for BSSN and ten
-for fCCZ4). Both files begin with
-iteration and physical time; compare against native results by physical time,
-not merely step number.
+`*_Constraints.dat`, named as in Dendro-GR `BSSN_GR`, contains one RMS per
+diagnostic field over locally owned, unique continuous-Galerkin nodes outside
+the same spherical excision regions. It counts a shared node once and weights
+each retained node equally, matching the native Dendro-BSSN reporting
+convention. The file also records the node count after all diagnostic RMS
+columns (six for BSSN and ten for fCCZ4), and a step-0 header names the
+columns. For BSSN, columns 3-6 (`H`, `MU0..MU2`) correspond to native
+`C_HAM` and `C_MOM0..2`; fCCZ4 lists its four Z4 fields first. Rows in both
+files begin with the step and physical time; only `*_Constraints.dat` has a
+header. Compare against native results by physical time, not merely step
+number.
 
 Claim evidence:
-- Claim: The generated solver reports distinct excised conformal-factor volume-weighted and unique-owned-node RMS norms, and only the latter matches native Dendro-BSSN's node-weighting convention.
+- Claim: The generated solver reports distinct excised conformal-factor volume-weighted and unique-owned-node RMS norms, and only the latter matches native Dendro-BSSN's node-weighting convention. The unique-node norm goes to `*_Constraints.dat`, native `BSSN_GR`'s file name, with a step-0 header of the generated diagnostic names followed by `unexcised_nodes`; for BSSN its columns 3-6 correspond to native `C_HAM` and `C_MOM0..2`. The volume-weighted norm goes to `*_Constraints_volweighted.dat`, which has no header.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `output_solver_context_cpp` / `Ctx::diagnostic_output`; `nrpy/infrastructures/Dendro/general_relativity/diagnostics.py`, `register_CFunction_diagnostics`.
-- Corroboration: `BSSN_GR/include/grUtils.tcc`, `bssn::computeConstraintL2Norm(const ot::Mesh*,...)`, native ownership, excision, and RMS reduction; `nrpy/infrastructures/Dendro/state_h.py`, diagnostic component order.
+- Corroboration: `BSSN_GR/include/grUtils.tcc`, `bssn::computeConstraintL2Norm(const ot::Mesh*,...)`, native ownership, excision, and RMS reduction, and `bssn::extractConstraints`, native file name and step-0 header; `nrpy/infrastructures/Dendro/state_h.py`, diagnostic component order.
 
 The generated main loop evolves, remeshes and transfers when scheduled, then
 advances puncture centers before diagnostic output. This ordering prevents a
@@ -93,7 +96,7 @@ does not prove equality of the evolved fields or equations.
 - [diagnostics.py](../../../nrpy/infrastructures/Dendro/general_relativity/diagnostics.py) - conformal-factor volume-weighted accumulation and excision.
 - [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - unique-node norm and output.
 - [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - post-remesh output order.
-- [Dendro-GR grUtils.tcc](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/include/grUtils.tcc) - native unique-owned-node RMS and excision convention.
+- [Dendro-GR grUtils.tcc](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/include/grUtils.tcc) - native unique-owned-node RMS and excision convention, and the constraint file name and header.
 
 ## See Also
 

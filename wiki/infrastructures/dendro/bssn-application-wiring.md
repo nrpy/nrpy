@@ -67,7 +67,20 @@ convert each search point to ADM variables. `BSSN_to_ADM` reconstructs grid
 fields used by ADM surface quantities; waveform extraction evaluates Psi4
 directly from the selected BSSN fields. Generated runtime services also provide
 physical boundaries, conformal-factor volume-weighted and unique-node constraint diagnostics, checkpoint and
-restart, and scheduled output.
+restart, and scheduled output. ADM surface quantities are written to
+`*_ADM.dat`.
+
+Each Psi4 mode goes to its own `*_GW_l<l>_m<m>.dat` file, with Dendro-GR
+`BSSN_GR`'s name and layout: a step-0 header, then the step, time and one
+complex `(Re,Im)` pair per extraction radius. Files are written for every `l`
+from 2 to the largest entry of `BSSN_GW_L_MODES`; native `BSSN_GR` writes only
+the listed `l` values, which is the same set for the default list.
+
+Claim evidence:
+- Claim: Rank 0 appends each (l, m) mode, for l = 2..max(`BSSN_GW_L_MODES`) and m = -l..l, to `<BSSN_PROFILE_FILE_PREFIX>_GW_l<l>_m<m>.dat`: a step-0 header, then one row per extraction step with the step, time and one `(Re,Im)` pair per extraction radius, in scientific notation with 10 digits after the decimal point. Native `BSSN_GR` uses the same name and layout but writes only the listed l values. This applies to the fCCZ4 application as well.
+- Role: public/scientific contract
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::gravitational_wave_output` within `output_solver_context_cpp`.
+- Corroboration: Dendro-GR `BSSN_GR/include/gwExtract.h`, `GW::extractFarFieldPsi4`, per-mode file writer.
 
 VTU output follows Dendro-GR `BSSN_GR`'s selection and defaults. With
 `BSSN_VTU_Z_SLICE_ONLY` (default true) it writes the elements that touch the
@@ -152,6 +165,7 @@ Claim evidence:
 - [Dendro-GR parameters.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/parameters.cpp) - native CAKO and lapse settings.
 - [Dendro-GR bssngr_main.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssngr_main.cpp) - post-merger CAKO switch.
 - [Dendro-GR bssnCtx.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssnCtx.cpp) - native VTU field selection and slicing.
+- [Dendro-GR gwExtract.h](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/include/gwExtract.h) - native per-mode Psi4 file names and layout.
 
 ## See Also
 
