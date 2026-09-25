@@ -165,6 +165,29 @@ def validate_registered_state(enable_fCCZ4: bool) -> None:
         )
 
 
+def dendro_state_name(gf_name: str) -> str:
+    """
+    Return the public Dendro state name of a registered NRPy gridfunction.
+
+    NRPy's equations use the formulation-neutral name ``cf``. The generated
+    Dendro state names that slot ``cf_W_or_chi``, because the selected
+    formulation decides whether it stores W or chi. Every other name is the
+    NRPy name. Role-prefixed stencil pointers (``in_``, ``rhs_``, ``out_``) keep
+    the NRPy names that the core gridfunction reads emit.
+
+    :param gf_name: Registered NRPy gridfunction name.
+    :return: The name used by the generated state enumeration, name arrays,
+        and checkpoint metadata.
+
+    Doctests:
+    >>> dendro_state_name("cf")
+    'cf_W_or_chi'
+    >>> dendro_state_name("alpha")
+    'alpha'
+    """
+    return "cf_W_or_chi" if gf_name == "cf" else gf_name
+
+
 def group_names(group: str) -> List[str]:
     """
     Return the registered gridfunction names in one group, in registry order.
@@ -199,8 +222,8 @@ def output_state_h(
     It carries the EVOL enum, name array, per-field metadata, and exact public
     Dendro-name lookup over every registered group. Canonical sequences above
     set the evolved, Ricci, and diagnostic orders; auxiliary fields retain
-    registry order. Each :class:`nrpy.grid.DendroGridFunction` supplies its
-    public Dendro name and metadata.
+    registry order. :func:`dendro_state_name` supplies each public Dendro name,
+    and each :class:`nrpy.grid.DendroGridFunction` supplies its metadata.
 
     :param solver_stem: Lowercase formulation stem for emitted header names.
     :param solver_namespace: NRPy-qualified solver namespace, e.g.
@@ -229,8 +252,8 @@ def output_state_h(
     lines.append(f"namespace {solver_namespace}::generated {{")
     lines.append("")
     lines.append("enum class EvolVar : unsigned {")
-    for index, _name, gf in evol:
-        lines.append(f"    {gf.dendro_name} = {index},")
+    for index, name, _gf in evol:
+        lines.append(f"    {dendro_state_name(name)} = {index},")
     lines.append("    END,")
     lines.append("};  // END ENUM: EvolVar")
     lines.append("")
@@ -245,8 +268,8 @@ def output_state_h(
     lines.append(
         "inline constexpr std::array<std::string_view, NUM_EVOL_GFS> EVOL_GF_NAMES = {"
     )
-    for _index, _name, gf in evol:
-        lines.append(f'    "{gf.dendro_name}",')
+    for _index, name, _gf in evol:
+        lines.append(f'    "{dendro_state_name(name)}",')
     lines.append("};  // END ARRAY: EVOL_GF_NAMES")
     lines.append("")
     lines.append("static_assert(NUM_EVOL_GFS == EVOL_GF_NAMES.size());")
@@ -307,11 +330,7 @@ def output_state_h(
     )
     for group, array_name, count_name, _member in groups:
         names = by_group.get(group, [])
-        dendro_names = [
-            cast(gri.DendroGridFunction, gri.glb_gridfcs_dict[name]).dendro_name
-            for name in names
-        ]
-        entries = "".join(f'    "{name}",\n' for name in dendro_names)
+        entries = "".join(f'    "{dendro_state_name(name)}",\n' for name in names)
         lines.append(
             f"inline constexpr unsigned {count_name} = {len(names)};\n"
             f"inline constexpr std::array<std::string_view, {count_name}>"

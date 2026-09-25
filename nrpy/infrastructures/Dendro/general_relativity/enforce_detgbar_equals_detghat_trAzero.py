@@ -76,7 +76,10 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     bindings = []
     for name in component_names:
         index = evolved_names.index(name)
-        bindings.append(f"const {scalar_type}* in_{name} = in_gfs[{index}];")
+        bindings.append(
+            f"const {scalar_type}* {gri.DendroGridFunction.input_pointer(name)} = "
+            f"in_gfs[{index}];"
+        )
         bindings.append(f"{scalar_type}* out_{name} = in_gfs[{index}];")
     body = "\n".join(
         (

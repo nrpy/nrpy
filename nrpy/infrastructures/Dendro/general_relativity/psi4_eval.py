@@ -76,9 +76,8 @@ def register_CFunction_psi4_eval(
     )
     input_bindings: List[str] = []
     for index, name in enumerate(state_h.BSSN_EVOLVED_GRIDFUNCTIONS):
-        gridfunction = cast(gri.DendroGridFunction, gri.glb_gridfcs_dict[name])
         input_bindings.append(
-            f"const {scalar_type}* in_{gridfunction.dendro_name} = "
+            f"const {scalar_type}* {gri.DendroGridFunction.input_pointer(name)} = "
             f"in_gfs[{index}] + offset;"
         )
     point_state_lines: List[str] = []
@@ -98,9 +97,8 @@ def register_CFunction_psi4_eval(
         "aDD12",
         "aDD22",
     ):
-        gridfunction = cast(gri.DendroGridFunction, gri.glb_gridfcs_dict[name])
         point_state_lines.append(
-            f"const {scalar_type} {name} = in_{gridfunction.dendro_name}[pp];"
+            f"const {scalar_type} {name} = {gri.DendroGridFunction.access_gf(name)};"
         )
     point_state = "\n".join(point_state_lines)
     derivative_unpack = "\n".join(

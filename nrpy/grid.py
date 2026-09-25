@@ -891,7 +891,7 @@ class DendroGridFunction(GridFunction):
 
     Dendro stores every gridfunction in one padded, variable-major, x-fastest
     block array.  A one-point memory read therefore resolves to a role-prefixed
-    input pointer ``in_<Dendro name>`` indexed by the base interior index
+    input pointer ``in_<exact NRPy name>`` indexed by the base interior index
     ``pp`` plus signed offsets in the ``nx``/``nxy`` strides.
     """
 
@@ -936,10 +936,29 @@ class DendroGridFunction(GridFunction):
         # ignored: the exact role-prefixed pointer below is the only Dendro
         # memory-access form.  BHaH array-selector semantics do not transfer.
         self.gf_array_name = gf_array_name
-        # NRPy's equations use the formulation-neutral name ``cf``. Dendro's
-        # public state names the same slot ``cf_W_or_chi`` because the selected
-        # formulation determines whether it stores W or chi.
-        self.dendro_name = "cf_W_or_chi" if name == "cf" else name
+
+    @staticmethod
+    def _term(offset: int, basis: str) -> str:
+        """
+        Format one signed offset term of a Dendro x-fastest interior index.
+
+        :param offset: Signed integer offset along one grid direction.
+        :param basis: Index expression for one step in that direction
+            ("1" for the fastest direction, "nx", "nxy", ...).
+        :return: Empty string for a zero offset, otherwise a string such as
+            " + 1", " - nx", or " + 2 * nxy".
+        """
+        if offset == 0:
+            return ""
+        sign = "+" if offset > 0 else "-"
+        magnitude = abs(offset)
+        if basis == "1":
+            term = str(magnitude)
+        elif magnitude == 1:
+            term = basis
+        else:
+            term = f"{magnitude} * {basis}"
+        return f" {sign} {term}"
 
     def read_gf_from_memory_Ccode_onept(
         self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
@@ -967,10 +986,28 @@ class DendroGridFunction(GridFunction):
         >>> glb_gridfcs_dict["abc"].read_gf_from_memory_Ccode_onept(0, -1, 0, enable_simd=True)
         'ReadSIMD(&in_abc[pp - nx])'
         """
-        access = self.access_gf(self.dendro_name, i0_offset, i1_offset, i2_offset)
+        access = self.access_gf(self.name, i0_offset, i1_offset, i2_offset)
         if kwargs.get("enable_simd", False):
             return f"ReadSIMD(&{access})"
         return access
+
+    @staticmethod
+    def input_pointer(gf_name: str) -> str:
+        """
+        Return the Dendro input-role pointer name for a gridfunction.
+
+        This class defines the ``in_`` spelling: the Dendro infrastructure's
+        decoration helpers call here rather than formatting it themselves, so
+        the emitted pointer name has one source.
+
+        :param gf_name: Exact registered NRPy gridfunction name.
+        :return: ``in_<gf_name>``.
+
+        Doctests:
+        >>> DendroGridFunction.input_pointer("cf")
+        'in_cf'
+        """
+        return f"in_{gf_name}"
 
     @staticmethod
     def access_gf(
@@ -997,24 +1034,13 @@ class DendroGridFunction(GridFunction):
         >>> DendroGridFunction.access_gf("abc", 0, -1, 0)
         'in_abc[pp - nx]'
         """
-        index = "pp"
-        for offset, basis in (
-            (i0_offset, "1"),
-            (i1_offset, "nx"),
-            (i2_offset, "nxy"),
-        ):
-            if offset == 0:
-                continue
-            sign = "+" if offset > 0 else "-"
-            magnitude = abs(offset)
-            if basis == "1":
-                term = str(magnitude)
-            elif magnitude == 1:
-                term = basis
-            else:
-                term = f"{magnitude} * {basis}"
-            index += f" {sign} {term}"
-        return f"in_{gf_name}[{index}]"
+        index = (
+            "pp"
+            + DendroGridFunction._term(i0_offset, "1")
+            + DendroGridFunction._term(i1_offset, "nx")
+            + DendroGridFunction._term(i2_offset, "nxy")
+        )
+        return f"{DendroGridFunction.input_pointer(gf_name)}[{index}]"
 
 
 # Type alias for grid function objects.

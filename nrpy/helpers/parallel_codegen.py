@@ -8,10 +8,9 @@ Author: Zachariah B. Etienne
 
 import logging
 import time
-from copy import deepcopy
 from importlib import import_module
-from multiprocessing import Pool, set_start_method
-from typing import Any, Callable, Dict, List, Tuple, Union, cast
+from multiprocessing import Manager, Pool, set_start_method
+from typing import Any, Callable, Dict, Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.grid as gri
@@ -99,52 +98,6 @@ def deep_update(d: Dict[Any, Any], u: Dict[Any, Any]) -> None:
             d[k] = v
 
 
-def _merge_registered_definitions(
-    registry_name: str,
-    destination: Dict[str, Any],
-    additions: Dict[str, Any],
-) -> None:
-    """
-    Merge one typed NRPy registry, rejecting conflicting definitions.
-
-    :param registry_name: Human-readable registry type for error reporting.
-    :param destination: Registry copy receiving validated definitions.
-    :param additions: Definitions returned by one worker.
-    :raises ValueError: If a name has two different definitions.
-    """
-    for name in sorted(additions):
-        if name in destination and not (
-            type(destination[name]) is type(additions[name])
-            and vars(destination[name]) == vars(additions[name])
-        ):
-            raise ValueError(
-                f"Parallel code generation produced conflicting {registry_name} "
-                f"definitions for '{name}'."
-            )
-        destination[name] = additions[name]
-
-
-def _merge_extras(destination: Dict[str, Any], additions: Dict[str, Any]) -> None:
-    """
-    Merge nested NRPy extras while rejecting conflicting leaf values.
-
-    :param destination: Extras copy receiving validated values.
-    :param additions: Extras returned by one worker.
-    :raises ValueError: If a leaf name has two different values.
-    """
-    for name in sorted(additions):
-        value = additions[name]
-        if name not in destination:
-            destination[name] = value
-        elif isinstance(destination[name], dict) and isinstance(value, dict):
-            _merge_extras(destination[name], value)
-        elif destination[name] != value:
-            raise ValueError(
-                "Parallel code generation produced conflicting extras "
-                f"definitions for '{name}'."
-            )
-
-
 def unpack_NRPy_environment_dict(
     NRPy_environment_dict: Dict[str, NRPyEnv_type],
 ) -> None:
@@ -153,34 +106,13 @@ def unpack_NRPy_environment_dict(
 
     :param NRPy_environment_dict: Dictionary containing NRPy environment types.
     """
-    merged_params = deepcopy(par.glb_params_dict)
-    merged_code_params = deepcopy(par.glb_code_params_dict)
-    merged_cfunctions = deepcopy(cfc.CFunction_dict)
-    merged_pyfunctions = deepcopy(pyfc.PyFunction_dict)
-    merged_gridfunctions = deepcopy(gri.glb_gridfcs_dict)
-    merged_extras = deepcopy(par.glb_extras_dict)
-
-    for task_key in sorted(NRPy_environment_dict):
-        env = NRPy_environment_dict[task_key]
-        _merge_registered_definitions("NRPyParameter", merged_params, env[0])
-        _merge_registered_definitions("CodeParameter", merged_code_params, env[1])
-        _merge_registered_definitions("CFunction", merged_cfunctions, env[2])
-        _merge_registered_definitions("PyFunction", merged_pyfunctions, env[3])
-        _merge_registered_definitions("gridfunction", merged_gridfunctions, env[4])
-        _merge_extras(merged_extras, env[5])
-
-    par.glb_params_dict.clear()
-    par.glb_params_dict.update(merged_params)
-    par.glb_code_params_dict.clear()
-    par.glb_code_params_dict.update(merged_code_params)
-    cfc.CFunction_dict.clear()
-    cfc.CFunction_dict.update(merged_cfunctions)
-    pyfc.PyFunction_dict.clear()
-    pyfc.PyFunction_dict.update(merged_pyfunctions)
-    gri.glb_gridfcs_dict.clear()
-    gri.glb_gridfcs_dict.update(merged_gridfunctions)
-    par.glb_extras_dict.clear()
-    par.glb_extras_dict.update(merged_extras)
+    for env in NRPy_environment_dict.values():
+        par.glb_params_dict.update(env[0])
+        par.glb_code_params_dict.update(env[1])
+        cfc.CFunction_dict.update(env[2])
+        pyfc.PyFunction_dict.update(env[3])
+        gri.glb_gridfcs_dict.update(env[4])
+        deep_update(par.glb_extras_dict, env[5])
 
 
 def pcg_registration_phase() -> bool:
@@ -202,9 +134,12 @@ def register_func_call(name: str, args: Dict[str, Any]) -> None:
     :param name: Name of the function.
     :param args: Arguments to pass to the function.
 
+    :raises ValueError: If a function call with the same name and arguments has already been registered.
     """
-    task_key = f"{len(ParallelCodeGen_dict):08d}:{name}"
-    ParallelCodeGen_dict[task_key] = ParallelCodeGen(name, args)
+    if name + str(args) in ParallelCodeGen_dict:
+        raise ValueError(f"Already registered {name + str(args)}.")
+
+    ParallelCodeGen_dict[name + str(args)] = ParallelCodeGen(name, args)
 
 
 def get_nested_function(
@@ -269,7 +204,7 @@ def parallel_function_call(PCG: Any) -> NRPyEnv_type:
         ) from ex
 
 
-def wrapper_func(args: Tuple[str, Any]) -> Tuple[str, NRPyEnv_type]:
+def wrapper_func(args: Tuple[Dict[str, Any], str, Any]) -> Any:
     """
     Execute a given function in parallel, wrapping its call for error-handling and performance logging.
 
@@ -280,12 +215,13 @@ def wrapper_func(args: Tuple[str, Any]) -> Tuple[str, NRPyEnv_type]:
     :return: The key and the result of the parallel_function_call.
     :raises RuntimeError: If any exception occurs during the task's execution.
     """
-    key, value = args
+    shared_dict, key, value = args
     start_time = time.time()
     try:
         # logging.debug(f"Starting task with key: {key}")
         result = parallel_function_call(value)
         # logging.debug(f"Task {key} completed: {result}")
+        shared_dict[key] = result
         funcname_args = value.function_name
         elapsed_time = time.time() - start_time
         logging.info(
@@ -302,19 +238,10 @@ def wrapper_func(args: Tuple[str, Any]) -> Tuple[str, NRPyEnv_type]:
 
 
 def do_parallel_codegen() -> None:
-    """
-    Perform parallel code generation by calling registered functions concurrently.
-
-    Worker and registry-merge failures propagate after restoring the
-    code-generation stage. Parent registries remain unchanged on either failure.
-    """
+    """Perform parallel code generation by calling registered functions concurrently."""
     if not par.parval_from_str("enable_parallel_codegen"):
         return
 
-    tasks = sorted(ParallelCodeGen_dict.items())
-    if not tasks:
-        return
-    previous_stage = par.parval_from_str("parallel_codegen_stage")
     par.set_parval_from_str("parallel_codegen_stage", "codegen")
 
     # By default, MacOS adopts the "spawn" method, which breaks the global environment.
@@ -325,19 +252,19 @@ def do_parallel_codegen() -> None:
     # Note that prior to using multiprocessing, we used the `multiprocess` library,
     #   which was very janky -- causing all sorts of race conditions.
     set_start_method("fork", force=True)
-    # Starting more processes than independent tasks only adds fork, import,
-    # and shutdown cost.  Large symbolic kernels can consume substantial memory,
-    # so one worker per disjoint task is also the safe upper bound.
-    try:
-        with Pool(processes=len(tasks)) as pool:
-            worker_results: List[Tuple[str, NRPyEnv_type]] = pool.map(
-                wrapper_func,
-                tasks,
-            )
-        unpack_NRPy_environment_dict(dict(worker_results))
-    finally:
-        par.set_parval_from_str("parallel_codegen_stage", previous_stage)
-    ParallelCodeGen_dict.clear()
+    manager = Manager()
+    NRPy_environment_to_unpack: Dict[str, Any] = manager.dict()  # type: ignore
+
+    with Pool() as pool:  # Set Pool(processes=1) to disable parallel codegen.
+        pool.map(
+            wrapper_func,
+            [
+                (NRPy_environment_to_unpack, key, value)
+                for key, value in ParallelCodeGen_dict.items()
+            ],
+        )
+
+    unpack_NRPy_environment_dict(dict(NRPy_environment_to_unpack))
 
 
 if __name__ == "__main__":

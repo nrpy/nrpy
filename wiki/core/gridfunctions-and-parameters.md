@@ -59,13 +59,10 @@ Array `CodeParameter` types are parsed only for C-style `REAL[N]` and `int[N]` s
 
 ### Dendro Access
 
-`DendroGridFunction` uses C type `DendroScalar` and role-prefixed pointers
-such as `in_abc[pp - nx]` within padded blocks. The connector maps the
-canonical conformal factor `cf` to storage name `cf_W_or_chi`. SIMD mode wraps
-each point read as `ReadSIMD(&in_abc[pp - nx])`; generated Ricci and RHS
-kernels load full-width vectors; each vector starts at
-`min(i0_vector, max(0, nx - padding - SIMD_WIDTH))` and stays within its own
-row.
+`DendroGridFunction` uses C type `DendroScalar` and role-prefixed pointers named
+after the exact NRPy gridfunction, such as `in_abc[pp - nx]`, within padded
+blocks. SIMD mode wraps each point read as `ReadSIMD(&in_abc[pp - nx])`; the
+Dendro kernel loops own the vector placement.
 
 ### Rank-N Registration
 

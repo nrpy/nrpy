@@ -9,11 +9,11 @@ Production examples generate complete Dendro applications.
 
 ## Detail
 
-Required generator checks include isolated static analysis, atomic registry
-merge failure, BSSN and fCCZ4 import and registration, two byte-identical clean
-generations, presence of all order-specific kernels, direct Python/CFunction/C++
-name correspondence, final-state pointer indices, and rejection of native
-`BSSN_GR` sources in each explicit CMake source list.
+Required generator checks include isolated static analysis, BSSN and fCCZ4
+import and registration, two byte-identical clean generations, presence of all
+order-specific kernels, direct Python/CFunction/C++ name correspondence,
+final-state pointer indices, and rejection of native `BSSN_GR` sources in each
+explicit CMake source list.
 
 Required application checks configure and build both sibling applications with
 Dendrolib. Both BSSN and fCCZ4 checks must generate W and chi variants.

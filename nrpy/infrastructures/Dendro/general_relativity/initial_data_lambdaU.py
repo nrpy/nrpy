@@ -72,11 +72,9 @@ def register_CFunction_initial_data_lambdaU(
         evolved_names = tuple(state_h.evolved_gridfunctions(enable_fCCZ4))
         bindings = []
         for index, name in enumerate(evolved_names):
-            dendro_name = cast(
-                gri.DendroGridFunction, gri.glb_gridfcs_dict[name]
-            ).dendro_name
             bindings.append(
-                f"const {scalar_type}* in_{dendro_name} = " f"in_gfs[{index}] + offset;"
+                f"const {scalar_type}* {gri.DendroGridFunction.input_pointer(name)} = "
+                f"in_gfs[{index}] + offset;"
             )
         for i in range(3):
             index = evolved_names.index(f"lambdaU{i}")

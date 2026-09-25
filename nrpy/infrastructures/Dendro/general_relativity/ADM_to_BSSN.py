@@ -102,10 +102,7 @@ def register_CFunction_ADM_to_BSSN(
     scalar_type = gri.DENDRO_SCALAR_TYPE
     output_lvalues: List[str] = []
     for name in output_names:
-        dendro_name = cast(
-            gri.DendroGridFunction, gri.glb_gridfcs_dict[name]
-        ).dendro_name
-        output_lvalues.append(f"out_{dendro_name}[pp]")
+        output_lvalues.append(f"out_{name}[pp]")
     kernel = c_codegen(
         [expressions[name] for name in output_names],
         output_lvalues,
@@ -144,11 +141,8 @@ def register_CFunction_ADM_to_BSSN(
     output_bindings = []
     for name in output_names:
         index = evolved_names.index(name)
-        dendro_name = cast(
-            gri.DendroGridFunction, gri.glb_gridfcs_dict[name]
-        ).dendro_name
         output_bindings.append(
-            f"{scalar_type}* out_{dendro_name} = out_gfs[{index}] + offset;"
+            f"{scalar_type}* out_{name} = out_gfs[{index}] + offset;"
         )
     local_inputs = [
         f"const {scalar_type} {name} = adm_{name}[pp];" for name in input_names

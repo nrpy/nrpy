@@ -19,10 +19,13 @@ and runtime-service registrar for finite-difference orders 4, 6, and 8. One
 `do_parallel_codegen()` call constructs and lowers all queued expressions.
 The parent process does not reconstruct those expressions.
 
-Worker results merge in sorted order into temporary registries. Unequal
-duplicate definitions or final-state index mismatches abort before any parent
-registry changes. Inexpensive emitters then write headers, parameter input,
-context, executable entry point, checkpoint support, prototypes, and CMake.
+After `do_parallel_codegen()`, each example calls
+`state_h.validate_registered_state` to confirm that the merged registry holds
+exactly the canonical Dendro state; no two parallel tasks register the same name
+with different definitions, so the merge order does not matter and repeated
+generation produces byte-identical trees. Inexpensive emitters then write
+headers, parameter input, context, executable entry point, checkpoint support,
+prototypes, and CMake.
 
 One Python module owns each generated numerical operation. Python basename,
 registrar suffix, CFunction name, and C++ basename correspond directly. Thus
@@ -35,20 +38,18 @@ connection-initialization pass.
 context, entry point, checkpoint support, local TwoPunctures implementation,
 runtime services, conversions, projection, and every order-specific numerical
 kernel. It uses no source glob, `bssn_common`, or source from `BSSN_GR/`.
-Dendrolib is the shared runtime dependency. Standalone builds default
-`CPU_ARCH` to `native` and apply that architecture to the solver and fetched
-libraries; `generic_avx2` selects `-mavx2 -mfma`. In-tree builds inherit
-Dendro-GR's architecture setting. The examples emit intrinsic-based Ricci and
-RHS kernels and package NRPy's `simd_intrinsics.h` under `generated/include`;
+Dendrolib is the shared runtime dependency. Standalone builds default `CPU_ARCH`
+to `native` and apply that architecture to the solver and fetched libraries;
+`generic_avx2` selects `-mavx2 -mfma`. In-tree builds inherit Dendro-GR's
+architecture setting. The examples emit intrinsic-based Ricci and RHS kernels
+and package NRPy's `simd_intrinsics.h` under `generated/include`;
 `register_CFunction_Ricci_eval` and `register_CFunction_rhs_eval` generate
-scalar kernels only when called with `enable_intrinsics=False`. The generated CMake `NRPY_SIMD_AVX2` option selects 256-bit vectors
-even when `CPU_ARCH=native` enables AVX-512. The slow-start lapse exponential
-is evaluated once per block kernel call in either mode, while its runtime
-`SSL_sigma` parameter remains available to the solver.
-`Ctx::rhs` does not clear the unzipped RHS or Ricci buffers: both kernels
-write every interior value, the RHS kernel reads Ricci only at points that the
-Ricci kernel wrote with the same loop, and `Mesh::zip` reads only interior
-values.
+scalar kernels only when called with `enable_intrinsics=False`. The slow-start
+lapse exponential is evaluated once per block kernel call in either mode, while
+its runtime `SSL_sigma` parameter remains available to the solver. `Ctx::rhs`
+does not clear the unzipped RHS or Ricci buffers: both kernels write every
+interior value, the RHS kernel reads Ricci only at points that the Ricci kernel
+wrote with the same loop, and `Mesh::zip` reads only interior values.
 
 Run `nrpyBssnSolver --tpid PARFILE` or `nrpyFccz4Solver --tpid PARFILE`
 with one MPI task before starting a fresh evolution. This computes the
@@ -100,7 +101,7 @@ Claim evidence:
 
 - [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) - BSSN registration wave and file emission.
 - [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - fCCZ4 registration wave and file emission.
-- [parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py) - worker execution and deterministic registry merge.
+- [parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py) - worker execution and registry merge.
 - [CMakeLists.py](../../../nrpy/infrastructures/Dendro/CMakeLists.py) - prototype and explicit CMake source emission.
 - [Dendro-GR CMakeLists.txt](https://github.com/paralab/Dendro-GR/blob/master/CMakeLists.txt) - parent architecture selection for in-tree builds.
 - [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - application entry point, parameter-file reading, and startup checks.

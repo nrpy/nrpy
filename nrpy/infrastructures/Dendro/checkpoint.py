@@ -5,9 +5,8 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List, cast
+from typing import List
 
-import nrpy.grid as gri
 import nrpy.params as par
 from nrpy.infrastructures.Dendro import CodeParameters, state_h
 
@@ -34,10 +33,10 @@ def output_checkpoint_cpp(
     :return: Complete generated ``checkpoint.cpp`` text.
     """
     state_h.validate_registered_state(enable_fCCZ4)
-    evolved_names = []
-    for name in state_h.evolved_gridfunctions(enable_fCCZ4):
-        gridfunction = cast(gri.DendroGridFunction, gri.glb_gridfcs_dict[name])
-        evolved_names.append(gridfunction.dendro_name)
+    evolved_names = [
+        state_h.dendro_state_name(name)
+        for name in state_h.evolved_gridfunctions(enable_fCCZ4)
+    ]
 
     parameter_names = CodeParameters.emitted_parameter_names()
     parameter_write_lines: List[str] = []

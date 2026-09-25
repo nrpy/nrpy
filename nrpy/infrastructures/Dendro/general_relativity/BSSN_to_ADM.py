@@ -75,12 +75,12 @@ def register_CFunction_BSSN_to_ADM(
         if not isinstance(gridfunction, gri.DendroGridFunction):
             raise ValueError(f"{name} is not registered as a Dendro gridfunction.")
         input_bindings.append(
-            f"const {scalar_type}* in_{gridfunction.dendro_name} = "
+            f"const {scalar_type}* {gri.DendroGridFunction.input_pointer(name)} = "
             f"in_gfs[{index}] + offset;"
         )
         if name != "Theta_fCCZ4" and not name.startswith("lambdaU"):
             local_inputs.append(
-                f"const {scalar_type} {name} = in_{gridfunction.dendro_name}[pp];"
+                f"const {scalar_type} {name} = {gri.DendroGridFunction.access_gf(name)};"
             )
     output_bindings = [
         f"{scalar_type}* adm_{name} = adm_gfs[{index}] + offset;"

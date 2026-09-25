@@ -111,11 +111,9 @@ def register_CFunction_BSSN_constraints(
         )
         input_bindings = []
         for index, name in enumerate(state_h.BSSN_EVOLVED_GRIDFUNCTIONS):
-            dendro_name = cast(
-                gri.DendroGridFunction, gri.glb_gridfcs_dict[name]
-            ).dendro_name
             input_bindings.append(
-                f"const {scalar_type}* in_{dendro_name} = in_gfs[{index}] + offset;"
+                f"const {scalar_type}* {gri.DendroGridFunction.input_pointer(name)} = "
+                f"in_gfs[{index}] + offset;"
             )
         diagnostic_bindings = [
             f"{scalar_type}* diagnostic_{name} = diagnostic_gfs[{index}] + offset;"

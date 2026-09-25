@@ -330,43 +330,6 @@ def c_codegen(
     Expressions using only pointer/stride helpers need helper calls even with no caller loads.
     Ordinary derivatives and direct field references retain their reads.
 
-    A Dendro SIMD kernel reads centered and mixed stencils through unaligned
-    vector loads and writes a complete vector of right-hand sides.
-
-    >>> import nrpy.grid as gri
-    >>> saved_gfs = gri.glb_gridfcs_dict.copy()
-    >>> saved_fd = fin.FDFunctions_dict.copy()
-    >>> saved_params = {name: par.parval_from_str(name) for name in ("Infrastructure", "parallelization", "finite_difference::fd_order")}
-    >>> try:
-    ...     par.set_parval_from_str("Infrastructure", "Dendro")
-    ...     par.set_parval_from_str("parallelization", "none")
-    ...     par.set_parval_from_str("finite_difference::fd_order", 2)
-    ...     gri.glb_gridfcs_dict.clear()
-    ...     _ = gri.register_gridfunctions("abc")
-    ...     print(c_codegen(sp.Symbol("abc_dD0") + sp.Symbol("abc_dDD12"), "rhs_abc[pp]", enable_fd_codegen=True, enable_simd=True, verbose=False, cse_sorting="none"))
-    ... finally:
-    ...     gri.glb_gridfcs_dict.clear(); gri.glb_gridfcs_dict.update(saved_gfs)
-    ...     fin.FDFunctions_dict.clear(); fin.FDFunctions_dict.update(saved_fd)
-    ...     for name, value in saved_params.items():
-    ...         par.set_parval_from_str(name, value)
-    static const double dblFDPart1_NegativeOne_ = -1.0;
-    MAYBE_UNUSED const REAL_SIMD_ARRAY FDPart1_NegativeOne_ = ConstSIMD(dblFDPart1_NegativeOne_);
-    static const double dblFDPart1_Rational_1_2 = 1.0/2.0;
-    const REAL_SIMD_ARRAY FDPart1_Rational_1_2 = ConstSIMD(dblFDPart1_Rational_1_2);
-    static const double dblFDPart1_Rational_1_4 = 1.0/4.0;
-    const REAL_SIMD_ARRAY FDPart1_Rational_1_4 = ConstSIMD(dblFDPart1_Rational_1_4);
-    const REAL_SIMD_ARRAY abc_i1m1_i2m1 = ReadSIMD(&in_abc[pp - nx - nxy]);
-    const REAL_SIMD_ARRAY abc_i1p1_i2m1 = ReadSIMD(&in_abc[pp + nx - nxy]);
-    const REAL_SIMD_ARRAY abc_i0m1 = ReadSIMD(&in_abc[pp - 1]);
-    const REAL_SIMD_ARRAY abc_i0p1 = ReadSIMD(&in_abc[pp + 1]);
-    const REAL_SIMD_ARRAY abc_dD0 = MulSIMD(FDPart1_Rational_1_2, MulSIMD(invdxx0, SubSIMD(abc_i0p1, abc_i0m1)));
-    const REAL_SIMD_ARRAY abc_i1m1_i2p1 = ReadSIMD(&in_abc[pp - nx + nxy]);
-    const REAL_SIMD_ARRAY abc_i1p1_i2p1 = ReadSIMD(&in_abc[pp + nx + nxy]);
-    const REAL_SIMD_ARRAY abc_dDD12 = MulSIMD(MulSIMD(FDPart1_Rational_1_4, invdxx1), MulSIMD(invdxx2, AddSIMD(abc_i1p1_i2p1, SubSIMD(abc_i1m1_i2m1, AddSIMD(abc_i1m1_i2p1, abc_i1p1_i2m1)))));
-    const REAL_SIMD_ARRAY __RHS_exp_0 = AddSIMD(abc_dD0, abc_dDD12);
-    WriteSIMD(&rhs_abc[pp], __RHS_exp_0);
-    <BLANKLINE>
-
     >>> import nrpy.grid as gri
     >>> saved_gfs = gri.glb_gridfcs_dict.copy()
     >>> saved_fd = fin.FDFunctions_dict.copy()

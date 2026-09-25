@@ -6,10 +6,13 @@
 ## Summary
 
 `DendroGridFunction` supplies the Dendro C++ storage expression directly. The
-Dendro connector maps NRPy's canonical conformal-factor gridfunction `cf` to
-`cf_W_or_chi`; equation modules retain `cf`. Stencil registrars bind pointers
-from fixed component lists and emit direct `ot::Block` loops. Algebraic floors
-and projection instead operate on owned nodes of zipped evolved vectors.
+generated state enumeration, name arrays, and checkpoint metadata name NRPy's
+canonical conformal-factor gridfunction `cf` as `cf_W_or_chi`, through
+`state_h.dendro_state_name`; equation modules and role-prefixed stencil pointers
+(`in_`, `rhs_`, `out_`) retain `cf`, as core gridfunction reads emit it. Stencil
+registrars bind pointers from fixed component lists and emit direct `ot::Block`
+loops. Algebraic floors and projection instead operate on owned nodes of zipped
+evolved vectors.
 
 ## Detail
 
@@ -56,8 +59,8 @@ Claim evidence:
 
 ## Sources
 
-- [grid.py](../../../nrpy/grid.py) - `DendroGridFunction` and `dendro_name`.
-- [state_h.py](../../../nrpy/infrastructures/Dendro/state_h.py) - state lists and enumeration emission.
+- [grid.py](../../../nrpy/grid.py) - `DendroGridFunction`.
+- [state_h.py](../../../nrpy/infrastructures/Dendro/state_h.py) - state lists, enumeration emission, and `dendro_state_name`.
 - [simple_loop.py](../../../nrpy/infrastructures/Dendro/simple_loop.py) - padded block point loops.
 - [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - direct input and output pointer binding.
 - [Ricci_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/Ricci_eval.py) - separate Ricci scratch binding.
