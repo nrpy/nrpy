@@ -215,7 +215,6 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/superB/superB/superB_pup_function_prototypes.h` | living |
 | `nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp` | living |
 | `nrpy/infrastructures/Dendro/tests_infra/README.md` | living |
-| `nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp` | living |
 | `nrpy/tests/reference_metric_Cartesian.py` | living |
 | `nrpy/tests/reference_metric_Spherical.py` | living |
 | `nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py` | living |
@@ -258,6 +257,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/examples/geodesic_visualizations/blueprint_analysis.py` | living |
 | `nrpy/examples/tests/sebob_consistency_check.py` | living |
 | `nrpy/examples/tests/sebobv2_consistency_check.py` | living |
+| `nrpy/examples/tests/dendro_application_check.py` | living |
 | `nrpy/examples/dendro_fccz4.py` | living |
 | `nrpy/examples/dendro_bssn.py` | living |
 | `nrpy/equations/basis_transforms/jacobians.py` | living |

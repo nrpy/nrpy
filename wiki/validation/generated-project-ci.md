@@ -5,8 +5,8 @@
 
 ## Summary
 
-Workflow YAML separates static analysis, Ubuntu/macOS code generation,
-ETLegacy regression, Dendro qualification, Charm++/superB, and trusted/current
+Workflow YAML separates static analysis, Ubuntu/macOS code generation, ETLegacy
+regression, Dendro application validation, Charm++/superB, and trusted/current
 waveform consistency routes. These are configured routes, not execution-result
 snapshots.
 
@@ -20,7 +20,7 @@ Configured GitHub job map:
 | `codegen-ubuntu` | Configured Ubuntu/Python matrix | Installs NRPy, generates in `tmp/`, and builds the selected default C/library projects with `make`, spanning elliptic, wave, black-hole, PN, SEOBNR, TOV, hydro, BHaHAHA, and `sebobv2` routes. It generates `sebobv1_jax` without package install/build. | The `make` builds run no generated executable, and `make clean` follows each; MANGA commands are commented out. |
 | `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation as Ubuntu; no Dendro generation or build; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
 | `einsteintoolkit-validation` | Configured Ubuntu/Apptainer Einstein Toolkit image | Generates `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs the configured Baikal, BaikalVacuum, and WaveToyNRPy Cactus testsuites and fails on reported failures. No `carpetx_*` generation/build/run. |
-| `dendro-validation` | Configured Ubuntu/Apptainer image | This checked-in job still invokes the removed mock-host/library generation interface and obsolete generated target names. It does not describe the complete sibling applications now emitted by the Dendro examples. | No current Dendro production result can be inferred from this stale job. Required replacement checks are deterministic generation, complete builds, and MPI TwoPunctures runs for both applications at FD4/6/8. |
+| `dendro-validation` | Ubuntu 24.04 runner with apt-installed Open MPI, GSL, BLAS/LAPACK, and gfortran; matrix `formulation: [bssn, fccz4]`; 75-minute job timeout | Each leg runs `nrpy/examples/tests/dendro_application_check.py`, which generates the W and chi projects twice, configures and builds them against the pinned Dendrolib, solves TwoPunctures once per variant, and runs short MPI evolutions with forced remeshing, horizon finds, wave extraction, checkpoint and restore, 1/2/4-rank repeats, FD4/6/8 initialization, and process-boundary rejections. | Proves only the named layers for the helper's two CI profiles: generation determinism, compile/link compatibility, closed-form TwoPunctures ADM and horizon-mass agreement, initialization and symmetry properties, restart identity, rank-count agreement, ordering of the initial Hamiltonian-constraint norm with FD order (not a convergence test), and the listed rejections. It is not long-time, merger, or production-resolution evidence. |
 | `charmpp-validation` | Configured Ubuntu/Apptainer Charm++ context | Generates and builds the configured superB elliptic, spectroscopy, and collision projects | Runs the configured collision executable through `charmrun`; no explicit scientific-output assertion beyond process success. |
 | `sebob-consistency-test` | Configured Ubuntu matrix | Checks out the workflow-selected trusted revision; generates/builds trusted and current SEOBNRv5 variants | Each helper invocation rebuilds both executables, uses exactly ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed the perturbation-derived baseline. |
 | `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the workflow-selected trusted revision | Uses the same ten-input and median-error criterion. |
@@ -89,31 +89,58 @@ cell is an ordinary C build. The helper installs no CUDA toolkit, declares no
 GPU runner, runs no generated executable, and checks no GPU result. Treat it as
 a local command recipe requiring a prepared environment, not CI pass evidence.
 
-Dendro's checked-in job predates complete sibling applications. It names
-removed generation options, library targets, qualification executables, and
-mock-host checks. Therefore it is a migration reminder, not configured coverage
-for `NRPy_BSSN_GR` or `NRPy_fCCZ4_GR`. Replacement workflow work requires
-explicit authorization for `.github/workflows/main.yml`.
+Dendro's job runs one helper per formulation. The helper generates the W and chi
+sibling applications twice with separate caches and requires byte-identical
+trees, then configures and builds each with `CPU_ARCH=x86-64-v3` against the
+Dendrolib and toml11 revisions pinned by the generated `CMakeLists.txt`. One
+TwoPunctures solve is shared by all runs of each conformal-factor variant.
+Profile P (maximum depth 13, FD6, eight steps, remesh, horizon, wave, and
+checkpoint cadence 4) checks the solved ADM energy and angular momentum against
+the closed forms for the conformal-factor rescaling, horizon irreducible masses
+against the puncture ADM masses, equal-mass reflection symmetry, zero initial
+Lambda, vanishing odd-m wave modes and the reflection relation C(l,-m) = (-1)^l
+conj C(l,m), a forced remesh with continuous ADM energy, the
+algebraic-projection residual and excision centers stored in the checkpoint,
+byte-identical `dat/`, `bah/`, and `vtu/` outputs after a stop at step 4 and
+restore, and agreement of half-rank-count with full-rank-count diagnostics
+within a relative tolerance. Profile O (maximum depth 10, four steps) checks
+that FD4, FD6, and FD8 share one mesh and that the initial
+Hamiltonian-constraint norm falls by at least half per order increase, an
+ordering check rather than a convergence test, plus a 1-rank repeat. The W and
+chi variants must agree at the shared initial diagnostic. Negative cases require
+nonzero exit and a named diagnostic for a W/chi cross-restore, `--tpid` on more
+than one rank, a TwoPunctures parameter mismatch, a missing TwoPunctures file,
+an unsupported element order, an unsupported refinement mode, an excessive CFL
+factor, and a missing argument. fCCZ4 additionally requires its Z4-extended
+Hamiltonian diagnostic to equal the BSSN one and its Z4 vector to vanish at step
+0.
 
-Current required checks live in [Production Validation And Deferred
-Checks](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md).
-They cover deterministic generation, explicit source lists, complete builds,
-MPI TwoPunctures initialization and diagnostics at FD4/6/8, remeshing,
-checkpoint/restart, constraints, waves, and horizons. This page records those
-requirements without claiming a configured or successful CI run.
+The helper refuses rank counts that would start a three-rank run and refuses
+horizon finding with `BSSN_IO_OUTPUT_FREQ=0`; its docstrings record the reason.
+It generates only with Kreiss-Oliger dissipation enabled. The apt packages,
+compilers, and `requirements.txt` packages are not pinned; the helper prints
+their resolved versions, and a pass is evidence only for those versions. Every
+subprocess has an argument vector, a timeout, and a bounded log tail on failure,
+and the work directory is removed unconditionally.
 
 Claim evidence:
-- Claim: the checked-in Dendro job targets the removed mock-host/library interface and does not validate the complete sibling applications.
+- Claim: the `dendro-validation` job generates, builds, runs, and checks both complete sibling Dendro applications in W and chi variants through `dendro_application_check.py`, with the checks and rejections listed in this section.
 - Role: CI behavior
-- Deciding authority: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py), current command-line interface; [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py), current command-line interface
-- Corroboration: [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), current generated target and source emission
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `Leg.run`, `Leg.run_variant`, `Leg.run_negatives`
+- Corroboration: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py), current command-line interface; [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), pinned dependency revisions
+
+Claim evidence:
+- Claim: the helper's pass results cover only its two CI profiles, eight-step or shorter evolutions, and Kreiss-Oliger-enabled generation; they are not evidence for long-time, merger, production-resolution, or KO-off (`--no-ko`) Dendro behavior.
+- Role: CI behavior
+- Deciding authority: [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `PROFILE_P`, `PROFILE_O`, `COMMON_OVERRIDES`, `Leg.generate_and_build`
+- Corroboration: [Production Validation And Deferred Checks](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md), `Required application checks`
 
 Explicitly unsupported or unverified by these configurations: CarpetX build or
 runtime; JAX generated-package install/import/basic test or accelerator runtime;
-any CUDA executable/GPU result; Dendro general boundaries, distributed
-remeshing, local time stepping, restart, output, GPU execution, or threaded
-kernels;
-long-time or nonlinear Dendro evolution;
+any CUDA executable/GPU result; Dendro general boundaries, local time
+stepping, GPU execution, threaded kernels, three-rank horizon checkpoints, or
+KO-off (`--no-ko`) generation and build; long-time, merger, or
+production-resolution Dendro evolution;
 geodesic/raytracing projects; GRoovy; active MANGA build; Kasner; and scientific
 correctness beyond the stated regression, property, and waveform assertions.
 
@@ -127,6 +154,7 @@ generated file has been deliberately registered as frozen evidence.
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-mac`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `einsteintoolkit-validation`; official Einstein Toolkit [Adding a test case](https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case) - `A test case is...`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `dendro-validation`
+- [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py) - `Leg.run`, profiles, checks, and negative cases
 - [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) - current BSSN generation interface
 - [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - current fCCZ4 generation interface
 - [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py) - current generated source and target emission

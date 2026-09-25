@@ -45,9 +45,30 @@ Dendro-BSSN currently duplicates x separation into the z component of its
 relative-position history. Compare the resulting meshes before interpreting
 constraint differences as differences between evolution equations.
 
-The checked-in GitHub workflow has not yet been updated for this application
-layout. Therefore workflow configuration does not currently prove these Dendro
-generation, build, MPI, remesh, restart, or diagnostic checks.
+The `dendro-validation` workflow job runs
+`nrpy/examples/tests/dendro_application_check.py` once per formulation and
+configures these required checks: W and chi generation (byte-identical repeat
+generation), complete builds, MPI TwoPunctures runs at FD4, FD6, and FD8 through
+the first diagnostic output with the initial Hamiltonian-constraint norm ordered
+by FD order (an ordering check, not a convergence test), finite diagnostics and
+lapse maxima on every run, zero initial Lambda, the algebraic-projection
+residual stored in the checkpoint, constraint output, wave extraction with odd-m
+modes near zero and the reflection relation C(l,-m) = (-1)^l conj C(l,m),
+apparent-horizon irreducible masses matching the puncture ADM masses, a forced
+remesh with continuous ADM energy, checkpoint and byte-identical restore, and
+rejection of both W/chi checkpoint-formulation mismatches. Halo exchange between
+ranks is covered by 1-, 2-, and 4-rank runs whose diagnostics must agree within
+a relative tolerance; block boundaries within a rank are covered only
+indirectly, through the numerical checks. The job does not inspect field data,
+does not check `alpha=W=sqrt(chi)` pointwise, and it runs none of the temporary
+direct numerical comparisons or native-control comparisons above; those remain
+review-time checks.
+
+Claim evidence:
+- Claim: `dendro-validation` configures the listed required application checks through `dendro_application_check.py`, covers halo exchange through rank-count agreement and block boundaries within a rank only through the numerical checks, and omits field-data inspection, the pointwise initial-lapse check, the temporary direct numerical comparisons, and native-control comparisons.
+- Role: CI behavior
+- Deciding authority: [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py), `Leg.run_variant`, `Leg.check_run_a`, `Leg.check_checkpoint`, `Leg.check_orders`, `Leg.compare_runs`, `Leg.run_negatives`; [main.yml](../../../.github/workflows/main.yml), `dendro-validation`
+- Corroboration: [Generated Project CI](../../validation/generated-project-ci.md), Dendro job description
 
 No new test file, test case, doctest prompt, or stored oracle may be added
 without express user permission. Runtime results belong in active review or CI
@@ -58,6 +79,7 @@ output, not as KB snapshots.
 - [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) - complete BSSN application generation.
 - [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - complete fCCZ4 application generation.
 - [CMakeLists.py](../../../nrpy/infrastructures/Dendro/CMakeLists.py) - explicit generated source manifest.
+- [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py) - configured CI checks for both applications.
 - [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - production evolution and service scheduling.
 - [Constraints And Diagnostic Norms](constraints-and-diagnostic-norms.md) - momentum convention and comparable RMS diagnostics.
 - [Octree Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md) - remesh path and limits of native parity.
