@@ -53,7 +53,7 @@ const unsigned padding = block.get1DPadWidth();
 const unsigned bflag = block.getBlkNodeFlag();
 if (padding == 0 || nx <= 2 * padding || ny <= 2 * padding || nz <= 2 * padding) {{
     throw std::invalid_argument("physical_boundary received invalid block padding");
-}}
+}}  // END IF: invalid block padding
 const {scalar_type} dx[3] = {{block.computeDx(domain_min, domain_max),
                              block.computeDy(domain_min, domain_max),
                              block.computeDz(domain_min, domain_max)}};
@@ -104,16 +104,16 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
                     gradient[2] += coefficient *
                         (in_gfs[field][offset + pp + distance * nx * ny] -
                          in_gfs[field][offset + pp - distance * nx * ny]) / dx[2];
-                }}
+                }}  // END LOOP: for distance over stencil radius
                 const {scalar_type} radial_derivative =
                     x * gradient[0] + y * gradient[1] + z * gradient[2];
                 rhs_gfs[field][offset + pp] =
                     -(radial_derivative + falloff[field] *
                       (in_gfs[field][offset + pp] - asymptotic[field])) / radius;
-            }}
-        }}
-    }}
-}}"""
+            }}  // END LOOP: for field over evolved gridfunctions
+        }}  // END LOOP: for i over interior x
+    }}  // END LOOP: for j over interior y
+}}  // END LOOP: for k over interior z"""
     falloff_values = ", ".join(falloff[name] for name in evolved_names)
     asymptotic_values = ", ".join(asymptotic[name] for name in evolved_names)
     body = f"""const {scalar_type} falloff[{len(evolved_names)}] = {{{falloff_values}}};

@@ -43,7 +43,9 @@ const char *injected() {
     const char *v = std::getenv("CAPTEST_INJECT");
     return v == nullptr ? "" : v;
 }  // END FUNCTION: injected
-bool inject(const char *what) { return std::string(injected()) == what; }
+bool inject(const char *what) {
+    return std::string(injected()) == what;
+}  // END FUNCTION: inject
 
 void report(const char *axis, bool ok, const std::string &detail) {
     if (!ok) ++g_failures;
@@ -97,7 +99,7 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
         [](double x, double y, double z) {
             const double r2 = x * x + y * y + z * z;
             return std::exp(-r2 / 0.5);
-        };
+        };  // END LAMBDA: Gaussian refinement indicator
     function2Octree(refine, octree, level + 2, 1e-3, eleOrder, comm);
     ot::Mesh *mesh = ot::createMesh(octree.data(), octree.size(), eleOrder,
                                     comm, 0, ot::SM_TYPE::FDM);
@@ -125,7 +127,7 @@ bool run_order(unsigned eleOrder, unsigned level, MPI_Comm comm, bool verbose) {
     std::function<void(double, double, double, double *)> fill =
         [](double x, double y, double z, double *out) {
             for (unsigned v = 0; v < 3; ++v) out[v] = field(v, x, y, z);
-        };
+        };  // END LAMBDA: fill linear fields
     double *zipped   = mesh->createCGVector<double>(fill, dof);
     double *unzipped = mesh->createUnZippedVector<double>(dof);
     if (faultRank && inject("zipped")) {

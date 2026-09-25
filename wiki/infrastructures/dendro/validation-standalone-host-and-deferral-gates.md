@@ -5,9 +5,7 @@
 
 ## Summary
 
-Production examples generate complete Dendro applications. Existing historical
-self-test emitters remain preserved, but production examples do not import
-them.
+Production examples generate complete Dendro applications.
 
 ## Detail
 

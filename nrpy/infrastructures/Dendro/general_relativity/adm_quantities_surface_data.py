@@ -126,7 +126,7 @@ def register_CFunction_adm_quantities_surface_data(
                 "    momentum12[pp] = invalid;",
                 "    momentum22[pp] = invalid;",
                 "    continue;",
-                "}",
+                "}  // END IF: invalid metric determinant",
                 f"const {scalar_type} inverse_gamma00 = "
                 "(gamma11[pp] * gamma22[pp] - gamma12[pp] * gamma12[pp]) / "
                 "determinant;",
@@ -164,17 +164,17 @@ def register_CFunction_adm_quantities_surface_data(
         geometry = f"""if (adm_gfs == nullptr || surface_gfs == nullptr) {{
     throw std::invalid_argument(
         "adm_quantities_surface_data_order_{fd_order} received a null field table");
-}}
+}}  // END IF: null field table
 for (unsigned field = 0; field < 12; ++field) {{
     if (adm_gfs[field] == nullptr)
         throw std::invalid_argument(
             "adm_quantities_surface_data_order_{fd_order} received a null ADM field");
-}}
+}}  // END LOOP: for field over ADM inputs
 for (unsigned field = 0; field < 9; ++field) {{
     if (surface_gfs[field] == nullptr)
         throw std::invalid_argument(
             "adm_quantities_surface_data_order_{fd_order} received a null output field");
-}}
+}}  // END LOOP: for field over surface outputs
 const std::ptrdiff_t offset = static_cast<std::ptrdiff_t>(block.getOffset());
 const unsigned nx_block = block.getAllocationSzX();
 const unsigned ny_block = block.getAllocationSzY();
@@ -183,7 +183,7 @@ const unsigned padding_block = block.get1DPadWidth();
 if (padding_block < {fd_order // 2}) {{
     throw std::invalid_argument(
         "ADM surface-data block padding is too small for FD{fd_order}");
-}}
+}}  // END IF: block padding too small
 const {scalar_type} dx_block[3] = {{
     block.computeDx(domain_min, domain_max),
     block.computeDy(domain_min, domain_max),

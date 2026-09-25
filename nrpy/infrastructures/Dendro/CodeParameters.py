@@ -163,10 +163,8 @@ def emitted_parameter_names() -> List[str]:
     """
     used_names = {
         cp_name
-        for cfunction_name in cfc.CFunction_dict
-        for cp_name in (
-            cfc.CFunction_dict[cfunction_name].ET_current_thorn_CodeParams_used or []
-        )
+        for cfunction in cfc.CFunction_dict.values()
+        for cp_name in (cfunction.ET_current_thorn_CodeParams_used or [])
     }
     return [
         cp_name
@@ -299,6 +297,7 @@ def register_CFunctions_parameters(solver_stem: str, solver_namespace: str) -> N
             continue
         validate_lines.append(
             f"if (!std::isfinite(params.{cp_name})) {{ ok = false; }}"
+            f"  // END IF: non-finite {cp_name}"
         )
     validate_lines.append("return ok;")
     validate_desc = (

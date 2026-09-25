@@ -90,7 +90,7 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
                 const {scalar_type} radius = excision_radii[region];
                 excised = excised || delta_x * delta_x + delta_y * delta_y +
                                       delta_z * delta_z < radius * radius;
-            }}
+            }}  // END LOOP: for region over excision regions
             if (excised) continue;
             const std::size_t pp = offset + i + static_cast<std::size_t>(nx) *
                                                (j + static_cast<std::size_t>(ny) * k);
@@ -102,9 +102,9 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
                         std::numeric_limits<{scalar_type}>::infinity();
                     local_max_norms[field] =
                         std::numeric_limits<{scalar_type}>::infinity();
-                }}
+                }}  // END LOOP: for field over diagnostics
                 continue;
-            }}
+            }}  // END IF: invalid conformal factor
             const {scalar_type} proper_volume = quadrature_weight * dx[0] * dx[1] *
                                                 dx[2] / std::pow(cf, {volume_exponent});
             *local_volume += proper_volume;
@@ -116,13 +116,13 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
                     local_max_norms[field] =
                         std::numeric_limits<{scalar_type}>::infinity();
                     continue;
-                }}
+                }}  // END IF: non-finite diagnostic value
                 local_squared_norms[field] += value * value * proper_volume;
                 local_max_norms[field] = std::max(local_max_norms[field], std::abs(value));
-            }}
-        }}
-    }}
-}}"""
+            }}  // END LOOP: for field over diagnostics
+        }}  // END LOOP: for i over interior x
+    }}  // END LOOP: for j over interior y
+}}  // END LOOP: for k over interior z"""
     cfc.register_CFunction(
         subdirectory="generated/src/diagnostics",
         includes=[f"{solver_stem}_defines.h", "<limits>"],

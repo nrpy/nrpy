@@ -28,7 +28,7 @@ void record(std::size_t size) noexcept {
     if (enabled.load(std::memory_order_relaxed)) {
         count.fetch_add(1, std::memory_order_relaxed);
         bytes.fetch_add(size, std::memory_order_relaxed);
-    }
+    }  // END IF: allocation measurement enabled
 }  // END FUNCTION: record
 // clang-format off
 }  // END NAMESPACE: allocation measurement
@@ -46,12 +46,18 @@ void *operator new[](std::size_t size) {
     throw std::bad_alloc();
 }  // END FUNCTION: operator new[]
 
-void operator delete(void *memory) noexcept { std::free(memory); }
-void operator delete[](void *memory) noexcept { std::free(memory); }
-void operator delete(void *memory, std::size_t) noexcept { std::free(memory); }
+void operator delete(void *memory) noexcept {
+    std::free(memory);
+}  // END FUNCTION: operator delete
+void operator delete[](void *memory) noexcept {
+    std::free(memory);
+}  // END FUNCTION: operator delete[]
+void operator delete(void *memory, std::size_t) noexcept {
+    std::free(memory);
+}  // END FUNCTION: operator delete
 void operator delete[](void *memory, std::size_t) noexcept {
     std::free(memory);
-}
+}  // END FUNCTION: operator delete[]
 
 void *operator new(std::size_t size, std::align_val_t alignment) {
     allocation_measurement::record(size);
@@ -68,17 +74,17 @@ void *operator new[](std::size_t size, std::align_val_t alignment) {
 
 void operator delete(void *memory, std::align_val_t) noexcept {
     std::free(memory);
-}
+}  // END FUNCTION: operator delete
 void operator delete[](void *memory, std::align_val_t) noexcept {
     std::free(memory);
-}
+}  // END FUNCTION: operator delete[]
 void operator delete(void *memory, std::size_t, std::align_val_t) noexcept {
     std::free(memory);
-}
+}  // END FUNCTION: operator delete
 void operator delete[](void *memory, std::size_t,
                        std::align_val_t) noexcept {
     std::free(memory);
-}
+}  // END FUNCTION: operator delete[]
 
 namespace {
 double field(unsigned f, double x, double y, double z) {
@@ -137,7 +143,7 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
             if (candidate.component_offset != 0) {
                 selected = id;
                 break;
-            }
+            }  // END IF: nonzero component offset found
         }  // END LOOP: for id seeking nonzero offset
         auto geometry =
             app::block_geometry(mesh, blocks[selected], minimum, maximum);
@@ -171,7 +177,7 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
             const unsigned bad_id = blocks.size();
             context.rhs_blkwise(context.unzipped, context.unzipped_rhs, &bad_id,
                                 1, &block_time);
-        }
+        }  // END IF: inject out-of-range block id
         if (fault == "blockwise_bad_dof") {
             app::DVec wrong_dof;
             wrong_dof.create_vector(&mesh,
@@ -203,7 +209,7 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
                         i < geometry.nx - geometry.padding;
                     selected_interior[cell] = interior ? 1 : 2;
                     if (interior) ++callback_points;
-                }  // END LOOP: mark selected block interior and row padding
+                }  // END LOOP: for i over padded x
         std::vector<double *> input(dof), output(dof);
         context.unzipped.to_2d(input.data());
         context.unzipped_rhs.to_2d(output.data());
@@ -230,8 +236,8 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
                     if (output[f][cell] != sentinel)
                         throw std::runtime_error(
                             "blockwise RHS wrote outside selected interior");
-                }
-            }  // END LOOP: require selected-block-only writes
+                }  // END ELSE: point outside selected block
+            }  // END LOOP: for cell over unzipped points
 
         std::vector<double> flat_input(std::size_t(dof) * volume);
         std::vector<double> flat_output(std::size_t(dof) * volume, sentinel);
@@ -291,7 +297,7 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
                 0.125;
             context.state.get_vec_ptr()[std::size_t(a00) * zipped_stride + i] +=
                 0.03125;
-        }
+        }  // END LOOP: for i over owned nodes
         context.unzip(context.state, context.unzipped, 1);
         context.unzipped.to_2d(input.data());
         std::vector<double> flat_projection(std::size_t(dof) * volume);
@@ -319,7 +325,7 @@ void qualify_block_callbacks(app::Ctx &context, ot::Mesh &mesh,
                     std::abs(flat_projection[std::size_t(f) * volume + cell] -
                              input[f][geometry.component_offset + cell]));
                 ++projection_points;
-            }  // END LOOP: compare block-local and whole-vector projection
+            }  // END LOOP: for cell over selected block
     }  // END IF: qualify active-rank callbacks
 
     unsigned long long totals[6] = {},
@@ -436,7 +442,7 @@ int main(int argc, char **argv) {
                                 throw std::runtime_error(
                                     "unfilled distributed zipped ghost");
                         ++remote;
-                    }  // END LOOP: verify received ghost nodes
+                    }  // END LOOP: for i over received ghosts
                     std::vector<double *> pointers(dof);
                     context.unzipped.to_2d(pointers.data());
                     for (const auto &b : mesh->getLocalBlockList()) {
@@ -469,8 +475,7 @@ int main(int argc, char **argv) {
                                                             b.get1DPadWidth()) *
                                                                grid_step) /
                                                 double(1u << m_uiMaxDepth);
-                                    }  // END LOOP: recompute physical padded
-                                       // coordinates
+                                    }  // END LOOP: for a over coordinate axes
                                     const bool halo = i < g.padding ||
                                                       j < g.padding ||
                                                       k < g.padding ||
@@ -514,10 +519,9 @@ int main(int argc, char **argv) {
                                         // nodal data.
                                         pointers[f][cell] =
                                             2 * field(f, x[0], x[1], x[2]) + 7;
-                                    }  // END LOOP: compare and transform
-                                       // components
-                                }  // END LOOP: inspect padded block points
-                    }  // END LOOP: verify all local blocks
+                                    }  // END LOOP: for f over field components
+                                }  // END LOOP: for i over padded x
+                    }  // END LOOP: for b over local blocks
                     context.zip(context.unzipped, context.state);
                     for (unsigned f = 0; f < dof; ++f)
                         for (unsigned i = mesh->getNodeLocalBegin();
@@ -532,7 +536,7 @@ int main(int argc, char **argv) {
                                 error,
                                 std::abs(context.state.get_vec_ptr()[cell] -
                                          (2 * expected[cell] + 7)));
-                        }  // END LOOP: check nonconstant zipped values
+                        }  // END LOOP: for i over owned nodes
                 }  // END IF: verify active rank transport
                 unsigned long long total_halos = 0, total_remote = 0,
                                    max_blocks = 0, total_offsets = 0;
@@ -603,7 +607,7 @@ int main(int argc, char **argv) {
                             parameter_error = std::max(
                                 parameter_error,
                                 std::abs(difference - (f == b0 ? -0.01 : 0.0)));
-                        }  // END LOOP: compare parameter response
+                        }  // END LOOP: for i over owned nodes
                 first.destroy_vector();
                 second.destroy_vector();
                 MPI_Allreduce(&parameter_error, &global_parameter_error, 1,

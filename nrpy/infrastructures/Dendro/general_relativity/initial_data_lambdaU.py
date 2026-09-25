@@ -94,7 +94,7 @@ def register_CFunction_initial_data_lambdaU(
                 f"if (padding_block < {fd_order // 2}) {{",
                 '    throw std::invalid_argument("initial_data_lambdaU padding '
                 f'is too small for FD{fd_order}");',
-                "}",
+                "}  // END IF: block padding too small",
                 f"const {scalar_type} dx_block[3] = {{",
                 "    block.computeDx(domain_min, domain_max),",
                 "    block.computeDy(domain_min, domain_max),",

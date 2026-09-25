@@ -102,7 +102,7 @@ const unsigned nz_block = block.getAllocationSzZ();
 const unsigned padding_block = block.get1DPadWidth();
 if (padding_block < {fd_order // 2}) {{
     throw std::invalid_argument("Ricci_eval block padding is too small for FD{fd_order}");
-}}
+}}  // END IF: block padding too small
 const {scalar_type} dx_block[3] = {{
     block.computeDx(domain_min, domain_max),
     block.computeDy(domain_min, domain_max),

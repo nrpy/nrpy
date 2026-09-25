@@ -73,7 +73,10 @@ def output_CFunctions_function_prototypes_and_construct_CMakeLists(
         '#include "BHaH_defines.h"',
         '#include "aeh_bhahaha.h"',
         "",
-        "namespace ot { class Block; class Mesh; }",
+        "namespace ot { class Block; class Mesh;",
+        "// clang-format off",
+        "}  // END NAMESPACE: ot",
+        "// clang-format on",
         "",
     ]
     for name, cfunc in sorted(cfc.CFunction_dict.items()):

@@ -109,9 +109,9 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
 {copy_to_adm}
             if (!(sample.alpha > 0.0) || !std::isfinite(sample.alpha))
                 throw std::runtime_error("TwoPunctures returned invalid W lapse");
-        }}
-    }}
-}}"""
+        }}  // END LOOP: for i over interior x
+    }}  // END LOOP: for j over interior y
+}}  // END LOOP: for k over interior z"""
     cfc.register_CFunction(
         subdirectory="generated/src/twopunctures",
         includes=[

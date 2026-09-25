@@ -289,8 +289,6 @@ typedef double DOUBLE;
         + f"include/{SOLVER_STEM}Ctx.h": solver_context.output_solver_context_h(
             SOLVER_STEM,
             SOLVER_NAMESPACE,
-            args.fd_order,
-            enable_fCCZ4=False,
         ),
         module_root
         + f"src/{SOLVER_STEM}Ctx.cpp": solver_context.output_solver_context_cpp(
@@ -298,8 +296,6 @@ typedef double DOUBLE;
             SOLVER_NAMESPACE,
             args.fd_order,
             enable_fCCZ4=False,
-            enable_SSL=True,
-            enable_CAHD=True,
         ),
         module_root
         + f"src/{SOLVER_STEM}_main.cpp": main_cpp.output_main_cpp(

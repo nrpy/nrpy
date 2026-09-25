@@ -63,36 +63,36 @@ def register_CFunction_gravitational_waves(
                 verbose=False,
             )
             harmonic_cases.append(
-                f"case {ell * ell + ell + mode}: {{\n{assignments}    break;\n}}"
+                f"case {ell * ell + ell + mode}: {{\n{assignments}    break;\n}}  // END BLOCK: harmonic ell={ell} m={mode}"
             )
     switch_body = "\n".join(harmonic_cases)
     decomposition = f"""if (mesh == nullptr || extraction_radii == nullptr ||
     modes_real == nullptr || modes_imag == nullptr) {{
     throw std::invalid_argument("gravitational_waves received a null array");
-}}
+}}  // END IF: null input array pointers
 if (maximum_l < 2 || maximum_l > {maximum_l_mode_generated}) {{
     throw std::invalid_argument("requested Psi4 mode was not generated");
-}}
+}}  // END IF: maximum_l outside generated range
 const unsigned required_modes = (maximum_l + 1) * (maximum_l + 1);
 if (mode_stride < required_modes) {{
     throw std::invalid_argument("Psi4 mode stride is too small");
-}}
+}}  // END IF: mode stride too small
 if (num_radii != 0 &&
     mode_stride > std::numeric_limits<unsigned>::max() / num_radii) {{
     throw std::overflow_error("Psi4 mode array size overflows unsigned");
-}}
+}}  // END IF: output size overflows unsigned
 const unsigned output_size = num_radii * mode_stride;
 if (output_size > static_cast<unsigned>(std::numeric_limits<int>::max())) {{
     throw std::overflow_error("Psi4 MPI reduction count exceeds INT_MAX");
-}}
+}}  // END IF: MPI count exceeds INT_MAX
 std::fill(modes_real, modes_real + output_size, 0.0);
 std::fill(modes_imag, modes_imag + output_size, 0.0);
 if (!mesh->isActive() || num_radii == 0) {{
     return;
-}}
+}}  // END IF: inactive rank or no radii
 if (psi4_real_zipped == nullptr || psi4_imag_zipped == nullptr) {{
     throw std::invalid_argument("gravitational_waves received null Psi4 data");
-}}
+}}  // END IF: null Psi4 field data
 constexpr unsigned num_points = LEBEDEV_025_NUM_PTS;
 const Point grid_limits[2] = {{grid_min, grid_max}};
 const Point domain_limits[2] = {{domain_min, domain_max}};
@@ -114,7 +114,7 @@ for (unsigned radius_index = 0; radius_index < num_radii; ++radius_index) {{
             radius * std::sin(theta) * std::sin(phi);
         coordinates[3 * point + 2] = extraction_center.z() +
             radius * std::cos(theta);
-    }}
+    }}  // END LOOP: for point over Lebedev points
     valid_real.clear();
     valid_imag.clear();
     ot::da::interpolateToCoords(
@@ -125,7 +125,7 @@ for (unsigned radius_index = 0; radius_index < num_radii; ++radius_index) {{
         grid_limits, domain_limits, shell_imag.data(), valid_imag);
     if (valid_real != valid_imag) {{
         throw std::logic_error("Psi4 fields have different interpolation owners");
-    }}
+    }}  // END IF: mismatched Psi4 interpolation owners
     for (const unsigned valid_index : valid_real) {{
         if (!std::isfinite(shell_real[valid_index]) ||
             !std::isfinite(shell_imag[valid_index])) {{
@@ -140,8 +140,8 @@ for (unsigned radius_index = 0; radius_index < num_radii; ++radius_index) {{
             std::cerr << "rank " << mesh->getMPIRank() << ": "
                       << message.str() << std::endl;
             throw std::runtime_error(message.str());
-        }}
-    }}
+        }}  // END IF: non-finite interpolated Psi4 value
+    }}  // END LOOP: for valid_index over owned points
     for (unsigned ell = 2; ell <= maximum_l; ++ell) {{
         for (int mode = -static_cast<int>(ell);
              mode <= static_cast<int>(ell); ++mode) {{
@@ -163,7 +163,7 @@ for (unsigned radius_index = 0; radius_index < num_radii; ++radius_index) {{
                 default:
                     throw std::logic_error(
                         "missing generated spin-weighted harmonic");
-                }}
+                }}  // END SWITCH: harmonic by mode_index
                 const {scalar_type} weight = LEBEDEV_025_WEIGHT[valid_index];
                 integral_real += weight *
                     (shell_real[valid_index] * harmonic_real +
@@ -171,13 +171,13 @@ for (unsigned radius_index = 0; radius_index < num_radii; ++radius_index) {{
                 integral_imag += weight *
                     (shell_imag[valid_index] * harmonic_real -
                      shell_real[valid_index] * harmonic_imag);
-            }}
+            }}  // END LOOP: for valid_index over Lebedev quadrature
             const unsigned output_index = radius_index * mode_stride + mode_index;
             local_real[output_index] = 4.0 * M_PI * integral_real;
             local_imag[output_index] = 4.0 * M_PI * integral_imag;
-        }}
-    }}
-}}
+        }}  // END LOOP: for mode over -ell..ell
+    }}  // END LOOP: for ell over 2..maximum_l
+}}  // END LOOP: for radius_index over extraction radii
 par::Mpi_Allreduce(
     local_real.data(), modes_real, static_cast<int>(output_size), MPI_SUM,
     mesh->getMPICommunicator());

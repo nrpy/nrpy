@@ -28,7 +28,6 @@ def register_CFunction_BSSN_constraints(
     *,
     fd_order: int = 6,
     CoordSystem: str = "Cartesian",
-    capture_validation_expressions: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register one order-specific per-block BSSN constraint kernel.
@@ -36,7 +35,6 @@ def register_CFunction_BSSN_constraints(
     :param solver_stem: Lowercase solver name used by the generated header.
     :param fd_order: Centered finite-difference order.
     :param CoordSystem: Reference-metric coordinate system.
-    :param capture_validation_expressions: Retain expressions for validation.
     :return: Updated NRPy environment, or ``None`` during task collection.
     :raises ValueError: If configuration, layout, or padding is invalid.
     """
@@ -130,7 +128,7 @@ const unsigned nz_block = block.getAllocationSzZ();
 const unsigned padding_block = block.get1DPadWidth();
 if (padding_block < {fd_order // 2}) {{
     throw std::invalid_argument("BSSN_constraints block padding is too small for FD{fd_order}");
-}}
+}}  // END IF: block padding too small
 const {scalar_type} dx_block[3] = {{
     block.computeDx(domain_min, domain_max),
     block.computeDy(domain_min, domain_max),
@@ -168,18 +166,6 @@ const {scalar_type} pmin_block[3] = {{
             ),
             body=body,
         )
-        if capture_validation_expressions:
-            validation = cast(
-                Dict[int, Dict[str, object]],
-                par.glb_extras_dict.setdefault("Dendro", {}).setdefault(
-                    "BSSN_constraint_validation", {}
-                ),
-            )
-            if fd_order in validation:
-                raise ValueError(
-                    f"BSSN constraint validation already exists for FD{fd_order}."
-                )
-            validation[fd_order] = expressions_by_gridfunction
     finally:
         par.set_parval_from_str("fd_order", old_fd_order)
     return pcg.NRPyEnv()

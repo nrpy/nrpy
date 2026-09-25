@@ -75,7 +75,7 @@ def register_CFunction_floor_the_lapse_and_conformal_factor(
             f"{scalar_type}* cf_W_or_chi = in_gfs[{conformal_factor_index}];",
             "for (unsigned pp = node_begin; pp < node_end; ++pp) {",
             loop_body,
-            "}",
+            "}  // END LOOP: for pp over node range",
         )
     )
     cfc.register_CFunction(

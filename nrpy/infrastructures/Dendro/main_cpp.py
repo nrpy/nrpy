@@ -67,15 +67,17 @@ DENDRO_PUNCTURE_SEED = r"""
 namespace nrpy_dendro_seed {
 struct PunctureParameters {
     double mass, x, y, z, vx, vy, vz, spin, spin_theta, spin_phi;
-};
+};  // END STRUCT: PunctureParameters
 namespace VAR {
 enum {
     U_ALPHA, U_CHI, U_K, U_GT0, U_GT1, U_GT2,
     U_BETA0, U_BETA1, U_BETA2, U_B0, U_B1, U_B2,
     U_SYMGT0, U_SYMGT1, U_SYMGT2, U_SYMGT3, U_SYMGT4, U_SYMGT5,
     U_SYMAT0, U_SYMAT1, U_SYMAT2, U_SYMAT3, U_SYMAT4, U_SYMAT5
-};
-}
+};  // END ENUM: VAR field indices
+// clang-format off
+}  // END NAMESPACE: VAR
+// clang-format on
 void punctureDataPhysicalCoord(const double xx, const double yy,
                                const double zz, double* var,
                                const PunctureParameters& BH1,
@@ -88,9 +90,9 @@ void punctureDataPhysicalCoord(const double xx, const double yy,
         for (j = 0; j < 3; j++) {
             for (i = 0; i < 3; i++) {
                 epijk[k][j][i] = 0.0;
-            }
-        }
-    }
+            }  // END LOOP: for i over epijk components
+        }  // END LOOP: for j over epijk components
+    }  // END LOOP: for k over epijk components
     epijk[0][1][2] = 1.0;
     epijk[1][2][0] = 1.0;
     epijk[2][0][1] = 1.0;
@@ -102,8 +104,8 @@ void punctureDataPhysicalCoord(const double xx, const double yy,
     for (j = 0; j < 3; j++) {
         for (i = 0; i < 3; i++) {
             deltaij[j][i] = 0.0;
-        }
-    }
+        }  // END LOOP: for i over deltaij columns
+    }  // END LOOP: for j over deltaij rows
 
     deltaij[0][0] = 1.0;
     deltaij[1][1] = 1.0;
@@ -210,7 +212,7 @@ void punctureDataPhysicalCoord(const double xx, const double yy,
         v_u_j1 =
             amp_capj * amp_capj * (u0_j + u2_j * amp_capr * amp_capr * p2_mu_j);
         v_u_corr = v_u_corr + v_u_j1;
-    }
+    }  // END IF: BH1 spinning puncture
     // For boosting puncture
     if (vp1tot > 1.e-6) {
         amp_capp = 2.0 * vp1tot / mass1;
@@ -228,7 +230,7 @@ void punctureDataPhysicalCoord(const double xx, const double yy,
         p2_mu_p  = (3.0 * pow(mu_p, 2) - 1.0) / 2.0;
         v_u_p1   = pow(amp_capp, 2) * (u0_p + u2_p * p2_mu_p);
         v_u_corr = v_u_corr + v_u_p1;
-    }
+    }  // END IF: BH1 boosted puncture
     // For spinning boosted pucture
     if (vp1tot > 1.e-6 && fabs(spin1) > 1.e-6) {
         v1       = (vp1[1] * vs1[2] - vp1[2] * vs1[1]) * vn1[0];
@@ -243,7 +245,7 @@ void punctureDataPhysicalCoord(const double xx, const double yy,
 
         v_u_c1   = (v1 * v2 * pow(l_r, 5)) / 80.0;
         v_u_corr = v_u_corr + v_u_c1;
-    }
+    }  // END IF: BH1 spinning boosted puncture
     // bh 2 same puncture as bh 1
     if (fabs(spin2) > 1.e-6) {
         amp_capj = 4.0 * spin2 / (mass2 * mass2);
@@ -261,7 +263,7 @@ void punctureDataPhysicalCoord(const double xx, const double yy,
         v_u_j2 =
             amp_capj * amp_capj * (u0_j + u2_j * amp_capr * amp_capr * p2_mu_j);
         v_u_corr = v_u_corr + v_u_j2;
-    }
+    }  // END IF: BH2 spinning puncture
 
     if (vp2tot > 1.e-6) {
         amp_capp = 2.0 * vp2tot / mass2;
@@ -279,7 +281,7 @@ void punctureDataPhysicalCoord(const double xx, const double yy,
         p2_mu_p  = (3.0 * pow(mu_p, 2) - 1.0) / 2.0;
         v_u_p2   = pow(amp_capp, 2) * (u0_p + u2_p * p2_mu_p);
         v_u_corr = v_u_corr + v_u_p2;
-    }
+    }  // END IF: BH2 boosted puncture
 
     if (vp2tot > 1.e-6 && fabs(spin2) > 1.e-6) {
         v1       = (vp2[1] * vs2[2] - vp2[2] * vs2[1]) * vn2[0];
@@ -294,7 +296,7 @@ void punctureDataPhysicalCoord(const double xx, const double yy,
 
         v_u_c2   = (v1 * v2 * pow(l_r, 5)) / 80.0;
         v_u_corr = v_u_corr + v_u_c2;
-    }
+    }  // END IF: BH2 spinning boosted puncture
 
     // vpsibl_u will be used for the conformal factor,
     vpsibl_u          = vpsibl + v_u_corr;
@@ -343,14 +345,14 @@ void punctureDataPhysicalCoord(const double xx, const double yy,
                     vt1 = epijk[i1][i3][i4] * vs1[i3] * vn1[i4] * vn1[i2];
                     vt2 = epijk[i2][i3][i4] * vs1[i3] * vn1[i4] * vn1[i1];
                     v2  = v2 + vt1 + vt2;
-                }
-            }
+                }  // END LOOP: for i4 over BH1 normal
+            }  // END LOOP: for i3 over BH1 spin
 
             v3  = vp1[i1] * vn1[i2] + vp1[i2] * vn1[i1];
             vt1 = 0.0;
             for (i3 = 0; i3 < 3; i3++) {
                 vt1 = vt1 + vp1[i3] * vn1[i3];
-            }
+            }  // END LOOP: for i3 over BH1 P-dot-n
             vt1 = vt1 * (vn1[i1] * vn1[i2] - deltaij[i1][i2]);
             v3  = v3 + vt1;
 
@@ -364,14 +366,14 @@ void punctureDataPhysicalCoord(const double xx, const double yy,
                     vt1 = epijk[i1][i3][i4] * vs2[i3] * vn2[i4] * vn2[i2];
                     vt2 = epijk[i2][i3][i4] * vs2[i3] * vn2[i4] * vn2[i1];
                     v2  = v2 + vt1 + vt2;
-                }
-            }
+                }  // END LOOP: for i4 over BH2 normal
+            }  // END LOOP: for i3 over BH2 spin
 
             v3  = vp2[i1] * vn2[i2] + vp2[i2] * vn2[i1];
             vt1 = 0.0;
             for (i3 = 0; i3 < 3; i3++) {
                 vt1 = vt1 + vp2[i3] * vn2[i3];
-            }
+            }  // END LOOP: for i3 over BH2 P-dot-n
             vt1 = vt1 * (vn2[i1] * vn2[i2] - deltaij[i1][i2]);
             v3  = v3 + vt1;
 
@@ -380,21 +382,28 @@ void punctureDataPhysicalCoord(const double xx, const double yy,
 
             if (i1 == 0 && i2 == 0) {
                 var[VAR::U_SYMAT0] = v4;  // XX
-            } else if (i1 == 0 && i2 == 1) {
+            }  // END IF: store At XX component
+            else if (i1 == 0 && i2 == 1) {
                 var[VAR::U_SYMAT1] = v4;  // XY
-            } else if (i1 == 0 && i2 == 2) {
+            }  // END ELSE IF: store At XY component
+            else if (i1 == 0 && i2 == 2) {
                 var[VAR::U_SYMAT2] = v4;  // XZ
-            } else if (i1 == 1 && i2 == 1) {
+            }  // END ELSE IF: store At XZ component
+            else if (i1 == 1 && i2 == 1) {
                 var[VAR::U_SYMAT3] = v4;  // YY
-            } else if (i1 == 1 && i2 == 2) {
+            }  // END ELSE IF: store At YY component
+            else if (i1 == 1 && i2 == 2) {
                 var[VAR::U_SYMAT4] = v4;  // YZ
-            } else if (i1 == 2 && i2 == 2) {
+            }  // END ELSE IF: store At YZ component
+            else if (i1 == 2 && i2 == 2) {
                 var[VAR::U_SYMAT5] = v4;  // ZZ
-            }
-        }
-    }
-}
-}  // namespace nrpy_dendro_seed
+            }  // END ELSE IF: store At ZZ component
+        }  // END LOOP: for i2 over Aij columns
+    }  // END LOOP: for i1 over Aij rows
+}  // END FUNCTION: punctureDataPhysicalCoord
+// clang-format off
+}  // END NAMESPACE: nrpy_dendro_seed
+// clang-format on
 
 """
 
@@ -476,7 +485,7 @@ int main(int argc, char** argv) {
         + executable_name
         + r""" [--tpid] PARAM_FILE\n";
     return 2;
-  }
+  }  // END IF: invalid command-line arguments
   MPI_Init(&argc, &argv);
   int rank = 0;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -645,9 +654,9 @@ int main(int argc, char** argv) {
         if (checkpoint_index < 0 || write_time > newest_checkpoint_time) {
           checkpoint_index = static_cast<int>(index);
           newest_checkpoint_time = write_time;
-        }
-      }
-    }
+        }  // END IF: newer checkpoint metadata found
+      }  // END LOOP: for index over checkpoint slots
+    }  // END IF: checkpoint restore requested
     const DendroScalar grid_min_x =
         toml::find_or<DendroScalar>(document, "BSSN_GRID_MIN_X", -400.0);
     const DendroScalar grid_min_y =
@@ -742,9 +751,10 @@ int main(int argc, char** argv) {
           document, "TPID_TARGET_M_PLUS", 0.48236442246752931);
       commondata.TP_bare_mass_m = toml::find_or<DendroScalar>(
           document, "TPID_TARGET_M_MINUS", 0.48236442246752931);
-    } else {
+    }  // END IF: bare masses given
+    else {
       commondata.TP_bare_mass_M = commondata.TP_bare_mass_m = -1.0;
-    }
+    }  // END ELSE: solve for bare masses
     std::snprintf(commondata.TP_BBH_description,
                   sizeof(commondata.TP_BBH_description),
                   "q=%g TwoPunctures", commondata.mass_ratio);
@@ -920,7 +930,7 @@ int main(int argc, char** argv) {
           nrpy_dendro_seed::punctureDataPhysicalCoord(
               physical_x, physical_y, physical_z, fields, seed_black_hole_1,
               seed_black_hole_2, initial_mesh_chi_floor);
-        };
+        };  // END LAMBDA: puncture seed field evaluation
     std::array<unsigned, 24> initial_field_indices{};
     for (unsigned field = 0; field < initial_field_indices.size(); ++field)
       initial_field_indices[field] = field;
@@ -959,7 +969,7 @@ int main(int argc, char** argv) {
 """
         + output_toml_bindings()
         + r"""
-    }
+    }  // END LOOP: for item over TOML table
     """
         + solver_stem
         + r"""_params_validate(params);
@@ -1017,7 +1027,7 @@ int main(int argc, char** argv) {
           adm[6 + component] = values[2 + component] * inverse_chi +
                                adm[component] * one_third_trK;
         return adm;
-      };
+      };  // END LAMBDA: bssn_to_adm
       const Point grid_limits[2]{
           Point(0.0, 0.0, 0.0),
           Point(1u << maximum_depth, 1u << maximum_depth,
@@ -1048,7 +1058,7 @@ int main(int argc, char** argv) {
           bssn_to_adm, grid_limits, domain_limits, vtu_frequency, 3,
           std::vector<int>{8, 16, 32}, std::vector<int>{16, 32, 64}, 0,
           toml::find_or<int>(document, "AEH_PARAMS", "VERBOSITY_LEVEL", 1));
-    }
+    }  // END IF: apparent-horizon finder enabled
     {
     """
         + solver_namespace
@@ -1080,7 +1090,7 @@ int main(int argc, char** argv) {
         throw std::runtime_error("checkpoint restore failed");
       mesh = context.get_mesh();
       restored = true;
-    }
+    }  // END IF: restore from checkpoint
     if (!restored) {
       if (context.initialize(commondata, tp_params, punctures) != 0)
         throw std::runtime_error("initial-data construction failed");
@@ -1112,7 +1122,7 @@ int main(int argc, char** argv) {
                     << old_grid_counts[1] << "->" << global_grid_counts[1]
                     << std::endl;
         if (global_grid_counts == old_grid_counts) break;
-      }
+      }  // END LOOP: for pass over initial remeshes
       if (initial_grid_remeshed &&
           context.initialize(commondata, tp_params, punctures) != 0)
         throw std::runtime_error("initial-grid reconstruction failed");
@@ -1126,7 +1136,8 @@ int main(int argc, char** argv) {
       ts::TSInfo converged_time_info = context.get_ts_info();
       converged_time_info._m_uiTh = time_step;
       context.set_ts_info(converged_time_info);
-    } else {
+    }  // END IF: fresh initial data
+    else {
       unsigned restored_minimum_depth = 0, restored_maximum_depth = 0;
       context.get_mesh()->computeMinMaxLevel(restored_minimum_depth,
                                              restored_maximum_depth);
@@ -1134,7 +1145,7 @@ int main(int argc, char** argv) {
           (grid_max_x - grid_min_x) / element_order,
           -static_cast<int>(restored_maximum_depth));
       time_step = context.get_ts_info()._m_uiTh;
-    }
+    }  // END ELSE: restored checkpoint grid
     ts::ETS<DendroScalar, """
         + solver_namespace
         + r"""::Ctx> time_stepper(&context);
@@ -1181,7 +1192,7 @@ int main(int argc, char** argv) {
         ts::TSInfo remeshed_time_info = context.get_ts_info();
         remeshed_time_info._m_uiTh = cfl * remeshed_minimum_dx;
         context.set_ts_info(remeshed_time_info);
-      }
+      }  // END IF: remesh this step
       if (context.evolve_excision_centers() != 0)
         throw std::runtime_error("puncture-center evolution failed");
       if (context.diagnostic_output() != 0)
@@ -1196,19 +1207,20 @@ int main(int argc, char** argv) {
         throw std::runtime_error("apparent-horizon output failed");
       if (context.write_checkpt() != 0)
         throw std::runtime_error("checkpoint write failed");
-    }
+    }  // END WHILE: RK4 time evolution
     context.terminal_output();
     mesh = context.get_mesh();
-    }
+    }  // END BLOCK: solver context lifetime
     delete mesh;
-  } catch (const std::exception& error) {
+  }  // END TRY: solver run
+  catch (const std::exception& error) {
     if (rank == 0) std::cerr << """
         + f'"{executable_name}: "'
         + r""" << error.what() << '\n';
     MPI_Abort(MPI_COMM_WORLD, 1);
-  }
+  }  // END CATCH: solver failure
   MPI_Finalize();
   return 0;
-}
+}  // END FUNCTION: main
 """
     )

@@ -45,7 +45,7 @@ if (valid_point_indices == nullptr || surface_coordinates == nullptr ||
 for (unsigned field = 0; field < 9; ++field) {{
     if (surface_data[field] == nullptr)
         throw std::invalid_argument("adm_quantities received a null data field");
-}}
+}}  // END LOOP: for field over surface data
 constexpr {scalar_type} inverse_8pi =
     0.039788735772973833942220940843128590508;
 for (unsigned valid = 0; valid < num_valid_points; ++valid) {{
@@ -88,7 +88,7 @@ for (unsigned valid = 0; valid < num_valid_points; ++valid) {{
     local_quantities[6] += weighted_inverse_8pi *
         (relative_coordinate[0] * momentum_surface[1] -
          relative_coordinate[1] * momentum_surface[0]);
-}}"""
+}}  // END LOOP: for valid over owned points"""
     cfc.register_CFunction(
         subdirectory="generated/src/adm_quantities",
         includes=[f"{solver_stem}_defines.h"],

@@ -16,7 +16,6 @@
 | `equation-modules-and-trusted-values` | Equation modules, generated trusted-value files, and BOB test metadata from `nrpy/equations`, including `nrpy/equations/seobnr/tests/BOB_v2_fit_sim_list.md`. | living | partial |
 | `infrastructure-modules-and-embedded-headers` | Python modules and embedded headers from `find nrpy/infrastructures -type f \( -name '*.py' -o -name '*.h' \)`. | living | partial |
 | `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`. | living | ingested |
-| `dendro-trusted-generated-source-baselines` | Generated-source baselines under `nrpy/infrastructures/Dendro/general_relativity/tests/`, owned by the emitting modules' direct validation entry points. Symbolic-expression baselines remain with their equation owners. | living | partial |
 | `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples` inventoried by `wiki/examples/example-generator-catalog.md`. | living | partial |
 | `ci-and-local-automation` | CI and local automation files from `.github`. | living | partial |
 
@@ -214,11 +213,9 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/superB/superB/superB_pup.py` | living |
 | `nrpy/infrastructures/superB/superB/superB.h` | living |
 | `nrpy/infrastructures/superB/superB/superB_pup_function_prototypes.h` | living |
-| `nrpy/infrastructures/Dendro/standalone_host/dendro_standalone_host.h` | living |
 | `nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp` | living |
 | `nrpy/infrastructures/Dendro/tests_infra/README.md` | living |
 | `nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp` | living |
-| `nrpy/infrastructures/Dendro/block_geometry.h` | living |
 | `nrpy/tests/reference_metric_Cartesian.py` | living |
 | `nrpy/tests/reference_metric_Spherical.py` | living |
 | `nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py` | living |

@@ -83,7 +83,7 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
             *bindings,
             "for (unsigned pp = node_begin; pp < node_end; ++pp) {",
             kernel,
-            "}",
+            "}  // END LOOP: for pp over node range",
         )
     )
     cfc.register_CFunction(

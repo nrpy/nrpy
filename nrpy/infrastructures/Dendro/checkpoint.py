@@ -68,7 +68,7 @@ def output_checkpoint_cpp(
                     f"        if (stored_{name}.size() != {size}) metadata_valid = false;",
                     f"        for (std::size_t i = 0; metadata_valid && i < {size}; ++i) {{",
                     f"            if (stored_{name}[i] != params.{name}[i]) metadata_valid = false;",
-                    "        }",
+                    "        }  // END LOOP: for i over array entries",
                 ]
             )
         else:
@@ -158,7 +158,7 @@ int {solver_stem}_write_checkpoint(
         checkpoint_variables{{}};
     for (unsigned i = 0; i < generated::NUM_EVOL_GFS; ++i) {{
         checkpoint_variables[i] = variables[i];
-    }}
+    }}  // END LOOP: for i over evolved gridfunctions
     std::ostringstream state_name;
     state_name << prefix << "_" << checkpoint_index << "_" << rank << ".var";
     const std::string temporary_state_name = state_name.str() + ".tmp";
@@ -176,7 +176,7 @@ int {solver_stem}_write_checkpoint(
         std::filesystem::remove(temporary_octree_name);
         std::filesystem::remove(temporary_state_name);
         return 1;
-    }}
+    }}  // END IF: temporary checkpoint write failed
 
     std::ostringstream metadata_name;
     metadata_name << prefix << "_" << checkpoint_index << "_step.cp";
@@ -184,25 +184,27 @@ int {solver_stem}_write_checkpoint(
         std::error_code remove_error;
         std::filesystem::remove(metadata_name.str(), remove_error);
         if (remove_error) global_status = 1;
-    }}
+    }}  // END IF: rank 0 removes old metadata
     MPI_Bcast(&global_status, 1, MPI_INT, 0, mesh->getMPICommunicator());
     if (global_status == 0) {{
         try {{
             std::filesystem::rename(temporary_octree_name, octree_name.str());
             std::filesystem::rename(temporary_state_name, state_name.str());
-        }} catch (const std::filesystem::filesystem_error&) {{
+        }}  // END TRY: rename checkpoint files
+        catch (const std::filesystem::filesystem_error&) {{
             local_status = 1;
-        }}
-    }} else {{
+        }}  // END CATCH: checkpoint rename failure
+    }}  // END IF: old metadata removed
+    else {{
         local_status = 1;
-    }}
+    }}  // END ELSE: old metadata removal failed
     MPI_Allreduce(&local_status, &global_status, 1, MPI_INT, MPI_MAX,
                   mesh->getMPICommunicator());
     if (global_status != 0) {{
         std::filesystem::remove(temporary_octree_name);
         std::filesystem::remove(temporary_state_name);
         return 1;
-    }}
+    }}  // END IF: checkpoint file rename failed
 
     json metadata;
     metadata["NRPY_FORMULATION"] = "{formulation_name}";
@@ -240,24 +242,27 @@ int {solver_stem}_write_checkpoint(
         std::ofstream output(temporary_name);
         if (!output) {{
             global_status = 1;
-        }} else {{
+        }}  // END IF: metadata file open failed
+        else {{
             output << std::setprecision(17) << std::setw(2) << metadata << '\\n';
             output.close();
             if (!output.good()) {{
                 global_status = 1;
-            }} else {{
+            }}  // END IF: metadata write failed
+            else {{
                 try {{
                     std::filesystem::rename(temporary_name, metadata_name.str());
-                }} catch (const std::filesystem::filesystem_error&) {{
+                }}  // END TRY: publish metadata file
+                catch (const std::filesystem::filesystem_error&) {{
                     global_status = 1;
                     std::filesystem::remove(temporary_name);
-                }}
-            }}
-        }}
-    }}
+                }}  // END CATCH: metadata rename failure
+            }}  // END ELSE: metadata written successfully
+        }}  // END ELSE: metadata file opened
+    }}  // END IF: rank 0 writes metadata
     MPI_Bcast(&global_status, 1, MPI_INT, 0, mesh->getMPICommunicator());
     return global_status;
-}}
+}}  // END FUNCTION: {solver_stem}_write_checkpoint
 
 int {solver_stem}_restore_checkpoint(
     const std::string& prefix,
@@ -296,7 +301,7 @@ int {solver_stem}_restore_checkpoint(
             std::ifstream input(metadata_name.str());
             metadata_valid = static_cast<bool>(input);
             if (metadata_valid) input >> metadata;
-        }}
+        }}  // END IF: read existing metadata file
         if (!metadata_valid) throw std::runtime_error("missing checkpoint metadata");
         const std::vector<std::string> expected_fields{{
 {field_literals}
@@ -314,7 +319,7 @@ int {solver_stem}_restore_checkpoint(
         if (metadata.at("NRPY_PARAMETER_NAMES")
                 .get<std::vector<std::string>>() != expected_parameters) {{
             metadata_valid = false;
-        }}
+        }}  // END IF: parameter-name list mismatch
         const json& parameters = metadata.at("NRPY_PARAMETERS");
 {parameter_checks}
         const DendroScalar stored_residual =
@@ -323,7 +328,7 @@ int {solver_stem}_restore_checkpoint(
         if (!std::isfinite(stored_residual) ||
             std::abs(stored_residual) > algebraic_residual_tolerance) {{
             metadata_valid = false;
-        }}
+        }}  // END IF: stored residual exceeds tolerance
         (void)metadata.at("NRPY_ITERATION").get<unsigned>();
         const DendroScalar stored_time =
             metadata.at("NRPY_TIME").get<DendroScalar>();
@@ -332,7 +337,7 @@ int {solver_stem}_restore_checkpoint(
         if (!std::isfinite(stored_time) || !std::isfinite(stored_time_step) ||
             stored_time_step <= 0.0) {{
             metadata_valid = false;
-        }}
+        }}  // END IF: invalid stored time data
         const unsigned stored_order =
             metadata.at("NRPY_ELEMENT_ORDER").get<unsigned>();
         const std::array<DendroScalar, 3> stored_minimum =
@@ -367,13 +372,13 @@ int {solver_stem}_restore_checkpoint(
             for (const DendroScalar coordinate :
                  stored_black_hole_positions[index])
                 if (!std::isfinite(coordinate)) metadata_valid = false;
-        }}
+        }}  // END LOOP: for index over history entries
         if (!stored_black_hole_positions.empty() &&
             stored_black_hole_positions.back() != stored_excision_centers)
             metadata_valid = false;
         for (const DendroScalar coordinate : stored_excision_centers) {{
             if (!std::isfinite(coordinate)) metadata_valid = false;
-        }}
+        }}  // END LOOP: for coordinate over excision centers
         if (metadata.at("NRPY_ACTIVE_COMM_SIZE").get<unsigned>() == 0 ||
             (stored_order != 4 && stored_order != 6 && stored_order != 8) ||
             stored_minimum != std::array<DendroScalar, 3>{{
@@ -381,10 +386,11 @@ int {solver_stem}_restore_checkpoint(
             stored_maximum != std::array<DendroScalar, 3>{{
                 domain_maximum.x(), domain_maximum.y(), domain_maximum.z()}}) {{
             metadata_valid = false;
-        }}
-    }} catch (const std::exception&) {{
+        }}  // END IF: incompatible mesh or domain
+    }}  // END TRY: parse checkpoint metadata
+    catch (const std::exception&) {{
         metadata_valid = false;
-    }}
+    }}  // END CATCH: malformed metadata
 
     int local_status = metadata_valid ? 0 : 1;
     int global_status = 0;
@@ -394,9 +400,9 @@ int {solver_stem}_restore_checkpoint(
         if (global_rank == 0) {{
             std::cerr << "Checkpoint metadata does not match {formulation_name}"
                       << std::endl;
-        }}
+        }}  // END IF: rank 0 reports mismatch
         return std::filesystem::exists(metadata_name.str()) ? 1 : 2;
-    }}
+    }}  // END IF: checkpoint metadata rejected
 
     const unsigned active_size =
         metadata.at("NRPY_ACTIVE_COMM_SIZE").get<unsigned>();
@@ -418,13 +424,13 @@ int {solver_stem}_restore_checkpoint(
                     << active_rank << ".oct";
         local_status = io::checkpoint::readOctFromFile(
             octree_name.str().c_str(), octree);
-    }}
+    }}  // END IF: active rank reads octree
     MPI_Allreduce(&local_status, &global_status, 1, MPI_INT, MPI_MAX,
                   global_communicator);
     if (global_status != 0) {{
         if (active) MPI_Comm_free(&active_communicator);
         return 1;
-    }}
+    }}  // END IF: octree read failed
 
     ot::Mesh* restored_mesh = new ot::Mesh(
         octree, 1, element_order, active_size, global_communicator);
@@ -444,14 +450,14 @@ int {solver_stem}_restore_checkpoint(
             state_name.str().c_str(), restored_mesh, variables.data(),
             generated::NUM_EVOL_GFS);
         MPI_Comm_free(&active_communicator);
-    }}
+    }}  // END IF: active rank reads state
     MPI_Allreduce(&local_status, &global_status, 1, MPI_INT, MPI_MAX,
                   global_communicator);
     if (global_status != 0) {{
         state.destroy_vector();
         delete restored_mesh;
         return 1;
-    }}
+    }}  // END IF: state read failed
 
     mesh = restored_mesh;
     iteration = metadata.at("NRPY_ITERATION").get<unsigned>();
@@ -468,6 +474,8 @@ int {solver_stem}_restore_checkpoint(
     black_hole_merge_time = stored_merge_time;
     merged_checkpoint_written = stored_merged_checkpoint_written;
     return 0;
-}}
-}}  // namespace {solver_namespace}
+}}  // END FUNCTION: {solver_stem}_restore_checkpoint
+// clang-format off
+}}  // END NAMESPACE: {solver_namespace}
+// clang-format on
 """

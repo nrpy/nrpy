@@ -55,7 +55,6 @@ def register_CFunction_rhs_eval(
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant__Hatted",
     enable_SSL: bool = False,
     enable_CAHD: bool = False,
-    capture_validation_expressions: bool = False,
     enable_intrinsics: bool = True,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -70,7 +69,6 @@ def register_CFunction_rhs_eval(
     :param ShiftEvolutionOption: Shift gauge condition.
     :param enable_SSL: Add slow-start lapse.
     :param enable_CAHD: Add formulation-specific Hamiltonian damping.
-    :param capture_validation_expressions: Retain expanded expressions for validation.
     :param enable_intrinsics: Generate SIMD-intrinsic kernels; every vector stays
         inside its own row.
     :return: Updated NRPy registries, or ``None`` while collecting parallel work.
@@ -338,7 +336,7 @@ const unsigned nz_block = block.getAllocationSzZ();
 const unsigned padding_block = block.get1DPadWidth();
 if (padding_block < {expected_padding}) {{
     throw std::invalid_argument("rhs_eval block padding is too small for FD{fd_order}");
-}}
+}}  // END IF: block padding too small
 const {scalar_type} dx_block[3] = {{
     block.computeDx(domain_min, domain_max),
     block.computeDy(domain_min, domain_max),
@@ -432,40 +430,6 @@ const {scalar_type} {prefix}grid_spacing = dx_block[0];
             ET_current_thorn_CodeParams_used=list(used_codeparameters),
         )
 
-        if capture_validation_expressions:
-            validation = cast(
-                Dict[int, Dict[str, Dict[str, object]]],
-                par.glb_extras_dict.setdefault("Dendro", {}).setdefault(
-                    "validation_candidates", {}
-                ),
-            )
-            candidates = validation.setdefault(fd_order, {}).setdefault("rhs", {})
-            owner = (
-                f"rhs_eval_order_{fd_order}"
-                f"|fccz4={int(enable_fCCZ4)}|coord={CoordSystem}"
-                f"|lapse={LapseEvolutionOption}|shift={ShiftEvolutionOption}"
-                f"|ko={int(enable_KreissOliger_dissipation)}"
-                f"|ssl={int(enable_SSL)}|cahd={int(enable_CAHD)}"
-            )
-            if owner in candidates:
-                raise ValueError(
-                    "Validation RHS expressions already exist for exact worker "
-                    f"configuration {owner}."
-                )
-            expanded_quantities = BSSN_quantities[CoordSystem]
-            ricci_substitutions = {
-                sp.Symbol(name): expression
-                for name, expression in zip(
-                    expanded_quantities.Ricci_varnames,
-                    expanded_quantities.Ricci_exprs,
-                )
-            }
-            candidates[owner] = {
-                name: expression.xreplace(
-                    {sp.Symbol("SSL_exp_factor"): sp.exp(ssl_exponent)}
-                ).xreplace(ricci_substitutions)
-                for name, expression in rhs_by_gridfunction_name.items()
-            }
     finally:
         par.set_parval_from_str("fd_order", old_fd_order)
     return pcg.NRPyEnv()

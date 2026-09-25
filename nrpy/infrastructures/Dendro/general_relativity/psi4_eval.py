@@ -148,8 +148,8 @@ if (axis2 <= seed_threshold * std::max(radius2, static_cast<{scalar_type}>(1))) 
         v2U[0] = 0.0;
         v2U[1] = 1.0;
         v2U[2] = 0.0;
-    }}
-}}
+    }}  // END IF: point at origin
+}}  // END IF: point on z axis
 const {scalar_type} crossD[3] = {{
     v1U[1] * v2U[2] - v1U[2] * v2U[1],
     v1U[2] * v2U[0] - v1U[0] * v2U[2],
@@ -170,7 +170,7 @@ const auto metric_inner = [&](const {scalar_type}* left,
                       + gammaDD12 * right[2])
          + left[2] * (gammaDD02 * right[0] + gammaDD12 * right[1]
                       + gammaDD22 * right[2]);
-}};
+}};  // END LAMBDA: metric_inner
 const {scalar_type} inverse_norm_v1 = 1.0 / std::sqrt(metric_inner(v1U, v1U));
 {scalar_type} e1U[3] = {{v1U[0] * inverse_norm_v1,
                          v1U[1] * inverse_norm_v1,
@@ -182,7 +182,7 @@ const {scalar_type} e1_dot_v2 = metric_inner(e1U, v2U);
 const {scalar_type} inverse_norm_e2 = 1.0 / std::sqrt(metric_inner(e2U, e2U));
 for (unsigned component = 0; component < 3; ++component) {{
     e2U[component] *= inverse_norm_e2;
-}}
+}}  // END LOOP: for component over e2U components
 const {scalar_type} e1_dot_v3 = metric_inner(e1U, v3U);
 const {scalar_type} e2_dot_v3 = metric_inner(e2U, v3U);
 {scalar_type} e3U[3] = {{
@@ -192,7 +192,7 @@ const {scalar_type} e2_dot_v3 = metric_inner(e2U, v3U);
 const {scalar_type} inverse_norm_e3 = 1.0 / std::sqrt(metric_inner(e3U, e3U));
 for (unsigned component = 0; component < 3; ++component) {{
     e3U[component] *= inverse_norm_e3;
-}}
+}}  // END LOOP: for component over e3U components
 const {scalar_type} n4U0 = M_SQRT1_2;
 const {scalar_type} n4U1 = -M_SQRT1_2 * e2U[0];
 const {scalar_type} n4U2 = -M_SQRT1_2 * e2U[1];
@@ -246,7 +246,7 @@ const unsigned padding_block = block.get1DPadWidth();
 if (padding_block < {padding}) {{
     throw std::invalid_argument(
         "psi4_eval block padding is too small for FD{fd_order}");
-}}
+}}  // END IF: block padding too small
 const {scalar_type} dx_block[3] = {{
     block.computeDx(domain_min, domain_max),
     block.computeDy(domain_min, domain_max),
@@ -260,7 +260,7 @@ const {scalar_type} pmin_block[3] = {{
 {scalar_type} arr_KDDdD[27] = {{}};
 {{
 {metric_derivatives}
-}}
+}}  // END BLOCK: metric derivative evaluation
 {point_state}
 {derivative_unpack}
 {tetrad}

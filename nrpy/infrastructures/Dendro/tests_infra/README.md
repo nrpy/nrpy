@@ -229,12 +229,6 @@ for one `rhs_blk` call. It rejects an allocation as large as the
 component-major block slab. Shared-runner wall time, compile time, and binary
 size are not performance checks and are not reported by Dendro CI.
 
-Separate AddressSanitizer and UndefinedBehaviorSanitizer builds run the
-standalone `offsets`, `address_values`, and `gr_nonflat_reference` sections for
-all twelve formulation, order, and KO profiles. These sections exercise nonzero
-component offsets, component-major flat storage, writable interiors, and
-sentinel regions.
-
 Exercise the negative cases before relying on these checkers:
 
 ```bash
