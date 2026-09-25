@@ -82,7 +82,7 @@ Claim evidence:
 - Claim: The generated solver reads every host parameter before the TwoPunctures data are loaded, stops on a present parameter of the wrong TOML type, warns on rank 0 about every parameter-file key or table member it never read, requires `BSSN_ID_TYPE = 0` and `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = true`, and stops when the per-step maximum absolute lapse, with NaN counted as infinity, is not finite.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp` (`ParameterFile`, startup checks, unread-parameter report, evolution loop); `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::terminal_output`.
-- Corroboration: `nrpy/infrastructures/Dendro/CodeParameters.py`, `output_toml_bindings`; `nrpy/infrastructures/Dendro/param_toml.py`, `generate_default_parfile`; `nrpy/examples/tests/dendro_application_check.py`, `Leg.universal_checks` (U4) and `Leg.run_negatives` (N1 lapse, type, and blow-up cases; N2).
+- Corroboration: `nrpy/infrastructures/Dendro/CodeParameters.py`, `output_toml_bindings`; `nrpy/infrastructures/Dendro/param_toml.py`, `generate_default_parfile`; `nrpy/examples/tests/dendro_application_check.py`, `Leg.universal_checks` (S1) and `Leg.run_negatives` (N1 lapse, type, and blow-up cases; N2).
 
 Claim evidence:
 - Claim: Single-rank `--tpid` precomputes reusable spectral coefficients for both generated formulations; fresh evolution loads matching coefficients, while checkpoint restoration needs no TwoPunctures file.

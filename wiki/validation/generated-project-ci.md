@@ -21,7 +21,7 @@ Configured GitHub job map:
 | `codegen-ubuntu` | Configured Ubuntu/Python matrix | Installs NRPy, generates in `tmp/`, and builds the selected default C/library projects with `make`, spanning elliptic, wave, black-hole, PN, SEOBNR, TOV, hydro, BHaHAHA, and `sebobv2` routes. It generates `sebobv1_jax` without package install/build. | The `make` builds run no generated executable, and `make clean` follows each; MANGA commands are commented out. |
 | `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation as Ubuntu; no Dendro generation or build; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
 | `einsteintoolkit-validation` | Configured Ubuntu/Apptainer Einstein Toolkit image | Generates `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs the configured Baikal, BaikalVacuum, and WaveToyNRPy Cactus testsuites and fails on reported failures. No `carpetx_*` generation/build/run. |
-| `dendro-validation` | Ubuntu 24.04 runner with apt-installed Open MPI, GSL, BLAS/LAPACK, and gfortran; matrix `formulation: [bssn, fccz4]`; 75-minute job timeout | Each leg runs `nrpy/examples/tests/dendro_application_check.py`, which generates the W and chi projects twice, configures and builds them against the pinned Dendrolib, solves TwoPunctures once per variant, and runs short MPI evolutions with forced remeshing, horizon finds, wave extraction, checkpoint and restore, 1/3/4-rank repeats, FD4/6/8 initialization, and process-boundary rejections. | Proves only the named layers for the helper's two CI profiles: generation determinism, compile/link compatibility, closed-form TwoPunctures ADM and horizon-mass agreement, initialization and symmetry properties, restart identity, rank-count agreement, ordering of the initial Hamiltonian-constraint norm with FD order (not a convergence test), and the listed rejections. It is not long-time, merger, or production-resolution evidence. |
+| `dendro-validation` | Ubuntu 24.04 runner with apt-installed Open MPI, GSL, BLAS/LAPACK, and gfortran; matrix `formulation: [bssn, fccz4]`; 75-minute job timeout | Each leg runs `nrpy/examples/tests/dendro_application_check.py`, which generates the W and chi projects twice, configures and builds them against the pinned Dendrolib, solves TwoPunctures once per variant, and runs short MPI evolutions with forced remeshing, horizon finds, wave extraction, checkpoint and restore, 1/3/4-rank repeats, FD4/6/8 initialization, a stored-reference comparison of the evolved diagnostics, and process-boundary rejections. | Proves only the named layers for the helper's two CI profiles: generation determinism, compile/link compatibility, closed-form TwoPunctures ADM and horizon-mass agreement, symmetry properties, restart identity, rank-count agreement, agreement with the stored reference for the evolved diagnostics (a regression check, not a correctness proof), ordering of the initial Hamiltonian-constraint norm with FD order (not a convergence test), and the listed rejections. It is not long-time, merger, or production-resolution evidence. |
 | `dendro-validation-dendrolib-master` (`dendrolib-canary.yml`) | Weekly schedule and manual dispatch only; same runner, packages, matrix, and timeout as `dendro-validation`. | Runs the same helper with `--dendrolib-ref master`: Dendrolib is cloned at the head of its master branch instead of the pinned commit, and the resolved commit is printed. | Same checks as `dendro-validation`; a pass or failure is evidence only for the printed Dendrolib commit, and pull requests are unaffected. |
 | `charmpp-validation` | Configured Ubuntu/Apptainer Charm++ context | Generates and builds the configured superB elliptic, spectroscopy, and collision projects | Runs the configured collision executable through `charmrun`; no explicit scientific-output assertion beyond process success. |
 | `sebob-consistency-test` | Configured Ubuntu matrix | Checks out the workflow-selected trusted revision; generates/builds trusted and current SEOBNRv5 variants | Each helper invocation rebuilds both executables, uses exactly ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed the perturbation-derived baseline. |
@@ -95,32 +95,58 @@ Dendro's job runs one helper per formulation. The helper generates the W and chi
 sibling applications twice with separate caches and requires byte-identical
 trees, then configures and builds each with `CPU_ARCH=x86-64-v3` against the
 Dendrolib and toml11 revisions pinned by the generated `CMakeLists.txt`. One
-TwoPunctures solve is shared by all runs of each conformal-factor variant.
-Profile P (maximum depth 13, FD6, eight steps, remesh, horizon, wave, and
-checkpoint cadence 4) checks the solved ADM energy and angular momentum against
-the closed forms for the conformal-factor rescaling, horizon irreducible masses
-against the puncture ADM masses, equal-mass reflection symmetry, zero initial
-Lambda, vanishing odd-m wave modes and the reflection relation C(l,-m) = (-1)^l
-conj C(l,m), a forced remesh with continuous ADM energy, the
-algebraic-projection residual and excision centers stored in the checkpoint,
-byte-identical `dat/`, `bah/`, and `vtu/` outputs after a stop at step 4 and
-restore, and agreement of a 3-rank run, which writes a horizon checkpoint, with
-the diagnostics of the main runs within a relative tolerance (horizon
-observables through the irreducible mass; the finder's convergence residuals are
-not compared). Profile O (maximum depth 10, four steps) checks that FD4, FD6,
-and FD8 share one mesh and that the initial Hamiltonian-constraint norm falls by
-at least half per order increase, an ordering check rather than a convergence
-test, plus a 1-rank repeat. The W and chi variants must agree at the shared
-initial diagnostic. Negative cases require nonzero exit and a named diagnostic
-for a W/chi cross-restore, `--tpid` on more than one rank, a TwoPunctures
-parameter mismatch, a missing TwoPunctures file, an unsupported element order,
-an unsupported refinement mode, an excessive CFL factor,
-`TPID_REPLACE_LAPSE_WITH_SQRT_CHI = false`, an integer given for a real-valued
-parameter, a lapse blow-up with constraint output off, and a missing argument.
-Every run made through the helper's solve step must print no unread-parameter
-warning, and a run given an unread key must warn about it and still succeed.
-fCCZ4 additionally requires its Z4-extended Hamiltonian diagnostic to equal the
-BSSN one and its Z4 vector to vanish at step 0.
+TwoPunctures solve is shared by all runs of each conformal-factor variant, and
+each check made for both variants is reported as one W-and-chi result. Profile P
+(maximum depth 13, FD6, eight steps, remesh, horizon, wave, and checkpoint
+cadence 4) checks the solved ADM energy and angular momentum against the closed
+forms for the conformal-factor rescaling, horizon irreducible masses against the
+puncture ADM masses, equal-mass reflection symmetry of the horizons, vanishing
+ADM momentum and in-plane angular momentum, vanishing odd-m wave modes and the
+reflection relation C(l,-m) = (-1)^l conj C(l,m) over all 21 modes with l = 2-4
+at two radii, point reflection of the checkpointed puncture centers at step 4
+and their motion along the puncture momenta, byte-identical `dat/`, `bah/`, and
+`vtu/` outputs after a stop at step 4 and restore, and agreement of a 3-rank
+run, which writes a horizon checkpoint, with the diagnostics of the main runs
+within a relative tolerance (horizon observables through the irreducible mass;
+the finder's convergence residuals are not compared). Run A's constraint and ADM
+rows and horizon observables at steps 0, 4, and 8 must also match a stored
+reference, `nrpy/examples/tests/dendro_application_check_reference.py`, within a
+fixed relative and absolute tolerance; because it covers the evolved state after
+the forced remesh, including node counts, it is the job's regression check on
+the evolution equations, gauge, and grid transfer. Profile O (maximum depth 10,
+four steps) checks that the initial Hamiltonian-constraint norm falls by at
+least half per order increase from FD4 to FD8 on one shared mesh, an ordering
+check rather than a convergence test, plus a 1-rank repeat. The W and chi
+variants must agree at the shared initial diagnostic. Every evolution run the
+helper checks (runs A, B, B restored, C, and the four profile-O runs) must pass
+one sanity check: finite output, constraint rows at the configured cadence, a
+node ceiling, and no unread-parameter warning. Negative cases require exit
+status 1-123 and a named diagnostic for a W/chi cross-restore, `--tpid` on more
+than one rank, a TwoPunctures parameter mismatch, a missing TwoPunctures file,
+an unsupported element order, an unsupported refinement mode, an excessive CFL
+factor, `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = false`, an integer given for a
+real-valued parameter, and a lapse blow-up with constraint output off; a run
+given an unread key must warn about it and still succeed.
+
+The stored reference is a generated `trusted_dict` keyed by formulation and
+conformal factor. It changes only through the helper's `--update-reference`
+mode, which writes run A's values as a candidate instead of comparing; the
+candidate is reviewed as a diff and then compared in a second run without the
+flag. An intentional change to the evolution, the gauge, the remesh, or the
+Dendrolib revision therefore requires regenerating the reference in the same
+change, and the weekly run against Dendrolib master fails when an upstream
+change alters these values beyond the tolerance. Most `dgr_*.dat` values are
+printed with six significant digits, so for those columns the comparison
+requires equal printed values, and below that resolution the check's sensitivity
+comes from the horizon columns; because unrounded constraint norms differ
+slightly between math-library paths, a single last-digit difference on another
+CPU class is possible, and the failure message names the entry.
+
+Claim evidence:
+- Claim: the Dendro helper compares run A's constraint and ADM rows and horizon observables at steps 0, 4, and 8 with the stored `trusted_dict` reference within a fixed relative and absolute tolerance, so the weekly Dendrolib-master run fails when an upstream change alters those values beyond the tolerance; the reference changes only through `--update-reference`, which writes a candidate instead of comparing and refuses to write when any check failed or when a Dendrolib branch or tag replaces the pin.
+- Role: CI behavior
+- Deciding authority: [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `REFERENCE_STEPS`, `REFERENCE_RTOL`, `REFERENCE_ATOL`, `read_reference`, `Leg.check_reference`, `Leg.run`, `main`; [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml), `dendro-validation-dendrolib-master`
+- Corroboration: [dendro_application_check_reference.py](../../nrpy/examples/tests/dendro_application_check_reference.py), `trusted_dict`; [Test Oracles And Safe Updates](test-oracles-and-safe-updates.md), `Two-Process Oracle Update`
 
 A separate workflow, `dendrolib-canary.yml`, runs the same two helper legs
 weekly and on manual dispatch with `--dendrolib-ref master`. The helper then
@@ -128,9 +154,11 @@ shallow-clones that Dendrolib branch from the repository declared in the
 generated `CMakeLists.txt`, configures both variants with
 `FETCHCONTENT_SOURCE_DIR_DENDROLIB` pointing at the clone, and prints the
 resolved commit. Pull requests and pushes keep building against the pinned
-commit, so an upstream change that breaks the generated applications shows up in
-this weekly run without failing unrelated changes; its results are evidence only
-for the printed commit.
+commit, so an upstream change that breaks the generated applications, or changes
+their stored-reference values beyond the tolerance, shows up in this weekly run
+without failing unrelated changes; a numerical change there calls for moving the
+pin and regenerating the reference in the same change; its results are evidence
+only for the printed commit.
 
 Claim evidence:
 - Claim: `dendrolib-canary.yml` runs the Dendro helper legs weekly and on manual dispatch against the head of Dendrolib's master branch, printing the resolved commit, while `dendro-validation` in `main.yml` keeps the commit pinned by the generator; a pass or failure is evidence only for the printed Dendrolib commit, and the configuration does not establish any run outcome.
@@ -147,7 +175,7 @@ failure, and the work directory is removed unconditionally.
 Claim evidence:
 - Claim: the `dendro-validation` job generates, builds, runs, and checks both complete sibling Dendro applications in W and chi variants through `dendro_application_check.py`, with the checks and rejections listed in this section.
 - Role: CI behavior
-- Deciding authority: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `Leg.run`, `Leg.run_variant`, `Leg.compare_runs`, `Leg.run_negatives`
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `Leg.run`, `Leg.run_variant`, `Leg.check_run_a`, `Leg.check_reference`, `Leg.compare_runs`, `Leg.run_negatives`
 - Corroboration: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py), current command-line interface; [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), pinned dependency revisions
 
 Claim evidence:
@@ -176,6 +204,7 @@ generated file has been deliberately registered as frozen evidence.
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `einsteintoolkit-validation`; official Einstein Toolkit [Adding a test case](https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case) - `A test case is...`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `dendro-validation`
 - [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py) - `Leg.run`, profiles, checks, and negative cases
+- [dendro_application_check_reference.py](../../nrpy/examples/tests/dendro_application_check_reference.py) - stored run-A reference values
 - [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml) - weekly `dendro-validation-dendrolib-master`
 - [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) - current BSSN generation interface
 - [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - current fCCZ4 generation interface

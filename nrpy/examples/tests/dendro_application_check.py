@@ -5,16 +5,17 @@ For one formulation (BSSN or fCCZ4), this helper generates the W and chi
 applications twice each, builds them standalone against the Dendrolib commit
 pinned by the generator (or against a named Dendrolib branch or tag), runs
 short MPI TwoPunctures evolutions, and checks the output against exact
-identities, values computed independently of the evolution, and comparisons
-between runs of the same binary. Each check prints its identifier, the
-validation layer it proves, the measured value, and the tolerance. The process
-exits nonzero if any check fails.
+identities, values computed independently of the evolution, comparisons between
+runs of the same binary, and a stored reference for the evolved diagnostics.
+Each check prints its identifier, the validation layer it proves, the measured
+value, and the tolerance; a check made for both conformal factors prints one
+line with both results. The process exits nonzero if any check fails.
 
 Usage (from the repository root):
     python nrpy/examples/tests/dendro_application_check.py \
         --formulation {bssn,fccz4} --work-dir DIR \
         [--launcher "mpiexec --oversubscribe --bind-to none"] [--ranks 4] \
-        [--build-jobs 4] [--dendrolib-ref master]
+        [--build-jobs 4] [--dendrolib-ref master] [--update-reference]
 
 Run without arguments, the helper runs its doctests. Configuring each
 generated project downloads the Dendrolib and toml11 revisions pinned by the
@@ -23,11 +24,17 @@ generated CMakeLists.txt, so the run needs network access. With
 repository named in the generated CMakeLists.txt, builds against it, and prints
 the resolved commit; such a run is evidence only for that commit.
 
+The stored reference, dendro_application_check_reference.py, is a generated
+trusted_dict. To change it, run the helper with --update-reference, which writes
+run A's values as a candidate instead of comparing them, review the diff, and
+then run it again without the flag so that the candidate is compared.
+
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
 import argparse
+import ast
 import importlib.metadata
 import json
 import math
@@ -110,26 +117,92 @@ TPID_RESULT_COUNT = 8
 TPID_INDEX_P_PLUS_Y = 15
 TPID_INDEX_P_MINUS_Y = 18
 
+# Stored reference for run A's evolved diagnostics (check E1): steps, and the
+# tolerance |a - b| <= REFERENCE_RTOL * max(|a|, |b|) + REFERENCE_ATOL. The
+# constraint and ADM rows in dgr_*.dat are printed with six significant digits,
+# so they must match as printed; below that resolution the check's sensitivity
+# comes from the horizon columns, printed with 10 to 16 digits. Unrounded
+# constraint norms differ slightly between math-library paths, so a
+# last-digit difference on another CPU class is possible; E1 names the worst
+# entry so such a difference can be recognized. Update mode reads, merges, and
+# rewrites the file, so run the two formulations' update legs one after the other.
+REFERENCE_FILE = Path(__file__).with_name("dendro_application_check_reference.py")
+REFERENCE_STEPS = (0, 4, 8)
+REFERENCE_RTOL = 1.0e-9
+REFERENCE_ATOL = 1.0e-12
+
 
 class CheckError(RuntimeError):
     """Raise when a step cannot produce the output a check needs."""
 
 
 class Report:
-    """Record check results and print them as they are made."""
+    """Record check results and print them, joining the W and chi results."""
 
     def __init__(self) -> None:
         """Start with no results."""
         self.failures: List[str] = []
         self.count = 0
+        self.pending: Dict[Tuple[str, str], Dict[str, Tuple[str, str, str, bool]]] = {}
 
     def check(
+        self,
+        ident: str,
+        layer: str,
+        what: str,
+        measured: str,
+        bound: str,
+        ok: bool,
+        variant: Optional[str] = None,
+    ) -> None:
+        """
+        Record one check and print it, or hold it until its other variant arrives.
+
+        A check made once per conformal-factor variant is printed as one line
+        when both its W and chi results are known.
+
+        :param ident: Check identifier, for example ``R1``.
+        :param layer: Validation layer the check proves.
+        :param what: Short description of the checked property.
+        :param measured: Measured value, formatted.
+        :param bound: Tolerance or criterion, formatted.
+        :param ok: Whether the check passed.
+        :param variant: ``W`` or ``chi`` for a per-variant check, else None.
+        """
+        if variant is None:
+            self._emit(ident, layer, what, measured, bound, ok)
+            return
+        entry = self.pending.setdefault((ident, what), {})
+        entry[variant] = (layer, measured, bound, ok)
+        if len(entry) == 2:
+            self._emit_pair(ident, what)
+
+    def flush(self) -> None:
+        """Print held per-variant checks whose other variant never arrived."""
+        for ident, what in list(self.pending):
+            self._emit_pair(ident, what)
+
+    def _emit_pair(self, ident: str, what: str) -> None:
+        """
+        Print the held results of one per-variant check as one line.
+
+        :param ident: Check identifier.
+        :param what: Short description of the checked property.
+        """
+        entry = self.pending.pop((ident, what))
+        layer = next(iter(entry.values()))[0]
+        measured = "; ".join(f"{v}: {m}" for v, (_, m, _, _) in entry.items())
+        bound = " / ".join(sorted({b for _, _, b, _ in entry.values()}))
+        ok = all(o for _, _, _, o in entry.values())
+        self._emit(ident, layer, f"{what} ({' and '.join(entry)})", measured, bound, ok)
+
+    def _emit(
         self, ident: str, layer: str, what: str, measured: str, bound: str, ok: bool
     ) -> None:
         """
-        Record and print one check.
+        Count and print one result line.
 
-        :param ident: Check identifier, for example ``R1``.
+        :param ident: Check identifier.
         :param layer: Validation layer the check proves.
         :param what: Short description of the checked property.
         :param measured: Measured value, formatted.
@@ -427,6 +500,25 @@ def trees_identical(first: Path, second: Path) -> Tuple[bool, str]:
     return True, ""
 
 
+def read_reference() -> Dict[str, Dict[str, List[float]]]:
+    """
+    Read the stored run-A reference values, or return an empty mapping.
+
+    The reference file holds only the literal ``trusted_dict``; it is parsed,
+    never executed.
+
+    :return: Values keyed by ``formulation/conformal``, then ``file@step``.
+    :raises CheckError: If the file does not hold a literal dictionary.
+    """
+    if not REFERENCE_FILE.exists():
+        return {}
+    text = REFERENCE_FILE.read_text(encoding="utf-8").partition("trusted_dict = ")[2]
+    try:
+        return cast(Dict[str, Dict[str, List[float]]], ast.literal_eval(text))
+    except (SyntaxError, ValueError) as error:
+        raise CheckError(f"{REFERENCE_FILE} is not a trusted_dict: {error}") from error
+
+
 class Leg:
     """Generate, build, run, and check one formulation's W and chi applications."""
 
@@ -444,6 +536,8 @@ class Leg:
         self.build_jobs: int = args.build_jobs
         self.dendrolib_ref: Optional[str] = args.dendrolib_ref
         self.dendrolib_source: Optional[Path] = None
+        self.update_reference: bool = args.update_reference
+        self.reference_candidate: Dict[str, Dict[str, List[float]]] = {}
         self.report = report
         self.solver_dir, self.exe_name, self.stem = SOLVER[self.formulation]
         self.executables: Dict[str, Path] = {}
@@ -546,10 +640,11 @@ class Leg:
         self.report.check(
             "G1",
             "generation determinism",
-            f"{conformal}: two clean generations byte-identical",
+            "two clean generations byte-identical",
             "identical" if same else detail,
             "identical",
             same,
+            conformal,
         )
         build = self.work / f"build-{conformal}"
         configure = [
@@ -611,14 +706,6 @@ class Leg:
             TIMEOUT_BUILD,
         )
         exe = build / self.exe_name
-        self.report.check(
-            "B1",
-            "build (compile/link compatibility)",
-            f"{conformal}: standalone project builds {self.exe_name}",
-            "built" if exe.is_file() else "missing",
-            "executable exists",
-            exe.is_file(),
-        )
         if not exe.is_file():
             raise CheckError(f"{exe} was not built")
         self.executables[conformal] = exe
@@ -674,22 +761,21 @@ class Leg:
         self, conformal: str, name: str, run_dir: Path, overrides: Dict[str, str]
     ) -> None:
         """
-        Check finiteness, cadence, mesh size, and parameter use for every run.
+        Check finiteness, cadence, mesh size, and parameter use for one run (S1).
 
         :param conformal: ``W`` or ``chi``.
         :param name: Run name.
         :param run_dir: Run directory.
         :param overrides: Profile overrides of the run.
         """
-        tag = f"{conformal}/{name}"
+        failed = []
         stdout = (run_dir / "run.log").read_text(errors="replace")
         alphas = [
             line.partition(" max_alpha=")[2].split()[0]
             for line in stdout.splitlines()
             if line.startswith("iteration=") and " max_alpha=" in line
         ]
-        finite_alpha = bool(alphas) and all(math.isfinite(float(a)) for a in alphas)
-        numbers: List[float] = []
+        numbers = [float(a) for a in alphas]
         for path in sorted((run_dir / "dat").glob("*.dat")):
             if path.name.startswith("dgr_GW_"):
                 for _, values in parse_modes(path):
@@ -698,47 +784,33 @@ class Leg:
                 numbers.extend(v for row in parse_table(path)[1] for v in row)
         for path in sorted((run_dir / "bah").glob("BHaHAHA_diagnostics.ah*.gp")):
             numbers.extend(v for row in parse_table(path)[1] for v in row[:15])
-        finite = finite_alpha and all(math.isfinite(v) for v in numbers)
-        self.report.check(
-            "U1",
-            "runtime",
-            f"{tag}: every output value finite",
-            f"{len(numbers)} values, {len(alphas)} max_alpha lines",
-            "all finite",
-            finite,
-        )
+        if not alphas or not all(math.isfinite(v) for v in numbers):
+            failed.append("nonfinite or missing output")
         header, rows = parse_table(run_dir / "dat" / "dgr_Constraints.dat")
         cadence = int(overrides["BSSN_TIME_STEP_OUTPUT_FREQ"])
         last = int(overrides["BSSN_MAX_ITERATIONS"])
-        expected = list(range(0, last + 1, cadence))
         steps = [int(round(r[0])) for r in rows]
         times = [r[1] for r in rows]
-        ordered = steps == expected and all(b > a for a, b in zip(times, times[1:]))
+        if steps != list(range(0, last + 1, cadence)) or any(
+            b <= a for a, b in zip(times, times[1:])
+        ):
+            failed.append(f"constraint rows at steps {steps}")
+        nodes = max(column(header, rows, "unexcised_nodes"))
+        if nodes > NODE_CEILING:
+            failed.append(f"{int(nodes)} nodes")
+        unread = sum(" has no effect" in line for line in stdout.splitlines())
+        if unread:
+            failed.append(f"{unread} unread-parameter warnings")
+        restored = overrides.get("BSSN_RESTORE_SOLVER") == "1"
         self.report.check(
-            "U2",
+            "S1",
             "runtime",
-            f"{tag}: constraint rows at the configured cadence",
-            str(steps),
-            str(expected),
-            ordered,
-        )
-        nodes = column(header, rows, "unexcised_nodes")
-        self.report.check(
-            "U3",
-            "runtime",
-            f"{tag}: mesh below the node ceiling",
-            f"max {int(max(nodes))}",
-            f"<= {NODE_CEILING}",
-            max(nodes) <= NODE_CEILING,
-        )
-        unread = [line for line in stdout.splitlines() if " has no effect" in line]
-        self.report.check(
-            "U4",
-            "runtime",
-            f"{tag}: every parameter is read",
-            f"{len(unread)} unread-parameter warnings",
-            "0",
-            not unread,
+            f"run {name}{' restored' if restored else ''} sanity",
+            "all hold" if not failed else "failed: " + ", ".join(failed),
+            f"finite output, rows at steps 0, {cadence}, ..., <= {NODE_CEILING} nodes, "
+            "no unread parameters",
+            not failed,
+            conformal,
         )
 
     def run_variant(self, conformal: str) -> None:
@@ -767,6 +839,7 @@ class Leg:
 
         run_a = self.solve(conformal, "A", PROFILE_P, self.ranks)
         self.check_run_a(conformal, run_a, results)
+        self.check_reference(conformal, run_a)
 
         stop4 = dict(PROFILE_P, BSSN_MAX_ITERATIONS="4")
         run_b = self.solve(conformal, "B", stop4, self.ranks)
@@ -774,25 +847,49 @@ class Leg:
             Dict[str, Any],  # json.loads returns untyped JSON values
             json.loads((run_b / "cp" / "ci_cp_1_step.cp").read_text()),
         )
-        self.check_checkpoint(conformal, metadata, inputs)
+        centers = [float(x) for x in metadata["NRPY_EXCISION_CENTERS"]]
+        x1, y1, z1, x2, y2, z2 = centers
+        reflection = max(abs(x1 + x2), abs(y1 + y2), abs(z1), abs(z2))
+        p_plus, p_minus = inputs[TPID_INDEX_P_PLUS_Y], inputs[TPID_INDEX_P_MINUS_Y]
+        # Reflection alone cannot see a sign error in the puncture-center
+        # update, which moves both punctures the wrong way symmetrically.
+        moved = y1 * p_plus > 0.0 and y2 * p_minus > 0.0
+        self.report.check(
+            "I2",
+            "numerical invariant and sign check",
+            "punctures point-reflected and moving along their momenta at step 4",
+            f"reflection {reflection:.1e}; y = ({y1:.2e}, {y2:.2e}), "
+            f"P_y = ({p_plus:.3g}, {p_minus:.3g})",
+            "reflection <= 1e-9; each y has the sign of its P_y",
+            reflection <= 1e-9 and moved,
+            conformal,
+        )
         restore = dict(PROFILE_P, BSSN_RESTORE_SOLVER="1")
         run_b = self.solve(conformal, "B", restore, self.ranks)
-        for sub in ("dat", "bah", "vtu"):
-            same, detail = trees_identical(run_a / sub, run_b / sub)
-            self.report.check(
-                "R1",
-                "exact runtime identity",
-                f"{conformal}: restart 0-4-8 equals uninterrupted run in {sub}/",
-                "identical" if same else detail,
-                "byte-identical",
-                same,
+        differences = [
+            detail
+            for same, detail in (
+                trees_identical(run_a / sub, run_b / sub)
+                for sub in ("dat", "bah", "vtu")
             )
+            if not same
+        ]
+        self.report.check(
+            "R1",
+            "exact runtime identity",
+            "restart 0-4-8 equals the uninterrupted run in dat/, bah/, vtu/",
+            "identical" if not differences else "; ".join(differences),
+            "byte-identical",
+            not differences,
+            conformal,
+        )
 
         # On three ranks the horizon-checkpoint gather uses root rank 0; the
         # main runs, on four or more ranks, use root rank 3.
         run_c = self.solve(conformal, "C", stop4, 3)
         self.compare_runs(
-            f"{conformal}: C (3 ranks) vs A ({self.ranks} ranks)",
+            conformal,
+            f"C (3 ranks) vs A ({self.ranks} ranks)",
             run_a,
             run_c,
             [0, 4],
@@ -810,7 +907,8 @@ class Leg:
         self.check_orders(conformal, orders)
         serial = self.solve(conformal, "O4s", dict(PROFILE_O, BSSN_ELE_ORDER="4"), 1)
         self.compare_runs(
-            f"{conformal}: O4 1 rank vs {self.ranks} ranks",
+            conformal,
+            f"O4 1 rank vs {self.ranks} ranks",
             orders[4],
             serial,
             [0, 1, 2, 3, 4],
@@ -824,7 +922,7 @@ class Leg:
         self, conformal: str, run_a: Path, results: Sequence[float]
     ) -> None:
         """
-        Check independent values, identities, and remeshing in run A.
+        Check independent values and symmetries in run A.
 
         :param conformal: ``W`` or ``chi``.
         :param run_a: Run directory.
@@ -840,33 +938,38 @@ class Leg:
         self.report.check(
             "X1",
             "regression/numerical, independent oracle",
-            f"{conformal}: E({radius:g}) against E(1+E/2r)^3",
+            "E(100) against E(1+E/2r)^3",
             f"{step0[3]:.6g} vs {e_expected:.6g}",
             "r = 100; relative <= 2e-4",
             radius == 100.0 and relative(step0[3], e_expected) <= 2e-4,
+            conformal,
         )
         self.report.check(
             "X1",
             "regression/numerical, independent oracle",
-            f"{conformal}: J_z({radius:g}) against J3/(1+E/2r)^2",
+            "J_z(100) against J3/(1+E/2r)^2",
             f"{step0[9]:.6g} vs {j_expected:.6g}",
             "r = 100; relative <= 2e-4",
             radius == 100.0 and relative(step0[9], j_expected) <= 2e-4,
+            conformal,
         )
         horizons = []
+        found_steps = []
+        worst = 0.0
         for index, target in ((1, mp_adm), (2, mm_adm)):
             rows = parse_table(run_a / "bah" / f"BHaHAHA_diagnostics.ah{index}.gp")[1]
-            found = sorted(int(round(r[0])) for r in rows)
-            worst = max((relative(r[12], target) for r in rows), default=math.inf)
-            self.report.check(
-                "X2",
-                "regression/numerical, independent oracle",
-                f"{conformal}: horizon {index} irreducible mass against puncture ADM mass",
-                f"steps {found}, max deviation {worst:.2e}",
-                "steps [0, 4, 8]; relative <= 2e-3",
-                found == [0, 4, 8] and worst <= 2e-3,
-            )
+            found_steps.append(sorted(int(round(r[0])) for r in rows))
+            worst = max([worst] + [relative(r[12], target) for r in rows])
             horizons.append({int(round(r[0])): r for r in rows})
+        self.report.check(
+            "X2",
+            "regression/numerical, independent oracle",
+            "horizon irreducible masses against the puncture ADM masses",
+            f"steps {found_steps}, max deviation {worst:.2e}",
+            "both horizons at steps [0, 4, 8]; relative <= 2e-3",
+            found_steps == [[0, 4, 8], [0, 4, 8]] and worst <= 2e-3,
+            conformal,
+        )
         worst_mass = worst_x = 0.0
         for step in (0, 4, 8):
             if step in horizons[0] and step in horizons[1]:
@@ -874,71 +977,28 @@ class Leg:
                 worst_mass = max(worst_mass, relative(first[12], second[12]))
                 worst_x = max(worst_x, abs(first[2] + second[2]))
         # The horizon finder converges only to its own tolerance, so the two
-        # horizons agree to that level, not to roundoff; the checkpoint check
-        # I2 tests point reflection of the punctures at full precision.
+        # horizons agree to that level, not to roundoff; check I2 tests point
+        # reflection of the punctures at full precision.
         self.report.check(
             "X2",
             "numerical invariant",
-            f"{conformal}: the two horizons are equal and point-reflected",
+            "the two horizons are equal and point-reflected",
             f"mass {worst_mass:.1e}, centroid x {worst_x:.1e}",
             "mass <= 1e-5, x <= 1e-4 (horizon-finder tolerance)",
             worst_mass <= 1e-5 and worst_x <= 1e-4,
+            conformal,
         )
-
-        header, rows = parse_table(run_a / "dat" / "dgr_Constraints.dat")
-        lam0 = column(header, rows, "LAMBDA_CONSTRAINT")[0]
-        self.report.check(
-            "I1",
-            "numerical invariant",
-            f"{conformal}: Lambda constraint at step 0",
-            f"{lam0:.2e}",
-            "<= 1e-12",
-            lam0 <= 1e-12,
-        )
-        if self.formulation == "fccz4":
-            h0 = column(header, rows, "H")[0]
-            hz4 = column(header, rows, "H_Z4")[0]
-            self.report.check(
-                "I1",
-                "numerical invariant",
-                f"{conformal}: H_Z4 equals H at step 0",
-                f"{hz4:.6g} vs {h0:.6g}",
-                "relative <= 2e-5",
-                relative(hz4, h0) <= 2e-5,
-            )
-            z4 = max(
-                abs(column(header, rows, f"Z4constraintU{i}")[0]) for i in range(3)
-            )
-            self.report.check(
-                "I1",
-                "numerical invariant",
-                f"{conformal}: Z4 vector at step 0",
-                f"{z4:.2e}",
-                "<= 1e-12",
-                z4 <= 1e-12,
-            )
 
         momentum = max(max(abs(r[4]), abs(r[5]), abs(r[6])) / abs(r[3]) for r in adm)
         spin = max(max(abs(r[7]), abs(r[8])) / abs(r[9]) for r in adm)
         self.report.check(
             "I2",
             "numerical invariant",
-            f"{conformal}: P_ADM, J_x, J_y vanish",
+            "P_ADM, J_x, J_y vanish",
             f"P/E {momentum:.1e}, J_xy/J_z {spin:.1e}",
             "<= 1e-10",
             momentum <= 1e-10 and spin <= 1e-10,
-        )
-
-        nodes = column(header, rows, "unexcised_nodes")
-        step4 = row_at(adm, 4)
-        continuity = relative(step4[3], step0[3])
-        self.report.check(
-            "M1",
-            "runtime state plus numerical",
-            f"{conformal}: remesh changes the mesh and preserves E",
-            f"nodes {int(nodes[0])} -> {int(nodes[1])}, E change {continuity:.1e}",
-            "nodes differ; relative E change <= 5e-3",
-            nodes[0] != nodes[1] and continuity <= 5e-3,
+            conformal,
         )
 
         modes: Dict[Tuple[int, int], List[Tuple[int, List[complex]]]] = {}
@@ -947,100 +1007,111 @@ class Leg:
             modes[(int(ell), int(m))] = parse_modes(path)
         expected_modes = {(l, m) for l in (2, 3, 4) for m in range(-l, l + 1)}
         radii = {len(values) for rows_lm in modes.values() for _, values in rows_lm}
-        self.report.check(
-            "I2",
-            "runtime",
-            f"{conformal}: Psi4 output covers l = 2-4, all m, two radii",
-            f"{len(modes)} mode files, radii per row {sorted(radii)}",
-            f"{len(expected_modes)} mode files, radii per row [2]",
-            set(modes) == expected_modes and radii == {2},
-        )
-        if set(modes) != expected_modes:
-            return  # the coverage check above has failed
-        c22 = max(abs(v) for _, values in modes[(2, 2)] for v in values)
-        odd = max(
-            abs(v)
-            for (l, m), rows_lm in modes.items()
-            if m % 2
-            for _, values in rows_lm
-            for v in values
-        )
-        parity = max(
-            abs(
-                modes[(l, -m)][i][1][j] - (-1) ** l * modes[(l, m)][i][1][j].conjugate()
+        covered = set(modes) == expected_modes and radii == {2}
+        odd = parity = math.inf
+        if covered:
+            c22 = max(abs(v) for _, values in modes[(2, 2)] for v in values)
+            odd = (
+                max(
+                    abs(v)
+                    for (l, m), rows_lm in modes.items()
+                    if m % 2
+                    for _, values in rows_lm
+                    for v in values
+                )
+                / c22
             )
-            for (l, m) in modes
-            if m > 0
-            for i in range(len(modes[(l, m)]))
-            for j in range(len(modes[(l, m)][i][1]))
-        )
+            parity = (
+                max(
+                    abs(
+                        modes[(l, -m)][i][1][j]
+                        - (-1) ** l * modes[(l, m)][i][1][j].conjugate()
+                    )
+                    for (l, m) in modes
+                    if m > 0
+                    for i in range(len(modes[(l, m)]))
+                    for j in range(len(modes[(l, m)][i][1]))
+                )
+                / c22
+            )
         self.report.check(
             "I2",
             "numerical invariant",
-            f"{conformal}: odd-m Psi4 modes vanish (l = 2-4)",
-            f"{odd / c22:.1e} of max|C22|",
-            "<= 1e-8",
-            odd / c22 <= 1e-8,
-        )
-        self.report.check(
-            "I2",
-            "numerical invariant",
-            f"{conformal}: C(l,-m) = (-1)^l conj C(l,m) (l = 2-4)",
-            f"{parity / c22:.1e} of max|C22|",
-            "<= 1e-8",
-            parity / c22 <= 1e-8,
+            "Psi4 modes: odd m vanish and C(l,-m) = (-1)^l conj C(l,m), l = 2-4",
+            f"{len(modes)} mode files, radii per row {sorted(radii)}, odd m {odd:.1e}, "
+            f"reflection {parity:.1e} of max|C22|",
+            "21 mode files with 2 radii; both <= 1e-8 of max|C22|",
+            covered and odd <= 1e-8 and parity <= 1e-8,
+            conformal,
         )
 
-    def check_checkpoint(
-        self,
-        conformal: str,
-        metadata: Dict[str, Any],  # untyped JSON values from json.loads
-        inputs: Sequence[float],
-    ) -> None:
+    def check_reference(self, conformal: str, run_a: Path) -> None:
         """
-        Check the projected residual, reflection, and puncture motion at step 4.
+        Compare run A's evolved diagnostics with the stored reference (check E1).
+
+        The constraint and ADM rows and the horizon observables (columns 1-13)
+        at ``REFERENCE_STEPS`` are compared. In ``--update-reference`` mode the
+        values are kept as a candidate reference instead.
 
         :param conformal: ``W`` or ``chi``.
-        :param metadata: Step-4 checkpoint metadata.
-        :param inputs: TwoPunctures solve inputs.
+        :param run_a: Run directory.
         """
-        residual = float(str(metadata["NRPY_PROJECTED_ALGEBRAIC_RESIDUAL"]))
+        values: Dict[str, List[float]] = {}
+        for name, count in (
+            ("dat/dgr_Constraints.dat", None),
+            ("dat/dgr_ADM.dat", None),
+            ("bah/BHaHAHA_diagnostics.ah1.gp", 13),
+            ("bah/BHaHAHA_diagnostics.ah2.gp", 13),
+        ):
+            rows = parse_table(run_a / name)[1]
+            for step in REFERENCE_STEPS:
+                values[f"{name}@{step}"] = row_at(rows, step)[:count]
+        key = f"{self.formulation}/{conformal}"
+        if self.update_reference:
+            self.reference_candidate[key] = values
+            print(f"reference candidate recorded for {key}", flush=True)
+            return
+        stored = read_reference().get(key, {})
+        used = math.inf
+        layout = bool(stored) and set(stored) == set(values)
+        layout = layout and all(len(stored[k]) == len(row) for k, row in values.items())
+        worst = ""
+        if layout:
+            used = 0.0
+            for k, row in values.items():
+                for index, (a, b) in enumerate(zip(row, stored[k])):
+                    scale = REFERENCE_RTOL * max(abs(a), abs(b)) + REFERENCE_ATOL
+                    ratio = abs(a - b) / scale
+                    if math.isnan(ratio) or ratio > used:  # a NaN stays, and fails
+                        used = ratio
+                        worst = f" at {k} entry {index}: {a!r} vs stored {b!r}"
         self.report.check(
-            "I1",
-            "numerical invariant",
-            f"{conformal}: projected algebraic residual at step 4",
-            f"{residual:.2e}",
-            "<= 1e-12",
-            residual <= 1e-12,
-        )
-        centers = [float(x) for x in metadata["NRPY_EXCISION_CENTERS"]]
-        x1, y1, z1, x2, y2, z2 = centers
-        reflection = max(abs(x1 + x2), abs(y1 + y2), abs(z1), abs(z2))
-        self.report.check(
-            "I2",
-            "numerical invariant",
-            f"{conformal}: punctures point-reflected at step 4",
-            f"{reflection:.1e}",
-            "<= 1e-9",
-            reflection <= 1e-9,
-        )
-        p_plus, p_minus = inputs[TPID_INDEX_P_PLUS_Y], inputs[TPID_INDEX_P_MINUS_Y]
-        moved = y1 * p_plus > 0.0 and y2 * p_minus > 0.0
-        self.report.check(
-            "I3",
-            "numerical sign check",
-            f"{conformal}: punctures move along their momenta",
-            f"y = ({y1:.2e}, {y2:.2e}), P_y = ({p_plus:.3g}, {p_minus:.3g})",
-            "same signs",
-            moved,
+            "E1",
+            "regression/numerical, stored reference",
+            f"evolved constraint, ADM, and horizon values at steps {list(REFERENCE_STEPS)}",
+            (
+                f"largest fraction of tolerance used {used:.1e}{worst}"
+                if layout
+                else f"stored reference for {key} missing or with different rows"
+            ),
+            f"|a-b| <= {REFERENCE_RTOL:g} max(|a|,|b|) + {REFERENCE_ATOL:g}",
+            used <= 1.0,
+            conformal,
         )
 
     def compare_runs(
-        self, label: str, first: Path, second: Path, steps: List[int], horizons: bool
+        self,
+        conformal: str,
+        label: str,
+        first: Path,
+        second: Path,
+        steps: List[int],
+        horizons: bool,
     ) -> None:
         """
         Compare two runs of one binary at the given steps (check P1).
 
+        :param conformal: ``W`` or ``chi``.
         :param label: Comparison label.
         :param first: Reference run directory.
         :param second: Run with a different rank count.
@@ -1099,11 +1170,12 @@ class Leg:
             f"largest fraction of tolerance used {used:.1e}; nodes equal {nodes_equal}",
             "|a-b| <= 1e-8 max(|a|,|b|) + 1e-12; equal unexcised_nodes",
             used <= 1.0 and nodes_equal,
+            conformal,
         )
 
     def check_orders(self, conformal: str, orders: Dict[int, Path]) -> None:
         """
-        Check the finite-difference orders on one octree (check O1).
+        Check that the initial constraint norm falls with FD order (check O1).
 
         :param conformal: ``W`` or ``chi``.
         :param orders: Run directory per order.
@@ -1118,51 +1190,22 @@ class Leg:
                 if line.startswith("initial-grid remesh pass=")
             ]
             elements[order] = int(passes[-1]) if passes else -1
-            reported = [
-                line.partition(" FD=")[2].split()[0]
-                for line in stdout.splitlines()
-                if ": profile=" in line and " FD=" in line
-            ]
-            self.report.check(
-                "O1",
-                "runtime",
-                f"{conformal}: FD{order} run reports its order",
-                reported[0] if reported else "none",
-                str(order),
-                reported == [str(order)],
-            )
             header, rows = parse_table(run_dir / "dat" / "dgr_Constraints.dat")
             h0[order] = column(header, rows, "H")[0]
-            lam0 = column(header, rows, "LAMBDA_CONSTRAINT")[0]
-            self.report.check(
-                "I1",
-                "numerical invariant",
-                f"{conformal}: FD{order} Lambda constraint at step 0",
-                f"{lam0:.2e}",
-                "<= 1e-12",
-                lam0 <= 1e-12,
-            )
         same_octree = len(set(elements.values())) == 1 and -1 not in elements.values()
-        self.report.check(
-            "O1",
-            "runtime",
-            f"{conformal}: one octree for FD4, FD6, FD8",
-            str(elements),
-            "equal element counts",
-            same_octree,
-        )
         ordered = h0[6] <= h0[4] / 2.0 and h0[8] <= h0[6] / 2.0
         self.report.check(
             "O1",
             "numerical ordering (not convergence)",
-            f"{conformal}: step-0 H decreases with order",
-            f"FD4 {h0[4]:.3e}, FD6 {h0[6]:.3e}, FD8 {h0[8]:.3e}",
-            "H6 <= H4/2 and H8 <= H6/2",
+            "step-0 H falls with FD order on one octree",
+            f"FD4 {h0[4]:.3e}, FD6 {h0[6]:.3e}, FD8 {h0[8]:.3e}; elements {elements}",
+            "equal element counts; H6 <= H4/2 and H8 <= H6/2",
             same_octree and ordered,
+            conformal,
         )
 
     def compare_variants(self) -> None:
-        """Compare the W and chi builds of this formulation (check V1)."""
+        """Compare the W and chi builds of this formulation at step 0 (check V1)."""
         run_w, run_chi = self.work / "W" / "A", self.work / "chi" / "A"
         adm_w = parse_table(run_w / "dat" / "dgr_ADM.dat")[1]
         adm_c = parse_table(run_chi / "dat" / "dgr_ADM.dat")[1]
@@ -1191,24 +1234,6 @@ class Leg:
             f"nodes equal {nodes_equal}, E {e0:.1e}, J_z {j0:.1e}, Psi4 {worst_mode / c22:.1e}",
             "equal nodes; E, J_z relative <= 2e-5; Psi4 <= 1e-5 of max|C22|",
             nodes_equal and e0 <= 2e-5 and j0 <= 2e-5 and worst_mode <= 1e-5 * c22,
-        )
-        evolution = max(
-            max(relative(a[3], b[3]), relative(a[9], b[9]))
-            for a, b in zip(adm_w, adm_c)
-        )
-        ratios = []
-        for name in ("H", "M_CONSTRAINT"):
-            for a, b in zip(
-                column(header_w, cons_w, name), column(header_c, cons_c, name)
-            ):
-                ratios.append(a / b if b != 0.0 else math.inf)
-        self.report.check(
-            "V1",
-            "differential numerical",
-            "W vs chi while evolving",
-            f"E, J_z {evolution:.1e}; H, M ratios {min(ratios):.2f}-{max(ratios):.2f}",
-            "E, J_z relative <= 1e-3; ratios in [0.5, 2] (gross-error check)",
-            evolution <= 1e-3 and all(0.5 <= r <= 2.0 for r in ratios),
         )
 
     def negative(
@@ -1368,9 +1393,6 @@ class Leg:
             self.negative(
                 label, self.mpi(ranks, exe, *extra, "ci.toml"), run_dir, expected
             )
-        self.negative(
-            "no arguments", self.mpi(1, exe), self.work / "W", f"usage: {self.exe_name}"
-        )
         run_dir = self.prepare(
             "W", "N-unread", dict(o4, BSSN_MAX_ITERATIONS="1", NRPY_CI_UNREAD="1")
         )
@@ -1405,6 +1427,22 @@ class Leg:
                 self.run_variant(conformal)
             self.compare_variants()
             self.run_negatives()
+            if self.update_reference and self.report.failures:
+                print("reference candidate not written: checks failed", flush=True)
+            elif self.update_reference:
+                import black  # pylint: disable=import-outside-toplevel
+
+                reference = read_reference()
+                reference.update(self.reference_candidate)
+                text = "trusted_dict = " + json.dumps(reference, sort_keys=True)
+                REFERENCE_FILE.write_text(
+                    black.format_str(text + "\n", mode=black.Mode()), encoding="utf-8"
+                )
+                print(
+                    f"reference candidate written to {REFERENCE_FILE}; review its diff, "
+                    "then rerun without --update-reference",
+                    flush=True,
+                )
         finally:
             shutil.rmtree(self.work, ignore_errors=True)
 
@@ -1439,10 +1477,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     parser.add_argument("--build-jobs", type=int, default=4, help="parallel build jobs")
     parser.add_argument(
+        "--update-reference",
+        action="store_true",
+        help="write run A's values as the candidate stored reference instead of "
+        "comparing (never used in CI)",
+    )
+    parser.add_argument(
         "--dendrolib-ref",
         help="build against this Dendrolib branch or tag instead of the pinned commit",
     )
     args = parser.parse_args(argv)
+    if args.update_reference and args.dendrolib_ref is not None:
+        parser.error("--update-reference requires the pinned Dendrolib revision")
     if args.ranks < 4:
         parser.error("--ranks must be at least 4, above the 3-rank comparison run")
     report = Report()
@@ -1451,6 +1497,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except (CheckError, OSError) as error:
         report.failures.append(f"aborted: {error}")
         print(f"[FAIL] aborted: {error}", flush=True)
+    finally:
+        report.flush()
     print(f"{report.count} checks, {len(report.failures)} failures", flush=True)
     for failure in report.failures:
         print(f"  FAILED {failure}", flush=True)

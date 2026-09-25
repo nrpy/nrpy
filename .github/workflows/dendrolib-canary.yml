@@ -4,7 +4,8 @@ name: Dendro validation against Dendrolib master
 # Dendrolib's master branch. Pull requests and pushes keep building against the
 # commit pinned by the generator (main.yml, dendro-validation). A failure here
 # appears in the Actions tab and marks an upstream change that would break
-# them; the log prints the Dendrolib commit that was built.
+# them or change their stored-reference values; the log prints the Dendrolib
+# commit that was built.
 on:
   schedule:
     - cron: '23 5 * * 1'

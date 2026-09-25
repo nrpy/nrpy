@@ -50,24 +50,31 @@ The `dendro-validation` workflow job runs
 configures these required checks: W and chi generation (byte-identical repeat
 generation), complete builds, MPI TwoPunctures runs at FD4, FD6, and FD8 through
 the first diagnostic output with the initial Hamiltonian-constraint norm ordered
-by FD order (an ordering check, not a convergence test), finite diagnostics and
-lapse maxima on every run, zero initial Lambda, the algebraic-projection
-residual stored in the checkpoint, constraint output, wave extraction with odd-m
-modes near zero and the reflection relation C(l,-m) = (-1)^l conj C(l,m),
-apparent-horizon irreducible masses matching the puncture ADM masses, a forced
-remesh with continuous ADM energy, checkpoint and byte-identical restore, and
-rejection of both W/chi checkpoint-formulation mismatches. Halo exchange between
-ranks is covered by 1-, 3-, and 4-rank runs whose diagnostics must agree within
-a relative tolerance; block boundaries within a rank are covered only
-indirectly, through the numerical checks. The job does not inspect field data,
-does not check `alpha=W=sqrt(chi)` pointwise, and it runs none of the temporary
-direct numerical comparisons or native-control comparisons above; those remain
+by FD order (an ordering check, not a convergence test), finite diagnostics on
+every run, constraint output, wave extraction with odd-m modes near zero and the
+reflection relation C(l,-m) = (-1)^l conj C(l,m), apparent-horizon irreducible
+masses matching the puncture ADM masses, a forced remesh whose evolved state and
+node counts match a stored reference, checkpoint and byte-identical restore,
+point reflection of the checkpointed puncture centers and their motion along the
+puncture momenta, and rejection of both W/chi checkpoint-formulation mismatches.
+The stored-reference comparison of run A's evolved constraint, ADM, and horizon
+values is a regression check on the evolution, not a correctness proof. Lambda
+initialization is asserted through the stored reference, which includes the
+step-0 Lambda constraint (and, for fCCZ4, the Z4 diagnostics), and the algebraic
+projection through checkpointing: the checkpoint writer refuses to write, and a
+restore refuses to read, a checkpoint whose projection residual is nonfinite or
+above tolerance. Halo exchange between ranks is covered by 1-, 3-, and 4-rank
+runs whose diagnostics must agree within a relative tolerance; block boundaries
+within a rank are covered only indirectly, through the numerical checks and the
+stored reference. The job does not inspect field data, does not check
+`alpha=W=sqrt(chi)` pointwise, and it runs none of the temporary direct
+numerical comparisons or native-control comparisons above; those remain
 review-time checks.
 
 Claim evidence:
-- Claim: `dendro-validation` configures the listed required application checks through `dendro_application_check.py`, covers halo exchange through rank-count agreement and block boundaries within a rank only through the numerical checks, and omits field-data inspection, the pointwise initial-lapse check, the temporary direct numerical comparisons, and native-control comparisons.
+- Claim: `dendro-validation` configures the listed required application checks through `dendro_application_check.py`, covers the evolution and the forced remesh through a stored-reference regression check, covers Lambda initialization through the stored step-0 constraint row and the algebraic projection through the checkpoint write-time and restore-time residual checks, covers halo exchange through rank-count agreement and block boundaries within a rank only through the numerical checks and the stored reference, and omits field-data inspection, the pointwise initial-lapse check, the temporary direct numerical comparisons, and native-control comparisons.
 - Role: CI behavior
-- Deciding authority: [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py), `Leg.run_variant`, `Leg.check_run_a`, `Leg.check_checkpoint`, `Leg.check_orders`, `Leg.compare_runs`, `Leg.run_negatives`; [main.yml](../../../.github/workflows/main.yml), `dendro-validation`
+- Deciding authority: [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py), `Leg.run_variant`, `Leg.check_run_a`, `Leg.check_reference`, `Leg.check_orders`, `Leg.compare_runs`, `Leg.run_negatives`; [main.yml](../../../.github/workflows/main.yml), `dendro-validation`; [checkpoint.py](../../../nrpy/infrastructures/Dendro/checkpoint.py), `output_checkpoint_cpp`, write-time and restore-time projection-residual checks
 - Corroboration: [Generated Project CI](../../validation/generated-project-ci.md), Dendro job description
 
 No new test file, test case, doctest prompt, or stored oracle may be added
@@ -80,6 +87,7 @@ output, not as KB snapshots.
 - [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - complete fCCZ4 application generation.
 - [CMakeLists.py](../../../nrpy/infrastructures/Dendro/CMakeLists.py) - explicit generated source manifest.
 - [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py) - configured CI checks for both applications.
+- [dendro_application_check_reference.py](../../../nrpy/examples/tests/dendro_application_check_reference.py) - stored run-A reference values.
 - [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - production evolution and service scheduling.
 - [Constraints And Diagnostic Norms](constraints-and-diagnostic-norms.md) - momentum convention and comparable RMS diagnostics.
 - [Octree Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md) - remesh path and limits of native parity.
