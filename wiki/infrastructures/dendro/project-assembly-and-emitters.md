@@ -1,15 +1,17 @@
 # Project Assembly And Generating Functions
 
-> Explain how NRPy emits complete sibling Dendro-GR applications. · Status: provisional
+> Explain how NRPy emits complete, standalone Dendrolib applications. · Status: provisional
 > Up: [Dendro](index.md)
 
 ## Summary
 
 `nrpy.examples.dendro_bssn` and `nrpy.examples.dendro_fccz4` generate
-`NRPy_BSSN_GR/` and `NRPy_fCCZ4_GR/` beside `BSSN_GR/`. Each directory is a
-complete Dendro application, not a kernel library, mock host, or adapter around
-Dendro-GR BSSN sources. With no explicit output directory, each example finds
-the nearest ancestor containing `CMakeLists.txt` and `BSSN_GR/`.
+`project/NRPy_BSSN_GR/` and `project/NRPy_fCCZ4_GR/`; `--project-dir` replaces
+`project`. Each directory is a complete, standalone Dendro application, not a
+kernel library, mock host, or adapter around Dendro-GR BSSN sources. It needs no
+Dendro-GR checkout: its CMake project fetches Dendrolib and toml11, and every
+other source is generated or packaged by NRPy. Each example ends by printing
+copy-paste commands that build and run the application inside its own directory.
 
 ## Detail
 
@@ -37,12 +39,13 @@ connection-initialization pass.
 `CMakeLists.py` writes an explicit source list. It includes the generated
 context, entry point, checkpoint support, local TwoPunctures implementation,
 runtime services, conversions, projection, and every order-specific numerical
-kernel. It uses no source glob, `bssn_common`, or source from `BSSN_GR/`.
-Dendrolib is the shared runtime dependency. Standalone builds default `CPU_ARCH`
-to `native` and apply that architecture to the solver and fetched libraries;
-`generic_avx2` selects `-mavx2 -mfma`. In-tree builds inherit Dendro-GR's
-architecture setting. The examples emit intrinsic-based Ricci and RHS kernels
-and package NRPy's `simd_intrinsics.h` under `generated/include`;
+kernel. It uses no source glob, `bssn_common`, or source from `BSSN_GR/`. The
+CMake project is standalone only: it fetches Dendrolib (`paralab/Dendro-5.01` at
+the commit `DENDROLIB_COMMIT` names) and toml11 with `FetchContent`, and it is
+not meant to be added to another CMake tree. `CPU_ARCH` defaults to `native` and
+applies to the solver and the fetched libraries; `generic_avx2` selects `-mavx2
+-mfma`. The examples emit intrinsic-based Ricci and RHS kernels and package
+NRPy's `simd_intrinsics.h` under `generated/include`;
 `register_CFunction_Ricci_eval` and `register_CFunction_rhs_eval` generate
 scalar kernels only when called with `enable_intrinsics=False`. The slow-start
 lapse exponential is evaluated once per block kernel call in either mode, while
@@ -91,19 +94,38 @@ Claim evidence:
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`.
 - Corroboration: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, calls to `output_main_cpp`; `nrpy/infrastructures/Dendro/param_toml.py`, `generate_default_parfile`.
 
+After generating, each example prints the prerequisites (CMake 3.16 or newer;
+GNU compilers, since the solver build passes `-fext-numeric-literals`; MPI with
+C, C++, and Fortran bindings; OpenMP; GSL; BLAS and LAPACK; git and network
+access for Dendrolib, toml11, and spdlog) and five commands: `cd` into the
+application directory, configure with `cmake -S . -B build
+-DCMAKE_BUILD_TYPE=Release`, build with `cmake --build build --parallel`, solve
+the TwoPunctures data with `mpiexec -n 1 build/<executable> --tpid
+pars/<stem>.toml`, and evolve with `mpiexec -n 4 build/<executable>
+pars/<stem>.toml`, noting that the default parameter file is a full production
+binary-black-hole run whose `BSSN_RK_TIME_END` can be lowered for a short test.
+The solver's default output prefixes are relative, so a run from the application
+directory writes its diagnostic files, the TwoPunctures file, `vtu/`, and `cp/`
+there, and `bah/` when `AEH_SOLVER_FREQ` is positive.
+
 Claim evidence:
-- Claim: Standalone generated builds apply the selected CPU architecture to the solver and fetched libraries, while in-tree builds inherit the parent build setting.
+- Claim: The generated CMake project is standalone: it declares its own project, fetches Dendrolib at `DENDROLIB_COMMIT` and toml11, and applies the selected CPU architecture to the solver and the fetched libraries.
 - Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/CMakeLists.py`, `output_CFunctions_function_prototypes_and_construct_CMakeLists`.
-- Corroboration: Dendro-GR `CMakeLists.txt`, `CPU_ARCH` selection and `add_compile_options`.
+- Deciding authority: `nrpy/infrastructures/Dendro/CMakeLists.py`, `output_CFunctions_function_prototypes_and_construct_CMakeLists` and `DENDROLIB_COMMIT`.
+- Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.generate_and_build`, configures and builds each generated tree on its own.
+
+Claim evidence:
+- Claim: Each Dendro example writes its application to `<project-dir>/<SOLVER_NAME>/` (default `project`) and prints the prerequisites and the copy-paste commands that configure, build, solve the TwoPunctures data, and evolve inside that directory.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `parse_args` and `main`; `nrpy/infrastructures/Dendro/CMakeLists.py`, `build_and_run_instructions`.
+- Corroboration: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`, relative default output prefixes and the `--tpid` requirement; `nrpy/infrastructures/Dendro/param_toml.py`, `generate_default_parfile`.
 
 ## Sources
 
 - [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) - BSSN registration wave and file emission.
 - [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - fCCZ4 registration wave and file emission.
 - [parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py) - worker execution and registry merge.
-- [CMakeLists.py](../../../nrpy/infrastructures/Dendro/CMakeLists.py) - prototype and explicit CMake source emission.
-- [Dendro-GR CMakeLists.txt](https://github.com/paralab/Dendro-GR/blob/master/CMakeLists.txt) - parent architecture selection for in-tree builds.
+- [CMakeLists.py](../../../nrpy/infrastructures/Dendro/CMakeLists.py) - prototype and explicit CMake source emission, standalone project, and build/run instructions.
 - [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - application entry point, parameter-file reading, and startup checks.
 - [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `output_toml_bindings`, CodeParameter key binding.
 - [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - generated Dendro runtime context.

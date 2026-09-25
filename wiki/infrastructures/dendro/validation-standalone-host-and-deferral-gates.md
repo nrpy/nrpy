@@ -15,7 +15,7 @@ order-specific kernels, direct Python/CFunction/C++ name correspondence,
 final-state pointer indices, and rejection of native `BSSN_GR` sources in each
 explicit CMake source list.
 
-Required application checks configure and build both sibling applications with
+Required application checks configure and build both standalone applications with
 Dendrolib. Both BSSN and fCCZ4 checks must generate W and chi variants.
 MPI TwoPunctures runs must exercise finite-difference orders 4, 6,
 and 8 through initialization and the first completed diagnostic output. Checks

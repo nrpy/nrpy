@@ -8,8 +8,8 @@
 NRPy routes generated-backend families with different runtime hosts:
 BHaH emits standalone C/CUDA-style projects or libraries, ETLegacy and CarpetX
 emit Einstein Toolkit thorns, superB emits Charm++ projects, JAX emits a
-Python/JAX package, and Dendro emits complete BSSN and fCCZ4 applications beside
-`BSSN_GR` in one Dendro-GR checkout.
+Python/JAX package, and Dendro emits complete, standalone BSSN and fCCZ4
+Dendrolib applications.
 Across them, files under generated `project/**` trees are build or runtime output,
 not source evidence,
 unless maintainers deliberately freeze and register selected generated files.
@@ -27,7 +27,7 @@ chat history.
 | CarpetX | CarpetX/Cactus thorn infrastructure using Loop/CarpetX dependencies, C++ source emission, ODESolvers schedule bins, and CarpetX gridfunction metadata. | Generated thorn directory with `interface.ccl`, `param.ccl`, `schedule.ccl`, `configuration.ccl`, `src/make.code.defn`, and thorn-local `src/*.cxx`. | Generate thorns from NRPy, place them in an Einstein Toolkit/CarpetX-capable checkout, then build/run in that host environment. CarpetX thorns require `Loop` and `CarpetX`; schedules use ODESolvers bins. | Current cited CI/validation pages do not establish `carpetx_*` Einstein Toolkit build/test coverage. CarpetX GR RHS has trusted-expression dictionaries; several SIMD/CAHD details are source-observed caveats rather than proven runtime guarantees. | Cite CarpetX writer modules, Cactus/CarpetX background docs only for terminology, and local validation pages for NRPy facts instead of emitted CCL files, configuration, C++ source, and built toolkit output. |
 | superB | Charm++-based superB infrastructure for distributed-memory generated applications, with `Main`, `Timestepping`, optional interpolation/horizon chares, and PUP support. | Generated Charm++ project under `project/<project_name>/`: `.h`, `.cpp`, `.ci`, PUP routines, copied static headers, parameter/default files, BHaH defines/prototypes, and a Makefile using `charmc`. | Run the Python generator, enter the generated project directory, run `make`, then launch with `./charmrun +pN ./<project_name>`. Optional BHaHAHA and checkpoint paths add service chares and link inputs. | `charmpp-validation` CI generates several superB workflows, builds them in a Charm++ Apptainer image, and runs `superB_two_blackholes_collide` through `charmrun +p2`. | Cite superB generator modules and static source headers instead of generated Charm++ projects, translated `.decl.h`/`.def.h`, logs, checkpoints, binaries, and linked service output. |
 | JAX | Python/JAX infrastructure driven by `PyFunction_dict` and `commondata_params_dict`, currently surfaced through `sebobv1_jax`. | Generated Python package under `project/<name>/src/<name>/`, with one module per registered `PyFunction`, `Commondata.py`, package `__init__.py`, `pyproject.toml`, `setup.cfg`, requirements, README, `.gitignore`, and a minimal import smoke test. | Run `python -m nrpy.examples.sebobv1_jax` or another JAX generator. Current CI generation route does not run a following generated `make` step; runtime use of generated package behavior is narrower than C backend build validation. | Ubuntu and macOS codegen CI run the JAX generator. Current `sebobv1_jax` route is generation-only and has a documented `a_f` Commondata mismatch, so end-to-end waveform runtime validation is provisional. | Cite JAX project generator, `PyFunction`/Commondata registry code, example source, and CI workflow instead of generated Python package files and packaging metadata. |
-| Dendro | Dendro infrastructure over NRPy gridfunction, CodeParameter, and `CFunction` registries; BSSN and fCCZ4 are complete applications. | `NRPy_BSSN_GR/` or `NRPy_fCCZ4_GR/` beside `BSSN_GR/`, with application-owned state, parameters, executable, context, TwoPunctures, kernels, runtime services, and explicit CMake sources. | Run either Python generator from the Dendro-GR tree, configure the root or generated application, build against Dendrolib, then run its solver with a Dendro parameter file. | Required validation uses deterministic generation, complete builds, and MPI TwoPunctures runs at FD4/6/8. The `dendro-validation` job configures these checks plus short-run remesh, horizon, wave, restart, and rank-count checks through `dendro_application_check.py`. | Cite Dendro generator modules and registrars instead of generated source, binaries, diagnostics, or checkpoints. |
+| Dendro | Dendro infrastructure over NRPy gridfunction, CodeParameter, and `CFunction` registries; BSSN and fCCZ4 are complete applications. | Standalone `project/NRPy_BSSN_GR/` or `project/NRPy_fCCZ4_GR/` (or under `--project-dir`), with application-owned state, parameters, executable, context, TwoPunctures, kernels, runtime services, and explicit CMake sources. | Run either Python generator; it prints the commands that configure and build the application (fetching Dendrolib and toml11), solve TwoPunctures with `--tpid`, and evolve, all inside the application directory. | Required validation uses deterministic generation, complete builds, and MPI TwoPunctures runs at FD4/6/8. The `dendro-validation` job configures these checks plus short-run remesh, horizon, wave, restart, and rank-count checks through `dendro_application_check.py`. | Cite Dendro generator modules and registrars instead of generated source, binaries, diagnostics, or checkpoints. |
 
 The main backend split is not language alone. BHaH and superB both generate
 standalone project trees, but BHaH initializes and evolves through a process or
@@ -36,8 +36,8 @@ generate Cactus thorns, but ETLegacy emits C sources and MoL-oriented schedules
 while CarpetX emits C++ sources, `configuration.ccl`, `Loop CarpetX`
 requirements, and ODESolvers-oriented schedules. JAX is the outlier: it
 consumes Python-function registries and writes a Python package rather than a
-C/C++ build. Dendro instead targets Dendrolib and emits complete sibling
-applications. Each sibling owns evolution, AMR, checkpoint, boundary,
+C/C++ build. Dendro instead targets Dendrolib and emits complete, standalone
+applications. Each application owns evolution, AMR, checkpoint, boundary,
 constraint, wave, horizon, and TwoPunctures paths. It neither wraps nor compiles
 the chi-specific `BSSN_GR` implementation.
 
@@ -48,7 +48,7 @@ Claim evidence:
 - Corroboration: [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), explicit registered-CFunction source emission
 
 Claim evidence:
-- Claim: each Dendro example emits one complete sibling application with an explicit source list; the `dendro-validation` CI job generates, builds, and runs both applications.
+- Claim: each Dendro example emits one complete, standalone application with an explicit source list; the `dendro-validation` CI job generates, builds, and runs both applications.
 - Role: descriptive behavior
 - Deciding authority: [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), `output_CFunctions_function_prototypes_and_construct_CMakeLists`; [solver_context.py](../../nrpy/infrastructures/Dendro/solver_context.py), generated context
 - Corroboration: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `Leg.generate_and_build`

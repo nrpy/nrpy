@@ -129,16 +129,16 @@ name could imply that the target code supplied it. Names required for target-cod
 integration still follow that code's source.
 
 **Right** — Cactus says thorn, so ETLegacy says `thorn_name`. NRPy's complete
-Dendro sibling applications use directories and CMake projects `NRPy_BSSN_GR`
-and `NRPy_fCCZ4_GR` beside native `BSSN_GR`, with namespaces `nrpy::bssn` and
+Dendro applications use directories and CMake projects `NRPy_BSSN_GR` and
+`NRPy_fCCZ4_GR`, named after native `BSSN_GR`, with namespaces `nrpy::bssn` and
 `nrpy::fccz4`. Child files and functions retain the formulation stem, while
 their executable targets identify the NRPy implementation.
 
 Claim evidence:
-- Claim: NRPy-generated Dendro sibling-application directories, CMake projects, namespaces, and executables identify NRPy; child files and functions retain their formulation or host-required names.
+- Claim: NRPy-generated Dendro application directories, CMake projects, namespaces, and executables identify NRPy; child files and functions retain their formulation or host-required names.
 - Role: normative rule
 - Deciding authority: this page, `The host's vocabulary governs emitted identifiers`, Rule
-- Corroboration: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) set sibling-application, project, namespace, and executable identities; registered Dendro-GR source establishes host conventions
+- Corroboration: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) set application, project, namespace, and executable identities; registered Dendro-GR source establishes host conventions
 
 **Wrong** — replacing the C++ namespace `fccz4::generated` with
 `Dendro::generated` on the reasoning that "fccz4" is a formulation name and

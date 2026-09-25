@@ -92,7 +92,7 @@ GPU runner, runs no generated executable, and checks no GPU result. Treat it as
 a local command recipe requiring a prepared environment, not CI pass evidence.
 
 Dendro's job runs one helper per formulation. The helper generates the W and chi
-sibling applications twice with separate caches and requires byte-identical
+applications twice with separate caches and requires byte-identical
 trees, then configures and builds each with `CPU_ARCH=x86-64-v3` against the
 Dendrolib and toml11 revisions pinned by the generated `CMakeLists.txt`. One
 TwoPunctures solve is shared by all runs of each conformal-factor variant, and
@@ -176,7 +176,7 @@ Every subprocess has an argument vector, a timeout, and a bounded log tail on
 failure, and the work directory is removed unconditionally.
 
 Claim evidence:
-- Claim: the `dendro-validation` job generates, builds, runs, and checks both complete sibling Dendro applications in W and chi variants through `dendro_application_check.py`, with the checks and rejections listed in this section.
+- Claim: the `dendro-validation` job generates, builds, runs, and checks both complete, standalone Dendro applications in W and chi variants through `dendro_application_check.py`, with the checks and rejections listed in this section.
 - Role: CI behavior
 - Deciding authority: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `Leg.run`, `Leg.run_variant`, `Leg.check_run_a`, `Leg.check_reference`, `Leg.compare_runs`, `Leg.run_negatives`
 - Corroboration: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py), current command-line interface; [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), pinned dependency revisions

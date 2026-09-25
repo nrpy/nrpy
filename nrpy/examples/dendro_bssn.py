@@ -1,7 +1,9 @@
 """
-Generate the complete NRPy BSSN application beside Dendro-GR's BSSN_GR.
+Generate the complete, standalone NRPy BSSN application for Dendrolib.
 
-Run as ``python -m nrpy.examples.dendro_bssn``.
+Run as ``python -m nrpy.examples.dendro_bssn``. By default the application is
+written to ``project/NRPy_BSSN_GR/``, and the build and run commands are printed at
+the end.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -76,12 +78,13 @@ def parse_args() -> argparse.Namespace:
     :return: Parsed command-line arguments.
     """
     parser = argparse.ArgumentParser(
-        description="Generate the complete NRPy BSSN application for Dendro-GR"
+        description="Generate the complete, standalone NRPy BSSN application"
     )
     parser.add_argument(
         "--project-dir",
         type=Path,
-        help="Dendro-GR root; by default, locate the nearest enclosing checkout",
+        default=Path("project"),
+        help="directory that receives the application directory (default: project)",
     )
     parser.add_argument(
         "--fd-order",
@@ -103,29 +106,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    """
-    Generate the complete Dendro BSSN application.
-
-    :raises ValueError: If no enclosing Dendro-GR root can be found.
-    """
+    """Generate the complete Dendro BSSN application."""
     args = parse_args()
-    if args.project_dir is None:
-        project_dir = next(
-            (
-                candidate
-                for candidate in (Path.cwd(), *Path.cwd().parents)
-                if (candidate / "CMakeLists.txt").is_file()
-                and (candidate / "BSSN_GR").is_dir()
-            ),
-            None,
-        )
-        if project_dir is None:
-            raise ValueError(
-                "No enclosing Dendro-GR root contains CMakeLists.txt and BSSN_GR/. "
-                "Pass --project-dir explicitly."
-            )
-    else:
-        project_dir = args.project_dir.resolve()
 
     par.set_parval_from_str("Infrastructure", "Dendro")
     par.set_parval_from_str("fp_type", "double")
@@ -332,7 +314,7 @@ typedef double DOUBLE;
         )
     )
     for relative_path, contents in sorted(artifacts.items()):
-        target = project_dir / relative_path
+        target = args.project_dir / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
         with ConditionalFileUpdater(
             target,
@@ -341,13 +323,19 @@ typedef double DOUBLE;
         ) as output_file:
             output_file.write(contents)
 
-    solver_dir = project_dir / SOLVER_NAME
+    solver_dir = args.project_dir / SOLVER_NAME
     print(f"Finished generating {SOLVER_NAME} in {solver_dir}.")
     print("Generated centered FD/KO profiles: 4/2, 6/4, 8/6.")
     print(f"Selected runtime profile: FD{args.fd_order}/KO{ko_fd_order}.")
     print(
         f"{args.conformal_factor} evolution, SSL, Dendro CAHD, "
         "TwoPunctures alpha=W, and eta=1 enabled."
+    )
+    print()
+    print(
+        CMakeLists.build_and_run_instructions(
+            solver_dir, EXECUTABLE_NAME, f"pars/{SOLVER_STEM}.toml"
+        )
     )
 
 
