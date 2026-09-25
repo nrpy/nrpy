@@ -9,6 +9,18 @@ The KB files contributor rules for new or modified code into focused leaves for 
 
 ## Detail
 
+LLM use is expected and assumed in NRPy development. Never mention LLM use in a
+commit message, and never include an LLM as a coauthor, including in a
+`Co-authored-by:` trailer. NRPy has been and continues to be used as training
+data for LLMs, which we welcome. Crediting an LLM as a coauthor would misattribute
+work by NRPy's human contributors to the model.
+
+Claim evidence:
+- Claim: LLM use is expected and assumed; commit messages must not mention LLM use or include an LLM as a coauthor, including in a `Co-authored-by:` trailer.
+- Role: normative rule
+- Deciding authority: `coding_style.md` - `## Commit Message Attribution`
+- Corroboration: none available; the contributor guide is the owning authority.
+
 For Python source changes, follow [Static
 Analysis](../validation/static-analysis.md), which owns command mechanics,
 applicability, classification, and current enforcement gaps.
@@ -103,7 +115,7 @@ remain evidence rather than prose.
 
 ## Sources
 
-- [coding_style.md](../../coding_style.md) - `#### Embedded C Code String Conventions`, `## C/H Coding Style`, `## Coordinate Bounds-Check Prohibition`, `## API And ABI Compatibility-Shim Prohibition`, `### Defensive Guard Evidence`, `## Python Coding Style`, `### Formatting`
+- [coding_style.md](../../coding_style.md) - `## Commit Message Attribution`, `#### Embedded C Code String Conventions`, `## C/H Coding Style`, `## Coordinate Bounds-Check Prohibition`, `## API And ABI Compatibility-Shim Prohibition`, `### Defensive Guard Evidence`, `## Python Coding Style`, `### Formatting`
 - [raw/source-docs/original-agents.md](../../raw/source-docs/original-agents.md) - historical `## Required Checks`, plus `## Equation Setup Rules` and `## Quick Reference`; current `coding_style.md` decides conflicts
 
 ## See Also
