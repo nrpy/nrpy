@@ -119,13 +119,15 @@ TPID_INDEX_P_MINUS_Y = 18
 
 # Stored reference for run A's evolved diagnostics (check E1): steps, and the
 # tolerance |a - b| <= REFERENCE_RTOL * max(|a|, |b|) + REFERENCE_ATOL. The
-# constraint and ADM rows in dgr_*.dat are printed with six significant digits,
-# so they must match as printed; below that resolution the check's sensitivity
-# comes from the horizon columns, printed with 10 to 16 digits. Unrounded
-# constraint norms differ slightly between math-library paths, so a
-# last-digit difference on another CPU class is possible; E1 names the worst
-# entry so such a difference can be recognized. Update mode reads, merges, and
-# rewrites the file, so run the two formulations' update legs one after the other.
+# constraint and ADM rows in dgr_*.dat are printed with up to ten significant
+# digits; the horizon radii and circumferences with ten, area and irreducible
+# mass with sixteen, and time and centroid in fixed point. The last printed
+# digits can vary between math-library paths and rank counts; a one-unit
+# difference in the tenth digit lies within the tolerance. The ADM linear
+# momentum and J_x, J_y vanish for this configuration, so their printed digits
+# are round-off and REFERENCE_ATOL, not the stored value, bounds them. E1 names
+# the worst entry. Update mode reads, merges, and rewrites the file, so run the
+# two formulations' update legs one after the other.
 REFERENCE_FILE = Path(__file__).with_name("dendro_application_check_reference.py")
 REFERENCE_STEPS = (0, 4, 8)
 REFERENCE_RTOL = 1.0e-9

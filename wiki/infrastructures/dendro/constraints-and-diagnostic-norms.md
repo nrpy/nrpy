@@ -71,10 +71,11 @@ columns. For BSSN, columns 3-6 (`H`, `MU0..MU2`) correspond to native
 `C_HAM` and `C_MOM0..2`; fCCZ4 lists its four Z4 fields first. Rows in both
 files begin with the step and physical time; only `*_Constraints.dat` has a
 header. Compare against native results by physical time, not merely step
-number.
+number. Both files print floating-point values with up to ten significant
+digits (default notation, trailing zeros dropped).
 
 Claim evidence:
-- Claim: The generated solver reports distinct excised conformal-factor volume-weighted and unique-owned-node RMS norms, and only the latter matches native Dendro-BSSN's node-weighting convention. The unique-node norm goes to `*_Constraints.dat`, native `BSSN_GR`'s file name, with a step-0 header of the generated diagnostic names followed by `unexcised_nodes`; for BSSN its columns 3-6 correspond to native `C_HAM` and `C_MOM0..2`. The volume-weighted norm goes to `*_Constraints_volweighted.dat`, which has no header.
+- Claim: The generated solver reports distinct excised conformal-factor volume-weighted and unique-owned-node RMS norms, and only the latter matches native Dendro-BSSN's node-weighting convention. The unique-node norm goes to `*_Constraints.dat`, native `BSSN_GR`'s file name, with a step-0 header of the generated diagnostic names followed by `unexcised_nodes`; for BSSN its columns 3-6 correspond to native `C_HAM` and `C_MOM0..2`. The volume-weighted norm goes to `*_Constraints_volweighted.dat`, which has no header. Both files print floating-point values with up to ten significant digits.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `output_solver_context_cpp` / `Ctx::diagnostic_output`; `nrpy/infrastructures/Dendro/general_relativity/diagnostics.py`, `register_CFunction_diagnostics`.
 - Corroboration: `BSSN_GR/include/grUtils.tcc`, `bssn::computeConstraintL2Norm(const ot::Mesh*,...)`, native ownership, excision, and RMS reduction, and `bssn::extractConstraints`, native file name and step-0 header; `nrpy/infrastructures/Dendro/state_h.py`, diagnostic component order.

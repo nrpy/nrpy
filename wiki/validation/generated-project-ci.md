@@ -135,12 +135,15 @@ candidate is reviewed as a diff and then compared in a second run without the
 flag. An intentional change to the evolution, the gauge, the remesh, or the
 Dendrolib revision therefore requires regenerating the reference in the same
 change, and the weekly run against Dendrolib master fails when an upstream
-change alters these values beyond the tolerance. Most `dgr_*.dat` values are
-printed with six significant digits, so for those columns the comparison
-requires equal printed values, and below that resolution the check's sensitivity
-comes from the horizon columns; because unrounded constraint norms differ
-slightly between math-library paths, a single last-digit difference on another
-CPU class is possible, and the failure message names the entry.
+change alters these values beyond the tolerance. The constraint and ADM rows are
+printed with up to ten significant digits; the horizon radii and circumferences
+with ten, area and irreducible mass with sixteen, and time and centroid in fixed
+point. The last printed digits can vary between math-library paths and rank
+counts; a one-unit difference in the tenth digit lies within the tolerance. The
+ADM linear-momentum components and the angular-momentum components J_x and J_y
+vanish for this configuration, so their printed digits are round-off and the
+absolute tolerance, not the stored value, bounds them. The check reports the
+worst entry.
 
 Claim evidence:
 - Claim: the Dendro helper compares run A's constraint and ADM rows and horizon observables at steps 0, 4, and 8 with the stored `trusted_dict` reference within a fixed relative and absolute tolerance, so the weekly Dendrolib-master run fails when an upstream change alters those values beyond the tolerance; the reference changes only through `--update-reference`, which writes a candidate instead of comparing and refuses to write when any check failed or when a Dendrolib branch or tag replaces the pin.
@@ -205,6 +208,8 @@ generated file has been deliberately registered as frozen evidence.
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `dendro-validation`
 - [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py) - `Leg.run`, profiles, checks, and negative cases
 - [dendro_application_check_reference.py](../../nrpy/examples/tests/dendro_application_check_reference.py) - stored run-A reference values
+- [solver_context.py](../../nrpy/infrastructures/Dendro/solver_context.py) - `Ctx::diagnostic_output`, `Ctx::adm_output` output precision
+- [diagnostics_file_output.py](../../nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_file_output.py) - horizon diagnostics column formats
 - [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml) - weekly `dendro-validation-dendrolib-master`
 - [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) - current BSSN generation interface
 - [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - current fCCZ4 generation interface

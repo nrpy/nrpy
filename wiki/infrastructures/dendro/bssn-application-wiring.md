@@ -68,7 +68,16 @@ fields used by ADM surface quantities; waveform extraction evaluates Psi4
 directly from the selected BSSN fields. Generated runtime services also provide
 physical boundaries, conformal-factor volume-weighted and unique-node constraint diagnostics, checkpoint and
 restart, and scheduled output. ADM surface quantities are written to
-`*_ADM.dat`.
+`*_ADM.dat`: every `BSSN_TIME_STEP_OUTPUT_FREQ` steps, when `BSSN_GW_RADAII` is
+non-empty, one row with the step, time, outermost extraction radius, and the ADM
+energy, linear momentum, and angular momentum, printed with up to ten
+significant digits (default notation, trailing zeros dropped).
+
+Claim evidence:
+- Claim: Every `BSSN_TIME_STEP_OUTPUT_FREQ` steps, when `BSSN_GW_RADAII` is non-empty, rank 0 appends one row to `<BSSN_PROFILE_FILE_PREFIX>_ADM.dat` with the step, time, the last listed extraction radius, and the seven ADM surface quantities (energy, three linear-momentum and three angular-momentum components), printed with up to ten significant digits in default notation. This applies to the fCCZ4 application as well.
+- Role: public/scientific contract
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::adm_output` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`, the `BSSN_TIME_STEP_OUTPUT_FREQ` and `BSSN_GW_RADAII` reads.
+- Corroboration: `nrpy/infrastructures/Dendro/general_relativity/adm_quantities.py`, `register_CFunction_adm_quantities`, the order of the seven quantities; `nrpy/examples/tests/dendro_application_check.py`, `Leg.check_run_a` column use.
 
 Each Psi4 mode goes to its own `*_GW_l<l>_m<m>.dat` file, with Dendro-GR
 `BSSN_GR`'s name and layout: a step-0 header, then the step, time and one

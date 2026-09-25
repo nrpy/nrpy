@@ -728,6 +728,7 @@ int Ctx::diagnostic_output() {{
       throw std::runtime_error("constraint diagnostics found a nonfinite constraint");
   if (m_uiMesh->getMPIRank() == 0) {{
     std::ofstream file(output_prefix_ + "_Constraints_volweighted.dat", std::ios::app);
+    file.precision(10);
     file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT;
     for (unsigned int i = 0; i < generated::NUM_DIAG_GFS; ++i)
       file << '\\t' << std::sqrt(global_sum[i] / global_volume)
@@ -783,6 +784,7 @@ int Ctx::diagnostic_output() {{
   if (m_uiMesh->getMPIRank() == 0) {{
     // Dendro-GR BSSN_GR's constraint file name and step-0 header layout.
     std::ofstream file(output_prefix_ + "_Constraints.dat", std::ios::app);
+    file.precision(10);
     if (m_uiTinfo._m_uiStep == 0) {{
       file << "TimeStep\\t time\\t";
       for (const std::string_view name : generated::DIAG_GF_NAMES)
@@ -943,6 +945,7 @@ int Ctx::adm_output() {{
                 m_uiMesh->getMPICommunicator());
   if (m_uiMesh->getMPIRank() == 0) {{
     std::ofstream file(output_prefix_ + "_ADM.dat", std::ios::app);
+    file.precision(10);
     file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT << '\\t' << radius;
     for (const DendroScalar quantity : global_quantities) file << '\\t' << quantity;
     file << '\\n';
