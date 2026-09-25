@@ -6,9 +6,10 @@
 ## Summary
 
 Workflow YAML separates static analysis, Ubuntu/macOS code generation, ETLegacy
-regression, Dendro application validation, Charm++/superB, and trusted/current
-waveform consistency routes. These are configured routes, not execution-result
-snapshots.
+regression, Dendro application validation plus a weekly run of the same checks
+against the head of Dendrolib's master branch, Charm++/superB, and
+trusted/current waveform consistency routes. These are configured routes, not
+execution-result snapshots.
 
 ## Detail
 
@@ -21,6 +22,7 @@ Configured GitHub job map:
 | `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation as Ubuntu; no Dendro generation or build; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
 | `einsteintoolkit-validation` | Configured Ubuntu/Apptainer Einstein Toolkit image | Generates `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs the configured Baikal, BaikalVacuum, and WaveToyNRPy Cactus testsuites and fails on reported failures. No `carpetx_*` generation/build/run. |
 | `dendro-validation` | Ubuntu 24.04 runner with apt-installed Open MPI, GSL, BLAS/LAPACK, and gfortran; matrix `formulation: [bssn, fccz4]`; 75-minute job timeout | Each leg runs `nrpy/examples/tests/dendro_application_check.py`, which generates the W and chi projects twice, configures and builds them against the pinned Dendrolib, solves TwoPunctures once per variant, and runs short MPI evolutions with forced remeshing, horizon finds, wave extraction, checkpoint and restore, 1/3/4-rank repeats, FD4/6/8 initialization, and process-boundary rejections. | Proves only the named layers for the helper's two CI profiles: generation determinism, compile/link compatibility, closed-form TwoPunctures ADM and horizon-mass agreement, initialization and symmetry properties, restart identity, rank-count agreement, ordering of the initial Hamiltonian-constraint norm with FD order (not a convergence test), and the listed rejections. It is not long-time, merger, or production-resolution evidence. |
+| `dendro-validation-dendrolib-master` (`dendrolib-canary.yml`) | Weekly schedule and manual dispatch only; same runner, packages, matrix, and timeout as `dendro-validation`. | Runs the same helper with `--dendrolib-ref master`: Dendrolib is cloned at the head of its master branch instead of the pinned commit, and the resolved commit is printed. | Same checks as `dendro-validation`; a pass or failure is evidence only for the printed Dendrolib commit, and pull requests are unaffected. |
 | `charmpp-validation` | Configured Ubuntu/Apptainer Charm++ context | Generates and builds the configured superB elliptic, spectroscopy, and collision projects | Runs the configured collision executable through `charmrun`; no explicit scientific-output assertion beyond process success. |
 | `sebob-consistency-test` | Configured Ubuntu matrix | Checks out the workflow-selected trusted revision; generates/builds trusted and current SEOBNRv5 variants | Each helper invocation rebuilds both executables, uses exactly ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed the perturbation-derived baseline. |
 | `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the workflow-selected trusted revision | Uses the same ten-input and median-error criterion. |
@@ -120,6 +122,22 @@ warning, and a run given an unread key must warn about it and still succeed.
 fCCZ4 additionally requires its Z4-extended Hamiltonian diagnostic to equal the
 BSSN one and its Z4 vector to vanish at step 0.
 
+A separate workflow, `dendrolib-canary.yml`, runs the same two helper legs
+weekly and on manual dispatch with `--dendrolib-ref master`. The helper then
+shallow-clones that Dendrolib branch from the repository declared in the
+generated `CMakeLists.txt`, configures both variants with
+`FETCHCONTENT_SOURCE_DIR_DENDROLIB` pointing at the clone, and prints the
+resolved commit. Pull requests and pushes keep building against the pinned
+commit, so an upstream change that breaks the generated applications shows up in
+this weekly run without failing unrelated changes; its results are evidence only
+for the printed commit.
+
+Claim evidence:
+- Claim: `dendrolib-canary.yml` runs the Dendro helper legs weekly and on manual dispatch against the head of Dendrolib's master branch, printing the resolved commit, while `dendro-validation` in `main.yml` keeps the commit pinned by the generator; a pass or failure is evidence only for the printed Dendrolib commit, and the configuration does not establish any run outcome.
+- Role: CI behavior
+- Deciding authority: [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml), `on`, `dendro-validation-dendrolib-master`; [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `Leg.generate_and_build`, `--dendrolib-ref`
+- Corroboration: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), the emitted Dendrolib `FetchContent_Declare`
+
 The helper generates only with Kreiss-Oliger dissipation enabled. The apt
 packages, compilers, and `requirements.txt` packages are not pinned; the helper
 prints their resolved versions, and a pass is evidence only for those versions.
@@ -158,6 +176,7 @@ generated file has been deliberately registered as frozen evidence.
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `einsteintoolkit-validation`; official Einstein Toolkit [Adding a test case](https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case) - `A test case is...`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `dendro-validation`
 - [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py) - `Leg.run`, profiles, checks, and negative cases
+- [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml) - weekly `dendro-validation-dendrolib-master`
 - [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) - current BSSN generation interface
 - [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - current fCCZ4 generation interface
 - [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py) - current generated source and target emission

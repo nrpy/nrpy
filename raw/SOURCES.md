@@ -49,6 +49,7 @@ aggregate rows and `wiki/source-map.md`.
 | `.pylintrc_python36` | living |
 | `.darglint` | living |
 | `.github/workflows/main.yml` | living |
+| `.github/workflows/dendrolib-canary.yml` | living |
 | `.github/single_file_static_analysis.sh` | living |
 | `.github/full_nrpy_local_ci.sh` | living |
 | `bin/nrpyinline.py` | living |

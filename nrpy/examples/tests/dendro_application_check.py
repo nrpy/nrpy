@@ -3,21 +3,25 @@ Generate, build, run, and check the complete NRPy Dendro applications.
 
 For one formulation (BSSN or fCCZ4), this helper generates the W and chi
 applications twice each, builds them standalone against the Dendrolib commit
-pinned by the generator, runs short MPI TwoPunctures evolutions, and checks
-the output against exact identities, values computed independently of the
-evolution, and comparisons between runs of the same binary. Each check prints
-its identifier, the validation layer it proves, the measured value, and the
-tolerance. The process exits nonzero if any check fails.
+pinned by the generator (or against a named Dendrolib branch or tag), runs
+short MPI TwoPunctures evolutions, and checks the output against exact
+identities, values computed independently of the evolution, and comparisons
+between runs of the same binary. Each check prints its identifier, the
+validation layer it proves, the measured value, and the tolerance. The process
+exits nonzero if any check fails.
 
 Usage (from the repository root):
     python nrpy/examples/tests/dendro_application_check.py \
         --formulation {bssn,fccz4} --work-dir DIR \
         [--launcher "mpiexec --oversubscribe --bind-to none"] [--ranks 4] \
-        [--build-jobs 4]
+        [--build-jobs 4] [--dendrolib-ref master]
 
 Run without arguments, the helper runs its doctests. Configuring each
 generated project downloads the Dendrolib and toml11 revisions pinned by the
-generated CMakeLists.txt, so the run needs network access.
+generated CMakeLists.txt, so the run needs network access. With
+--dendrolib-ref, the helper instead clones that Dendrolib branch or tag from the
+repository named in the generated CMakeLists.txt, builds against it, and prints
+the resolved commit; such a run is evidence only for that commit.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -438,6 +442,8 @@ class Leg:
         self.launcher: List[str] = shlex.split(args.launcher)
         self.ranks: int = args.ranks
         self.build_jobs: int = args.build_jobs
+        self.dendrolib_ref: Optional[str] = args.dendrolib_ref
+        self.dendrolib_source: Optional[Path] = None
         self.report = report
         self.solver_dir, self.exe_name, self.stem = SOLVER[self.formulation]
         self.executables: Dict[str, Path] = {}
@@ -466,6 +472,7 @@ class Leg:
             [sys.executable, "--version"],
             ["clang-format", "--version"],
             ["cmake", "--version"],
+            ["git", "--version"],
             ["c++", "--version"],
             ["gfortran", "--version"],
             [self.launcher[0], "--version"],
@@ -500,8 +507,13 @@ class Leg:
         """
         Generate one variant twice, compare the trees, and build the first.
 
+        With ``--dendrolib-ref``, the first call also clones that Dendrolib ref
+        and both variants build against the clone.
+
         :param conformal: ``W`` or ``chi``.
-        :raises CheckError: If the executable was not built.
+        :raises CheckError: If the generated project declares no Dendrolib
+            repository, a clone, configure, or build step fails, or the
+            executable was not built.
         """
         trees = []
         for copy in (1, 2):
@@ -540,17 +552,54 @@ class Leg:
             same,
         )
         build = self.work / f"build-{conformal}"
+        configure = [
+            "cmake",
+            "-S",
+            str(trees[0]),
+            "-B",
+            str(build),
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DCPU_ARCH=x86-64-v3",
+            f"-DFETCHCONTENT_BASE_DIR={self.work / f'deps-{conformal}'}",
+        ]
+        if self.dendrolib_ref is not None:
+            if self.dendrolib_source is None:
+                # Clone the named ref from the repository the generated project
+                # declares, once per leg.
+                text = (trees[0] / "CMakeLists.txt").read_text()
+                after = text.partition("FetchContent_Declare(dendrolib")[2]
+                declaration = after.partition(")")[0]
+                url = declaration.partition('GIT_REPOSITORY "')[2]
+                repository = url.partition('"')[0]
+                if not repository:
+                    raise CheckError(
+                        "generated CMakeLists.txt declares no Dendrolib repository"
+                    )
+                self.dendrolib_source = self.work / "dendrolib-src"
+                run_checked(
+                    ["git", "clone", "--depth", "1", "--branch", self.dendrolib_ref]
+                    + [repository, str(self.dendrolib_source)],
+                    self.work,
+                    self.work / "dendrolib-clone.log",
+                    TIMEOUT_CONFIGURE,
+                )
+                run_checked(
+                    ["git", "-C", str(self.dendrolib_source), "rev-parse", "HEAD"],
+                    self.work,
+                    self.work / "dendrolib-commit.log",
+                    TIMEOUT_VERSION,
+                )
+                commit = (self.work / "dendrolib-commit.log").read_text().strip()
+                print(
+                    f"version: dendrolib: {commit} ({self.dendrolib_ref} of {repository});"
+                    " results are evidence only for this commit",
+                    flush=True,
+                )
+            configure.append(
+                f"-DFETCHCONTENT_SOURCE_DIR_DENDROLIB={self.dendrolib_source}"
+            )
         run_checked(
-            [
-                "cmake",
-                "-S",
-                str(trees[0]),
-                "-B",
-                str(build),
-                "-DCMAKE_BUILD_TYPE=Release",
-                "-DCPU_ARCH=x86-64-v3",
-                f"-DFETCHCONTENT_BASE_DIR={self.work / f'deps-{conformal}'}",
-            ],
+            configure,
             self.work,
             self.work / f"configure-{conformal}.log",
             TIMEOUT_CONFIGURE,
@@ -1389,6 +1438,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="MPI ranks of the main runs; at least 4",
     )
     parser.add_argument("--build-jobs", type=int, default=4, help="parallel build jobs")
+    parser.add_argument(
+        "--dendrolib-ref",
+        help="build against this Dendrolib branch or tag instead of the pinned commit",
+    )
     args = parser.parse_args(argv)
     if args.ranks < 4:
         parser.error("--ranks must be at least 4, above the 3-rank comparison run")
