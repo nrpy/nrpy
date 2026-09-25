@@ -60,6 +60,30 @@ does not read the file. The reader rejects a missing, truncated, or
 parameter-mismatched file. The NRPy suffix keeps these coefficients separate
 from native Dendro-GR's `TPID_FILEPREFIX_tpid_sol.bin` format.
 
+The solver reads every host parameter through a small parameter-file object that
+records each key it reads; the generated binding loop assigns registered
+CodeParameter keys directly, so they are excluded from the report below. An
+absent key takes its default, and a present key of the wrong TOML type, such as
+an integer for a real-valued parameter, stops the run with a located type
+error. Every parameter is read before the TwoPunctures data are loaded or
+solved. At that point rank 0 prints `<solver>: warning: parameter KEY has no
+effect` for every remaining key or table member that was never read, on `--tpid`
+and evolution runs alike. This covers misspelled keys, native Dendro-GR keys the
+generated solver does not implement, and settings that other parameters make
+inapplicable, such as the target masses when `TPID_GIVE_BARE_MASS` is 0.
+`BSSN_ID_TYPE` must be 0 and `TPID_REPLACE_LAPSE_WITH_SQRT_CHI` must be true, or
+the run stops at startup; because the solver always sets the initial lapse to
+`sqrt(chi) = W`, native `INITIAL_LAPSE` and `TPID_INITIAL_LAPSE_PSI_EXPONENT`
+have no effect and are reported as such. Each step's terminal output reduces the
+maximum absolute lapse with a NaN counted as infinity, and the solver stops with
+`the lapse became nonfinite` when the reduced value is not finite.
+
+Claim evidence:
+- Claim: The generated solver reads every host parameter before the TwoPunctures data are loaded, stops on a present parameter of the wrong TOML type, warns on rank 0 about every parameter-file key or table member it never read, requires `BSSN_ID_TYPE = 0` and `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = true`, and stops when the per-step maximum absolute lapse, with NaN counted as infinity, is not finite.
+- Role: public/scientific contract
+- Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp` (`ParameterFile`, startup checks, unread-parameter report, evolution loop); `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::terminal_output`.
+- Corroboration: `nrpy/infrastructures/Dendro/CodeParameters.py`, `output_toml_bindings`; `nrpy/infrastructures/Dendro/param_toml.py`, `generate_default_parfile`; `nrpy/examples/tests/dendro_application_check.py`, `Leg.universal_checks` (U4) and `Leg.run_negatives` (N1 lapse, type, and blow-up cases; N2).
+
 Claim evidence:
 - Claim: Single-rank `--tpid` precomputes reusable spectral coefficients for both generated formulations; fresh evolution loads matching coefficients, while checkpoint restoration needs no TwoPunctures file.
 - Role: public/scientific contract
@@ -79,7 +103,8 @@ Claim evidence:
 - [parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py) - worker execution and deterministic registry merge.
 - [CMakeLists.py](../../../nrpy/infrastructures/Dendro/CMakeLists.py) - prototype and explicit CMake source emission.
 - [Dendro-GR CMakeLists.txt](https://github.com/paralab/Dendro-GR/blob/master/CMakeLists.txt) - parent architecture selection for in-tree builds.
-- [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - application entry point.
+- [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - application entry point, parameter-file reading, and startup checks.
+- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `output_toml_bindings`, CodeParameter key binding.
 - [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - generated Dendro runtime context.
 
 ## See Also

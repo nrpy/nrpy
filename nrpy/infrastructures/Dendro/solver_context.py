@@ -1482,8 +1482,13 @@ int Ctx::terminal_output() {{
   if (!m_uiMesh->isActive()) return 0;
   DendroScalar local = 0.0;
   for (unsigned int i = m_uiMesh->getNodeLocalBegin();
-       i < m_uiMesh->getNodeLocalEnd(); ++i)
-    local = std::max(local, std::abs(state_.get_vec_ptr()[i]));
+       i < m_uiMesh->getNodeLocalEnd(); ++i) {{
+    const DendroScalar value = std::abs(state_.get_vec_ptr()[i]);
+    // std::max would skip a NaN; infinity carries it through MPI_MAX.
+    local = std::isfinite(value)
+                ? std::max(local, value)
+                : std::numeric_limits<DendroScalar>::infinity();
+  }}  // END LOOP: for i over local nodes
   DendroScalar global = 0.0;
   MPI_Allreduce(&local, &global, 1, MPI_DOUBLE, MPI_MAX,
                 m_uiMesh->getMPICommunicator());

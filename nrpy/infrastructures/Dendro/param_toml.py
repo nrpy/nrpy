@@ -25,7 +25,7 @@ def generate_default_parfile(
     """
     Emit one flat TOML parameter file accepted by the Dendro application.
 
-    The file uses the same top-level keys as ``q1.par.lowres.toml``. The
+    The file uses top-level key names from ``q1.par.lowres.toml``. The
     evolved conformal variable is selected at code generation; the
     TwoPunctures lapse is initialized to ``W=(psi_background+u)^(-2)``
     for either W or chi evolution. The generated eta default is one; an
@@ -71,9 +71,7 @@ def generate_default_parfile(
         "BSSN_ID_TYPE = 0",
         "BSSN_RK_TIME_BEGIN = 0.0",
         "BSSN_RK_TIME_END = 700.0",
-        "INITIAL_LAPSE = 2",
         'TPID_FILEPREFIX = "tp"',
-        "TPID_INITIAL_LAPSE_PSI_EXPONENT = -2.0",
         "TPID_REPLACE_LAPSE_WITH_SQRT_CHI = true",
         "ETA_CONST = 1.0",
     ]

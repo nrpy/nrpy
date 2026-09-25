@@ -468,6 +468,7 @@ def output_main_cpp(
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -477,6 +478,55 @@ void allocate_derivs(derivs* derivatives, int count);
 """
         + DENDRO_PUNCTURE_SEED
         + r"""
+// Parameter file that records every key the solver reads, so that keys which
+// are never read can be reported as having no effect. An absent key yields
+// its fallback; a present key of the wrong TOML type is an error, as for the
+// CodeParameter bindings.
+class ParameterFile {
+ public:
+  explicit ParameterFile(const std::string& path)
+      : document_(toml::parse(path)) {}
+  const toml::value& document() const { return document_; }
+  template <typename T>
+  T get(const std::string& key, const T& fallback) {
+    read_keys_.insert(key);
+    if (!document_.contains(key)) return fallback;
+    return toml::find<T>(document_, key);
+  }  // END FUNCTION: get
+  template <typename T>
+  T get(const std::string& table, const std::string& key, const T& fallback) {
+    read_keys_.insert(table + "." + key);
+    if (!document_.contains(table)) return fallback;
+    const toml::value& entry = document_.at(table);
+    if (entry.is_table() && !entry.contains(key)) return fallback;
+    return toml::find<T>(document_, table, key);
+  }  // END FUNCTION: get
+  /**
+   * List the given keys, or their table members, that were never read.
+   * @param keys Top-level keys of the parameter file.
+   * @return The unread keys, with table members as table.member, sorted.
+   */
+  std::vector<std::string> unread(const std::vector<std::string>& keys) const {
+    std::vector<std::string> result;
+    for (const std::string& key : keys) {
+      const toml::value& value = document_.at(key);
+      if (!value.is_table()) {
+        if (read_keys_.count(key) == 0) result.push_back(key);
+        continue;
+      }  // END IF: key is not a table
+      for (const auto& member : value.as_table())
+        if (read_keys_.count(key + "." + member.first) == 0)
+          result.push_back(key + "." + member.first);
+    }  // END LOOP: for key over keys
+    std::sort(result.begin(), result.end());
+    return result;
+  }  // END FUNCTION: unread
+
+ private:
+  toml::value document_;
+  std::set<std::string> read_keys_;
+};  // END CLASS: ParameterFile
+
 int main(int argc, char** argv) {
   const bool generate_tpid =
       argc == 3 && std::strcmp(argv[1], "--tpid") == 0;
@@ -494,43 +544,53 @@ int main(int argc, char** argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &mpi_tasks);
     if (generate_tpid && mpi_tasks != 1)
       throw std::runtime_error("--tpid requires exactly one MPI task");
-    const toml::value document = toml::parse(argv[generate_tpid ? 2 : 1]);
+    ParameterFile parameters(argv[generate_tpid ? 2 : 1]);
+    // Native Dendro-GR keys whose only supported value is what the generated
+    // solver implements: TwoPunctures data whose initial lapse is replaced by
+    // sqrt(chi) = W. With that replacement, native INITIAL_LAPSE and
+    // TPID_INITIAL_LAPSE_PSI_EXPONENT have no effect, so they are not read.
+    if (parameters.get<int>("BSSN_ID_TYPE", 0) != 0)
+      throw std::runtime_error("BSSN_ID_TYPE must be 0 (TwoPunctures)");
+    if (!parameters.get<bool>("TPID_REPLACE_LAPSE_WITH_SQRT_CHI", true))
+      throw std::runtime_error(
+          "TPID_REPLACE_LAPSE_WITH_SQRT_CHI must be true: the initial lapse is "
+          "always sqrt(chi) = W");
     const unsigned element_order =
-        toml::find_or<unsigned>(document, "BSSN_ELE_ORDER", """
+        parameters.get<unsigned>("BSSN_ELE_ORDER", """
         + solver_namespace
         + r"""::generated::FD_ORDER);
     if (element_order != 4 && element_order != 6 && element_order != 8)
       throw std::runtime_error("BSSN_ELE_ORDER must be 4, 6, or 8");
     const unsigned minimum_depth =
-        toml::find_or<unsigned>(document, "BSSN_MINDEPTH", 4);
+        parameters.get<unsigned>("BSSN_MINDEPTH", 4);
     const unsigned maximum_depth =
-        toml::find_or<unsigned>(document, "BSSN_MAXDEPTH", 14);
+        parameters.get<unsigned>("BSSN_MAXDEPTH", 14);
     if (minimum_depth > maximum_depth || maximum_depth >= 31)
       throw std::runtime_error("invalid octree depth range");
     const DendroScalar wavelet_tolerance =
-        toml::find_or<DendroScalar>(document, "BSSN_WAVELET_TOL", 1.0e-5);
+        parameters.get<DendroScalar>("BSSN_WAVELET_TOL", 1.0e-5);
     const unsigned refinement_mode =
-        toml::find_or<unsigned>(document, "BSSN_REFINEMENT_MODE", 4);
+        parameters.get<unsigned>("BSSN_REFINEMENT_MODE", 4);
     const unsigned wavelet_tolerance_mode =
-        toml::find_or<unsigned>(document, "BSSN_USE_WAVELET_TOL_FUNCTION", 0);
-    const DendroScalar maximum_wavelet_tolerance = toml::find_or<DendroScalar>(
-        document, "BSSN_WAVELET_TOL_MAX", wavelet_tolerance);
-    const DendroScalar gravitational_wave_tolerance = toml::find_or<DendroScalar>(
-        document, "BSSN_GW_REFINE_WTOL", wavelet_tolerance);
-    const DendroScalar amr_coarsening_factor = toml::find_or<DendroScalar>(
-        document, "BSSN_DENDRO_AMR_FAC", 0.1);
-    const DendroScalar postmerger_amr_coarsening_factor = toml::find_or<DendroScalar>(
-        document, "BSSN_DENDRO_AMR_FAC_POST_MERGER", 0.0);
+        parameters.get<unsigned>("BSSN_USE_WAVELET_TOL_FUNCTION", 0);
+    const DendroScalar maximum_wavelet_tolerance = parameters.get<DendroScalar>(
+        "BSSN_WAVELET_TOL_MAX", wavelet_tolerance);
+    const DendroScalar gravitational_wave_tolerance = parameters.get<DendroScalar>(
+        "BSSN_GW_REFINE_WTOL", wavelet_tolerance);
+    const DendroScalar amr_coarsening_factor = parameters.get<DendroScalar>(
+        "BSSN_DENDRO_AMR_FAC", 0.1);
+    const DendroScalar postmerger_amr_coarsening_factor = parameters.get<DendroScalar>(
+        "BSSN_DENDRO_AMR_FAC_POST_MERGER", 0.0);
     std::vector<unsigned> refinement_variables;
     for (unsigned field = 0; field <
          """
         + solver_namespace
         + r"""::generated::NUM_EVOL_GFS; ++field)
       refinement_variables.push_back(field);
-    refinement_variables = toml::find_or<std::vector<unsigned>>(
-        document, "BSSN_REFINE_VARIABLE_INDICES", refinement_variables);
-    const unsigned number_refinement_variables = toml::find_or<unsigned>(
-        document, "BSSN_NUM_REFINE_VARS",
+    refinement_variables = parameters.get<std::vector<unsigned>>(
+        "BSSN_REFINE_VARIABLE_INDICES", refinement_variables);
+    const unsigned number_refinement_variables = parameters.get<unsigned>(
+        "BSSN_NUM_REFINE_VARS",
         static_cast<unsigned>(refinement_variables.size()));
     if (number_refinement_variables == 0 ||
         number_refinement_variables > refinement_variables.size())
@@ -547,79 +607,79 @@ int main(int argc, char** argv) {
           "generated Dendro solver supports BH_WAMR (mode 4) with "
           "constant or causal wavelet tolerance (mode 0 or 6)");
     const DendroScalar cfl =
-        toml::find_or<DendroScalar>(document, "BSSN_CFL_FACTOR", 0.25);
+        parameters.get<DendroScalar>("BSSN_CFL_FACTOR", 0.25);
     const DendroScalar time_begin =
-        toml::find_or<DendroScalar>(document, "BSSN_RK_TIME_BEGIN", 0.0);
+        parameters.get<DendroScalar>("BSSN_RK_TIME_BEGIN", 0.0);
     const DendroScalar time_end =
-        toml::find_or<DendroScalar>(document, "BSSN_RK_TIME_END", 700.0);
-    const unsigned maximum_iterations = toml::find_or<unsigned>(
-        document, "BSSN_MAX_ITERATIONS", std::numeric_limits<unsigned>::max());
+        parameters.get<DendroScalar>("BSSN_RK_TIME_END", 700.0);
+    const unsigned maximum_iterations = parameters.get<unsigned>(
+        "BSSN_MAX_ITERATIONS", std::numeric_limits<unsigned>::max());
     const unsigned remesh_frequency =
-        toml::find_or<unsigned>(document, "BSSN_REMESH_TEST_FREQ", 50);
-    const unsigned postmerger_remesh_frequency = toml::find_or<unsigned>(
-        document, "BSSN_REMESH_TEST_FREQ_AFTER_MERGER", 10);
+        parameters.get<unsigned>("BSSN_REMESH_TEST_FREQ", 50);
+    const unsigned postmerger_remesh_frequency = parameters.get<unsigned>(
+        "BSSN_REMESH_TEST_FREQ_AFTER_MERGER", 10);
     const unsigned initial_grid_iterations =
-        toml::find_or<unsigned>(document, "BSSN_INIT_GRID_ITER", 10);
-    const bool use_refinement_mode_for_initial_grid = toml::find_or<bool>(
-        document, "BSSN_USE_SET_REF_MODE_FOR_INITIAL_CONVERGE", true);
+        parameters.get<unsigned>("BSSN_INIT_GRID_ITER", 10);
+    const bool use_refinement_mode_for_initial_grid = parameters.get<bool>(
+        "BSSN_USE_SET_REF_MODE_FOR_INITIAL_CONVERGE", true);
     if (initial_grid_iterations > 0 && !use_refinement_mode_for_initial_grid)
       throw std::runtime_error(
           "generated BH_WAMR solver requires "
           "BSSN_USE_SET_REF_MODE_FOR_INITIAL_CONVERGE=true");
     const unsigned grain_size =
-        toml::find_or<unsigned>(document, "BSSN_DENDRO_GRAIN_SZ", 1000);
+        parameters.get<unsigned>("BSSN_DENDRO_GRAIN_SZ", 1000);
     const DendroScalar load_imbalance_tolerance =
-        toml::find_or<DendroScalar>(document, "BSSN_LOAD_IMB_TOL", 0.1);
+        parameters.get<DendroScalar>("BSSN_LOAD_IMB_TOL", 0.1);
     const unsigned split_fix =
-        toml::find_or<unsigned>(document, "BSSN_SPLIT_FIX", 2);
+        parameters.get<unsigned>("BSSN_SPLIT_FIX", 2);
     const unsigned diagnostic_frequency =
-        toml::find_or<unsigned>(document, "BSSN_TIME_STEP_OUTPUT_FREQ", 25);
+        parameters.get<unsigned>("BSSN_TIME_STEP_OUTPUT_FREQ", 25);
     const unsigned vtu_frequency =
-        toml::find_or<unsigned>(document, "BSSN_IO_OUTPUT_FREQ", 8);
+        parameters.get<unsigned>("BSSN_IO_OUTPUT_FREQ", 8);
     // VTU field selection and slicing, with Dendro-GR BSSN_GR's defaults: the
     // first entry of each index list, written on the z-normal slice through the
     // domain center.
     const bool vtu_z_slice_only =
-        toml::find_or<bool>(document, "BSSN_VTU_Z_SLICE_ONLY", true);
+        parameters.get<bool>("BSSN_VTU_Z_SLICE_ONLY", true);
     std::vector<unsigned> vtu_evolved_fields;
     for (unsigned field = 0; field <
          """
         + solver_namespace
         + r"""::generated::NUM_EVOL_GFS; ++field)
       vtu_evolved_fields.push_back(field);
-    vtu_evolved_fields = toml::find_or<std::vector<unsigned>>(
-        document, "BSSN_VTU_OUTPUT_EVOL_INDICES", vtu_evolved_fields);
-    const unsigned number_vtu_evolved_fields = toml::find_or<unsigned>(
-        document, "BSSN_NUM_EVOL_VARS_VTU_OUTPUT", 1);
+    vtu_evolved_fields = parameters.get<std::vector<unsigned>>(
+        "BSSN_VTU_OUTPUT_EVOL_INDICES", vtu_evolved_fields);
+    const unsigned number_vtu_evolved_fields = parameters.get<unsigned>(
+        "BSSN_NUM_EVOL_VARS_VTU_OUTPUT", 1);
     if (number_vtu_evolved_fields > vtu_evolved_fields.size())
       throw std::runtime_error("invalid BSSN_NUM_EVOL_VARS_VTU_OUTPUT");
     vtu_evolved_fields.resize(number_vtu_evolved_fields);
     std::vector<unsigned> vtu_constraint_fields =
-        toml::find_or<std::vector<unsigned>>(
-            document, "BSSN_VTU_OUTPUT_CONST_INDICES",
+        parameters.get<std::vector<unsigned>>(
+            "BSSN_VTU_OUTPUT_CONST_INDICES",
             std::vector<unsigned>{0, 1, 2, 3, 4, 5});
-    const unsigned number_vtu_constraint_fields = toml::find_or<unsigned>(
-        document, "BSSN_NUM_CONST_VARS_VTU_OUTPUT", 1);
+    const unsigned number_vtu_constraint_fields = parameters.get<unsigned>(
+        "BSSN_NUM_CONST_VARS_VTU_OUTPUT", 1);
     if (number_vtu_constraint_fields > vtu_constraint_fields.size())
       throw std::runtime_error("invalid BSSN_NUM_CONST_VARS_VTU_OUTPUT");
     vtu_constraint_fields.resize(number_vtu_constraint_fields);
     const unsigned checkpoint_frequency =
-        toml::find_or<unsigned>(document, "BSSN_CHECKPT_FREQ", 100);
+        parameters.get<unsigned>("BSSN_CHECKPT_FREQ", 100);
     const unsigned apparent_horizon_frequency =
-        toml::find_or<unsigned>(document, "AEH_SOLVER_FREQ", 0);
+        parameters.get<unsigned>("AEH_SOLVER_FREQ", 0);
     const unsigned gravitational_wave_frequency =
-        toml::find_or<unsigned>(document, "BSSN_GW_EXTRACT_FREQ", 0);
+        parameters.get<unsigned>("BSSN_GW_EXTRACT_FREQ", 0);
     const std::vector<DendroScalar> gravitational_wave_radii =
-        toml::find_or<std::vector<DendroScalar>>(
-            document, "BSSN_GW_RADAII", std::vector<DendroScalar>{{50.0}});
-    const unsigned gravitational_wave_num_radii = toml::find_or<unsigned>(
-        document, "BSSN_GW_NUM_RADAII",
+        parameters.get<std::vector<DendroScalar>>(
+            "BSSN_GW_RADAII", std::vector<DendroScalar>{{50.0}});
+    const unsigned gravitational_wave_num_radii = parameters.get<unsigned>(
+        "BSSN_GW_NUM_RADAII",
         static_cast<unsigned>(gravitational_wave_radii.size()));
     const std::vector<unsigned> gravitational_wave_l_modes =
-        toml::find_or<std::vector<unsigned>>(
-            document, "BSSN_GW_L_MODES", std::vector<unsigned>{{2}});
-    const unsigned gravitational_wave_num_l_modes = toml::find_or<unsigned>(
-        document, "BSSN_GW_NUM_LMODES",
+        parameters.get<std::vector<unsigned>>(
+            "BSSN_GW_L_MODES", std::vector<unsigned>{{2}});
+    const unsigned gravitational_wave_num_l_modes = parameters.get<unsigned>(
+        "BSSN_GW_NUM_LMODES",
         static_cast<unsigned>(gravitational_wave_l_modes.size()));
     if (gravitational_wave_num_radii != gravitational_wave_radii.size() ||
         gravitational_wave_num_l_modes != gravitational_wave_l_modes.size() ||
@@ -634,13 +694,13 @@ int main(int argc, char** argv) {
         *std::max_element(gravitational_wave_l_modes.begin(),
                           gravitational_wave_l_modes.end());
     const unsigned nyquist_mode =
-        toml::find_or<unsigned>(document, "BSSN_NYQUIST_M", 0);
+        parameters.get<unsigned>("BSSN_NYQUIST_M", 0);
     if (gravitational_wave_maximum_l < 2 || gravitational_wave_maximum_l > 8)
       throw std::runtime_error("BSSN_GW_L_MODES must lie in [2, 8]");
     const bool restore_solver =
-        toml::find_or<unsigned>(document, "BSSN_RESTORE_SOLVER", 0) != 0;
-    const std::string checkpoint_prefix = toml::find_or<std::string>(
-        document, "BSSN_CHKPT_FILE_PREFIX", """
+        parameters.get<unsigned>("BSSN_RESTORE_SOLVER", 0) != 0;
+    const std::string checkpoint_prefix = parameters.get<std::string>(
+        "BSSN_CHKPT_FILE_PREFIX", """
         + f'"cp/{profile_name}"'
         + r""");
     int checkpoint_index = -1;
@@ -658,17 +718,17 @@ int main(int argc, char** argv) {
       }  // END LOOP: for index over checkpoint slots
     }  // END IF: checkpoint restore requested
     const DendroScalar grid_min_x =
-        toml::find_or<DendroScalar>(document, "BSSN_GRID_MIN_X", -400.0);
+        parameters.get<DendroScalar>("BSSN_GRID_MIN_X", -400.0);
     const DendroScalar grid_min_y =
-        toml::find_or<DendroScalar>(document, "BSSN_GRID_MIN_Y", -400.0);
+        parameters.get<DendroScalar>("BSSN_GRID_MIN_Y", -400.0);
     const DendroScalar grid_min_z =
-        toml::find_or<DendroScalar>(document, "BSSN_GRID_MIN_Z", -400.0);
+        parameters.get<DendroScalar>("BSSN_GRID_MIN_Z", -400.0);
     const DendroScalar grid_max_x =
-        toml::find_or<DendroScalar>(document, "BSSN_GRID_MAX_X", 400.0);
+        parameters.get<DendroScalar>("BSSN_GRID_MAX_X", 400.0);
     const DendroScalar grid_max_y =
-        toml::find_or<DendroScalar>(document, "BSSN_GRID_MAX_Y", 400.0);
+        parameters.get<DendroScalar>("BSSN_GRID_MAX_Y", 400.0);
     const DendroScalar grid_max_z =
-        toml::find_or<DendroScalar>(document, "BSSN_GRID_MAX_Z", 400.0);
+        parameters.get<DendroScalar>("BSSN_GRID_MAX_Z", 400.0);
     if (!(wavelet_tolerance > 0.0) || !std::isfinite(wavelet_tolerance) ||
         !(maximum_wavelet_tolerance > 0.0) ||
         !std::isfinite(maximum_wavelet_tolerance) ||
@@ -687,18 +747,18 @@ int main(int argc, char** argv) {
     commondata_struct commondata{};
     commondata.NUMGRIDS = 1;
     const DendroScalar mass_1 =
-        toml::find_or<DendroScalar>(document, "BSSN_BH1", "MASS", 0.5);
+        parameters.get<DendroScalar>("BSSN_BH1", "MASS", 0.5);
     const DendroScalar mass_2 =
-        toml::find_or<DendroScalar>(document, "BSSN_BH2", "MASS", 0.5);
+        parameters.get<DendroScalar>("BSSN_BH2", "MASS", 0.5);
     const std::array<DendroScalar, 2> black_hole_masses{{mass_1, mass_2}};
     const std::array<DendroScalar, 2> black_hole_amr_radii{{
-        toml::find_or<DendroScalar>(document, "BSSN_BH1_AMR_R", 2.0),
-        toml::find_or<DendroScalar>(document, "BSSN_BH2_AMR_R", 2.0)}};
+        parameters.get<DendroScalar>("BSSN_BH1_AMR_R", 2.0),
+        parameters.get<DendroScalar>("BSSN_BH2_AMR_R", 2.0)}};
     const std::array<unsigned, 2> black_hole_maximum_levels{{
-        toml::find_or<unsigned>(document, "BSSN_BH1_MAX_LEV", maximum_depth),
-        toml::find_or<unsigned>(document, "BSSN_BH2_MAX_LEV", maximum_depth)}};
+        parameters.get<unsigned>("BSSN_BH1_MAX_LEV", maximum_depth),
+        parameters.get<unsigned>("BSSN_BH2_MAX_LEV", maximum_depth)}};
     const DendroScalar black_hole_amr_ratio =
-        toml::find_or<DendroScalar>(document, "BSSN_AMR_R_RATIO", 2.0);
+        parameters.get<DendroScalar>("BSSN_AMR_R_RATIO", 2.0);
     if (grain_size == 0 || !(load_imbalance_tolerance >= 0.0) ||
         !std::isfinite(load_imbalance_tolerance) ||
         !(black_hole_amr_radii[0] > 0.0) ||
@@ -713,44 +773,44 @@ int main(int argc, char** argv) {
         black_hole_maximum_levels[1] > maximum_depth)
       throw std::runtime_error("invalid mesh-adaptation parameters");
     const std::array<Point, 2> excision_centers{{
-        Point(toml::find_or<DendroScalar>(document, "BSSN_BH1", "X", 4.0),
-              toml::find_or<DendroScalar>(document, "BSSN_BH1", "Y", 0.0),
-              toml::find_or<DendroScalar>(document, "BSSN_BH1", "Z", 0.0)),
-        Point(toml::find_or<DendroScalar>(document, "BSSN_BH2", "X", -4.0),
-              toml::find_or<DendroScalar>(document, "BSSN_BH2", "Y", 0.0),
-              toml::find_or<DendroScalar>(document, "BSSN_BH2", "Z", 0.0))}};
+        Point(parameters.get<DendroScalar>("BSSN_BH1", "X", 4.0),
+              parameters.get<DendroScalar>("BSSN_BH1", "Y", 0.0),
+              parameters.get<DendroScalar>("BSSN_BH1", "Z", 0.0)),
+        Point(parameters.get<DendroScalar>("BSSN_BH2", "X", -4.0),
+              parameters.get<DendroScalar>("BSSN_BH2", "Y", 0.0),
+              parameters.get<DendroScalar>("BSSN_BH2", "Z", 0.0))}};
     const std::array<Point, 2> initial_black_hole_velocities{{
-        Point(toml::find_or<DendroScalar>(document, "BSSN_BH1", "V_X", 0.0),
-              toml::find_or<DendroScalar>(document, "BSSN_BH1", "V_Y", 0.0),
-              toml::find_or<DendroScalar>(document, "BSSN_BH1", "V_Z", 0.0)),
-        Point(toml::find_or<DendroScalar>(document, "BSSN_BH2", "V_X", 0.0),
-              toml::find_or<DendroScalar>(document, "BSSN_BH2", "V_Y", 0.0),
-              toml::find_or<DendroScalar>(document, "BSSN_BH2", "V_Z", 0.0))}};
+        Point(parameters.get<DendroScalar>("BSSN_BH1", "V_X", 0.0),
+              parameters.get<DendroScalar>("BSSN_BH1", "V_Y", 0.0),
+              parameters.get<DendroScalar>("BSSN_BH1", "V_Z", 0.0)),
+        Point(parameters.get<DendroScalar>("BSSN_BH2", "V_X", 0.0),
+              parameters.get<DendroScalar>("BSSN_BH2", "V_Y", 0.0),
+              parameters.get<DendroScalar>("BSSN_BH2", "V_Z", 0.0))}};
     const std::array<DendroScalar, 2> excision_radii{{
-        toml::find_or<DendroScalar>(document, "BSSN_BH1_CONSTRAINT_R", 1.0),
-        toml::find_or<DendroScalar>(document, "BSSN_BH2_CONSTRAINT_R", 1.0)}};
+        parameters.get<DendroScalar>("BSSN_BH1_CONSTRAINT_R", 1.0),
+        parameters.get<DendroScalar>("BSSN_BH2_CONSTRAINT_R", 1.0)}};
     commondata.mass_ratio = std::max(mass_1, mass_2) / std::min(mass_1, mass_2);
     commondata.initial_sep =
-        2.0 * toml::find_or<DendroScalar>(document, "TPID_PAR_B", 4.0);
-    commondata.initial_p_t = std::abs(toml::find_or<DendroScalar>(
-        document, "BSSN_BH1", "V_Y", 0.11284523509709575));
-    commondata.initial_p_r = std::abs(toml::find_or<DendroScalar>(
-        document, "BSSN_BH1", "V_X", -0.002284343811437988));
+        2.0 * parameters.get<DendroScalar>("TPID_PAR_B", 4.0);
+    commondata.initial_p_t = std::abs(parameters.get<DendroScalar>(
+        "BSSN_BH1", "V_Y", 0.11284523509709575));
+    commondata.initial_p_r = std::abs(parameters.get<DendroScalar>(
+        "BSSN_BH1", "V_X", -0.002284343811437988));
     commondata.bbhxy_BH_m_chix = commondata.bbhxy_BH_m_chiy =
         commondata.bbhxy_BH_m_chiz = 0.0;
     commondata.bbhxy_BH_M_chix = commondata.bbhxy_BH_M_chiy =
         commondata.bbhxy_BH_M_chiz = 0.0;
     commondata.TP_npoints_A =
-        toml::find_or<int>(document, "TPID_NPOINTS_A", 65);
+        parameters.get<int>("TPID_NPOINTS_A", 65);
     commondata.TP_npoints_B =
-        toml::find_or<int>(document, "TPID_NPOINTS_B", 78);
+        parameters.get<int>("TPID_NPOINTS_B", 78);
     commondata.TP_npoints_phi =
-        toml::find_or<int>(document, "TPID_NPOINTS_PHI", 10);
-    if (toml::find_or<int>(document, "TPID_GIVE_BARE_MASS", 1) != 0) {
-      commondata.TP_bare_mass_M = toml::find_or<DendroScalar>(
-          document, "TPID_TARGET_M_PLUS", 0.48236442246752931);
-      commondata.TP_bare_mass_m = toml::find_or<DendroScalar>(
-          document, "TPID_TARGET_M_MINUS", 0.48236442246752931);
+        parameters.get<int>("TPID_NPOINTS_PHI", 10);
+    if (parameters.get<int>("TPID_GIVE_BARE_MASS", 1) != 0) {
+      commondata.TP_bare_mass_M = parameters.get<DendroScalar>(
+          "TPID_TARGET_M_PLUS", 0.48236442246752931);
+      commondata.TP_bare_mass_m = parameters.get<DendroScalar>(
+          "TPID_TARGET_M_MINUS", 0.48236442246752931);
     }  // END IF: bare masses given
     else {
       commondata.TP_bare_mass_M = commondata.TP_bare_mass_m = -1.0;
@@ -761,10 +821,10 @@ int main(int argc, char** argv) {
     params_struct tp_params{};
     ID_persist_struct punctures{};
     initialize_ID_persist_struct(&commondata, &punctures);
-    punctures.Newton_tol = toml::find_or<DendroScalar>(
-        document, "TPID_NEWTON_TOL", punctures.Newton_tol);
-    punctures.adm_tol = toml::find_or<DendroScalar>(
-        document, "TPID_ADM_TOL", punctures.adm_tol);
+    punctures.Newton_tol = parameters.get<DendroScalar>(
+        "TPID_NEWTON_TOL", punctures.Newton_tol);
+    punctures.adm_tol = parameters.get<DendroScalar>(
+        "TPID_ADM_TOL", punctures.adm_tol);
     punctures.initial_lapse_psi_exponent = -2.0;
     std::snprintf(punctures.initial_lapse, sizeof(punctures.initial_lapse),
                   "W");
@@ -792,11 +852,78 @@ int main(int argc, char** argv) {
         static_cast<REAL>(punctures.rescale_sources),
         static_cast<REAL>(punctures.solve_momentum_constraint)}};
     const std::string tpid_prefix =
-        toml::find_or<std::string>(document, "TPID_FILEPREFIX", "tp");
+        parameters.get<std::string>("TPID_FILEPREFIX", "tp");
     if (tpid_prefix.empty())
       throw std::runtime_error("TPID_FILEPREFIX must not be empty");
     const std::filesystem::path tpid_file =
         tpid_prefix + "_nrpy_tpid_sol.bin";
+    const double initial_mesh_chi_floor = parameters.get<DendroScalar>(
+        "CHI_FLOOR", 0.1);
+    const std::array<std::array<DendroScalar, 3>, 2> black_hole_spins{{
+        {{parameters.get<DendroScalar>("BSSN_BH1", "SPIN", 0.0),
+          parameters.get<DendroScalar>("BSSN_BH1", "SPIN_THETA", 0.0),
+          parameters.get<DendroScalar>("BSSN_BH1", "SPIN_PHI", 0.0)}},
+        {{parameters.get<DendroScalar>("BSSN_BH2", "SPIN", 0.0),
+          parameters.get<DendroScalar>("BSSN_BH2", "SPIN_THETA", 0.0),
+          parameters.get<DendroScalar>("BSSN_BH2", "SPIN_PHI", 0.0)}}}};
+    """
+        + solver_namespace
+        + r"""::generated::params_struct params{};
+    """
+        + solver_stem
+        + r"""_params_struct_set_to_default(params);
+    std::vector<std::string> unbound_keys;
+    for (const auto& item : parameters.document().as_table()) {
+"""
+        + output_toml_bindings()
+        + r"""
+      // Each binding above ends in continue, so only unbound keys reach here.
+      unbound_keys.push_back(item.first);
+    }  // END LOOP: for item over TOML table
+    """
+        + solver_stem
+        + r"""_params_validate(params);
+    const std::string output_prefix = parameters.get<std::string>(
+        "BSSN_PROFILE_FILE_PREFIX", """
+        + f'"{profile_name}"'
+        + r""");
+    const std::string vtu_prefix = parameters.get<std::string>(
+        "BSSN_VTU_FILE_PREFIX", """
+        + f'"vtu/{profile_name}"'
+        + r""");
+    const std::string horizon_directory = parameters.get<std::string>(
+        "AEH_PARAMS", "AEH_SAVE_DIR", "bah");
+    const std::vector<double> horizon_cfl_factors =
+        parameters.get<std::vector<double>>(
+            "AEH_PARAMS", "CFL_FACTOR", std::vector<double>{1.0, 1.0, 1.0});
+    const std::vector<double> horizon_l2_tolerances =
+        parameters.get<std::vector<double>>(
+            "AEH_PARAMS", "THETA_L2_M_TOL",
+            std::vector<double>{1.0e-5, 1.0e-5, 1.0e-5});
+    const std::vector<double> horizon_linf_tolerances =
+        parameters.get<std::vector<double>>(
+            "AEH_PARAMS", "THETA_LINF_M_TOL",
+            std::vector<double>{1.0e-2, 1.0e-2, 1.0e-2});
+    const std::vector<double> horizon_search_radii =
+        parameters.get<std::vector<double>>(
+            "AEH_PARAMS", "MAX_SEARCH_RADIUS",
+            std::vector<double>{1.5, 1.5, 1.5});
+    const std::vector<int> horizon_interpolation_limits =
+        parameters.get<std::vector<int>>(
+            "AEH_PARAMS", "NR_INTERP_MAX", std::vector<int>{48, 48, 48});
+    const int horizon_verbosity =
+        parameters.get<int>("AEH_PARAMS", "VERBOSITY_LEVEL", 1);
+    // Every parameter has now been read; report the unread ones before the
+    // TwoPunctures data are loaded, in one write so that output from other
+    // ranks cannot split a line.
+    if (rank == 0) {
+      std::string report;
+      for (const std::string& key : parameters.unread(unbound_keys))
+        report += """
+        + f'"{executable_name}: warning: parameter "'
+        + r""" + key + " has no effect\n";
+      std::cerr << report << std::flush;
+    }  // END IF: rank 0 reports unread parameters
     if (generate_tpid || checkpoint_index < 0) {
       const std::filesystem::path output_file =
           generate_tpid ? std::filesystem::path(tpid_file.string() + ".tmp")
@@ -901,24 +1028,20 @@ int main(int argc, char** argv) {
     std::vector<ot::TreeNode> octree;
     const DendroScalar octree_coordinate_scale =
         std::ldexp(1.0, -static_cast<int>(maximum_depth));
-    const double initial_mesh_chi_floor = toml::find_or<DendroScalar>(
-        document, "CHI_FLOOR", 0.1);
     const nrpy_dendro_seed::PunctureParameters seed_black_hole_1{
         mass_1, excision_centers[0].x(), excision_centers[0].y(),
         excision_centers[0].z(), initial_black_hole_velocities[0].x(),
         initial_black_hole_velocities[0].y(),
         initial_black_hole_velocities[0].z(),
-        toml::find_or<DendroScalar>(document, "BSSN_BH1", "SPIN", 0.0),
-        toml::find_or<DendroScalar>(document, "BSSN_BH1", "SPIN_THETA", 0.0),
-        toml::find_or<DendroScalar>(document, "BSSN_BH1", "SPIN_PHI", 0.0)};
+        black_hole_spins[0][0], black_hole_spins[0][1],
+        black_hole_spins[0][2]};
     const nrpy_dendro_seed::PunctureParameters seed_black_hole_2{
         mass_2, excision_centers[1].x(), excision_centers[1].y(),
         excision_centers[1].z(), initial_black_hole_velocities[1].x(),
         initial_black_hole_velocities[1].y(),
         initial_black_hole_velocities[1].z(),
-        toml::find_or<DendroScalar>(document, "BSSN_BH2", "SPIN", 0.0),
-        toml::find_or<DendroScalar>(document, "BSSN_BH2", "SPIN_THETA", 0.0),
-        toml::find_or<DendroScalar>(document, "BSSN_BH2", "SPIN_PHI", 0.0)};
+        black_hole_spins[1][0], black_hole_spins[1][1],
+        black_hole_spins[1][2]};
     std::function<void(double, double, double, double*)> initial_bssn_fields =
         [&](double x, double y, double z, double* fields) {
           const double physical_x = grid_min_x + x * octree_coordinate_scale *
@@ -959,31 +1082,9 @@ int main(int argc, char** argv) {
         -static_cast<int>(local_maximum_depth));
     DendroScalar time_step = cfl * minimum_dx;
 
-    """
-        + solver_namespace
-        + r"""::generated::params_struct params{};
-    """
-        + solver_stem
-        + r"""_params_struct_set_to_default(params);
-    for (const auto& item : document.as_table()) {
-"""
-        + output_toml_bindings()
-        + r"""
-    }  // END LOOP: for item over TOML table
-    """
-        + solver_stem
-        + r"""_params_validate(params);
-    const std::string output_prefix = toml::find_or<std::string>(
-        document, "BSSN_PROFILE_FILE_PREFIX", """
-        + f'"{profile_name}"'
-        + r""");
     const std::filesystem::path output_path(output_prefix);
     if (!output_path.parent_path().empty())
       std::filesystem::create_directories(output_path.parent_path());
-    const std::string vtu_prefix = toml::find_or<std::string>(
-        document, "BSSN_VTU_FILE_PREFIX", """
-        + f'"vtu/{profile_name}"'
-        + r""");
     const std::filesystem::path vtu_path(vtu_prefix);
     if (!vtu_path.parent_path().empty())
       std::filesystem::create_directories(vtu_path.parent_path());
@@ -992,8 +1093,6 @@ int main(int argc, char** argv) {
       std::filesystem::create_directories(checkpoint_path.parent_path());
     std::unique_ptr<dendro_aeh::AEH_BHaHAHA> apparent_horizon_finder;
     if (apparent_horizon_frequency > 0) {
-      const std::string horizon_directory = toml::find_or<std::string>(
-          document, "AEH_PARAMS", "AEH_SAVE_DIR", "bah");
       std::filesystem::create_directories(horizon_directory);
       const std::vector<double> initial_x{
           excision_centers[0].x(), excision_centers[1].x(), 0.0};
@@ -1036,28 +1135,18 @@ int main(int argc, char** argv) {
       apparent_horizon_finder = std::make_unique<dendro_aeh::AEH_BHaHAHA>(
           3, true, initial_x, initial_y, initial_z, 3,
           std::vector<double>{0.0, 0.0, 0.0},
-          toml::find_or<std::vector<double>>(
-              document, "AEH_PARAMS", "CFL_FACTOR",
-              std::vector<double>{1.0, 1.0, 1.0}),
+          horizon_cfl_factors,
           std::vector<int>{10000, 10000, 10000},
-          toml::find_or<std::vector<double>>(
-              document, "AEH_PARAMS", "THETA_L2_M_TOL",
-              std::vector<double>{1.0e-5, 1.0e-5, 1.0e-5}),
-          toml::find_or<std::vector<double>>(
-              document, "AEH_PARAMS", "THETA_LINF_M_TOL",
-              std::vector<double>{1.0e-2, 1.0e-2, 1.0e-2}),
+          horizon_l2_tolerances,
+          horizon_linf_tolerances,
           std::vector<double>{7.0, 7.0, 7.0},
           std::vector<double>{0.0, 0.0, 0.0},
-          toml::find_or<std::vector<double>>(
-              document, "AEH_PARAMS", "MAX_SEARCH_RADIUS",
-              std::vector<double>{1.5, 1.5, 1.5}),
-          toml::find_or<std::vector<int>>(
-              document, "AEH_PARAMS", "NR_INTERP_MAX",
-              std::vector<int>{48, 48, 48}),
+          horizon_search_radii,
+          horizon_interpolation_limits,
           32, 64, horizon_directory, black_holes, horizon_indices,
           bssn_to_adm, grid_limits, domain_limits, vtu_frequency, 3,
           std::vector<int>{8, 16, 32}, std::vector<int>{16, 32, 64}, 0,
-          toml::find_or<int>(document, "AEH_PARAMS", "VERBOSITY_LEVEL", 1));
+          horizon_verbosity);
     }  // END IF: apparent-horizon finder enabled
     {
     """
@@ -1176,7 +1265,8 @@ int main(int argc, char** argv) {
                 << " dx_min=" << minimum_dx << " dt=" << time_step << '\n';
     while (time_stepper.curr_time() < time_end &&
            time_stepper.curr_step() < maximum_iterations) {
-      context.terminal_output();
+      if (context.terminal_output() != 0)
+        throw std::runtime_error("the lapse became nonfinite");
       time_stepper.evolve();
       if (context.is_remesh()) {
         context.remesh_and_gridtransfer(
@@ -1208,7 +1298,8 @@ int main(int argc, char** argv) {
       if (context.write_checkpt() != 0)
         throw std::runtime_error("checkpoint write failed");
     }  // END WHILE: RK4 time evolution
-    context.terminal_output();
+    if (context.terminal_output() != 0)
+      throw std::runtime_error("the lapse became nonfinite");
     mesh = context.get_mesh();
     }  // END BLOCK: solver context lifetime
     delete mesh;

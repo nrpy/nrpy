@@ -111,7 +111,11 @@ chi variants must agree at the shared initial diagnostic. Negative cases require
 nonzero exit and a named diagnostic for a W/chi cross-restore, `--tpid` on more
 than one rank, a TwoPunctures parameter mismatch, a missing TwoPunctures file,
 an unsupported element order, an unsupported refinement mode, an excessive CFL
-factor, and a missing argument. fCCZ4 additionally requires its Z4-extended
+factor, `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = false`, an integer given for a
+real-valued parameter, a lapse blow-up with constraint output off, and a missing
+argument. Every run made through the helper's solve step must print no
+unread-parameter warning, and a run given an unread key must warn about it and
+still succeed. fCCZ4 additionally requires its Z4-extended
 Hamiltonian diagnostic to equal the BSSN one and its Z4 vector to vanish at step
 0.
 

@@ -637,7 +637,7 @@ class Leg:
         self, conformal: str, name: str, run_dir: Path, overrides: Dict[str, str]
     ) -> None:
         """
-        Check finiteness, cadence, and mesh size for every run.
+        Check finiteness, cadence, mesh size, and parameter use for every run.
 
         :param conformal: ``W`` or ``chi``.
         :param name: Run name.
@@ -693,6 +693,15 @@ class Leg:
             f"max {int(max(nodes))}",
             f"<= {NODE_CEILING}",
             max(nodes) <= NODE_CEILING,
+        )
+        unread = [line for line in stdout.splitlines() if " has no effect" in line]
+        self.report.check(
+            "U4",
+            "runtime",
+            f"{tag}: every parameter is read",
+            f"{len(unread)} unread-parameter warnings",
+            "0",
+            not unread,
         )
 
     def run_variant(self, conformal: str) -> None:
@@ -1197,7 +1206,7 @@ class Leg:
 
     def run_negatives(self) -> None:
         """
-        Run the invalid-input cases once for this formulation.
+        Run the invalid-input cases and the unread-parameter warning case once.
 
         :raises CheckError: If a copied checkpoint does not record its writer's
             formulation.
@@ -1281,6 +1290,35 @@ class Leg:
                 "constraint diagnostics found a nonfinite constraint",
                 False,
             ),
+            (
+                "TPID_REPLACE_LAPSE_WITH_SQRT_CHI = false",
+                dict(o4, TPID_REPLACE_LAPSE_WITH_SQRT_CHI="false"),
+                2,
+                [],
+                "TPID_REPLACE_LAPSE_WITH_SQRT_CHI must be true",
+                False,
+            ),
+            (
+                "BSSN_RK_TIME_END = 1000 (integer for a real)",
+                dict(o4, BSSN_RK_TIME_END="1000"),
+                2,
+                [],
+                "bad_cast to floating",
+                False,
+            ),
+            (
+                "lapse blow-up with constraint output off",
+                dict(
+                    o4,
+                    BSSN_CFL_FACTOR="3.0",
+                    BSSN_TIME_STEP_OUTPUT_FREQ="100000",
+                    BSSN_MAX_ITERATIONS="40",
+                ),
+                2,
+                [],
+                "the lapse became nonfinite",
+                False,
+            ),
         ]
         for index, (label, overrides, ranks, extra, expected, drop_tp) in enumerate(
             cases
@@ -1293,6 +1331,22 @@ class Leg:
             )
         self.negative(
             "no arguments", self.mpi(1, exe), self.work / "W", f"usage: {self.exe_name}"
+        )
+        run_dir = self.prepare(
+            "W", "N-unread", dict(o4, BSSN_MAX_ITERATIONS="1", NRPY_CI_UNREAD="1")
+        )
+        run_checked(
+            self.mpi(2, exe, "ci.toml"), run_dir, run_dir / "run.log", TIMEOUT_RUN
+        )
+        expected = f"{self.exe_name}: warning: parameter NRPY_CI_UNREAD has no effect"
+        warned = expected in (run_dir / "run.log").read_text(errors="replace")
+        self.report.check(
+            "N2",
+            "runtime warning behavior",
+            "an unread parameter is reported and the run continues",
+            f"exit 0, warning {'found' if warned else 'missing'}",
+            f"exit 0 with '{expected}'",
+            warned,
         )
 
     def run(self) -> None:
