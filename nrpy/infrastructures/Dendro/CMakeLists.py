@@ -148,7 +148,7 @@ def output_CFunctions_function_prototypes_and_construct_CMakeLists(
             "  if(NOT TARGET dendro5)",
             "    FetchContent_Declare(dendrolib",
             '      GIT_REPOSITORY "https://github.com/paralab/Dendro-5.01"',
-            '      GIT_TAG "5a058d87ad7ffa8f3c897f3148e5fbb4af58b1d8")',
+            '      GIT_TAG "6cbc9a7f668c045070e67c3fec4f302857f74055")',
             "    FetchContent_MakeAvailable(dendrolib)",
             "  endif()",
             "  if(NOT TARGET dendro_git_version_and_date)",

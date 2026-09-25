@@ -20,7 +20,7 @@ Configured GitHub job map:
 | `codegen-ubuntu` | Configured Ubuntu/Python matrix | Installs NRPy, generates in `tmp/`, and builds the selected default C/library projects with `make`, spanning elliptic, wave, black-hole, PN, SEOBNR, TOV, hydro, BHaHAHA, and `sebobv2` routes. It generates `sebobv1_jax` without package install/build. | The `make` builds run no generated executable, and `make clean` follows each; MANGA commands are commented out. |
 | `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation as Ubuntu; no Dendro generation or build; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
 | `einsteintoolkit-validation` | Configured Ubuntu/Apptainer Einstein Toolkit image | Generates `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs the configured Baikal, BaikalVacuum, and WaveToyNRPy Cactus testsuites and fails on reported failures. No `carpetx_*` generation/build/run. |
-| `dendro-validation` | Ubuntu 24.04 runner with apt-installed Open MPI, GSL, BLAS/LAPACK, and gfortran; matrix `formulation: [bssn, fccz4]`; 75-minute job timeout | Each leg runs `nrpy/examples/tests/dendro_application_check.py`, which generates the W and chi projects twice, configures and builds them against the pinned Dendrolib, solves TwoPunctures once per variant, and runs short MPI evolutions with forced remeshing, horizon finds, wave extraction, checkpoint and restore, 1/2/4-rank repeats, FD4/6/8 initialization, and process-boundary rejections. | Proves only the named layers for the helper's two CI profiles: generation determinism, compile/link compatibility, closed-form TwoPunctures ADM and horizon-mass agreement, initialization and symmetry properties, restart identity, rank-count agreement, ordering of the initial Hamiltonian-constraint norm with FD order (not a convergence test), and the listed rejections. It is not long-time, merger, or production-resolution evidence. |
+| `dendro-validation` | Ubuntu 24.04 runner with apt-installed Open MPI, GSL, BLAS/LAPACK, and gfortran; matrix `formulation: [bssn, fccz4]`; 75-minute job timeout | Each leg runs `nrpy/examples/tests/dendro_application_check.py`, which generates the W and chi projects twice, configures and builds them against the pinned Dendrolib, solves TwoPunctures once per variant, and runs short MPI evolutions with forced remeshing, horizon finds, wave extraction, checkpoint and restore, 1/3/4-rank repeats, FD4/6/8 initialization, and process-boundary rejections. | Proves only the named layers for the helper's two CI profiles: generation determinism, compile/link compatibility, closed-form TwoPunctures ADM and horizon-mass agreement, initialization and symmetry properties, restart identity, rank-count agreement, ordering of the initial Hamiltonian-constraint norm with FD order (not a convergence test), and the listed rejections. It is not long-time, merger, or production-resolution evidence. |
 | `charmpp-validation` | Configured Ubuntu/Apptainer Charm++ context | Generates and builds the configured superB elliptic, spectroscopy, and collision projects | Runs the configured collision executable through `charmrun`; no explicit scientific-output assertion beyond process success. |
 | `sebob-consistency-test` | Configured Ubuntu matrix | Checks out the workflow-selected trusted revision; generates/builds trusted and current SEOBNRv5 variants | Each helper invocation rebuilds both executables, uses exactly ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed the perturbation-derived baseline. |
 | `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the workflow-selected trusted revision | Uses the same ten-input and median-error criterion. |
@@ -102,35 +102,34 @@ Lambda, vanishing odd-m wave modes and the reflection relation C(l,-m) = (-1)^l
 conj C(l,m), a forced remesh with continuous ADM energy, the
 algebraic-projection residual and excision centers stored in the checkpoint,
 byte-identical `dat/`, `bah/`, and `vtu/` outputs after a stop at step 4 and
-restore, and agreement of half-rank-count with full-rank-count diagnostics
-within a relative tolerance. Profile O (maximum depth 10, four steps) checks
-that FD4, FD6, and FD8 share one mesh and that the initial
-Hamiltonian-constraint norm falls by at least half per order increase, an
-ordering check rather than a convergence test, plus a 1-rank repeat. The W and
-chi variants must agree at the shared initial diagnostic. Negative cases require
-nonzero exit and a named diagnostic for a W/chi cross-restore, `--tpid` on more
-than one rank, a TwoPunctures parameter mismatch, a missing TwoPunctures file,
-an unsupported element order, an unsupported refinement mode, an excessive CFL
-factor, `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = false`, an integer given for a
-real-valued parameter, a lapse blow-up with constraint output off, and a missing
-argument. Every run made through the helper's solve step must print no
-unread-parameter warning, and a run given an unread key must warn about it and
-still succeed. fCCZ4 additionally requires its Z4-extended
-Hamiltonian diagnostic to equal the BSSN one and its Z4 vector to vanish at step
-0.
+restore, and agreement of a 3-rank run, which writes a horizon checkpoint, with
+the diagnostics of the main runs within a relative tolerance (horizon
+observables through the irreducible mass; the finder's convergence residuals are
+not compared). Profile O (maximum depth 10, four steps) checks that FD4, FD6,
+and FD8 share one mesh and that the initial Hamiltonian-constraint norm falls by
+at least half per order increase, an ordering check rather than a convergence
+test, plus a 1-rank repeat. The W and chi variants must agree at the shared
+initial diagnostic. Negative cases require nonzero exit and a named diagnostic
+for a W/chi cross-restore, `--tpid` on more than one rank, a TwoPunctures
+parameter mismatch, a missing TwoPunctures file, an unsupported element order,
+an unsupported refinement mode, an excessive CFL factor,
+`TPID_REPLACE_LAPSE_WITH_SQRT_CHI = false`, an integer given for a real-valued
+parameter, a lapse blow-up with constraint output off, and a missing argument.
+Every run made through the helper's solve step must print no unread-parameter
+warning, and a run given an unread key must warn about it and still succeed.
+fCCZ4 additionally requires its Z4-extended Hamiltonian diagnostic to equal the
+BSSN one and its Z4 vector to vanish at step 0.
 
-The helper refuses rank counts that would start a three-rank run and refuses
-horizon finding with `BSSN_IO_OUTPUT_FREQ=0`; its docstrings record the reason.
-It generates only with Kreiss-Oliger dissipation enabled. The apt packages,
-compilers, and `requirements.txt` packages are not pinned; the helper prints
-their resolved versions, and a pass is evidence only for those versions. Every
-subprocess has an argument vector, a timeout, and a bounded log tail on failure,
-and the work directory is removed unconditionally.
+The helper generates only with Kreiss-Oliger dissipation enabled. The apt
+packages, compilers, and `requirements.txt` packages are not pinned; the helper
+prints their resolved versions, and a pass is evidence only for those versions.
+Every subprocess has an argument vector, a timeout, and a bounded log tail on
+failure, and the work directory is removed unconditionally.
 
 Claim evidence:
 - Claim: the `dendro-validation` job generates, builds, runs, and checks both complete sibling Dendro applications in W and chi variants through `dendro_application_check.py`, with the checks and rejections listed in this section.
 - Role: CI behavior
-- Deciding authority: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `Leg.run`, `Leg.run_variant`, `Leg.run_negatives`
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `Leg.run`, `Leg.run_variant`, `Leg.compare_runs`, `Leg.run_negatives`
 - Corroboration: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py), current command-line interface; [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), pinned dependency revisions
 
 Claim evidence:
@@ -141,12 +140,12 @@ Claim evidence:
 
 Explicitly unsupported or unverified by these configurations: CarpetX build or
 runtime; JAX generated-package install/import/basic test or accelerator runtime;
-any CUDA executable/GPU result; Dendro general boundaries, local time
-stepping, GPU execution, threaded kernels, three-rank horizon checkpoints, or
-KO-off (`--no-ko`) generation and build; long-time, merger, or
-production-resolution Dendro evolution;
-geodesic/raytracing projects; GRoovy; active MANGA build; Kasner; and scientific
-correctness beyond the stated regression, property, and waveform assertions.
+any CUDA executable/GPU result; Dendro general boundaries, local time stepping,
+GPU execution, threaded kernels, three-rank horizon-checkpoint contents and
+restore, or KO-off (`--no-ko`) generation and build; long-time, merger, or
+production-resolution Dendro evolution; geodesic/raytracing projects; GRoovy;
+active MANGA build; Kasner; and scientific correctness beyond the stated
+regression, property, and waveform assertions.
 
 These jobs intentionally create generated `project/` outputs. Treat those as CI
 products, not committed documentation or hand-authored source, unless a selected

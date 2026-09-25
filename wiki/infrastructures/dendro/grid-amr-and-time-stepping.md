@@ -71,21 +71,25 @@ Claim evidence:
 
 When the apparent-horizon finder is enabled (`AEH_SOLVER_FREQ > 0`), each
 checkpoint also writes the finder's search state to
-`<BSSN_CHKPT_FILE_PREFIX>_aeh_solver_checkpt-cp<index>.json`, with the 0/1
-index of the solver checkpoint, as Dendro-GR `BSSN_GR` names it. The search
-state is the horizon count, the binary-black-hole flag, the previous three
-horizon shapes, centers, times and radii, and the active, failure and
-fixed-radius-guess flags; it seeds the next horizon find. Restore reads it
-back. A checkpoint written without a horizon file leaves the finder in its
-initial state. `BSSN_GR` also writes a one-time merger checkpoint with index
-3, which the generated solver does not. Because a checkpoint is written after
-its step's output, a restored run skips the initial output instead of
-repeating that step's output rows and horizon find.
+`<BSSN_CHKPT_FILE_PREFIX>_aeh_solver_checkpt-cp<index>.json`, with the 0/1 index
+of the solver checkpoint, as Dendro-GR `BSSN_GR` names it. The search state is
+the horizon count, the binary-black-hole flag, the previous three horizon
+shapes, centers, times and radii, and the active, failure and fixed-radius-guess
+flags; it seeds the next horizon find. Restore reads it back. A checkpoint
+written without a horizon file leaves the finder in its initial state. `BSSN_GR`
+also writes a one-time merger checkpoint with index 3, which the generated
+solver does not. Because a checkpoint is written after its step's output, a
+restored run skips the initial output instead of repeating that step's output
+rows and horizon find. The finder writes a `BHaHAHA_diagnostics` row for each
+successfully found horizon only on horizon-find steps (multiples of
+`AEH_SOLVER_FREQ`) that are also multiples of `BSSN_IO_OUTPUT_FREQ`; with
+`BSSN_IO_OUTPUT_FREQ = 0` it writes none, although horizons are still found and
+their search state is checkpointed.
 
 Claim evidence:
-- Claim: With the apparent-horizon finder enabled, each checkpoint writes the finder's search state with Dendrolib's `AEH_BHaHAHA::create_checkpoint` to `<BSSN_CHKPT_FILE_PREFIX>_aeh_solver_checkpt-cp<index>.json`, using the same 0/1 index as the solver checkpoint, and restore reads it with `AEH_BHaHAHA::restore_checkpoint`; if the file is missing, the finder keeps its initial state. A restored run skips the initial output at the restored step.
+- Claim: With the apparent-horizon finder enabled, each checkpoint writes the finder's search state with Dendrolib's `AEH_BHaHAHA::create_checkpoint` to `<BSSN_CHKPT_FILE_PREFIX>_aeh_solver_checkpt-cp<index>.json`, using the same 0/1 index as the solver checkpoint, and restore reads it with `AEH_BHaHAHA::restore_checkpoint`; if the file is missing, the finder keeps its initial state. A restored run skips the initial output at the restored step. The finder writes a diagnostics row for each successfully found horizon only on horizon-find steps (multiples of `AEH_SOLVER_FREQ`) that are also multiples of `BSSN_IO_OUTPUT_FREQ`, and none when that frequency is 0.
 - Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::write_checkpt` and `Ctx::restore_checkpt` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; Dendrolib `src/aeh_bhahaha.cpp`, `AEH_BHaHAHA::create_checkpoint` and `AEH_BHaHAHA::restore_checkpoint`, file contents and missing-file return.
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::write_checkpt`, `Ctx::restore_checkpt`, and `Ctx::apparent_horizon_output` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; Dendrolib `src/aeh_bhahaha.cpp`, `AEH_BHaHAHA::create_checkpoint` and `AEH_BHaHAHA::restore_checkpoint` (file contents and missing-file return) and `AEH_BHaHAHA::find_horizons` (the `file_output_freq_` guard).
 - Corroboration: Dendro-GR `BSSN_GR/src/bssnCtx.cpp`, `BSSNCtx::write_checkpt` and `BSSNCtx::restore_checkpt`, native file name and calls.
 
 The generated binary-black-hole path parses native `BH_WAMR` mode 4,

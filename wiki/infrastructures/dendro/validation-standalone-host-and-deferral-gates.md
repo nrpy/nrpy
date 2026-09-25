@@ -57,7 +57,7 @@ modes near zero and the reflection relation C(l,-m) = (-1)^l conj C(l,m),
 apparent-horizon irreducible masses matching the puncture ADM masses, a forced
 remesh with continuous ADM energy, checkpoint and byte-identical restore, and
 rejection of both W/chi checkpoint-formulation mismatches. Halo exchange between
-ranks is covered by 1-, 2-, and 4-rank runs whose diagnostics must agree within
+ranks is covered by 1-, 3-, and 4-rank runs whose diagnostics must agree within
 a relative tolerance; block boundaries within a rank are covered only
 indirectly, through the numerical checks. The job does not inspect field data,
 does not check `alpha=W=sqrt(chi)` pointwise, and it runs none of the temporary
