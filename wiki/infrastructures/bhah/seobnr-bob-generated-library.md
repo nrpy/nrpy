@@ -104,9 +104,66 @@ Claim evidence:
 - Deciding authority: [SEOBNRv5_aligned_spin_special_amplitude_coefficients.py](../../../nrpy/infrastructures/BHaH/seobnr/inspiral_waveform/SEOBNRv5_aligned_spin_special_amplitude_coefficients.py), `register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients`
 - Corroboration: `none available` - this generated-C control-flow branch has no module-local trusted-expression or generated-project numerical check that isolates it; verification requires inspecting the generated `SEOBNRv5_aligned_spin_special_amplitude_coefficients` source directly
 
-Merger and IMR assembly sit above the inspiral arrays. The aligned-spin
-`SEOBNRv5_aligned_spin_IMR_waveform` interpolates inspiral modes at the
-attachment time, allocates ringdown arrays, then selects either native
+Merger and IMR assembly sit above the inspiral arrays. Both
+`SEOBNRv5_aligned_spin_IMR_waveform` and `SEBOBv2_IMR_waveform` convert the
+input `dt` to the geometric-unit spacing `dT` and call
+`SEOBNRv5_aligned_spin_interpolate_modes`, which resamples the `(2,2)` inspiral
+strain by cubic spline at `t_first + i dT`, with
+`floor((t_last - t_first) / dT) + 1` samples between the first and last
+inspiral times. Floating-point rounding can place `t_first + i dT` for the
+final sample past `t_last`; that sample is set to `t_last`, so its spacing
+differs from `dT` by roundoff only. Each routine sets `idx_match` to the index
+of the last resampled time at or before `t_attach`, but never to the final
+sample: when `t_attach` is at or after the final resampled time, `idx_match` is
+the second-to-last sample. The resampled time at `idx_match` is `t_match`, and
+ringdown samples follow at `t_match + (i + 1) dT`, so `waveform_IMR` keeps the
+requested spacing. The inspiral part of `waveform_IMR` copies samples
+`0..idx_match` only.
+
+Claim evidence:
+- Claim: `SEOBNRv5_aligned_spin_IMR_waveform` and `SEBOBv2_IMR_waveform`
+  resample the `(2,2)` inspiral strain at `t_first + i dT` for
+  `i < floor((t_last - t_first) / dT) + 1`, where `dT` is the input `dt` in
+  geometric units; a final sample that rounding places after `t_last` is set to
+  `t_last`. Ringdown samples follow at `t_match + (i + 1) dT`. Uniform spacing
+  holds only up to floating-point roundoff.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_interpolate_modes.py](../../../nrpy/infrastructures/BHaH/seobnr/inspiral_waveform/SEOBNRv5_aligned_spin_interpolate_modes.py), `register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes`; [SEOBNRv5_aligned_spin_IMR_waveform.py](../../../nrpy/infrastructures/BHaH/seobnr/SEOBNRv5_aligned_spin_IMR_waveform.py), `register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform`; [SEBOBv2_IMR_waveform.py](../../../nrpy/infrastructures/BHaH/seobnr/SEBOBv2_IMR_waveform.py), `register_CFunction_SEBOBv2_IMR_waveform`
+- Corroboration: `none available` - the SEOB and SEBOBv2 consistency checks compare waveform amplitude and phase against the trusted revision but do not check sample times; verification requires inspecting the generated sources directly
+
+Although the final resampled sample is never copied into the inspiral part of
+`waveform_IMR`, it still enters the ringdown. When `idx_match` is the
+second-to-last sample, the BOB ringdown branch of both routines sets the
+ringdown phase offset `phase_match = h22_phase_new[idx_match + 1]`, the final
+sample's unwrapped phase, and the aligned-spin routine takes the sign of the
+ringdown phase from `h22_phase_new[idx_match + 1] - h22_phase_new[idx_match]`.
+In the native SEOBNRv5 merger-ringdown branch of the aligned-spin routine, the
+cubic spline that sets the amplitude, phase, and their time derivatives at
+`t_match` covers samples `max(idx_match, 5) - 5` through
+`min(n, idx_match + 5) - 1`, where `n` is the number of resampled samples, so
+it includes the final sample whenever `idx_match >= n - 5`. The endpoint
+override changes the final sample only at roundoff level, so in these cases
+the ringdown differs by roundoff from one attached to an unmodified final
+sample. This use of the final sample
+is intended behavior. When a generated `main` calls `commondata_io` (the
+examples' `output_commondata` option), the final sample is also written to
+`commondata.bin` with the rest of `waveform_inspiral`.
+
+Claim evidence:
+- Claim: `SEOBNRv5_aligned_spin_IMR_waveform` and `SEBOBv2_IMR_waveform` read
+  the final resampled inspiral sample when `idx_match` is the second-to-last
+  sample: the BOB ringdown branch sets `phase_match` from its unwrapped phase,
+  and the aligned-spin routine also sets the ringdown phase sign from the
+  difference between it and the sample at `idx_match`. The native SEOBNRv5
+  merger-ringdown branch of `SEOBNRv5_aligned_spin_IMR_waveform` includes it
+  in the attachment spline when `idx_match >= n - 5`. Neither routine copies
+  it into the inspiral part of `waveform_IMR`.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_IMR_waveform.py](../../../nrpy/infrastructures/BHaH/seobnr/SEOBNRv5_aligned_spin_IMR_waveform.py), `register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform`; [SEBOBv2_IMR_waveform.py](../../../nrpy/infrastructures/BHaH/seobnr/SEBOBv2_IMR_waveform.py), `register_CFunction_SEBOBv2_IMR_waveform`
+- Corroboration: `none available` - the SEOB and SEBOBv2 consistency checks compare the whole waveform's amplitude and phase and do not isolate the ringdown phase offset or the attachment spline; verification requires inspecting the generated sources directly
+
+After resampling, the aligned-spin routine allocates ringdown arrays, then
+selects either native
 SEOBNRv5 merger-ringdown or BOB ringdown based on the registration flag before
 concatenating inspiral and ringdown into `commondata->waveform_IMR`.
 `SEBOBv2_IMR_waveform` follows the same assembly shape but calls
@@ -153,6 +210,7 @@ consistency scripts.
 - [SEOBNRv5_aligned_spin_ode_integration.py](../../../nrpy/infrastructures/BHaH/seobnr/dynamics/SEOBNRv5_aligned_spin_ode_integration.py) - `register_CFunction_SEOBNRv5_aligned_spin_ode_integration`
 - [SEOBNRv5_aligned_spin_waveform_from_dynamics.py](../../../nrpy/infrastructures/BHaH/seobnr/inspiral_waveform/SEOBNRv5_aligned_spin_waveform_from_dynamics.py) - `register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics`
 - [SEOBNRv5_aligned_spin_special_amplitude_coefficients.py](../../../nrpy/infrastructures/BHaH/seobnr/inspiral_waveform/SEOBNRv5_aligned_spin_special_amplitude_coefficients.py) - `register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients`
+- [SEOBNRv5_aligned_spin_interpolate_modes.py](../../../nrpy/infrastructures/BHaH/seobnr/inspiral_waveform/SEOBNRv5_aligned_spin_interpolate_modes.py) - `register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes`
 - [SEOBNRv5_aligned_spin_IMR_waveform.py](../../../nrpy/infrastructures/BHaH/seobnr/SEOBNRv5_aligned_spin_IMR_waveform.py) - `register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform`
 - [SEBOBv2_IMR_waveform.py](../../../nrpy/infrastructures/BHaH/seobnr/SEBOBv2_IMR_waveform.py) - `register_CFunction_SEBOBv2_IMR_waveform`
 - [BOB_v2_waveform_from_times.py](../../../nrpy/infrastructures/BHaH/seobnr/merger_waveform/BOB_v2_waveform_from_times.py) - `register_CFunction_BOB_v2_waveform_from_times`
