@@ -67,7 +67,10 @@ const int maxiter = 100;
 for (i = 0; i < n; i++){
 gsl_vector_set(x , i , x_guess[i]);
 }
-gsl_multiroot_fsolver_set(s , f , x);
+status = gsl_multiroot_fsolver_set(s , f , x);
+int fsolver_set_status[1] = {GSL_SUCCESS};
+char fsolver_set_name[] = "gsl_multiroot_fsolver_set";
+handle_gsl_return_status(status,fsolver_set_status,1,fsolver_set_name);
 do {
   iter++;
   status = gsl_multiroot_fsolver_iterate (s);
@@ -80,6 +83,19 @@ do {
   handle_gsl_return_status(status,test_residual_status,2,residual_name);
 }
 while(status == GSL_CONTINUE && iter < maxiter);
+if (status != GSL_SUCCESS){
+  REAL residual_norm2 = 0.;
+  for (i = 0; i < n; i++){
+    REAL f_i = gsl_vector_get(s->f , i);
+    residual_norm2 += f_i * f_i;
+  } // END LOOP: for i over residual components
+  fprintf(stderr,
+          "Error: in root_finding_multidimensional(), gsl_multiroot_fsolver_iterate() did not converge within %d iterations (||f||=%.15e)\\n",
+          maxiter, sqrt(residual_norm2));
+  gsl_multiroot_fsolver_free (s);
+  gsl_vector_free (x);
+  exit(1);
+} // END IF: multidimensional root not converged
 for (i = 0; i < n; i++){
 x_result[i] = gsl_vector_get(s->x , i);
 }

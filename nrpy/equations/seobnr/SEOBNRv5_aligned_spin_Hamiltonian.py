@@ -418,7 +418,6 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
             1 + self.prstar**2 * (1 + self.Balignnp) / self.xi**2 + Qalign
         )
         self.dQalign_dprstar = sp.diff(Qalign, self.prstar)
-        self.r_dot = -self.xi * sp.diff(self.Hreal, self.prstar)
         Hbarodd = Hodd / self.pphi
         self.dHoddbar_dr = sp.diff(Hbarodd, self.r)
         # Terms needed for dynamics

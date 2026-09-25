@@ -147,8 +147,12 @@ SEOBNRv5_aligned_spin_merger_waveform_from_times(ringdown_time,ringdown_amp,ring
         body += """
 // Step 5: Build BOB ringdown samples and align their phase.
 const REAL phase_match = h22_phase_new[idx_match + 1];
+// Direction comes from the local unwrapped-phase slope at the attachment point,
+// not the phase value itself: an additive offset to an unwrapped phase can flip
+// the sign of phase_match without changing the physical frequency direction.
+const REAL phase_slope = h22_phase_new[idx_match + 1] - h22_phase_new[idx_match];
 BOB_aligned_spin_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,nsteps_ringdown,commondata);
-const REAL true_sign = copysign(1.,phase_match);
+const REAL true_sign = copysign(1.,phase_slope);
 for(i = 0; i < nsteps_ringdown; i++){
   ringdown_phase[i] = true_sign*ringdown_phase[i] + phase_match;
 } // END LOOP: for i over BOB ringdown phases

@@ -28,11 +28,24 @@ spin-spin, and spin-orbit pieces, and exposes stable object outputs including
 `xi`, `Aalign`, `Balignnp`, `Heven`, and `Hreal`.
 
 The same class differentiates the real Hamiltonian into quantities used for
-integration and initial-data construction. Public derivative outputs include
-`dHreal_dr`, `dHreal_dprstar`, `dHreal_dpphi`, `dHreal_dr_dr`,
-`dHreal_dr_dpphi`, `dQalign_dprstar`, `dHoddbar_dr`, and `r_dot`. Circular
-counterparts are formed by substituting `prstar = 0` before differentiating, with
-outputs such as `dHreal_dr_circ`, `dHreal_dpphi_circ`,
+integration and initial-data construction. Public non-circular derivative
+outputs are `dHreal_dr`, `dHreal_dprstar`, `dHreal_dpphi`, `dHreal_dr_dr`,
+`dHreal_dr_dpphi`, `dQalign_dprstar`, and `dHoddbar_dr`.
+
+Claim evidence:
+- Claim: `SEOBNRv5_aligned_spin_Hamiltonian_quantities`'s public
+  non-circular derivative outputs are exactly `dHreal_dr`, `dHreal_dprstar`,
+  `dHreal_dpphi`, `dHreal_dr_dr`, `dHreal_dr_dpphi`, `dQalign_dprstar`, and
+  `dHoddbar_dr`; its public circular derivative outputs are exactly
+  `dHreal_dr_circ`, `dHreal_dpphi_circ`, `dHreal_dr_dr_circ`,
+  `dHreal_dr_dpphi_circ`, and `dHreal_dpphi_dpphi_circ`; the class does not
+  expose a separate `r_dot` member.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py), `SEOBNRv5_aligned_spin_Hamiltonian_quantities.__init__`
+- Corroboration: [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_Hamiltonian.py), `trusted_dict`, pins the exact key set produced by the module's own default-constructor evaluation
+
+Circular counterparts are formed by substituting `prstar = 0` before
+differentiating, with outputs `dHreal_dr_circ`, `dHreal_dpphi_circ`,
 `dHreal_dr_dr_circ`, `dHreal_dr_dpphi_circ`, and
 `dHreal_dpphi_dpphi_circ`. The circular first derivatives are divided by `nu`;
 each circular second derivative differentiates one of those normalized first
