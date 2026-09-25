@@ -69,6 +69,25 @@ Claim evidence:
 - Deciding authority: `nrpy/infrastructures/Dendro/checkpoint.py`, `output_checkpoint_cpp`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::write_checkpt`, `Ctx::restore_checkpt`, and `Ctx::is_remesh` within `output_solver_context_cpp`.
 - Corroboration: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`, schedules remeshing and checkpoint writes around time stepping.
 
+When the apparent-horizon finder is enabled (`AEH_SOLVER_FREQ > 0`), each
+checkpoint also writes the finder's search state to
+`<BSSN_CHKPT_FILE_PREFIX>_aeh_solver_checkpt-cp<index>.json`, with the 0/1
+index of the solver checkpoint, as Dendro-GR `BSSN_GR` names it. The search
+state is the horizon count, the binary-black-hole flag, the previous three
+horizon shapes, centers, times and radii, and the active, failure and
+fixed-radius-guess flags; it seeds the next horizon find. Restore reads it
+back. A checkpoint written without a horizon file leaves the finder in its
+initial state. `BSSN_GR` also writes a one-time merger checkpoint with index
+3, which the generated solver does not. Because a checkpoint is written after
+its step's output, a restored run skips the initial output instead of
+repeating that step's output rows and horizon find.
+
+Claim evidence:
+- Claim: With the apparent-horizon finder enabled, each checkpoint writes the finder's search state with Dendrolib's `AEH_BHaHAHA::create_checkpoint` to `<BSSN_CHKPT_FILE_PREFIX>_aeh_solver_checkpt-cp<index>.json`, using the same 0/1 index as the solver checkpoint, and restore reads it with `AEH_BHaHAHA::restore_checkpoint`; if the file is missing, the finder keeps its initial state. A restored run skips the initial output at the restored step.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::write_checkpt` and `Ctx::restore_checkpt` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; Dendrolib `src/aeh_bhahaha.cpp`, `AEH_BHaHAHA::create_checkpoint` and `AEH_BHaHAHA::restore_checkpoint`, file contents and missing-file return.
+- Corroboration: Dendro-GR `BSSN_GR/src/bssnCtx.cpp`, `BSSNCtx::write_checkpt` and `BSSNCtx::restore_checkpt`, native file name and calls.
+
 The generated binary-black-hole path parses native `BH_WAMR` mode 4,
 selected refinement variables, constant or causal mode-6 wavelet tolerance,
 wavelet coarsening factors, puncture-centered level floors, post-merger remesh
@@ -142,6 +161,7 @@ initial data rather than a call into chi-specific `BSSN_GR` code.
 
 - [Dendrolib block.h](https://github.com/paralab/Dendro-5.01/blob/master/include/block.h) - `ot::Block` geometry.
 - [Dendrolib mesh.h](https://github.com/paralab/Dendro-5.01/blob/master/include/mesh.h) - zip, unzip, remesh, and intergrid transfer.
+- [Dendrolib aeh_bhahaha.cpp](https://github.com/paralab/Dendro-5.01/blob/master/src/aeh_bhahaha.cpp) - apparent-horizon finder checkpoint write and restore.
 - [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - generated context and service scheduling.
 - [checkpoint.py](../../../nrpy/infrastructures/Dendro/checkpoint.py) - checkpoint and restore generation.
 - [physical_boundary.py](../../../nrpy/infrastructures/Dendro/general_relativity/physical_boundary.py) - boundary kernel registration.
@@ -151,6 +171,7 @@ initial data rather than a call into chi-specific `BSSN_GR` code.
 - [physical_boundary_ghosts.py](../../../nrpy/infrastructures/Dendro/general_relativity/physical_boundary_ghosts.py) - physical exterior-padding extrapolation.
 - [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - analytic seed, AMR parameters, and scheduling.
 - [Dendro-GR dataUtils.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/dataUtils.cpp) - native black-hole refinement path.
+- [Dendro-GR bssnCtx.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssnCtx.cpp) - native apparent-horizon checkpoint file name and restore.
 
 ## See Also
 

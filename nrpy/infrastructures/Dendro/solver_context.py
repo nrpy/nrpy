@@ -283,7 +283,15 @@ namespace {{
 // C_MOM0-2, C_PSI4_REAL, C_PSI4_IMG.
 constexpr std::array<std::string_view, 6> vtu_constraint_names{{
     "H", "MU0", "MU1", "MU2", "psi4_real", "psi4_imag"}};
-}}  // namespace
+// Apparent-horizon finder checkpoint file, named as in Dendro-GR BSSN_GR.
+std::string horizon_checkpoint_name(const std::string& prefix,
+                                    unsigned int checkpoint_index) {{
+  return prefix + "_aeh_solver_checkpt-cp" + std::to_string(checkpoint_index) +
+         ".json";
+}}  // END FUNCTION: horizon_checkpoint_name
+// clang-format off
+}}  // END NAMESPACE: internal linkage
+// clang-format on
 Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum,
          DendroScalar time_step, DendroScalar wavelet_tolerance,
          unsigned int wavelet_tolerance_mode,
@@ -670,10 +678,10 @@ void Ctx::compute_constraints() {{
       case 8: {constraint_stem}_order_8(block, state.data(), diagnostic.data(),
                                          domain_minimum_, domain_maximum_); break;
       default: throw std::logic_error("unsupported Dendro element order");
-    }}
-  }}
+    }}  // END SWITCH: constraint kernel FD order
+  }}  // END LOOP: for block over local blocks
   zip(unzipped_constraints_, constraints_);
-}}
+}}  // END FUNCTION: compute_constraints
 void Ctx::compute_psi4() {{
   unzip(state_, unzipped_state_, 1);
   std::fill_n(unzipped_psi4_.get_vec_ptr(), unzipped_psi4_.get_size(), 0.0);
@@ -691,14 +699,14 @@ void Ctx::compute_psi4() {{
       case 8: psi4_eval_order_8(block, state.data(), psi4.data(),
                                 domain_minimum_, domain_maximum_); break;
       default: throw std::logic_error("unsupported Dendro element order");
-    }}
-  }}
+    }}  // END SWITCH: Psi4 kernel FD order
+  }}  // END LOOP: for block over local blocks
   zip(unzipped_psi4_, psi4_);
   std::array<DendroScalar*, 2> zipped_psi4{{}};
   psi4_.to_2d(zipped_psi4.data());
   m_uiMesh->readFromGhostBegin(zipped_psi4[0], 2);
   m_uiMesh->readFromGhostEnd(zipped_psi4[0], 2);
-}}
+}}  // END FUNCTION: compute_psi4
 int Ctx::diagnostic_output() {{
   if (!m_uiMesh->isActive() || diagnostic_frequency_ == 0 ||
       m_uiTinfo._m_uiStep % diagnostic_frequency_ != 0) return 0;
@@ -734,7 +742,7 @@ int Ctx::diagnostic_output() {{
       file << '\\t' << std::sqrt(global_sum[i] / global_volume)
            << '\\t' << global_max[i];
     file << '\\n';
-  }}
+  }}  // END IF: rank 0 writes volume norms
   // Dendro-BSSN's reported norm weights each owned, unexcised CG node equally.
   // Keep this distinct from the conformal-factor volume-weighted norm above.
   std::array<DendroScalar *, generated::NUM_DIAG_GFS> zipped_diagnostic{{}};
@@ -789,14 +797,14 @@ int Ctx::diagnostic_output() {{
       for (const std::string_view name : generated::DIAG_GF_NAMES)
         file << ' ' << name << '\\t';
       file << " unexcised_nodes\\t\\n";
-    }}
+    }}  // END IF: step-0 column header
     file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT;
     for (unsigned int field = 0; field < generated::NUM_DIAG_GFS; ++field)
       file << '\\t' << std::sqrt(global_node_sums[field] / static_cast<double>(global_nodes));
     file << '\\t' << global_nodes << '\\n';
-  }}
+  }}  // END IF: rank 0 writes norms
   return 0;
-}}
+}}  // END FUNCTION: diagnostic_output
 int Ctx::gravitational_wave_output() {{
   if (!m_uiMesh->isActive() || gravitational_wave_frequency_ == 0 ||
       gravitational_wave_radii_.empty() ||
@@ -836,7 +844,7 @@ int Ctx::gravitational_wave_output() {{
                radius_index < gravitational_wave_radii_.size(); ++radius_index)
             file << 'r' << radius_index << '\\t';
           file << '\\n';
-        }}
+        }}  // END IF: step-0 radius header
         file.precision(10);
         file << std::scientific << m_uiTinfo._m_uiStep << '\\t'
              << m_uiTinfo._m_uiT << '\\t';
@@ -846,13 +854,13 @@ int Ctx::gravitational_wave_output() {{
               static_cast<unsigned>(static_cast<int>(ell * ell + ell) + mode);
           file << std::complex<DendroScalar>(modes_real[index],
                                              modes_imag[index]) << '\\t';
-        }}
+        }}  // END LOOP: for radius_index over radii
         file << '\\n';
-      }}
-    }}
-  }}
+      }}  // END LOOP: for mode over -ell..ell
+    }}  // END LOOP: for ell over 2..max_l
+  }}  // END IF: rank 0 writes modes
   return 0;
-}}
+}}  // END FUNCTION: gravitational_wave_output
 int Ctx::adm_output() {{
   if (!m_uiMesh->isActive() || diagnostic_frequency_ == 0 ||
       gravitational_wave_radii_.empty() ||
@@ -947,7 +955,7 @@ int Ctx::adm_output() {{
     file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT << '\\t' << radius;
     for (const DendroScalar quantity : global_quantities) file << '\\t' << quantity;
     file << '\\n';
-  }}
+  }}  // END IF: rank 0 writes ADM
   return 0;
 }}
 int Ctx::write_vtu() {{
@@ -964,24 +972,25 @@ int Ctx::write_vtu() {{
   for (const unsigned int field : vtu_evolved_fields_) {{
     output.push_back(fields[field]);
     names.emplace_back(generated::EVOL_GF_NAMES[field]);
-  }}
-  const auto requested = [this](unsigned int first, unsigned int last) {{
-    for (const unsigned int field : vtu_constraint_fields_)
-      if (field >= first && field <= last) return true;
-    return false;
-  }};
+  }}  // END LOOP: for field over evolved selection
+  bool constraints_requested = false, psi4_requested = false;
+  for (const unsigned int field : vtu_constraint_fields_)
+    if (field < 4)
+      constraints_requested = true;
+    else
+      psi4_requested = true;
   std::array<DendroScalar*, generated::NUM_DIAG_GFS> constraints{{}};
   std::array<DendroScalar*, 2> psi4{{}};
-  if (requested(0, 3)) {{
+  if (constraints_requested) {{
     compute_constraints();
     constraints_.to_2d(constraints.data());
     m_uiMesh->readFromGhostBegin(constraints[0], generated::NUM_DIAG_GFS);
     m_uiMesh->readFromGhostEnd(constraints[0], generated::NUM_DIAG_GFS);
-  }}
-  if (requested(4, 5)) {{
+  }}  // END IF: constraint fields selected
+  if (psi4_requested) {{
     compute_psi4();
     psi4_.to_2d(psi4.data());
-  }}
+  }}  // END IF: Psi4 fields selected
   constexpr std::array<unsigned int, 4> constraint_indices{{
       generated::find_variable(vtu_constraint_names[0])->index,
       generated::find_variable(vtu_constraint_names[1])->index,
@@ -1001,7 +1010,7 @@ int Ctx::write_vtu() {{
     output.push_back(field < 4 ? constraints[constraint_indices[field]]
                                : psi4[field - 4]);
     names.emplace_back(vtu_constraint_names[field]);
-  }}
+  }}  // END LOOP: for field over constraint selection
   std::vector<const char*> name_pointers;
   for (const std::string& name : names) name_pointers.push_back(name.c_str());
   const char* metadata_names[2] = {{"Time", "Cycle"}};
@@ -1018,13 +1027,14 @@ int Ctx::write_vtu() {{
                             prefix.c_str(), 2, metadata_names, metadata,
                             static_cast<unsigned int>(output.size()),
                             name_pointers.data(), output.data());
-  }} else {{
+  }}  // END IF: z-normal slice output
+  else {{
     io::vtk::mesh2vtuFine(m_uiMesh, prefix.c_str(), 2, metadata_names,
                           metadata, static_cast<unsigned int>(output.size()),
                           name_pointers.data(), output.data());
-  }}
+  }}  // END ELSE: full-volume output
   return 0;
-}}
+}}  // END FUNCTION: write_vtu
 int Ctx::apparent_horizon_output() {{
   if (!m_uiMesh->isActive() || apparent_horizon_frequency_ == 0 ||
       apparent_horizon_finder_ == nullptr ||
@@ -1331,17 +1341,24 @@ int Ctx::write_checkpt() {{
   const bool merged_checkpoint_written =
       merged_checkpoint_written_ ||
       (excision_centers_[0] - excision_centers_[1]).abs() < 0.1;
+  const unsigned int checkpoint_index =
+      (m_uiTinfo._m_uiStep / checkpoint_frequency_) % 2;
   const int status = {solver_stem}_write_checkpoint(checkpoint_prefix_,
-      (m_uiTinfo._m_uiStep / checkpoint_frequency_) % 2, m_uiMesh, state_,
+      checkpoint_index, m_uiMesh, state_,
       params, m_uiTinfo._m_uiStep, m_uiTinfo._m_uiT, m_uiTinfo._m_uiTh,
       domain_minimum_, domain_maximum_, excision_centers_,
       black_hole_time_history_, black_hole_position_history_,
       black_hole_merge_time_, merged_checkpoint_written,
       algebraic_residual(m_uiMesh, state_));
-  if (status == 0)
-    merged_checkpoint_written_ = merged_checkpoint_written;
-  return status;
-}}
+  if (status != 0) return status;
+  merged_checkpoint_written_ = merged_checkpoint_written;
+  // The horizon finder's search state (previous horizons, centers, radii and
+  // failure flags) seeds its next find; Dendro-GR BSSN_GR checkpoints it too.
+  if (apparent_horizon_finder_ != nullptr)
+    apparent_horizon_finder_->create_checkpoint(
+        m_uiMesh, horizon_checkpoint_name(checkpoint_prefix_, checkpoint_index));
+  return 0;
+}}  // END FUNCTION: write_checkpt
 int Ctx::restore_checkpt(unsigned int checkpoint_index) {{
   ot::Mesh* restored_mesh = nullptr;
   DVec restored_state;
@@ -1416,8 +1433,11 @@ int Ctx::restore_checkpt(unsigned int checkpoint_index) {{
   m_uiTinfo._m_uiTh = time_step;
   excision_center_time_ = time;
   m_uiIsETSSynced = false;
+  if (apparent_horizon_finder_ != nullptr)
+    apparent_horizon_finder_->restore_checkpoint(
+        m_uiMesh, horizon_checkpoint_name(checkpoint_prefix_, checkpoint_index));
   return 0;
-}}
+}}  // END FUNCTION: restore_checkpt
 DendroScalar Ctx::algebraic_residual(ot::Mesh* mesh, DVec& state) {{
   if (!mesh->isActive()) return 0.0;
   std::array<DendroScalar*, generated::NUM_EVOL_GFS> fields{{}};

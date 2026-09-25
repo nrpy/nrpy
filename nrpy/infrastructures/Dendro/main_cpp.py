@@ -1141,16 +1141,22 @@ int main(int argc, char** argv) {
     time_stepper.set_ets_coefficients(ts::ETSType::RK4);
     time_stepper.set_evolve_vars(context.get_evolution_vars());
     time_stepper.init();
-    if (context.diagnostic_output() != 0)
-      throw std::runtime_error("initial diagnostic output failed");
-    if (context.gravitational_wave_output() != 0)
-      throw std::runtime_error("initial gravitational-wave output failed");
-    if (context.adm_output() != 0)
-      throw std::runtime_error("initial ADM output failed");
-    if (context.write_vtu() != 0)
-      throw std::runtime_error("initial VTU output failed");
-    if (context.apparent_horizon_output() != 0)
-      throw std::runtime_error("initial apparent-horizon output failed");
+    // A checkpoint is written after its step's output, so a restored run
+    // skips the initial output: repeating it would duplicate output rows and
+    // repeat the step's horizon find, which the restored finder history
+    // would then record twice at the same time.
+    if (!restored) {
+      if (context.diagnostic_output() != 0)
+        throw std::runtime_error("initial diagnostic output failed");
+      if (context.gravitational_wave_output() != 0)
+        throw std::runtime_error("initial gravitational-wave output failed");
+      if (context.adm_output() != 0)
+        throw std::runtime_error("initial ADM output failed");
+      if (context.write_vtu() != 0)
+        throw std::runtime_error("initial VTU output failed");
+      if (context.apparent_horizon_output() != 0)
+        throw std::runtime_error("initial apparent-horizon output failed");
+    }  // END IF: fresh-start initial output
     if (rank == 0)
       std::cout << """
         + f'"{executable_name}: profile={profile_name} FD="'

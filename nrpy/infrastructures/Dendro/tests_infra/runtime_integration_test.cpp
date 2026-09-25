@@ -1,5 +1,8 @@
 // Compile against a generated real context, not standalone host declarations.
 // RUNTIME_HEADER and RUNTIME_NAMESPACE select the generated formulation.
+//
+// Author: Zachariah B. Etienne
+//         zachetie **at** gmail **dot* com
 #include RUNTIME_HEADER
 #include <algorithm>
 #include <atomic>
@@ -27,7 +30,9 @@ void record(std::size_t size) noexcept {
         bytes.fetch_add(size, std::memory_order_relaxed);
     }
 }  // END FUNCTION: record
+// clang-format off
 }  // END NAMESPACE: allocation measurement
+// clang-format on
 
 void *operator new(std::size_t size) {
     allocation_measurement::record(size);

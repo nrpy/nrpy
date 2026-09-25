@@ -5,6 +5,9 @@
 // written so that a host that does not meet the assumed requirements fails it:
 // the expected values are recomputed here from the block record and the
 // physical domain, never read back from the same call under test.
+//
+// Author: Zachariah B. Etienne
+//         zachetie **at** gmail **dot* com
 #include <mpi.h>
 
 #include <cerrno>
