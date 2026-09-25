@@ -61,7 +61,7 @@ int stop = 0;
 if (!isfinite(commondata->initial_omega) || commondata->initial_omega <= 0.0){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), initial_omega must be finite and positive, got %.15e\\n", commondata->initial_omega);
   exit(1);
-}
+} // END IF: initial_omega not finite positive
 
 y[0] = commondata->r;
 y[1] = commondata->phi;
@@ -71,17 +71,17 @@ status = SEOBNRv5_aligned_spin_right_hand_sides(t, y, dydt, commondata);
 int rhs_status[1] = {GSL_SUCCESS};
 char rhs_name[] = "gsl_odeiv2_evolve_apply";
 
-// Step 0.a: Require a finite, positive orbital-frequency derivative and a finite,
+// Step 0.a: Require a finite, positive orbital frequency dydt[1] = dphi/dt and a finite,
 // positive derived step size before either value reaches GSL's adaptive evolution.
 if (!isfinite(dydt[1]) || dydt[1] <= 0.0){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), dydt[1] must be finite and positive, got %.15e\\n", dydt[1]);
   exit(1);
-}
+} // END IF: dydt[1] not finite positive
 REAL h = 2.0 * M_PI / dydt[1] / 5.0;
 if (!isfinite(h) || h <= 0.0){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), initial step size h must be finite and positive, got %.15e\\n", h);
   exit(1);
-}
+} // END IF: step size not finite positive
 
 // Step 0.b: Start the dynamics buffer at a modest fixed capacity and grow it
 // geometrically (Step 2.a) instead of reserving a full-duration sample count.
@@ -120,12 +120,12 @@ while (t < tmax && stop == 0) {
     if (bufferlength > SIZE_MAX / 2){
       fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), dynamics_RK buffer capacity overflowed while doubling\\n");
       exit(1);
-    }
+    } // END IF: capacity doubling would overflow
     bufferlength = 2 * bufferlength;
     if (bufferlength > SIZE_MAX / (NUMVARS * sizeof(REAL))){
       fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), dynamics_RK allocation size overflowed\\n");
       exit(1);
-    }
+    } // END IF: allocation byte count overflows
     dynamics_RK = (REAL *)realloc(dynamics_RK, bufferlength * (NUMVARS) * sizeof(REAL));
     if (dynamics_RK == NULL){
       fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), realloc() failed for dynamics_RK\\n");
@@ -182,7 +182,7 @@ REAL *restrict times = malloc(nsteps * sizeof(REAL));
 if (times == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), malloc() failed for times\\n");
   exit(1);
-}
+} // END IF: times allocation failed
 for (i = 0; i < nsteps; i++){
   times[i] = dynamics_RK[IDX(i,TIME)];
 } // END LOOP: for i over raw dynamics samples

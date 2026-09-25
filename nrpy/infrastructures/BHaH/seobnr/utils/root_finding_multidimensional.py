@@ -88,7 +88,7 @@ if (status != GSL_SUCCESS){
   for (i = 0; i < n; i++){
     REAL f_i = gsl_vector_get(s->f , i);
     residual_norm2 += f_i * f_i;
-  }
+  } // END LOOP: for i over residual components
   fprintf(stderr,
           "Error: in root_finding_multidimensional(), gsl_multiroot_fsolver_iterate() did not converge within %d iterations (||f||=%.15e)\\n",
           maxiter, sqrt(residual_norm2));

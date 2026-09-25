@@ -96,6 +96,7 @@ def process_input_set(
 
     :param nominal_args: Tuple containing the nominal input paramters, path to trusted executable, and path to current executable.
     :return: Tuple containing the baseline error, the test error (both None if no comparison was performed), and whether this input set is a trusted/current success-vs-failure regression.
+    :raises subprocess.CalledProcessError: If an executable run fails for a non-calibration approximant.
     """
     nominal_inputs, nominal_trusted_exec, nominal_current_exec = nominal_args
     is_calibration_mode = "calibration" in Path(nominal_trusted_exec).name
@@ -230,7 +231,7 @@ if __name__ == "__main__":
             continue
         if baseline_err is None or test_err is None:
             print(
-                f"  Input set {i+1}: calibration run aborted consistently; skipping from median."
+                f"  Input set {i+1}: a calibration executable aborted, so no error comparison is available; skipping from median."
             )
             continue
         baseline_errors.append(baseline_err)
