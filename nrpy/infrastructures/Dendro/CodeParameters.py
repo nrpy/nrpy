@@ -31,6 +31,7 @@ Q1_TOML_PARAMETER_NAMES = {
     "SSL_h": "BSSN_SSL_H",
     "SSL_sigma": "BSSN_SSL_SIGMA",
     "C_CAHD": "BSSN_CAHD_C",
+    "CFL_FACTOR": "BSSN_CFL_FACTOR",
     "KreissOliger_strength_gauge": "KO_DISS_SIGMA",
     "KreissOliger_strength_nongauge": "KO_DISS_SIGMA",
 }

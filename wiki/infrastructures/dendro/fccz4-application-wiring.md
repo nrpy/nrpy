@@ -1,6 +1,6 @@
 # fCCZ4 Application Wiring
 
-> Describe fCCZ4 equations, initial data, conversions, and runtime services in `NRPy_fCCZ4_GR`. · Status: provisional
+> Describe fCCZ4 equations, initial data, conversions, and runtime services in `Dendro_NRPy_fCCZ4`. · Status: provisional
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -12,6 +12,20 @@ constant default `eta=1`, centered derivatives, its fCCZ4 CAHD contribution,
 and separate conformal Ricci and RHS kernels.
 
 ## Detail
+
+Each generated directory contains `pars/fccz4.toml` with the generated
+runtime defaults and `pars/q1.par.lowres.toml` with the supplied equal-mass
+TwoPunctures BBH parameters. Both files work with the single-rank `--tpid`
+command and the MPI evolution command. The packaged q1 file starts a fresh
+run, sets a large end time of 1000000, omits an explicit iteration cap,
+and uses native scaling with base output frequencies of 80. The copied q1 file
+is identical in the BSSN and fCCZ4 directories; each executable constructs its
+own evolved fields from the same physical initial data.
+
+The independent `--ybs-gamma` and `--ybs-momentum` options, runtime
+coefficients, paper references, and in-script KO setting are described in
+[BSSN Application Wiring](bssn-application-wiring.md#optional-yo-et-al-adjustments).
+The fCCZ4 shift driver receives the adjusted fCCZ4 connection RHS.
 
 The fCCZ4 CAHD contribution is
 

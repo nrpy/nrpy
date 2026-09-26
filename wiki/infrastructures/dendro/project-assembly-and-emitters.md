@@ -6,7 +6,7 @@
 ## Summary
 
 `nrpy.examples.dendro_bssn` and `nrpy.examples.dendro_fccz4` generate
-`project/NRPy_BSSN_GR/` and `project/NRPy_fCCZ4_GR/`; `--project-dir` replaces
+`project/Dendro_NRPy_BSSN/` and `project/Dendro_NRPy_fCCZ4/`; `--project-dir` replaces
 `project`. Each directory is a complete, standalone Dendro application, not a
 kernel library, mock host, or adapter around Dendro-GR BSSN sources. It needs no
 Dendro-GR checkout: its CMake project fetches Dendrolib and toml11, and every
@@ -40,8 +40,8 @@ connection-initialization pass.
 context, entry point, checkpoint support, local TwoPunctures implementation,
 runtime services, conversions, projection, and every order-specific numerical
 kernel. It uses no source glob, `bssn_common`, or source from `BSSN_GR/`. The
-CMake project is standalone only: it fetches Dendrolib (`paralab/Dendro-5.01` at
-the commit `DENDROLIB_COMMIT` names) and toml11 with `FetchContent`, and it is
+CMake project is standalone only: it fetches Dendrolib (`paralab/Dendro-5.01`, branch `master`)
+and toml11 with `FetchContent`, and it is
 not meant to be added to another CMake tree. `CPU_ARCH` defaults to `native` and
 applies to the solver and the fetched libraries; `generic_avx2` selects `-mavx2
 -mfma`. The examples emit intrinsic-based Ricci and RHS kernels and package
@@ -78,9 +78,11 @@ inapplicable, such as the target masses when `TPID_GIVE_BARE_MASS` is 0.
 `BSSN_ID_TYPE` must be 0 and `TPID_REPLACE_LAPSE_WITH_SQRT_CHI` must be true, or
 the run stops at startup; because the solver always sets the initial lapse to
 `sqrt(chi) = W`, native `INITIAL_LAPSE` and `TPID_INITIAL_LAPSE_PSI_EXPONENT`
-have no effect and are reported as such. Each step's terminal output reduces the
+have no effect and are reported as such. Each step checks the
 maximum absolute lapse with a NaN counted as infinity, and the solver stops with
 `the lapse became nonfinite` when the reduced value is not finite.
+`BSSN_TIME_STEP_OUTPUT_FREQ` controls terminal printing; disabling printing
+does not disable this check.
 
 Claim evidence:
 - Claim: The generated solver reads every host parameter before the TwoPunctures data are loaded, stops on a present parameter of the wrong TOML type, warns on rank 0 about every parameter-file key or table member it never read, requires `BSSN_ID_TYPE = 0` and `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = true`, and stops when the per-step maximum absolute lapse, with NaN counted as infinity, is not finite.
@@ -97,21 +99,24 @@ Claim evidence:
 After generating, each example prints the prerequisites (CMake 3.16 or newer;
 GNU compilers, since the solver build passes `-fext-numeric-literals`; MPI with
 C, C++, and Fortran bindings; OpenMP; GSL; BLAS and LAPACK; git and network
-access for Dendrolib, toml11, and spdlog) and five commands: `cd` into the
+access for Dendrolib, toml11, and spdlog) and five numbered commands: `cd` into the
 application directory, configure with `cmake -S . -B build
--DCMAKE_BUILD_TYPE=Release`, build with `cmake --build build --parallel`, solve
+-DCMAKE_BUILD_TYPE=Release`, build with `cmake --build build --parallel 4`, solve
 the TwoPunctures data with `mpiexec -n 1 build/<executable> --tpid
-pars/<stem>.toml`, and evolve with `mpiexec -n 4 build/<executable>
-pars/<stem>.toml`, noting that the default parameter file is a full production
-binary-black-hole run whose `BSSN_RK_TIME_END` can be lowered for a short test.
+pars/q1.par.lowres.toml`, and evolve with `mpiexec -n 4 build/<executable>
+pars/q1.par.lowres.toml`, noting that the default parameter file is a production binary-black-hole
+run. Add `BSSN_MAX_ITERATIONS = 100` to the parameter file for a short test.
 The solver's default output prefixes are relative, so a run from the application
-directory writes its diagnostic files, the TwoPunctures file, `vtu/`, and `cp/`
+directory writes `dat/` diagnostics, the TwoPunctures file, `vtu/`, and `cp/`
 there, and `bah/` when `AEH_SOLVER_FREQ` is positive.
+Both examples copy `nrpy/examples/q1.par.lowres.toml` next to their generated
+`pars/bssn.toml` or `pars/fccz4.toml`. The q1 file is included in the Python
+package by `setup.py`, so installed generators have the same input file.
 
 Claim evidence:
-- Claim: The generated CMake project is standalone: it declares its own project, fetches Dendrolib at `DENDROLIB_COMMIT` and toml11, and applies the selected CPU architecture to the solver and the fetched libraries.
+- Claim: The generated CMake project is standalone: it declares its own project, fetches Dendrolib from `master` and toml11, and applies the selected CPU architecture to the solver and the fetched libraries.
 - Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/CMakeLists.py`, `output_CFunctions_function_prototypes_and_construct_CMakeLists` and `DENDROLIB_COMMIT`.
+- Deciding authority: `nrpy/infrastructures/Dendro/CMakeLists.py`, `output_CFunctions_function_prototypes_and_construct_CMakeLists`.
 - Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.generate_and_build`, configures and builds each generated tree on its own.
 
 Claim evidence:

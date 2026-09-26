@@ -53,6 +53,8 @@ def register_CFunction_rhs_eval(
     CoordSystem: str = "Cartesian",
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant__Hatted",
+    enable_YBS_Gamma_constraint_adjustment: bool = False,
+    enable_YBS_momentum_constraint_adjustment: bool = False,
     enable_SSL: bool = False,
     enable_CAHD: bool = False,
     enable_intrinsics: bool = True,
@@ -67,6 +69,9 @@ def register_CFunction_rhs_eval(
     :param CoordSystem: Reference-metric coordinate system.
     :param LapseEvolutionOption: Lapse gauge condition.
     :param ShiftEvolutionOption: Shift gauge condition.
+    :param enable_YBS_Gamma_constraint_adjustment: Add Yo et al. Gamma driving.
+    :param enable_YBS_momentum_constraint_adjustment: Add Yo et al. momentum
+        damping with coefficient C_YBS_mom times CFL_FACTOR times local spacing.
     :param enable_SSL: Add slow-start lapse.
     :param enable_CAHD: Add formulation-specific Hamiltonian damping.
     :param enable_intrinsics: Generate SIMD-intrinsic kernels; every vector stays
@@ -100,11 +105,24 @@ def register_CFunction_rhs_eval(
         staged_coord_system = CoordSystem + "_RbarDD_gridfunctions"
         quantities = BSSN_quantities[staged_coord_system]
 
+        if enable_YBS_Gamma_constraint_adjustment:
+            par.register_CodeParameter(
+                "REAL", __name__, "YBS_chi", 2.0 / 3.0, add_to_parfile=True
+            )
+        if enable_YBS_momentum_constraint_adjustment:
+            par.register_CodeParameters(
+                "REAL",
+                __name__,
+                ["C_YBS_mom", "CFL_FACTOR"],
+                [1.0, 0.25],
+                add_to_parfile=True,
+            )
+
         if enable_fCCZ4:
             fccz4_rhs = fCCZ4_RHSs.get_rhs(
                 staged_coord_system,
-                enable_YBS_Gamma_constraint_adjustment=False,
-                enable_YBS_momentum_constraint_adjustment=False,
+                enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
+                enable_YBS_momentum_constraint_adjustment=enable_YBS_momentum_constraint_adjustment,
             )
             rhs_by_symbol_name: Dict[str, sp.Expr] = OrderedDict(
                 sorted(fccz4_rhs.fCCZ4_RHSs_varname_to_expr_dict.items())
@@ -115,7 +133,7 @@ def register_CFunction_rhs_eval(
                 enable_T4munu=False,
                 LapseEvolutionOption=LapseEvolutionOption,
                 ShiftEvolutionOption=ShiftEvolutionOption,
-                enable_YBS_Gamma_constraint_adjustment=False,
+                enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
                 evolved_connection_rhsU=fccz4_rhs.Lambdatilde_rhsU,
             )
             if LapseEvolutionOption == "OnePlusLog":
@@ -123,8 +141,8 @@ def register_CFunction_rhs_eval(
         else:
             bssn_rhs = BSSN_RHSs.get_rhs(
                 staged_coord_system,
-                enable_YBS_Gamma_constraint_adjustment=False,
-                enable_YBS_momentum_constraint_adjustment=False,
+                enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
+                enable_YBS_momentum_constraint_adjustment=enable_YBS_momentum_constraint_adjustment,
             )
             rhs_by_symbol_name = OrderedDict(
                 sorted(bssn_rhs.BSSN_RHSs_varname_to_expr_dict.items())
@@ -135,6 +153,7 @@ def register_CFunction_rhs_eval(
                 enable_T4munu=False,
                 LapseEvolutionOption=LapseEvolutionOption,
                 ShiftEvolutionOption=ShiftEvolutionOption,
+                enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
             )
 
         rhs_by_symbol_name["alpha_rhs"] = alpha_rhs
@@ -343,6 +362,12 @@ const {scalar_type} {prefix}grid_spacing = dx_block[0];
     GRIDX_TO_X(block.getBlockNode().minX()) - padding_block * dx_block[0],
     GRIDY_TO_Y(block.getBlockNode().minY()) - padding_block * dx_block[1],
     GRIDZ_TO_Z(block.getBlockNode().minZ()) - padding_block * dx_block[2]}};"""
+        if enable_YBS_momentum_constraint_adjustment:
+            geometry += (
+                f"\nconst {scalar_type} {prefix}dsmin = "
+                "std::min({std::abs(dx_block[0]), std::abs(dx_block[1]), "
+                "std::abs(dx_block[2])});"
+            )
         input_bindings = []
         rhs_bindings = []
         for index, name in enumerate(evol_order):
@@ -372,6 +397,7 @@ const {scalar_type} {prefix}grid_spacing = dx_block[0];
                 "time_step",
                 "grid_spacing",
                 *(("SSL_exp_factor",) if enable_SSL else ()),
+                *(("dsmin",) if enable_YBS_momentum_constraint_adjustment else ()),
             )
             preloop += [
                 f"[[maybe_unused]] const REAL_SIMD_ARRAY {name} = ConstSIMD(NOSIMD{name});"

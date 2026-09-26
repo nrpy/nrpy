@@ -161,6 +161,12 @@ constraint norms, apparent-horizon calls, wave extraction, ADM quantities,
 field output, timing, checkpoint, and restart. TwoPunctures is application-local
 initial data rather than a call into chi-specific `BSSN_GR` code.
 
+Grid size is written initially and after each scheduled remesh check to
+`dat/dgr_GridInfo.dat` with the default prefix. An actual remesh also updates
+the effective VTU and gravitational-wave frequencies from the current maximum
+mesh level. See [Grid size and native output cadence](constraints-and-diagnostic-norms.md#grid-size-and-native-output-cadence)
+for the columns, count reduction, scaling, and restart behavior.
+
 ## Sources
 
 - [Dendrolib block.h](https://github.com/paralab/Dendro-5.01/blob/master/include/block.h) - `ot::Block` geometry.

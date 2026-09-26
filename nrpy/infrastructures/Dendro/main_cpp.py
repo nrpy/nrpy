@@ -632,10 +632,12 @@ int main(int argc, char** argv) {
         parameters.get<DendroScalar>("BSSN_LOAD_IMB_TOL", 0.1);
     const unsigned split_fix =
         parameters.get<unsigned>("BSSN_SPLIT_FIX", 2);
-    const unsigned diagnostic_frequency =
-        parameters.get<unsigned>("BSSN_TIME_STEP_OUTPUT_FREQ", 25);
+    const unsigned terminal_frequency =
+        parameters.get<unsigned>("BSSN_TIME_STEP_OUTPUT_FREQ", 80);
     const unsigned vtu_frequency =
-        parameters.get<unsigned>("BSSN_IO_OUTPUT_FREQ", 8);
+        parameters.get<unsigned>("BSSN_IO_OUTPUT_FREQ", 80);
+    const bool scale_output_frequencies =
+        parameters.get<bool>("BSSN_SCALE_VTU_AND_GW_EXTRACTION", true);
     // VTU field selection and slicing, with Dendro-GR BSSN_GR's defaults: the
     // first entry of each index list, written on the z-normal slice through the
     // domain center.
@@ -668,7 +670,9 @@ int main(int argc, char** argv) {
     const unsigned apparent_horizon_frequency =
         parameters.get<unsigned>("AEH_SOLVER_FREQ", 0);
     const unsigned gravitational_wave_frequency =
-        parameters.get<unsigned>("BSSN_GW_EXTRACT_FREQ", 0);
+        parameters.get<unsigned>("BSSN_GW_EXTRACT_FREQ", 80);
+    const unsigned postmerger_gravitational_wave_frequency =
+        parameters.get<unsigned>("BSSN_GW_EXTRACT_FREQ_AFTER_MERGER", 80);
     const std::vector<DendroScalar> gravitational_wave_radii =
         parameters.get<std::vector<DendroScalar>>(
             "BSSN_GW_RADAII", std::vector<DendroScalar>{{50.0}});
@@ -885,7 +889,7 @@ int main(int argc, char** argv) {
         + r"""_params_validate(params);
     const std::string output_prefix = parameters.get<std::string>(
         "BSSN_PROFILE_FILE_PREFIX", """
-        + f'"{profile_name}"'
+        + '"dat/dgr"'
         + r""");
     const std::string vtu_prefix = parameters.get<std::string>(
         "BSSN_VTU_FILE_PREFIX", """
@@ -1157,7 +1161,7 @@ int main(int argc, char** argv) {
         gravitational_wave_tolerance, amr_coarsening_factor,
         postmerger_amr_coarsening_factor, refinement_variables,
         remesh_frequency, postmerger_remesh_frequency,
-        diagnostic_frequency, vtu_frequency,
+        terminal_frequency, vtu_frequency,
         checkpoint_frequency, output_prefix, vtu_prefix, checkpoint_prefix,
         vtu_z_slice_only, vtu_evolved_fields, vtu_constraint_fields,
         excision_centers, excision_radii, black_hole_masses,
@@ -1166,7 +1170,8 @@ int main(int argc, char** argv) {
         apparent_horizon_finder.get(), gravitational_wave_frequency,
         gravitational_wave_radii, gravitational_wave_maximum_l, nyquist_mode,
         initial_black_hole_velocities, time_begin,
-        Point(0.0, 0.0, 0.0));
+        Point(0.0, 0.0, 0.0), scale_output_frequencies,
+        postmerger_gravitational_wave_frequency);
     context.params = params;
     ts::TSInfo time_info{};
     time_info._m_uiStep = 0;
@@ -1235,6 +1240,7 @@ int main(int argc, char** argv) {
           -static_cast<int>(restored_maximum_depth));
       time_step = context.get_ts_info()._m_uiTh;
     }  // END ELSE: restored checkpoint grid
+    context.update_output_frequencies();
     ts::ETS<DendroScalar, """
         + solver_namespace
         + r"""::Ctx> time_stepper(&context);
@@ -1246,6 +1252,7 @@ int main(int argc, char** argv) {
     // repeat the step's horizon find, which the restored finder history
     // would then record twice at the same time.
     if (!restored) {
+      context.write_grid_summary_data();
       if (context.diagnostic_output() != 0)
         throw std::runtime_error("initial diagnostic output failed");
       if (context.gravitational_wave_output() != 0)
@@ -1268,7 +1275,8 @@ int main(int argc, char** argv) {
       if (context.terminal_output() != 0)
         throw std::runtime_error("the lapse became nonfinite");
       time_stepper.evolve();
-      if (context.is_remesh()) {
+      const bool remesh_test = context.is_remesh_due();
+      if (remesh_test && context.is_remesh()) {
         context.remesh_and_gridtransfer(
             grain_size, load_imbalance_tolerance, split_fix);
         context.post_timestep(context.get_evolution_vars());
@@ -1282,7 +1290,9 @@ int main(int argc, char** argv) {
         ts::TSInfo remeshed_time_info = context.get_ts_info();
         remeshed_time_info._m_uiTh = cfl * remeshed_minimum_dx;
         context.set_ts_info(remeshed_time_info);
+        context.update_output_frequencies();
       }  // END IF: remesh this step
+      if (remesh_test) context.write_grid_summary_data();
       if (context.evolve_excision_centers() != 0)
         throw std::runtime_error("puncture-center evolution failed");
       if (context.diagnostic_output() != 0)

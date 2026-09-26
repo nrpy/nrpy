@@ -2,7 +2,7 @@
 Generate the complete, standalone NRPy fCCZ4 application for Dendrolib.
 
 Run as ``python -m nrpy.examples.dendro_fccz4``. By default the application is
-written to ``project/NRPy_fCCZ4_GR/``, and the build and run commands are printed at
+written to ``project/Dendro_NRPy_fCCZ4/``, and the build and run commands are printed at
 the end.
 
 Author: Zachariah B. Etienne
@@ -59,7 +59,7 @@ from nrpy.infrastructures.Dendro.general_relativity import (
     twopunctures,
 )
 
-SOLVER_NAME = "NRPy_fCCZ4_GR"
+SOLVER_NAME = "Dendro_NRPy_fCCZ4"
 SOLVER_PREFIX = "FCCZ4"
 SOLVER_STEM = "fccz4"
 SOLVER_NAMESPACE = "nrpy::fccz4"
@@ -99,15 +99,31 @@ def parse_args() -> argparse.Namespace:
         default="W",
         help="evolved conformal factor (default: W)",
     )
-    parser.add_argument("--ko", dest="ko", action="store_true")
-    parser.add_argument("--no-ko", dest="ko", action="store_false")
-    parser.set_defaults(ko=True)
+    parser.add_argument(
+        "--ybs-gamma",
+        action="store_true",
+        help=(
+            "add Gamma-constraint driving (default: off); "
+            "Yo, Baumgarte and Shapiro, arXiv:gr-qc/0209066, Eq. (45); "
+            "Yo, Lin and Cao, arXiv:1205.5111, Eq. (47)"
+        ),
+    )
+    parser.add_argument(
+        "--ybs-momentum",
+        action="store_true",
+        help=(
+            "add momentum-gradient damping (default: off); "
+            "Yo, Lin and Cao, arXiv:1205.5111, Eq. (56), "
+            "with a local CFL-times-spacing coefficient"
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     """Generate the complete Dendro fCCZ4 application."""
     args = parse_args()
+    enable_KreissOliger_dissipation = True
 
     par.set_parval_from_str("Infrastructure", "Dendro")
     par.set_parval_from_str("fp_type", "double")
@@ -135,10 +151,12 @@ def main() -> None:
             SOLVER_STEM,
             enable_fCCZ4=True,
             fd_order=fd_order,
-            enable_KreissOliger_dissipation=args.ko,
+            enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
             CoordSystem=COORD_SYSTEM,
             LapseEvolutionOption=LAPSE_EVOLUTION_OPTION,
             ShiftEvolutionOption=SHIFT_EVOLUTION_OPTION,
+            enable_YBS_Gamma_constraint_adjustment=args.ybs_gamma,
+            enable_YBS_momentum_constraint_adjustment=args.ybs_momentum,
             enable_SSL=True,
             enable_CAHD=True,
         )
@@ -262,7 +280,7 @@ typedef double DOUBLE;
             ko_fd_order,
             args.fd_order,
             required_padding,
-            args.ko,
+            enable_KreissOliger_dissipation,
             FD_ORDERS,
             {order: order // 2 for order in FD_ORDERS},
         ),
@@ -309,9 +327,12 @@ typedef double DOUBLE;
             ko_fd_order,
             args.fd_order,
             required_padding,
-            args.ko,
+            enable_KreissOliger_dissipation,
         ),
     }
+    artifacts[module_root + "pars/q1.par.lowres.toml"] = (
+        Path(__file__).with_name("q1.par.lowres.toml").read_text(encoding="utf-8")
+    )
     artifacts[module_root + "generated/include/simd_intrinsics.h"] = (
         Path(nrpy.helpers.__file__).parent / "simd_intrinsics.h"
     ).read_text(encoding="utf-8")
@@ -342,10 +363,14 @@ typedef double DOUBLE;
         f"{args.conformal_factor} evolution, SSL, fCCZ4 CAHD, "
         "TwoPunctures alpha=W, and eta=1 enabled."
     )
+    print(
+        f"TwoPunctures parameter files: pars/{SOLVER_STEM}.toml (generated defaults) "
+        "and pars/q1.par.lowres.toml (q=1 BBH profile)."
+    )
     print()
     print(
         CMakeLists.build_and_run_instructions(
-            solver_dir, EXECUTABLE_NAME, f"pars/{SOLVER_STEM}.toml"
+            solver_dir, EXECUTABLE_NAME, "pars/q1.par.lowres.toml"
         )
     )
 

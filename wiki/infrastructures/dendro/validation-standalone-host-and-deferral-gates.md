@@ -81,6 +81,15 @@ No new test file, test case, doctest prompt, or stored oracle may be added
 without express user permission. Runtime results belong in active review or CI
 output, not as KB snapshots.
 
+The helper uses fixed output frequencies for its stored-reference profiles by
+setting `BSSN_SCALE_VTU_AND_GW_EXTRACTION = false`; the generated production
+parameter files enable native scaling. The helper reads the native GridInfo
+CSV header and includes grid counts, timestep, and physical time in its
+existing restart and rank comparisons. Rank comparisons exclude wall time and active MPI rank count. Exact restart
+comparisons exclude only the GridInfo wall-time column; every other byte in
+GridInfo and the other output files must match. These fixed-cadence checks do
+not establish that native frequency scaling is correct.
+
 ## Sources
 
 - [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) - complete BSSN application generation.

@@ -2,8 +2,8 @@ r"""
 Generate, build, run, and check the complete NRPy Dendro applications.
 
 For one formulation (BSSN or fCCZ4), this helper generates the W and chi
-applications twice each, builds them standalone against the Dendrolib commit
-pinned by the generator (or against a named Dendrolib branch or tag), runs
+applications twice each, builds them standalone against Dendrolib master
+(or against another named Dendrolib branch or tag), runs
 short MPI TwoPunctures evolutions, and checks the output against exact
 identities, values computed independently of the evolution, comparisons between
 runs of the same binary, and a stored reference for the evolved diagnostics.
@@ -18,8 +18,8 @@ Usage (from the repository root):
         [--build-jobs 4] [--dendrolib-ref master] [--update-reference]
 
 Run without arguments, the helper runs its doctests. Configuring each
-generated project downloads the Dendrolib and toml11 revisions pinned by the
-generated CMakeLists.txt, so the run needs network access. With
+generated project downloads Dendrolib master and the toml11 release selected by
+the generated CMakeLists.txt, so the run needs network access. With
 --dendrolib-ref, the helper instead clones that Dendrolib branch or tag from the
 repository named in the generated CMakeLists.txt, builds against it, and prints
 the resolved commit; such a run is evidence only for that commit.
@@ -60,8 +60,8 @@ LOG_TAIL_LINES = 60
 NODE_CEILING = 2_500_000
 
 SOLVER = {
-    "bssn": ("NRPy_BSSN_GR", "nrpyBssnSolver", "bssn"),
-    "fccz4": ("NRPy_fCCZ4_GR", "nrpyFccz4Solver", "fccz4"),
+    "bssn": ("Dendro_NRPy_BSSN", "nrpyBssnSolver", "bssn"),
+    "fccz4": ("Dendro_NRPy_fCCZ4", "nrpyFccz4Solver", "fccz4"),
 }
 
 COMMON_OVERRIDES: Dict[str, str] = {
@@ -72,6 +72,7 @@ COMMON_OVERRIDES: Dict[str, str] = {
     "BSSN_DENDRO_GRAIN_SZ": "50",
     "BSSN_WAVELET_TOL": "0.001",
     "BSSN_GW_EXTRACT_FREQ": "4",
+    "BSSN_SCALE_VTU_AND_GW_EXTRACTION": "false",
     "BSSN_GW_RADAII": "[50.0, 100.0]",
     "BSSN_GW_NUM_RADAII": "2",
     "BSSN_GW_L_MODES": "[2, 3, 4]",
@@ -104,6 +105,7 @@ PROFILE_O: Dict[str, str] = {
     "BSSN_INIT_GRID_ITER": "10",
     "BSSN_MAX_ITERATIONS": "4",
     "BSSN_TIME_STEP_OUTPUT_FREQ": "1",
+    "BSSN_GW_EXTRACT_FREQ": "1",
     "BSSN_REMESH_TEST_FREQ": "0",
     "AEH_SOLVER_FREQ": "0",
     "BSSN_IO_OUTPUT_FREQ": "0",
@@ -370,7 +372,7 @@ def apply_overrides(base_text: str, overrides: Dict[str, str]) -> str:
 
 def parse_table(path: Path) -> Tuple[List[str], List[List[float]]]:
     r"""
-    Parse a whitespace-separated numeric table and its column names.
+    Parse a whitespace-separated numeric table or native GridInfo CSV.
 
     Column names come from the "# column N = <name>: <meaning>" label lines;
     other "#" lines are skipped.
@@ -393,7 +395,12 @@ def parse_table(path: Path) -> Tuple[List[str], List[List[float]]]:
     labels: List[str] = []
     rows: List[List[float]] = []
     for line in path.read_text().splitlines():
-        fields = line.split()
+        fields = (
+            line.split(",") if path.name.endswith("_GridInfo.dat") else line.split()
+        )
+        if fields and fields[0] == "timeStep":
+            labels = fields
+            continue
         if fields[:2] == ["#", "column"] and "=" in line:
             labels.append(line.partition("=")[2].partition(":")[0].strip())
             continue
@@ -481,12 +488,15 @@ def row_at(rows: List[List[float]], step: int) -> List[float]:
     raise CheckError(f"no row for step {step}")
 
 
-def trees_identical(first: Path, second: Path) -> Tuple[bool, str]:
+def trees_identical(
+    first: Path, second: Path, ignore_grid_wall_time: bool = False
+) -> Tuple[bool, str]:
     """
     Compare two directory trees file by file.
 
     :param first: First tree.
     :param second: Second tree.
+    :param ignore_grid_wall_time: Exclude only the GridInfo wall-time column.
     :return: Whether they are identical, and the first difference found.
 
     >>> import tempfile
@@ -506,7 +516,18 @@ def trees_identical(first: Path, second: Path) -> Tuple[bool, str]:
         missing = sorted(set(map(str, names_a)) ^ set(map(str, names_b)))
         return False, f"file lists differ: {missing[:5]}"
     for name in names_a:
-        if (first / name).read_bytes() != (second / name).read_bytes():
+        contents = [(tree / name).read_bytes() for tree in (first, second)]
+        if ignore_grid_wall_time and name.name.endswith("_GridInfo.dat"):
+            # MPI_Wtime differs between otherwise identical evolutions.
+            for index, content in enumerate(contents):
+                lines = []
+                for line in content.split(b"\n"):
+                    fields = line.split(b",")
+                    if len(fields) == 7 and fields[0] != b"timeStep":
+                        fields[3] = b"<wall time>"
+                    lines.append(b",".join(fields))
+                contents[index] = b"\n".join(lines)
+        if contents[0] != contents[1]:
             return False, f"{name} differs"
     return True, ""
 
@@ -689,18 +710,6 @@ class Leg:
                     self.work / "dendrolib-clone.log",
                     TIMEOUT_CONFIGURE,
                 )
-                run_checked(
-                    ["git", "-C", str(self.dendrolib_source), "rev-parse", "HEAD"],
-                    self.work,
-                    self.work / "dendrolib-commit.log",
-                    TIMEOUT_VERSION,
-                )
-                commit = (self.work / "dendrolib-commit.log").read_text().strip()
-                print(
-                    f"version: dendrolib: {commit} ({self.dendrolib_ref} of {repository});"
-                    " results are evidence only for this commit",
-                    flush=True,
-                )
             configure.append(
                 f"-DFETCHCONTENT_SOURCE_DIR_DENDROLIB={self.dendrolib_source}"
             )
@@ -709,6 +718,23 @@ class Leg:
             self.work,
             self.work / f"configure-{conformal}.log",
             TIMEOUT_CONFIGURE,
+        )
+        dendrolib_source = (
+            self.dendrolib_source or self.work / f"deps-{conformal}/dendrolib-src"
+        )
+        commit_log = self.work / f"dendrolib-commit-{conformal}.log"
+        run_checked(
+            ["git", "-C", str(dendrolib_source), "rev-parse", "HEAD"],
+            self.work,
+            commit_log,
+            TIMEOUT_VERSION,
+        )
+        with commit_log.open() as stream:
+            commit = stream.read(128).strip()
+        print(
+            f"version: dendrolib ({conformal}): {commit}; "
+            "results are evidence only for this commit",
+            flush=True,
         )
         run_checked(
             ["cmake", "--build", str(build), "--parallel", str(self.build_jobs)],
@@ -798,7 +824,11 @@ class Leg:
         if not alphas or not all(math.isfinite(v) for v in numbers):
             failed.append("nonfinite or missing output")
         header, rows = parse_table(run_dir / "dat" / "dgr_Constraints.dat")
-        cadence = int(overrides["BSSN_TIME_STEP_OUTPUT_FREQ"])
+        cadence = int(
+            overrides.get(
+                "BSSN_GW_EXTRACT_FREQ", COMMON_OVERRIDES["BSSN_GW_EXTRACT_FREQ"]
+            )
+        )
         last = int(overrides["BSSN_MAX_ITERATIONS"])
         steps = [int(round(r[0])) for r in rows]
         times = [r[1] for r in rows]
@@ -880,7 +910,7 @@ class Leg:
         differences = [
             detail
             for same, detail in (
-                trees_identical(run_a / sub, run_b / sub)
+                trees_identical(run_a / sub, run_b / sub, ignore_grid_wall_time=True)
                 for sub in ("dat", "bah", "vtu")
             )
             if not same
@@ -890,7 +920,7 @@ class Leg:
             "exact runtime identity",
             "restart 0-4-8 equals the uninterrupted run in dat/, bah/, vtu/",
             "identical" if not differences else "; ".join(differences),
-            "byte-identical",
+            "byte-identical except GridInfo wall time",
             not differences,
             conformal,
         )
@@ -1146,6 +1176,38 @@ class Leg:
                     for ca, cb in zip(mine[s], theirs[s])
                     for a, b in ((ca.real, cb.real), (ca.imag, cb.imag))
                 ]
+            elif path.name.endswith("_GridInfo.dat"):
+                grid_names = [
+                    "timeStep",
+                    "simTime",
+                    "commSize",
+                    "wTime",
+                    "meshSize",
+                    "totalGridPoints",
+                    "stepSize",
+                ]
+                header, rows_a = parse_table(path)
+                other_header, rows_b = parse_table(other)
+                if header != grid_names or other_header != grid_names:
+                    raise CheckError("GridInfo columns differ from Dendro-GR")
+                shared = sorted(
+                    set(steps)
+                    & {int(r[0]) for r in rows_a}
+                    & {int(r[0]) for r in rows_b}
+                )
+                if not shared:
+                    raise CheckError(f"{path.name}: no common steps in {steps}")
+                # Wall times and MPI task counts can differ between these runs.
+                pairs = [
+                    (row_at(rows_a, s)[i], row_at(rows_b, s)[i])
+                    for s in shared
+                    for i in (0, 1, 4, 5, 6)
+                ]
+                nodes_equal = nodes_equal and all(
+                    row_at(rows_a, s)[i] == row_at(rows_b, s)[i]
+                    for s in shared
+                    for i in (4, 5)
+                )
             else:
                 header, rows_a = parse_table(path)
                 rows_b = parse_table(other)[1]
@@ -1387,6 +1449,7 @@ class Leg:
                     o4,
                     BSSN_CFL_FACTOR="3.0",
                     BSSN_TIME_STEP_OUTPUT_FREQ="100000",
+                    BSSN_GW_EXTRACT_FREQ="0",
                     BSSN_MAX_ITERATIONS="40",
                 ),
                 2,
@@ -1495,11 +1558,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     parser.add_argument(
         "--dendrolib-ref",
-        help="build against this Dendrolib branch or tag instead of the pinned commit",
+        help="build against this Dendrolib branch or tag instead of master",
     )
     args = parser.parse_args(argv)
     if args.update_reference and args.dendrolib_ref is not None:
-        parser.error("--update-reference requires the pinned Dendrolib revision")
+        parser.error("--update-reference cannot be combined with --dendrolib-ref")
     if args.ranks < 4:
         parser.error("--ranks must be at least 4, above the 3-rank comparison run")
     report = Report()

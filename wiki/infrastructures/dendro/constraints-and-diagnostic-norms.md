@@ -93,6 +93,49 @@ the same reported time. Matching initial data, field representation, mesh,
 excision, and norm remain separate prerequisites; agreement of one scalar norm
 does not prove equality of the evolved fields or equations.
 
+### Grid size and native output cadence
+
+Both formulations append `<BSSN_PROFILE_FILE_PREFIX>_GridInfo.dat`. The
+emitted parameter file sets the prefix to `dat/dgr`, giving
+`dat/dgr_GridInfo.dat`. This file follows Dendro-GR's CSV format, including its
+uncommented header:
+
+```text
+timeStep,simTime,commSize,wTime,meshSize,totalGridPoints,stepSize
+```
+
+The columns give the iteration, physical time, number of active MPI ranks,
+`MPI_Wtime()`, global number of octants, global number of owned continuous-
+Galerkin nodes, and current timestep. Counts include nodes inside the diagnostic
+excision spheres. Floating-point values use scientific notation with 12 digits
+after the decimal point. Fresh runs write the initialized grid; subsequent rows
+follow each scheduled remesh check, even when the grid stays unchanged. A
+restart skips the restored iteration's initial output and appends without
+repeating a nonempty file's header. Counts are reduced from the current mesh.
+
+`BSSN_SCALE_VTU_AND_GW_EXTRACTION` defaults to `true`. After initialization,
+restoration, and an actual remesh, the solver computes
+`level_shift = max(0, BSSN_MAXDEPTH - 2 - current_maximum_level)`.
+A positive base frequency becomes `max(1, base_frequency >> level_shift)`;
+zero remains zero. This follows Dendro-GR's scaling for VTU and gravitational-
+wave output, with a guard for grids deeper than its reference level. Setting
+the parameter to `false` uses the base frequencies unchanged.
+
+Constraints and ADM quantities use the effective gravitational-wave cadence.
+`BSSN_GW_EXTRACT_FREQ` supplies its base before merger;
+`BSSN_GW_EXTRACT_FREQ_AFTER_MERGER` supplies it when frequencies are next
+updated after merger. `BSSN_IO_OUTPUT_FREQ` supplies the VTU base.
+`BSSN_TIME_STEP_OUTPUT_FREQ` controls terminal printing without scaling;
+the finite-lapse check still runs every iteration. The generated parameter
+files set these base output frequencies to 80. Native scaling can therefore
+produce diagnostic rows more often than every 80 iterations on a coarser grid.
+
+Claim evidence:
+- Claim: Both generated formulations use Dendro-GR's GridInfo filename, CSV columns, current full-mesh counts, and scientific precision; they write initially and at remesh checks. VTU and gravitational-wave frequencies use native level scaling, and constraints and ADM quantities follow the effective gravitational-wave frequency.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::write_grid_summary_data`, `Ctx::update_output_frequencies`, `Ctx::is_remesh_due`, `Ctx::diagnostic_output`, and `Ctx::adm_output`; `nrpy/infrastructures/Dendro/main_cpp.py`, initialization and evolution loop; `nrpy/infrastructures/Dendro/param_toml.py`, emitted defaults.
+- Corroboration: Dendro-GR `BSSN_GR/src/bssnCtx.cpp`, `BSSNCtx::write_grid_summary_data` and `calculate_full_grid_size`; `BSSN_GR/include/parameters.h`, `scaleOutputFreq`; `BSSN_GR/src/bssngr_main.cpp`, frequency updates, GridInfo calls, and constraint-output scheduling.
+
 ## Sources
 
 - [BSSN_constraints.py](../../../nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py) - Dendro momentum-index lowering at code generation.
@@ -104,6 +147,10 @@ does not prove equality of the evolved fields or equations.
 - [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - unique-node norm and output.
 - [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - post-remesh output order.
 - [Dendro-GR grUtils.tcc](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/include/grUtils.tcc) - native unique-owned-node RMS and excision convention, and the constraint file name and header.
+
+- [Dendro-GR bssnCtx.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssnCtx.cpp) - native GridInfo writer and mesh counts.
+- [Dendro-GR parameters.h](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/include/parameters.h) - native frequency scaling.
+- [Dendro-GR bssngr_main.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssngr_main.cpp) - native output scheduling.
 
 ## See Also
 

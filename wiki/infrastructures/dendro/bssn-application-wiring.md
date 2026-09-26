@@ -1,6 +1,6 @@
 # BSSN Application Wiring
 
-> Describe BSSN equations, initial data, conversions, and runtime services in `NRPy_BSSN_GR`. · Status: provisional
+> Describe BSSN equations, initial data, conversions, and runtime services in `Dendro_NRPy_BSSN`. · Status: provisional
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -13,6 +13,15 @@ Runtime parameter input can override the generated eta default, but cannot
 change the evolved conformal factor of an already generated binary.
 
 ## Detail
+
+Each generated directory contains `pars/bssn.toml` with the generated
+runtime defaults and `pars/q1.par.lowres.toml` with the supplied equal-mass
+TwoPunctures BBH parameters. Both files work with the single-rank `--tpid`
+command and the MPI evolution command. The packaged q1 file starts a fresh
+run, sets a large end time of 1000000, omits an explicit iteration cap,
+and uses native scaling with base output frequencies of 80. The copied q1 file
+is identical in the BSSN and fCCZ4 directories; each executable constructs its
+own evolved fields from the same physical initial data.
 
 The BSSN CAHD contribution depends on the evolved conformal factor:
 
@@ -68,21 +77,21 @@ fields used by ADM surface quantities; waveform extraction evaluates Psi4
 directly from the selected BSSN fields. Generated runtime services also provide
 physical boundaries, conformal-factor volume-weighted and unique-node constraint
 diagnostics, checkpoint and restart, and scheduled output. ADM surface
-quantities are written to `*_ADM.dat`: every `BSSN_TIME_STEP_OUTPUT_FREQ` steps,
+quantities are written to `*_ADM.dat`: at the effective gravitational-wave output cadence,
 when `BSSN_GW_RADAII` is non-empty, one row with the step, time, outermost
 extraction radius, and the ADM energy, linear momentum, and angular momentum,
 printed with up to ten significant digits (default notation, trailing zeros
-dropped). Every ASCII diagnostic file the application writes (`*_ADM.dat`, the
-two constraint files, and the Psi4 mode files) opens with column labels in the
+dropped). The labeled ASCII diagnostic files (`*_ADM.dat`, the
+two constraint files, and the Psi4 mode files) open with column labels in the
 style of BHaHAHA's horizon diagnostics files: when the file is missing or empty,
 rank 0 first writes a title line naming the formulation and evolved conformal
 factor, then one `# column N = <name>: <meaning>` line per column. A restart
 appends below the existing labels.
 
 Claim evidence:
-- Claim: Every `BSSN_TIME_STEP_OUTPUT_FREQ` steps, when `BSSN_GW_RADAII` is non-empty, rank 0 appends one row to `<BSSN_PROFILE_FILE_PREFIX>_ADM.dat` with the step, time, the last listed extraction radius, and the seven ADM surface quantities (energy, three linear-momentum and three angular-momentum components), printed with up to ten significant digits in default notation. This applies to the fCCZ4 application as well.
+- Claim: At the effective gravitational-wave output cadence, when `BSSN_GW_RADAII` is non-empty, rank 0 appends one row to `<BSSN_PROFILE_FILE_PREFIX>_ADM.dat` with the step, time, the last listed extraction radius, and the seven ADM surface quantities (energy, three linear-momentum and three angular-momentum components), printed with up to ten significant digits in default notation. This applies to the fCCZ4 application as well.
 - Role: public/scientific contract
-- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::adm_output` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`, the `BSSN_TIME_STEP_OUTPUT_FREQ` and `BSSN_GW_RADAII` reads.
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::adm_output` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`, the `BSSN_GW_EXTRACT_FREQ` and `BSSN_GW_RADAII` reads; `Ctx::update_output_frequencies`.
 - Corroboration: `nrpy/infrastructures/Dendro/general_relativity/adm_quantities.py`, `register_CFunction_adm_quantities`, the order of the seven quantities; `nrpy/examples/tests/dendro_application_check.py`, `Leg.check_run_a` column use.
 
 Claim evidence:
@@ -150,7 +159,7 @@ physical time.
 The same parameter file alone does not make generated and native BSSN
 evolutions equivalent:
 
-| Choice | Generated `NRPy_BSSN_GR` | Native CPU `BSSN_GR` |
+| Choice | Generated `Dendro_NRPy_BSSN` | Native CPU `BSSN_GR` |
 | --- | --- | --- |
 | Evolved conformal factor | W by default; `--conformal-factor chi` selects chi at generation | chi |
 | TwoPunctures initial lapse | Always `alpha=(psi_background+u)^(-2)=W`; startup rejects `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = false`, and `INITIAL_LAPSE` and `TPID_INITIAL_LAPSE_PSI_EXPONENT` are reported as having no effect | `TPID_REPLACE_LAPSE_WITH_SQRT_CHI=true` is needed to replace the ordinary `INITIAL_LAPSE=2` result with full-psi W |
@@ -171,6 +180,37 @@ Claim evidence:
 - Role: public/scientific contract
 - Deciding authority: `nrpy/examples/dendro_bssn.py`, `main`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `BSSN_GR/src/rhs.cpp`, CPU eta, SSL/CAHD include selection, and CAKO branches; `BSSN_GR/src/TwoPunctures.cpp`, lapse replacement.
 - Corroboration: `nrpy/infrastructures/Dendro/CodeParameters.py`, q1 parameter mapping; `BSSN_GR/src/eta_RIT.inc.cpp`, radial formula; `BSSN_GR/src/parameters.cpp`, lapse and CAKO settings; `BSSN_GR/src/bssngr_main.cpp`, post-merger CAKO switch.
+
+### Optional Yo et al. adjustments
+
+Both examples accept `--ybs-gamma` and `--ybs-momentum` independently or
+together. Both default to off. `--ybs-gamma` forwards the canonical Gamma
+constraint adjustment to the evolution and shift-driver equations. Its runtime
+coefficient is `YBS_chi`, defaulting to 2/3; this is the additional NRPy
+coefficient, with Brown's BSSN contribution retained separately. The help cites
+[Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066](https://arxiv.org/abs/gr-qc/0209066),
+Eq. (45), and [Yo, Lin, and Cao, arXiv:1205.5111](https://arxiv.org/abs/1205.5111),
+Eq. (47).
+
+`--ybs-momentum` adds the covariant, symmetric trace-free gradient of the
+lower conformal momentum residual to the conformal extrinsic-curvature RHS.
+The help cites Yo, Lin, and Cao, Eq. (56). NRPy multiplies this term by
+`C_YBS_mom * BSSN_CFL_FACTOR * min(abs(dx), abs(dy), abs(dz))`, using the
+current Cartesian block spacing and runtime CFL factor; `C_YBS_mom` defaults
+to 1. This local coefficient is NRPy's timestep scaling of the paper's term.
+It adds no evolved gridfunction. See [YBS-MOM](../../equations/general-relativity/ybs-momentum-damping.md)
+for the equation and the limits of a damping or stability claim.
+
+Kreiss--Oliger generation is controlled by
+`enable_KreissOliger_dissipation` inside each example, defaulting to `True`.
+There are no `--ko` or `--no-ko` arguments. The runtime strength remains
+`KO_DISS_SIGMA`.
+
+Claim evidence:
+- Claim: The Dendro examples expose independent default-off Gamma and momentum adjustments; the momentum coefficient uses the current block's minimum physical spacing and the evolution CFL factor, without adding evolved fields.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `parse_args` and `main`; `nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py`, `register_CFunction_rhs_eval`; `nrpy/infrastructures/Dendro/CodeParameters.py`, `Q1_TOML_PARAMETER_NAMES`.
+- Corroboration: `nrpy/equations/general_relativity/BSSN_RHSs.py` and `fCCZ4_RHSs.py`, canonical adjustment construction; the cited Yo et al. equations.
 
 ## Sources
 

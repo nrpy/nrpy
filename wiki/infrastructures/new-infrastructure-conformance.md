@@ -38,7 +38,7 @@ emit and contain no formulation name. Physics lives under
 `Makefile_helpers.py`, `CodeParameters.py`.
 
 **Wrong** — a generic layer with formulation-named templates and
-`NRPy_fCCZ4_GR/` hardcoded into path construction. A second formulation
+`Dendro_NRPy_fCCZ4/` hardcoded into path construction. A second formulation
 could not be lowered through that layer without editing it, which means the
 abstraction did not exist.
 
@@ -129,8 +129,8 @@ name could imply that the target code supplied it. Names required for target-cod
 integration still follow that code's source.
 
 **Right** — Cactus says thorn, so ETLegacy says `thorn_name`. NRPy's complete
-Dendro applications use directories and CMake projects `NRPy_BSSN_GR` and
-`NRPy_fCCZ4_GR`, named after native `BSSN_GR`, with namespaces `nrpy::bssn` and
+Dendro applications use directories and CMake projects `Dendro_NRPy_BSSN` and
+`Dendro_NRPy_fCCZ4`, named after native `BSSN_GR`, with namespaces `nrpy::bssn` and
 `nrpy::fccz4`. Child files and functions retain the formulation stem, while
 their executable targets identify the NRPy implementation.
 

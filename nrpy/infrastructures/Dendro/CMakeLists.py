@@ -12,9 +12,6 @@ from typing import Dict, Sequence
 
 import nrpy.c_function as cfc
 
-# Dendrolib (paralab/Dendro-5.01) commit the generated applications fetch.
-DENDROLIB_COMMIT = "6cbc9a7f668c045070e67c3fec4f302857f74055"
-
 
 def output_CFunctions_function_prototypes_and_construct_CMakeLists(
     solver_name: str,
@@ -147,7 +144,7 @@ def output_CFunctions_function_prototypes_and_construct_CMakeLists(
             "FetchContent_MakeAvailable(toml11)",
             "FetchContent_Declare(dendrolib",
             '  GIT_REPOSITORY "https://github.com/paralab/Dendro-5.01"',
-            f'  GIT_TAG "{DENDROLIB_COMMIT}")',
+            '  GIT_TAG "master")',
             "FetchContent_MakeAvailable(dendrolib)",
             "",
             f"add_executable({executable_name}",
@@ -194,26 +191,31 @@ def build_and_run_instructions(
     :return: Prerequisites and shell commands, one per line.
 
     Doctests:
-    >>> print(build_and_run_instructions(Path("project/NRPy_BSSN_GR"), "nrpyBssnSolver", "pars/bssn.toml"))
+    >>> print(build_and_run_instructions(Path("project/Dendro_NRPy_BSSN"), "nrpyBssnSolver", "pars/bssn.toml"))
     Prerequisites: CMake 3.16 or newer; GNU compilers (gcc, g++ with C++17,
     gfortran); MPI with C, C++, and Fortran bindings; OpenMP; GSL; BLAS and
     LAPACK; git and network access (CMake fetches Dendrolib, toml11, and spdlog
     on first configure).
     To build and run, copy and paste:
     <BLANKLINE>
-    cd project/NRPy_BSSN_GR
+    # 1. Enter the generated application directory.
+    cd project/Dendro_NRPy_BSSN
+    # 2. Configure the CMake project.
     cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-    cmake --build build --parallel
+    # 3. Compile the executable with four build jobs.
+    cmake --build build --parallel 4
+    # 4. Generate TwoPunctures initial data on one MPI rank.
     mpiexec -n 1 build/nrpyBssnSolver --tpid pars/bssn.toml
+    # 5. Evolve the binary on four MPI ranks.
     mpiexec -n 4 build/nrpyBssnSolver pars/bssn.toml
     <BLANKLINE>
     The --tpid run solves the TwoPunctures initial data once, on one MPI rank;
-    the second command evolves it, with -n set to the MPI ranks to use. The
-    default parameter file is a full production binary-black-hole run; lower
-    BSSN_RK_TIME_END in it for a short test.
-    >>> text = build_and_run_instructions(Path("my dir/NRPy_BSSN_GR"), "x", "p.toml")
+    step 5 evolves it, with -n set to the MPI ranks to use. The
+    default parameter file is a production binary-black-hole run. For a short
+    test, add BSSN_MAX_ITERATIONS = 100 to the parameter file before step 5.
+    >>> text = build_and_run_instructions(Path("my dir/Dendro_NRPy_BSSN"), "x", "p.toml")
     >>> [line for line in text.splitlines() if line.startswith("cd ")]
-    ["cd 'my dir/NRPy_BSSN_GR'"]
+    ["cd 'my dir/Dendro_NRPy_BSSN'"]
     """
     solver_dir_quoted = shlex.quote(str(solver_dir))
     return f"""Prerequisites: CMake 3.16 or newer; GNU compilers (gcc, g++ with C++17,
@@ -222,16 +224,21 @@ LAPACK; git and network access (CMake fetches Dendrolib, toml11, and spdlog
 on first configure).
 To build and run, copy and paste:
 
+# 1. Enter the generated application directory.
 cd {solver_dir_quoted}
+# 2. Configure the CMake project.
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
+# 3. Compile the executable with four build jobs.
+cmake --build build --parallel 4
+# 4. Generate TwoPunctures initial data on one MPI rank.
 mpiexec -n 1 build/{executable_name} --tpid {parfile}
+# 5. Evolve the binary on four MPI ranks.
 mpiexec -n 4 build/{executable_name} {parfile}
 
 The --tpid run solves the TwoPunctures initial data once, on one MPI rank;
-the second command evolves it, with -n set to the MPI ranks to use. The
-default parameter file is a full production binary-black-hole run; lower
-BSSN_RK_TIME_END in it for a short test."""
+step 5 evolves it, with -n set to the MPI ranks to use. The
+default parameter file is a production binary-black-hole run. For a short
+test, add BSSN_MAX_ITERATIONS = 100 to the parameter file before step 5."""
 
 
 if __name__ == "__main__":

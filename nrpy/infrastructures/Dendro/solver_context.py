@@ -58,7 +58,7 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
       const std::array<unsigned int, 2>&, DendroScalar, unsigned int,
       unsigned int, dendro_aeh::AEH_BHaHAHA*, unsigned int,
       const std::vector<DendroScalar>&, unsigned int, unsigned int,
-      const std::array<Point, 2>&, DendroScalar, const Point&);
+      const std::array<Point, 2>&, DendroScalar, const Point&, bool, unsigned int);
   ~Ctx();
   Ctx(const Ctx&) = delete;
   Ctx& operator=(const Ctx&) = delete;
@@ -84,6 +84,9 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
   int adm_output();
   int apparent_horizon_output();
   bool is_remesh(bool initial_grid = false);
+  bool is_remesh_due() const;
+  void update_output_frequencies();
+  void write_grid_summary_data();
   int grid_transfer(const ot::Mesh*);
   int write_vtu();
   int write_checkpt();
@@ -131,8 +134,13 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
   bool merged_checkpoint_written_ = false;
   unsigned int remesh_frequency_ = 10;
   unsigned int postmerger_remesh_frequency_ = 10;
-  unsigned int diagnostic_frequency_ = 8;
+  unsigned int terminal_frequency_ = 80;
+  unsigned int diagnostic_frequency_ = 80;
   unsigned int vtu_frequency_ = 8;
+  unsigned int base_vtu_frequency_ = 8;
+  unsigned int base_gravitational_wave_frequency_ = 80;
+  unsigned int postmerger_gravitational_wave_frequency_ = 80;
+  bool scale_output_frequencies_ = true;
   unsigned int checkpoint_frequency_ = 0;
   unsigned int apparent_horizon_frequency_ = 0;
   dendro_aeh::AEH_BHaHAHA* apparent_horizon_finder_ = nullptr;
@@ -357,7 +365,7 @@ Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum,
          const std::vector<unsigned int>& refinement_variables,
          unsigned int remesh_frequency,
          unsigned int postmerger_remesh_frequency,
-         unsigned int diagnostic_frequency,
+         unsigned int terminal_frequency,
          unsigned int vtu_frequency, unsigned int checkpoint_frequency,
          const std::string& output_prefix, const std::string& vtu_prefix,
          const std::string& checkpoint_prefix, bool vtu_z_slice_only,
@@ -377,7 +385,9 @@ Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum,
          unsigned int nyquist_mode,
          const std::array<Point, 2>& initial_black_hole_velocities,
          DendroScalar time_begin,
-         const Point& extraction_center)
+         const Point& extraction_center,
+         bool scale_output_frequencies,
+         unsigned int postmerger_gravitational_wave_frequency)
     : domain_minimum_(minimum), domain_maximum_(maximum),
       excision_centers_(excision_centers), excision_center_time_(time_begin),
       excision_radii_(excision_radii),
@@ -395,12 +405,16 @@ Ctx::Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum,
       postmerger_amr_coarsening_factor_(postmerger_amr_coarsening_factor),
       remesh_frequency_(remesh_frequency),
       postmerger_remesh_frequency_(postmerger_remesh_frequency),
-      diagnostic_frequency_(diagnostic_frequency),
+      terminal_frequency_(terminal_frequency),
       vtu_frequency_(vtu_frequency),
       checkpoint_frequency_(checkpoint_frequency), output_prefix_(output_prefix) {{
   apparent_horizon_frequency_ = apparent_horizon_frequency;
   apparent_horizon_finder_ = apparent_horizon_finder;
   gravitational_wave_frequency_ = gravitational_wave_frequency;
+  base_gravitational_wave_frequency_ = gravitational_wave_frequency;
+  base_vtu_frequency_ = vtu_frequency;
+  scale_output_frequencies_ = scale_output_frequencies;
+  postmerger_gravitational_wave_frequency_ = postmerger_gravitational_wave_frequency;
   gravitational_wave_radii_ = gravitational_wave_radii;
   gravitational_wave_maximum_l_ = gravitational_wave_maximum_l;
   nyquist_mode_ = nyquist_mode;
@@ -762,6 +776,49 @@ void Ctx::compute_psi4() {{
   m_uiMesh->readFromGhostBegin(zipped_psi4[0], 2);
   m_uiMesh->readFromGhostEnd(zipped_psi4[0], 2);
 }}  // END FUNCTION: compute_psi4
+void Ctx::update_output_frequencies() {{
+  unsigned int minimum_level = 0, maximum_level = 0;
+  m_uiMesh->computeMinMaxLevel(minimum_level, maximum_level);
+  // Native Dendro-GR measures the shift from its maximum usable level.
+  // Deeper supported grids use the base cadence, without unsigned underflow.
+  const unsigned int level_shift = static_cast<unsigned int>(std::max(
+      0, static_cast<int>(m_uiMaxDepth) - 2 - static_cast<int>(maximum_level)));
+  const auto scaled_frequency = [this, level_shift](unsigned int frequency) {{
+    if (!scale_output_frequencies_ || frequency == 0) return frequency;
+    return level_shift >= std::numeric_limits<unsigned int>::digits
+               ? 1u : std::max(1u, frequency >> level_shift);
+  }};
+  const bool merged = (excision_centers_[0] - excision_centers_[1]).abs() < 0.1 ||
+      black_hole_merge_time_ < std::numeric_limits<DendroScalar>::max();
+  vtu_frequency_ = scaled_frequency(base_vtu_frequency_);
+  gravitational_wave_frequency_ = scaled_frequency(
+      merged ? postmerger_gravitational_wave_frequency_
+             : base_gravitational_wave_frequency_);
+  diagnostic_frequency_ = gravitational_wave_frequency_;
+}}  // END FUNCTION: update_output_frequencies
+void Ctx::write_grid_summary_data() {{
+  if (!m_uiMesh->isActive()) return;
+  const unsigned long long local_counts[2] = {{
+      m_uiMesh->getNumLocalMeshElements(), m_uiMesh->getNumLocalMeshNodes()}};
+  unsigned long long global_counts[2]{{}};
+  MPI_Allreduce(local_counts, global_counts, 2, MPI_UNSIGNED_LONG_LONG,
+                MPI_SUM, m_uiMesh->getMPICommunicator());
+  if (m_uiMesh->getMPIRank() != 0) return;
+  const std::string name = output_prefix_ + "_GridInfo.dat";
+  const bool has_rows = std::filesystem::exists(name) &&
+                        std::filesystem::file_size(name) > 0;
+  std::ofstream file;
+  file.exceptions(std::ios::failbit | std::ios::badbit);
+  file.open(name, std::ios::app);
+  file << std::scientific << std::setprecision(12);
+  if (!has_rows)
+    file << "timeStep,simTime,commSize,wTime,meshSize,totalGridPoints,stepSize\\n";
+  file << m_uiTinfo._m_uiStep << ',' << m_uiTinfo._m_uiT << ','
+       << m_uiMesh->getMPICommSize() << ',' << MPI_Wtime() << ','
+       << global_counts[0] << ',' << global_counts[1] << ','
+       << m_uiTinfo._m_uiTh << '\\n';
+  file.close();
+}}  // END FUNCTION: write_grid_summary_data
 int Ctx::diagnostic_output() {{
   if (!m_uiMesh->isActive() || diagnostic_frequency_ == 0 ||
       m_uiTinfo._m_uiStep % diagnostic_frequency_ != 0) return 0;
@@ -1152,15 +1209,18 @@ int Ctx::apparent_horizon_output() {{
                    tracked_locations);
   return 0;
 }}  // END FUNCTION: apparent_horizon_output
-bool Ctx::is_remesh(bool initial_grid) {{
+bool Ctx::is_remesh_due() const {{
   const bool black_holes_merged =
       (excision_centers_[0] - excision_centers_[1]).abs() < 0.1;
   const unsigned int active_remesh_frequency =
       black_holes_merged ? postmerger_remesh_frequency_ : remesh_frequency_;
-  if (!initial_grid &&
-      (active_remesh_frequency == 0 || m_uiTinfo._m_uiStep == 0 ||
-       m_uiTinfo._m_uiStep % active_remesh_frequency != 0))
-    return false;
+  return active_remesh_frequency > 0 && m_uiTinfo._m_uiStep > 0 &&
+         m_uiTinfo._m_uiStep % active_remesh_frequency == 0;
+}}  // END FUNCTION: is_remesh_due
+bool Ctx::is_remesh(bool initial_grid) {{
+  if (!initial_grid && !is_remesh_due()) return false;
+  const bool black_holes_merged =
+      (excision_centers_[0] - excision_centers_[1]).abs() < 0.1;
   unzip(state_, unzipped_state_, 1);
   std::array<DendroScalar*, generated::NUM_EVOL_GFS> fields{{}};
   std::array<const DendroScalar*, generated::NUM_EVOL_GFS> const_fields{{}};
@@ -1599,7 +1659,9 @@ int Ctx::terminal_output() {{
   DendroScalar global = 0.0;
   MPI_Allreduce(&local, &global, 1, MPI_DOUBLE, MPI_MAX,
                 m_uiMesh->getMPICommunicator());
-  if (m_uiMesh->getMPIRank() == 0)
+  if (m_uiMesh->getMPIRank() == 0 &&
+      (!std::isfinite(global) || (terminal_frequency_ > 0 &&
+       m_uiTinfo._m_uiStep % terminal_frequency_ == 0)))
     std::printf("iteration=%u time=%.17g max_alpha=%.17g\\n",
                 m_uiTinfo._m_uiStep, m_uiTinfo._m_uiT, global);
   return std::isfinite(global) ? 0 : 1;
