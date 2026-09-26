@@ -78,16 +78,20 @@ def register_CFunction_floor_the_lapse_and_conformal_factor(
             "}  // END LOOP: for pp over node range",
         )
     )
+    desc = "Floor alpha and the conformal factor with Dendro's CHI_FLOOR."
+    cfunc_type = "void"
+    name = "floor_the_lapse_and_conformal_factor"
+    params = (
+        f"{scalar_type}* const* in_gfs, unsigned node_begin, "
+        f"unsigned node_end, const {scalar_type} chi_floor"
+    )
     cfc.register_CFunction(
         subdirectory="generated/src/floor_the_lapse_and_conformal_factor",
         includes=[f"{solver_stem}_defines.h", "<algorithm>", "<cmath>", "<stdexcept>"],
-        desc="Floor alpha and the conformal factor with Dendro's CHI_FLOOR.",
-        cfunc_type="void",
-        name="floor_the_lapse_and_conformal_factor",
-        params=(
-            f"{scalar_type}* const* in_gfs, unsigned node_begin, "
-            f"unsigned node_end, const {scalar_type} chi_floor"
-        ),
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
         body=body,
         ET_current_thorn_CodeParams_used=["chi_floor"],
     )

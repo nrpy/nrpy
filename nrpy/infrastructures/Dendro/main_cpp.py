@@ -1,28 +1,3 @@
-# MIT License
-# Copied numerical routine: Dendro-GR/BSSN_GR/src/grUtils.cpp,
-# punctureDataPhysicalCoord. The function signature and BH parameter access
-# were adapted for the generated NRPy solver; its numerical body is unchanged.
-#
-# Copyright (c) 2018 DendroGR
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is furnished
-# to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 """
 Emit the executable entry point for a generated Dendro application.
 
@@ -61,6 +36,31 @@ DENDRO_LICENSE = """// MIT License
 """
 
 
+# MIT License
+# Copied numerical routine: Dendro-GR/BSSN_GR/src/grUtils.cpp,
+# punctureDataPhysicalCoord. The function signature and BH parameter access
+# were adapted for the generated NRPy solver; its numerical body is unchanged.
+#
+# Copyright (c) 2018 DendroGR
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is furnished
+# to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 DENDRO_PUNCTURE_SEED = r"""
 // Dendro-GR BSSN_GR/src/grUtils.cpp: punctureDataPhysicalCoord.
 // Numerical expressions and branch conditions are retained from Dendro-GR.
@@ -83,7 +83,7 @@ void punctureDataPhysicalCoord(const double xx, const double yy,
                                const PunctureParameters& BH1,
                                const PunctureParameters& BH2,
                                const double CHI_FLOOR) {
-    /* Define the Levi-Cevita pseudo-tensor and Kroneckar delta */
+    /* Define the Levi-Civita pseudo-tensor and Kronecker delta */
     double epijk[3][3][3];
     int i, j, k;
     for (k = 0; k < 3; k++) {
@@ -231,7 +231,7 @@ void punctureDataPhysicalCoord(const double xx, const double yy,
         v_u_p1   = pow(amp_capp, 2) * (u0_p + u2_p * p2_mu_p);
         v_u_corr = v_u_corr + v_u_p1;
     }  // END IF: BH1 boosted puncture
-    // For spinning boosted pucture
+    // For spinning boosted puncture
     if (vp1tot > 1.e-6 && fabs(spin1) > 1.e-6) {
         v1       = (vp1[1] * vs1[2] - vp1[2] * vs1[1]) * vn1[0];
         v1       = v1 + (vp1[2] * vs1[0] - vp1[0] * vs1[2]) * vn1[1];
@@ -709,7 +709,7 @@ int main(int argc, char** argv) {
         + r""");
     int checkpoint_index = -1;
     std::filesystem::file_time_type newest_checkpoint_time{};
-    if (restore_solver) {
+    if (restore_solver && !generate_tpid) {
       for (unsigned index = 0; index < 2; ++index) {
         const std::filesystem::path metadata =
             checkpoint_prefix + "_" + std::to_string(index) + "_step.cp";
@@ -720,6 +720,8 @@ int main(int argc, char** argv) {
           newest_checkpoint_time = write_time;
         }  // END IF: newer checkpoint metadata found
       }  // END LOOP: for index over checkpoint slots
+      if (checkpoint_index < 0)
+        throw std::runtime_error("checkpoint restore requested but no checkpoint metadata found: " + checkpoint_prefix);
     }  // END IF: checkpoint restore requested
     const DendroScalar grid_min_x =
         parameters.get<DendroScalar>("BSSN_GRID_MIN_X", -400.0);
@@ -741,12 +743,20 @@ int main(int argc, char** argv) {
         !(amr_coarsening_factor > 0.0) ||
         !(amr_coarsening_factor <= 1.0) ||
         !std::isfinite(amr_coarsening_factor) || !(cfl > 0.0) ||
+        !std::isfinite(cfl) ||
         !(postmerger_amr_coarsening_factor >= 0.0) ||
         !(postmerger_amr_coarsening_factor <= 1.0) ||
         !std::isfinite(postmerger_amr_coarsening_factor) ||
         !(time_end > time_begin) || !(grid_max_x > grid_min_x) ||
-        !(grid_max_y > grid_min_y) || !(grid_max_z > grid_min_z))
+        !(grid_max_y > grid_min_y) || !(grid_max_z > grid_min_z) ||
+        !std::isfinite(grid_max_x - grid_min_x) ||
+        !std::isfinite(grid_max_y - grid_min_y) ||
+        !std::isfinite(grid_max_z - grid_min_z))
       throw std::runtime_error("invalid runtime parameter range");
+
+    const DendroScalar minimum_domain_width = std::min(
+        {grid_max_x - grid_min_x, grid_max_y - grid_min_y,
+         grid_max_z - grid_min_z});
 
     commondata_struct commondata{};
     commondata.NUMGRIDS = 1;
@@ -884,9 +894,10 @@ int main(int argc, char** argv) {
       // Each binding above ends in continue, so only unbound keys reach here.
       unbound_keys.push_back(item.first);
     }  // END LOOP: for item over TOML table
-    """
+    if (!"""
         + solver_stem
-        + r"""_params_validate(params);
+        + r"""_params_validate(params))
+      throw std::runtime_error("invalid runtime parameters");
     const std::string output_prefix = parameters.get<std::string>(
         "BSSN_PROFILE_FILE_PREFIX", """
         + '"dat/dgr"'
@@ -1082,7 +1093,7 @@ int main(int argc, char** argv) {
     unsigned local_minimum_depth = 0, local_maximum_depth = 0;
     mesh->computeMinMaxLevel(local_minimum_depth, local_maximum_depth);
     DendroScalar minimum_dx = std::ldexp(
-        (grid_max_x - grid_min_x) / element_order,
+        minimum_domain_width / element_order,
         -static_cast<int>(local_maximum_depth));
     DendroScalar time_step = cfl * minimum_dx;
 
@@ -1224,7 +1235,7 @@ int main(int argc, char** argv) {
       context.get_mesh()->computeMinMaxLevel(converged_minimum_depth,
                                              converged_maximum_depth);
       minimum_dx = std::ldexp(
-          (grid_max_x - grid_min_x) / element_order,
+          minimum_domain_width / element_order,
           -static_cast<int>(converged_maximum_depth));
       time_step = cfl * minimum_dx;
       ts::TSInfo converged_time_info = context.get_ts_info();
@@ -1236,9 +1247,12 @@ int main(int argc, char** argv) {
       context.get_mesh()->computeMinMaxLevel(restored_minimum_depth,
                                              restored_maximum_depth);
       minimum_dx = std::ldexp(
-          (grid_max_x - grid_min_x) / element_order,
+          minimum_domain_width / element_order,
           -static_cast<int>(restored_maximum_depth));
       time_step = context.get_ts_info()._m_uiTh;
+      if (!(time_step > 0.0) || !std::isfinite(time_step) ||
+          time_step > cfl * minimum_dx)
+        throw std::runtime_error("checkpoint time step exceeds the minimum-axis CFL bound or is invalid");
     }  // END ELSE: restored checkpoint grid
     context.update_output_frequencies();
     ts::ETS<DendroScalar, """
@@ -1285,7 +1299,7 @@ int main(int argc, char** argv) {
         context.get_mesh()->computeMinMaxLevel(remeshed_minimum_depth,
                                                remeshed_maximum_depth);
         const DendroScalar remeshed_minimum_dx = std::ldexp(
-            (grid_max_x - grid_min_x) / element_order,
+            minimum_domain_width / element_order,
             -static_cast<int>(remeshed_maximum_depth));
         ts::TSInfo remeshed_time_info = context.get_ts_info();
         remeshed_time_info._m_uiTh = cfl * remeshed_minimum_dx;
@@ -1315,9 +1329,9 @@ int main(int argc, char** argv) {
     delete mesh;
   }  // END TRY: solver run
   catch (const std::exception& error) {
-    if (rank == 0) std::cerr << """
-        + f'"{executable_name}: "'
-        + r""" << error.what() << '\n';
+    std::cerr << """
+        + f'"{executable_name}: rank "'
+        + r""" << rank << ": " << error.what() << std::endl;
     MPI_Abort(MPI_COMM_WORLD, 1);
   }  // END CATCH: solver failure
   MPI_Finalize();

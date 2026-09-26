@@ -126,6 +126,14 @@ const {scalar_type} dx_block[3] = {{
                 ),
             )
         )
+        desc = f"Per-block conformal Ricci tensor at FD order {fd_order}."
+        cfunc_type = "void"
+        name = f"Ricci_eval_order_{fd_order}"
+        params = (
+            f"const ot::Block& block, const {scalar_type}* const* in_gfs, "
+            f"{scalar_type}* const* ricci_gfs, const Point& domain_min, "
+            "const Point& domain_max"
+        )
         cfc.register_CFunction(
             subdirectory="generated/src/Ricci_eval",
             # simd_intrinsics.h must precede the definitions header, which can
@@ -133,14 +141,10 @@ const {scalar_type} dx_block[3] = {{
             # after clang-format sorts the includes.
             includes=(["./simd_intrinsics.h"] if enable_intrinsics else [])
             + [f"{solver_stem}_defines.h"],
-            desc=f"Per-block conformal Ricci tensor at FD order {fd_order}.",
-            cfunc_type="void",
-            name=f"Ricci_eval_order_{fd_order}",
-            params=(
-                f"const ot::Block& block, const {scalar_type}* const* in_gfs, "
-                f"{scalar_type}* const* ricci_gfs, const Point& domain_min, "
-                "const Point& domain_max"
-            ),
+            desc=desc,
+            cfunc_type=cfunc_type,
+            name=name,
+            params=params,
             body=body,
         )
     finally:

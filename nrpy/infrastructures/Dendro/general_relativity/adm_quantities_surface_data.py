@@ -208,20 +208,24 @@ const {scalar_type} pmin_block[3] = {{
                 ),
             )
         )
+        desc = (
+            "Compute block-local ADM mass flux and momentum surface tensor "
+            f"at FD order {fd_order}."
+        )
+        cfunc_type = "void"
+        name = f"adm_quantities_surface_data_order_{fd_order}"
+        params = (
+            f"const ot::Block& block, const {scalar_type}* const* adm_gfs, "
+            f"{scalar_type}* const* surface_gfs, const Point& domain_min, "
+            "const Point& domain_max"
+        )
         cfc.register_CFunction(
             subdirectory="generated/src/adm_quantities_surface_data",
             includes=[f"{solver_stem}_defines.h", "<limits>"],
-            desc=(
-                "Compute block-local ADM mass flux and momentum surface tensor "
-                f"at FD order {fd_order}."
-            ),
-            cfunc_type="void",
-            name=f"adm_quantities_surface_data_order_{fd_order}",
-            params=(
-                f"const ot::Block& block, const {scalar_type}* const* adm_gfs, "
-                f"{scalar_type}* const* surface_gfs, const Point& domain_min, "
-                "const Point& domain_max"
-            ),
+            desc=desc,
+            cfunc_type=cfunc_type,
+            name=name,
+            params=params,
             body=body,
         )
 

@@ -69,6 +69,27 @@ Claim evidence:
 - Deciding authority: `nrpy/infrastructures/Dendro/checkpoint.py`, `output_checkpoint_cpp`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::write_checkpt`, `Ctx::restore_checkpt`, and `Ctx::is_remesh` within `output_solver_context_cpp`.
 - Corroboration: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`, schedules remeshing and checkpoint writes around time stepping.
 
+New RK4 timesteps use `BSSN_CFL_FACTOR` times the smallest physical axis
+spacing at the current global maximum octree level. The driver recomputes
+this spacing after initial-grid convergence and after evolution remeshing;
+`dx_min` reports that same minimum. Independent domain bounds and CFL must
+produce finite positive widths and a finite positive CFL factor. This rule
+preserves cubic-domain timesteps but reduces timesteps when Y or Z is finer
+than X.
+
+A requested restore with no checkpoint metadata stops before loading puncture
+data or appending diagnostics. The separate `--tpid` mode still generates
+initial-data coefficients without requiring a checkpoint. A valid restore
+retains its stored timestep; the driver rejects a timestep above the current
+minimum-axis CFL bound before initializing RK4. Registered nonfinite floating
+parameters are rejected before puncture-file access.
+
+Claim evidence:
+- Claim: New timesteps use the minimum physical axis spacing; restore requires checkpoint metadata and preserves a stored timestep only if it satisfies the current CFL bound. The driver checks generated parameter validation before loading puncture data.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`.
+- Corroboration: `nrpy/infrastructures/Dendro/CodeParameters.py`, generated parameter validation; Dendrolib `Block::computeDx`, `computeDy`, and `computeDz` define the physical axis spacings.
+
 When the apparent-horizon finder is enabled (`AEH_SOLVER_FREQ > 0`), each
 checkpoint also writes the finder's search state to
 `<BSSN_CHKPT_FILE_PREFIX>_aeh_solver_checkpt-cp<index>.json`, with the 0/1 index

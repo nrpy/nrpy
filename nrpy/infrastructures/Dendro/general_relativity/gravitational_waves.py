@@ -184,6 +184,20 @@ par::Mpi_Allreduce(
 par::Mpi_Allreduce(
     local_imag.data(), modes_imag, static_cast<int>(output_size), MPI_SUM,
     mesh->getMPICommunicator());"""
+    desc = "Interpolate Psi4 to spheres and decompose spin-weight minus-two modes."
+    cfunc_type = "void"
+    name = "gravitational_waves"
+    params = (
+        f"const ot::Mesh* mesh, const {scalar_type}* psi4_real_zipped, "
+        f"const {scalar_type}* psi4_imag_zipped, "
+        f"const {scalar_type}* extraction_radii, unsigned num_radii, "
+        "unsigned maximum_l, unsigned mode_stride, "
+        "const Point& extraction_center, const Point& grid_min, "
+        "const Point& grid_max, const Point& domain_min, "
+        f"const Point& domain_max, {scalar_type}* modes_real, "
+        f"{scalar_type}* modes_imag"
+    )
+    body = decomposition
     cfc.register_CFunction(
         subdirectory="generated/src/gravitational_waves",
         includes=[
@@ -199,19 +213,10 @@ par::Mpi_Allreduce(
             "<stdexcept>",
             "<vector>",
         ],
-        desc="Interpolate Psi4 to spheres and decompose spin-weight minus-two modes.",
-        cfunc_type="void",
-        name="gravitational_waves",
-        params=(
-            f"const ot::Mesh* mesh, const {scalar_type}* psi4_real_zipped, "
-            f"const {scalar_type}* psi4_imag_zipped, "
-            f"const {scalar_type}* extraction_radii, unsigned num_radii, "
-            "unsigned maximum_l, unsigned mode_stride, "
-            "const Point& extraction_center, const Point& grid_min, "
-            "const Point& grid_max, const Point& domain_min, "
-            f"const Point& domain_max, {scalar_type}* modes_real, "
-            f"{scalar_type}* modes_imag"
-        ),
-        body=decomposition,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        body=body,
     )
     return pcg.NRPyEnv()

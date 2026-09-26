@@ -112,6 +112,15 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
         }}  // END LOOP: for i over interior x
     }}  // END LOOP: for j over interior y
 }}  // END LOOP: for k over interior z"""
+    desc = "Interpolate solved TwoPunctures ADM data onto one Dendro block interior."
+    cfunc_type = "void"
+    name = "twopunctures"
+    params = (
+        "const ot::Block& block, const commondata_struct* commondata, "
+        "const params_struct* params, const ID_persist_struct* punctures, "
+        f"{scalar_type}* const* adm_gfs, "
+        "const Point& domain_min, const Point& domain_max"
+    )
     cfc.register_CFunction(
         subdirectory="generated/src/twopunctures",
         includes=[
@@ -119,15 +128,10 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
             "BHaH_defines.h",
             "BHaH_function_prototypes.h",
         ],
-        desc="Interpolate solved TwoPunctures ADM data onto one Dendro block interior.",
-        cfunc_type="void",
-        name="twopunctures",
-        params=(
-            "const ot::Block& block, const commondata_struct* commondata, "
-            "const params_struct* params, const ID_persist_struct* punctures, "
-            f"{scalar_type}* const* adm_gfs, "
-            "const Point& domain_min, const Point& domain_max"
-        ),
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
         body=body,
     )
     return pcg.NRPyEnv()

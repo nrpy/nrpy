@@ -357,7 +357,7 @@ const {scalar_type} dx_block[3] = {{
     block.computeDx(domain_min, domain_max),
     block.computeDy(domain_min, domain_max),
     block.computeDz(domain_min, domain_max)}};
-const {scalar_type} {prefix}grid_spacing = dx_block[0];
+const {scalar_type} {prefix}grid_spacing = {"dx_block[0]" if enable_fCCZ4 else "std::min({dx_block[0], dx_block[1], dx_block[2]})"};
 [[maybe_unused]] const {scalar_type} pmin_block[3] = {{
     GRIDX_TO_X(block.getBlockNode().minX()) - padding_block * dx_block[0],
     GRIDY_TO_Y(block.getBlockNode().minY()) - padding_block * dx_block[1],
@@ -437,6 +437,11 @@ const {scalar_type} {prefix}grid_spacing = dx_block[0];
             + (f", {cparam_args}" if cparam_args else "")
         )
         formulation = "fCCZ4" if enable_fCCZ4 else "BSSN"
+        desc = f"Per-block direct-FD {formulation} RHS ({len(evol_order)} fields)."
+        cfunc_type = "void"
+        name = f"rhs_eval_order_{fd_order}"
+        params = block_params
+        body = block_body
         cfc.register_CFunction(
             subdirectory="generated/src/rhs_eval",
             # simd_intrinsics.h must precede the definitions header, which can
@@ -444,11 +449,11 @@ const {scalar_type} {prefix}grid_spacing = dx_block[0];
             # after clang-format sorts the includes.
             includes=(["./simd_intrinsics.h"] if enable_intrinsics else [])
             + [f"{solver_stem}_defines.h"],
-            desc=f"Per-block direct-FD {formulation} RHS ({len(evol_order)} fields).",
-            cfunc_type="void",
-            name=f"rhs_eval_order_{fd_order}",
-            params=block_params,
-            body=block_body,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            name=name,
+            params=params,
+            body=body,
             ET_current_thorn_CodeParams_used=list(used_codeparameters),
         )
 

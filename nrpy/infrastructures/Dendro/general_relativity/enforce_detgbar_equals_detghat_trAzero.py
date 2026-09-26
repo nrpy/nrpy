@@ -89,13 +89,17 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
             "}  // END LOOP: for pp over node range",
         )
     )
+    desc = "Enforce det(gammabar)=det(gammahat) and tr(Abar)=0 per owned node."
+    cfunc_type = "void"
+    name = "enforce_detgbar_equals_detghat_trAzero"
+    params = f"{scalar_type}* const* in_gfs, unsigned node_begin, unsigned node_end"
     cfc.register_CFunction(
         subdirectory="generated/src/enforce_detgbar_equals_detghat_trAzero",
         includes=[f"{solver_stem}_defines.h"],
-        desc="Enforce det(gammabar)=det(gammahat) and tr(Abar)=0 per owned node.",
-        cfunc_type="void",
-        name="enforce_detgbar_equals_detghat_trAzero",
-        params=f"{scalar_type}* const* in_gfs, unsigned node_begin, unsigned node_end",
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
         body=body,
     )
     return pcg.NRPyEnv()

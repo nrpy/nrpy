@@ -123,20 +123,24 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
         }}  // END LOOP: for i over interior x
     }}  // END LOOP: for j over interior y
 }}  // END LOOP: for k over interior z"""
+    desc = "Accumulate excised conformal-factor volume-weighted constraint norms on one block."
+    cfunc_type = "void"
+    name = "diagnostics"
+    params = (
+        f"const ot::Block& block, const {scalar_type}* const* diagnostic_gfs, "
+        f"const {scalar_type}* const* state_gfs, "
+        "const Point& domain_min, const Point& domain_max, "
+        f"const Point* excision_centers, const {scalar_type}* excision_radii, "
+        f"unsigned num_excision_regions, {scalar_type}* local_squared_norms, "
+        f"{scalar_type}* local_max_norms, {scalar_type}* local_volume"
+    )
     cfc.register_CFunction(
         subdirectory="generated/src/diagnostics",
         includes=[f"{solver_stem}_defines.h", "<limits>"],
-        desc="Accumulate excised conformal-factor volume-weighted constraint norms on one block.",
-        cfunc_type="void",
-        name="diagnostics",
-        params=(
-            f"const ot::Block& block, const {scalar_type}* const* diagnostic_gfs, "
-            f"const {scalar_type}* const* state_gfs, "
-            "const Point& domain_min, const Point& domain_max, "
-            f"const Point* excision_centers, const {scalar_type}* excision_radii, "
-            f"unsigned num_excision_regions, {scalar_type}* local_squared_norms, "
-            f"{scalar_type}* local_max_norms, {scalar_type}* local_volume"
-        ),
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
         body=body,
     )
     return pcg.NRPyEnv()

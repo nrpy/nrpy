@@ -119,17 +119,21 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
     body = f"""const {scalar_type} falloff[{len(evolved_names)}] = {{{falloff_values}}};
 const {scalar_type} asymptotic[{len(evolved_names)}] = {{{asymptotic_values}}};
 {body}"""
+    desc = "Apply state-aware outgoing-radiation RHS data on physical faces."
+    cfunc_type = "void"
+    name = "physical_boundary"
+    params = (
+        f"const ot::Block& block, const {scalar_type}* const* in_gfs, "
+        f"{scalar_type}* const* rhs_gfs, "
+        "const Point& domain_min, const Point& domain_max"
+    )
     cfc.register_CFunction(
         subdirectory="generated/src/physical_boundary",
         includes=[f"{solver_stem}_defines.h"],
-        desc="Apply state-aware outgoing-radiation RHS data on physical faces.",
-        cfunc_type="void",
-        name="physical_boundary",
-        params=(
-            f"const ot::Block& block, const {scalar_type}* const* in_gfs, "
-            f"{scalar_type}* const* rhs_gfs, "
-            "const Point& domain_min, const Point& domain_max"
-        ),
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
         body=body,
     )
     return pcg.NRPyEnv()

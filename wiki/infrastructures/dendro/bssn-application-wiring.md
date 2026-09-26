@@ -30,8 +30,10 @@ W_rhs += (C_CAHD/2) W H dx^2 / (dt (1 + 10 dx^2)),  default C_CAHD = 0.06.
 chi_rhs += C_CAHD chi H dx^2 / (dt (1 + 10 dx^2)).
 ```
 
-`C_CAHD` is a runtime parameter; `dx` and `dt` are the current block spacing
-and timestep. The factor of two
+`C_CAHD` is a runtime parameter; `dx` is the smallest of the current block's
+three physical axis spacings, and `dt` is the current timestep. This choice
+preserves the cubic-grid coefficient and limits directional damping on
+rectangular domains. The factor of two
 follows `chi=W^2`; it preserves the same CAHD perturbation to the physical
 conformal factor. SSL uses `W=cf` or `W=sqrt(cf)` in its relaxation toward
 `alpha=W`. KO has no W-dependent scaling in this profile (`enable_CAKO=False`).
@@ -41,7 +43,7 @@ are named `BSSN_constraints_order_N`; there is no generic constraint catch-all
 source.
 
 Claim evidence:
-- Claim: The W and chi BSSN variants receive the corresponding CAHD factor; SSL uses W in either variant, while KO is not scaled by W. The conformal representation is a code-generation choice, not a runtime switch.
+- Claim: The W and chi BSSN variants receive the corresponding CAHD factor using the minimum physical block spacing; SSL uses W in either variant, while KO is not scaled by W. The conformal representation is a code-generation choice, not a runtime switch.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py`, `register_CFunction_rhs_eval`; `nrpy/examples/dendro_bssn.py`, `parse_args` and `main`.
 - Corroboration: `nrpy/infrastructures/Dendro/general_relativity/ADM_to_BSSN.py`, `register_CFunction_ADM_to_BSSN`, uses the selected conformal factor in initial-data conversion.

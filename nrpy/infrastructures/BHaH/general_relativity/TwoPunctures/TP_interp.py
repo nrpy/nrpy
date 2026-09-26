@@ -74,7 +74,7 @@ def register_CFunction_TP_Interp(
     xx = x - ID_persist->center_offset[0];
     yy = y - ID_persist->center_offset[1];
     zz = z - ID_persist->center_offset[2];
-  }
+  }  // END BLOCK: subtract puncture center offset
 """
         output_assignment_body = """  initial_data->gammaSphorCartDD00 = gxx_out;
   initial_data->gammaSphorCartDD01 = gxy_out;  // Technically gammaSphorCartDD10 = gammaSphorCartDD01
@@ -100,7 +100,7 @@ def register_CFunction_TP_Interp(
     xx = z_dest;
     yy = y_dest;
     zz = x_dest;
-  }
+  }  // END BLOCK: legacy coordinate swap
 """
         output_assignment_body = """  // Legacy swap_xz output: swap x and z tensor components only.
   initial_data->gammaSphorCartDD00 = gzz_out;
@@ -134,12 +134,14 @@ def register_CFunction_TP_Interp(
 
   if (CCTK_EQUALS(ID_persist->grid_setup_method, "Taylor expansion")) {
     gsm = GSM_Taylor_expansion;
-  } else if (CCTK_EQUALS(ID_persist->grid_setup_method, "evaluation")) {
+  }  // END IF: CCTK_EQUALS(ID_persist->grid_setup_method, "Taylor expansion")
+   else if (CCTK_EQUALS(ID_persist->grid_setup_method, "evaluation")) {
     gsm = GSM_evaluation;
-  } else {
+  }  // END ELSE IF: CCTK_EQUALS(ID_persist->grid_setup_method, "evaluation")
+   else {
     fprintf(stderr, "internal error\n");
     exit(1);
-  }
+  }  // END ELSE: unsupported grid setup method
 
   antisymmetric_lapse = CCTK_EQUALS(ID_persist->initial_lapse, "twopunctures-antisymmetric");
   averaged_lapse = CCTK_EQUALS(ID_persist->initial_lapse, "twopunctures-averaged");
@@ -202,7 +204,7 @@ def register_CFunction_TP_Interp(
     break;
   default:
     assert(0);
-  }
+  }  // END SWITCH: gsm
   r_plus = pow(pow(r_plus, 4) + pow(ID_persist->TP_epsilon, 4), 0.25);
   r_minus = pow(pow(r_minus, 4) + pow(ID_persist->TP_epsilon, 4), 0.25);
   if (r_plus < ID_persist->TP_Tiny)
@@ -213,10 +215,10 @@ def register_CFunction_TP_Interp(
 #define EXTEND(M, r) (M * (3. / 8 * pow(r, 4) / pow(ID_persist->TP_Extend_Radius, 5) - 5. / 4 * pow(r, 2) / pow(ID_persist->TP_Extend_Radius, 3) + 15. / 8 / ID_persist->TP_Extend_Radius))
   if (r_plus < ID_persist->TP_Extend_Radius) {
     psi1 = 1 + 0.5 * EXTEND(mp, r_plus) + 0.5 * mm / r_minus + U;
-  }
+  }  // END IF: r_plus < ID_persist->TP_Extend_Radius
   if (r_minus < ID_persist->TP_Extend_Radius) {
     psi1 = 1 + 0.5 * EXTEND(mm, r_minus) + 0.5 * mp / r_plus + U;
-  }
+  }  // END IF: r_minus < ID_persist->TP_Extend_Radius
   REAL static_psi = 1;
 
   REAL Aij[3][3];
@@ -248,7 +250,7 @@ def register_CFunction_TP_Interp(
 
     if (rp < ID_persist->TP_Extend_Radius) {
       ir = EXTEND(1., rp);
-    }
+    }  // END IF: rp < ID_persist->TP_Extend_Radius
 
     s1 = 0.5 * mp * ir;
     s3 = -s1 * ir * ir;
@@ -279,7 +281,7 @@ def register_CFunction_TP_Interp(
 
     if (rp < ID_persist->TP_Extend_Radius) {
       ir = EXTEND(1., rp);
-    }
+    }  // END IF: rp < ID_persist->TP_Extend_Radius
 
     s1 = 0.5 * mm * ir;
     s3 = -s1 * ir * ir;
@@ -323,7 +325,8 @@ def register_CFunction_TP_Interp(
     if (brownsville_lapse)
       alp_out = 2.0 / (1.0 + pow(p, ID_persist->initial_lapse_psi_exponent));
 
-  } /* if conformal-state > 0 */
+  }  // END IF: conformal factor derivatives required
+   /* if conformal-state > 0 */
 
   // puncture_u_out = U;
 
@@ -350,15 +353,15 @@ def register_CFunction_TP_Interp(
 
     if (r_plus < ID_persist->TP_Extend_Radius) {
       alp_out = ((1.0 - 0.5 * EXTEND(mp, r_plus) - 0.5 * mm / r_minus) / (1.0 + 0.5 * EXTEND(mp, r_plus) + 0.5 * mm / r_minus));
-    }
+    }  // END IF: r_plus < ID_persist->TP_Extend_Radius
     if (r_minus < ID_persist->TP_Extend_Radius) {
       alp_out = ((1.0 - 0.5 * EXTEND(mm, r_minus) - 0.5 * mp / r_plus) / (1.0 + 0.5 * EXTEND(mp, r_minus) + 0.5 * mp / r_plus));
-    }
+    }  // END IF: r_minus < ID_persist->TP_Extend_Radius
 
     if (averaged_lapse) {
       alp_out = 0.5 * (1.0 + alp_out);
-    }
-  }
+    }  // END IF: averaged_lapse
+  }  // END IF: antisymmetric_lapse || averaged_lapse
   if (ID_persist->multiply_old_lapse)
     alp_out *= old_alp;
 
@@ -408,7 +411,7 @@ def register_CFunction_TP_Interp(
     free_derivs(&par.cf_v, par.npoints_A * par.npoints_B * par.npoints_phi * 1);
 
     return 0;
-  }
+  }  // END FUNCTION: main
 
 #endif
 """

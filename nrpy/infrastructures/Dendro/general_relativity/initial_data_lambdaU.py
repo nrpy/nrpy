@@ -116,17 +116,21 @@ def register_CFunction_initial_data_lambdaU(
                 ),
             )
         )
+        desc = f"Initialize covariant conformal connection with FD{fd_order}."
+        cfunc_type = "void"
+        name = f"initial_data_lambdaU_order_{fd_order}"
+        params = (
+            f"const ot::Block& block, const {scalar_type}* const* in_gfs, "
+            f"{scalar_type}* const* out_gfs, const Point& domain_min, "
+            "const Point& domain_max"
+        )
         cfc.register_CFunction(
             subdirectory="generated/src/initial_data_lambdaU",
             includes=[f"{solver_stem}_defines.h"],
-            desc=f"Initialize covariant conformal connection with FD{fd_order}.",
-            cfunc_type="void",
-            name=f"initial_data_lambdaU_order_{fd_order}",
-            params=(
-                f"const ot::Block& block, const {scalar_type}* const* in_gfs, "
-                f"{scalar_type}* const* out_gfs, const Point& domain_min, "
-                "const Point& domain_max"
-            ),
+            desc=desc,
+            cfunc_type=cfunc_type,
+            name=name,
+            params=params,
             body=body,
         )
     finally:

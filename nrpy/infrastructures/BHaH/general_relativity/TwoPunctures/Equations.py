@@ -76,7 +76,7 @@ REAL BY_KKofxyz(ID_persist_struct par, REAL x, REAL y, REAL z) {
   for (i = 0; i < 3; i++) {
     np_Pp += n_plus[i] * par.par_P_plus[i];
     nm_Pm += n_minus[i] * par.par_P_minus[i];
-  }
+  }  // END LOOP: for i: i < 3
   /* cross product: np_Sp[i] = [(n_+) x (S_+)]_i; nm_Sm[i] = [(n_-) x (S_-)]_i*/
   np_Sp[0] = n_plus[1] * par.par_S_plus[2] - n_plus[2] * par.par_S_plus[1];
   np_Sp[1] = n_plus[2] * par.par_S_plus[0] - n_plus[0] * par.par_S_plus[2];
@@ -93,11 +93,11 @@ REAL BY_KKofxyz(ID_persist_struct par, REAL x, REAL y, REAL z) {
       if (i == j)
         Aij -= +1.5 * (np_Pp / r2_plus + nm_Pm / r2_minus);
       AijAij += Aij * Aij;
-    }
-  }
+    }  // END LOOP: for j: j < 3
+  }  // END LOOP: for i: i < 3
 
   return AijAij;
-}
+}  // END FUNCTION: BY_KKofxyz
 
 void BY_Aijofxyz(ID_persist_struct par, REAL x, REAL y, REAL z, REAL Aij[3][3]) {
   int i, j;
@@ -129,7 +129,7 @@ void BY_Aijofxyz(ID_persist_struct par, REAL x, REAL y, REAL z, REAL Aij[3][3]) 
   for (i = 0; i < 3; i++) {
     np_Pp += n_plus[i] * par.par_P_plus[i];
     nm_Pm += n_minus[i] * par.par_P_minus[i];
-  }
+  }  // END LOOP: for i: i < 3
   /* cross product: np_Sp[i] = [(n_+) x (S_+)]_i; nm_Sm[i] = [(n_-) x (S_-)]_i*/
   np_Sp[0] = n_plus[1] * par.par_S_plus[2] - n_plus[2] * par.par_S_plus[1];
   np_Sp[1] = n_plus[2] * par.par_S_plus[0] - n_plus[0] * par.par_S_plus[2];
@@ -144,9 +144,9 @@ void BY_Aijofxyz(ID_persist_struct par, REAL x, REAL y, REAL z, REAL Aij[3][3]) 
                   3.0 * (np_Sp[i] * n_plus[j] + np_Sp[j] * n_plus[i]) / r3_plus - 3.0 * (nm_Sm[i] * n_minus[j] + nm_Sm[j] * n_minus[i]) / r3_minus;
       if (i == j)
         Aij[i][j] -= +1.5 * (np_Pp / r2_plus + nm_Pm / r2_minus);
-    }
-  }
-}
+    }  // END LOOP: for j: j < 3
+  }  // END LOOP: for i: i < 3
+}  // END FUNCTION: BY_Aijofxyz
 
 /*-----------------------------------------------------------*/
 /********           Nonlinear Equations            ***********/
@@ -163,7 +163,7 @@ void NonLinEquations(ID_persist_struct par, REAL rho_adm, REAL A, REAL B, REAL X
   psi7 = psi * psi2 * psi4;
 
   values[0] = U.d11[0] + U.d22[0] + U.d33[0] + 0.125 * BY_KKofxyz(par, x, y, z) / psi7 + 2.0 * Pi / psi2 / psi * rho_adm;
-}
+}  // END FUNCTION: NonLinEquations
 
 /*-----------------------------------------------------------*/
 /********               Linear Equations           ***********/
@@ -180,7 +180,7 @@ void LinEquations(ID_persist_struct par, REAL A, REAL B, REAL X, REAL R, REAL x,
   psi8 = psi4 * psi4;
 
   values[0] = dU.d11[0] + dU.d22[0] + dU.d33[0] - 0.875 * BY_KKofxyz(par, x, y, z) / psi8 * dU.d0[0];
-}
+}  // END FUNCTION: LinEquations
 """
 
     name = "TP_Equations"

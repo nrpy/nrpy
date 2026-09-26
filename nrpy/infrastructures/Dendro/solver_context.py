@@ -350,6 +350,8 @@ std::ofstream open_labeled_output(const std::string& name,
            << labels[column] << '\\n';
   }}  // END IF: new file receives column labels
   file.precision(10);
+  if (!file)
+    throw std::runtime_error("cannot write diagnostic file: " + name);
   return file;
 }}  // END FUNCTION: open_labeled_output
 // clang-format off
@@ -856,8 +858,9 @@ int Ctx::diagnostic_output() {{
       labels.push_back(name + "_rms: volume-weighted RMS of the " + meaning);
       labels.push_back(name + "_max: maximum absolute value of the " + meaning);
     }}  // END LOOP: for i over diagnostic fields
+    const std::string filename = output_prefix_ + "_Constraints_volweighted.dat";
     std::ofstream file = open_labeled_output(
-        output_prefix_ + "_Constraints_volweighted.dat",
+        filename,
         "constraint norms weighted by {volume_element} dx dy dz (sqrt(gamma) "
         "dx dy dz when det(gammabar) = 1), outside the puncture excision "
         "regions",
@@ -867,6 +870,9 @@ int Ctx::diagnostic_output() {{
       file << '\\t' << std::sqrt(global_sum[i] / global_volume)
            << '\\t' << global_max[i];
     file << '\\n';
+    file.close();
+    if (!file)
+      throw std::runtime_error("cannot write diagnostic file: " + filename);
   }}  // END IF: rank 0 writes volume norms
   // Dendro-BSSN's reported norm weights each owned, unexcised CG node equally.
   // Keep this distinct from the conformal-factor volume-weighted norm above.
@@ -924,8 +930,9 @@ int Ctx::diagnostic_output() {{
                        ": RMS of the " + std::string(diagnostic_meanings[field]));
     labels.emplace_back(
         "unexcised_nodes: number of grid nodes included in each RMS");
+    const std::string filename = output_prefix_ + "_Constraints.dat";
     std::ofstream file = open_labeled_output(
-        output_prefix_ + "_Constraints.dat",
+        filename,
         "constraint norms: RMS over unique grid nodes outside the puncture "
         "excision regions, each node weighted equally (Dendro-GR BSSN_GR "
         "convention)",
@@ -934,6 +941,9 @@ int Ctx::diagnostic_output() {{
     for (unsigned int field = 0; field < generated::NUM_DIAG_GFS; ++field)
       file << '\\t' << std::sqrt(global_node_sums[field] / static_cast<double>(global_nodes));
     file << '\\t' << global_nodes << '\\n';
+    file.close();
+    if (!file)
+      throw std::runtime_error("cannot write diagnostic file: " + filename);
   }}  // END IF: rank 0 writes norms
   return 0;
 }}  // END FUNCTION: diagnostic_output
@@ -985,10 +995,10 @@ int Ctx::gravitational_wave_output() {{
             "): projection onto the spin-weight -2 spherical harmonic over "
             "coordinate spheres about the coordinate origin, without a "
             "radius factor";
-        std::ofstream file = open_labeled_output(
+        const std::string filename =
             output_prefix_ + "_GW_l" + std::to_string(ell) + "_m" +
-                std::to_string(mode) + ".dat",
-            title, labels);
+                std::to_string(mode) + ".dat";
+        std::ofstream file = open_labeled_output(filename, title, labels);
         file << std::scientific << m_uiTinfo._m_uiStep << '\\t'
              << m_uiTinfo._m_uiT << '\\t';
         for (unsigned radius_index = 0;
@@ -999,6 +1009,9 @@ int Ctx::gravitational_wave_output() {{
                                              modes_imag[index]) << '\\t';
         }}  // END LOOP: for radius_index over radii
         file << '\\n';
+        file.close();
+        if (!file)
+          throw std::runtime_error("cannot write diagnostic file: " + filename);
       }}  // END LOOP: for mode over -ell..ell
     }}  // END LOOP: for ell over 2..max_l
   }}  // END IF: rank 0 writes modes
@@ -1094,8 +1107,9 @@ int Ctx::adm_output() {{
   MPI_Allreduce(local_quantities, global_quantities, 7, MPI_DOUBLE, MPI_SUM,
                 m_uiMesh->getMPICommunicator());
   if (m_uiMesh->getMPIRank() == 0) {{
+    const std::string filename = output_prefix_ + "_ADM.dat";
     std::ofstream file = open_labeled_output(
-        output_prefix_ + "_ADM.dat",
+        filename,
         "ADM surface integrals over a coordinate sphere of radius r about the "
         "coordinate origin",
         {{"TimeStep: iteration number", "time: simulation time",
@@ -1110,6 +1124,9 @@ int Ctx::adm_output() {{
     file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT << '\\t' << radius;
     for (const DendroScalar quantity : global_quantities) file << '\\t' << quantity;
     file << '\\n';
+    file.close();
+    if (!file)
+      throw std::runtime_error("cannot write diagnostic file: " + filename);
   }}  // END IF: rank 0 writes ADM
   return 0;
 }}  // END FUNCTION: adm_output

@@ -31,9 +31,9 @@ def register_CFunction_BSSN_to_ADM(
     Register conversion of the evolved formulation to Cartesian ADM fields.
 
     The output order is ``gammaDD``, ``KDD``, ``betaU``, then ``BU``. This is
-    the exact inverse storage contract consumed by ``ADM_to_BSSN``. ``BU`` is
-    the Gamma-driver auxiliary field, not an ADM variable; retaining it makes
-    the scratch representation lossless for restart and service calls.
+    the ADM field order expected by ``ADM_to_BSSN``. ``BU`` is
+    the Gamma-driver auxiliary field, not an ADM variable; including it keeps
+    that field available to ``ADM_to_BSSN``.
 
     :param solver_stem: Lowercase formulation name used by generated headers.
     :param enable_fCCZ4: Validate the fCCZ4 state instead of the BSSN state.
@@ -123,17 +123,21 @@ def register_CFunction_BSSN_to_ADM(
             ),
         )
     )
+    desc = "Pointwise conversion from BSSN fields to Cartesian ADM fields."
+    cfunc_type = "void"
+    name = "BSSN_to_ADM"
+    params = (
+        f"const ot::Block& block, const {scalar_type}* const* in_gfs, "
+        f"{scalar_type}* const* adm_gfs, const Point& domain_min, "
+        "const Point& domain_max"
+    )
     cfc.register_CFunction(
         subdirectory="generated/src/BSSN_to_ADM",
         includes=[f"{solver_stem}_defines.h"],
-        desc="Pointwise conversion from BSSN fields to Cartesian ADM fields.",
-        cfunc_type="void",
-        name="BSSN_to_ADM",
-        params=(
-            f"const ot::Block& block, const {scalar_type}* const* in_gfs, "
-            f"{scalar_type}* const* adm_gfs, const Point& domain_min, "
-            "const Point& domain_max"
-        ),
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
         body=body,
     )
     return pcg.NRPyEnv()

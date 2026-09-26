@@ -280,6 +280,14 @@ const {scalar_type} pmin_block[3] = {{
                     ),
                 )
             )
+            desc = f"Evaluate Psi4 on one padded block at FD order {fd_order}."
+            cfunc_type = "void"
+            name = f"psi4_eval_order_{fd_order}"
+            params = (
+                f"const ot::Block& block, const {scalar_type}* const* in_gfs, "
+                f"{scalar_type}* const* psi4_gfs, const Point& domain_min, "
+                "const Point& domain_max"
+            )
             cfc.register_CFunction(
                 subdirectory="generated/src/psi4_eval",
                 includes=[
@@ -289,14 +297,10 @@ const {scalar_type} pmin_block[3] = {{
                     "<limits>",
                     "<stdexcept>",
                 ],
-                desc=f"Evaluate Psi4 on one padded block at FD order {fd_order}.",
-                cfunc_type="void",
-                name=f"psi4_eval_order_{fd_order}",
-                params=(
-                    f"const ot::Block& block, const {scalar_type}* const* in_gfs, "
-                    f"{scalar_type}* const* psi4_gfs, const Point& domain_min, "
-                    "const Point& domain_max"
-                ),
+                desc=desc,
+                cfunc_type=cfunc_type,
+                name=name,
+                params=params,
                 body=body,
             )
     finally:

@@ -93,6 +93,17 @@ the same reported time. Matching initial data, field representation, mesh,
 excision, and norm remain separate prerequisites; agreement of one scalar norm
 does not prove equality of the evolved fields or equations.
 
+Labeled constraint, Psi4, and ADM files retain their append behavior and
+column formatting. The solver checks stream state after opening and writing
+headers, then explicitly closes each completed row and checks stream state.
+Open, write, or close failures stop the run with the failed filename.
+
+Claim evidence:
+- Claim: Labeled diagnostic output errors stop the run and identify the file, including errors detected when a buffered row is closed.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `open_labeled_output`, `Ctx::diagnostic_output`, `Ctx::gravitational_wave_output`, and `Ctx::adm_output` within `output_solver_context_cpp`.
+- Corroboration: `nrpy/infrastructures/Dendro/main_cpp.py`, exception handling in `output_main_cpp`.
+
 ### Grid size and native output cadence
 
 Both formulations append `<BSSN_PROFILE_FILE_PREFIX>_GridInfo.dat`. The

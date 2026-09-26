@@ -34,21 +34,26 @@ def register_CFunction_apparent_horizon(
     if par.parval_from_str("Infrastructure") != "Dendro":
         raise ValueError("apparent_horizon requires Infrastructure='Dendro'.")
 
-    cfc.register_CFunction(
-        subdirectory="generated/src/apparent_horizon",
-        includes=[f"{solver_stem}_defines.h", "aeh_bhahaha.h"],
-        desc="Run BHaHAHA on evolved BSSN fields with post-interpolation ADM conversion.",
-        cfunc_type="void",
-        name="apparent_horizon",
-        params=(
-            "dendro_aeh::AEH_BHaHAHA& finder, const ot::Mesh* mesh, "
-            "const double** evolved_gfs, unsigned iteration, double time, "
-            "const std::vector<Point>& tracked_locations"
-        ),
-        body="""if (mesh == nullptr)
+    desc = "Run BHaHAHA on evolved BSSN fields with post-interpolation ADM conversion."
+    cfunc_type = "void"
+    name = "apparent_horizon"
+    params = (
+        "dendro_aeh::AEH_BHaHAHA& finder, const ot::Mesh* mesh, "
+        "const double** evolved_gfs, unsigned iteration, double time, "
+        "const std::vector<Point>& tracked_locations"
+    )
+    body = """if (mesh == nullptr)
     throw std::invalid_argument("apparent_horizon received a null mesh");
 if (evolved_gfs == nullptr)
     throw std::invalid_argument("apparent_horizon received null evolved fields");
-finder.find_horizons(mesh, evolved_gfs, iteration, time, tracked_locations);""",
+finder.find_horizons(mesh, evolved_gfs, iteration, time, tracked_locations);"""
+    cfc.register_CFunction(
+        subdirectory="generated/src/apparent_horizon",
+        includes=[f"{solver_stem}_defines.h", "aeh_bhahaha.h"],
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        body=body,
     )
     return pcg.NRPyEnv()

@@ -89,22 +89,27 @@ for (unsigned valid = 0; valid < num_valid_points; ++valid) {{
         (relative_coordinate[0] * momentum_surface[1] -
          relative_coordinate[1] * momentum_surface[0]);
 }}  // END LOOP: for valid over owned points"""
+    desc = "Accumulate rank-local ADM mass and momenta from owned surface samples."
+    cfunc_type = "void"
+    name = "adm_quantities"
+    params = (
+        "unsigned num_points, unsigned num_valid_points, "
+        "const unsigned* valid_point_indices, "
+        f"const {scalar_type}* surface_coordinates, "
+        f"const {scalar_type}* surface_normals, "
+        f"const {scalar_type}* surface_weights, "
+        f"const {scalar_type}* const* surface_data, "
+        f"const {scalar_type} center[3], "
+        f"{scalar_type} local_quantities[7]"
+    )
+    body = quadrature_body
     cfc.register_CFunction(
         subdirectory="generated/src/adm_quantities",
         includes=[f"{solver_stem}_defines.h"],
-        desc="Accumulate rank-local ADM mass and momenta from owned surface samples.",
-        cfunc_type="void",
-        name="adm_quantities",
-        params=(
-            "unsigned num_points, unsigned num_valid_points, "
-            "const unsigned* valid_point_indices, "
-            f"const {scalar_type}* surface_coordinates, "
-            f"const {scalar_type}* surface_normals, "
-            f"const {scalar_type}* surface_weights, "
-            f"const {scalar_type}* const* surface_data, "
-            f"const {scalar_type} center[3], "
-            f"{scalar_type} local_quantities[7]"
-        ),
-        body=quadrature_body,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        body=body,
     )
     return pcg.NRPyEnv()

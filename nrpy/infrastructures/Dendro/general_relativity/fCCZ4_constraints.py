@@ -167,17 +167,21 @@ const {scalar_type} pmin_block[3] = {{
                 ),
             )
         )
+        desc = f"Per-block fCCZ4 constraints at FD order {fd_order}."
+        cfunc_type = "void"
+        name = f"fCCZ4_constraints_order_{fd_order}"
+        params = (
+            f"const ot::Block& block, const {scalar_type}* const* in_gfs, "
+            f"{scalar_type}* const* diagnostic_gfs, const Point& domain_min, "
+            "const Point& domain_max"
+        )
         cfc.register_CFunction(
             subdirectory="generated/src/fCCZ4_constraints",
             includes=[f"{solver_stem}_defines.h"],
-            desc=f"Per-block fCCZ4 constraints at FD order {fd_order}.",
-            cfunc_type="void",
-            name=f"fCCZ4_constraints_order_{fd_order}",
-            params=(
-                f"const ot::Block& block, const {scalar_type}* const* in_gfs, "
-                f"{scalar_type}* const* diagnostic_gfs, const Point& domain_min, "
-                "const Point& domain_max"
-            ),
+            desc=desc,
+            cfunc_type=cfunc_type,
+            name=name,
+            params=params,
             body=body,
         )
     finally:

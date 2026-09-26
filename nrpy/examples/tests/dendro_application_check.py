@@ -39,12 +39,14 @@ import importlib.metadata
 import json
 import math
 import os
+import select
 import shlex
 import shutil
 import signal
 import struct
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
 
@@ -593,6 +595,8 @@ class Leg:
         The apt packages, compilers, and ``requirements.txt`` packages come from
         the runner image and package indexes, which the workflow does not pin, so
         a pass is evidence only for the versions printed here.
+
+        :raises BaseException: An unexpected interruption, after stopping the probe.
         """
         commands = [
             [sys.executable, "--version"],
@@ -612,19 +616,71 @@ class Leg:
             print(f"version: {requirement}: {version}", flush=True)
         for argv in commands:
             try:
-                completed = subprocess.run(
+                # Bound captured bytes before selecting the displayed lines.
+                output = bytearray()
+                unavailable = ""
+                output_limit = 64 * 1024
+                deadline = time.monotonic() + TIMEOUT_VERSION
+                with subprocess.Popen(
                     argv,
-                    capture_output=True,
-                    text=True,
-                    timeout=TIMEOUT_VERSION,
-                    check=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
                     shell=False,
-                )
-                text = (completed.stdout or completed.stderr).strip().splitlines()
+                    start_new_session=True,
+                ) as process:
+                    try:
+                        assert process.stdout is not None
+                        while True:
+                            remaining = deadline - time.monotonic()
+                            if (
+                                remaining <= 0
+                                or not select.select(
+                                    [process.stdout], [], [], remaining
+                                )[0]
+                            ):
+                                unavailable = f"timeout after {TIMEOUT_VERSION} seconds"
+                                break
+                            chunk = os.read(
+                                process.stdout.fileno(),
+                                min(4096, output_limit + 1 - len(output)),
+                            )
+                            if not chunk:
+                                break
+                            output.extend(chunk)
+                            if len(output) > output_limit:
+                                unavailable = "version output exceeds 65536 bytes"
+                                break
+                        if unavailable:
+                            try:
+                                os.killpg(process.pid, signal.SIGKILL)
+                            except ProcessLookupError:
+                                pass
+                            process.wait()
+                        else:
+                            process.wait(timeout=max(0.0, deadline - time.monotonic()))
+                            if process.returncode != 0:
+                                unavailable = f"exit status {process.returncode}"
+                    except BaseException:
+                        try:
+                            os.killpg(process.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        process.wait()
+                        raise
+                if unavailable:
+                    print(
+                        f"version: {' '.join(argv[:2])}: unavailable ({unavailable})",
+                        flush=True,
+                    )
+                    continue
+                text = output.decode(errors="replace").strip().splitlines()
                 print(
                     f"version: {' '.join(argv[:2])}: {' | '.join(text[:3])}", flush=True
                 )
-            except (OSError, subprocess.TimeoutExpired) as error:
+            except (
+                OSError,
+                subprocess.TimeoutExpired,
+            ) as error:
                 print(
                     f"version: {' '.join(argv[:2])}: unavailable ({error})", flush=True
                 )
@@ -1378,6 +1434,46 @@ class Leg:
             )
         exe = self.executables["W"]
         o4 = dict(PROFILE_O, BSSN_ELE_ORDER="4")
+        # Reject registered nonfinite values before accessing puncture data.
+        for parameter, value in (("BSSN_SSL_SIGMA", "nan"), ("ETA_CONST", "inf")):
+            run_dir = self.prepare(
+                "W", f"N-nonfinite-{parameter}", dict(o4, **{parameter: value})
+            )
+            (run_dir / TPID_FILE).unlink()
+            self.negative(
+                f"{parameter} = {value}",
+                self.mpi(2, exe, "ci.toml"),
+                run_dir,
+                "invalid runtime parameters",
+            )
+        run_dir = self.prepare(
+            "W", "N-restore-missing", dict(o4, BSSN_RESTORE_SOLVER="1")
+        )
+        diagnostic = run_dir / "dat/dgr_Constraints.dat"
+        previous_output = b"# Existing evolution output\n80 1.0 0.25\n"
+        diagnostic.write_bytes(previous_output)
+        self.negative(
+            "restore requested without checkpoint metadata",
+            self.mpi(2, exe, "ci.toml"),
+            run_dir,
+            "checkpoint restore requested but no checkpoint metadata found",
+        )
+        self.report.check(
+            "N1",
+            "runtime error behavior",
+            "missing checkpoint preserves diagnostics",
+            "unchanged" if diagnostic.read_bytes() == previous_output else "changed",
+            "unchanged",
+            diagnostic.read_bytes() == previous_output,
+        )
+        run_dir = self.prepare("W", "N-output-failure", o4)
+        (run_dir / "dat/dgr_ADM.dat").mkdir()
+        self.negative(
+            "ADM diagnostic path is a directory",
+            self.mpi(2, exe, "ci.toml"),
+            run_dir,
+            "cannot write diagnostic file: dat/dgr_ADM.dat",
+        )
         cases = [
             (
                 "--tpid on 2 ranks",
@@ -1418,6 +1514,14 @@ class Leg:
                 [],
                 "generated Dendro solver supports BH_WAMR",
                 False,
+            ),
+            (
+                "BSSN_CFL_FACTOR = inf",
+                dict(o4, BSSN_CFL_FACTOR="inf"),
+                2,
+                [],
+                "invalid runtime parameter range",
+                True,
             ),
             (
                 "BSSN_CFL_FACTOR = 3.0",
