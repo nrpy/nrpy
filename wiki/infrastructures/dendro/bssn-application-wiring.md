@@ -156,11 +156,15 @@ differs from its CodeParameter default remains absent so rerunning the file
 preserves each call site's current behavior. In particular, omitted
 `BSSN_BH1.V_X` and `BSSN_BH1.V_Y` retain their distinct defaults for puncture
 tracking and TwoPunctures momentum; omitted `CHI_FLOOR` retains its
-CodeParameter default rather than the host's initial-mesh seed fallback. The
-special `--tpid` utility run does not write an evolution parameter dump.
+`0.1` initial-mesh puncture-seed floor and its `1e-4` evolved-field floor. The
+dump writes every inserted floating-point default with enough digits to
+recover its original double value, including values inside TOML arrays. A
+rerun can therefore reuse the same TwoPunctures solution file when its input
+parameters agree. The special `--tpid` utility run does not write an evolution
+parameter dump.
 
 Claim evidence:
-- Claim: A normal solver launch writes one rank-0 TOML file named `<BSSN_PROFILE_FILE_PREFIX>__PARAM_DUMP__YYYY-MM-DD-HH-MM-SS.toml`. It preserves supplied keys and tables, and adds consumed host fallback and registered runtime CodeParameter defaults only when every host fallback and mapped CodeParameter default for a missing key agrees. It leaves conflicting keys absent so the file can be rerun without changing their distinct call-site behavior. `--tpid` does not write the file. This applies to the fCCZ4 application as well.
+- Claim: A normal solver launch writes one rank-0 TOML file named `<BSSN_PROFILE_FILE_PREFIX>__PARAM_DUMP__YYYY-MM-DD-HH-MM-SS.toml`. It preserves supplied keys and tables, and adds consumed host fallback and registered runtime CodeParameter defaults only when every host fallback and mapped CodeParameter default for a missing key agrees. Inserted floating-point defaults retain enough digits to recover their double values, so the same TwoPunctures solution file can be reused. Conflicting keys remain absent to preserve their distinct call-site behavior. `--tpid` does not write the file. This applies to the fCCZ4 application as well.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `ParameterFile` and `output_main_cpp`; `nrpy/infrastructures/Dendro/CodeParameters.py`, `output_toml_default_assignments`.
 - Corroboration: Dendro-GR `BSSN_GR/src/bssngr_main.cpp`, `writeParamTOMLFile` call; Dendro-GR `BSSN_GR/src/parameters.cpp`, resolved parameter writer.

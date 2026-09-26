@@ -567,10 +567,25 @@ class ParameterFile {
 
  private:
   using ParameterKey = std::pair<std::string, std::string>;
+  static void set_dump_float_precision(toml::value& value) {
+    if (value.is_floating()) {
+      // TwoPunctures compares the input doubles when reusing its solution file.
+      value.as_floating_fmt().prec =
+          std::numeric_limits<toml::value::floating_type>::max_digits10;
+    } else if (value.is_array()) {
+      for (auto& member : value.as_array())
+        set_dump_float_precision(member);
+    } else if (value.is_table()) {
+      for (auto& member : value.as_table())
+        set_dump_float_precision(member.second);
+    }
+  }  // END FUNCTION: set_dump_float_precision
   void record_fallback(const std::string& table, const std::string& key,
                        const toml::value& value) {
     const ParameterKey name{table, key};
-    const auto inserted = fallback_defaults_.emplace(name, value);
+    toml::value dump_value = value;
+    set_dump_float_precision(dump_value);
+    const auto inserted = fallback_defaults_.emplace(name, dump_value);
     if (!inserted.second && !(inserted.first->second == value))
       conflicting_defaults_.insert(name);
   }  // END FUNCTION: record_fallback
