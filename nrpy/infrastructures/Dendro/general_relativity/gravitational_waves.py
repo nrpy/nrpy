@@ -28,7 +28,8 @@ def register_CFunction_gravitational_waves(
     Register Lebedev Psi4 mode decomposition.
 
     The generated function interpolates zipped Psi4 fields onto coordinate
-    spheres and computes ``Psi4_lm`` without an extraction-radius factor.
+    spheres, computes ``Psi4_lm`` without an extraction-radius factor, and
+    accumulates the separate real and imaginary Psi4 L2 norms.
 
     :param solver_stem: Lowercase solver name used by the generated header.
     :param maximum_l_mode_generated: Largest compiled spin-weighted mode.
@@ -67,7 +68,8 @@ def register_CFunction_gravitational_waves(
             )
     switch_body = "\n".join(harmonic_cases)
     decomposition = f"""if (mesh == nullptr || extraction_radii == nullptr ||
-    modes_real == nullptr || modes_imag == nullptr) {{
+    modes_real == nullptr || modes_imag == nullptr ||
+    l2_real == nullptr || l2_imag == nullptr) {{
     throw std::invalid_argument("gravitational_waves received a null array");
 }}  // END IF: null input array pointers
 if (maximum_l < 2 || maximum_l > {maximum_l_mode_generated}) {{
@@ -87,6 +89,8 @@ if (output_size > static_cast<unsigned>(std::numeric_limits<int>::max())) {{
 }}  // END IF: MPI count exceeds INT_MAX
 std::fill(modes_real, modes_real + output_size, 0.0);
 std::fill(modes_imag, modes_imag + output_size, 0.0);
+std::fill(l2_real, l2_real + num_radii, 0.0);
+std::fill(l2_imag, l2_imag + num_radii, 0.0);
 if (!mesh->isActive() || num_radii == 0) {{
     return;
 }}  // END IF: inactive rank or no radii
@@ -98,6 +102,8 @@ const Point grid_limits[2] = {{grid_min, grid_max}};
 const Point domain_limits[2] = {{domain_min, domain_max}};
 std::vector<{scalar_type}> local_real(output_size, 0.0);
 std::vector<{scalar_type}> local_imag(output_size, 0.0);
+std::vector<{scalar_type}> local_l2_real(num_radii, 0.0);
+std::vector<{scalar_type}> local_l2_imag(num_radii, 0.0);
 std::vector<{scalar_type}> coordinates(3 * num_points);
 std::vector<{scalar_type}> shell_real(num_points);
 std::vector<{scalar_type}> shell_imag(num_points);
@@ -141,6 +147,10 @@ for (unsigned radius_index = 0; radius_index < num_radii; ++radius_index) {{
                       << message.str() << std::endl;
             throw std::runtime_error(message.str());
         }}  // END IF: non-finite interpolated Psi4 value
+        local_l2_real[radius_index] +=
+            shell_real[valid_index] * shell_real[valid_index];
+        local_l2_imag[radius_index] +=
+            shell_imag[valid_index] * shell_imag[valid_index];
     }}  // END LOOP: for valid_index over owned points
     for (unsigned ell = 2; ell <= maximum_l; ++ell) {{
         for (int mode = -static_cast<int>(ell);
@@ -183,8 +193,17 @@ par::Mpi_Allreduce(
     mesh->getMPICommunicator());
 par::Mpi_Allreduce(
     local_imag.data(), modes_imag, static_cast<int>(output_size), MPI_SUM,
+    mesh->getMPICommunicator());
+par::Mpi_Allreduce(
+    local_l2_real.data(), l2_real, static_cast<int>(num_radii), MPI_SUM,
+    mesh->getMPICommunicator());
+par::Mpi_Allreduce(
+    local_l2_imag.data(), l2_imag, static_cast<int>(num_radii), MPI_SUM,
     mesh->getMPICommunicator());"""
-    desc = "Interpolate Psi4 to spheres and decompose spin-weight minus-two modes."
+    desc = (
+        "Interpolate Psi4 to spheres, decompose spin-weight minus-two modes, "
+        "and compute separate real and imaginary L2 norms."
+    )
     cfunc_type = "void"
     name = "gravitational_waves"
     params = (
@@ -195,7 +214,8 @@ par::Mpi_Allreduce(
         "const Point& extraction_center, const Point& grid_min, "
         "const Point& grid_max, const Point& domain_min, "
         f"const Point& domain_max, {scalar_type}* modes_real, "
-        f"{scalar_type}* modes_imag"
+        f"{scalar_type}* modes_imag, {scalar_type}* l2_real, "
+        f"{scalar_type}* l2_imag"
     )
     body = decomposition
     cfc.register_CFunction(

@@ -84,11 +84,13 @@ when `BSSN_GW_RADAII` is non-empty, one row with the step, time, outermost
 extraction radius, and the ADM energy, linear momentum, and angular momentum,
 printed with up to ten significant digits (default notation, trailing zeros
 dropped). The labeled ASCII diagnostic files (`*_ADM.dat`, the
-two constraint files, and the Psi4 mode files) open with column labels in the
-style of BHaHAHA's horizon diagnostics files: when the file is missing or empty,
-rank 0 first writes a title line naming the formulation and evolved conformal
-factor, then one `# column N = <name>: <meaning>` line per column. A restart
-appends below the existing labels.
+two constraint files, the Psi4 mode files, `*_GW_L2.dat`, and
+`*_BHLocations.dat`) open with column labels in the style of BHaHAHA's horizon
+diagnostics files: when the file is missing or empty, rank 0 first writes a
+title line naming the formulation and evolved conformal factor, then one
+`# column N = <name>: <meaning>` line per column. Dendro-GR writes
+uncommented header lines for its corresponding waveform-norm and puncture
+location files. A restart appends below the existing local labels.
 
 Claim evidence:
 - Claim: At the effective gravitational-wave output cadence, when `BSSN_GW_RADAII` is non-empty, rank 0 appends one row to `<BSSN_PROFILE_FILE_PREFIX>_ADM.dat` with the step, time, the last listed extraction radius, and the seven ADM surface quantities (energy, three linear-momentum and three angular-momentum components), printed with up to ten significant digits in default notation. This applies to the fCCZ4 application as well.
@@ -97,9 +99,9 @@ Claim evidence:
 - Corroboration: `nrpy/infrastructures/Dendro/general_relativity/adm_quantities.py`, `register_CFunction_adm_quantities`, the order of the seven quantities; `nrpy/examples/tests/dendro_application_check.py`, `Leg.check_run_a` column use.
 
 Claim evidence:
-- Claim: When `*_ADM.dat`, `*_Constraints.dat`, `*_Constraints_volweighted.dat`, or a `*_GW_l<l>_m<m>.dat` file is missing or empty, rank 0 writes `# <title>`, `#`, and one `# column N = <name>: <meaning>` line per column before the first row; a file that already has content receives no further labels. The step and time columns are named `TimeStep` and `time` (`t` in the Psi4 files) and the Psi4 radius columns `r0`, `r1`, ..., as in native `BSSN_GR`'s headers; the constraint columns use the generated diagnostic names. This applies to the fCCZ4 application as well.
+- Claim: When `*_ADM.dat`, either constraint file, a `*_GW_l<l>_m<m>.dat` file, `*_GW_L2.dat`, or `*_BHLocations.dat` is missing or empty, rank 0 writes `# <title>`, `#`, and one `# column N = <name>: <meaning>` line per column before the first row; a file that already has content receives no further labels. The step and time columns are named `TimeStep` and `time` (`t` in the Psi4 files); Psi4 radius columns are `r0`, `r1`, ..., as in native `BSSN_GR`'s headers; the constraint and puncture-location columns use descriptive generated labels. Native waveform-norm and puncture-location files instead use uncommented headers. This applies to the fCCZ4 application as well.
 - Role: public/scientific contract
-- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `open_labeled_output` and its four callers within `output_solver_context_cpp`, and `diagnostic_meanings`.
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `open_labeled_output` and its six output paths within `output_solver_context_cpp`, and `diagnostic_meanings`.
 - Corroboration: `nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_file_output.py`, the horizon diagnostics header this format follows; `nrpy/examples/tests/dendro_application_check.py`, `parse_table` and `parse_modes`, which read the labels.
 
 Each Psi4 mode goes to its own `*_GW_l<l>_m<m>.dat` file, with Dendro-GR
@@ -117,6 +119,51 @@ Claim evidence:
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::gravitational_wave_output` within `output_solver_context_cpp`.
 - Corroboration: Dendro-GR `BSSN_GR/include/gwExtract.h`, `GW::extractFarFieldPsi4`, per-mode file writer.
+
+At the effective gravitational-wave extraction cadence, rank 0 also appends
+`<BSSN_PROFILE_FILE_PREFIX>_GW_L2.dat`. Each row gives the step and time, then
+one `(Re,Im)` pair per extraction radius. The two values are
+`sqrt(sum(Re(Psi4)^2))` and `sqrt(sum(Im(Psi4)^2))`, with each sum over the
+valid Lebedev samples and reduced across MPI ranks. The sums use no Lebedev
+weights or `4*pi` factor. Labels name the columns `TimeStep`, `t`, `r0`, `r1`,
+and so on, and give each radius. Unlike Dendro-GR's uncommented step-zero
+header, the generated file uses comment labels. A fresh run writes step 0. A
+restart skips the checkpoint step already written and appends the next
+scheduled row.
+
+The same cadence writes
+`<BSSN_PROFILE_FILE_PREFIX>_BHLocations.dat` with the step, time, and Cartesian
+coordinates of the two tracked puncture centers. These are puncture/excision
+center positions, not apparent-horizon centers. The labeled header follows the
+other local diagnostic files, while Dendro-GR writes an uncommented header; a
+restart appends rows below the existing labels.
+The initial fresh-run row uses the initial centers, and evolved rows use the
+centers updated before diagnostics.
+
+Claim evidence:
+- Claim: At each active gravitational-wave extraction step, rank 0 appends `<BSSN_PROFILE_FILE_PREFIX>_GW_L2.dat` with the step, time and one complex pair per radius. Each pair contains the square roots of the MPI-reduced, unweighted sums of the squared real and imaginary interpolated Psi4 samples over valid Lebedev points. Rank 0 also appends `<BSSN_PROFILE_FILE_PREFIX>_BHLocations.dat` with the step, time and coordinates of both tracked puncture centers. Fresh runs write step 0; restarts do not repeat the checkpoint step. The same behavior is used by the fCCZ4 application.
+- Role: public/scientific contract
+- Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/gravitational_waves.py`, `register_CFunction_gravitational_waves`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::gravitational_wave_output` and `Ctx::black_hole_locations_output`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`.
+- Corroboration: Dendro-GR `BSSN_GR/include/gwExtract.h`, `GW::extractFarFieldPsi4`; Dendro-GR `BSSN_GR/src/dataUtils.cpp`, `writeBHCoordinates`; `nrpy/examples/tests/dendro_application_check.py`, universal output parsing.
+
+On normal solver startup, rank 0 writes
+`<BSSN_PROFILE_FILE_PREFIX>__PARAM_DUMP__YYYY-MM-DD-HH-MM-SS.toml`, using
+machine local time in the filename. The TOML retains supplied keys and tables,
+and adds consumed host fallback and registered runtime CodeParameter defaults
+only when every host fallback and mapped CodeParameter default for a missing
+key agrees. A key with differing call-site fallbacks or a host fallback that
+differs from its CodeParameter default remains absent so rerunning the file
+preserves each call site's current behavior. In particular, omitted
+`BSSN_BH1.V_X` and `BSSN_BH1.V_Y` retain their distinct defaults for puncture
+tracking and TwoPunctures momentum; omitted `CHI_FLOOR` retains its
+CodeParameter default rather than the host's initial-mesh seed fallback. The
+special `--tpid` utility run does not write an evolution parameter dump.
+
+Claim evidence:
+- Claim: A normal solver launch writes one rank-0 TOML file named `<BSSN_PROFILE_FILE_PREFIX>__PARAM_DUMP__YYYY-MM-DD-HH-MM-SS.toml`. It preserves supplied keys and tables, and adds consumed host fallback and registered runtime CodeParameter defaults only when every host fallback and mapped CodeParameter default for a missing key agrees. It leaves conflicting keys absent so the file can be rerun without changing their distinct call-site behavior. `--tpid` does not write the file. This applies to the fCCZ4 application as well.
+- Role: public/scientific contract
+- Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `ParameterFile` and `output_main_cpp`; `nrpy/infrastructures/Dendro/CodeParameters.py`, `output_toml_default_assignments`.
+- Corroboration: Dendro-GR `BSSN_GR/src/bssngr_main.cpp`, `writeParamTOMLFile` call; Dendro-GR `BSSN_GR/src/parameters.cpp`, resolved parameter writer.
 
 VTU output follows Dendro-GR `BSSN_GR`'s selection and defaults. With
 `BSSN_VTU_Z_SLICE_ONLY` (default true) it writes the elements that touch the
@@ -223,16 +270,18 @@ Claim evidence:
 - [initial_data_lambdaU.py](../../../nrpy/infrastructures/Dendro/general_relativity/initial_data_lambdaU.py) - connection initialization.
 - [twopunctures.py](../../../nrpy/infrastructures/Dendro/general_relativity/twopunctures.py) - TwoPunctures data and interpolation.
 - [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - traversal and runtime scheduling.
-- [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - analytic puncture seed and generated startup sequence.
+- [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - puncture seed, effective parameter values, and generated startup sequence.
 - [floor_the_lapse_and_conformal_factor.py](../../../nrpy/infrastructures/Dendro/general_relativity/floor_the_lapse_and_conformal_factor.py) - representation-dependent conformal-factor floor.
-- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - runtime mapping of eta and KO strengths to q1 parameter names.
+- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - runtime mapping of eta and KO strengths to q1 parameter names and recorded compatible TOML defaults.
+- [gravitational_waves.py](../../../nrpy/infrastructures/Dendro/general_relativity/gravitational_waves.py) - Psi4 interpolation, mode decomposition, and real/imaginary L2 sums.
 - [param_toml.py](../../../nrpy/infrastructures/Dendro/param_toml.py) - emitted sample's eta and KO values.
 - [Dendro-GR rhs.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/rhs.cpp) - native CPU eta and SSL/CAHD dispatch.
 - [Dendro-GR TwoPunctures.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/TwoPunctures.cpp) - native initial-lapse replacement.
 - [Dendro-GR parameters.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/parameters.cpp) - native CAKO and lapse settings.
-- [Dendro-GR bssngr_main.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssngr_main.cpp) - post-merger CAKO switch.
+- [Dendro-GR bssngr_main.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssngr_main.cpp) - parameter dump name, startup, and diagnostic cadence.
+- [Dendro-GR dataUtils.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/dataUtils.cpp) - native puncture-coordinate output.
 - [Dendro-GR bssnCtx.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssnCtx.cpp) - native VTU field selection and slicing.
-- [Dendro-GR gwExtract.h](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/include/gwExtract.h) - native per-mode Psi4 file names and layout.
+- [Dendro-GR gwExtract.h](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/include/gwExtract.h) - native Psi4 L2 and per-mode file names and layouts.
 - [diagnostics_file_output.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_file_output.py) - BHaHAHA horizon diagnostics header, the column-label format.
 
 ## See Also

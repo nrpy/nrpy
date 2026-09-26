@@ -441,6 +441,47 @@ def output_toml_bindings() -> str:
     return "\n".join(lines)
 
 
+def output_toml_default_assignments() -> str:
+    """Emit candidate defaults for registered runtime CodeParameters.
+
+    User-supplied TOML values remain untouched. If several CodeParameters map
+    to one TOML key, each default is recorded so ``ParameterFile`` can omit a
+    key when those defaults differ or conflict with a host fallback.
+
+    :return: C++ statements that record registered defaults in ``ParameterFile``.
+    """
+    names_by_toml_key: Dict[str, List[str]] = {}
+    for name in runtime_parameter_names():
+        toml_key = Q1_TOML_PARAMETER_NAMES.get(name, name)
+        names_by_toml_key.setdefault(toml_key, []).append(name)
+
+    lines: List[str] = []
+    for toml_key in sorted(names_by_toml_key):
+        for name in names_by_toml_key[toml_key]:
+            parameter = par.glb_code_params_dict[name]
+            base, size, _is_array = par.parse_cparam_type(parameter.cparam_type)
+            if base == "char":
+                raise ValueError(
+                    "Dendro TOML character parameters are not supported."
+                )
+            if size is not None:
+                lines += [
+                    "{",
+                    "toml::value::array_type values;",
+                    f"for (unsigned i = 0; i < {size}; ++i) {{",
+                    f"  values.emplace_back(params.{name}[i]);",
+                    "} // END LOOP: record CodeParameter array default",
+                    f'parameters.set_default("{toml_key}", toml::value(values));',
+                    "} // END BLOCK: record CodeParameter array default",
+                ]
+            else:
+                lines.append(
+                    f'parameters.set_default("{toml_key}", '
+                    f"toml::value(params.{name}));"
+                )
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":
     import doctest
     import sys

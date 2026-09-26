@@ -54,9 +54,12 @@ by FD order (an ordering check, not a convergence test), finite diagnostics on
 every run, constraint output, wave extraction with odd-m modes near zero and the
 reflection relation C(l,-m) = (-1)^l conj C(l,m), apparent-horizon irreducible
 masses matching the puncture ADM masses, a forced remesh whose evolved state and
-node counts match a stored reference, checkpoint and byte-identical restore,
-point reflection of the checkpointed puncture centers and their motion along the
-puncture momenta, and rejection of both W/chi checkpoint-formulation mismatches.
+node counts match a stored reference, checkpoint and byte-identical diagnostic
+restore, point reflection of the checkpointed puncture centers and their motion
+along the puncture momenta, and rejection of both W/chi checkpoint-formulation
+mismatches. The restore comparison normalizes GridInfo wall time, excludes only
+the per-launch `dgr__PARAM_DUMP__*.toml` files under `dat/`, and compares all
+diagnostic `.dat` files.
 The stored-reference comparison of run A's evolved constraint, ADM, and horizon
 values is a regression check on the evolution, not a correctness proof. Lambda
 initialization is asserted through the stored reference, which includes the

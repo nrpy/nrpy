@@ -104,11 +104,14 @@ puncture ADM masses, equal-mass reflection symmetry of the horizons, vanishing
 ADM momentum and in-plane angular momentum, vanishing odd-m wave modes and the
 reflection relation C(l,-m) = (-1)^l conj C(l,m) over all 21 modes with l = 2-4
 at two radii, point reflection of the checkpointed puncture centers at step 4
-and their motion along the puncture momenta, byte-identical `dat/`, `bah/`, and
-`vtu/` outputs after a stop at step 4 and restore, and agreement of a 3-rank
-run, which writes a horizon checkpoint, with the diagnostics of the main runs
+and their motion along the puncture momenta, byte-identical diagnostic outputs
+in `dat/`, `bah/`, and `vtu/` after a stop at step 4 and restore, and agreement
+of a 3-rank run, which writes a horizon checkpoint, with the diagnostics of the main runs
 within a relative tolerance (horizon observables through the irreducible mass;
-the finder's convergence residuals are not compared). Run A's constraint and ADM
+the finder's convergence residuals are not compared). The restore comparison
+normalizes the GridInfo wall-time column and excludes the per-launch
+`dgr__PARAM_DUMP__*.toml` files; it compares all diagnostic `.dat` files.
+Run A's constraint and ADM
 rows and horizon observables at steps 0, 4, and 8 must also match a stored
 reference, `nrpy/examples/tests/dendro_application_check_reference.py`, within a
 fixed relative and absolute tolerance; because it covers the evolved state after

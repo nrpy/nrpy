@@ -6,7 +6,10 @@ Author: Zachariah B. Etienne
 """
 
 import nrpy.params as par
-from nrpy.infrastructures.Dendro.CodeParameters import output_toml_bindings
+from nrpy.infrastructures.Dendro.CodeParameters import (
+    output_toml_bindings,
+    output_toml_default_assignments,
+)
 from nrpy.infrastructures.Dendro.state_h import BSSN_EVOLVED_GRIDFUNCTIONS
 
 DENDRO_LICENSE = """// MIT License
@@ -459,18 +462,24 @@ def output_main_cpp(
 #include <toml.hpp>
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <iomanip>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 void allocate_derivs(derivs* derivatives, int count);
@@ -487,18 +496,52 @@ class ParameterFile {
   explicit ParameterFile(const std::string& path)
       : document_(toml::parse(path)) {}
   const toml::value& document() const { return document_; }
+  void set_default(const std::string& key, toml::value value) {
+    record_fallback("", key, value);
+  }  // END FUNCTION: set_default
+  void materialize_fallbacks() {
+    for (const auto& item : fallback_defaults_) {
+      if (conflicting_defaults_.count(item.first) != 0) continue;
+      if (item.first.first.empty()) {
+        auto& document_table = document_.as_table();
+        if (document_table.find(item.first.second) == document_table.end())
+          document_table.emplace(item.first.second, item.second);
+        continue;
+      }  // END IF: top-level fallback
+      const std::string& table = item.first.first;
+      const std::string& key = item.first.second;
+      auto& document_table = document_.as_table();
+      auto table_value = document_table.find(table);
+      if (table_value == document_table.end()) {
+        table_value = document_table.emplace(
+            table, toml::value(toml::value::table_type{})).first;
+      }  // END IF: create table for fallback
+      if (table_value->second.is_table() &&
+          !table_value->second.contains(key))
+        table_value->second.as_table().emplace(key, item.second);
+    }  // END LOOP: for fallback over recorded defaults
+  }  // END FUNCTION: materialize_fallbacks
   template <typename T>
   T get(const std::string& key, const T& fallback) {
     read_keys_.insert(key);
-    if (!document_.contains(key)) return fallback;
+    if (!document_.contains(key)) {
+      record_fallback("", key, toml::value(fallback));
+      return fallback;
+    }  // END IF: use top-level fallback
     return toml::find<T>(document_, key);
   }  // END FUNCTION: get
   template <typename T>
   T get(const std::string& table, const std::string& key, const T& fallback) {
     read_keys_.insert(table + "." + key);
-    if (!document_.contains(table)) return fallback;
+    if (!document_.contains(table)) {
+      record_fallback(table, key, toml::value(fallback));
+      return fallback;
+    }  // END IF: use table fallback
     const toml::value& entry = document_.at(table);
-    if (entry.is_table() && !entry.contains(key)) return fallback;
+    if (entry.is_table() && !entry.contains(key)) {
+      record_fallback(table, key, toml::value(fallback));
+      return fallback;
+    }  // END IF: use member fallback
     return toml::find<T>(document_, table, key);
   }  // END FUNCTION: get
   /**
@@ -523,9 +566,37 @@ class ParameterFile {
   }  // END FUNCTION: unread
 
  private:
+  using ParameterKey = std::pair<std::string, std::string>;
+  void record_fallback(const std::string& table, const std::string& key,
+                       const toml::value& value) {
+    const ParameterKey name{table, key};
+    const auto inserted = fallback_defaults_.emplace(name, value);
+    if (!inserted.second && !(inserted.first->second == value))
+      conflicting_defaults_.insert(name);
+  }  // END FUNCTION: record_fallback
   toml::value document_;
   std::set<std::string> read_keys_;
+  std::map<ParameterKey, toml::value> fallback_defaults_;
+  std::set<ParameterKey> conflicting_defaults_;
 };  // END CLASS: ParameterFile
+void write_parameter_dump(const std::string& output_prefix,
+                          const toml::value& parameters, int rank) {
+  if (rank != 0) return;
+  const std::time_t launch_time = std::chrono::system_clock::to_time_t(
+      std::chrono::system_clock::now());
+  const std::tm* const local_time = std::localtime(&launch_time);
+  if (local_time == nullptr)
+    throw std::runtime_error("cannot determine local time for parameter dump");
+  std::ostringstream timestamp;
+  timestamp << std::put_time(local_time, "%Y-%m-%d-%H-%M-%S");
+  const std::string filename = output_prefix + "__PARAM_DUMP__" +
+                               timestamp.str() + ".toml";
+  std::ofstream file;
+  file.exceptions(std::ios::failbit | std::ios::badbit);
+  file.open(filename, std::ios::out | std::ios::trunc);
+  file << toml::format(parameters) << '\n';
+  file.close();
+}  // END FUNCTION: write_parameter_dump
 
 int main(int argc, char** argv) {
   const bool generate_tpid =
@@ -939,6 +1010,18 @@ int main(int argc, char** argv) {
         + r""" + key + " has no effect\n";
       std::cerr << report << std::flush;
     }  // END IF: rank 0 reports unread parameters
+    if (!generate_tpid) {
+"""
+        + output_toml_default_assignments()
+        + r"""
+      parameters.materialize_fallbacks();
+      if (rank == 0) {
+        const std::filesystem::path output_path(output_prefix);
+        if (!output_path.parent_path().empty())
+          std::filesystem::create_directories(output_path.parent_path());
+        write_parameter_dump(output_prefix, parameters.document(), rank);
+      }  // END IF: rank 0 writes parameter dump
+    }  // END IF: normal solver launch
     if (generate_tpid || checkpoint_index < 0) {
       const std::filesystem::path output_file =
           generate_tpid ? std::filesystem::path(tpid_file.string() + ".tmp")
@@ -1035,7 +1118,7 @@ int main(int argc, char** argv) {
       MPI_Finalize();
       return 0;
     } // END IF: exit after puncture solve
-
+""" + r"""
     const Point domain_minimum(grid_min_x, grid_min_y, grid_min_z);
     const Point domain_maximum(grid_max_x, grid_max_y, grid_max_z);
     m_uiMaxDepth = maximum_depth;
@@ -1097,9 +1180,6 @@ int main(int argc, char** argv) {
         -static_cast<int>(local_maximum_depth));
     DendroScalar time_step = cfl * minimum_dx;
 
-    const std::filesystem::path output_path(output_prefix);
-    if (!output_path.parent_path().empty())
-      std::filesystem::create_directories(output_path.parent_path());
     const std::filesystem::path vtu_path(vtu_prefix);
     if (!vtu_path.parent_path().empty())
       std::filesystem::create_directories(vtu_path.parent_path());
@@ -1271,6 +1351,8 @@ int main(int argc, char** argv) {
         throw std::runtime_error("initial diagnostic output failed");
       if (context.gravitational_wave_output() != 0)
         throw std::runtime_error("initial gravitational-wave output failed");
+      if (context.black_hole_locations_output() != 0)
+        throw std::runtime_error("initial black-hole location output failed");
       if (context.adm_output() != 0)
         throw std::runtime_error("initial ADM output failed");
       if (context.write_vtu() != 0)
@@ -1313,6 +1395,8 @@ int main(int argc, char** argv) {
         throw std::runtime_error("diagnostic output failed");
       if (context.gravitational_wave_output() != 0)
         throw std::runtime_error("gravitational-wave output failed");
+      if (context.black_hole_locations_output() != 0)
+        throw std::runtime_error("black-hole location output failed");
       if (context.adm_output() != 0)
         throw std::runtime_error("ADM output failed");
       if (context.write_vtu() != 0)

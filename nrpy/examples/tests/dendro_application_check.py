@@ -491,7 +491,10 @@ def row_at(rows: List[List[float]], step: int) -> List[float]:
 
 
 def trees_identical(
-    first: Path, second: Path, ignore_grid_wall_time: bool = False
+    first: Path,
+    second: Path,
+    ignore_grid_wall_time: bool = False,
+    ignore_parameter_dumps: bool = False,
 ) -> Tuple[bool, str]:
     """
     Compare two directory trees file by file.
@@ -499,6 +502,7 @@ def trees_identical(
     :param first: First tree.
     :param second: Second tree.
     :param ignore_grid_wall_time: Exclude only the GridInfo wall-time column.
+    :param ignore_parameter_dumps: Exclude ``dgr__PARAM_DUMP__*.toml`` files.
     :return: Whether they are identical, and the first difference found.
 
     >>> import tempfile
@@ -512,8 +516,20 @@ def trees_identical(
     ...     same, trees_identical(a, b)
     ((True, ''), (False, 'f differs'))
     """
-    names_a = sorted(p.relative_to(first) for p in first.rglob("*") if p.is_file())
-    names_b = sorted(p.relative_to(second) for p in second.rglob("*") if p.is_file())
+    def comparable_files(tree: Path) -> List[Path]:
+        return [
+            path
+            for path in tree.rglob("*")
+            if path.is_file()
+            and not (
+                ignore_parameter_dumps
+                and path.name.startswith("dgr__PARAM_DUMP__")
+                and path.suffix == ".toml"
+            )
+        ]
+
+    names_a = sorted(p.relative_to(first) for p in comparable_files(first))
+    names_b = sorted(p.relative_to(second) for p in comparable_files(second))
     if names_a != names_b:
         missing = sorted(set(map(str, names_a)) ^ set(map(str, names_b)))
         return False, f"file lists differ: {missing[:5]}"
@@ -966,7 +982,12 @@ class Leg:
         differences = [
             detail
             for same, detail in (
-                trees_identical(run_a / sub, run_b / sub, ignore_grid_wall_time=True)
+                trees_identical(
+                    run_a / sub,
+                    run_b / sub,
+                    ignore_grid_wall_time=True,
+                    ignore_parameter_dumps=(sub == "dat"),
+                )
                 for sub in ("dat", "bah", "vtu")
             )
             if not same
@@ -974,9 +995,9 @@ class Leg:
         self.report.check(
             "R1",
             "exact runtime identity",
-            "restart 0-4-8 equals the uninterrupted run in dat/, bah/, vtu/",
+            "restart 0-4-8 matches diagnostic outputs in dat/, bah/, vtu/",
             "identical" if not differences else "; ".join(differences),
-            "byte-identical except GridInfo wall time",
+            "byte-identical except GridInfo wall time; dgr parameter dumps excluded",
             not differences,
             conformal,
         )

@@ -81,6 +81,7 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
   int diagnostic_output();
   int evolve_excision_centers();
   int gravitational_wave_output();
+  int black_hole_locations_output();
   int adm_output();
   int apparent_horizon_output();
   bool is_remesh(bool initial_grid = false);
@@ -961,6 +962,8 @@ int Ctx::gravitational_wave_output() {{
       gravitational_wave_radii_.size() * mode_stride;
   std::vector<DendroScalar> modes_real(mode_count, 0.0);
   std::vector<DendroScalar> modes_imag(mode_count, 0.0);
+  std::vector<DendroScalar> l2_real(gravitational_wave_radii_.size(), 0.0);
+  std::vector<DendroScalar> l2_imag(gravitational_wave_radii_.size(), 0.0);
   const Point grid_minimum(0.0, 0.0, 0.0);
   const Point grid_maximum(1u << m_uiMaxDepth, 1u << m_uiMaxDepth,
                            1u << m_uiMaxDepth);
@@ -970,8 +973,36 @@ int Ctx::gravitational_wave_output() {{
       static_cast<unsigned>(gravitational_wave_radii_.size()),
       gravitational_wave_maximum_l_, mode_stride, extraction_center_,
       grid_minimum, grid_maximum, domain_minimum_, domain_maximum_,
-      modes_real.data(), modes_imag.data());
+      modes_real.data(), modes_imag.data(), l2_real.data(), l2_imag.data());
   if (m_uiMesh->getMPIRank() == 0) {{
+    std::vector<std::string> l2_labels{{
+        "TimeStep: iteration number", "t: simulation time"}};
+    for (unsigned radius_index = 0;
+         radius_index < gravitational_wave_radii_.size(); ++radius_index) {{
+      std::ostringstream label;
+      label.precision(10);
+      label << 'r' << radius_index
+            << ": (sqrt sum of real Psi4 squared, sqrt sum of imaginary Psi4 squared) at extraction radius r = "
+            << gravitational_wave_radii_[radius_index];
+      l2_labels.push_back(label.str());
+    }}  // END LOOP: for radius_index over radii
+    const std::string l2_filename = output_prefix_ + "_GW_L2.dat";
+    std::ofstream l2_file = open_labeled_output(
+        l2_filename,
+        "separate real and imaginary Psi4 L2 norms over valid Lebedev points",
+        l2_labels);
+    l2_file << std::scientific << m_uiTinfo._m_uiStep << '\\t'
+            << m_uiTinfo._m_uiT << '\\t';
+    for (unsigned radius_index = 0;
+         radius_index < gravitational_wave_radii_.size(); ++radius_index) {{
+      l2_file << std::complex<DendroScalar>(std::sqrt(l2_real[radius_index]),
+                                            std::sqrt(l2_imag[radius_index]))
+              << '\\t';
+    }}  // END LOOP: for radius_index over radii
+    l2_file << '\\n';
+    l2_file.close();
+    if (!l2_file)
+      throw std::runtime_error("cannot write diagnostic file: " + l2_filename);
     // One file per (l, m) mode in Dendro-GR BSSN_GR's name and layout: the
     // step, time and one (Re, Im) pair per radius, under column labels that
     // keep BSSN_GR's header names (TimeStep, t, r0, r1, ...).
@@ -1017,6 +1048,32 @@ int Ctx::gravitational_wave_output() {{
   }}  // END IF: rank 0 writes modes
   return 0;
 }}  // END FUNCTION: gravitational_wave_output
+int Ctx::black_hole_locations_output() {{
+  if (!m_uiMesh->isActive() || gravitational_wave_frequency_ == 0 ||
+      m_uiTinfo._m_uiStep % gravitational_wave_frequency_ != 0) return 0;
+  if (m_uiMesh->getMPIRank() != 0) return 0;
+  const std::vector<std::string> labels{{
+      "TimeStep: iteration number", "time: simulation time",
+      "bh1_x: x coordinate of tracked puncture 1",
+      "bh1_y: y coordinate of tracked puncture 1",
+      "bh1_z: z coordinate of tracked puncture 1",
+      "bh2_x: x coordinate of tracked puncture 2",
+      "bh2_y: y coordinate of tracked puncture 2",
+      "bh2_z: z coordinate of tracked puncture 2"}};
+  const std::string filename = output_prefix_ + "_BHLocations.dat";
+  std::ofstream file = open_labeled_output(
+      filename, "coordinate positions of the two tracked puncture centers",
+      labels);
+  file << std::scientific << m_uiTinfo._m_uiStep << '\\t'
+       << m_uiTinfo._m_uiT;
+  for (const Point& center : excision_centers_)
+    file << '\\t' << center.x() << '\\t' << center.y() << '\\t' << center.z();
+  file << '\\n';
+  file.close();
+  if (!file)
+    throw std::runtime_error("cannot write diagnostic file: " + filename);
+  return 0;
+}}  // END FUNCTION: black_hole_locations_output
 int Ctx::adm_output() {{
   if (!m_uiMesh->isActive() || diagnostic_frequency_ == 0 ||
       gravitational_wave_radii_.empty() ||
