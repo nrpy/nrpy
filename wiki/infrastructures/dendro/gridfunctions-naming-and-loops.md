@@ -1,156 +1,74 @@
 # Gridfunctions, Naming, And Loops
 
-> Explain the Dendro gridfunction class, the exact-name role decorations, the CFunction role sidecar, the generation parameters, and the two loop helpers. · Status: provisional
+> Define Dendro storage names, fixed component order, and block-local loop generation. · Status: provisional
 > Up: [Dendro](index.md)
 
 ## Summary
 
-The Dendro infrastructure keeps every registered NRPy name byte for byte and
-derives everything machine-readable from it. Names reach generated code only
-through reversible syntactic decorations, scheduling roles are a one-word
-sidecar beside the CFunction registry, the non-scientific lowering choices are
-ordinary NRPy parameters, and both loop helpers are thin layers over the
-generic NRPy loop helper.
+`DendroGridFunction` supplies the Dendro C++ storage expression directly. The
+generated state enumeration, name arrays, and checkpoint metadata name NRPy's
+canonical conformal-factor gridfunction `cf` as `cf_W_or_chi`, through
+`state_h.dendro_state_name`; equation modules and role-prefixed stencil pointers
+(`in_`, `rhs_`, `out_`) retain `cf`, as core gridfunction reads emit it. Stencil
+registrars bind pointers from fixed component lists and emit direct `ot::Block`
+loops. Algebraic floors and projection instead operate on owned nodes of zipped
+evolved vectors.
 
 ## Detail
 
-### The gridfunction class
+BSSN evolved storage has this fixed order:
 
-`DendroGridFunction` is a plain string formatter, like its `BHaHGridFunction`,
-`ETLegacyGridFunction`, and `CarpetXGridFunction` peers. Its one-point read
-helper returns a role-prefixed input pointer indexed by the base interior
-index `pp` plus signed x-fastest offsets, and it rejects a SIMD read because
-the qualified CPU profile is not SIMD-qualified. It imports nothing from
-`nrpy.infrastructures`.
+```text
+alpha, cf_W_or_chi, trK,
+lambdaU0, lambdaU1, lambdaU2,
+vetU0, vetU1, vetU2,
+betU0, betU1, betU2,
+hDD00, hDD01, hDD02, hDD11, hDD12, hDD22,
+aDD00, aDD01, aDD02, aDD11, aDD12, aDD22
+```
 
-### Exact names, no aliases
+fCCZ4 appends `Theta_fCCZ4`. Conformal Ricci storage is a separate six-component
+scratch list: `RbarDD00`, `RbarDD01`, `RbarDD02`, `RbarDD11`, `RbarDD12`, and
+`RbarDD22`. Enum values, names, pointer indices, transfer, output, and checkpoint
+metadata use these same lists. Alphabetical registry sorting never defines
+runtime storage.
 
-The `gridfunction_name_decorations` module permits only syntactic decorations that map one-to-one onto
-the exact NRPy name. Semantic aliases are prohibited: `cf` stays `cf` and never
-becomes `chi`, `lambdaU` never becomes `Gt`, and `Theta_fCCZ4` never becomes
-`Theta`. The decorations are the role pointers `in_`, `rhs_`, `out_`, and
-`diag_`, plus the enum member form. The four pointers are prefixes applied
-to the exact registered name and the enum member is the name itself, so every
-decoration is reversible by construction and a generated identifier always
-traces back to one registered gridfunction. `validate_cpp_identifier` enforces
-that a name is a legal C or C++ identifier.
-
-`out_` exists because the other three roles all mean something else. Reusing
-`rhs_` for the initial-data writer made its generated signature claim it fills
-the right-hand-side vector, which is how a caller silently zeroes the state.
-
-A separate helper, `rhs_symbol_to_gridfunction_name`, maps NRPy's RHS *symbol*
-convention onto the registered gridfunction name — `h_rhsDD00` becomes `hDD00`
-— which is the bijection the RHS builder asserts against the registry. It does
-not invert the `rhs_` pointer decoration.
-
-The fCCZ4 state keeps its exact NRPy names and the
-`GridFunction.gridfunction_lists()` order, stores native `hDD`
--- the reference-metric conformal-metric perturbation, so that in Cartesian
-coordinates the conformal metric is the identity plus `hDD` -- and native
-evolved `lambdaU`, the fCCZ4 conformal connection quantity rather than a BSSN
-contracted connection. No full-metric field replaces `hDD`. Runtime physics
-parameters come from the registered `CodeParameter` objects without a second
-Dendro physics table. `emitted_parameter_names()` selects the non-`#define`
-parameters recorded as used by registered CFunctions for the generated struct.
-`runtime_parameter_names()` narrows that use-closure to parameters used by the
-`rhs_eval_block` role and opted into the real-host parameter file. A
-registry-only parameter is absent from both the generated struct and real-host
-parameter bindings.
-A kernel is likewise a registered CFunction plus non-authoritative role
-metadata, with no second body registry.
+Each registrar emits its pointer declarations once in registry order. It does
+not infer inputs by scanning expressions or rewrite identifiers with strings or
+regular expressions. `simple_loop.py` emits x-fastest padded-block loops without
+a nested OpenMP region. Stencil kernels receive `ot::Block` directly and
+derive offsets, dimensions, spacing, padding, and interior bounds from it.
+SIMD gridfunction reads use `ReadSIMD(&in_<name>[pp + offset])`, an unaligned
+load. SIMD Ricci and RHS kernels advance by `SIMD_WIDTH` and start each vector
+at `min(i0_vector, max(0, nx - padding - SIMD_WIDTH))`. When a row has at
+least `SIMD_WIDTH` interior points, its final vector ends at the last interior
+point and recomputes a few interior points with identical arithmetic. A row
+with fewer interior points than `SIMD_WIDTH` (FD6 13³ or FD4 9³ blocks at
+width 8) has one vector, which covers the interior and padding points of the
+same row (on both sides for FD4 9³ blocks). Every load stays inside the block,
+every store stays inside its own row, and no remainder loop is needed. SIMD kernels omit the
+unused scalar coordinates.
+The floor and determinant/trace projection kernels take zipped field pointers
+and the mesh-owned node range instead of block geometry.
 
 Claim evidence:
-- Claim: Dendro emits the non-`#define` CFunction parameter-use closure into its generated struct, while its real-host parameter bindings contain only the `add_to_parfile` subset used by `rhs_eval_block`; registry-only parameters are absent from both.
+- Claim: Dendro's algebraic floor and determinant/trace projection kernels take zipped field pointers and an owned-node range, while stencil kernels retain padded-block geometry.
 - Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/CodeParameters.py`, `emitted_parameter_names`, `runtime_parameter_names`, and their doctest
-- Corroboration: [Project Assembly And Generating Functions](project-assembly-and-emitters.md), parameter-selection rules
-
-Because the decorations are reversible, an intentional rename or reorder of the
-registered state is a visible change to the emitted `EvolVar` enum and to the
-component order the generated state header declares. Nothing currently rejects
-a state laid out by a different order, because the checkpoint ABI is a separate
-deferred profile.
-
-### The role sidecar
-
-A Dendro kernel is an ordinary NRPy CFunction plus one word: its scheduling
-role. `set_CFunction_role` registers the CFunction through
-`cfc.register_CFunction` and records the role in
-`par.glb_extras_dict["Dendro"]["CFunction_roles"]`;
-`set_CFunction_codeparameters` records the CodeParameters a kernel took, and
-`CFunction_name_for_role` and `CFunction_codeparameters` read the sidecar back.
-That is how the host-adapter
-emitters ask for "the all-block RHS entry point" without taking a dozen name
-arguments.
-The sidecar holds no body, signature, parameter default, field declaration, or
-source path, because the CFunction registry is the only body and signature
-store. Duplicate names are rejected by `cfc.register_CFunction` itself.
-
-The registered EVOL, AUXEVOL, and DIAG orders are queried from the gridfunction
-registry rather than restated. The right-hand-side builder also records the
-ghost points its regular and KO operators reach through `set_required_padding`.
-The reader raises when nothing is recorded, so a lost writer fails generation
-rather than emitting zero padding. `registered_evol_order` raises on an empty EVOL registry for the
-same reason: a builder that reached it with nothing registered would emit a
-well-formed kernel with an empty body, which is the one failure a generated
-solver cannot report.
-
-Claim evidence:
-- Claim: the Dendro role sidecar stores one scheduling role string per registered CFunction name and, since the signature re-parser was deleted, the CodeParameter names each signature forwards, and duplicate registration is rejected by `nrpy.c_function.register_CFunction` rather than by the sidecar.
-- Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/CFunction_roles.py`, `set_CFunction_role` and its doctest
-- Corroboration: `nrpy/c_function.py`, `register_CFunction` duplicate-name `ValueError`
-
-### Loops
-
-The interior point loop is x-fastest with `i0` innermost over the padded block
-interior. It emits the interior base index `pp`, which the gridfunction class's
-one-point read helper uses for every read, along with the interior coordinates
-`xx0`, `xx1`, and `xx2`. The block loop iterates the local block list supplied
-by Dendro and invokes the registered per-block CFunction for each block. Both
-are emitted by NRPy through the generic loop helper; the Dendro runtime supplies
-only the block list and its count. The [grid and AMR
-page](grid-amr-and-time-stepping.md) distinguishes this loop unit from
-Dendro's refinement unit.
-`require_serial_parallelization` keeps the
-emitted loop free of a parallelization directive NRPy is not entitled to choose
-for the host: the point kernel runs inside Dendro's own block traversal, so an
-inner OpenMP pragma would nest parallelism.
-
-### Generation parameters
-
-Dendro registers no NRPy parameters of its own. The scalar alias is the core
-constant `nrpy.grid.DENDRO_SCALAR_TYPE`, which every emitter reads at the point
-of use, as the three sibling gridfunction classes hardcode theirs; Kreiss-Oliger
-dissipation is a per-call builder argument, as it is in BHaH and ETLegacy. There
-is no parallel configuration object.
-`validate_generation_parameters` rejects an unsupported combination before
-anything is lowered, so an unqualified profile fails generation instead of
-producing silently wrong output. The runtime parameter default, validation, and
-print CFunctions are registered last, after the scientific CFunctions have
-recorded their CodeParameter uses beside their registered CFunction names.
-
-The conformal-factor restriction is GR policy and therefore lives under
-`general_relativity/generation_parameters.py`. Generic reach accepts algebraic
-and restricted-axis calculations and delegates coefficients and per-axis reach
-to `nrpy.finite_difference`.
+- Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/floor_the_lapse_and_conformal_factor.py` and `enforce_detgbar_equals_detghat_trAzero.py`, CFunction registrations.
+- Corroboration: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::post_timestep` within `output_solver_context_cpp`, passes the zipped stage and owned-node range.
 
 ## Sources
 
-- [grid.py](../../../nrpy/grid.py) - `DendroGridFunction`, `input_pointer`, `access_gf`, `read_gf_from_memory_Ccode_onept`
-- [gridfunction_name_decorations.py](../../../nrpy/infrastructures/Dendro/gridfunction_name_decorations.py) - `input_pointer`, `rhs_pointer`, `out_pointer`, `enum_member`, `rhs_symbol_to_gridfunction_name`, `validate_cpp_identifier`, `tensor_family_of`
-- [CFunction_roles.py](../../../nrpy/infrastructures/Dendro/CFunction_roles.py) - `set_CFunction_role`, `CFunction_name_for_role`, `registered_evol_order`, `set_required_padding`
-- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `emitted_parameter_names`, `runtime_parameter_names`, `register_CFunctions_parameters`
-- [simple_loop.py](../../../nrpy/infrastructures/Dendro/simple_loop.py) - `simple_loop`, `block_loop`, `require_serial_parallelization`
-- [generation_parameters.py](../../../nrpy/infrastructures/Dendro/general_relativity/generation_parameters.py) - `validate_generation_parameters`
+- [grid.py](../../../nrpy/grid.py) - `DendroGridFunction`.
+- [state_h.py](../../../nrpy/infrastructures/Dendro/state_h.py) - state lists, enumeration emission, and `dendro_state_name`.
+- [simple_loop.py](../../../nrpy/infrastructures/Dendro/simple_loop.py) - padded block point loops.
+- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - direct input and output pointer binding.
+- [Ricci_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/Ricci_eval.py) - separate Ricci scratch binding.
+- [floor_the_lapse_and_conformal_factor.py](../../../nrpy/infrastructures/Dendro/general_relativity/floor_the_lapse_and_conformal_factor.py) - owned-node floor.
+- [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/Dendro/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - owned-node projection.
 
 ## See Also
 
 - Parent: [Dendro](index.md)
 - Depends on: [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
-- Depends on: [Octree Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md)
-- See also: [Project Assembly And Generating Functions](project-assembly-and-emitters.md)
-- Example: [fCCZ4 Application Wiring](fccz4-application-wiring.md)
-- See also: [Finite Difference](../../core/finite-difference.md)
-- See also: [Infrastructure Code Style](../infrastructure-code-style.md)
+- Used by: [BSSN Application Wiring](bssn-application-wiring.md)

@@ -13,7 +13,7 @@ Most example generators write under `project/<name>/`. Standalone BHaH examples 
 
 Einstein Toolkit and CarpetX generators produce thorn directories rather than standalone executables. Those thorns are generated into `project/<name>/` and then copied or linked into an Einstein Toolkit checkout for build and run. `superB` generators produce Charm++ projects, and `sebobv1_jax` generates a Python/JAX project instead of a C executable.
 
-CI deliberately creates and builds generated outputs as validation evidence. The Ubuntu and macOS codegen jobs install NRPy, generate many projects, and run `make` where applicable. Separate Einstein Toolkit, Dendro, and Charm++ jobs generate backend products inside CI containers and validate their configured build, runtime, and oracle gates.
+CI deliberately creates and builds generated outputs as validation evidence. The Ubuntu and macOS codegen jobs install NRPy, generate many projects, and run `make` where applicable. Separate Einstein Toolkit and Charm++ jobs generate backend products inside CI containers, the Dendro job generates them in the runner's temporary directory, and each job runs its configured build, runtime, and required checks.
 
 The contribution boundary is stricter than the generated-project capability. Binary files, images, archives, compiled artifacts, generated projects, and similar non-text outputs should not be committed unless maintainers approve or a specific generated artifact is intentionally registered as source evidence. For documentation and review, cite the generator source and stable symbols rather than transient generated output whenever possible.
 

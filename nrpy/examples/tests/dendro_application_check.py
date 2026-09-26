@@ -1,0 +1,1699 @@
+r"""
+Generate, build, run, and check the complete NRPy Dendro applications.
+
+For one formulation (BSSN or fCCZ4), this helper generates the W and chi
+applications twice each, builds them standalone against Dendrolib master
+(or against another named Dendrolib branch or tag), runs
+short MPI TwoPunctures evolutions, and checks the output against exact
+identities, values computed independently of the evolution, comparisons between
+runs of the same binary, and a stored reference for the evolved diagnostics.
+Each check prints its identifier, the validation layer it proves, the measured
+value, and the tolerance; a check made for both conformal factors prints one
+line with both results. The process exits nonzero if any check fails.
+
+Usage (from the repository root):
+    python nrpy/examples/tests/dendro_application_check.py \
+        --formulation {bssn,fccz4} --work-dir DIR \
+        [--launcher "mpiexec --oversubscribe --bind-to none"] [--ranks 4] \
+        [--build-jobs 4] [--dendrolib-ref master] [--update-reference]
+
+Run without arguments, the helper runs its doctests. Configuring each
+generated project downloads Dendrolib master and the toml11 release selected by
+the generated CMakeLists.txt, so the run needs network access. With
+--dendrolib-ref, the helper instead clones that Dendrolib branch or tag from the
+repository named in the generated CMakeLists.txt, builds against it, and prints
+the resolved commit; such a run is evidence only for that commit.
+
+The stored reference, dendro_application_check_reference.py, is a generated
+trusted_dict. To change it, run the helper with --update-reference, which writes
+run A's values as a candidate instead of comparing them, review the diff, and
+then run it again without the flag so that the candidate is compared.
+
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
+"""
+
+import argparse
+import ast
+import importlib.metadata
+import json
+import math
+import os
+import select
+import shlex
+import shutil
+import signal
+import struct
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+TIMEOUT_GENERATE = 600
+TIMEOUT_CONFIGURE = 900
+TIMEOUT_BUILD = 1800
+TIMEOUT_RUN = 900
+TIMEOUT_NEGATIVE = 120
+TIMEOUT_VERSION = 60
+LOG_TAIL_LINES = 60
+NODE_CEILING = 2_500_000
+
+SOLVER = {
+    "bssn": ("Dendro_NRPy_BSSN", "nrpyBssnSolver", "bssn"),
+    "fccz4": ("Dendro_NRPy_fCCZ4", "nrpyFccz4Solver", "fccz4"),
+}
+
+COMMON_OVERRIDES: Dict[str, str] = {
+    "BSSN_MINDEPTH": "3",
+    "BSSN_BH1_AMR_R": "1.0",
+    "BSSN_BH2_AMR_R": "1.0",
+    "BSSN_AMR_R_RATIO": "1.618033988749895",
+    "BSSN_DENDRO_GRAIN_SZ": "50",
+    "BSSN_WAVELET_TOL": "0.001",
+    "BSSN_GW_EXTRACT_FREQ": "4",
+    "BSSN_SCALE_VTU_AND_GW_EXTRACTION": "false",
+    "BSSN_GW_RADAII": "[50.0, 100.0]",
+    "BSSN_GW_NUM_RADAII": "2",
+    "BSSN_GW_L_MODES": "[2, 3, 4]",
+    "BSSN_GW_NUM_LMODES": "3",
+    "TPID_NPOINTS_A": "24",
+    "TPID_NPOINTS_B": "24",
+    "TPID_NPOINTS_PHI": "6",
+    "TPID_FILEPREFIX": '"tp_ci"',
+    "BSSN_PROFILE_FILE_PREFIX": '"dat/dgr"',
+    "BSSN_CHKPT_FILE_PREFIX": '"cp/ci_cp"',
+    "BSSN_VTU_FILE_PREFIX": '"vtu/ci"',
+}
+
+# Profile P: FD6, horizons, a forced remesh at step 4, and checkpoints.
+PROFILE_P: Dict[str, str] = {
+    "BSSN_ELE_ORDER": "6",
+    "BSSN_MAXDEPTH": "13",
+    "BSSN_INIT_GRID_ITER": "1",
+    "BSSN_MAX_ITERATIONS": "8",
+    "BSSN_TIME_STEP_OUTPUT_FREQ": "4",
+    "BSSN_REMESH_TEST_FREQ": "4",
+    "BSSN_IO_OUTPUT_FREQ": "4",
+    "BSSN_CHECKPT_FREQ": "4",
+    "AEH_SOLVER_FREQ": "4",
+}
+
+# Profile O: one converged octree for every finite-difference order.
+PROFILE_O: Dict[str, str] = {
+    "BSSN_MAXDEPTH": "10",
+    "BSSN_INIT_GRID_ITER": "10",
+    "BSSN_MAX_ITERATIONS": "4",
+    "BSSN_TIME_STEP_OUTPUT_FREQ": "1",
+    "BSSN_GW_EXTRACT_FREQ": "1",
+    "BSSN_REMESH_TEST_FREQ": "0",
+    "AEH_SOLVER_FREQ": "0",
+    "BSSN_IO_OUTPUT_FREQ": "0",
+    "BSSN_CHECKPT_FREQ": "0",
+}
+
+TPID_FILE = "tp_ci_nrpy_tpid_sol.bin"
+TPID_TAG = b"NRPy-TPID-1"
+TPID_INPUT_COUNT = 33
+TPID_RESULT_COUNT = 8
+TPID_INDEX_P_PLUS_Y = 15
+TPID_INDEX_P_MINUS_Y = 18
+
+# Stored reference for run A's evolved diagnostics (check E1): steps, and the
+# tolerance |a - b| <= REFERENCE_RTOL * max(|a|, |b|) + REFERENCE_ATOL. The
+# constraint and ADM rows in dgr_*.dat are printed with up to ten significant
+# digits; the horizon radii and circumferences with ten, area and irreducible
+# mass with sixteen, and time and centroid in fixed point. The last printed
+# digits can vary between math-library paths and rank counts; a one-unit
+# difference in the tenth digit lies within the tolerance. The ADM linear
+# momentum and J_x, J_y vanish for this configuration, so their printed digits
+# are round-off and REFERENCE_ATOL, not the stored value, bounds them. E1 names
+# the worst entry. Update mode reads, merges, and rewrites the file, so run the
+# two formulations' update legs one after the other.
+REFERENCE_FILE = Path(__file__).with_name("dendro_application_check_reference.py")
+REFERENCE_STEPS = (0, 4, 8)
+REFERENCE_RTOL = 1.0e-9
+REFERENCE_ATOL = 1.0e-12
+
+
+class CheckError(RuntimeError):
+    """Raise when a step cannot produce the output a check needs."""
+
+
+class Report:
+    """Record check results and print them, joining the W and chi results."""
+
+    def __init__(self) -> None:
+        """Start with no results."""
+        self.failures: List[str] = []
+        self.count = 0
+        self.pending: Dict[Tuple[str, str], Dict[str, Tuple[str, str, str, bool]]] = {}
+
+    def check(
+        self,
+        ident: str,
+        layer: str,
+        what: str,
+        measured: str,
+        bound: str,
+        ok: bool,
+        variant: Optional[str] = None,
+    ) -> None:
+        """
+        Record one check and print it, or hold it until its other variant arrives.
+
+        A check made once per conformal-factor variant is printed as one line
+        when both its W and chi results are known.
+
+        :param ident: Check identifier, for example ``R1``.
+        :param layer: Validation layer the check proves.
+        :param what: Short description of the checked property.
+        :param measured: Measured value, formatted.
+        :param bound: Tolerance or criterion, formatted.
+        :param ok: Whether the check passed.
+        :param variant: ``W`` or ``chi`` for a per-variant check, else None.
+        """
+        if variant is None:
+            self._emit(ident, layer, what, measured, bound, ok)
+            return
+        entry = self.pending.setdefault((ident, what), {})
+        entry[variant] = (layer, measured, bound, ok)
+        if len(entry) == 2:
+            self._emit_pair(ident, what)
+
+    def flush(self) -> None:
+        """Print held per-variant checks whose other variant never arrived."""
+        for ident, what in list(self.pending):
+            self._emit_pair(ident, what)
+
+    def _emit_pair(self, ident: str, what: str) -> None:
+        """
+        Print the held results of one per-variant check as one line.
+
+        :param ident: Check identifier.
+        :param what: Short description of the checked property.
+        """
+        entry = self.pending.pop((ident, what))
+        layer = next(iter(entry.values()))[0]
+        measured = "; ".join(f"{v}: {m}" for v, (_, m, _, _) in entry.items())
+        bound = " / ".join(sorted({b for _, _, b, _ in entry.values()}))
+        ok = all(o for _, _, _, o in entry.values())
+        self._emit(ident, layer, f"{what} ({' and '.join(entry)})", measured, bound, ok)
+
+    def _emit(
+        self, ident: str, layer: str, what: str, measured: str, bound: str, ok: bool
+    ) -> None:
+        """
+        Count and print one result line.
+
+        :param ident: Check identifier.
+        :param layer: Validation layer the check proves.
+        :param what: Short description of the checked property.
+        :param measured: Measured value, formatted.
+        :param bound: Tolerance or criterion, formatted.
+        :param ok: Whether the check passed.
+        """
+        self.count += 1
+        status = "PASS" if ok else "FAIL"
+        print(
+            f"[{status}] {ident} ({layer}) {what}: measured {measured}; criterion {bound}",
+            flush=True,
+        )
+        if not ok:
+            self.failures.append(f"{ident}: {what}")
+
+
+def tail(path: Path, lines: int = LOG_TAIL_LINES) -> str:
+    r"""
+    Return at most the last ``lines`` lines of a text file.
+
+    :param path: File to read.
+    :param lines: Maximum number of lines.
+    :return: Tail text, or an empty string if the file is missing.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as d:
+    ...     p = Path(d) / "log"
+    ...     _ = p.write_text("a\nb\nc\n")
+    ...     tail(p, 2)
+    'b\nc'
+    """
+    if not path.exists():
+        return ""
+    return "\n".join(path.read_text(errors="replace").splitlines()[-lines:])
+
+
+def run_logged(
+    argv: Sequence[str],
+    cwd: Path,
+    log: Path,
+    timeout: int,
+    env: Optional[Dict[str, str]] = None,
+) -> Tuple[int, bool]:
+    """
+    Run a command with its output in a log file.
+
+    :param argv: Argument vector; no shell is used.
+    :param cwd: Working directory.
+    :param log: Log file receiving standard output and standard error.
+    :param timeout: Time limit in seconds.
+    :param env: Environment, or None to inherit.
+    :return: Exit status and whether the time limit was reached. On timeout, or
+        if the helper is interrupted, the command's process group is killed;
+        MPI ranks, which the launcher places in their own process groups, then
+        exit through the launcher's failure detection.
+    :raises BaseException: Any interruption other than the timeout, such as
+        KeyboardInterrupt, re-raised after the process group is killed.
+    """
+    with open(log, "w", encoding="utf-8") as stream:
+        with subprocess.Popen(
+            list(argv),
+            cwd=cwd,
+            stdout=stream,
+            stderr=subprocess.STDOUT,
+            env=env,
+            shell=False,
+            start_new_session=True,
+        ) as process:
+            try:
+                return process.wait(timeout=timeout), False
+            except BaseException as error:
+                # Kill the launcher's process group (including build jobs) on a
+                # timeout or any interruption; MPI ranks exit once it is gone.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait()
+                if isinstance(error, subprocess.TimeoutExpired):
+                    return 124, True
+                raise
+
+
+def run_checked(
+    argv: Sequence[str],
+    cwd: Path,
+    log: Path,
+    timeout: int,
+    env: Optional[Dict[str, str]] = None,
+) -> None:
+    """
+    Run a command that must succeed; on failure print the log tail and raise.
+
+    :param argv: Argument vector; no shell is used.
+    :param cwd: Working directory.
+    :param log: Log file receiving standard output and standard error.
+    :param timeout: Time limit in seconds.
+    :param env: Environment, or None to inherit.
+    :raises CheckError: If the command fails or reaches its time limit.
+    """
+    status, timed_out = run_logged(argv, cwd, log, timeout, env)
+    if timed_out or status != 0:
+        print(tail(log), flush=True)
+        reason = f"timed out after {timeout} s" if timed_out else f"exit {status}"
+        raise CheckError(f"{' '.join(argv)} in {cwd}: {reason}")
+
+
+def apply_overrides(base_text: str, overrides: Dict[str, str]) -> str:
+    r"""
+    Replace or append top-level TOML keys, before the first table header.
+
+    :param base_text: Text of the generated parameter file.
+    :param overrides: Keys and literal TOML values.
+    :return: Updated parameter-file text.
+    :raises CheckError: If an override key appears in a non-flat form.
+
+    >>> apply_overrides('A = 1\nB = 2\n[T]\nC = 3\n', {"B": "5", "D": "6"})
+    'A = 1\nB = 5\nD = 6\n[T]\nC = 3\n'
+    >>> apply_overrides('A = 1\n', {"A": "2", "E": '"x"'})
+    'A = 2\nE = "x"\n'
+    >>> apply_overrides('[A]\nx = 1\n', {"A": "2"})
+    Traceback (most recent call last):
+    ...
+    CheckError: override key A appears as a table in the parameter file
+    >>> apply_overrides('A.b = 1\n', {"A": "2"})
+    Traceback (most recent call last):
+    ...
+    CheckError: override key A appears in dotted form
+    """
+    lines = base_text.splitlines()
+    result: List[str] = []
+    seen = set()
+    appended = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            table = stripped.strip("[]").strip()
+            if table.split(".")[0].strip() in overrides:
+                raise CheckError(
+                    f"override key {table} appears as a table in the parameter file"
+                )
+            if not appended:
+                result.extend(
+                    f"{k} = {v}" for k, v in overrides.items() if k not in seen
+                )
+                appended = True
+            result.append(line)
+            continue
+        key, equals, _ = stripped.partition("=")
+        key = key.strip()
+        if equals and not appended and key in overrides:
+            result.append(f"{key} = {overrides[key]}")
+            seen.add(key)
+            continue
+        root = key.split(".")[0].strip()
+        if equals and "." in key and root in overrides:
+            raise CheckError(f"override key {root} appears in dotted form")
+        result.append(line)
+    if not appended:
+        result.extend(f"{k} = {v}" for k, v in overrides.items() if k not in seen)
+    return "\n".join(result) + "\n"
+
+
+def parse_table(path: Path) -> Tuple[List[str], List[List[float]]]:
+    r"""
+    Parse a whitespace-separated numeric table or native GridInfo CSV.
+
+    Column names come from the "# column N = <name>: <meaning>" label lines;
+    other "#" lines are skipped.
+
+    :param path: File to parse.
+    :return: Column names (empty if none) and numeric rows.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as d:
+    ...     p = Path(d) / "t.dat"
+    ...     _ = p.write_text(
+    ...         "# title\n#\n# column  1 = TimeStep: iteration number\n"
+    ...         "# column  2 = time: simulation time\n# column  3 = H: RMS\n"
+    ...         "0\t0\t1e-6\n4\t0.5\tnan\n"
+    ...     )
+    ...     h, rows = parse_table(p)
+    ...     h, rows[0], math.isnan(rows[1][2])
+    (['TimeStep', 'time', 'H'], [0.0, 0.0, 1e-06], True)
+    """
+    labels: List[str] = []
+    rows: List[List[float]] = []
+    for line in path.read_text().splitlines():
+        fields = (
+            line.split(",") if path.name.endswith("_GridInfo.dat") else line.split()
+        )
+        if fields and fields[0] == "timeStep":
+            labels = fields
+            continue
+        if fields[:2] == ["#", "column"] and "=" in line:
+            labels.append(line.partition("=")[2].partition(":")[0].strip())
+            continue
+        if not fields or fields[0].startswith("#"):
+            continue
+        rows.append([float(x) for x in fields])
+    return labels, rows
+
+
+def parse_modes(path: Path) -> List[Tuple[int, List[complex]]]:
+    r"""
+    Parse a Dendro-GR-layout Psi4 mode file into (step, per-radius values).
+
+    :param path: ``dgr_GW_l<l>_m<m>.dat`` file.
+    :return: One entry per row: the step and the complex value at each radius.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as d:
+    ...     p = Path(d) / "m.dat"
+    ...     _ = p.write_text(
+    ...         "# title\n#\n# column  1 = TimeStep: iteration number\n"
+    ...         "4\t1e-1\t(1e-7,-2e-7)\t\n"
+    ...     )
+    ...     parse_modes(p)
+    [(4, [(1e-07-2e-07j)])]
+    """
+    result = []
+    for line in path.read_text().splitlines():
+        fields = [f for f in line.split("\t") if f.strip()]
+        if not fields or fields[0].startswith("#"):
+            continue
+        values = []
+        for field in fields[2:]:
+            real, imag = field.strip().strip("()").split(",")
+            values.append(complex(float(real), float(imag)))
+        result.append((int(float(fields[0])), values))
+    return result
+
+
+def relative(a: float, b: float) -> float:
+    """
+    Return |a - b| / max(|a|, |b|), and 0 when both vanish.
+
+    :param a: First value.
+    :param b: Second value.
+    :return: Relative difference.
+
+    >>> relative(1.0, 1.001) < 1.0e-3
+    True
+    >>> relative(0.0, 0.0)
+    0.0
+    """
+    scale = max(abs(a), abs(b))
+    return 0.0 if scale == 0.0 else abs(a - b) / scale
+
+
+def column(header: List[str], rows: List[List[float]], name: str) -> List[float]:
+    """
+    Return one named column of a parsed table.
+
+    :param header: Header names.
+    :param rows: Numeric rows.
+    :param name: Column name.
+    :return: Column values.
+    :raises CheckError: If the column is missing.
+    """
+    if name not in header:
+        raise CheckError(f"column {name} missing from header {header}")
+    index = header.index(name)
+    return [row[index] for row in rows]
+
+
+def row_at(rows: List[List[float]], step: int) -> List[float]:
+    """
+    Return the row whose first column equals ``step``.
+
+    :param rows: Numeric rows.
+    :param step: Step number.
+    :return: Matching row.
+    :raises CheckError: If no row matches.
+    """
+    for row in rows:
+        if int(round(row[0])) == step:
+            return row
+    raise CheckError(f"no row for step {step}")
+
+
+def trees_identical(
+    first: Path, second: Path, ignore_grid_wall_time: bool = False
+) -> Tuple[bool, str]:
+    """
+    Compare two directory trees file by file.
+
+    :param first: First tree.
+    :param second: Second tree.
+    :param ignore_grid_wall_time: Exclude only the GridInfo wall-time column.
+    :return: Whether they are identical, and the first difference found.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as d:
+    ...     a, b = Path(d) / "a", Path(d) / "b"
+    ...     for x in (a, b):
+    ...         x.mkdir()
+    ...         _ = (x / "f").write_text("1")
+    ...     same = trees_identical(a, b)
+    ...     _ = (b / "f").write_text("2")
+    ...     same, trees_identical(a, b)
+    ((True, ''), (False, 'f differs'))
+    """
+    names_a = sorted(p.relative_to(first) for p in first.rglob("*") if p.is_file())
+    names_b = sorted(p.relative_to(second) for p in second.rglob("*") if p.is_file())
+    if names_a != names_b:
+        missing = sorted(set(map(str, names_a)) ^ set(map(str, names_b)))
+        return False, f"file lists differ: {missing[:5]}"
+    for name in names_a:
+        contents = [(tree / name).read_bytes() for tree in (first, second)]
+        if ignore_grid_wall_time and name.name.endswith("_GridInfo.dat"):
+            # MPI_Wtime differs between otherwise identical evolutions.
+            for index, content in enumerate(contents):
+                lines = []
+                for line in content.split(b"\n"):
+                    fields = line.split(b",")
+                    if len(fields) == 7 and fields[0] != b"timeStep":
+                        fields[3] = b"<wall time>"
+                    lines.append(b",".join(fields))
+                contents[index] = b"\n".join(lines)
+        if contents[0] != contents[1]:
+            return False, f"{name} differs"
+    return True, ""
+
+
+def read_reference() -> Dict[str, Dict[str, List[float]]]:
+    """
+    Read the stored run-A reference values, or return an empty mapping.
+
+    The reference file holds only the literal ``trusted_dict``; it is parsed,
+    never executed.
+
+    :return: Values keyed by ``formulation/conformal``, then ``file@step``.
+    :raises CheckError: If the file does not hold a literal dictionary.
+    """
+    if not REFERENCE_FILE.exists():
+        return {}
+    text = REFERENCE_FILE.read_text(encoding="utf-8").partition("trusted_dict = ")[2]
+    try:
+        return cast(Dict[str, Dict[str, List[float]]], ast.literal_eval(text))
+    except (SyntaxError, ValueError) as error:
+        raise CheckError(f"{REFERENCE_FILE} is not a trusted_dict: {error}") from error
+
+
+class Leg:
+    """Generate, build, run, and check one formulation's W and chi applications."""
+
+    def __init__(self, args: argparse.Namespace, report: Report) -> None:
+        """
+        Store the command-line settings.
+
+        :param args: Parsed command-line arguments.
+        :param report: Result recorder.
+        """
+        self.formulation: str = args.formulation
+        self.work = Path(args.work_dir).resolve()
+        self.launcher: List[str] = shlex.split(args.launcher)
+        self.ranks: int = args.ranks
+        self.build_jobs: int = args.build_jobs
+        self.dendrolib_ref: Optional[str] = args.dendrolib_ref
+        self.dendrolib_source: Optional[Path] = None
+        self.update_reference: bool = args.update_reference
+        self.reference_candidate: Dict[str, Dict[str, List[float]]] = {}
+        self.report = report
+        self.solver_dir, self.exe_name, self.stem = SOLVER[self.formulation]
+        self.executables: Dict[str, Path] = {}
+        self.base_pars: Dict[str, str] = {}
+
+    def mpi(self, ranks: int, exe: Path, *extra: str) -> List[str]:
+        """
+        Return the launcher argument vector for one solver run.
+
+        :param ranks: Number of MPI ranks.
+        :param exe: Solver executable.
+        :param extra: Solver arguments.
+        :return: Argument vector.
+        """
+        return self.launcher + ["-n", str(ranks), str(exe)] + list(extra)
+
+    def record_versions(self) -> None:
+        """
+        Print the resolved versions of the dependencies that are not pinned.
+
+        The apt packages, compilers, and ``requirements.txt`` packages come from
+        the runner image and package indexes, which the workflow does not pin, so
+        a pass is evidence only for the versions printed here.
+
+        :raises BaseException: An unexpected interruption, after stopping the probe.
+        """
+        commands = [
+            [sys.executable, "--version"],
+            ["clang-format", "--version"],
+            ["cmake", "--version"],
+            ["git", "--version"],
+            ["c++", "--version"],
+            ["gfortran", "--version"],
+            [self.launcher[0], "--version"],
+            ["dpkg-query", "-W", "libopenmpi-dev", "libgsl-dev", "libopenblas-dev"],
+        ]
+        for requirement in (REPO_ROOT / "requirements.txt").read_text().split():
+            try:
+                version = importlib.metadata.version(requirement)
+            except importlib.metadata.PackageNotFoundError:
+                version = "not installed"
+            print(f"version: {requirement}: {version}", flush=True)
+        for argv in commands:
+            try:
+                # Bound captured bytes before selecting the displayed lines.
+                output = bytearray()
+                unavailable = ""
+                output_limit = 64 * 1024
+                deadline = time.monotonic() + TIMEOUT_VERSION
+                with subprocess.Popen(
+                    argv,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    shell=False,
+                    start_new_session=True,
+                ) as process:
+                    try:
+                        assert process.stdout is not None
+                        while True:
+                            remaining = deadline - time.monotonic()
+                            if (
+                                remaining <= 0
+                                or not select.select(
+                                    [process.stdout], [], [], remaining
+                                )[0]
+                            ):
+                                unavailable = f"timeout after {TIMEOUT_VERSION} seconds"
+                                break
+                            chunk = os.read(
+                                process.stdout.fileno(),
+                                min(4096, output_limit + 1 - len(output)),
+                            )
+                            if not chunk:
+                                break
+                            output.extend(chunk)
+                            if len(output) > output_limit:
+                                unavailable = "version output exceeds 65536 bytes"
+                                break
+                        if unavailable:
+                            try:
+                                os.killpg(process.pid, signal.SIGKILL)
+                            except ProcessLookupError:
+                                pass
+                            process.wait()
+                        else:
+                            process.wait(timeout=max(0.0, deadline - time.monotonic()))
+                            if process.returncode != 0:
+                                unavailable = f"exit status {process.returncode}"
+                    except BaseException:
+                        try:
+                            os.killpg(process.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        process.wait()
+                        raise
+                if unavailable:
+                    print(
+                        f"version: {' '.join(argv[:2])}: unavailable ({unavailable})",
+                        flush=True,
+                    )
+                    continue
+                text = output.decode(errors="replace").strip().splitlines()
+                print(
+                    f"version: {' '.join(argv[:2])}: {' | '.join(text[:3])}", flush=True
+                )
+            except (
+                OSError,
+                subprocess.TimeoutExpired,
+            ) as error:
+                print(
+                    f"version: {' '.join(argv[:2])}: unavailable ({error})", flush=True
+                )
+
+    def generate_and_build(self, conformal: str) -> None:
+        """
+        Generate one variant twice, compare the trees, and build the first.
+
+        With ``--dendrolib-ref``, the first call also clones that Dendrolib ref
+        and both variants build against the clone.
+
+        :param conformal: ``W`` or ``chi``.
+        :raises CheckError: If the generated project declares no Dendrolib
+            repository, a clone, configure, or build step fails, or the
+            executable was not built.
+        """
+        trees = []
+        for copy in (1, 2):
+            project = self.work / f"gen-{conformal}-{copy}"
+            cache = self.work / f"cache-{conformal}-{copy}"
+            project.mkdir(parents=True)
+            cache.mkdir(parents=True)
+            env = dict(os.environ)
+            env["XDG_CACHE_HOME"] = str(cache)
+            env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+            run_checked(
+                [
+                    sys.executable,
+                    "-m",
+                    f"nrpy.examples.dendro_{self.formulation}",
+                    "--project-dir",
+                    str(project),
+                    "--fd-order",
+                    "6",
+                    "--conformal-factor",
+                    conformal,
+                ],
+                REPO_ROOT,
+                self.work / f"generate-{conformal}-{copy}.log",
+                TIMEOUT_GENERATE,
+                env,
+            )
+            trees.append(project / self.solver_dir)
+        same, detail = trees_identical(trees[0], trees[1])
+        self.report.check(
+            "G1",
+            "generation determinism",
+            "two clean generations byte-identical",
+            "identical" if same else detail,
+            "identical",
+            same,
+            conformal,
+        )
+        build = self.work / f"build-{conformal}"
+        configure = [
+            "cmake",
+            "-S",
+            str(trees[0]),
+            "-B",
+            str(build),
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DCPU_ARCH=x86-64-v3",
+            f"-DFETCHCONTENT_BASE_DIR={self.work / f'deps-{conformal}'}",
+        ]
+        if self.dendrolib_ref is not None:
+            if self.dendrolib_source is None:
+                # Clone the named ref from the repository the generated project
+                # declares, once per leg.
+                text = (trees[0] / "CMakeLists.txt").read_text()
+                after = text.partition("FetchContent_Declare(dendrolib")[2]
+                declaration = after.partition(")")[0]
+                url = declaration.partition('GIT_REPOSITORY "')[2]
+                repository = url.partition('"')[0]
+                if not repository:
+                    raise CheckError(
+                        "generated CMakeLists.txt declares no Dendrolib repository"
+                    )
+                self.dendrolib_source = self.work / "dendrolib-src"
+                run_checked(
+                    ["git", "clone", "--depth", "1", "--branch", self.dendrolib_ref]
+                    + [repository, str(self.dendrolib_source)],
+                    self.work,
+                    self.work / "dendrolib-clone.log",
+                    TIMEOUT_CONFIGURE,
+                )
+            configure.append(
+                f"-DFETCHCONTENT_SOURCE_DIR_DENDROLIB={self.dendrolib_source}"
+            )
+        run_checked(
+            configure,
+            self.work,
+            self.work / f"configure-{conformal}.log",
+            TIMEOUT_CONFIGURE,
+        )
+        dendrolib_source = (
+            self.dendrolib_source or self.work / f"deps-{conformal}/dendrolib-src"
+        )
+        commit_log = self.work / f"dendrolib-commit-{conformal}.log"
+        run_checked(
+            ["git", "-C", str(dendrolib_source), "rev-parse", "HEAD"],
+            self.work,
+            commit_log,
+            TIMEOUT_VERSION,
+        )
+        with commit_log.open() as stream:
+            commit = stream.read(128).strip()
+        print(
+            f"version: dendrolib ({conformal}): {commit}; "
+            "results are evidence only for this commit",
+            flush=True,
+        )
+        run_checked(
+            ["cmake", "--build", str(build), "--parallel", str(self.build_jobs)],
+            self.work,
+            self.work / f"build-{conformal}.log",
+            TIMEOUT_BUILD,
+        )
+        exe = build / self.exe_name
+        if not exe.is_file():
+            raise CheckError(f"{exe} was not built")
+        self.executables[conformal] = exe
+        self.base_pars[conformal] = (
+            trees[0] / "pars" / f"{self.stem}.toml"
+        ).read_text()
+
+    def prepare(self, conformal: str, name: str, overrides: Dict[str, str]) -> Path:
+        """
+        Create a run directory with its parameter file and TwoPunctures file.
+
+        :param conformal: ``W`` or ``chi``.
+        :param name: Run name.
+        :param overrides: Profile overrides on top of the common ones.
+        :return: Run directory.
+        """
+        merged = dict(COMMON_OVERRIDES)
+        merged.update(overrides)
+        run_dir = self.work / conformal / name
+        for sub in ("dat", "vtu", "cp", "bah"):
+            (run_dir / sub).mkdir(parents=True, exist_ok=True)
+        (run_dir / "ci.toml").write_text(
+            apply_overrides(self.base_pars[conformal], merged)
+        )
+        tpid = self.work / conformal / TPID_FILE
+        if tpid.exists() and not (run_dir / TPID_FILE).exists():
+            os.link(tpid, run_dir / TPID_FILE)
+        return run_dir
+
+    def solve(
+        self, conformal: str, name: str, overrides: Dict[str, str], ranks: int
+    ) -> Path:
+        """
+        Run the solver in a prepared directory; it must succeed.
+
+        :param conformal: ``W`` or ``chi``.
+        :param name: Run name.
+        :param overrides: Profile overrides.
+        :param ranks: Number of MPI ranks.
+        :return: Run directory.
+        """
+        run_dir = self.prepare(conformal, name, overrides)
+        run_checked(
+            self.mpi(ranks, self.executables[conformal], "ci.toml"),
+            run_dir,
+            run_dir / "run.log",
+            TIMEOUT_RUN,
+        )
+        self.universal_checks(conformal, name, run_dir, overrides)
+        return run_dir
+
+    def universal_checks(
+        self, conformal: str, name: str, run_dir: Path, overrides: Dict[str, str]
+    ) -> None:
+        """
+        Check finiteness, cadence, mesh size, and parameter use for one run (S1).
+
+        :param conformal: ``W`` or ``chi``.
+        :param name: Run name.
+        :param run_dir: Run directory.
+        :param overrides: Profile overrides of the run.
+        """
+        failed = []
+        stdout = (run_dir / "run.log").read_text(errors="replace")
+        alphas = [
+            line.partition(" max_alpha=")[2].split()[0]
+            for line in stdout.splitlines()
+            if line.startswith("iteration=") and " max_alpha=" in line
+        ]
+        numbers = [float(a) for a in alphas]
+        for path in sorted((run_dir / "dat").glob("*.dat")):
+            if path.name.startswith("dgr_GW_"):
+                for _, values in parse_modes(path):
+                    numbers.extend(v for c in values for v in (c.real, c.imag))
+            else:
+                numbers.extend(v for row in parse_table(path)[1] for v in row)
+        for path in sorted((run_dir / "bah").glob("BHaHAHA_diagnostics.ah*.gp")):
+            numbers.extend(v for row in parse_table(path)[1] for v in row[:15])
+        if not alphas or not all(math.isfinite(v) for v in numbers):
+            failed.append("nonfinite or missing output")
+        header, rows = parse_table(run_dir / "dat" / "dgr_Constraints.dat")
+        cadence = int(
+            overrides.get(
+                "BSSN_GW_EXTRACT_FREQ", COMMON_OVERRIDES["BSSN_GW_EXTRACT_FREQ"]
+            )
+        )
+        last = int(overrides["BSSN_MAX_ITERATIONS"])
+        steps = [int(round(r[0])) for r in rows]
+        times = [r[1] for r in rows]
+        if steps != list(range(0, last + 1, cadence)) or any(
+            b <= a for a, b in zip(times, times[1:])
+        ):
+            failed.append(f"constraint rows at steps {steps}")
+        nodes = max(column(header, rows, "unexcised_nodes"))
+        if nodes > NODE_CEILING:
+            failed.append(f"{int(nodes)} nodes")
+        unread = sum(" has no effect" in line for line in stdout.splitlines())
+        if unread:
+            failed.append(f"{unread} unread-parameter warnings")
+        restored = overrides.get("BSSN_RESTORE_SOLVER") == "1"
+        self.report.check(
+            "S1",
+            "runtime",
+            f"run {name}{' restored' if restored else ''} sanity",
+            "all hold" if not failed else "failed: " + ", ".join(failed),
+            f"finite output, rows at steps 0, {cadence}, ..., <= {NODE_CEILING} nodes, "
+            "no unread parameters",
+            not failed,
+            conformal,
+        )
+
+    def run_variant(self, conformal: str) -> None:
+        """
+        Run and check one conformal-factor variant.
+
+        :param conformal: ``W`` or ``chi``.
+        :raises CheckError: If the TwoPunctures file lacks the NRPy tag.
+        """
+        exe = self.executables[conformal]
+        tp_dir = self.prepare(conformal, "tpid", PROFILE_P)
+        run_checked(
+            self.mpi(1, exe, "--tpid", "ci.toml"),
+            tp_dir,
+            tp_dir / "run.log",
+            TIMEOUT_RUN,
+        )
+        shutil.copyfile(tp_dir / TPID_FILE, self.work / conformal / TPID_FILE)
+        data = (tp_dir / TPID_FILE).read_bytes()
+        if not data.startswith(TPID_TAG):
+            raise CheckError(f"{tp_dir / TPID_FILE} lacks the NRPy TwoPunctures tag")
+        inputs = struct.unpack_from(f"<{TPID_INPUT_COUNT}d", data, 16)
+        results = struct.unpack_from(
+            f"<{TPID_RESULT_COUNT}d", data, 16 + 8 * TPID_INPUT_COUNT
+        )
+
+        run_a = self.solve(conformal, "A", PROFILE_P, self.ranks)
+        self.check_run_a(conformal, run_a, results)
+        self.check_reference(conformal, run_a)
+
+        stop4 = dict(PROFILE_P, BSSN_MAX_ITERATIONS="4")
+        run_b = self.solve(conformal, "B", stop4, self.ranks)
+        metadata = cast(
+            Dict[str, Any],  # json.loads returns untyped JSON values
+            json.loads((run_b / "cp" / "ci_cp_1_step.cp").read_text()),
+        )
+        centers = [float(x) for x in metadata["NRPY_EXCISION_CENTERS"]]
+        x1, y1, z1, x2, y2, z2 = centers
+        reflection = max(abs(x1 + x2), abs(y1 + y2), abs(z1), abs(z2))
+        p_plus, p_minus = inputs[TPID_INDEX_P_PLUS_Y], inputs[TPID_INDEX_P_MINUS_Y]
+        # Reflection alone cannot see a sign error in the puncture-center
+        # update, which moves both punctures the wrong way symmetrically.
+        moved = y1 * p_plus > 0.0 and y2 * p_minus > 0.0
+        self.report.check(
+            "I2",
+            "numerical invariant and sign check",
+            "punctures point-reflected and moving along their momenta at step 4",
+            f"reflection {reflection:.1e}; y = ({y1:.2e}, {y2:.2e}), "
+            f"P_y = ({p_plus:.3g}, {p_minus:.3g})",
+            "reflection <= 1e-9; each y has the sign of its P_y",
+            reflection <= 1e-9 and moved,
+            conformal,
+        )
+        restore = dict(PROFILE_P, BSSN_RESTORE_SOLVER="1")
+        run_b = self.solve(conformal, "B", restore, self.ranks)
+        differences = [
+            detail
+            for same, detail in (
+                trees_identical(run_a / sub, run_b / sub, ignore_grid_wall_time=True)
+                for sub in ("dat", "bah", "vtu")
+            )
+            if not same
+        ]
+        self.report.check(
+            "R1",
+            "exact runtime identity",
+            "restart 0-4-8 equals the uninterrupted run in dat/, bah/, vtu/",
+            "identical" if not differences else "; ".join(differences),
+            "byte-identical except GridInfo wall time",
+            not differences,
+            conformal,
+        )
+
+        # On three ranks the horizon-checkpoint gather uses root rank 0; the
+        # main runs, on four or more ranks, use root rank 3.
+        run_c = self.solve(conformal, "C", stop4, 3)
+        self.compare_runs(
+            conformal,
+            f"C (3 ranks) vs A ({self.ranks} ranks)",
+            run_a,
+            run_c,
+            [0, 4],
+            True,
+        )
+
+        orders: Dict[int, Path] = {}
+        for order in (4, 6, 8):
+            orders[order] = self.solve(
+                conformal,
+                f"O{order}",
+                dict(PROFILE_O, BSSN_ELE_ORDER=str(order)),
+                self.ranks,
+            )
+        self.check_orders(conformal, orders)
+        serial = self.solve(conformal, "O4s", dict(PROFILE_O, BSSN_ELE_ORDER="4"), 1)
+        self.compare_runs(
+            conformal,
+            f"O4 1 rank vs {self.ranks} ranks",
+            orders[4],
+            serial,
+            [0, 1, 2, 3, 4],
+            False,
+        )
+        for name in ("A", "C", "O4", "O6", "O8", "O4s"):
+            for sub in ("vtu", "cp"):
+                shutil.rmtree(self.work / conformal / name / sub, ignore_errors=True)
+
+    def check_run_a(
+        self, conformal: str, run_a: Path, results: Sequence[float]
+    ) -> None:
+        """
+        Check independent values and symmetries in run A.
+
+        :param conformal: ``W`` or ``chi``.
+        :param run_a: Run directory.
+        :param results: TwoPunctures results ``mp, mm, mp_adm, mm_adm, E, J1, J2, J3``.
+        """
+        _, _, mp_adm, mm_adm, energy, _, _, j3 = results
+        adm = parse_table(run_a / "dat" / "dgr_ADM.dat")[1]
+        step0 = row_at(adm, 0)
+        radius = step0[2]
+        factor = 1.0 + energy / (2.0 * radius)
+        e_expected = energy * factor**3
+        j_expected = j3 / factor**2
+        self.report.check(
+            "X1",
+            "regression/numerical, independent oracle",
+            "E(100) against E(1+E/2r)^3",
+            f"{step0[3]:.6g} vs {e_expected:.6g}",
+            "r = 100; relative <= 2e-4",
+            radius == 100.0 and relative(step0[3], e_expected) <= 2e-4,
+            conformal,
+        )
+        self.report.check(
+            "X1",
+            "regression/numerical, independent oracle",
+            "J_z(100) against J3/(1+E/2r)^2",
+            f"{step0[9]:.6g} vs {j_expected:.6g}",
+            "r = 100; relative <= 2e-4",
+            radius == 100.0 and relative(step0[9], j_expected) <= 2e-4,
+            conformal,
+        )
+        horizons = []
+        found_steps = []
+        worst = 0.0
+        for index, target in ((1, mp_adm), (2, mm_adm)):
+            rows = parse_table(run_a / "bah" / f"BHaHAHA_diagnostics.ah{index}.gp")[1]
+            found_steps.append(sorted(int(round(r[0])) for r in rows))
+            worst = max([worst] + [relative(r[12], target) for r in rows])
+            horizons.append({int(round(r[0])): r for r in rows})
+        self.report.check(
+            "X2",
+            "regression/numerical, independent oracle",
+            "horizon irreducible masses against the puncture ADM masses",
+            f"steps {found_steps}, max deviation {worst:.2e}",
+            "both horizons at steps [0, 4, 8]; relative <= 2e-3",
+            found_steps == [[0, 4, 8], [0, 4, 8]] and worst <= 2e-3,
+            conformal,
+        )
+        worst_mass = worst_x = 0.0
+        for step in (0, 4, 8):
+            if step in horizons[0] and step in horizons[1]:
+                first, second = horizons[0][step], horizons[1][step]
+                worst_mass = max(worst_mass, relative(first[12], second[12]))
+                worst_x = max(worst_x, abs(first[2] + second[2]))
+        # The horizon finder converges only to its own tolerance, so the two
+        # horizons agree to that level, not to roundoff; check I2 tests point
+        # reflection of the punctures at full precision.
+        self.report.check(
+            "X2",
+            "numerical invariant",
+            "the two horizons are equal and point-reflected",
+            f"mass {worst_mass:.1e}, centroid x {worst_x:.1e}",
+            "mass <= 1e-5, x <= 1e-4 (horizon-finder tolerance)",
+            worst_mass <= 1e-5 and worst_x <= 1e-4,
+            conformal,
+        )
+
+        momentum = max(max(abs(r[4]), abs(r[5]), abs(r[6])) / abs(r[3]) for r in adm)
+        spin = max(max(abs(r[7]), abs(r[8])) / abs(r[9]) for r in adm)
+        self.report.check(
+            "I2",
+            "numerical invariant",
+            "P_ADM, J_x, J_y vanish",
+            f"P/E {momentum:.1e}, J_xy/J_z {spin:.1e}",
+            "<= 1e-10",
+            momentum <= 1e-10 and spin <= 1e-10,
+            conformal,
+        )
+
+        modes: Dict[Tuple[int, int], List[Tuple[int, List[complex]]]] = {}
+        for path in (run_a / "dat").glob("dgr_GW_l*_m*.dat"):
+            ell, _, m = path.stem[len("dgr_GW_l") :].partition("_m")
+            modes[(int(ell), int(m))] = parse_modes(path)
+        expected_modes = {(l, m) for l in (2, 3, 4) for m in range(-l, l + 1)}
+        radii = {len(values) for rows_lm in modes.values() for _, values in rows_lm}
+        covered = set(modes) == expected_modes and radii == {2}
+        odd = parity = math.inf
+        if covered:
+            c22 = max(abs(v) for _, values in modes[(2, 2)] for v in values)
+            odd = (
+                max(
+                    abs(v)
+                    for (l, m), rows_lm in modes.items()
+                    if m % 2
+                    for _, values in rows_lm
+                    for v in values
+                )
+                / c22
+            )
+            parity = (
+                max(
+                    abs(
+                        modes[(l, -m)][i][1][j]
+                        - (-1) ** l * modes[(l, m)][i][1][j].conjugate()
+                    )
+                    for (l, m) in modes
+                    if m > 0
+                    for i in range(len(modes[(l, m)]))
+                    for j in range(len(modes[(l, m)][i][1]))
+                )
+                / c22
+            )
+        self.report.check(
+            "I2",
+            "numerical invariant",
+            "Psi4 modes: odd m vanish and C(l,-m) = (-1)^l conj C(l,m), l = 2-4",
+            f"{len(modes)} mode files, radii per row {sorted(radii)}, odd m {odd:.1e}, "
+            f"reflection {parity:.1e} of max|C22|",
+            "21 mode files with 2 radii; both <= 1e-8 of max|C22|",
+            covered and odd <= 1e-8 and parity <= 1e-8,
+            conformal,
+        )
+
+    def check_reference(self, conformal: str, run_a: Path) -> None:
+        """
+        Compare run A's evolved diagnostics with the stored reference (check E1).
+
+        The constraint and ADM rows and the horizon observables (columns 1-13)
+        at ``REFERENCE_STEPS`` are compared. In ``--update-reference`` mode the
+        values are kept as a candidate reference instead.
+
+        :param conformal: ``W`` or ``chi``.
+        :param run_a: Run directory.
+        """
+        values: Dict[str, List[float]] = {}
+        for name, count in (
+            ("dat/dgr_Constraints.dat", None),
+            ("dat/dgr_ADM.dat", None),
+            ("bah/BHaHAHA_diagnostics.ah1.gp", 13),
+            ("bah/BHaHAHA_diagnostics.ah2.gp", 13),
+        ):
+            rows = parse_table(run_a / name)[1]
+            for step in REFERENCE_STEPS:
+                values[f"{name}@{step}"] = row_at(rows, step)[:count]
+        key = f"{self.formulation}/{conformal}"
+        if self.update_reference:
+            self.reference_candidate[key] = values
+            print(f"reference candidate recorded for {key}", flush=True)
+            return
+        stored = read_reference().get(key, {})
+        used = math.inf
+        layout = bool(stored) and set(stored) == set(values)
+        layout = layout and all(len(stored[k]) == len(row) for k, row in values.items())
+        worst = ""
+        if layout:
+            used = 0.0
+            for k, row in values.items():
+                for index, (a, b) in enumerate(zip(row, stored[k])):
+                    scale = REFERENCE_RTOL * max(abs(a), abs(b)) + REFERENCE_ATOL
+                    ratio = abs(a - b) / scale
+                    if math.isnan(ratio) or ratio > used:  # a NaN stays, and fails
+                        used = ratio
+                        worst = f" at {k} entry {index}: {a!r} vs stored {b!r}"
+        self.report.check(
+            "E1",
+            "regression/numerical, stored reference",
+            f"evolved constraint, ADM, and horizon values at steps {list(REFERENCE_STEPS)}",
+            (
+                f"largest fraction of tolerance used {used:.1e}{worst}"
+                if layout
+                else f"stored reference for {key} missing or with different rows"
+            ),
+            f"|a-b| <= {REFERENCE_RTOL:g} max(|a|,|b|) + {REFERENCE_ATOL:g}",
+            used <= 1.0,
+            conformal,
+        )
+
+    def compare_runs(
+        self,
+        conformal: str,
+        label: str,
+        first: Path,
+        second: Path,
+        steps: List[int],
+        horizons: bool,
+    ) -> None:
+        """
+        Compare two runs of one binary at the given steps (check P1).
+
+        :param conformal: ``W`` or ``chi``.
+        :param label: Comparison label.
+        :param first: Reference run directory.
+        :param second: Run with a different rank count.
+        :param steps: Steps to compare.
+        :param horizons: Whether to compare horizon diagnostics.
+        :raises CheckError: If a Psi4 file has no step in common with ``steps``.
+        """
+        used = 0.0
+        nodes_equal = True
+        for path in sorted((first / "dat").glob("*.dat")):
+            other = second / "dat" / path.name
+            if path.name.startswith("dgr_GW_"):
+                mine = dict(parse_modes(path))
+                theirs = dict(parse_modes(other))
+                shared = [s for s in steps if s in mine and s in theirs]
+                if not shared:
+                    raise CheckError(f"{path.name}: no common steps in {steps}")
+                pairs = [
+                    (a, b)
+                    for s in shared
+                    for ca, cb in zip(mine[s], theirs[s])
+                    for a, b in ((ca.real, cb.real), (ca.imag, cb.imag))
+                ]
+            elif path.name.endswith("_GridInfo.dat"):
+                grid_names = [
+                    "timeStep",
+                    "simTime",
+                    "commSize",
+                    "wTime",
+                    "meshSize",
+                    "totalGridPoints",
+                    "stepSize",
+                ]
+                header, rows_a = parse_table(path)
+                other_header, rows_b = parse_table(other)
+                if header != grid_names or other_header != grid_names:
+                    raise CheckError("GridInfo columns differ from Dendro-GR")
+                shared = sorted(
+                    set(steps)
+                    & {int(r[0]) for r in rows_a}
+                    & {int(r[0]) for r in rows_b}
+                )
+                if not shared:
+                    raise CheckError(f"{path.name}: no common steps in {steps}")
+                # Wall times and MPI task counts can differ between these runs.
+                pairs = [
+                    (row_at(rows_a, s)[i], row_at(rows_b, s)[i])
+                    for s in shared
+                    for i in (0, 1, 4, 5, 6)
+                ]
+                nodes_equal = nodes_equal and all(
+                    row_at(rows_a, s)[i] == row_at(rows_b, s)[i]
+                    for s in shared
+                    for i in (4, 5)
+                )
+            else:
+                header, rows_a = parse_table(path)
+                rows_b = parse_table(other)[1]
+                if header and "unexcised_nodes" in header:
+                    index = header.index("unexcised_nodes")
+                    nodes_equal = nodes_equal and all(
+                        row_at(rows_a, s)[index] == row_at(rows_b, s)[index]
+                        for s in steps
+                    )
+                pairs = [
+                    (a, b)
+                    for s in steps
+                    for a, b in zip(row_at(rows_a, s), row_at(rows_b, s))
+                ]
+            for a, b in pairs:
+                used = max(used, abs(a - b) / (1.0e-8 * max(abs(a), abs(b)) + 1.0e-12))
+        if horizons:
+            for index in (1, 2):
+                name = f"BHaHAHA_diagnostics.ah{index}.gp"
+                rows_a = parse_table(first / "bah" / name)[1]
+                rows_b = parse_table(second / "bah" / name)[1]
+                # Columns 1-13 run through M_irr; columns 14-15 are the finder's
+                # convergence residuals, which amplify roundoff and are skipped.
+                for s in steps:
+                    for a, b in zip(row_at(rows_a, s)[:13], row_at(rows_b, s)[:13]):
+                        used = max(
+                            used, abs(a - b) / (1.0e-8 * max(abs(a), abs(b)) + 1.0e-12)
+                        )
+        self.report.check(
+            "P1",
+            "numerical invariant",
+            f"{label} at steps {steps}",
+            f"largest fraction of tolerance used {used:.1e}; nodes equal {nodes_equal}",
+            "|a-b| <= 1e-8 max(|a|,|b|) + 1e-12; equal unexcised_nodes",
+            used <= 1.0 and nodes_equal,
+            conformal,
+        )
+
+    def check_orders(self, conformal: str, orders: Dict[int, Path]) -> None:
+        """
+        Check that the initial constraint norm falls with FD order (check O1).
+
+        :param conformal: ``W`` or ``chi``.
+        :param orders: Run directory per order.
+        """
+        elements = {}
+        h0 = {}
+        for order, run_dir in orders.items():
+            stdout = (run_dir / "run.log").read_text(errors="replace")
+            passes = [
+                line.partition(" elements=")[2].partition("->")[2].split()[0]
+                for line in stdout.splitlines()
+                if line.startswith("initial-grid remesh pass=")
+            ]
+            elements[order] = int(passes[-1]) if passes else -1
+            header, rows = parse_table(run_dir / "dat" / "dgr_Constraints.dat")
+            h0[order] = column(header, rows, "H")[0]
+        same_octree = len(set(elements.values())) == 1 and -1 not in elements.values()
+        ordered = h0[6] <= h0[4] / 2.0 and h0[8] <= h0[6] / 2.0
+        self.report.check(
+            "O1",
+            "numerical ordering (not convergence)",
+            "step-0 H falls with FD order on one octree",
+            f"FD4 {h0[4]:.3e}, FD6 {h0[6]:.3e}, FD8 {h0[8]:.3e}; elements {elements}",
+            "equal element counts; H6 <= H4/2 and H8 <= H6/2",
+            same_octree and ordered,
+            conformal,
+        )
+
+    def compare_variants(self) -> None:
+        """Compare the W and chi builds of this formulation at step 0 (check V1)."""
+        run_w, run_chi = self.work / "W" / "A", self.work / "chi" / "A"
+        adm_w = parse_table(run_w / "dat" / "dgr_ADM.dat")[1]
+        adm_c = parse_table(run_chi / "dat" / "dgr_ADM.dat")[1]
+        header_w, cons_w = parse_table(run_w / "dat" / "dgr_Constraints.dat")
+        header_c, cons_c = parse_table(run_chi / "dat" / "dgr_Constraints.dat")
+        nodes_equal = (
+            column(header_w, cons_w, "unexcised_nodes")[0]
+            == column(header_c, cons_c, "unexcised_nodes")[0]
+        )
+        e0 = relative(row_at(adm_w, 0)[3], row_at(adm_c, 0)[3])
+        j0 = relative(row_at(adm_w, 0)[9], row_at(adm_c, 0)[9])
+        c22 = max(
+            abs(v)
+            for _, values in parse_modes(run_w / "dat" / "dgr_GW_l2_m2.dat")
+            for v in values
+        )
+        worst_mode = 0.0
+        for path in sorted((run_w / "dat").glob("dgr_GW_l*_m*.dat")):
+            first = dict(parse_modes(path))[0]
+            second = dict(parse_modes(run_chi / "dat" / path.name))[0]
+            worst_mode = max(worst_mode, max(abs(a - b) for a, b in zip(first, second)))
+        self.report.check(
+            "V1",
+            "differential numerical",
+            "W vs chi at step 0",
+            f"nodes equal {nodes_equal}, E {e0:.1e}, J_z {j0:.1e}, Psi4 {worst_mode / c22:.1e}",
+            "equal nodes; E, J_z relative <= 2e-5; Psi4 <= 1e-5 of max|C22|",
+            nodes_equal and e0 <= 2e-5 and j0 <= 2e-5 and worst_mode <= 1e-5 * c22,
+        )
+
+    def negative(
+        self, label: str, argv: List[str], run_dir: Path, expected: str
+    ) -> None:
+        """
+        Run a case that must fail promptly with a named diagnostic (check N1).
+
+        :param label: Case label.
+        :param argv: Argument vector.
+        :param run_dir: Working directory.
+        :param expected: Text that must appear in the output; a trailing newline
+            requires it to end a line.
+        """
+        safe = "".join(c if c.isalnum() else "_" for c in label)
+        log = run_dir / f"negative-{safe}.log"
+        status, timed_out = run_logged(argv, run_dir, log, TIMEOUT_NEGATIVE)
+        text = log.read_text(errors="replace")
+        ok = (not timed_out) and 0 < status < 124 and expected in text
+        if not ok:
+            print(tail(log), flush=True)
+        self.report.check(
+            "N1",
+            "runtime error behavior",
+            label,
+            (
+                "timed out"
+                if timed_out
+                else f"exit {status}, text {'found' if expected in text else 'missing'}"
+            ),
+            f"exit status 1-123 with '{expected.strip()}'",
+            ok,
+        )
+
+    def run_negatives(self) -> None:
+        """
+        Run the invalid-input cases and the unread-parameter warning case once.
+
+        :raises CheckError: If a copied checkpoint does not record its writer's
+            formulation.
+        """
+        suffix = {"bssn": "BSSN", "fccz4": "fCCZ4"}[self.formulation]
+        names = {"W": suffix, "chi": f"{suffix}_chi"}
+        for writer, reader in (("W", "chi"), ("chi", "W")):
+            target = self.work / reader / f"restore-from-{writer}"
+            shutil.copytree(self.work / writer / "B", target)
+            for slot in (0, 1):
+                stored = json.loads(
+                    (target / "cp" / f"ci_cp_{slot}_step.cp").read_text()
+                ).get("NRPY_FORMULATION")
+                if stored != names[writer]:
+                    raise CheckError(
+                        f"{writer} checkpoint slot {slot} records formulation {stored}"
+                    )
+            for sub in ("dat", "bah", "vtu"):
+                shutil.rmtree(target / sub, ignore_errors=True)
+                (target / sub).mkdir()
+            (target / "ci.toml").write_text(
+                apply_overrides(
+                    self.base_pars[reader],
+                    dict(COMMON_OVERRIDES, **PROFILE_P, BSSN_RESTORE_SOLVER="1"),
+                )
+            )
+            self.negative(
+                f"{reader} executable restoring the {writer} checkpoint",
+                self.mpi(self.ranks, self.executables[reader], "ci.toml"),
+                target,
+                f"Checkpoint metadata does not match {names[reader]}\n",
+            )
+        exe = self.executables["W"]
+        o4 = dict(PROFILE_O, BSSN_ELE_ORDER="4")
+        # Reject registered nonfinite values before accessing puncture data.
+        for parameter, value in (("BSSN_SSL_SIGMA", "nan"), ("ETA_CONST", "inf")):
+            run_dir = self.prepare(
+                "W", f"N-nonfinite-{parameter}", dict(o4, **{parameter: value})
+            )
+            (run_dir / TPID_FILE).unlink()
+            self.negative(
+                f"{parameter} = {value}",
+                self.mpi(2, exe, "ci.toml"),
+                run_dir,
+                "invalid runtime parameters",
+            )
+        run_dir = self.prepare(
+            "W", "N-restore-missing", dict(o4, BSSN_RESTORE_SOLVER="1")
+        )
+        diagnostic = run_dir / "dat/dgr_Constraints.dat"
+        previous_output = b"# Existing evolution output\n80 1.0 0.25\n"
+        diagnostic.write_bytes(previous_output)
+        self.negative(
+            "restore requested without checkpoint metadata",
+            self.mpi(2, exe, "ci.toml"),
+            run_dir,
+            "checkpoint restore requested but no checkpoint metadata found",
+        )
+        self.report.check(
+            "N1",
+            "runtime error behavior",
+            "missing checkpoint preserves diagnostics",
+            "unchanged" if diagnostic.read_bytes() == previous_output else "changed",
+            "unchanged",
+            diagnostic.read_bytes() == previous_output,
+        )
+        run_dir = self.prepare("W", "N-output-failure", o4)
+        (run_dir / "dat/dgr_ADM.dat").mkdir()
+        self.negative(
+            "ADM diagnostic path is a directory",
+            self.mpi(2, exe, "ci.toml"),
+            run_dir,
+            "cannot write diagnostic file: dat/dgr_ADM.dat",
+        )
+        cases = [
+            (
+                "--tpid on 2 ranks",
+                o4,
+                2,
+                ["--tpid"],
+                "--tpid requires exactly one MPI task",
+                False,
+            ),
+            (
+                "TPID_PAR_B changed after --tpid",
+                dict(o4, TPID_PAR_B="4.5"),
+                2,
+                [],
+                "NRPy TwoPunctures file does not match the input parameters",
+                False,
+            ),
+            (
+                "TwoPunctures file absent",
+                o4,
+                2,
+                [],
+                "cannot open NRPy TwoPunctures file",
+                True,
+            ),
+            (
+                "BSSN_ELE_ORDER = 5",
+                dict(PROFILE_O, BSSN_ELE_ORDER="5"),
+                2,
+                [],
+                "BSSN_ELE_ORDER must be 4, 6, or 8",
+                False,
+            ),
+            (
+                "BSSN_REFINEMENT_MODE = 0",
+                dict(o4, BSSN_REFINEMENT_MODE="0"),
+                2,
+                [],
+                "generated Dendro solver supports BH_WAMR",
+                False,
+            ),
+            (
+                "BSSN_CFL_FACTOR = inf",
+                dict(o4, BSSN_CFL_FACTOR="inf"),
+                2,
+                [],
+                "invalid runtime parameter range",
+                True,
+            ),
+            (
+                "BSSN_CFL_FACTOR = 3.0",
+                dict(o4, BSSN_CFL_FACTOR="3.0"),
+                2,
+                [],
+                "constraint diagnostics found a nonfinite constraint",
+                False,
+            ),
+            (
+                "TPID_REPLACE_LAPSE_WITH_SQRT_CHI = false",
+                dict(o4, TPID_REPLACE_LAPSE_WITH_SQRT_CHI="false"),
+                2,
+                [],
+                "TPID_REPLACE_LAPSE_WITH_SQRT_CHI must be true",
+                False,
+            ),
+            (
+                "BSSN_RK_TIME_END = 1000 (integer for a real)",
+                dict(o4, BSSN_RK_TIME_END="1000"),
+                2,
+                [],
+                "bad_cast to floating",
+                False,
+            ),
+            (
+                "lapse blow-up with constraint output off",
+                dict(
+                    o4,
+                    BSSN_CFL_FACTOR="3.0",
+                    BSSN_TIME_STEP_OUTPUT_FREQ="100000",
+                    BSSN_GW_EXTRACT_FREQ="0",
+                    BSSN_MAX_ITERATIONS="40",
+                ),
+                2,
+                [],
+                "the lapse became nonfinite",
+                False,
+            ),
+        ]
+        for index, (label, overrides, ranks, extra, expected, drop_tp) in enumerate(
+            cases
+        ):
+            run_dir = self.prepare("W", f"N{index}", overrides)
+            if drop_tp:
+                (run_dir / TPID_FILE).unlink()
+            self.negative(
+                label, self.mpi(ranks, exe, *extra, "ci.toml"), run_dir, expected
+            )
+        run_dir = self.prepare(
+            "W", "N-unread", dict(o4, BSSN_MAX_ITERATIONS="1", NRPY_CI_UNREAD="1")
+        )
+        run_checked(
+            self.mpi(2, exe, "ci.toml"), run_dir, run_dir / "run.log", TIMEOUT_RUN
+        )
+        expected = f"{self.exe_name}: warning: parameter NRPY_CI_UNREAD has no effect"
+        warned = expected in (run_dir / "run.log").read_text(errors="replace")
+        self.report.check(
+            "N2",
+            "runtime warning behavior",
+            "an unread parameter is reported and the run continues",
+            f"exit 0, warning {'found' if warned else 'missing'}",
+            f"exit 0 with '{expected}'",
+            warned,
+        )
+
+    def run(self) -> None:
+        """
+        Run the whole leg; the working directory is always removed.
+
+        :raises CheckError: If the work directory already exists.
+        """
+        if self.work.exists():
+            raise CheckError(f"work directory {self.work} already exists")
+        self.work.mkdir(parents=True)
+        try:
+            self.record_versions()
+            for conformal in ("W", "chi"):
+                self.generate_and_build(conformal)
+            for conformal in ("W", "chi"):
+                self.run_variant(conformal)
+            self.compare_variants()
+            self.run_negatives()
+            if self.update_reference and self.report.failures:
+                print("reference candidate not written: checks failed", flush=True)
+            elif self.update_reference:
+                import black  # pylint: disable=import-outside-toplevel
+
+                reference = read_reference()
+                reference.update(self.reference_candidate)
+                text = "trusted_dict = " + json.dumps(reference, sort_keys=True)
+                REFERENCE_FILE.write_text(
+                    black.format_str(text + "\n", mode=black.Mode()), encoding="utf-8"
+                )
+                print(
+                    f"reference candidate written to {REFERENCE_FILE}; review its diff, "
+                    "then rerun without --update-reference",
+                    flush=True,
+                )
+        finally:
+            shutil.rmtree(self.work, ignore_errors=True)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """
+    Parse arguments, run one formulation leg, and summarize.
+
+    :param argv: Command-line arguments, or None for ``sys.argv``.
+    :return: Process exit status.
+    """
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
+    parser.add_argument(
+        "--formulation",
+        choices=sorted(SOLVER),
+        required=True,
+        help="application to generate and check",
+    )
+    parser.add_argument(
+        "--work-dir", required=True, help="new directory, removed on exit"
+    )
+    parser.add_argument(
+        "--launcher",
+        default="mpiexec --oversubscribe --bind-to none",
+        help="MPI launcher command, before its -n option",
+    )
+    parser.add_argument(
+        "--ranks",
+        type=int,
+        default=4,
+        help="MPI ranks of the main runs; at least 4",
+    )
+    parser.add_argument("--build-jobs", type=int, default=4, help="parallel build jobs")
+    parser.add_argument(
+        "--update-reference",
+        action="store_true",
+        help="write run A's values as the candidate stored reference instead of "
+        "comparing (never used in CI)",
+    )
+    parser.add_argument(
+        "--dendrolib-ref",
+        help="build against this Dendrolib branch or tag instead of master",
+    )
+    args = parser.parse_args(argv)
+    if args.update_reference and args.dendrolib_ref is not None:
+        parser.error("--update-reference cannot be combined with --dendrolib-ref")
+    if args.ranks < 4:
+        parser.error("--ranks must be at least 4, above the 3-rank comparison run")
+    report = Report()
+    try:
+        Leg(args, report).run()
+    except (CheckError, OSError) as error:
+        report.failures.append(f"aborted: {error}")
+        print(f"[FAIL] aborted: {error}", flush=True)
+    finally:
+        report.flush()
+    print(f"{report.count} checks, {len(report.failures)} failures", flush=True)
+    for failure in report.failures:
+        print(f"  FAILED {failure}", flush=True)
+    return 1 if report.failures else 0
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 1:
+        import doctest
+
+        doctest_results = doctest.testmod()
+        if doctest_results.failed > 0:
+            print(
+                f"Doctest failed: {doctest_results.failed} of "
+                f"{doctest_results.attempted} test(s)"
+            )
+            sys.exit(1)
+        print(f"Doctest passed: All {doctest_results.attempted} test(s) passed")
+    else:
+        sys.exit(main())

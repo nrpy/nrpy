@@ -1,223 +1,110 @@
-# Validation, Standalone Host, And Deferred Tests
+# Production Validation And Deferred Checks
 
-> Explain Dendro module checks, generated standalone validation, real-host tests, CI scope, and tests not yet implemented. · Status: provisional
+> Define checks for complete generated Dendro applications and state current limits. · Status: provisional
 > Up: [Dendro](index.md)
 
 ## Summary
 
-Dendro has reproducible validation at three levels: tests beside the generating
-modules, generated standalone CTest cases, and an opt-in real-host test program.
-These routes define reproducible checks; this page does
-not preserve results, host revisions, dates, environment tuples, or generated
-file inventories. A capability claim must be re-established against the
-source and host checkout being reviewed.
-
-The standalone route covers both BSSN and fCCZ4 without Dendrolib. The real-host
-route supports either generated context with Dendro-GR and Dendrolib. General
-physical boundaries, remeshing, local time stepping, checkpoint/restart, output
-selection, GPU execution, and threaded kernels remain outside that route.
+Production examples generate complete Dendro applications.
 
 ## Detail
 
-### Module Checks And Independent Reference Values
+Required generator checks include isolated static analysis, BSSN and fCCZ4
+import and registration, two byte-identical clean generations, presence of all
+order-specific kernels, direct Python/CFunction/C++ name correspondence,
+final-state pointer indices, and rejection of native `BSSN_GR` sources in each
+explicit CMake source list.
 
-Small doctests stay beside their generating modules. Generated headers, sources,
-and CMake interfaces are validated by generating and building complete C++
-projects instead of by matching fragments of emitted text.
-
-Equation modules keep trusted symbolic-expression dictionaries under
-`nrpy/equations`; VE supplies numerical values for their free symbols. Dendro
-RHS and constraint assembly is instead covered by the complete generated C++
-project: the nonflat reference checks the large FD kernels numerically, while
-the remaining executable sections test their host interfaces.
-
-Claim evidence:
-- Claim: equation-level VE stays with the defining equation modules, while complete generated C++ projects test the Dendro generating functions together.
-- Role: generated evidence
-- Deciding authority: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py) and [kreiss_oliger_terms.py](../../../nrpy/equations/general_relativity/kreiss_oliger_terms.py), their VE definitions; [general_relativity/self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py), `output_self_test_artifacts`
-- Corroboration: [validate_expressions.py](../../../nrpy/validate_expressions/validate_expressions.py), `compare_or_generate_trusted_results`; [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py), generated CTest registration
-
-### Generated Standalone Test Executable
-
-Every generated solver compiles against `dendro_standalone_host.h` when its
-directory is configured as the top-level CMake project. The example generator
-copies that header and `block_geometry.h` into the project, so they participate
-in the same build as the generated kernels. Embedded mode instead builds the
-production library against the host's `dendro5` target.
-
-Generated CTest cases exercise registry consistency, parameter forwarding,
-offsets, derivative selection and reach, RHS and initial-data calls,
-algebraic enforcement, constraint diagnostics, and Minkowski evolution. A
-nonflat reference evaluates the canonical RHS and constraint-diagnostic
-expressions with multiprecision arithmetic on deterministic binary64 samples
-and computes expected values independently of generated C++ execution. Its
-bound is derived from each expression graph, scales, spacing amplification, and valid
-rounding/reassociation effects, not from a measured C++ error.
-
-The addressing test uses unequal spacing, component offsets, sentinel regions,
-centered first and second derivatives, mixed derivatives, and Kreiss-Oliger
-response. Its coefficient values come from an independent finite-difference
-weight construction rather than the code-generation helper. It perturbs cells
-at the recorded reach and one point beyond it, proving the generated RHS both
-uses the declared outer point and ignores anything outside it. Fault variants must make the checker
-reject the corresponding bad address, halo, or derivative behavior. The evolution tests
-check algebraic residuals, constraints, flat-state RHS, adapter agreement,
-perturbation response, convergence, drift, and algebraic enforcement. Any
-failed check exits nonzero and therefore fails CTest.
+Required application checks configure and build both standalone applications with
+Dendrolib. Both BSSN and fCCZ4 checks must generate W and chi variants.
+MPI TwoPunctures runs must exercise finite-difference orders 4, 6,
+and 8 through initialization and the first completed diagnostic output. Checks
+must cover nontrivial finite fields, `alpha=W=sqrt(chi)` for both formulations,
+Lambda initialization, algebraic projection, block-boundary continuity,
+constraints, wave extraction, apparent horizons, forced remeshing, checkpoint,
+and restart. W/chi checkpoint-formulation mismatches must be rejected.
+Temporary direct numerical comparisons must cover interior stencils, block
+boundaries, conformal-factor algebra, SSL, CAHD, and separate Ricci/RHS
+coupling. Native-control comparisons must use the same initial data, post-remesh
+state, puncture excision, momentum-component convention, and unique-node RMS;
+conformal-factor volume-weighted RMS is a distinct diagnostic. Compare by physical time and check
+the initial diagnostic before interpreting long evolutions. Record the evolved
+conformal-factor choice, native full-psi lapse replacement, eta prescription,
+KO strength, native CAKO state, and any post-merger CAKO switch before
+attributing any later difference to the formulation.
 
 Claim evidence:
-- Claim: generated Dendro projects contain standalone executable checks for registry consistency, addressing, numerical kernels, and Minkowski evolution for both formulations.
-- Role: descriptive behavior
-- Deciding authority: [self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/self_tests_cpp.py), `output_self_test_artifacts`; [general_relativity/self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py), `output_self_test_artifacts`; [general_relativity/main_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py), `standalone_ctest_statements`
-- Corroboration: [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py), generated solver/test CMake registration
+- Claim: Complete BSSN and fCCZ4 qualification requires W and chi generation and rejection of incompatible restarts; BSSN native comparisons require matching initial data, excision, momentum components, and post-remesh unique-node RMS. Native comparisons must record the conformal-factor choice, full-psi lapse replacement, eta prescription, KO strength, CAKO state, and any post-merger CAKO switch; matching a parfile alone is insufficient.
+- Role: normative rule
+- Deciding authority: this page, `Required application checks`.
+- Corroboration: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `parse_args`; `nrpy/infrastructures/Dendro/checkpoint.py`, formulation metadata; `nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py`, momentum lowering; `nrpy/infrastructures/Dendro/solver_context.py`, diagnostic scheduling and node reduction; `BSSN_GR/src/parameters.cpp`, native lapse and CAKO settings; `BSSN_GR/src/bssngr_main.cpp`, post-merger CAKO switch.
 
-### Runtime parameters
+AMR parameter parity is not proof of identical remesh histories. The generated
+optional Nyquist path uses the z-coordinate puncture separation, but native
+Dendro-BSSN currently duplicates x separation into the z component of its
+relative-position history. Compare the resulting meshes before interpreting
+constraint differences as differences between evolution equations.
 
-The real entry point accepts `-t FILE`. Rank zero reads the TOML text and
-broadcasts it; the host TOML library parses it, and use-derived bindings
-populate the block-RHS members of `params_struct`. Unknown fields, malformed or
-nonfinite values, and profile mismatch terminate through the parent
-communicator. Parameters belonging only to standalone qualification kernels
-are not accepted TOML keys. The standalone test executable rejects parameter files.
-The real runner also accepts `--steps` and `--dt`; its mesh and initial-data
-profile remain fixed by the real-host test. [Project Assembly And Generating
-Functions](project-assembly-and-emitters.md#parameter-selection-and-host-geometry)
-explains the parameter selection and geometry.
-
-Claim evidence:
-- Claim: the real entry point binds the opted-in parameters used by its block-RHS CFunction, forwards them through that registered signature, rejects other parameter keys, and terminates the MPI job on invalid input.
-- Role: descriptive behavior
-- Deciding authority: [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py), `_REAL_MAIN`; [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py), `output_toml_bindings`; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), `codeparameter_tail` and `_REAL_SOURCE`
-- Corroboration: [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), analytic parameter-response check
-
-### Real-host qualification
-
-The opt-in host branch uses actual `ot::Mesh`, `ot::Block`, `ot::DVector`, and
-`ts::Ctx` types. `block_geometry` normalizes padded allocation, component
-offset, physical padded origin, and spacing. Component pointers retain their
-bases; the generated block kernel applies the block offset once. The RHS
-callbacks divide ownership as follows:
-
-- `rhs` owns the halo exchange, exterior values, traversal of every local
-  block, and zip back to a packed vector.
-- `rhs_blkwise` accepts already-unzipped component arrays and a list of local
-  block identifiers. It performs no exchange or zip and writes only the
-  selected block interiors, using each Dendrolib component offset.
-- `rhs_blk` accepts one component-major block-local slab. It rebases that
-  block's component offset to zero before calling the same numerical kernel.
-- `pre_stage_blk`, `post_stage_blk`, and `pre_timestep_blk` are byte-preserving
-  no-ops. `post_timestep_blk` applies the algebraic BSSN projection to one
-  block-local slab with the same zero-offset rule as `rhs_blk`.
-
-The direct runtime check calls these functions on real Dendrolib storage and
-compares the block and whole-vector results with `B^0=0.01`, `eta=1`, and an
-explicit nonzero RHS-magnitude requirement. The nonzero shift-driver RHS makes
-the comparison sensitive to component routing and input selection. This proves
-their numerical and storage behavior, but does not prove that a particular
-Dendrolib `ExplicitNUTS` schedule invokes them in the required sequence.
-Scheduler-driven stage projection remains unqualified until that sequence is
-observed in the selected Dendrolib time integrator. See [Octree Grid, AMR, And
-Time Stepping](grid-amr-and-time-stepping.md) for the distinction between
-Dendro's octree AMR and its time-stepper choices.
+The `dendro-validation` workflow job runs
+`nrpy/examples/tests/dendro_application_check.py` once per formulation and
+configures these required checks: W and chi generation (byte-identical repeat
+generation), complete builds, MPI TwoPunctures runs at FD4, FD6, and FD8 through
+the first diagnostic output with the initial Hamiltonian-constraint norm ordered
+by FD order (an ordering check, not a convergence test), finite diagnostics on
+every run, constraint output, wave extraction with odd-m modes near zero and the
+reflection relation C(l,-m) = (-1)^l conj C(l,m), apparent-horizon irreducible
+masses matching the puncture ADM masses, a forced remesh whose evolved state and
+node counts match a stored reference, checkpoint and byte-identical restore,
+point reflection of the checkpointed puncture centers and their motion along the
+puncture momenta, and rejection of both W/chi checkpoint-formulation mismatches.
+The stored-reference comparison of run A's evolved constraint, ADM, and horizon
+values is a regression check on the evolution, not a correctness proof. Lambda
+initialization is asserted through the stored reference, which includes the
+step-0 Lambda constraint (and, for fCCZ4, the Z4 diagnostics), and the algebraic
+projection through checkpointing: the checkpoint writer refuses to write, and a
+restore refuses to read, a checkpoint whose projection residual is nonfinite or
+above tolerance. Halo exchange between ranks is covered by 1-, 3-, and 4-rank
+runs whose diagnostics must agree within a relative tolerance; block boundaries
+within a rank are covered only indirectly, through the numerical checks and the
+stored reference. The job does not inspect field data, does not check
+`alpha=W=sqrt(chi)` pointwise, and it runs none of the temporary direct
+numerical comparisons or native-control comparisons above; those remain
+review-time checks.
 
 Claim evidence:
-- Claim: direct block-callback tests establish callback storage and numerical behavior, but do not qualify Dendrolib `ExplicitNUTS` scheduling or scheduler-driven stage projection.
-- Role: descriptive behavior
-- Deciding authority: [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), direct callback invocation
-- Corroboration: [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), block callbacks; [enuts.h](https://github.com/paralab/Dendro-5.01/blob/master/ODE/include/enuts.h), `ts::ExplicitNUTS`
-
-`dendrolib_capability_test.cpp` derives expected padded geometry and values from
-the selected checkout's block records. It checks that Dendrolib padding is half
-the element order for generated element orders 4, 6, and 8, corresponding to 2,
-3, and 4 points per side. It also checks scalar ABI, padded
-extents, unzip offsets, variable-major x-fastest layout, padded origin, and
-in-domain halo values. Component-distinct affine fields separate layout and
-transport errors from interpolation error. Each checker has a corresponding
-fault-injection mode; a checker is credible only when its fault makes the
-qualification fail.
-
-`runtime_integration_test.cpp` exercises a selected generated formulation's
-whole-vector and block callbacks, component offsets, block-local zero offsets,
-selected-block writes, padded origins, halo exchange, nonconstant zip,
-parameter response, block/whole projection equivalence, byte-preserving block
-hooks, argument rejection, finite-value handling, and rank-local failure
-termination. It runs on one rank to isolate local block addressing and on two
-ranks to include distributed transport. The Minkowski route checks its
-configured evolution invariants using mesh-scaled numerical bounds. These
-checks qualify only the selected source and host checkout; the KB stores
-neither a revision fingerprint nor the run outcome.
-
-Claim evidence:
-- Claim: Dendro supplies reproducible capability and generated-runtime tests that can qualify the selected real host without embedding host snapshots in the KB.
-- Role: descriptive behavior
-- Deciding authority: [dendrolib_capability_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp), its geometry/value checkers and fault modes; [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), its transport, parameter, evolution, and failure checks
-- Corroboration: [README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md), reproduction procedure; [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py), real-host adapter and callback implementation
-
-### CI Coverage And Remaining Tests
-
-Module doctests run through static analysis. The checked-in
-`dendro-validation` GitHub job generates BSSN and fCCZ4 projects for
-finite-difference orders 4, 6, and 8 with KO dissipation enabled and disabled,
-then runs every generated standalone CTest check. Focused sanitizer builds run
-the offset, flat-storage, and nonflat-reference sections for every profile.
-One Dendro-GR build is reconfigured for both formulations at FD4,
-FD6, and FD8 with KO enabled and FD6 with KO disabled. Each selected profile
-runs `runtime_integration_test.cpp` on one and two MPI ranks and one two-rank
-Minkowski step. The job requires injected transport, callback, host
-element-order, and TOML-profile defects to fail with their expected diagnostics.
-The block-local callback check rejects mesh-sized allocation. Shared-runner
-wall time is not treated as a performance measurement. Workflow configuration
-proves this check sequence, not a latest successful run.
-
-Claim evidence:
-- Claim: `dendro-validation` configures the complete standalone formulation/order/KO matrix, focused sanitizer checks, and the real-host FD4/6/8 KO-on plus FD6 KO-off matrix described above, without recording a run result in the KB.
+- Claim: `dendro-validation` configures the listed required application checks through `dendro_application_check.py`, covers the evolution and the forced remesh through a stored-reference regression check, covers Lambda initialization through the stored step-0 constraint row and the algebraic projection through the checkpoint write-time and restore-time residual checks, covers halo exchange through rank-count agreement and block boundaries within a rank only through the numerical checks and the stored reference, and omits field-data inspection, the pointwise initial-lapse check, the temporary direct numerical comparisons, and native-control comparisons.
 - Role: CI behavior
-- Deciding authority: [main.yml](../../../.github/workflows/main.yml), `dendro-validation`
-- Corroboration: [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp), real-host checks and injected defects; [general_relativity/self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py), generated standalone numerical checks
+- Deciding authority: [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py), `Leg.run_variant`, `Leg.check_run_a`, `Leg.check_reference`, `Leg.check_orders`, `Leg.compare_runs`, `Leg.run_negatives`; [main.yml](../../../.github/workflows/main.yml), `dendro-validation`; [checkpoint.py](../../../nrpy/infrastructures/Dendro/checkpoint.py), `output_checkpoint_cpp`, write-time and restore-time projection-residual checks
+- Corroboration: [Generated Project CI](../../validation/generated-project-ci.md), Dendro job description
 
-General application boundary semantics, remeshing and state transfer, local time
-stepping, checkpoint/restart ABI, output selection, GPU execution, and threaded
-kernels remain open. The real-host qualification uses Dendrolib block-boundary flags
-to prescribe constant analytic exterior data; it does not expose a general
-application boundary-condition interface.
+No new test file, test case, doctest prompt, or stored oracle may be added
+without express user permission. Runtime results belong in active review or CI
+output, not as KB snapshots.
 
-The numerical checks use analytic or property oracles rather than a frozen
-runtime output: multiprecision evaluation of the canonical RHS expressions,
-resolvable KO contributions, and roundoff-scaled Minkowski bounds. The
-generated matrix covers finite-difference orders 4, 6, and 8 with KO both
-disabled and enabled. It does not establish remeshing, long-time or nonlinear
-evolution, or broad physics validation. It also does not compare centered with
-directional advection, benchmark stencil profiles, or reproduce Dendro-GR's
-order-8 KO physical-boundary formulas. The real-host tests qualify block
-padding and the selected generated runtime path, not exact equality with every
-Dendro-GR derivative implementation. See [Finite-Difference Profiles And
-Dendro Conformance](finite-difference-profiles-and-dendro-conformance.md).
+The helper uses fixed output frequencies for its stored-reference profiles by
+setting `BSSN_SCALE_VTU_AND_GW_EXTRACTION = false`; the generated production
+parameter files enable native scaling. The helper reads the native GridInfo
+CSV header and includes grid counts, timestep, and physical time in its
+existing restart and rank comparisons. Rank comparisons exclude wall time and active MPI rank count. Exact restart
+comparisons exclude only the GridInfo wall-time column; every other byte in
+GridInfo and the other output files must match. These fixed-cadence checks do
+not establish that native frequency scaling is correct.
 
 ## Sources
 
-- [runtime_integration_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp) - real-context transport, parameter, evolution, and fault checks
-- [main.yml](../../../.github/workflows/main.yml) - configured `dendro-validation` job
-- [dendrolib_capability_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp) - host capability checks and fault injection
-- [README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md) - reproduction procedure
-- [block_geometry.h](../../../nrpy/infrastructures/Dendro/block_geometry.h) - shared `block_geometry_struct` field definitions
-- [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - standalone and real-host contexts
-- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - TOML bindings
-- [dendro_standalone_host.h](../../../nrpy/infrastructures/Dendro/standalone_host/dendro_standalone_host.h) - standalone host types
-- [self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/self_tests_cpp.py) - generated self-test source files
-- [general_relativity/self_tests_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/self_tests_cpp.py) - nonflat reference test
-- [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - generic process shell
-- [general_relativity/main_cpp.py](../../../nrpy/infrastructures/Dendro/general_relativity/main_cpp.py) - GR evolution and CTest registration
-- [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py) - solver/test CMake emission
-- [parfile.py](../../../nrpy/infrastructures/Dendro/parfile.py) - default parameter file
-- [enuts.h](https://github.com/paralab/Dendro-5.01/blob/master/ODE/include/enuts.h) - `ts::ExplicitNUTS`
+- [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) - complete BSSN application generation.
+- [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - complete fCCZ4 application generation.
+- [CMakeLists.py](../../../nrpy/infrastructures/Dendro/CMakeLists.py) - explicit generated source manifest.
+- [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py) - configured CI checks for both applications.
+- [dendro_application_check_reference.py](../../../nrpy/examples/tests/dendro_application_check_reference.py) - stored run-A reference values.
+- [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - production evolution and service scheduling.
+- [Constraints And Diagnostic Norms](constraints-and-diagnostic-norms.md) - momentum convention and comparable RMS diagnostics.
+- [Octree Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md) - remesh path and limits of native parity.
+- [main.yml](../../../.github/workflows/main.yml) - currently configured CI jobs.
+- [Code Test Policy](../../validation/code-test-policy.md) - permitted test changes and proof limits.
 
 ## See Also
 
 - Parent: [Dendro](index.md)
-- See also: [Generated Project CI](../../validation/generated-project-ci.md)
-- Depends on: [Project Assembly And Generating Functions](project-assembly-and-emitters.md)
-- Depends on: [Octree Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md)
-- See also: [Finite-Difference Profiles And Dendro Conformance](finite-difference-profiles-and-dendro-conformance.md)
-- Implements: [Code Test Policy](../../validation/code-test-policy.md)
-- See also: [Generated Backend Comparison](../../syntheses/generated-backend-comparison.md)
-- See also: [fCCZ4 Application Wiring](fccz4-application-wiring.md)
+- Depends on: [Generated Project CI](../../validation/generated-project-ci.md)
+- Validates: [Project Assembly And Generating Functions](project-assembly-and-emitters.md)

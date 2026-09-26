@@ -193,16 +193,18 @@ set up initial_p_t and initial_p_r if not set in parfile.
       par->npoints_A = 66;   // Number of coefficients in the compactified radial direction
       par->npoints_B = 66;   // Number of coefficients in the angular direction
       par->npoints_phi = 28; // Number of coefficients in the phi direction
-    } else {
+    }  // END IF: commondata->mass_ratio >= 2.0
+     else {
       par->npoints_A = 48;   // Number of coefficients in the compactified radial direction
       par->npoints_B = 48;   // Number of coefficients in the angular direction
       par->npoints_phi = 20; // Number of coefficients in the phi direction
-    }
-  } else {
+    }  // END ELSE: lower mass ratio resolution
+  }  // END IF: unspecified spectral point counts
+   else {
     par->npoints_A = commondata->TP_npoints_A;
     par->npoints_B = commondata->TP_npoints_B;
     par->npoints_phi = commondata->TP_npoints_phi;
-  }
+  }  // END ELSE: specified spectral point counts
 
   if (commondata->initial_p_t == -1.0 || commondata->initial_p_r == -1.0) {
     // Step 2.b: Set initial tangential and radial momenta if initialized to -1.0
@@ -218,7 +220,7 @@ set up initial_p_t and initial_p_r if not set in parfile.
       commondata->initial_p_r *= -1.0;
 
     fprintf(stderr, "NRPyPN: Found p_t, p_r = %.8f %.8f\n", commondata->initial_p_t, commondata->initial_p_r);
-  }
+  }  // END IF: unspecified initial momenta
 
   // UNIVERSAL PARAMETERS:
   {
@@ -232,11 +234,12 @@ set up initial_p_t and initial_p_r if not set in parfile.
 
     if (commondata->TP_bare_mass_M < 0 || commondata->TP_bare_mass_m < 0) {
       par->give_bare_mass = false;
-    } else {
+    }  // END IF: unspecified bare masses
+     else {
       par->give_bare_mass = true;
       par->par_m_plus = commondata->TP_bare_mass_M;
       par->par_m_minus = commondata->TP_bare_mass_m;
-    }
+    }  // END ELSE: specified bare masses
 
     if (par->give_bare_mass == false) {
       // Set initial guesses for bare masses. Typically
@@ -245,7 +248,7 @@ set up initial_p_t and initial_p_r if not set in parfile.
       //   solver will sort it out, no worries :)
       par->par_m_plus = 0.9 * par->target_M_plus;
       par->par_m_minus = 0.9 * par->target_M_minus;
-    }
+    }  // END IF: par->give_bare_mass == false
 
     par->par_b = 0.5 * commondata->initial_sep; // x coordinate of the m+ puncture on the native TwoPunctures grid
     const REAL grid_dist_from_origin_BH_m = commondata->initial_sep * par->target_M_plus;
@@ -274,8 +277,8 @@ set up initial_p_t and initial_p_r if not set in parfile.
       // Dimensionless spin parameter chi = J/M^2 --> J = chi * M^2
       par->par_S_minus[ii] = bbhxy_BH_m_chi[ii] * par->target_M_minus * par->target_M_minus;
       par->par_S_plus[ii] = bbhxy_BH_M_chi[ii] * par->target_M_plus * par->target_M_plus;
-    }
-  }
+    }  // END LOOP: for ii: ii < 3
+  }  // END BLOCK: initialize binary physical parameters
 
   fprintf(stderr, "#################################\n");
   fprintf(stderr, "-={ INITIAL BINARY PARAMETERS }=-\n");

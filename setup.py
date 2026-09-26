@@ -157,6 +157,8 @@ if __name__ == "__main__":
     # Auto-discover header files
     auto_pkg_data = discover_header_package_data(dir_setup, top_package="nrpy")
 
+    auto_pkg_data.setdefault("nrpy.examples", []).append("q1.par.lowres.toml")
+
     # Ensure py.typed is included for PEP 561 typing
     auto_pkg_data.setdefault("nrpy", [])
     if "py.typed" not in auto_pkg_data["nrpy"]:

@@ -1054,7 +1054,12 @@ def read_gfs_from_memory(
         gf = gri.glb_gridfcs_dict[gfname]
         gf_type = gf.gf_type
         if enable_simd:
-            if par.parval_from_str("Infrastructure") in ("BHaH", "CarpetX", "ETLegacy"):
+            if par.parval_from_str("Infrastructure") in (
+                "BHaH",
+                "CarpetX",
+                "ETLegacy",
+                "Dendro",
+            ):
                 gf_type = "REAL_SIMD_ARRAY"
             else:
                 raise ValueError("FIXME: Please specify the fp_type for SIMD")
@@ -1563,7 +1568,7 @@ def proto_FD_operators_to_sympy_expressions(
             next(iter(gri.glb_gridfcs_dict))
         ].gf_type  # next(iter( grabs any key in the dict.
         if enable_simd:
-            if gf_type in ("REAL", "CCTK_REAL", "double"):
+            if gf_type in ("REAL", "CCTK_REAL", "double", gri.DENDRO_SCALAR_TYPE):
                 gf_type = "REAL_SIMD_ARRAY"
         FDlhsvarnames[i] = f"const {gf_type} {proto_deriv_var}"
 
