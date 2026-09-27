@@ -1391,7 +1391,12 @@ class Leg:
         )
 
     def negative(
-        self, label: str, argv: List[str], run_dir: Path, expected: str
+        self,
+        label: str,
+        argv: List[str],
+        run_dir: Path,
+        expected: str,
+        forbidden: Optional[str] = None,
     ) -> None:
         """
         Run a case that must fail promptly with a named diagnostic (check N1).
@@ -1401,24 +1406,31 @@ class Leg:
         :param run_dir: Working directory.
         :param expected: Text that must appear in the output; a trailing newline
             requires it to end a line.
+        :param forbidden: Text that must not appear in the output.
         """
         safe = "".join(c if c.isalnum() else "_" for c in label)
         log = run_dir / f"negative-{safe}.log"
         status, timed_out = run_logged(argv, run_dir, log, TIMEOUT_NEGATIVE)
         text = log.read_text(errors="replace")
-        ok = (not timed_out) and 0 < status < 124 and expected in text
+        expected_found = expected in text
+        forbidden_found = forbidden is not None and forbidden in text
+        text_matches = expected_found and not forbidden_found
+        ok = (not timed_out) and 0 < status < 124 and text_matches
         if not ok:
             print(tail(log), flush=True)
+        measured_text = f"text {'found' if expected_found else 'missing'}"
+        bound = f"exit status 1-123 with '{expected.strip()}'"
+        if forbidden is not None:
+            measured_text += (
+                f", forbidden diagnostic {'found' if forbidden_found else 'absent'}"
+            )
+            bound += f" and without '{forbidden.strip()}'"
         self.report.check(
             "N1",
             "runtime error behavior",
             label,
-            (
-                "timed out"
-                if timed_out
-                else f"exit {status}, text {'found' if expected in text else 'missing'}"
-            ),
-            f"exit status 1-123 with '{expected.strip()}'",
+            "timed out" if timed_out else f"exit {status}, {measured_text}",
+            bound,
             ok,
         )
 
@@ -1455,7 +1467,12 @@ class Leg:
                 f"{reader} executable restoring the {writer} checkpoint",
                 self.mpi(self.ranks, self.executables[reader], "ci.toml"),
                 target,
-                f"Checkpoint metadata does not match {names[reader]}\n",
+                f"Checkpoint metadata does not match {names[reader]}",
+                (
+                    f"Checkpoint metadata does not match {names['chi']}"
+                    if reader == "W"
+                    else None
+                ),
             )
         exe = self.executables["W"]
         o4 = dict(PROFILE_O, BSSN_ELE_ORDER="4")
