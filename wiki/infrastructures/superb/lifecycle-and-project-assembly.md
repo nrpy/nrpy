@@ -76,10 +76,14 @@ registered `CFunction` from `CFunction_dict` as `.cpp`, writes
 `BHaH_function_prototypes.h`, and creates a project Makefile. For superB, the
 examples call it with `CC="charmc"` and link `-module CkIO`; optional settings
 add GSL flags and BHaHAHA link inputs. The generated Makefile encodes expected
-`.ci` outputs directly rather than relying on generated dependency output: it
-has explicit rules such as `timestepping.decl.h timestepping.def.h:
-timestepping.ci`, `main.decl.h main.def.h: main.ci`, and, when BHaHAHA is
-enabled, matching rules for `interpolator3d.ci` and `horizon_finder.ci`. The
+`.ci` outputs directly rather than relying on generated dependency output: one
+pattern rule, `%.decl.h %.def.h: %.ci`, translates each `.ci` file, and when
+BHaHAHA is enabled a prerequisite line orders `horizon_finder.decl.h` after
+`interpolator3d.decl.h`. GNU make runs a multi-target pattern rule's recipe,
+here one `charmc` translation, once to produce both headers; an explicit
+two-target rule would be two independent rules, so a parallel `make -j` could
+translate the same `.ci` file twice and rewrite `timestepping.decl.h` while
+`main.cpp` includes it. The
 same Makefile handles C++ object compilation, the final `$(CC) -language
 charm++` link step, optional service chares, and a `clean` target that removes
 object files, generated `.decl.h`/`.def.h` headers, `charmrun`, and checkpoint
