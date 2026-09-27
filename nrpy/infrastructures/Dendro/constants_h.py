@@ -65,13 +65,13 @@ def output_constants_h(
         Dendro profile.
 
     Doctests:
-    >>> header = output_constants_h("bssn", "bssn", 4, 2, 4, 2, False)
+    >>> header = output_constants_h("bssn", "nrpy::bssn", 4, 2, 4, 2, False)
     >>> "#ifndef BSSN_CONSTANTS_H" in header
     True
     >>> header.rstrip().endswith("#endif  // BSSN_CONSTANTS_H")
     True
     >>> from nrpy.helpers.generic import clang_format
-    >>> "}  // END NAMESPACE: bssn::generated" in clang_format(header)
+    >>> "}  // END NAMESPACE: nrpy::bssn::generated" in clang_format(header)
     True
     >>> "inline constexpr bool KO_ENABLED = false;" in header
     True

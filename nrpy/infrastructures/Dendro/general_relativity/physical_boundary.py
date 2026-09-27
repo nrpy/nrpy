@@ -42,7 +42,7 @@ def register_CFunction_physical_boundary(
     asymptotic: Dict[str, str] = {}
     for name in evolved_names:
         falloff[name] = "2.0" if name.startswith(("lambdaU", "aDD")) else "1.0"
-        asymptotic[name] = "1.0" if name in ("alpha", "cf") else "0.0"
+        asymptotic[name] = str(float(gri.glb_gridfcs_dict[name].f_infinity))
 
     scalar_type = gri.DENDRO_SCALAR_TYPE
     body = f"""const std::ptrdiff_t offset = static_cast<std::ptrdiff_t>(block.getOffset());
@@ -119,7 +119,14 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
     body = f"""const {scalar_type} falloff[{len(evolved_names)}] = {{{falloff_values}}};
 const {scalar_type} asymptotic[{len(evolved_names)}] = {{{asymptotic_values}}};
 {body}"""
-    desc = "Apply state-aware outgoing-radiation RHS data on physical faces."
+    desc = """Replace the right-hand side on physical faces with the outgoing-radiation condition.
+
+@param[in] block Dendro block whose physical-face nodes are updated.
+@param[in] in_gfs Unzipped evolved fields.
+@param[in,out] rhs_gfs Unzipped right-hand sides; physical-face values are replaced.
+@param[in] domain_min Lower corner of the physical domain.
+@param[in] domain_max Upper corner of the physical domain.
+"""
     cfunc_type = "void"
     name = "physical_boundary"
     params = (

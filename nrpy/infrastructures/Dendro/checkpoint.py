@@ -14,7 +14,6 @@ from nrpy.infrastructures.Dendro import CodeParameters, state_h
 def output_checkpoint_cpp(
     solver_stem: str,
     solver_namespace: str,
-    formulation_name: str,
     *,
     enable_fCCZ4: bool = False,
 ) -> str:
@@ -28,11 +27,14 @@ def output_checkpoint_cpp(
 
     :param solver_stem: Lowercase formulation stem used by generated headers.
     :param solver_namespace: Generated application namespace.
-    :param formulation_name: Stable checkpoint formulation identifier.
     :param enable_fCCZ4: Select the canonical fCCZ4 state layout when true.
     :return: Complete generated ``checkpoint.cpp`` text.
     """
     state_h.validate_registered_state(enable_fCCZ4)
+    # Stable checkpoint identifier: the formulation, suffixed for chi evolution.
+    formulation_name = ("fCCZ4" if enable_fCCZ4 else "BSSN") + (
+        "_chi" if par.parval_from_str("EvolvedConformalFactor_cf") == "chi" else ""
+    )
     evolved_names = [
         state_h.dendro_state_name(name)
         for name in state_h.evolved_gridfunctions(enable_fCCZ4)
@@ -185,7 +187,8 @@ int {solver_stem}_write_checkpoint(
         if (remove_error) global_status = 1;
     }}  // END IF: rank 0 removes old metadata
     MPI_Bcast(&global_status, 1, MPI_INT, 0, mesh->getMPICommunicator());
-    if (global_status == 0) {{
+    const bool metadata_removed = global_status == 0;
+    if (metadata_removed) {{
         try {{
             std::filesystem::rename(temporary_octree_name, octree_name.str());
             std::filesystem::rename(temporary_state_name, state_name.str());
@@ -202,6 +205,12 @@ int {solver_stem}_write_checkpoint(
     if (global_status != 0) {{
         std::filesystem::remove(temporary_octree_name);
         std::filesystem::remove(temporary_state_name);
+        if (metadata_removed) {{
+            // Metadata is gone; delete this slot's files so no slot mixes checkpoints.
+            std::error_code cleanup_error;
+            std::filesystem::remove(octree_name.str(), cleanup_error);
+            std::filesystem::remove(state_name.str(), cleanup_error);
+        }}  // END IF: slot metadata already removed
         return 1;
     }}  // END IF: checkpoint file rename failed
 

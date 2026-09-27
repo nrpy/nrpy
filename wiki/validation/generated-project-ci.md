@@ -195,10 +195,20 @@ runtime; JAX generated-package install/import/basic test or accelerator runtime;
 any CUDA executable/GPU result; Dendro general boundaries, local time stepping,
 GPU execution, threaded kernels, three-rank horizon-checkpoint contents and
 restore, or generation and build with `enable_KreissOliger_dissipation = False`;
-long-time, merger, or
+Dendro builds under AddressSanitizer or UndefinedBehaviorSanitizer, generated
+C++ self-tests under CTest, faults injected into the generated C++ at run time
+(invalid block offsets, halos, element orders, nonfinite values, and null or
+out-of-range block, field, and projection arguments), or builds against a
+pinned Dendro-GR commit; long-time, merger, or
 production-resolution Dendro evolution; geodesic/raytracing projects; GRoovy;
 active MANGA build; Kasner; and scientific correctness beyond the stated
 regression, property, and waveform assertions.
+
+Claim evidence:
+- Claim: the `dendro-validation` job builds each generated Dendro application with the generated CMake project against Dendrolib `master` and runs the helper's checks, including the invalid-input and output-failure cases of `Leg.run_negatives`; it runs no AddressSanitizer or UndefinedBehaviorSanitizer build, no generated C++ self-test under CTest, no fault injected into the generated C++ at run time, and no build against a pinned Dendro-GR commit, so a pass is not evidence for any of these.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `Leg.generate_and_build`, `Leg.run_negatives`
+- Corroboration: [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), `output_CFunctions_function_prototypes_and_construct_CMakeLists`, Dendrolib `GIT_TAG "master"` and no test targets
 
 These jobs intentionally create generated `project/` outputs. Treat those as CI
 products, not committed documentation or hand-authored source, unless a selected

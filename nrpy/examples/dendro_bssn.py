@@ -60,7 +60,6 @@ from nrpy.infrastructures.Dendro.general_relativity import (
 )
 
 SOLVER_NAME = "Dendro_NRPy_BSSN"
-SOLVER_PREFIX = "BSSN"
 SOLVER_STEM = "bssn"
 SOLVER_NAMESPACE = "nrpy::bssn"
 EXECUTABLE_NAME = "nrpyBssnSolver"
@@ -124,6 +123,7 @@ def main() -> None:
     """Generate the complete Dendro BSSN application."""
     args = parse_args()
     enable_KreissOliger_dissipation = True
+    enable_intrinsics = True
 
     par.set_parval_from_str("Infrastructure", "Dendro")
     par.set_parval_from_str("fp_type", "double")
@@ -132,13 +132,6 @@ def main() -> None:
     par.set_parval_from_str("EvolvedConformalFactor_cf", args.conformal_factor)
     par.set_parval_from_str("detgbarOverdetghat_equals_one", True)
     par.set_parval_from_str("enable_parallel_codegen", True)
-    par.register_CodeParameter(
-        "REAL",
-        "nrpy.equations.general_relativity.BSSN_gauge_RHSs",
-        "eta",
-        1.0,
-        commondata=True,
-    )
     state_h.register_canonical_gridfunctions(enable_fCCZ4=False)
 
     for fd_order in FD_ORDERS:
@@ -146,6 +139,7 @@ def main() -> None:
             SOLVER_STEM,
             fd_order=fd_order,
             CoordSystem=COORD_SYSTEM,
+            enable_intrinsics=enable_intrinsics,
         )
         rhs_eval.register_CFunction_rhs_eval(
             SOLVER_STEM,
@@ -158,6 +152,7 @@ def main() -> None:
             enable_YBS_momentum_constraint_adjustment=args.ybs_momentum,
             enable_SSL=True,
             enable_CAHD=True,
+            enable_intrinsics=enable_intrinsics,
         )
         BSSN_constraints.register_CFunction_BSSN_constraints(
             SOLVER_STEM, fd_order=fd_order, CoordSystem=COORD_SYSTEM
@@ -190,6 +185,7 @@ def main() -> None:
     )
     adm_quantities.register_CFunction_adm_quantities(SOLVER_STEM)
     pcg.do_parallel_codegen()
+    par.adjust_CodeParam_default("eta", 1.0)
 
     state_h.validate_registered_state(enable_fCCZ4=False)
     CodeParameters.register_CFunctions_parameters(SOLVER_STEM, SOLVER_NAMESPACE)
@@ -305,7 +301,6 @@ typedef double DOUBLE;
         + "src/checkpoint.cpp": checkpoint.output_checkpoint_cpp(
             SOLVER_STEM,
             SOLVER_NAMESPACE,
-            "BSSN" if args.conformal_factor == "W" else "BSSN_chi",
             enable_fCCZ4=False,
         ),
         module_root
@@ -329,7 +324,6 @@ typedef double DOUBLE;
         CMakeLists.output_CFunctions_function_prototypes_and_construct_CMakeLists(
             SOLVER_NAME,
             SOLVER_STEM,
-            SOLVER_PREFIX,
             EXECUTABLE_NAME,
             application_sources,
         )

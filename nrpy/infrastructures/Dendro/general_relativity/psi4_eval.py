@@ -280,7 +280,14 @@ const {scalar_type} pmin_block[3] = {{
                     ),
                 )
             )
-            desc = f"Evaluate Psi4 on one padded block at FD order {fd_order}."
+            desc = f"""Evaluate Psi4 on one block at finite-difference order {fd_order}.
+
+@param[in] block Dendro block whose interior nodes are evaluated.
+@param[in] in_gfs Unzipped evolved fields.
+@param[out] psi4_gfs Unzipped real and imaginary parts of Psi4.
+@param[in] domain_min Lower corner of the physical domain.
+@param[in] domain_max Upper corner of the physical domain.
+"""
             cfunc_type = "void"
             name = f"psi4_eval_order_{fd_order}"
             params = (

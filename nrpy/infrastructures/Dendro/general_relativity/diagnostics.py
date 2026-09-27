@@ -123,7 +123,20 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
         }}  // END LOOP: for i over interior x
     }}  // END LOOP: for j over interior y
 }}  // END LOOP: for k over interior z"""
-    desc = "Accumulate excised conformal-factor volume-weighted constraint norms on one block."
+    desc = """Accumulate volume-weighted constraint norms on one block, skipping excised points.
+
+@param[in] block Dendro block whose interior nodes are summed.
+@param[in] diagnostic_gfs Unzipped constraint fields, in DIAG order.
+@param[in] state_gfs Unzipped evolved fields, which supply the conformal factor.
+@param[in] domain_min Lower corner of the physical domain.
+@param[in] domain_max Upper corner of the physical domain.
+@param[in] excision_centers Centers of the excision spheres.
+@param[in] excision_radii Radii of the excision spheres.
+@param num_excision_regions Number of excision spheres.
+@param[in,out] local_squared_norms Running sum of each squared constraint times proper volume.
+@param[in,out] local_max_norms Running maximum of each absolute constraint.
+@param[in,out] local_volume Running sum of proper volume.
+"""
     cfunc_type = "void"
     name = "diagnostics"
     params = (

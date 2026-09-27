@@ -78,7 +78,13 @@ def register_CFunction_floor_the_lapse_and_conformal_factor(
             "}  // END LOOP: for pp over node range",
         )
     )
-    desc = "Floor alpha and the conformal factor with Dendro's CHI_FLOOR."
+    desc = """Floor the lapse alpha and the conformal factor at chi_floor at each owned node.
+
+@param[in,out] in_gfs Zipped evolved fields that are floored in place.
+@param node_begin First owned node index.
+@param node_end One past the last owned node index.
+@param chi_floor Lower bound for alpha and the conformal factor.
+"""
     cfunc_type = "void"
     name = "floor_the_lapse_and_conformal_factor"
     params = (

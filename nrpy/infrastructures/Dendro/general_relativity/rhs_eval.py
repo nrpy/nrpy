@@ -57,7 +57,7 @@ def register_CFunction_rhs_eval(
     enable_YBS_momentum_constraint_adjustment: bool = False,
     enable_SSL: bool = False,
     enable_CAHD: bool = False,
-    enable_intrinsics: bool = True,
+    enable_intrinsics: bool,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register one order-specific BSSN or fCCZ4 right-hand-side kernel.
@@ -98,6 +98,7 @@ def register_CFunction_rhs_eval(
     if enable_intrinsics and CoordSystem != "Cartesian":
         raise ValueError("Dendro SIMD RHS kernels require Cartesian coordinates.")
 
+    # Step 1: Build the symbolic right-hand sides at the requested order.
     old_fd_order = par.parval_from_str("fd_order")
     par.set_parval_from_str("fd_order", fd_order)
     try:
@@ -162,6 +163,7 @@ def register_CFunction_rhs_eval(
             rhs_by_symbol_name[f"bet_rhsU{i}"] = bet_rhsU[i]
         rhs_by_symbol_name = OrderedDict(sorted(rhs_by_symbol_name.items()))
 
+        # Step 2: Add Kreiss-Oliger dissipation, slow-start lapse, and CAHD terms.
         if enable_KreissOliger_dissipation:
             add_KreissOliger_dissipation_terms(
                 rhs_by_symbol_name,
@@ -230,6 +232,7 @@ def register_CFunction_rhs_eval(
                     )
                 )
 
+        # Step 3: Map the right-hand sides to evolved fields with centered derivatives.
         rhs_by_gridfunction_name: Dict[str, sp.Expr] = OrderedDict()
         rhs_by_gridfunction_name["alpha"] = rhs_by_symbol_name["alpha_rhs"]
         rhs_by_gridfunction_name["cf"] = rhs_by_symbol_name["cf_rhs"]
@@ -286,6 +289,7 @@ def register_CFunction_rhs_eval(
             for name, expression in rhs_by_gridfunction_name.items()
         )
 
+        # Step 4: Check the output order and the storage map.
         evol_order = tuple(state_h.evolved_gridfunctions(enable_fCCZ4))
         state_h.validate_registered_state(enable_fCCZ4)
         if tuple(rhs_by_gridfunction_name) != evol_order:
@@ -300,6 +304,7 @@ def register_CFunction_rhs_eval(
         if len(lvalues) != len(set(lvalues)):
             raise ValueError("RHS outputs must map bijectively onto EVOL storage.")
 
+        # Step 5: Generate the kernel and check its stencil reach.
         kernel_expressions = list(rhs_by_gridfunction_name.values())
         fp_type = str(par.parval_from_str("fp_type"))
         scalar_type = gri.DENDRO_SCALAR_TYPE
@@ -345,6 +350,17 @@ def register_CFunction_rhs_eval(
                 if name in par.glb_code_params_dict
             )
         )
+        # Step 6: Emit the block preamble, pointer bindings, and point loop.
+        # Only the BSSN CAHD term reads grid_spacing; emit it only when used.
+        grid_spacing_line = (
+            f"const {scalar_type} {prefix}grid_spacing = "
+            "std::min({dx_block[0], dx_block[1], dx_block[2]});\n"
+            if any(
+                expression.has(sp.Symbol("grid_spacing"))
+                for expression in kernel_expressions
+            )
+            else ""
+        )
         geometry = f"""const std::ptrdiff_t offset = static_cast<std::ptrdiff_t>(block.getOffset());
 const unsigned nx_block = block.getAllocationSzX();
 const unsigned ny_block = block.getAllocationSzY();
@@ -357,8 +373,7 @@ const {scalar_type} dx_block[3] = {{
     block.computeDx(domain_min, domain_max),
     block.computeDy(domain_min, domain_max),
     block.computeDz(domain_min, domain_max)}};
-const {scalar_type} {prefix}grid_spacing = {"dx_block[0]" if enable_fCCZ4 else "std::min({dx_block[0], dx_block[1], dx_block[2]})"};
-[[maybe_unused]] const {scalar_type} pmin_block[3] = {{
+{grid_spacing_line}[[maybe_unused]] const {scalar_type} pmin_block[3] = {{
     GRIDX_TO_X(block.getBlockNode().minX()) - padding_block * dx_block[0],
     GRIDY_TO_Y(block.getBlockNode().minY()) - padding_block * dx_block[1],
     GRIDZ_TO_Z(block.getBlockNode().minZ()) - padding_block * dx_block[2]}};"""
@@ -395,7 +410,7 @@ const {scalar_type} {prefix}grid_spacing = {"dx_block[0]" if enable_fCCZ4 else "
                 *used_codeparameters,
                 "stage_time",
                 "time_step",
-                "grid_spacing",
+                *(("grid_spacing",) if grid_spacing_line else ()),
                 *(("SSL_exp_factor",) if enable_SSL else ()),
                 *(("dsmin",) if enable_YBS_momentum_constraint_adjustment else ()),
             )
@@ -422,6 +437,7 @@ const {scalar_type} {prefix}grid_spacing = {"dx_block[0]" if enable_fCCZ4 else "
                 ),
             )
         )
+        # Step 7: Register the C function.
         cparam_args = ", ".join(
             "const "
             f"{CodeParameters.c_type(par.glb_code_params_dict[name].cparam_type)} "
@@ -437,7 +453,21 @@ const {scalar_type} {prefix}grid_spacing = {"dx_block[0]" if enable_fCCZ4 else "
             + (f", {cparam_args}" if cparam_args else "")
         )
         formulation = "fCCZ4" if enable_fCCZ4 else "BSSN"
-        desc = f"Per-block direct-FD {formulation} RHS ({len(evol_order)} fields)."
+        parameter_doc = "".join(
+            f"@param {prefix}{name} Value of the {name} CodeParameter.\n"
+            for name in used_codeparameters
+        )
+        desc = f"""Evaluate the {formulation} right-hand sides of all {len(evol_order)} evolved fields on one block at finite-difference order {fd_order}.
+
+@param[in] block Dendro block whose interior nodes are evaluated.
+@param[in] in_gfs Unzipped evolved fields.
+@param[in] ricci_gfs Unzipped RbarDD components.
+@param[out] rhs_gfs Unzipped right-hand sides, in EVOL order.
+@param[in] domain_min Lower corner of the physical domain.
+@param[in] domain_max Upper corner of the physical domain.
+@param {prefix}stage_time Time of the Runge-Kutta stage being evaluated.
+@param {prefix}time_step Current time step.
+{parameter_doc}"""
         cfunc_type = "void"
         name = f"rhs_eval_order_{fd_order}"
         params = block_params
@@ -460,14 +490,3 @@ const {scalar_type} {prefix}grid_spacing = {"dx_block[0]" if enable_fCCZ4 else "
     finally:
         par.set_parval_from_str("fd_order", old_fd_order)
     return pcg.NRPyEnv()
-
-
-if __name__ == "__main__":
-    import doctest
-    import sys
-
-    results = doctest.testmod()
-    if results.failed > 0:
-        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-        sys.exit(1)
-    print(f"Doctest passed: All {results.attempted} test(s) passed")

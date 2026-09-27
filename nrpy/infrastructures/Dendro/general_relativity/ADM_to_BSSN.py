@@ -174,7 +174,14 @@ def register_CFunction_ADM_to_BSSN(
             ),
         )
     )
-    desc = "Pointwise conversion from TwoPunctures ADM fields to BSSN fields."
+    desc = """Convert puncture ADM fields to the evolved fields at every block-interior node.
+
+@param[in] block Dendro block whose interior nodes are evaluated.
+@param[in] adm_gfs Unzipped ADM fields: gammaDD, KDD, betaU, then BU.
+@param[out] out_gfs Unzipped evolved fields that receive the converted values.
+@param[in] domain_min Lower corner of the physical domain.
+@param[in] domain_max Upper corner of the physical domain.
+"""
     cfunc_type = "void"
     name = f"ADM_to_BSSN_order_{fd_order}"
     params = (

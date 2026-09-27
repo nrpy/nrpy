@@ -30,6 +30,8 @@ def output_types_h(solver_stem: str, solver_namespace: str) -> str:
 
 #if !defined(DENDRO_SCALAR_DEFINED) && !defined(DendroScalar)
 #define DENDRO_SCALAR_DEFINED
+// par::Mpi_Allreduce takes its MPI datatype from this alias, so fp_type must
+// be a type that par::Mpi_datatype specializes.
 using {scalar_type} = {fp_type};
 #endif
 

@@ -8,10 +8,12 @@ recorded by the registered CFunctions; its real-host runtime interface is the
 narrower set forwarded to the block RHS.  No physics parameter table is
 authored here and no equation module is imported.
 
-The parameter CFunctions (set defaults, parse a file, validate, print) are
-registered from here as well, as BHaH registers ``params_struct_set_to_default``
-from its own ``CodeParameters``.  They carry no Dendro role: the host context
-calls them, and they are not scheduled as numerical kernels.
+The two parameter CFunctions, ``<stem>_params_struct_set_to_default`` and
+``<stem>_params_validate``, are registered from here as well, as BHaH
+registers ``params_struct_set_to_default`` from its own ``CodeParameters``.
+The generated ``main`` calls both before evolution, and the ``Ctx``
+constructor calls the first; neither is scheduled as a numerical kernel.
+Parameter files are read by the ``ParameterFile`` class in ``main_cpp.py``.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -272,9 +274,10 @@ def register_CFunctions_parameters(solver_stem: str, solver_namespace: str) -> N
             )
         else:
             set_lines.append(f"params.{cp_name} = {float(value)!r};")
-    set_to_default_desc = (
-        "Generated parameter defaults, from the registered CodeParameters."
-    )
+    set_to_default_desc = """Set every generated parameter to its registered CodeParameter default.
+
+@param[out] params Parameter table that receives the defaults.
+"""
     set_to_default_cfunc_type = "void"
     set_to_default_name = f"{solver_stem}_params_struct_set_to_default"
     set_to_default_params = f"{params_type}& params"
@@ -301,9 +304,11 @@ def register_CFunctions_parameters(solver_stem: str, solver_namespace: str) -> N
             f"  // END IF: non-finite {cp_name}"
         )
     validate_lines.append("return ok;")
-    validate_desc = (
-        "Generated parameter validation: finite checks for floating point parameters."
-    )
+    validate_desc = """Check that every floating-point parameter is finite.
+
+@param[in] params Parameter table to check.
+@return true if every floating-point parameter is finite, otherwise false.
+"""
     validate_cfunc_type = "bool"
     validate_name = f"{solver_stem}_params_validate"
     validate_params = f"const {params_type}& params"
@@ -316,39 +321,6 @@ def register_CFunctions_parameters(solver_stem: str, solver_namespace: str) -> N
         name=validate_name,
         params=validate_params,
         body=validate_body,
-    )
-
-    print_lines: List[str] = [f'std::printf("{solver_stem} effective parameters:\\n");']
-    for cp_name in runtime_parameter_names():
-        cparam_type = par.glb_code_params_dict[cp_name].cparam_type
-        base = c_type(cparam_type)
-        if par.parse_cparam_type(cparam_type)[2]:
-            if base == "char":
-                print_lines.append(
-                    f'std::printf("  {cp_name} = %s\\n", params.{cp_name});'
-                )
-            continue
-        if base in ("bool", "int"):
-            print_lines.append(
-                f'std::printf("  {cp_name} = %d\\n", (int) params.{cp_name});'
-            )
-        else:
-            print_lines.append(
-                f'std::printf("  {cp_name} = %g\\n", (double) params.{cp_name});'
-            )
-    print_effective_desc = "Generated effective-parameter printout."
-    print_effective_cfunc_type = "void"
-    print_effective_name = f"{solver_stem}_params_print_effective"
-    print_effective_params = f"const {params_type}& params"
-    print_effective_body = "\n".join(print_lines)
-    cfc.register_CFunction(
-        subdirectory=subdirectory,
-        includes=includes,
-        desc=print_effective_desc,
-        cfunc_type=print_effective_cfunc_type,
-        name=print_effective_name,
-        params=print_effective_params,
-        body=print_effective_body,
     )
 
 

@@ -89,7 +89,18 @@ for (unsigned valid = 0; valid < num_valid_points; ++valid) {{
         (relative_coordinate[0] * momentum_surface[1] -
          relative_coordinate[1] * momentum_surface[0]);
 }}  // END LOOP: for valid over owned points"""
-    desc = "Accumulate rank-local ADM mass and momenta from owned surface samples."
+    desc = """Accumulate the rank-local ADM energy, linear momentum, and angular momentum.
+
+@param num_points Number of quadrature points on the extraction sphere.
+@param num_valid_points Number of quadrature points owned by this rank.
+@param[in] valid_point_indices Indices of the owned quadrature points.
+@param[in] surface_coordinates Cartesian coordinates of every quadrature point.
+@param[in] surface_normals Unit outward normal at every quadrature point.
+@param[in] surface_weights Area-weighted quadrature weight at every point.
+@param[in] surface_data Nine interpolated fields: mass flux, then K_ij - gamma_ij K.
+@param[in] center Center of the extraction sphere.
+@param[in,out] local_quantities Running sums of E, P_i, and J_i on this rank.
+"""
     cfunc_type = "void"
     name = "adm_quantities"
     params = (

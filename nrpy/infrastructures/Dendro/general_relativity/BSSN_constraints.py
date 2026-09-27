@@ -151,7 +151,14 @@ const {scalar_type} pmin_block[3] = {{
                 ),
             )
         )
-        desc = f"Per-block BSSN constraints at FD order {fd_order}."
+        desc = f"""Evaluate the BSSN constraints on one block at finite-difference order {fd_order}.
+
+@param[in] block Dendro block whose interior nodes are evaluated.
+@param[in] in_gfs Unzipped evolved fields.
+@param[out] diagnostic_gfs Unzipped constraint fields, in DIAG order.
+@param[in] domain_min Lower corner of the physical domain.
+@param[in] domain_max Upper corner of the physical domain.
+"""
         cfunc_type = "void"
         name = f"BSSN_constraints_order_{fd_order}"
         params = (

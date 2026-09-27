@@ -116,7 +116,14 @@ def register_CFunction_initial_data_lambdaU(
                 ),
             )
         )
-        desc = f"Initialize covariant conformal connection with FD{fd_order}."
+        desc = f"""Set the conformal connection lambdaU from the conformal metric at finite-difference order {fd_order}.
+
+@param[in] block Dendro block whose interior nodes are evaluated.
+@param[in] in_gfs Unzipped evolved fields.
+@param[out] out_gfs Unzipped evolved fields whose lambdaU components are written.
+@param[in] domain_min Lower corner of the physical domain.
+@param[in] domain_max Upper corner of the physical domain.
+"""
         cfunc_type = "void"
         name = f"initial_data_lambdaU_order_{fd_order}"
         params = (

@@ -325,8 +325,7 @@ def register_CFunction_TP_Interp(
     if (brownsville_lapse)
       alp_out = 2.0 / (1.0 + pow(p, ID_persist->initial_lapse_psi_exponent));
 
-  }  // END IF: conformal factor derivatives required
-   /* if conformal-state > 0 */
+  }  // END IF: conformal-state, psi^n, or Brownsville lapse
 
   // puncture_u_out = U;
 

@@ -45,14 +45,14 @@ def register_CFunction_gravitational_waves(
         raise ValueError("Psi4 extraction requires maximum_l_mode_generated >= 2.")
 
     scalar_type = gri.DENDRO_SCALAR_TYPE
-    theta, phi = sp.symbols("theta phi", real=True)
+    phi = sp.Symbol("phi", real=True)
     harmonic_theta = sp.Symbol("harmonic_theta", real=True)
     harmonic_cases: List[str] = []
     for ell in range(2, maximum_l_mode_generated + 1):
         for mode in range(-ell, ell + 1):
             harmonic = spin_weighted_spherical_harmonics.Y(
-                -2, ell, mode, theta, phi
-            ).subs(theta, harmonic_theta)
+                -2, ell, mode, harmonic_theta, phi
+            )
             assignments = c_codegen(
                 [sp.re(harmonic), sp.im(harmonic)],
                 ["harmonic_real", "harmonic_imag"],
@@ -200,10 +200,25 @@ par::Mpi_Allreduce(
 par::Mpi_Allreduce(
     local_l2_imag.data(), l2_imag, static_cast<int>(num_radii), MPI_SUM,
     mesh->getMPICommunicator());"""
-    desc = (
-        "Interpolate Psi4 to spheres, decompose spin-weight minus-two modes, "
-        "and compute separate real and imaginary L2 norms."
-    )
+    desc = """Interpolate Psi4 to extraction spheres and project it onto spin-weight -2 harmonics.
+
+@param[in] mesh Dendro mesh that holds Psi4.
+@param[in] psi4_real_zipped Zipped real part of Psi4.
+@param[in] psi4_imag_zipped Zipped imaginary part of Psi4.
+@param[in] extraction_radii Radii of the extraction spheres.
+@param num_radii Number of extraction spheres.
+@param maximum_l Largest l mode computed.
+@param mode_stride Number of mode slots per extraction radius in the output arrays.
+@param[in] extraction_center Center of the extraction spheres.
+@param[in] grid_min Lower corner of the octree coordinates.
+@param[in] grid_max Upper corner of the octree coordinates.
+@param[in] domain_min Lower corner of the physical domain.
+@param[in] domain_max Upper corner of the physical domain.
+@param[out] modes_real Real part of each (l, m) mode at each radius, summed over ranks.
+@param[out] modes_imag Imaginary part of each (l, m) mode at each radius, summed over ranks.
+@param[out] l2_real Sum of squared real Psi4 samples at each radius, over ranks.
+@param[out] l2_imag Sum of squared imaginary Psi4 samples at each radius, over ranks.
+"""
     cfunc_type = "void"
     name = "gravitational_waves"
     params = (

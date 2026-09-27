@@ -45,9 +45,20 @@ and toml11 with `FetchContent`, and it is
 not meant to be added to another CMake tree. `CPU_ARCH` defaults to `native` and
 applies to the solver and the fetched libraries; `generic_avx2` selects `-mavx2
 -mfma`. The examples emit intrinsic-based Ricci and RHS kernels and package
-NRPy's `simd_intrinsics.h` under `generated/include`;
-`register_CFunction_Ricci_eval` and `register_CFunction_rhs_eval` generate
-scalar kernels only when called with `enable_intrinsics=False`. The slow-start
+NRPy's `simd_intrinsics.h` under `generated/include`.
+
+`register_CFunction_Ricci_eval` and `register_CFunction_rhs_eval` take a
+required `enable_intrinsics` argument. `True` generates SIMD-intrinsic kernels
+and is accepted only with `CoordSystem = "Cartesian"`; `False` generates
+scalar kernels. Both examples pass `True`.
+
+Claim evidence:
+- Claim: `register_CFunction_Ricci_eval` and `register_CFunction_rhs_eval` take a required keyword argument `enable_intrinsics`; `True` emits SIMD-intrinsic kernels and raises `ValueError` unless `CoordSystem` is `Cartesian`, `False` emits scalar kernels, and both examples pass `True`.
+- Role: descriptive behavior
+- Deciding authority: [Ricci_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/Ricci_eval.py), `register_CFunction_Ricci_eval`; [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
+- Corroboration: [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py), `main`, `enable_intrinsics`
+
+The slow-start
 lapse exponential is evaluated once per block kernel call in either mode, while
 its runtime `SSL_sigma` parameter remains available to the solver. `Ctx::rhs`
 does not clear the unzipped RHS or Ricci buffers: both kernels write every

@@ -112,7 +112,16 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
         }}  // END LOOP: for i over interior x
     }}  // END LOOP: for j over interior y
 }}  // END LOOP: for k over interior z"""
-    desc = "Interpolate solved TwoPunctures ADM data onto one Dendro block interior."
+    desc = """Interpolate the solved TwoPunctures ADM data onto the interior nodes of one block.
+
+@param[in] block Dendro block whose interior nodes are filled.
+@param[in] commondata TwoPunctures common data.
+@param[in] params TwoPunctures parameter table.
+@param[in] punctures Solved TwoPunctures spectral data.
+@param[out] adm_gfs Unzipped ADM fields: gammaDD, KDD, betaU, then BU.
+@param[in] domain_min Lower corner of the physical domain.
+@param[in] domain_max Upper corner of the physical domain.
+"""
     cfunc_type = "void"
     name = "twopunctures"
     params = (

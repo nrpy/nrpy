@@ -46,28 +46,124 @@ using DVec = ot::DVector<DendroScalar, unsigned int>;
 class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
  public:
   generated::params_struct params{{}};
-  Ctx(ot::Mesh*, const Point&, const Point&, DendroScalar, DendroScalar,
-      unsigned int, DendroScalar, DendroScalar, DendroScalar, DendroScalar,
-      const std::vector<unsigned int>&,
-      unsigned int, unsigned int, unsigned int, unsigned int, unsigned int,
-      const std::string&, const std::string&, const std::string&, bool,
-      const std::vector<unsigned int>&, const std::vector<unsigned int>&,
-      const std::array<Point, 2>&, const std::array<DendroScalar, 2>&,
-      const std::array<DendroScalar, 2>&,
-      const std::array<DendroScalar, 2>&,
-      const std::array<unsigned int, 2>&, DendroScalar, unsigned int,
-      unsigned int, dendro_aeh::AEH_BHaHAHA*, unsigned int,
-      const std::vector<DendroScalar>&, unsigned int, unsigned int,
-      const std::array<Point, 2>&, DendroScalar, const Point&, bool, unsigned int);
+  /**
+   * Validate the run settings, store them, and allocate every field vector.
+   *
+   * @param[in] mesh Initial Dendro mesh; its element order must be 4, 6, or 8.
+   * @param[in] minimum Lower corner of the physical domain.
+   * @param[in] maximum Upper corner of the physical domain.
+   * @param time_step Initial time step.
+   * @param wavelet_tolerance Wavelet refinement tolerance.
+   * @param wavelet_tolerance_mode 0 for a constant tolerance, 6 for the radial and causal profile.
+   * @param maximum_wavelet_tolerance Largest tolerance used by mode 6.
+   * @param gravitational_wave_tolerance Tolerance between the extraction radii in mode 6.
+   * @param amr_coarsening_factor Dendro coarsening factor before the merged checkpoint.
+   * @param postmerger_amr_coarsening_factor Coarsening factor after the merged checkpoint; 0 keeps the first.
+   * @param[in] refinement_variables Evolved-field indices tested for refinement.
+   * @param remesh_frequency Iterations between remesh tests before merger.
+   * @param postmerger_remesh_frequency Iterations between remesh tests after merger.
+   * @param terminal_frequency Iterations between terminal status lines.
+   * @param vtu_frequency Iterations between VTU outputs.
+   * @param checkpoint_frequency Iterations between checkpoints; 0 disables them.
+   * @param[in] output_prefix Path prefix of the diagnostic files.
+   * @param[in] vtu_prefix Path prefix of the VTU files.
+   * @param[in] checkpoint_prefix Path prefix of the checkpoint files.
+   * @param vtu_z_slice_only Write only the z-normal slice through the domain center.
+   * @param[in] vtu_evolved_fields Evolved-field indices written to VTU files.
+   * @param[in] vtu_constraint_fields Constraint and Psi4 field indices written to VTU files.
+   * @param[in] excision_centers Initial puncture centers.
+   * @param[in] excision_radii Radii excluded from the constraint norms around each puncture.
+   * @param[in] black_hole_masses Puncture masses.
+   * @param[in] black_hole_amr_radii Innermost refinement radius around each puncture.
+   * @param[in] black_hole_maximum_levels Maximum refinement level around each puncture.
+   * @param black_hole_amr_ratio Growth factor of the refinement radius per coarser level.
+   * @param minimum_depth Coarsest refinement level.
+   * @param apparent_horizon_frequency Iterations between horizon finds; 0 disables them.
+   * @param[in,out] apparent_horizon_finder BHaHAHA horizon finder, or nullptr.
+   * @param gravitational_wave_frequency Iterations between Psi4 and constraint outputs.
+   * @param[in] gravitational_wave_radii Psi4 extraction radii, in increasing order.
+   * @param gravitational_wave_maximum_l Largest l mode written, from 2 to 8.
+   * @param nyquist_mode Mode number for wavelength-based refinement; 0 disables it.
+   * @param[in] initial_black_hole_velocities Initial puncture velocities.
+   * @param time_begin Initial simulation time.
+   * @param[in] extraction_center Center of the extraction spheres.
+   * @param scale_output_frequencies Scale output frequencies with the finest level.
+   * @param postmerger_gravitational_wave_frequency Iterations between Psi4 outputs after merger.
+   */
+  Ctx(ot::Mesh* mesh, const Point& minimum, const Point& maximum,
+      DendroScalar time_step, DendroScalar wavelet_tolerance,
+      unsigned int wavelet_tolerance_mode, DendroScalar maximum_wavelet_tolerance,
+      DendroScalar gravitational_wave_tolerance, DendroScalar amr_coarsening_factor,
+      DendroScalar postmerger_amr_coarsening_factor,
+      const std::vector<unsigned int>& refinement_variables,
+      unsigned int remesh_frequency, unsigned int postmerger_remesh_frequency,
+      unsigned int terminal_frequency, unsigned int vtu_frequency,
+      unsigned int checkpoint_frequency, const std::string& output_prefix,
+      const std::string& vtu_prefix, const std::string& checkpoint_prefix,
+      bool vtu_z_slice_only, const std::vector<unsigned int>& vtu_evolved_fields,
+      const std::vector<unsigned int>& vtu_constraint_fields,
+      const std::array<Point, 2>& excision_centers,
+      const std::array<DendroScalar, 2>& excision_radii,
+      const std::array<DendroScalar, 2>& black_hole_masses,
+      const std::array<DendroScalar, 2>& black_hole_amr_radii,
+      const std::array<unsigned int, 2>& black_hole_maximum_levels,
+      DendroScalar black_hole_amr_ratio, unsigned int minimum_depth,
+      unsigned int apparent_horizon_frequency,
+      dendro_aeh::AEH_BHaHAHA* apparent_horizon_finder,
+      unsigned int gravitational_wave_frequency,
+      const std::vector<DendroScalar>& gravitational_wave_radii,
+      unsigned int gravitational_wave_maximum_l, unsigned int nyquist_mode,
+      const std::array<Point, 2>& initial_black_hole_velocities,
+      DendroScalar time_begin, const Point& extraction_center,
+      bool scale_output_frequencies,
+      unsigned int postmerger_gravitational_wave_frequency);
+  /**
+   * Release the MPI exchange buffers and every field vector.
+   */
   ~Ctx();
   Ctx(const Ctx&) = delete;
   Ctx& operator=(const Ctx&) = delete;
-  int initialize(const commondata_struct&, const params_struct&,
-                 const ID_persist_struct&);
+  /**
+   * Set the initial evolved fields from the solved TwoPunctures data.
+   *
+   * Interpolates the ADM fields to every block, converts them to the evolved
+   * fields, sets lambdaU by finite differences, then floors alpha and the
+   * conformal factor and enforces the algebraic BSSN constraints.
+   *
+   * @param[in] commondata TwoPunctures common data.
+   * @param[in] tp_params TwoPunctures parameter table.
+   * @param[in] punctures Solved TwoPunctures spectral data.
+   * @return 0.
+   */
+  int initialize(const commondata_struct& commondata, const params_struct& tp_params,
+                 const ID_persist_struct& punctures);
   int initialize() {{ return 0; }}
-  int rhs(DVec*, DVec*, unsigned int, DendroScalar);
-  int rhs_blkwise(DVec, DVec, const unsigned int*, unsigned int,
-                  DendroScalar*);
+  /**
+   * Evaluate the right-hand sides of all evolved fields for one Runge-Kutta stage.
+   *
+   * Fills physical ghost points, evaluates the Ricci tensor and the
+   * right-hand sides at the selected finite-difference order, and applies the
+   * outgoing-radiation condition on physical faces.
+   *
+   * @param[in] in Zipped evolved fields at the stage.
+   * @param[out] out Zipped right-hand sides.
+   * @param count Number of states; must be 1.
+   * @param time Stage time.
+   * @return 0.
+   */
+  int rhs(DVec* in, DVec* out, unsigned int count, DendroScalar time);
+  /**
+   * Evaluate the right-hand sides on a list of blocks, for block-wise stepping.
+   *
+   * @param in Unzipped evolved fields.
+   * @param out Unzipped right-hand sides, written on the listed blocks.
+   * @param[in] ids Local block indices to evaluate.
+   * @param count Number of listed blocks.
+   * @param[in] block_time Time of each listed block, or nullptr for the current time.
+   * @return 0.
+   */
+  int rhs_blkwise(DVec in, DVec out, const unsigned int* ids, unsigned int count,
+                  DendroScalar* block_time);
   int rhs_blk(const DendroScalar*, DendroScalar*, unsigned int, unsigned int,
               DendroScalar) {{ return 0; }}
   int pre_stage_blk(DendroScalar*, unsigned int, unsigned int, DendroScalar) {{ return 0; }}
@@ -78,21 +174,116 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
   int post_stage(DVec&) {{ return 0; }}
   int pre_timestep(DVec&) {{ return 0; }}
   int post_timestep(DVec&);
+  /**
+   * Write the volume-weighted and node-weighted constraint norms.
+   *
+   * Runs every diagnostic_frequency_ iterations. Rank 0 appends to
+   * <prefix>_Constraints_volweighted.dat and <prefix>_Constraints.dat.
+   * Points inside the excision spheres are excluded.
+   *
+   * @return 0.
+   */
   int diagnostic_output();
+  /**
+   * Advance the puncture centers by integrating dx^i/dt = -beta^i at each center.
+   *
+   * Uses the shift interpolated at the current centers over the time since
+   * the last update, and records the centers in the puncture history.
+   *
+   * @return 0.
+   */
   int evolve_excision_centers();
+  /**
+   * Write the Psi4 modes and L2 norms on every extraction sphere.
+   *
+   * Runs every gravitational_wave_frequency_ iterations. Rank 0 appends one
+   * <prefix>_GW_l<l>_m<m>.dat file per mode and <prefix>_GW_L2.dat.
+   *
+   * @return 0.
+   */
   int gravitational_wave_output();
+  /**
+   * Append the two tracked puncture centers to <prefix>_BHLocations.dat.
+   *
+   * @return 0.
+   */
   int black_hole_locations_output();
+  /**
+   * Write the ADM energy, linear momentum, and angular momentum.
+   *
+   * Integrates over the coordinate sphere at the last extraction radius.
+   * Rank 0 appends to <prefix>_ADM.dat.
+   *
+   * @return 0.
+   */
   int adm_output();
+  /**
+   * Run the apparent-horizon finder on the evolved fields.
+   *
+   * @return 0.
+   */
   int apparent_horizon_output();
+  /**
+   * Set the octree refinement flags and report whether the grid changes.
+   *
+   * Combines the wavelet test on the refinement fields with the refinement
+   * levels required near the punctures, the merged remnant, and the
+   * extraction radius.
+   *
+   * @param initial_grid Test even when no remesh is due.
+   * @return true if any rank changes the grid.
+   */
   bool is_remesh(bool initial_grid = false);
   bool is_remesh_due() const;
+  /**
+   * Scale the VTU and Psi4 output frequencies with the finest refinement level.
+   */
   void update_output_frequencies();
+  /**
+   * Append the iteration, time, rank count, element count, and node count to <prefix>_GridInfo.dat.
+   */
   void write_grid_summary_data();
-  int grid_transfer(const ot::Mesh*);
+  /**
+   * Move the evolved fields to a new mesh and reallocate every work vector on it.
+   *
+   * @param[in] mesh New Dendro mesh.
+   * @return 0.
+   */
+  int grid_transfer(const ot::Mesh* mesh);
+  /**
+   * Write the selected evolved, constraint, and Psi4 fields to VTU files.
+   *
+   * Runs every vtu_frequency_ iterations, writing either the z-normal slice
+   * through the domain center or the full volume.
+   *
+   * @return 0.
+   */
   int write_vtu();
+  /**
+   * Write the evolved fields and run metadata when a checkpoint is due.
+   *
+   * Alternates between checkpoint slots 0 and 1, and also checkpoints the
+   * horizon finder.
+   *
+   * @return 0 on success or when no checkpoint is due, otherwise nonzero.
+   */
   int write_checkpt();
-  int restore_checkpt(unsigned int);
+  /**
+   * Replace the mesh and evolved fields with those stored in one checkpoint slot.
+   *
+   * @param checkpoint_index Checkpoint slot, 0 or 1.
+   * @return 0 on success, otherwise nonzero.
+   */
+  int restore_checkpt(unsigned int checkpoint_index);
   int finalize() {{ return 0; }}
+  /**
+   * Check that the evolved fields are finite and print a status line.
+   *
+   * Prints the iteration, time, and largest |alpha| every terminal_frequency_
+   * iterations, and always when a value is not finite.
+   *
+   * @return 0 if every evolved value is finite, otherwise 1.
+   */
   int terminal_output();
   DVec& get_evolution_vars() {{ return state_; }}
   DVec& get_constraint_vars() {{ return constraints_; }}
@@ -100,12 +291,34 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
   unsigned int get_async_batch_sz() {{ return 1; }}
   unsigned int get_num_refine_vars() {{ return refinement_variables_.size(); }}
   const unsigned int* get_refine_var_ids() {{ return refinement_variables_.data(); }}
+  /**
+   * Return the wavelet refinement tolerance as a function of position.
+   *
+   * Mode 0 returns a constant. Mode 6 varies the tolerance with radius
+   * between 8 and the extraction radii, and relaxes it where the current time
+   * precedes the causal time at that radius.
+   *
+   * @return Function of (x, y, z) that gives the tolerance.
+   */
   std::function<double(double, double, double)> get_wtol_function();
   void compute_lts_ts_offset() {{}}
   static unsigned int getBlkTimestepFac(unsigned int, unsigned int, unsigned int) {{ return 1; }}
  private:
-  DendroScalar algebraic_residual(ot::Mesh*, DVec&);
+  /**
+   * Return the largest |det(gammabar) - 1| or |tr(Abar)| over all ranks.
+   *
+   * @param[in] mesh Dendro mesh of the fields.
+   * @param[in] state Zipped evolved fields.
+   * @return Largest residual, or infinity at a nonpositive or nonfinite determinant.
+   */
+  DendroScalar algebraic_residual(ot::Mesh* mesh, DVec& state);
+  /**
+   * Evaluate the constraints at every node into constraints_.
+   */
   void compute_constraints();
+  /**
+   * Evaluate the real and imaginary parts of Psi4 at every node into psi4_.
+   */
   void compute_psi4();
   Point domain_minimum_, domain_maximum_;
   std::array<Point, 2> excision_centers_{{}};
@@ -158,20 +371,75 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
   std::string checkpoint_prefix_ = "cp/nrpy";
   std::vector<unsigned int> refinement_variables_{{}};
 }};  // END CLASS: Ctx
+/**
+ * Write the evolved fields, octree, and run metadata to one checkpoint slot.
+ *
+ * Each active rank writes its octree and fields to temporary files, which are
+ * renamed into place before rank 0 writes the metadata file.
+ *
+ * @param[in] prefix Path prefix of the checkpoint files.
+ * @param checkpoint_index Checkpoint slot, 0 or 1.
+ * @param[in] mesh Dendro mesh of the fields.
+ * @param[in] state Zipped evolved fields.
+ * @param[in] params Generated parameter table, stored for comparison on restore.
+ * @param iteration Current iteration number.
+ * @param time Current simulation time.
+ * @param time_step Current time step.
+ * @param[in] domain_minimum Lower corner of the physical domain.
+ * @param[in] domain_maximum Upper corner of the physical domain.
+ * @param[in] excision_centers Current puncture centers.
+ * @param[in] black_hole_time_history Times of the recorded puncture centers.
+ * @param[in] black_hole_position_history Recorded puncture centers.
+ * @param black_hole_merge_time Time the punctures merged, or the largest DendroScalar.
+ * @param merged_checkpoint_written Whether a checkpoint after merger exists.
+ * @param projected_algebraic_residual Algebraic constraint residual of state.
+ * @return 0 on success, otherwise 1.
+ */
 int {solver_stem}_write_checkpoint(
-    const std::string&, unsigned int, ot::Mesh*, DVec&,
-    const generated::params_struct&, unsigned int, DendroScalar,
-    DendroScalar, const Point&, const Point&, const std::array<Point, 2>&,
-    const std::vector<DendroScalar>&,
-    const std::vector<std::array<DendroScalar, 6>>&, DendroScalar, bool,
-    DendroScalar);
+    const std::string& prefix, unsigned int checkpoint_index, ot::Mesh* mesh,
+    DVec& state, const generated::params_struct& params, unsigned int iteration,
+    DendroScalar time, DendroScalar time_step, const Point& domain_minimum,
+    const Point& domain_maximum, const std::array<Point, 2>& excision_centers,
+    const std::vector<DendroScalar>& black_hole_time_history,
+    const std::vector<std::array<DendroScalar, 6>>& black_hole_position_history,
+    DendroScalar black_hole_merge_time, bool merged_checkpoint_written,
+    DendroScalar projected_algebraic_residual);
+/**
+ * Read one checkpoint slot after checking its metadata against this run.
+ *
+ * The formulation, field names, parameters, element order, and domain must
+ * match; on success a new mesh is built on the stored number of ranks.
+ *
+ * @param[in] prefix Path prefix of the checkpoint files.
+ * @param checkpoint_index Checkpoint slot, 0 or 1.
+ * @param global_communicator Communicator of every rank.
+ * @param[in] domain_minimum Lower corner of the physical domain.
+ * @param[in] domain_maximum Upper corner of the physical domain.
+ * @param[out] mesh Restored Dendro mesh, owned by the caller.
+ * @param[out] state Restored zipped evolved fields.
+ * @param[in] params Generated parameter table of this run.
+ * @param[out] iteration Stored iteration number.
+ * @param[out] time Stored simulation time.
+ * @param[out] time_step Stored time step.
+ * @param[out] excision_centers Stored puncture centers.
+ * @param[out] black_hole_time_history Stored times of the puncture centers.
+ * @param[out] black_hole_position_history Stored puncture centers.
+ * @param[out] black_hole_merge_time Stored merger time.
+ * @param[out] merged_checkpoint_written Whether a checkpoint after merger existed.
+ * @param algebraic_residual_tolerance Largest stored algebraic residual accepted.
+ * @return 0 on success, 2 if the metadata file is absent, otherwise 1.
+ */
 int {solver_stem}_restore_checkpoint(
-    const std::string&, unsigned int, MPI_Comm, const Point&, const Point&,
-    ot::Mesh*&, DVec&, const generated::params_struct&, unsigned int&,
-    DendroScalar&, DendroScalar&, std::array<Point, 2>&,
-    std::vector<DendroScalar>&,
-    std::vector<std::array<DendroScalar, 6>>&, DendroScalar&, bool&,
-    DendroScalar);
+    const std::string& prefix, unsigned int checkpoint_index,
+    MPI_Comm global_communicator, const Point& domain_minimum,
+    const Point& domain_maximum, ot::Mesh*& mesh, DVec& state,
+    const generated::params_struct& params, unsigned int& iteration,
+    DendroScalar& time, DendroScalar& time_step,
+    std::array<Point, 2>& excision_centers,
+    std::vector<DendroScalar>& black_hole_time_history,
+    std::vector<std::array<DendroScalar, 6>>& black_hole_position_history,
+    DendroScalar& black_hole_merge_time, bool& merged_checkpoint_written,
+    DendroScalar algebraic_residual_tolerance);
 // clang-format off
 }}  // END NAMESPACE: {solver_namespace}
 // clang-format on
@@ -196,6 +464,7 @@ def output_solver_context_cpp(
     :return: Complete context implementation.
     :raises ValueError: If any required ordered kernel is not registered.
     """
+    # Step 1: Check that every kernel the context calls is registered.
     production_orders = (4, 6, 8)
     constraint_stem = "fCCZ4_constraints" if enable_fCCZ4 else "BSSN_constraints"
     for order in production_orders:
@@ -222,6 +491,7 @@ def output_solver_context_cpp(
     ):
         if name not in cfc.CFunction_dict:
             raise ValueError(f"Missing registered Dendro service {name!r}.")
+    # Step 2: Collect the CodeParameters passed to the RHS kernels.
     parameter_names: List[str] = list(
         cfc.CFunction_dict[
             f"rhs_eval_order_{fd_order}"
@@ -238,6 +508,7 @@ def output_solver_context_cpp(
         if order_parameters != parameter_names:
             raise ValueError("All Dendro RHS orders must use the same parameters.")
     rhs_parameters = "".join(f", params.{name}" for name in parameter_names)
+    # Step 3: Generate the algebraic-constraint residual expressions.
     g00, g01, g02, g11, g12, g22 = sp.symbols("g00 g01 g02 g11 g12 g22")
     a00, a01, a02, a11, a12, a22 = sp.symbols("a00 a01 a02 a11 a12 a22")
     conformal_metric = sp.Matrix(((g00, g01, g02), (g01, g11, g12), (g02, g12, g22)))
@@ -261,6 +532,7 @@ def output_solver_context_cpp(
         cse_sorting="none",
         verbose=False,
     )
+    # Step 4: Build the diagnostic column labels and output titles.
     # Meaning of each diagnostic field, in DIAG_GF_NAMES order, for the column
     # labels of both constraint output files.
     connection = "Lambdatilde^i" if enable_fCCZ4 else "Lambdabar^i"
@@ -294,7 +566,8 @@ def output_solver_context_cpp(
     output_title = f"NRPy {'fCCZ4' if enable_fCCZ4 else 'BSSN'} ({conformal_factor})"
     # The volume-weighted norms' weight, per diagnostics.py's quadrature.
     volume_element = "chi^-3/2" if conformal_factor == "chi" else "W^-3"
-    return f"""// GENERATED FILE - DO NOT EDIT
+    # Step 5: Emit the context implementation.
+    return rf"""// GENERATED FILE - DO NOT EDIT
 // AUTOMATICALLY GENERATED BY NRPy
 #include "{solver_stem}Ctx.h"
 #include <algorithm>
@@ -315,6 +588,7 @@ def output_solver_context_cpp(
 #include "daUtils.h"
 #include "lebedev.h"
 #include "oct2vtk.h"
+#include "parUtils.h"
 namespace {solver_namespace} {{
 namespace {{
 // VTU constraint-field names in Dendro-GR BSSN_GR's numbering: C_HAM,
@@ -333,10 +607,18 @@ constexpr std::array<std::string_view, generated::NUM_DIAG_GFS> diagnostic_meani
 {meaning_entries}}};  // END ARRAY: diagnostic_meanings
 // Formulation and evolved conformal factor, named in each file's title line.
 constexpr std::string_view output_title = "{output_title}";
-// Open a rank-0 output file for appending, printing ten digits. A
-// missing or empty file first receives a title line and one
-// "# column N = <label>" line per column, as in BHaHAHA's horizon diagnostics
-// files; a restart appends below the existing labels.
+/**
+ * Open a rank-0 output file for appending, printing ten digits.
+ *
+ * A missing or empty file first receives a title line and one
+ * "# column N = <label>" line per column, as in BHaHAHA's horizon diagnostics
+ * files; a restart appends below the existing labels.
+ *
+ * @param[in] name Output file name.
+ * @param title Description written after the formulation in the title line.
+ * @param[in] labels One label per output column.
+ * @return Output stream positioned at the end of the file.
+ */
 std::ofstream open_labeled_output(const std::string& name,
                                   std::string_view title,
                                   const std::vector<std::string>& labels) {{
@@ -345,10 +627,10 @@ std::ofstream open_labeled_output(const std::string& name,
                        std::filesystem::file_size(name, error) > 0;
   std::ofstream file(name, std::ios::app);
   if (!labeled) {{
-    file << "# " << output_title << ' ' << title << "\\n#\\n";
+    file << "# " << output_title << ' ' << title << "\n#\n";
     for (std::size_t column = 0; column < labels.size(); ++column)
       file << "# column " << std::setw(2) << column + 1 << " = "
-           << labels[column] << '\\n';
+           << labels[column] << '\n';
   }}  // END IF: new file receives column labels
   file.precision(10);
   if (!file)
@@ -703,9 +985,9 @@ int Ctx::evolve_excision_centers() {{
     }}  // END LOOP: for component over shift components
   }}  // END IF: active rank interpolates shift
   std::array<DendroScalar, 6> global_shift{{}};
-  MPI_Allreduce(local_shift.data(), global_shift.data(),
-                static_cast<int>(global_shift.size()), MPI_DOUBLE, MPI_SUM,
-                m_uiMesh->getMPIGlobalCommunicator());
+  par::Mpi_Allreduce(local_shift.data(), global_shift.data(),
+                     static_cast<int>(global_shift.size()), MPI_SUM,
+                     m_uiMesh->getMPIGlobalCommunicator());
   for (unsigned black_hole = 0; black_hole < excision_centers_.size();
        ++black_hole) {{
     for (unsigned component = 0; component < 3; ++component)
@@ -815,11 +1097,11 @@ void Ctx::write_grid_summary_data() {{
   file.open(name, std::ios::app);
   file << std::scientific << std::setprecision(12);
   if (!has_rows)
-    file << "timeStep,simTime,commSize,wTime,meshSize,totalGridPoints,stepSize\\n";
+    file << "timeStep,simTime,commSize,wTime,meshSize,totalGridPoints,stepSize\n";
   file << m_uiTinfo._m_uiStep << ',' << m_uiTinfo._m_uiT << ','
        << m_uiMesh->getMPICommSize() << ',' << MPI_Wtime() << ','
        << global_counts[0] << ',' << global_counts[1] << ','
-       << m_uiTinfo._m_uiTh << '\\n';
+       << m_uiTinfo._m_uiTh << '\n';
   file.close();
 }}  // END FUNCTION: write_grid_summary_data
 int Ctx::diagnostic_output() {{
@@ -839,12 +1121,12 @@ int Ctx::diagnostic_output() {{
                 maximum, &volume);
   DendroScalar global_sum[generated::NUM_DIAG_GFS]{{}}, global_max[generated::NUM_DIAG_GFS]{{}};
   DendroScalar global_volume = 0.0;
-  MPI_Allreduce(sum, global_sum, generated::NUM_DIAG_GFS, MPI_DOUBLE, MPI_SUM,
-                m_uiMesh->getMPICommunicator());
-  MPI_Allreduce(maximum, global_max, generated::NUM_DIAG_GFS, MPI_DOUBLE,
-                MPI_MAX, m_uiMesh->getMPICommunicator());
-  MPI_Allreduce(&volume, &global_volume, 1, MPI_DOUBLE, MPI_SUM,
-                m_uiMesh->getMPICommunicator());
+  par::Mpi_Allreduce(sum, global_sum, generated::NUM_DIAG_GFS, MPI_SUM,
+                     m_uiMesh->getMPICommunicator());
+  par::Mpi_Allreduce(maximum, global_max, generated::NUM_DIAG_GFS, MPI_MAX,
+                     m_uiMesh->getMPICommunicator());
+  par::Mpi_Allreduce(&volume, &global_volume, 1, MPI_SUM,
+                     m_uiMesh->getMPICommunicator());
   if (!(global_volume > 0.0) || !std::isfinite(global_volume))
     throw std::runtime_error("constraint diagnostics found a nonfinite conformal factor");
   for (unsigned int i = 0; i < generated::NUM_DIAG_GFS; ++i)
@@ -866,11 +1148,11 @@ int Ctx::diagnostic_output() {{
         "dx dy dz when det(gammabar) = 1), outside the puncture excision "
         "regions",
         labels);
-    file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT;
+    file << m_uiTinfo._m_uiStep << '\t' << m_uiTinfo._m_uiT;
     for (unsigned int i = 0; i < generated::NUM_DIAG_GFS; ++i)
-      file << '\\t' << std::sqrt(global_sum[i] / global_volume)
-           << '\\t' << global_max[i];
-    file << '\\n';
+      file << '\t' << std::sqrt(global_sum[i] / global_volume)
+           << '\t' << global_max[i];
+    file << '\n';
     file.close();
     if (!file)
       throw std::runtime_error("cannot write diagnostic file: " + filename);
@@ -938,10 +1220,10 @@ int Ctx::diagnostic_output() {{
         "excision regions, each node weighted equally (Dendro-GR BSSN_GR "
         "convention)",
         labels);
-    file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT;
+    file << m_uiTinfo._m_uiStep << '\t' << m_uiTinfo._m_uiT;
     for (unsigned int field = 0; field < generated::NUM_DIAG_GFS; ++field)
-      file << '\\t' << std::sqrt(global_node_sums[field] / static_cast<double>(global_nodes));
-    file << '\\t' << global_nodes << '\\n';
+      file << '\t' << std::sqrt(global_node_sums[field] / static_cast<double>(global_nodes));
+    file << '\t' << global_nodes << '\n';
     file.close();
     if (!file)
       throw std::runtime_error("cannot write diagnostic file: " + filename);
@@ -991,15 +1273,15 @@ int Ctx::gravitational_wave_output() {{
         l2_filename,
         "separate real and imaginary Psi4 L2 norms over valid Lebedev points",
         l2_labels);
-    l2_file << std::scientific << m_uiTinfo._m_uiStep << '\\t'
-            << m_uiTinfo._m_uiT << '\\t';
+    l2_file << std::scientific << m_uiTinfo._m_uiStep << '\t'
+            << m_uiTinfo._m_uiT << '\t';
     for (unsigned radius_index = 0;
          radius_index < gravitational_wave_radii_.size(); ++radius_index) {{
       l2_file << std::complex<DendroScalar>(std::sqrt(l2_real[radius_index]),
                                             std::sqrt(l2_imag[radius_index]))
-              << '\\t';
+              << '\t';
     }}  // END LOOP: for radius_index over radii
-    l2_file << '\\n';
+    l2_file << '\n';
     l2_file.close();
     if (!l2_file)
       throw std::runtime_error("cannot write diagnostic file: " + l2_filename);
@@ -1030,16 +1312,16 @@ int Ctx::gravitational_wave_output() {{
             output_prefix_ + "_GW_l" + std::to_string(ell) + "_m" +
                 std::to_string(mode) + ".dat";
         std::ofstream file = open_labeled_output(filename, title, labels);
-        file << std::scientific << m_uiTinfo._m_uiStep << '\\t'
-             << m_uiTinfo._m_uiT << '\\t';
+        file << std::scientific << m_uiTinfo._m_uiStep << '\t'
+             << m_uiTinfo._m_uiT << '\t';
         for (unsigned radius_index = 0;
              radius_index < gravitational_wave_radii_.size(); ++radius_index) {{
           const unsigned index = radius_index * mode_stride +
               static_cast<unsigned>(static_cast<int>(ell * ell + ell) + mode);
           file << std::complex<DendroScalar>(modes_real[index],
-                                             modes_imag[index]) << '\\t';
+                                             modes_imag[index]) << '\t';
         }}  // END LOOP: for radius_index over radii
-        file << '\\n';
+        file << '\n';
         file.close();
         if (!file)
           throw std::runtime_error("cannot write diagnostic file: " + filename);
@@ -1064,11 +1346,11 @@ int Ctx::black_hole_locations_output() {{
   std::ofstream file = open_labeled_output(
       filename, "coordinate positions of the two tracked puncture centers",
       labels);
-  file << std::scientific << m_uiTinfo._m_uiStep << '\\t'
+  file << std::scientific << m_uiTinfo._m_uiStep << '\t'
        << m_uiTinfo._m_uiT;
   for (const Point& center : excision_centers_)
-    file << '\\t' << center.x() << '\\t' << center.y() << '\\t' << center.z();
-  file << '\\n';
+    file << '\t' << center.x() << '\t' << center.y() << '\t' << center.z();
+  file << '\n';
   file.close();
   if (!file)
     throw std::runtime_error("cannot write diagnostic file: " + filename);
@@ -1161,8 +1443,8 @@ int Ctx::adm_output() {{
                  weights.data(), surface_data_pointers.data(), center,
                  local_quantities);
   DendroScalar global_quantities[7]{{}};
-  MPI_Allreduce(local_quantities, global_quantities, 7, MPI_DOUBLE, MPI_SUM,
-                m_uiMesh->getMPICommunicator());
+  par::Mpi_Allreduce(local_quantities, global_quantities, 7, MPI_SUM,
+                     m_uiMesh->getMPICommunicator());
   if (m_uiMesh->getMPIRank() == 0) {{
     const std::string filename = output_prefix_ + "_ADM.dat";
     std::ofstream file = open_labeled_output(
@@ -1178,9 +1460,9 @@ int Ctx::adm_output() {{
           "J_y: ADM angular momentum about the coordinate origin, y component",
           "J_z: ADM angular momentum about the coordinate origin, z "
           "component"}});
-    file << m_uiTinfo._m_uiStep << '\\t' << m_uiTinfo._m_uiT << '\\t' << radius;
-    for (const DendroScalar quantity : global_quantities) file << '\\t' << quantity;
-    file << '\\n';
+    file << m_uiTinfo._m_uiStep << '\t' << m_uiTinfo._m_uiT << '\t' << radius;
+    for (const DendroScalar quantity : global_quantities) file << '\t' << quantity;
+    file << '\n';
     file.close();
     if (!file)
       throw std::runtime_error("cannot write diagnostic file: " + filename);
@@ -1715,8 +1997,8 @@ DendroScalar Ctx::algebraic_residual(ot::Mesh* mesh, DVec& state) {{
         local_residual, std::max(std::abs(determinant - 1.0), std::abs(trace_a)));
   }}  // END LOOP: for pp over local nodes
   DendroScalar global_residual = 0.0;
-  MPI_Allreduce(&local_residual, &global_residual, 1, MPI_DOUBLE, MPI_MAX,
-                mesh->getMPICommunicator());
+  par::Mpi_Allreduce(&local_residual, &global_residual, 1, MPI_MAX,
+                     mesh->getMPICommunicator());
   return global_residual;
 }}  // END FUNCTION: algebraic_residual
 int Ctx::terminal_output() {{
@@ -1731,12 +2013,12 @@ int Ctx::terminal_output() {{
                 : std::numeric_limits<DendroScalar>::infinity();
   }}  // END LOOP: for i over local nodes
   DendroScalar global = 0.0;
-  MPI_Allreduce(&local, &global, 1, MPI_DOUBLE, MPI_MAX,
-                m_uiMesh->getMPICommunicator());
+  par::Mpi_Allreduce(&local, &global, 1, MPI_MAX,
+                     m_uiMesh->getMPICommunicator());
   if (m_uiMesh->getMPIRank() == 0 &&
       (!std::isfinite(global) || (terminal_frequency_ > 0 &&
        m_uiTinfo._m_uiStep % terminal_frequency_ == 0)))
-    std::printf("iteration=%u time=%.17g max_alpha=%.17g\\n",
+    std::printf("iteration=%u time=%.17g max_alpha=%.17g\n",
                 m_uiTinfo._m_uiStep, m_uiTinfo._m_uiT, global);
   return std::isfinite(global) ? 0 : 1;
 }}  // END FUNCTION: terminal_output

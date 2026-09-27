@@ -208,10 +208,14 @@ const {scalar_type} pmin_block[3] = {{
                 ),
             )
         )
-        desc = (
-            "Compute block-local ADM mass flux and momentum surface tensor "
-            f"at FD order {fd_order}."
-        )
+        desc = f"""Evaluate the ADM mass flux and K_ij - gamma_ij K on one block at finite-difference order {fd_order}.
+
+@param[in] block Dendro block whose interior nodes are evaluated.
+@param[in] adm_gfs Unzipped ADM fields: gammaDD, then KDD.
+@param[out] surface_gfs Three mass-flux components, then six K_ij - gamma_ij K components.
+@param[in] domain_min Lower corner of the physical domain.
+@param[in] domain_max Upper corner of the physical domain.
+"""
         cfunc_type = "void"
         name = f"adm_quantities_surface_data_order_{fd_order}"
         params = (

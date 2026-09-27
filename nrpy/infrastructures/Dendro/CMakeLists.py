@@ -16,7 +16,6 @@ import nrpy.c_function as cfc
 def output_CFunctions_function_prototypes_and_construct_CMakeLists(
     solver_name: str,
     solver_stem: str,
-    solver_prefix: str,
     executable_name: str,
     application_sources: Sequence[str],
 ) -> Dict[str, str]:
@@ -30,7 +29,6 @@ def output_CFunctions_function_prototypes_and_construct_CMakeLists(
 
     :param solver_name: Generated application directory name.
     :param solver_stem: Lowercase formulation stem used by generated headers.
-    :param solver_prefix: Uppercase prefix used by CMake options.
     :param executable_name: Generated application executable name.
     :param application_sources: Explicit module-relative non-CFunction sources.
     :return: Mapping from generated path to file text.
@@ -165,11 +163,6 @@ def output_CFunctions_function_prototypes_and_construct_CMakeLists(
             "  toml11::toml11",
             "  m",
             ")",
-            "",
-            f'option({solver_prefix}_ENABLE_CUDA "Build a generated CUDA backend" OFF)',
-            f"if({solver_prefix}_ENABLE_CUDA)",
-            '  message(FATAL_ERROR "This generated application is CPU-qualified only")',
-            "endif()",
             "",
         ]
     )

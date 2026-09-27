@@ -34,7 +34,15 @@ def register_CFunction_apparent_horizon(
     if par.parval_from_str("Infrastructure") != "Dendro":
         raise ValueError("apparent_horizon requires Infrastructure='Dendro'.")
 
-    desc = "Run BHaHAHA on evolved BSSN fields with post-interpolation ADM conversion."
+    desc = """Run BHaHAHA on the evolved fields, converting to ADM fields after interpolation.
+
+@param[in,out] finder BHaHAHA horizon finder and its state.
+@param[in] mesh Dendro mesh that holds the evolved fields.
+@param[in] evolved_gfs Zipped evolved fields.
+@param iteration Current iteration number.
+@param time Current simulation time.
+@param[in] tracked_locations Current puncture locations used as horizon guesses.
+"""
     cfunc_type = "void"
     name = "apparent_horizon"
     params = (

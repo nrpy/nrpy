@@ -89,7 +89,12 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
             "}  // END LOOP: for pp over node range",
         )
     )
-    desc = "Enforce det(gammabar)=det(gammahat) and tr(Abar)=0 per owned node."
+    desc = """Enforce det(gammabar) = det(gammahat) and tr(Abar) = 0 at each owned node.
+
+@param[in,out] in_gfs Zipped evolved fields that are corrected in place.
+@param node_begin First owned node index.
+@param node_end One past the last owned node index.
+"""
     cfunc_type = "void"
     name = "enforce_detgbar_equals_detghat_trAzero"
     params = f"{scalar_type}* const* in_gfs, unsigned node_begin, unsigned node_end"

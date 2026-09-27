@@ -9,7 +9,6 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-import math
 from typing import List, Sequence, cast
 
 import sympy as sp
@@ -274,37 +273,6 @@ def output_state_h(
     lines.append("")
     lines.append("static_assert(NUM_EVOL_GFS == EVOL_GF_NAMES.size());")
     lines.append("")
-    # The emitter also produces rank, asymptotic value and
-    # wavespeed metadata, rendered from the registered gridfunction records.  The
-    # host needs these in C++ (outer boundaries need f_infinity, a CFL step
-    # needs the wavespeed); anything less would force a hand-maintained
-    # table that could drift from the registry.
-    lines.append("inline constexpr std::array<unsigned, NUM_EVOL_GFS> EVOL_GF_RANK = {")
-    for _index, _name, gf in evol:
-        lines.append(f"    {int(gf.rank)},")
-    lines.append("};  // END ARRAY: EVOL_GF_RANK")
-    lines.append("")
-    scalar_type = gri.DENDRO_SCALAR_TYPE
-    lines.append(
-        f"inline constexpr std::array<{scalar_type}, NUM_EVOL_GFS>"
-        " EVOL_GF_F_INFINITY = {"
-    )
-    for _index, name, gf in evol:
-        lines.append(
-            f"    {_cxx_scalar_literal(str(gf.f_infinity), name, 'f_infinity')},"
-        )
-    lines.append("};  // END ARRAY: EVOL_GF_F_INFINITY")
-    lines.append("")
-    lines.append(
-        f"inline constexpr std::array<{scalar_type}, NUM_EVOL_GFS>"
-        " EVOL_GF_WAVESPEED = {"
-    )
-    for _index, name, gf in evol:
-        lines.append(
-            f"    {_cxx_scalar_literal(str(gf.wavespeed), name, 'wavespeed')},"
-        )
-    lines.append("};  // END ARRAY: EVOL_GF_WAVESPEED")
-    lines.append("")
     # The strict, case-sensitive exact-name lookup.
     # Matching is case-sensitive because NRPy tensor-variance suffixes are, and
     # an unknown name resolves to an empty optional rather than to a silently
@@ -403,32 +371,6 @@ inline constexpr std::array<VariableRef::Group, {len(groups) + 1}> VARIABLE_GROU
     lines.append(f"#endif  // {guard}")
     lines.append("")
     return "\n".join(lines)
-
-
-def _cxx_scalar_literal(value: str, gf_name: str, field: str) -> str:
-    """
-    Render one registered scalar metadata value as a C++ floating-point literal.
-
-    :param value: The registered metadata value.
-    :param gf_name: Gridfunction name (for the error message).
-    :param field: Record field name (for the error message).
-    :return: A C++ literal.
-    :raises ValueError: If the value is not a finite real number, which would
-        otherwise emit an uncompilable symbolic expression such as ``sqrt(2)``.
-    """
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        try:
-            number = float(cast(sp.Expr, sp.sympify(value)))
-        except (TypeError, ValueError, AttributeError) as exc:
-            raise ValueError(
-                f"Gridfunction {gf_name!r} has non-numeric {field} {value!r}: "
-                "generated metadata must be a finite real number."
-            ) from exc
-    if not math.isfinite(number):
-        raise ValueError(f"Gridfunction {gf_name!r} has non-finite {field} {value!r}.")
-    return repr(number)
 
 
 if __name__ == "__main__":

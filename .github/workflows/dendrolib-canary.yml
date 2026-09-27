@@ -1,8 +1,8 @@
 name: Dendro validation against Dendrolib master
 
 # Weekly check of the generated NRPy Dendro applications against the head of
-# Dendrolib's master branch, also used by pull requests and pushes. This
-# schedule checks upstream changes even when no NRPy change triggers main.yml.
+# Dendrolib's master branch. This schedule checks upstream changes even when no
+# NRPy change triggers main.yml.
 # The log prints the Dendrolib commit that was built.
 on:
   schedule:

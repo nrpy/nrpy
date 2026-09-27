@@ -29,6 +29,9 @@ trusted_dict. To change it, run the helper with --update-reference, which writes
 run A's values as a candidate instead of comparing them, review the diff, and
 then run it again without the flag so that the candidate is compared.
 
+The helper requires Python 3.8 or later, because it reads installed package
+versions with importlib.metadata.
+
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
@@ -516,6 +519,7 @@ def trees_identical(
     ...     same, trees_identical(a, b)
     ((True, ''), (False, 'f differs'))
     """
+
     def comparable_files(tree: Path) -> List[Path]:
         return [
             path
