@@ -442,13 +442,15 @@ def output_toml_bindings() -> str:
 
 
 def output_toml_default_assignments() -> str:
-    """Emit candidate defaults for registered runtime CodeParameters.
+    """
+    Emit candidate defaults for registered runtime CodeParameters.
 
     User-supplied TOML values remain untouched. If several CodeParameters map
     to one TOML key, each default is recorded so ``ParameterFile`` can omit a
     key when those defaults differ or conflict with a host fallback.
 
     :return: C++ statements that record registered defaults in ``ParameterFile``.
+    :raises ValueError: If a registered runtime CodeParameter has character type.
     """
     names_by_toml_key: Dict[str, List[str]] = {}
     for name in runtime_parameter_names():
@@ -461,9 +463,7 @@ def output_toml_default_assignments() -> str:
             parameter = par.glb_code_params_dict[name]
             base, size, _is_array = par.parse_cparam_type(parameter.cparam_type)
             if base == "char":
-                raise ValueError(
-                    "Dendro TOML character parameters are not supported."
-                )
+                raise ValueError("Dendro TOML character parameters are not supported.")
             if size is not None:
                 lines += [
                     "{",

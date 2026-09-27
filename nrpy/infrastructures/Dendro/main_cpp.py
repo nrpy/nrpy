@@ -1133,7 +1133,8 @@ int main(int argc, char** argv) {
       MPI_Finalize();
       return 0;
     } // END IF: exit after puncture solve
-""" + r"""
+"""
+        + r"""
     const Point domain_minimum(grid_min_x, grid_min_y, grid_min_z);
     const Point domain_maximum(grid_max_x, grid_max_y, grid_max_z);
     m_uiMaxDepth = maximum_depth;
