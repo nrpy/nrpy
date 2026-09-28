@@ -71,9 +71,10 @@ the C examples in the same jobs, that JAX route is not followed by a generated
 Generated files under `project/<name>/`, including generated JAX package files,
 are products of handwritten generators. Cite the source generator, registry,
 example, README, and CI workflow for behavior rather than citing transient
-generated project output. Printer-level JAX expression emission belongs to
-[CSE And Printer Support](../../core/helpers/cse-and-printer-support.md), which
-owns `py_codegen()` and `NRPyJaxPrinter`; this page only documents how the
+generated project output. Printing of JAX expressions belongs to
+[Python Codegen](../../core/python-codegen.md), which documents `py_codegen()`,
+and [CSE And Printer Support](../../core/helpers/cse-and-printer-support.md),
+which documents `NRPyJaxPrinter`; this page only documents how the
 already-registered Python functions are assembled into a package.
 
 ## Sources
