@@ -51,10 +51,10 @@ int *ivector(long nl, long nh)
   if (retval == NULL) {
     fprintf(stderr, "allocation failure in ivector()");
     exit(1);
-  }
+  }  // END IF: retval == NULL
 
   return retval - nl;
-}
+}  // END FUNCTION: ivector
 
 /*---------------------------------------------------------------------------*/
 REAL *dvector(long nl, long nh)
@@ -66,10 +66,10 @@ REAL *dvector(long nl, long nh)
   if (retval == NULL) {
     fprintf(stderr, "allocation failure in dvector()");
     exit(1);
-  }
+  }  // END IF: retval == NULL
 
   return retval - nl;
-}
+}  // END FUNCTION: dvector
 
 /*---------------------------------------------------------------------------*/
 int **imatrix(long nrl, long nrh, long ncl, long nch)
@@ -81,14 +81,14 @@ int **imatrix(long nrl, long nrh, long ncl, long nch)
   if (retval == NULL) {
     fprintf(stderr, "allocation failure (1) in imatrix()");
     exit(1);
-  }
+  }  // END IF: retval == NULL
 
   /* get all memory for the matrix in on chunk */
   retval[0] = (int *)malloc(sizeof(int) * (nrh - nrl + 1) * (nch - ncl + 1));
   if (retval[0] == NULL) {
     fprintf(stderr, "allocation failure (2) in imatrix()");
     exit(1);
-  }
+  }  // END IF: retval[0] == NULL
 
   /* apply column and row offsets */
   retval[0] -= ncl;
@@ -101,7 +101,7 @@ int **imatrix(long nrl, long nrh, long ncl, long nch)
   assert(retval[nrh] - retval[nrl] == (nrh - nrl) * width);
 
   return retval;
-}
+}  // END FUNCTION: imatrix
 
 /*---------------------------------------------------------------------------*/
 REAL **dmatrix(long nrl, long nrh, long ncl, long nch)
@@ -113,14 +113,14 @@ REAL **dmatrix(long nrl, long nrh, long ncl, long nch)
   if (retval == NULL) {
     fprintf(stderr, "allocation failure (1) in dmatrix()");
     exit(1);
-  }
+  }  // END IF: retval == NULL
 
   /* get all memory for the matrix in on chunk */
   retval[0] = (REAL *)malloc(sizeof(REAL) * (nrh - nrl + 1) * (nch - ncl + 1));
   if (retval[0] == NULL) {
     fprintf(stderr, "allocation failure (2) in dmatrix()");
     exit(1);
-  }
+  }  // END IF: retval[0] == NULL
 
   /* apply column and row offsets */
   retval[0] -= ncl;
@@ -133,7 +133,7 @@ REAL **dmatrix(long nrl, long nrh, long ncl, long nch)
   assert(retval[nrh] - retval[nrl] == (nrh - nrl) * width);
 
   return retval;
-}
+}  // END FUNCTION: dmatrix
 
 /*---------------------------------------------------------------------------*/
 REAL ***d3tensor(long nrl, long nrh, long ncl, long nch, long ndl, long ndh)
@@ -146,20 +146,20 @@ REAL ***d3tensor(long nrl, long nrh, long ncl, long nch, long ndl, long ndh)
   if (retval == NULL) {
     fprintf(stderr, "allocation failure (1) in d3tensor()");
     exit(1);
-  }
+  }  // END IF: retval == NULL
 
   retval[0] = (REAL **)malloc(sizeof(REAL *) * (nrh - nrl + 1) * (nch - ncl + 1));
   if (retval[0] == NULL) {
     fprintf(stderr, "allocation failure (2) in d3tensor()");
     exit(1);
-  }
+  }  // END IF: retval[0] == NULL
 
   /* get all memory for the tensor in on chunk */
   retval[0][0] = (REAL *)malloc(sizeof(REAL) * (nrh - nrl + 1) * (nch - ncl + 1) * (ndh - ndl + 1));
   if (retval[0][0] == NULL) {
     fprintf(stderr, "allocation failure (3) in d3tensor()");
     exit(1);
-  }
+  }  // END IF: retval[0][0] == NULL
 
   /* apply all offsets */
   retval[0][0] -= ndl;
@@ -171,35 +171,35 @@ REAL ***d3tensor(long nrl, long nrh, long ncl, long nch, long ndl, long ndh)
   long depth = (ndh - ndl + 1);
   for (long j = ncl + 1; j <= nch; j++) { /* first row of columns */
     retval[nrl][j] = retval[nrl][j - 1] + depth;
-  }
+  }  // END LOOP: for j: j <= nch
   assert(retval[nrl][nch] - retval[nrl][ncl] == (nch - ncl) * depth);
   for (long i = nrl + 1; i <= nrh; i++) {
     retval[i] = retval[i - 1] + width;
     retval[i][ncl] = retval[i - 1][ncl] + width * depth; /* first cell in column */
     for (long j = ncl + 1; j <= nch; j++) {
       retval[i][j] = retval[i][j - 1] + depth;
-    }
+    }  // END LOOP: for j: j <= nch
     assert(retval[i][nch] - retval[i][ncl] == (nch - ncl) * depth);
-  }
+  }  // END LOOP: for i: i <= nrh
   assert(retval[nrh] - retval[nrl] == (nrh - nrl) * width);
   assert(&retval[nrh][nch][ndh] - &retval[nrl][ncl][ndl] == (nrh - nrl + 1) * (nch - ncl + 1) * (ndh - ndl + 1) - 1);
 
   return retval;
-}
+}  // END FUNCTION: d3tensor
 
 /*--------------------------------------------------------------------------*/
 void free_ivector(int *v, long nl, long nh)
 /* free an int vector allocated with ivector() */
 {
   free(v + nl);
-}
+}  // END FUNCTION: free_ivector
 
 /*--------------------------------------------------------------------------*/
 void free_dvector(REAL *v, long nl, long nh)
 /* free an double vector allocated with dvector() */
 {
   free(v + nl);
-}
+}  // END FUNCTION: free_dvector
 
 /*--------------------------------------------------------------------------*/
 void free_imatrix(int **m, long nrl, long nrh, long ncl, long nch)
@@ -207,7 +207,7 @@ void free_imatrix(int **m, long nrl, long nrh, long ncl, long nch)
 {
   free(m[nrl] + ncl);
   free(m + nrl);
-}
+}  // END FUNCTION: free_imatrix
 
 /*--------------------------------------------------------------------------*/
 void free_dmatrix(REAL **m, long nrl, long nrh, long ncl, long nch)
@@ -215,7 +215,7 @@ void free_dmatrix(REAL **m, long nrl, long nrh, long ncl, long nch)
 {
   free(m[nrl] + ncl);
   free(m + nrl);
-}
+}  // END FUNCTION: free_dmatrix
 
 /*--------------------------------------------------------------------------*/
 void free_d3tensor(REAL ***t, long nrl, long nrh, long ncl, long nch, long ndl, long ndh)
@@ -224,7 +224,7 @@ void free_d3tensor(REAL ***t, long nrl, long nrh, long ncl, long nch, long ndl, 
   free(t[nrl][ncl] + ndl);
   free(t[nrl] + ncl);
   free(t + nrl);
-}
+}  // END FUNCTION: free_d3tensor
 
 /*--------------------------------------------------------------------------*/
 int minimum2(int i, int j) {
@@ -232,7 +232,7 @@ int minimum2(int i, int j) {
   if (j < result)
     result = j;
   return result;
-}
+}  // END FUNCTION: minimum2
 
 /*-------------------------------------------------------------------------*/
 int minimum3(int i, int j, int k) {
@@ -242,7 +242,7 @@ int minimum3(int i, int j, int k) {
   if (k < result)
     result = k;
   return result;
-}
+}  // END FUNCTION: minimum3
 
 /*--------------------------------------------------------------------------*/
 int maximum2(int i, int j) {
@@ -250,7 +250,7 @@ int maximum2(int i, int j) {
   if (j > result)
     result = j;
   return result;
-}
+}  // END FUNCTION: maximum2
 
 /*--------------------------------------------------------------------------*/
 int maximum3(int i, int j, int k) {
@@ -260,7 +260,7 @@ int maximum3(int i, int j, int k) {
   if (k > result)
     result = k;
   return result;
-}
+}  // END FUNCTION: maximum3
 
 /*--------------------------------------------------------------------------*/
 int pow_int(int mantisse, int exponent) {
@@ -270,7 +270,7 @@ int pow_int(int mantisse, int exponent) {
     result *= mantisse;
 
   return result;
-}
+}  // END FUNCTION: pow_int
 
 /*--------------------------------------------------------------------------*/
 void chebft_Zeros(REAL u[], int n, int inv)
@@ -290,18 +290,19 @@ void chebft_Zeros(REAL u[], int n, int inv)
         sum += u[k] * cos(Pion * j * (k + 0.5));
       c[j] = fac * sum * isignum;
       isignum = -isignum;
-    }
-  } else {
+    }  // END LOOP: for j: j < n
+  }  // END IF: inv == 0
+   else {
     for (j = 0; j < n; j++) {
       sum = -0.5 * u[0];
       isignum = 1;
       for (k = 0; k < n; k++) {
         sum += u[k] * cos(Pion * (j + 0.5) * k) * isignum;
         isignum = -isignum;
-      }
+      }  // END LOOP: for k: k < n
       c[j] = sum;
-    }
-  }
+    }  // END LOOP: for j: j < n
+  }  // END ELSE: inverse Chebyshev transform
   for (j = 0; j < n; j++)
 #if 0
     if (fabs(c[j]) < 5.e-16)
@@ -310,7 +311,7 @@ void chebft_Zeros(REAL u[], int n, int inv)
 #endif
     u[j] = c[j];
   free_dvector(c, 0, n);
-}
+}  // END FUNCTION: chebft_Zeros
 
 /* --------------------------------------------------------------------------*/
 
@@ -331,23 +332,24 @@ void chebft_Extremes(REAL u[], int n, int inv)
         sum += u[k] * cos(PioN * j * k);
       c[j] = fac * sum * isignum;
       isignum = -isignum;
-    }
+    }  // END LOOP: for j: j < n
     c[N] = 0.5 * c[N];
-  } else {
+  }  // END IF: inv == 0
+   else {
     for (j = 0; j < n; j++) {
       sum = -0.5 * u[0];
       isignum = 1;
       for (k = 0; k < n; k++) {
         sum += u[k] * cos(PioN * j * k) * isignum;
         isignum = -isignum;
-      }
+      }  // END LOOP: for k: k < n
       c[j] = sum;
-    }
-  }
+    }  // END LOOP: for j: j < n
+  }  // END ELSE: inverse Chebyshev transform
   for (j = 0; j < n; j++)
     u[j] = c[j];
   free_dvector(c, 0, N);
-}
+}  // END FUNCTION: chebft_Extremes
 
 /* --------------------------------------------------------------------------*/
 
@@ -358,7 +360,7 @@ void chder(REAL *c, REAL *cder, int n) {
   cder[n - 1] = 0.0;
   for (j = n - 2; j >= 0; j--)
     cder[j] = cder[j + 2] + 2 * (j + 1) * c[j + 1];
-}
+}  // END FUNCTION: chder
 
 /* --------------------------------------------------------------------------*/
 REAL chebev(REAL a, REAL b, REAL c[], int m, REAL x)
@@ -377,10 +379,10 @@ REAL chebev(REAL a, REAL b, REAL c[], int m, REAL x)
     djp2 = djp1;
     djp1 = dj;
     dj = 2 * y * djp1 - djp2 + c[j];
-  }
+  }  // END LOOP: for j: j >= 1
 
   return y * dj - djp1 + 0.5 * c[0];
-}
+}  // END FUNCTION: chebev
 
 /* --------------------------------------------------------------------------*/
 void fourft(REAL *u, int N, int inv)
@@ -406,21 +408,22 @@ void fourft(REAL *u, int N, int inv)
         a[l] += fac * u[k] * cos(x);
         if (l > 0 && l < M)
           b[l] += fac * u[k] * sin(x);
-      }
-    }
+      }  // END LOOP: for k: k < N
+    }  // END LOOP: for l: l <= M
     u[0] = a[0];
     u[M] = a[M];
     for (l = 1; l < M; l++) {
       u[l] = a[l];
       u[l + M] = b[l];
-    }
-  } else {
+    }  // END LOOP: for l: l < M
+  }  // END IF: inv == 0
+   else {
     a[0] = u[0];
     a[M] = u[M];
     for (l = 1; l < M; l++) {
       a[l] = u[l];
       b[l] = u[M + l];
-    }
+    }  // END LOOP: for l: l < M
     iy = 1;
     for (k = 0; k < N; k++) {
       u[k] = 0.5 * (a[0] + a[M] * iy);
@@ -428,13 +431,13 @@ void fourft(REAL *u, int N, int inv)
       for (l = 1; l < M; l++) {
         x = x1 * l;
         u[k] += a[l] * cos(x) + b[l] * sin(x);
-      }
+      }  // END LOOP: for l: l < M
       iy = -iy;
-    }
-  }
+    }  // END LOOP: for k: k < N
+  }  // END ELSE: inverse Fourier transform
   free_dvector(a, 0, M);
   free_dvector(b, 1, M);
-}
+}  // END FUNCTION: fourft
 
 /* -----------------------------------------*/
 void fourder(REAL u[], REAL du[], int N) {
@@ -447,8 +450,8 @@ void fourder(REAL u[], REAL du[], int N) {
     lpM = l + M;
     du[l] = u[lpM] * l;
     du[lpM] = -u[l] * l;
-  }
-}
+  }  // END LOOP: for l: l < M
+}  // END FUNCTION: fourder
 
 /* -----------------------------------------*/
 void fourder2(REAL u[], REAL d2u[], int N) {
@@ -462,8 +465,8 @@ void fourder2(REAL u[], REAL d2u[], int N) {
     d2u[l] = -u[l] * l2;
     if (l < M)
       d2u[lpM] = -u[lpM] * l2;
-  }
-}
+  }  // END LOOP: for l: l <= M
+}  // END FUNCTION: fourder2
 
 /* ----------------------------------------- */
 REAL fourev(REAL *u, int N, REAL x) {
@@ -474,9 +477,9 @@ REAL fourev(REAL *u, int N, REAL x) {
   for (l = 1; l < M; l++) {
     xl = x * l;
     result += u[l] * cos(xl) + u[M + l] * sin(xl);
-  }
+  }  // END LOOP: for l: l < M
   return result;
-}
+}  // END FUNCTION: fourev
 
 /* ------------------------------------------------------------------------*/
 REAL norm1(REAL *v, int n) {
@@ -488,7 +491,7 @@ REAL norm1(REAL *v, int n) {
       result = fabs(v[i]);
 
   return result;
-}
+}  // END FUNCTION: norm1
 
 /* -------------------------------------------------------------------------*/
 REAL norm2(REAL *v, int n) {
@@ -499,7 +502,7 @@ REAL norm2(REAL *v, int n) {
     result += v[i] * v[i];
 
   return sqrt(result);
-}
+}  // END FUNCTION: norm2
 
 /* -------------------------------------------------------------------------*/
 REAL scalarproduct(REAL *v, REAL *w, int n) {
@@ -510,7 +513,7 @@ REAL scalarproduct(REAL *v, REAL *w, int n) {
     result += v[i] * w[i];
 
   return result;
-}
+}  // END FUNCTION: scalarproduct
 
 /* -------------------------------------------------------------------------*/
 """

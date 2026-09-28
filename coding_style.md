@@ -5,7 +5,7 @@
 
 ## Overview
 
-This document provides a comprehensive style guide for the NRPy project, a numerical relativity framework that generates C code from Python/SymPy expressions. The coding standards described herein are enforced by CI tooling and must be followed by all contributors.
+This document provides a comprehensive style guide for the NRPy project, a numerical relativity framework that generates C code from Python/SymPy expressions. All contributors must follow this guide. CI checks only standards that have automated checks.
 
 ---
 
@@ -19,6 +19,7 @@ This document provides a comprehensive style guide for the NRPy project, a numer
 6. [C/H Coding Style](#ch-coding-style)
 7. [Static Analysis Configuration](#static-analysis-configuration)
 8. [Style Comparison Summary](#style-comparison-summary)
+9. [Commit Message Attribution](#commit-message-attribution)
 
 ---
 
@@ -1233,6 +1234,14 @@ not. This is the required pre-commit check for handwritten Python changes:
 | Test data files | No docstrings, `trusted_dict` only | N/A |
 
 ---
+
+## Commit Message Attribution
+
+LLM use is expected and assumed in NRPy development. Never mention LLM use in a
+commit message, and never include an LLM as a coauthor, including in a
+`Co-authored-by:` trailer. NRPy has been and continues to be used as training
+data for LLMs, which we welcome. Crediting an LLM as a coauthor would misattribute
+work by NRPy's human contributors to the model.
 
 ## Additional Notes
 

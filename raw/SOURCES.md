@@ -16,7 +16,6 @@
 | `equation-modules-and-trusted-values` | Equation modules, generated trusted-value files, and BOB test metadata from `nrpy/equations`, including `nrpy/equations/seobnr/tests/BOB_v2_fit_sim_list.md`. | living | partial |
 | `infrastructure-modules-and-embedded-headers` | Python modules and embedded headers from `find nrpy/infrastructures -type f \( -name '*.py' -o -name '*.h' \)`. | living | partial |
 | `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`. | living | ingested |
-| `dendro-trusted-generated-source-baselines` | Generated-source baselines under `nrpy/infrastructures/Dendro/general_relativity/tests/`, owned by the emitting modules' direct validation entry points. Symbolic-expression baselines remain with their equation owners. | living | partial |
 | `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples` inventoried by `wiki/examples/example-generator-catalog.md`. | living | partial |
 | `ci-and-local-automation` | CI and local automation files from `.github`. | living | partial |
 
@@ -50,6 +49,7 @@ aggregate rows and `wiki/source-map.md`.
 | `.pylintrc_python36` | living |
 | `.darglint` | living |
 | `.github/workflows/main.yml` | living |
+| `.github/workflows/dendrolib-canary.yml` | living |
 | `.github/single_file_static_analysis.sh` | living |
 | `.github/full_nrpy_local_ci.sh` | living |
 | `bin/nrpyinline.py` | living |
@@ -214,11 +214,8 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/superB/superB/superB_pup.py` | living |
 | `nrpy/infrastructures/superB/superB/superB.h` | living |
 | `nrpy/infrastructures/superB/superB/superB_pup_function_prototypes.h` | living |
-| `nrpy/infrastructures/Dendro/standalone_host/dendro_standalone_host.h` | living |
 | `nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp` | living |
 | `nrpy/infrastructures/Dendro/tests_infra/README.md` | living |
-| `nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp` | living |
-| `nrpy/infrastructures/Dendro/block_geometry.h` | living |
 | `nrpy/tests/reference_metric_Cartesian.py` | living |
 | `nrpy/tests/reference_metric_Spherical.py` | living |
 | `nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py` | living |
@@ -261,6 +258,9 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/examples/geodesic_visualizations/blueprint_analysis.py` | living |
 | `nrpy/examples/tests/sebob_consistency_check.py` | living |
 | `nrpy/examples/tests/sebobv2_consistency_check.py` | living |
+| `nrpy/examples/q1.par.lowres.toml` | living |
+| `nrpy/examples/tests/dendro_application_check.py` | living |
+| `nrpy/examples/tests/dendro_application_check_reference.py` | living |
 | `nrpy/examples/dendro_fccz4.py` | living |
 | `nrpy/examples/dendro_bssn.py` | living |
 | `nrpy/equations/basis_transforms/jacobians.py` | living |
@@ -385,8 +385,8 @@ aggregate rows and `wiki/source-map.md`.
 | Source | Provenance | Status | Ingest | Notes |
 | --- | --- | --- | --- | --- |
 | `https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md` | Andrej Karpathy gist raw note, `LLM Wiki`; the full URL is its stable source locator. | frozen | partial | Background approach source for persistent LLM-maintained wiki governance: raw/wiki/schema layers and ingest/query/lint workflows. |
-| `https://github.com/paralab/Dendro-5.01` | Dendrolib upstream repository used by Dendro-GR as its host-library dependency. | living | partial | Deciding source for cited balanced-octree input, octant refinement flags, regular-block decomposition, DVector layouts, zip/unzip, remeshing, intergrid transfer, and UTS/NUTS interfaces. Only cited interfaces are ingested. |
-| `https://github.com/paralab/Dendro-GR` | Dendro-GR upstream application repository and its Dendrolib integration. | living | partial | Source for cited host conventions used beside generated solvers: padded-origin arithmetic, block reads, refinement modes, remesh/intergrid-transfer sequencing, constraint interfaces, derivative-order selection, high-order centered advection functions, KO selection, solver build structure, and namespace declarations. Only cited interfaces are ingested. |
+| `https://github.com/paralab/Dendro-5.01` | Dendrolib upstream repository used by Dendro-GR as its host-library dependency. | living | partial | Deciding source for cited balanced-octree input, octant refinement flags, regular-block decomposition, DVector layouts, zip/unzip, remeshing, intergrid transfer, UTS/NUTS interfaces, and the apparent-horizon finder checkpoint interface. Only cited interfaces are ingested. |
+| `https://github.com/paralab/Dendro-GR` | Dendro-GR upstream application repository and its Dendrolib integration. | living | partial | Source for cited host conventions that the generated solvers follow: padded-origin arithmetic, block reads, refinement modes, remesh/intergrid-transfer sequencing, constraint interfaces, derivative-order selection, high-order centered advection functions, KO selection, namespace declarations, GridInfo CSV output, and mesh-level output-frequency scaling. Only cited interfaces are ingested. |
 | `https://arxiv.org/pdf/gr-qc/0104063v3` | Version-pinned v3 PDF for Baker, Campanelli, and Lousto, arXiv:gr-qc/0104063. | frozen | ingested | Primary deciding source for the Psi4 tetrad contract in Sec. V.A: Eqs. (5.6)-(5.7), the following unnumbered Gram-Schmidt procedure, and the later Eq. (5.9) rotation. |
 | `https://arxiv.org/pdf/astro-ph/0503420v2` | Version-pinned v2 paper for Duez et al., arXiv:astro-ph/0503420. | frozen | ingested | Magnetic four-vector, stress-energy, conserved fluid variables, fluxes, sources, HLL flux, and approximate MHD dispersion in Eqs. (16), (23)-(24), (31)-(39), and (48)-(50). NRPy reference-densitizes the Cartesian fluid equations. |
 | `https://arxiv.org/pdf/2412.03659v2` | Version-pinned v2 paper for Jacques et al., arXiv:2412.03659. | frozen | ingested | Conformal metric split, reference-metric volume factor, GRHD conserved variables, fluxes, sources, and rescaling in Eqs. (2)-(5), (11), (13)-(24). Eq. (11) rewrites the divergence of a chosen current; the paper does not define or assert conservation of NRPy's entropy current. |

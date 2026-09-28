@@ -972,11 +972,8 @@ class DendroGridFunction(GridFunction):
         :param i0_offset: Offset in the fastest (x) direction.
         :param i1_offset: Offset in the middle (y) direction.
         :param i2_offset: Offset in the slowest (z) direction.
-        :param kwargs: Additional keyword arguments; SIMD is rejected because
-            the Dendro CPU profile is not SIMD-qualified.
+        :param kwargs: Additional keyword arguments, including ``enable_simd``.
         :return: C code string reading the gridfunction value at the offsets.
-        :raises ValueError: If SIMD access is requested for the Dendro CPU
-            profile.
 
         Doctests:
         >>> glb_gridfcs_dict.clear()
@@ -986,15 +983,13 @@ class DendroGridFunction(GridFunction):
         'in_abc[pp + 1 + 2 * nx + 3 * nxy]'
         >>> glb_gridfcs_dict["abc"].read_gf_from_memory_Ccode_onept(0, -1, 0)
         'in_abc[pp - nx]'
-        >>> try:
-        ...     glb_gridfcs_dict["abc"].read_gf_from_memory_Ccode_onept(0, 0, 0, enable_simd=True)
-        ... except ValueError:
-        ...     print("Dendro SIMD rejected. Good.")
-        Dendro SIMD rejected. Good.
+        >>> glb_gridfcs_dict["abc"].read_gf_from_memory_Ccode_onept(0, -1, 0, enable_simd=True)
+        'ReadSIMD(&in_abc[pp - nx])'
         """
+        access = self.access_gf(self.name, i0_offset, i1_offset, i2_offset)
         if kwargs.get("enable_simd", False):
-            raise ValueError("Dendro SIMD access is not qualified for the CPU profile.")
-        return self.access_gf(self.name, i0_offset, i1_offset, i2_offset)
+            return f"ReadSIMD(&{access})"
+        return access
 
     @staticmethod
     def input_pointer(gf_name: str) -> str:
