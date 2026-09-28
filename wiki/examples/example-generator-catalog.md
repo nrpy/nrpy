@@ -91,11 +91,10 @@ rows in [Sources](../../raw/SOURCES.md) register the cited files. Aggregate stat
 remains `partial` because file-set ownership does not by itself prove complete
 semantic reconciliation or future-file ingestion.
 
-Claim status: contested; contradiction: CONTR-0002. The `sebobv1_jax` row
-records generation intent only: current Commondata list truncation omits `a_f`
-while the emitted function passes `a_f`. See
-[CONTR-0002](../contradictions.md#contr-0002). Generation is configured in CI;
-generated-package installation or execution is not.
+The `sebobv1_jax` row records generation intent. Generation is configured in
+CI; generated-package installation or execution is not. See
+[SEBOBv1 JAX Workflow](../infrastructures/jax/sebobv1-jax-workflow.md) for the
+generated coefficient function and its `Commondata` fields.
 
 ## Sources
 

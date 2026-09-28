@@ -17,9 +17,17 @@ The constructor reads `par.parval_from_str("Infrastructure")` and requires the v
 
 When `verbose` is enabled, `py_codegen()` emits a Python comment block before generated code. The block records the original SymPy expression or expressions paired with their output assignment names; plural output uses bracketed `"[name = expression]"` lines.
 
-With `enable_cse=False`, each expression is emitted independently. If `postproc_substitution_dict` is nonempty, `apply_substitution_dict()` first rewrites matching free-symbol names by appending the configured suffix. The selected expression is then passed to `printer.doprint(expr, output_name)`, and the printed assignment is appended to the output string.
+With `enable_cse=False`, each expression is emitted independently. If `postproc_substitution_dict` is nonempty, `apply_substitution_dict()` first rewrites matching free-symbol names by appending the configured suffix. The right-hand side is then printed with `printer.doprint(expr)`, and the line `output_name = <printed expression>` is appended to the output string.
 
-With `enable_cse=True`, `py_codegen()` collects the expressions and output names, then calls SymPy CSE with numbered temporaries from `cse_varprefix + "tmp"` and the configured `cse_sorting` order. For SymPy versions before 1.3, the implementation prints a warning and uses the raw `sp.cse()` result. For SymPy 1.3 and newer, it passes the `sp.cse()` result through `cse_postprocess()`. CSE temporaries and final reduced expressions both receive optional `apply_substitution_dict()` processing, are expanded with `sp.expand()`, and are emitted through `printer.doprint()`.
+With `enable_cse=True`, `py_codegen()` collects the expressions and output names, then calls SymPy CSE with numbered temporaries from `cse_varprefix + "tmp"` and the configured `cse_sorting` order. For SymPy versions before 1.3, the implementation prints a warning and uses the raw `sp.cse()` result. For SymPy 1.3 and newer, it passes the `sp.cse()` result through `cse_postprocess()`. CSE temporaries and final reduced expressions both receive optional `apply_substitution_dict()` processing, are expanded with `sp.expand()`, and are emitted in the same way: `printer.doprint()` prints the right-hand side and `py_codegen()` writes the assignment to the temporary or output name.
+
+`py_codegen()` never passes the output name to `doprint()` as the `assign_to` argument. In SymPy 1.11 to 1.14, whose printer is `JaxPrinter`, and in some SymPy development commits, that path converts the right-hand side to an array expression and silently drops negative powers, printing, for example, `m2/m1` as `m2` and `1/x**2` as `jnp.einsum("", )`.
+
+Claim evidence:
+- Claim: `py_codegen()` prints each temporary and output as `name = <printed right-hand side>`, calling `printer.doprint()` on the right-hand side only; quotients and negative integer powers are therefore printed as divisions or reciprocals on every supported SymPy version. This makes no claim about output formatting beyond the printer's own conventions.
+- Role: descriptive behavior
+- Deciding authority: [nrpy/py_codegen.py](../../nrpy/py_codegen.py), `py_codegen`
+- Corroboration: the `py_codegen` doctests print `m2/m1`, `1/x**2`, and `y/(x + z)` with CSE disabled and enabled, including a CSE temporary `tmp0 = m2/m1`.
 
 Unlike `c_codegen()`, this path does not run `sort_cse_output_deterministically()` when `cse_sorting="none"`. That option requests SymPy's unsorted CSE path; this page makes no deterministic-output guarantee for it.
 

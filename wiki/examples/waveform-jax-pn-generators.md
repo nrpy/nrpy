@@ -94,11 +94,10 @@ JAX work are roadmap items in the example source, not completed workflow
 features. Existing JAX infrastructure pages own the generated-package lifecycle
 and the narrower Commondata/PyFunction details.
 
-Claim status: contested; contradiction: CONTR-0002. The generator supplies 14
-Commondata names and descriptions but only 13 dtypes and defaults. Batch
-registration uses `zip()`, so generated `Commondata.py` omits `a_f`, while the
-emitted coefficient function constructs `Commondata(..., a_f=a_f)`. See
-[CONTR-0002](../contradictions.md#contr-0002). GitHub codegen invokes only
+The generator supplies 14 Commondata names, dtypes, defaults, and
+descriptions, and batch registration rejects lists of unequal length, so
+generated `Commondata.py` includes the `a_f` field that the emitted coefficient
+function passes to `Commondata(...)`. GitHub codegen invokes only
 generation; it does not install/import the package, run the generated basic
 test, call the coefficient function, or validate any JAX accelerator/numerical
 result. The generated metadata declares `jax`, `jaxlib>=0.4.0`, and
