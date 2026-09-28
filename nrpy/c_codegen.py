@@ -223,7 +223,7 @@ class CCodeGen:
             #         Otherwise set fp_type="REAL_SIMD_ARRAY", which should be #define'd
             #         within the C code. For example for AVX-256, the C code should have
             #         #define REAL_SIMD_ARRAY __m256d
-            if Infrastructure in ("BHaH", "CarpetX", "ETLegacy"):
+            if Infrastructure in ("BHaH", "CarpetX", "ETLegacy", "Dendro"):
                 self.fp_type_alias = "REAL_SIMD_ARRAY"
             else:
                 raise ValueError("FIXME: Please specify the fp_type for SIMD")

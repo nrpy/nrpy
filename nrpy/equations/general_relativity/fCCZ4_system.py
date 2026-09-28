@@ -5,8 +5,8 @@ Shared, infrastructure-neutral fCCZ4 expression factory.
 This module assembles the complete fCCZ4 right-hand-side system -- the
 non-gauge fCCZ4 equations, the moving-puncture gauge equations, and the
 optional Kreiss-Oliger, CAHD, and SSL terms -- into one infrastructure-
-neutral expression set.  The BHaH and Dendro registration functions both use
-this set, so there is exactly one source for the fCCZ4 expressions.
+neutral expression set.  The BHaH registration function uses this set; the
+Dendro right-hand-side generator assembles its fCCZ4 expressions itself.
 
 The factory returns expressions and semantic relationships only: it does not
 emit a state order, infrastructure-specific names, parameter default table,

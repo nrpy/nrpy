@@ -89,6 +89,22 @@ implemented contract. The user-directed CAHD-style direct formulation and
 living code decide current behavior; [CONTR-0007](../../contradictions.md#contr-0007)
 records this resolved mismatch.
 
+### Dendro block spacing
+
+The Dendro examples expose this term with `--ybs-momentum`, independently of
+`--ybs-gamma`. Dendro computes `dsmin` once per Cartesian block as
+`min(abs(dx), abs(dy), abs(dz))`; it broadcasts the scalar in SIMD kernels.
+The generated RHS uses `C_YBS_mom * BSSN_CFL_FACTOR * dsmin`, with the same
+CFL factor used for evolution. No spacing gridfunction is needed on a block
+with uniform Cartesian spacing. See [BSSN Application Wiring](../../infrastructures/dendro/bssn-application-wiring.md#optional-yo-et-al-adjustments)
+for defaults and the shared fCCZ4 interface.
+
+Claim evidence:
+- Claim: Dendro evaluates the local momentum coefficient from Cartesian block spacing and the evolution CFL parameter, while reusing the canonical momentum-gradient equation.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py`, `register_CFunction_rhs_eval`; `nrpy/infrastructures/Dendro/CodeParameters.py`, `Q1_TOML_PARAMETER_NAMES`.
+- Corroboration: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, generation options and RHS registration.
+
 ## Sources
 
 - [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py) - direct momentum adjustment
