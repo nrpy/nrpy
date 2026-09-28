@@ -51,7 +51,7 @@ def register_CFunction_diagnostics(
     )
     scalar_type = gri.DENDRO_SCALAR_TYPE
     volume_exponent = 3 if conformal_factor == "W" else 1.5
-    body = f"""if (diagnostic_gfs == nullptr || state_gfs == nullptr ||
+    body = rf"""if (diagnostic_gfs == nullptr || state_gfs == nullptr ||
     local_squared_norms == nullptr || local_max_norms == nullptr ||
     local_volume == nullptr)
     throw std::invalid_argument("diagnostics received a null array");

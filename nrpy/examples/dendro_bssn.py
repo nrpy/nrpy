@@ -199,7 +199,7 @@ def main() -> None:
         bhah_defines = (Path(temporary_directory) / "BHaH_defines.h").read_text(
             encoding="utf-8"
         )
-    bhah_defines = f"""#ifndef NRPY_PACKAGED_BHAH_DEFINES_H
+    bhah_defines = rf"""#ifndef NRPY_PACKAGED_BHAH_DEFINES_H
 #define NRPY_PACKAGED_BHAH_DEFINES_H
 #include "TwoPunctures.h"
 {bhah_defines}

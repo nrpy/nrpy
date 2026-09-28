@@ -109,7 +109,7 @@ def register_CFunction_psi4_eval(
         )
     )
     inverse_chi_denominator = "cf * cf" if conformal_factor == "W" else "cf"
-    tetrad = f"""const {scalar_type} inverse_W2 = 1.0 / ({inverse_chi_denominator});
+    tetrad = rf"""const {scalar_type} inverse_W2 = 1.0 / ({inverse_chi_denominator});
 const {scalar_type} gammaDD00 = (1.0 + hDD00) * inverse_W2;
 const {scalar_type} gammaDD01 = hDD01 * inverse_W2;
 const {scalar_type} gammaDD02 = hDD02 * inverse_W2;
@@ -235,7 +235,7 @@ const {scalar_type} mim4U3 = M_SQRT1_2 * e1U[2];"""
                 verbose=False,
                 upwind_control_vec=sp.Symbol("unset"),
             )
-            geometry = f"""const std::ptrdiff_t offset =
+            geometry = rf"""const std::ptrdiff_t offset =
     static_cast<std::ptrdiff_t>(block.getOffset());
 const unsigned nx_block = block.getAllocationSzX();
 const unsigned ny_block = block.getAllocationSzY();
@@ -253,7 +253,7 @@ const {scalar_type} pmin_block[3] = {{
     GRIDX_TO_X(block.getBlockNode().minX()) - padding_block * dx_block[0],
     GRIDY_TO_Y(block.getBlockNode().minY()) - padding_block * dx_block[1],
     GRIDZ_TO_Z(block.getBlockNode().minZ()) - padding_block * dx_block[2]}};"""
-            point_evaluation = f"""{scalar_type} arr_gammaDDdDD[81] = {{}};
+            point_evaluation = rf"""{scalar_type} arr_gammaDDdDD[81] = {{}};
 {scalar_type} arr_GammaUDD[27] = {{}};
 {scalar_type} arr_KDDdD[27] = {{}};
 {{

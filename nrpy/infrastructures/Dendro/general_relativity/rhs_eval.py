@@ -361,7 +361,7 @@ def register_CFunction_rhs_eval(
             )
             else ""
         )
-        geometry = f"""const std::ptrdiff_t offset = static_cast<std::ptrdiff_t>(block.getOffset());
+        geometry = rf"""const std::ptrdiff_t offset = static_cast<std::ptrdiff_t>(block.getOffset());
 const unsigned nx_block = block.getAllocationSzX();
 const unsigned ny_block = block.getAllocationSzY();
 const unsigned nz_block = block.getAllocationSzZ();

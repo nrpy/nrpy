@@ -93,7 +93,7 @@ def register_CFunction_Ricci_eval(
             f"{scalar_type}* ricci_{name} = ricci_gfs[{index}] + offset;"
             for index, name in enumerate(state_h.RICCI_GRIDFUNCTIONS)
         ]
-        geometry = f"""const std::ptrdiff_t offset = static_cast<std::ptrdiff_t>(block.getOffset());
+        geometry = rf"""const std::ptrdiff_t offset = static_cast<std::ptrdiff_t>(block.getOffset());
 const unsigned nx_block = block.getAllocationSzX();
 const unsigned ny_block = block.getAllocationSzY();
 const unsigned nz_block = block.getAllocationSzZ();

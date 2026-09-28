@@ -118,7 +118,10 @@ selected refinement variables, constant or causal mode-6 wavelet tolerance,
 wavelet coarsening factors, puncture-centered level floors, post-merger remesh
 cadence, and optional wave-zone Nyquist refinement. The analytic initial-grid
 seed comes from Dendro-GR's `punctureDataPhysicalCoord`, with its source and
-MIT license embedded in the generated entry point. A separate single-rank
+MIT license embedded in the generated entry point. Its lapse and chi floors use
+`std::fmax`, so at a sample exactly on a puncture, where the Dendro-GR
+expressions give NaN, the lapse and chi take the floor value instead and can
+still trigger refinement there. A separate single-rank
 `--tpid` run computes TwoPunctures coefficients once. Fresh evolution loads
 those coefficients before evolved-state conversion; after any initial-grid
 remesh, the solver reconstructs that state from the same data. Grid
@@ -133,7 +136,7 @@ into the z component of its relative-position history, so enabling Nyquist
 refinement can produce different remesh decisions even with the same parameters.
 
 Claim evidence:
-- Claim: The generated binary-puncture path parses native-style wavelet/geometric AMR controls, loads separately solved TwoPunctures data for evolution, and uses the licensed native analytic octree seed; its Nyquist history uses the z-coordinate separation, unlike the native path's duplicated x separation.
+- Claim: The generated binary-puncture path parses native-style wavelet/geometric AMR controls, loads separately solved TwoPunctures data for evolution, and uses the licensed native analytic octree seed, whose lapse and chi floors return the floor value where the native expressions give NaN at a sample exactly on a puncture; its Nyquist history uses the z-coordinate separation, unlike the native path's duplicated x separation.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::get_wtol_function` and `Ctx::is_remesh` within `output_solver_context_cpp`.
 - Corroboration: `BSSN_GR/src/grUtils.cpp`, `punctureDataPhysicalCoord`; `BSSN_GR/src/dataUtils.cpp`, `calculate_relative_position_history` and `isRemeshBH`.

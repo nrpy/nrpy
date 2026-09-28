@@ -35,7 +35,7 @@ def register_CFunction_adm_quantities(
         raise ValueError("adm_quantities requires Infrastructure='Dendro'.")
 
     scalar_type = gri.DENDRO_SCALAR_TYPE
-    quadrature_body = f"""if (local_quantities == nullptr)
+    quadrature_body = rf"""if (local_quantities == nullptr)
     throw std::invalid_argument("adm_quantities received a null accumulator");
 if (num_valid_points == 0) return;
 if (valid_point_indices == nullptr || surface_coordinates == nullptr ||

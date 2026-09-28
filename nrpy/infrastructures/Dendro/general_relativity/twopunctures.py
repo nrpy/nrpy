@@ -76,7 +76,7 @@ def register_CFunction_twopunctures(
         f"                adm_gfs[{index}][pp] = {value};"
         for index, value in enumerate(assignments)
     )
-    body = f"""if (commondata == nullptr || params == nullptr || punctures == nullptr ||
+    body = rf"""if (commondata == nullptr || params == nullptr || punctures == nullptr ||
     adm_gfs == nullptr)
     throw std::invalid_argument("twopunctures received a null argument");
 if (std::strcmp(punctures->initial_lapse, "W") != 0)

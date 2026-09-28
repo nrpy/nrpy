@@ -67,7 +67,7 @@ def register_CFunction_gravitational_waves(
                 f"case {ell * ell + ell + mode}: {{\n{assignments}    break;\n}}  // END BLOCK: harmonic ell={ell} m={mode}"
             )
     switch_body = "\n".join(harmonic_cases)
-    decomposition = f"""if (mesh == nullptr || extraction_radii == nullptr ||
+    decomposition = rf"""if (mesh == nullptr || extraction_radii == nullptr ||
     modes_real == nullptr || modes_imag == nullptr ||
     l2_real == nullptr || l2_imag == nullptr) {{
     throw std::invalid_argument("gravitational_waves received a null array");

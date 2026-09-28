@@ -45,7 +45,7 @@ def register_CFunction_physical_boundary(
         asymptotic[name] = str(float(gri.glb_gridfcs_dict[name].f_infinity))
 
     scalar_type = gri.DENDRO_SCALAR_TYPE
-    body = f"""const std::ptrdiff_t offset = static_cast<std::ptrdiff_t>(block.getOffset());
+    body = rf"""const std::ptrdiff_t offset = static_cast<std::ptrdiff_t>(block.getOffset());
 const unsigned nx = block.getAllocationSzX();
 const unsigned ny = block.getAllocationSzY();
 const unsigned nz = block.getAllocationSzZ();
@@ -116,7 +116,7 @@ for (unsigned k = padding; k < nz - padding; ++k) {{
 }}  // END LOOP: for k over interior z"""
     falloff_values = ", ".join(falloff[name] for name in evolved_names)
     asymptotic_values = ", ".join(asymptotic[name] for name in evolved_names)
-    body = f"""const {scalar_type} falloff[{len(evolved_names)}] = {{{falloff_values}}};
+    body = rf"""const {scalar_type} falloff[{len(evolved_names)}] = {{{falloff_values}}};
 const {scalar_type} asymptotic[{len(evolved_names)}] = {{{asymptotic_values}}};
 {body}"""
     desc = """Replace the right-hand side on physical faces with the outgoing-radiation condition.

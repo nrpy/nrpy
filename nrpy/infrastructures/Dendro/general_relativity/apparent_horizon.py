@@ -50,7 +50,7 @@ def register_CFunction_apparent_horizon(
         "const double** evolved_gfs, unsigned iteration, double time, "
         "const std::vector<Point>& tracked_locations"
     )
-    body = """if (mesh == nullptr)
+    body = r"""if (mesh == nullptr)
     throw std::invalid_argument("apparent_horizon received a null mesh");
 if (evolved_gfs == nullptr)
     throw std::invalid_argument("apparent_horizon received null evolved fields");

@@ -161,7 +161,7 @@ def register_CFunction_adm_quantities_surface_data(
                 *momentum_lines,
             )
         )
-        geometry = f"""if (adm_gfs == nullptr || surface_gfs == nullptr) {{
+        geometry = rf"""if (adm_gfs == nullptr || surface_gfs == nullptr) {{
     throw std::invalid_argument(
         "adm_quantities_surface_data_order_{fd_order} received a null field table");
 }}  // END IF: null field table

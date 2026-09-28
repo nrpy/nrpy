@@ -3,8 +3,11 @@ Emit the executable entry point for a generated Dendro application.
 
 ``DENDRO_PUNCTURE_SEED`` copies ``punctureDataPhysicalCoord`` from
 Dendro-GR/BSSN_GR/src/grUtils.cpp with an adapted signature and parameter
-access and an unchanged numerical body. It is distributed under the MIT
-License reproduced in ``DENDRO_LICENSE``, which is emitted with it.
+access. Its numerical body is unchanged except that the lapse and chi
+floors use ``std::fmax``: at a sample exactly on a puncture, where the
+Dendro-GR expressions give NaN, the floor value is returned instead. It is
+distributed under the MIT License reproduced in ``DENDRO_LICENSE``, which is
+emitted with it.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -19,7 +22,7 @@ from nrpy.infrastructures.Dendro.state_h import BSSN_EVOLVED_GRIDFUNCTIONS
 
 DENDRO_LICENSE = """// MIT License
 // Source: Dendro-GR/BSSN_GR/src/grUtils.cpp, punctureDataPhysicalCoord.
-// Adapted signature and parameter access; numerical body unchanged.
+// Adapted signature and parameter access; NaN-safe lapse and chi floors.
 //
 // Copyright (c) 2018 DendroGR
 //
@@ -46,7 +49,9 @@ DENDRO_LICENSE = """// MIT License
 
 DENDRO_PUNCTURE_SEED = r"""
 // Dendro-GR BSSN_GR/src/grUtils.cpp: punctureDataPhysicalCoord.
-// Numerical expressions and branch conditions are retained from Dendro-GR.
+// Numerical expressions and branch conditions are retained from Dendro-GR,
+// except that the lapse and chi floors use std::fmax, which returns the floor
+// when an expression is NaN at a sample exactly on a puncture.
 namespace nrpy_dendro_seed {
 struct PunctureParameters {
     double mass, x, y, z, vx, vy, vz, spin, spin_theta, spin_phi;
@@ -306,12 +311,12 @@ void punctureDataPhysicalCoord(const double xx, const double yy,
 
     var[VAR::U_ALPHA] = 1.0 / (vpsibl_u * vpsibl_u);
     // std::cout<<"Alpha: "<<u[U_ALPHA]<<" vpsibl_u: "<< vpsibl_u<<std::endl;
-    var[VAR::U_ALPHA] = std::max(var[VAR::U_ALPHA], CHI_FLOOR);
+    var[VAR::U_ALPHA] = std::fmax(var[VAR::U_ALPHA], CHI_FLOOR);
 
     v2                = 1.0 / pow(vpsibl_u, 4);
     var[VAR::U_CHI]   = v2;
 
-    if (var[VAR::U_CHI] < CHI_FLOOR) var[VAR::U_CHI] = CHI_FLOOR;
+    var[VAR::U_CHI] = std::fmax(var[VAR::U_CHI], CHI_FLOOR);
 
     var[VAR::U_K]      = 0.0;
 
@@ -580,17 +585,16 @@ class ParameterFile {
  private:
   using ParameterKey = std::pair<std::string, std::string>;
   static void set_dump_float_precision(toml::value& value) {
-    if (value.is_floating()) {
-      // TwoPunctures compares the input doubles when reusing its solution file.
+    // TwoPunctures compares the input doubles when reusing its solution file.
+    if (value.is_floating())
       value.as_floating_fmt().prec =
           std::numeric_limits<toml::value::floating_type>::max_digits10;
-    } else if (value.is_array()) {
+    else if (value.is_array())
       for (auto& member : value.as_array())
         set_dump_float_precision(member);
-    } else if (value.is_table()) {
+    else if (value.is_table())
       for (auto& member : value.as_table())
         set_dump_float_precision(member.second);
-    }
   }  // END FUNCTION: set_dump_float_precision
   void record_fallback(const std::string& table, const std::string& key,
                        const toml::value& value) {
