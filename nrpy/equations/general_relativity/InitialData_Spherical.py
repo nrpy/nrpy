@@ -383,4 +383,24 @@ if __name__ == "__main__":
         c = sp.cos(th)
         Y = 3 * c**2 - 1
 
+        # Assemble the mode-20 spatial metric in spherical coordinates
+        gammaDD = ixp.zerorank2()
+
+        gammaDD[0][0] = 1 + A*Y
+        gammaDD[0][1] = gammaDD[1][0] = -6*r*B*s*c
+        gammaDD[0][2] = gammaDD[2][0] = sp.sympify(0)
+        gammaDD[1][1] = r**2(1 - A*Y/2 + 3*C*s**2)
+        gammaDD[1][2] = gammaDD[2][1] = sp.sympify(0)
+        gammaDD[2][2] = r**2 * s**2 * (1 - A*Y/2 - 3*C*s**2)
+
+        # Assemble the mode-20 extrinsic curvature from the time derivatives
+        KDD = ixp.zerorank2()
+
+        KDD[0][0] = -sp.Rational(1, 2)*A_dot*Y
+        KDD[0][1] = KDD[1][0] = 3*r*B_dot*s*c
+        KDD[0][2] = KDD[2][0] = sp.sympify(0)
+        KDD[1][1] = r**2 * (sp.Rational(1, 4)*A_dot*Y - sp.Rational(3, 2)*C_dot*s**2)
+        KDD[1][2] = KDD[2][1] = sp.sympify(0)
+        KDD[2][2] = r**2 * s**2 * (sp.Rational(1, 4)*A_dot*Y + sp.Rational(3, 2)*C_dot*s**2)
+
         return self.gammaDD, self.KDD
