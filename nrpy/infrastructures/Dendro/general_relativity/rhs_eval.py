@@ -72,8 +72,9 @@ def register_CFunction_rhs_eval(
     :param enable_YBS_Gamma_constraint_adjustment: Add the Yo et al. Gamma-constraint
         term and register YBS_chi, whose default 0 disables it.
     :param enable_YBS_momentum_constraint_adjustment: Add Yo et al. momentum
-        damping with coefficient C_YBS_mom times CFL_FACTOR times local spacing,
-        and register C_YBS_mom, whose default 0 disables it.
+        damping with coefficient C_YBS_mom times CFL_FACTOR times local spacing
+        times the conformal factor W, and register C_YBS_mom, whose default 0
+        disables it and whose recommended value is 1.75.
     :param enable_SSL: Add slow-start lapse.
     :param enable_CAHD: Add formulation-specific Hamiltonian damping.
     :param enable_intrinsics: Generate SIMD-intrinsic kernels; every vector stays
@@ -116,10 +117,11 @@ def register_CFunction_rhs_eval(
                 0.0,
                 add_to_parfile=True,
                 description=(
-                    "YBS Gamma-constraint strength; 0 disables the term. "
-                    "Recommended maximum (the usual xi=1 choice of Yo, Lin, and Cao; "
-                    "no stability bound was derived): 2/3 for BSSN and 4/3 for "
-                    "fCCZ4 (same C^i Dbar_k beta^k coefficient as BSSN with xi=1)."
+                    "2/3 (BSSN) or 4/3 (fCCZ4) = recommended; the usual xi=1 choice "
+                    "of Yo, Lin, and Cao, which gives the same C^i Dbar_k beta^k "
+                    "coefficient in both formulations. Range: 0 (off) up to the "
+                    "recommended value; no stability bound was derived, and negative "
+                    "values should not be used."
                 ),
             )
         if enable_YBS_momentum_constraint_adjustment:
@@ -130,11 +132,13 @@ def register_CFunction_rhs_eval(
                 [0.0, 0.25],
                 add_to_parfile=True,
                 descriptions=[
-                    "YBS momentum-damping strength; 0 disables the term. "
-                    "Recommended maximum, assuming CFL_FACTOR = 0.45: 0.89 with RK4 "
-                    "and finite-difference orders up to 8. "
-                    "The maximum scales as 1/CFL_FACTOR^2 "
-                    "(0.18 at CFL_FACTOR = 1; 2.9 at the registered default 0.25).",
+                    "1.75 = recommended; diffusive damping of momentum-constraint "
+                    "violations, weighted by the conformal factor W so it switches "
+                    "off at punctures. Range: 0 (off) to about 2 at CFL_FACTOR = 0.45. "
+                    "Stability needs C_YBS_mom * CFL_FACTOR^2 * lambda_FD * W * ds_min "
+                    "/ dsmin below the Runge-Kutta real-axis limit (2.5 for RK3, 2.8 "
+                    "for RK4), where ds_min is the smallest grid spacing and lambda_FD "
+                    "= 5.6 to 7.6 for 4th to 8th order.",
                     "Evolution CFL factor.",
                 ],
             )

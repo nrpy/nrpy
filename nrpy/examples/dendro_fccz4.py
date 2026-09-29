@@ -103,7 +103,8 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "add the Gamma-constraint term to the connection equation (default: off); "
-            "its runtime strength YBS_chi defaults to 0, which disables it; "
+            "its runtime strength YBS_chi defaults to 0, which disables it "
+            "(recommended 4/3); "
             "Yo, Baumgarte and Shapiro, arXiv:gr-qc/0209066, Eq. (45); "
             "Yo, Lin and Cao, arXiv:1205.5111, Eq. (47)"
         ),
@@ -113,9 +114,10 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "add momentum-gradient damping (default: off); "
-            "its runtime strength C_YBS_mom defaults to 0, which disables it; "
+            "its runtime strength C_YBS_mom defaults to 0, which disables it "
+            "(recommended 1.75); "
             "Yo, Lin and Cao, arXiv:1205.5111, Eq. (56), "
-            "with a local CFL-times-spacing coefficient"
+            "with a local CFL-times-spacing coefficient weighted by the conformal factor W"
         ),
     )
     return parser.parse_args()

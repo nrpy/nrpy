@@ -252,11 +252,11 @@ Eq. (47).
 `--ybs-momentum` adds the covariant, symmetric trace-free gradient of the
 lower conformal momentum residual to the conformal extrinsic-curvature RHS.
 The help cites Yo, Lin, and Cao, Eq. (56). NRPy multiplies this term by
-`C_YBS_mom * BSSN_CFL_FACTOR * min(abs(dx), abs(dy), abs(dz))`, using the
-current Cartesian block spacing and runtime CFL factor; `C_YBS_mom` defaults
-to 0, which disables the term, and its recommended maximum with RK4 is
-`0.18 / BSSN_CFL_FACTOR^2` (see [YBS-MOM](../../equations/general-relativity/ybs-momentum-damping.md#strength-and-timestep-bound)).
-This local coefficient is NRPy's timestep scaling of the paper's term.
+`C_YBS_mom * BSSN_CFL_FACTOR * min(abs(dx), abs(dy), abs(dz)) * W`, using the
+current Cartesian block spacing, the runtime CFL factor, and the conformal
+factor `W` built from the evolved variable (`W` or `chi`); `C_YBS_mom` defaults
+to 0, which disables the term, and its recommended value is 1.75 (see [YBS-MOM](../../equations/general-relativity/ybs-momentum-damping.md#strength-and-timestep-bound)).
+This local coefficient is NRPy's timestep scaling and `W` weight of the paper's term.
 It adds no evolved gridfunction. See [YBS-MOM](../../equations/general-relativity/ybs-momentum-damping.md)
 for the equation and the limits of a damping or stability claim.
 
@@ -266,7 +266,7 @@ There are no `--ko` or `--no-ko` arguments. The runtime strength remains
 `KO_DISS_SIGMA`.
 
 Claim evidence:
-- Claim: The Dendro examples expose independent default-off Gamma and momentum adjustments whose runtime strengths `YBS_chi` and `C_YBS_mom` default to 0, which removes each term; the recommended maxima are advice from the linked equation pages, not a stability guarantee; the momentum coefficient uses the current block's minimum physical spacing and the evolution CFL factor, without adding evolved fields.
+- Claim: The Dendro examples expose independent default-off Gamma and momentum adjustments whose runtime strengths `YBS_chi` and `C_YBS_mom` default to 0, which removes each term; the recommended values are advice from the linked equation pages, not a stability guarantee; the momentum coefficient uses the current block's minimum physical spacing, the evolution CFL factor, and the conformal-factor weight `W`, without adding evolved fields.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `parse_args` and `main`; `nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py`, `register_CFunction_rhs_eval`; `nrpy/infrastructures/Dendro/CodeParameters.py`, `Q1_TOML_PARAMETER_NAMES`.
 - Corroboration: `nrpy/equations/general_relativity/BSSN_RHSs.py` and `fCCZ4_RHSs.py`, canonical adjustment construction; the cited Yo et al. equations.
