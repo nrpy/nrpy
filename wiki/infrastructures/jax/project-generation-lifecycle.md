@@ -64,9 +64,11 @@ parameters and the SEOBNRv5 aligned-spin coefficient `PyFunction`, then calls
 `pcg.do_parallel_codegen()` and
 `JAX.jax_project_generator.output_PyFunction_files_and_construct_project()`
 when run as a module. README guidance lists this as JAX project generation, and
-the generated-project CI jobs run `python -m nrpy.examples.sebobv1_jax`; unlike
-the C examples in the same jobs, that JAX route is not followed by a generated
-`make` build.
+the generated-project CI jobs run `python -m nrpy.examples.sebobv1_jax`, then
+install the generated package with `pip install .` and call
+`SEOBNRv5_aligned_spin_coefficients` once with Python-scalar inputs. That call
+takes the place of the C examples' `make` build; it checks no returned value and
+does not run the generated `tests/test_basic.py`.
 
 Generated files under `project/<name>/`, including generated JAX package files,
 are products of handwritten generators. Cite the source generator, registry,

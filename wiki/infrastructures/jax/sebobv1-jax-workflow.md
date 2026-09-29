@@ -60,17 +60,20 @@ tables for final-spin values and the real/imaginary `(2,2)` QNM data, computes
 `Commondata(...)` return expression populated with masses, spins, initial
 frequency, rescaled timestep, coefficients, `rISCO`, `rstop`, QNM values,
 `M_f`, and `a_f`. Every keyword in that return is a field that the example
-registers in `Commondata`. The printed symbolic expressions contain `Max` and
-`Min` as `jnp.maximum` and `jnp.minimum` calls, and integers or rationals that
-do not fit in a signed 32-bit integer as floats (see
+registers in `Commondata`. The printed symbolic expressions contain one `Max`,
+from the clamp of `1 - 4 nu` in the final mass, as a `jnp.maximum` call, and
+integers or rationals that do not fit in a signed 32-bit integer as floats (see
 [CSE And Printer Support](../../core/helpers/cse-and-printer-support.md)), so
 the generated module needs no imports beyond `jax`, `jax.numpy`, and
-`Commondata`, and its expressions can be evaluated with JAX arrays. The earlier
+`Commondata`, and its expressions can be evaluated with JAX arrays. `py_codegen()`
+prints the expressions unexpanded, so a float32 `mass_ratio` gives finite `M_f`,
+`omega_qnm`, and `tau_qnm`; see [Python Codegen](../../core/python-codegen.md).
+The earlier
 mismatch between the return and the registered fields is recorded as resolved in
 [CONTR-0002](../../contradictions.md#contr-0002).
 
 Claim evidence:
-- Claim: The generated `SEOBNRv5_aligned_spin_coefficients` returns `Commondata(...)` using only keywords that `nrpy.examples.sebobv1_jax` registers as `Commondata` fields, including `a_f`. This does not claim that CI imports or calls the generated function.
+- Claim: The generated `SEOBNRv5_aligned_spin_coefficients` returns `Commondata(...)` using only keywords that `nrpy.examples.sebobv1_jax` registers as `Commondata` fields, including `a_f`. This does not claim that CI checks any returned value.
 - Role: descriptive behavior
 - Deciding authority: [SEOBNRv5_aligned_spin_coefficients.py](../../../nrpy/infrastructures/JAX/sebob/SEOBNRv5_aligned_spin_coefficients.py), `register_PyFunction_SEOBNRv5_aligned_spin_coefficients` emitted return; [sebobv1_jax.py](../../../nrpy/examples/sebobv1_jax.py), `register_commondata_params` call
 - Corroboration: [commondata.py](../../../nrpy/infrastructures/JAX/commondata.py), `register_commondata_params`, rejects unequal list lengths, so a dropped field fails generation; the CONTR-0002 resolution test in [Contradictions](../../contradictions.md#contr-0002) exercises the generated call.
@@ -85,16 +88,19 @@ coefficient/remnant subset needed by
 inspiral modes, NQC corrections, merger-ringdown waveforms, or mismatch and
 calibration utilities.
 
-CI coverage for this route is generation-only. In both `codegen-ubuntu` and
-`codegen-mac`, the workflow installs NRPy, generates and `make`-builds many C
-example projects, then runs `python -m nrpy.examples.sebobv1_jax` without a
-following `make` step for the generated Python/JAX project. Do not cite
+In both `codegen-ubuntu` and `codegen-mac`, the workflow installs NRPy,
+generates and `make`-builds many C example projects, then runs
+`python -m nrpy.examples.sebobv1_jax`, installs the generated package with
+`pip install .`, imports `SEOBNRv5_aligned_spin_coefficients`, calls it once with
+Python-scalar inputs, and prints the returned `Commondata`. Do not cite
 generated `project/sebobv1_jax/` files as source evidence unless a maintainer
 deliberately freezes and registers such output.
 
-No generated-package install, generated import, coefficient-function call, or
-returned-field assertion appears in those configured jobs. Workflow
-configuration proves job shape, not generated-package runtime behavior.
+That call is the JAX counterpart of the `make` step for the C projects: it
+passes when the generated function is installed, imported, traced, and returns
+without error. The jobs do not run the generated pytest, assert any returned
+field or numerical value, use a float32 input, or test an accelerator, and they
+do not run the full CONTR-0002 resolution test.
 
 ## Sources
 

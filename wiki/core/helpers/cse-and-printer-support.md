@@ -37,7 +37,7 @@ Claim evidence:
 
 The JAX printer also implements `_print_ArrayElementwiseApplyFunc()`. Unary lambda elementwise application is lowered by printing the array operand once, printing the scalar lambda body with a sentinel symbol, and replacing that sentinel with the parenthesized array expression. Multi-argument lambdas fall back to `jnp.vectorize(...)`, and non-lambda callables are printed as callable applications to the array string.
 
-`py_codegen()` is the local integration point for `NRPyJaxPrinter`: it constructs a module-level printer, requires the `Infrastructure` parameter to be `JAX`, optionally runs SymPy CSE through `cse_postprocess()`, prints each right-hand side through `printer.doprint()`, and writes the assignment itself; see [Python Codegen](../python-codegen.md) for why the output name is not passed to the printer. Unlike the C path, this Python path does not call `cse_preprocess()` or the deterministic `order="none"` post-sort helper in the current source.
+`py_codegen()` is the local integration point for `NRPyJaxPrinter`: it constructs a module-level printer, requires the `Infrastructure` parameter to be `JAX`, optionally runs SymPy CSE through `cse_postprocess()`, prints each unexpanded right-hand side through `printer.doprint()`, and writes the assignment itself; see [Python Codegen](../python-codegen.md) for why the output name is not passed to the printer. Unlike the C path, this Python path does not call `cse_preprocess()` or the deterministic `order="none"` post-sort helper in the current source.
 
 ## Sources
 

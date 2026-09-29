@@ -238,8 +238,7 @@ def py_codegen(
                 common_subexpression[1] = apply_substitution_dict(
                     common_subexpression[1], PCGParams.postproc_substitution_dict
                 )
-            rhs = printer.doprint(sp.expand(common_subexpression[1]))
-            outstring += f"{common_subexpression[0]} = {rhs}\n"
+            outstring += f"{common_subexpression[0]} = {printer.doprint(common_subexpression[1])}\n"
 
         # cse_results[1] specifies the varnames in terms of CSE variables.
         for i, result in enumerate(cse_results[1]):
@@ -247,7 +246,7 @@ def py_codegen(
                 result = apply_substitution_dict(
                     result, PCGParams.postproc_substitution_dict
                 )
-            outstring += f"{varnames[i]} = {printer.doprint(sp.expand(result))}\n"
+            outstring += f"{varnames[i]} = {printer.doprint(result)}\n"
 
         # End of group processing
     # Step 4: Construct final output string

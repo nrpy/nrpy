@@ -97,10 +97,10 @@ and the narrower Commondata/PyFunction details.
 The generator supplies 14 Commondata names, dtypes, defaults, and
 descriptions, and batch registration rejects lists of unequal length, so
 generated `Commondata.py` includes the `a_f` field that the emitted coefficient
-function passes to `Commondata(...)`. GitHub codegen invokes only
-generation; it does not install/import the package, run the generated basic
-test, call the coefficient function, or validate any JAX accelerator/numerical
-result. The generated metadata declares `jax`, `jaxlib>=0.4.0`, and
+function passes to `Commondata(...)`. GitHub codegen generates and installs
+the package, imports the coefficient function, and calls it once with
+Python-scalar inputs; it does not run the generated basic test or check any
+returned value, JAX accelerator, or numerical result. The generated metadata declares `jax`, `jaxlib>=0.4.0`, and
 `numpy>=1.21.0`; official JAX [Installation](https://docs.jax.dev/en/latest/installation.html)
 under `Supported platforms` remains authority for current platform-specific JAX
 installation, not NRPy's workflow.

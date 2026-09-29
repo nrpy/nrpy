@@ -47,7 +47,7 @@ generation, build, or runtime coverage.
 | `nrpypn_quasicircular_momenta.py` | `python -m nrpy.examples.nrpypn_quasicircular_momenta` | Standalone BHaH PN momentum utility project | Python, C compiler, `make` | Configured Ubuntu/macOS CI generation and build; no runtime/result check | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
 | `photon_geodesic_batch_integrator.py` | `python -m nrpy.examples.photon_geodesic_batch_integrator [--cuda] [--outdir DIR]` | Standalone tiled photon raytracing project emitting light-blueprint ZIP artifacts | Python, C or CUDA toolchain, `make`, NumPy/Matplotlib/Pillow for visualization; Numba optional for acceleration | Manual/source-supported batch route | [Geodesic Raytracing](geodesic-raytracing.md) |
 | `photon_geodesic_integrator.py` | `python -m nrpy.examples.photon_geodesic_integrator` | Standalone single-photon geodesic project plus trajectory visualization copy | Python, C compiler, `make`, NumPy/Matplotlib for visualization | Manual/source-supported single-ray route | [Geodesic Raytracing](geodesic-raytracing.md) |
-| `sebobv1_jax.py` | `python -m nrpy.examples.sebobv1_jax` | Python/JAX package generation intended for SEOBNRv5 coefficient initialization | Python for generation; generated package declares JAX, `jaxlib`, and NumPy | Configured Ubuntu/macOS generation only; no generated-package install, import, test, accelerator, or numerical check | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
+| `sebobv1_jax.py` | `python -m nrpy.examples.sebobv1_jax` | Python/JAX package generation intended for SEOBNRv5 coefficient initialization | Python for generation; generated package declares JAX, `jaxlib`, and NumPy | Configured Ubuntu/macOS generation, generated-package install, and one coefficient-function call with Python-scalar inputs; no generated test, accelerator, or numerical check | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
 | `sebobv2.py` | `python -m nrpy.examples.sebobv2` | GSL-backed BHaH C waveform project | Python, C compiler, `make`, GSL | Configured trusted/current build, executable run, and ten-input perturbation-relative comparison | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
 | `seobnrv5_aligned_spin_inspiral.py` | `python -m nrpy.examples.seobnrv5_aligned_spin_inspiral [-seobnrv5_bob|-seobnrv5_nrnqc_bob|-seobnrv5_nrpy] [-calibration_no_spin|-calibration_spin|-nrpy_calibrated]` | GSL-backed BHaH C SEOBNRv5 waveform project family | Python, C compiler, `make`, GSL | Configured trusted/current build and ten-input executable comparison for all nine calibration/production variants; the three additional `-nrpy_calibrated` variants are build-only | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
 | `spinning_blackhole.py` | `python -m nrpy.examples.spinning_blackhole [--cuda] [--floating_point_precision TYPE]` | Standalone BHaH spinning black-hole project | Python, C or CUDA toolchain, `make`; BHaHAHA in supported OpenMP/double path | Configured Ubuntu/macOS default OpenMP build; local helper configures CUDA build; neither runs the executable | [Standalone GR/BHaH](standalone-gr-bhah.md) |
@@ -91,8 +91,9 @@ rows in [Sources](../../raw/SOURCES.md) register the cited files. Aggregate stat
 remains `partial` because file-set ownership does not by itself prove complete
 semantic reconciliation or future-file ingestion.
 
-The `sebobv1_jax` row records generation intent. Generation is configured in
-CI; generated-package installation or execution is not. See
+The `sebobv1_jax` row records generation intent. CI generates and installs the
+package and calls the coefficient function once without checking its returned
+values. See
 [SEBOBv1 JAX Workflow](../infrastructures/jax/sebobv1-jax-workflow.md) for the
 generated coefficient function and its `Commondata` fields.
 
