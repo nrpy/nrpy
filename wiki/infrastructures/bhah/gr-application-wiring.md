@@ -59,7 +59,7 @@ each declares an explicit false source constant and forwards it to this shared
 registrar.
 
 Claim evidence:
-- Claim: the shared registrar conditionally owns the runtime YBS parameter, whose default is 0, and forwards the opt-in flag to the selected BSSN or fCCZ4 equation and gauge owners; the four black-hole generators keep it explicitly false by default and share this registrar.
+- Claim: the shared registrar conditionally owns the runtime YBS parameter, whose default is 0, and forwards the opt-in flag to the selected BSSN or fCCZ4 equation and gauge owners; `two_blackholes_collide.py`, `blackhole_spectroscopy.py`, `superB_two_blackholes_collide.py`, and `superB_blackhole_spectroscopy.py` keep it explicitly false by default and share this registrar.
 - Role: descriptive behavior
 - Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
 - Corroboration: [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py), and [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py), forwarded `enable_YBS_Gamma_constraint_adjustment` constants
@@ -257,7 +257,7 @@ coordinate-specialized by `register_CFunction_sqrt_detgammahat_d3xx_volume_eleme
 when diagnostics are registered.
 
 Basis transforms are registered through
-`basis_transforms.register_all.register_CFunctions`. The two production modules
+`basis_transforms.register_all.register_CFunctions`. The basis-transform modules
 emit private per-coordinate single-point kernels with coordinate-system suffixes.
 The public unsuffixed runtime dispatchers are emitted later by
 `rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs`. The

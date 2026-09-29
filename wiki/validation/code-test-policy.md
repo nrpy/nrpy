@@ -270,7 +270,7 @@ is not.
 7. No meaningful contract: add no behavioral test.
 8. Handwritten Python changed: follow [Static Analysis](static-analysis.md).
 
-Three checked-in shapes are retained facts, not templates. This policy treats
+The checked-in shapes described here are retained facts, not templates. This policy treats
 the NRPyLaTeX BSSN file as a unique retained direct-execution sampled cross-
 representation harness. The JAX
 project generator emits a downstream pytest import/`__version__` scaffold that
@@ -282,7 +282,7 @@ Claim evidence:
 - Claim: The NRPyLaTeX BSSN file directly executes a sampled cross-representation comparison; the JAX project generator emits a downstream pytest import/`__version__` scaffold that configured generated-project CI does not execute; and BHaH `compile_Makefile()` contains an external-compilation doctest.
 - Role: descriptive behavior
 - Deciding authority: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`; [jax_project_generator.py](../../nrpy/infrastructures/JAX/jax_project_generator.py), `_generate_project_metadata` and `output_PyFunction_files_and_construct_project`; [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `compile_Makefile`
-- Corroboration: [main.yml](../../.github/workflows/main.yml), `codegen-ubuntu` and `codegen-mac`, corroborates that JAX output is generated without executing its scaffold; no independent corroboration for the other two outliers
+- Corroboration: [main.yml](../../.github/workflows/main.yml), `codegen-ubuntu` and `codegen-mac`, corroborates that JAX output is generated without executing its scaffold; no independent corroboration for the other outliers
 
 Do not expand any of those shapes. Whether an unrelated touch must remove a
 legacy empty runner remains maintainer judgment. Meaningful doctest-only

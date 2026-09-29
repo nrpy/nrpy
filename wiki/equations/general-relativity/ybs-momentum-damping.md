@@ -82,8 +82,7 @@ The black-hole spectroscopy generator schedules the shared spacing fill when
 either CAHD or YBS-MOM needs it.
 
 All affected existing trusted-expression owners enable YBS Gamma and YBS-MOM
-together: six BSSN dictionaries, six fCCZ4 dictionaries, and eight BHaH
-`rhs_eval` dictionaries. No new test or trusted-dictionary family was added.
+together.
 
 ### Strength and timestep bound
 
@@ -127,7 +126,7 @@ Claim evidence:
 - Claim: the runtime default `C_YBS_mom = 0.0` removes the term exactly, and the recommended maximum is half of the explicit-Runge-Kutta diffusion limit `real-axis limit / (lambda_FD * CFL_FACTOR^2)` at the finest cell; the analysis is frozen-coefficient and principal-part only, and no evolution confirmed it.
 - Role: descriptive behavior
 - Deciding authority: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS momentum branch (`ell_M`); [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` (default value); [numerical_grids_and_timestep.py](../../../nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py), `register_CFunction_cfl_limited_timestep`
-- Corroboration: [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (56), for the operator only; no repository script reproduces the `lambda_FD`, real-axis-limit, and propagation values
+- Corroboration: [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (56), for the operator only; none available for the `lambda_FD`, real-axis-limit, and propagation values, because they follow from NRPy's centered finite-difference stencils and the Runge-Kutta stability limits, which Eq. (56) does not treat
 
 ### Authority reconciliation
 

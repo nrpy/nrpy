@@ -136,7 +136,7 @@ Claim evidence:
 - Deciding authority: [GR diagnostics_nearest.py](../../../nrpy/infrastructures/superB/general_relativity/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [NRPyElliptic diagnostics_nearest.py](../../../nrpy/infrastructures/superB/nrpyelliptic/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
 - Corroboration: [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py), generated diagnostic dispatch; [BHaH diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
 
-Current configured CI builds all three superB projects but runs only the
+Current configured CI builds all superB projects but runs only the
 collision executable. It does not inspect CkIO files, volume-reduction values,
 NRPyElliptic residual stopping, checkpoint/restart, or error paths. The prose
 above describes local generator control flow plus Charm++ 8.0.0 API contracts,

@@ -222,7 +222,7 @@ Claim evidence:
 - Corroboration: [BSSN_constraints_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py), `trusted_dict`; [BSSN_constraints_Spherical.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Spherical.py), `trusted_dict`
 
 Representative trusted files pin the core RHS, quantity, and constraint
-dictionaries. All six BSSN RHS trusted cases jointly enable YBS Gamma and
+dictionaries. All BSSN RHS trusted cases jointly enable YBS Gamma and
 YBS-MOM, so they pin the changed `a_rhsDD` expressions and every other output
 already present in those dictionaries without separate option-combination files.
 Gauge validation is driven by the supported lapse and shift option

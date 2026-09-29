@@ -84,7 +84,7 @@ when `BSSN_GW_RADAII` is non-empty, one row with the step, time, outermost
 extraction radius, and the ADM energy, linear momentum, and angular momentum,
 printed with up to ten significant digits (default notation, trailing zeros
 dropped). The labeled ASCII diagnostic files (`*_ADM.dat`, the
-two constraint files, the Psi4 mode files, `*_GW_L2.dat`, and
+constraint files, the Psi4 mode files, `*_GW_L2.dat`, and
 `*_BHLocations.dat`) open with column labels in the style of BHaHAHA's horizon
 diagnostics files: when the file is missing or empty, rank 0 first writes a
 title line naming the formulation and evolved conformal factor, then one
@@ -101,7 +101,7 @@ Claim evidence:
 Claim evidence:
 - Claim: When `*_ADM.dat`, either constraint file, a `*_GW_l<l>_m<m>.dat` file, `*_GW_L2.dat`, or `*_BHLocations.dat` is missing or empty, rank 0 writes `# <title>`, `#`, and one `# column N = <name>: <meaning>` line per column before the first row; a file that already has content receives no further labels. The step and time columns are named `TimeStep` and `time` (`t` in the Psi4 files); Psi4 radius columns are `r0`, `r1`, ..., as in native `BSSN_GR`'s headers; the constraint and puncture-location columns use descriptive generated labels. Native waveform-norm and puncture-location files instead use uncommented headers. This applies to the fCCZ4 application as well.
 - Role: public/scientific contract
-- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `open_labeled_output` and its six output paths within `output_solver_context_cpp`, and `diagnostic_meanings`.
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `open_labeled_output` and its output paths within `output_solver_context_cpp`, and `diagnostic_meanings`.
 - Corroboration: `nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_file_output.py`, the horizon diagnostics header this format follows; `nrpy/examples/tests/dendro_application_check.py`, `parse_table` and `parse_modes`, which read the labels.
 
 Each Psi4 mode goes to its own `*_GW_l<l>_m<m>.dat` file, with Dendro-GR

@@ -71,7 +71,7 @@ thorn-local C files and Cactus build metadata.
 Validation scope is narrower than general Einstein Toolkit support. The
 configured `einsteintoolkit-validation` job generates the ETLegacy Carpet
 WaveToy and Baikal thorns, links them into the pinned ET environment, builds
-that toolkit, and requests three testsuites. This workflow configuration proves
+that toolkit, and requests the Baikal, BaikalVacuum, and WaveToyNRPy testsuites. This workflow configuration proves
 the job shape, not its latest success, and does not establish arbitrary thorn,
 platform, GPU, or restart behavior.
 
