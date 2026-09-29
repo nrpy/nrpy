@@ -23,7 +23,7 @@ build/link fact here; CkIO sessions and callbacks are owned by
 ## Detail
 
 The public README classifies superB as NRPy's Charm++-based infrastructure for
-distributed-memory workflows and lists three entry examples:
+distributed-memory workflows and lists entry examples:
 `superB_two_blackholes_collide`, `superB_blackhole_spectroscopy`, and
 `superB_nrpyelliptic_conformally_flat`. It also distinguishes superB output
 from standalone BHaH executables: superB generators produce Charm++ projects,

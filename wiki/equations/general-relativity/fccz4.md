@@ -416,6 +416,20 @@ Claim evidence:
 - Deciding authority: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` and `BSSNRHSs_dict.get_rhs`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` and `FCCZ4RHSsDict.get_rhs`
 - Corroboration: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints.__init__`; [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), representative jointly enabled `trusted_dict`
 
+The fCCZ4 connection RHS already contains `+(2/3) C^i Dbar_j beta^j`, so the
+net coefficient of `C^i Dbar_j beta^j` in the constraint propagation is
+`2/3 - YBS_chi`. It vanishes at `YBS_chi = 2/3`. The BSSN `xi=1` coefficient
+`-2/3` therefore needs `YBS_chi = 4/3` in fCCZ4, which is the recommended
+maximum. It is set by matching the BSSN `xi=1` coefficient, not by a stability
+bound. The runtime default `YBS_chi = 0` removes the term. Larger
+values have no supporting derivation or source here.
+
+Claim evidence:
+- Claim: the fCCZ4 net coefficient of `C^i*Dbar_j beta^j` in the constraint propagation is `2/3 - YBS_chi`, so `YBS_chi = 4/3` reproduces the BSSN `xi=1` coefficient by matching, not by a derived stability bound, and the default `YBS_chi = 0` removes the term.
+- Role: descriptive behavior
+- Deciding authority: [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` connection composition; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS Gamma branch
+- Corroboration: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` parameter registration; [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (47)
+
 Claim evidence:
 - Claim: `FCCZ4Constraints` constructs the fCCZ4-only connection, Z4 Ricci, and `H_Z4` aggregates; `FCCZ4ConstraintsDict` and `fCCZ4_constraints` cache them; `FCCZ4RHSs` retrieves option-matched cached BSSN and fCCZ4 constraint objects, copies mutable aggregates without mutation, applies the displayed corrections at reference-rescaled output boundaries, and delegates enabled matter sources to the established `T4munu` helpers.
 - Role: descriptive behavior
@@ -516,7 +530,7 @@ Claim evidence:
 - Corroboration: [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py), `trusted_dict`; disabled-branch count, ordering, and namespace behavior are established by owner-source inspection
 
 Claim evidence:
-- Claim: enabling YBS-MOM changes existing fCCZ4 `a_rhsDD` expressions without changing the 18-entry evolution dictionary; all six existing fCCZ4 RHS trusted-output comparisons exercise this branch jointly with YBS Gamma.
+- Claim: enabling YBS-MOM changes existing fCCZ4 `a_rhsDD` expressions without changing the 18-entry evolution dictionary; all existing fCCZ4 RHS trusted-output comparisons exercise this branch jointly with YBS Gamma.
 - Role: descriptive behavior
 - Deciding authority: [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` and `FCCZ4RHSsDict.get_rhs`
 - Corroboration: [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py), `trusted_dict`
@@ -579,7 +593,7 @@ These statements describe the source resolutions made by the current
 implementation; they do not claim that the papers use identical conventions.
 
 Claim evidence:
-- Claim: The current NRPy implementation applies the five listed fCCZ4 source resolutions where the cited sources differ or contain inconsistent equations or prose; its connection RHS corrects the duplicated Mewes constraint-vector stretch, retains the required divergence promotion, and has the exact aggregate Cartesian coefficient `-Lambdatilde^b delta^i_a+(2/3)Lambdatilde^i delta^a_b`.
+- Claim: The current NRPy implementation applies the listed fCCZ4 source resolutions where the cited sources differ or contain inconsistent equations or prose; its connection RHS corrects the duplicated Mewes constraint-vector stretch, retains the required divergence promotion, and has the exact aggregate Cartesian coefficient `-Lambdatilde^b delta^i_a+(2/3)Lambdatilde^i delta^a_b`.
 - Role: public/scientific contract
 - Deciding authority: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__`; [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints.__init__`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` and module `__main__`; [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), `fCCZ4_gauge_RHSs`; source crosswalks in [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), [Alic et al., arXiv:1106.2254v2](https://arxiv.org/pdf/1106.2254v2), and [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1)
 - Corroboration: [Alic et al., arXiv:1106.2254v2](https://arxiv.org/pdf/1106.2254v2), Eq. (19), corroborates the full corrected Cartesian coefficient; [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1), Eqs. (2.11) and (2.17), corroborates one stretch but not the complete promoted-divergence coefficient; no paper is used as an oracle for the exact local coefficient identity
@@ -639,15 +653,15 @@ and lapse/shift gauge outputs with the YBS options disabled.
 
 Evolution covers SinhCartesian baseline and external-Ricci cases,
 SinhSpherical baseline, external-Ricci, and precompute-with-matter cases, plus
-one lower-priority Cartesian representative. Constraints cover `W`, `phi`, and
-`chi` in both curved coordinate families, external Ricci in both, one
-SinhSpherical precompute-with-matter case, and one Cartesian representative.
+a lower-priority Cartesian representative. Constraints cover `W`, `phi`, and
+`chi` in both curved coordinate families, external Ricci in both, a
+SinhSpherical precompute-with-matter case, and a Cartesian representative.
 Gauge coverage prioritizes complete 4-by-7 lapse/shift matrices in both
 SinhCartesian and SinhSpherical, then adds a Cartesian default representative
 and a SinhSpherical precompute-with-matter representative. Each trusted
 dictionary contains only the stated final outputs. The gauge-only APIs do not
 own a YBS-MOM output, so those dictionaries remain default-YBS rather than
-testing YBS Gamma alone; the eight jointly enabled BHaH `rhs_eval` dictionaries
+testing YBS Gamma alone; the jointly enabled BHaH `rhs_eval` dictionaries
 cover the resulting shift-driver and momentum-adjusted `a_rhsDD` changes together.
 
 These deterministic samples are regression evidence for symbolic construction

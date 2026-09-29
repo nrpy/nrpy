@@ -139,7 +139,7 @@ Claim evidence:
 Each GRMHD validation path follows its GRHD counterpart. `GRMHD_equations.py`
 first sets `BmagU = 0` in Cartesian coordinates and requires every GRHD
 expression attribute, including source and connection terms, to equal the GRHD
-result exactly. It then loops over the seven coordinate systems that
+result exactly. It then loops over the coordinate systems that
 `GRHD_equations.py` validates: Spherical, SinhSpherical, SinhSpherical with
 `enable_rfm_precompute`, Cartesian, SinhCartesian, SinhCylindrical, and
 SinhSymTP. For each, it runs `construct_all_equations` with the symbolic
@@ -180,7 +180,7 @@ admissibility of arbitrary caller-supplied states. As in GRHD, callers must
 supply valid lapse, metric, four-velocity, densities, and nonzero denominators.
 
 Claim evidence:
-- Claim: The GRMHD equation class checks exact Cartesian B=0 equality with GRHD and, for the seven GRHD coordinate systems, compares all stored magnetic expressions, including source and connection terms and curvilinear fluxes, with trusted values. The speed module checks exact B=0 equality with GRHD for symbolic face states in all three flux directions, and the HLL module in flux direction 0 on a flat face metric; they compare left-state roots, `(cmin, cmax)`, right-state conserved variables and fluxes, and one direction of HLL fluxes, in which both speed bounds are nonzero, with and without exchanged face states, with trusted values. The speed module requires exact agreement with GRHD bounds built from the two face-state `compute_v02` values on a flat face metric in all three flux directions. Trusted samples need not be physical states.
+- Claim: The GRMHD equation class checks exact Cartesian B=0 equality with GRHD and, for the GRHD coordinate systems, compares all stored magnetic expressions, including source and connection terms and curvilinear fluxes, with trusted values. The speed module checks exact B=0 equality with GRHD for symbolic face states in all three flux directions, and the HLL module in flux direction 0 on a flat face metric; they compare left-state roots, `(cmin, cmax)`, right-state conserved variables and fluxes, and one direction of HLL fluxes, in which both speed bounds are nonzero, with and without exchanged face states, with trusted values. The speed module requires exact agreement with GRHD bounds built from the two face-state `compute_v02` values on a flat face metric in all three flux directions. Trusted samples need not be physical states.
 - Role: descriptive behavior
 - Deciding authority: [GRMHD_equations.py](../../nrpy/equations/grmhd/GRMHD_equations.py), [characteristic_speeds.py](../../nrpy/equations/grmhd/characteristic_speeds.py), and [HLL_fluxes.py](../../nrpy/equations/grmhd/HLL_fluxes.py), `__main__` validation paths
 - Corroboration: `GRMHD_equations_<CoordSystem>.py` files such as [GRMHD_equations_Cartesian.py](../../nrpy/equations/grmhd/tests/GRMHD_equations_Cartesian.py) and [GRMHD_equations_SinhSpherical_rfm_precompute.py](../../nrpy/equations/grmhd/tests/GRMHD_equations_SinhSpherical_rfm_precompute.py), [GRMHD characteristic_speeds.py](../../nrpy/equations/grmhd/tests/characteristic_speeds.py), and [GRMHD HLL_fluxes.py](../../nrpy/equations/grmhd/tests/HLL_fluxes.py), `trusted_dict`

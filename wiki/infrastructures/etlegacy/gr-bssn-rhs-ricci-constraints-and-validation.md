@@ -105,7 +105,7 @@ Claim evidence:
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
 - Corroboration: [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [interface_ccl.py](../../../nrpy/infrastructures/ETLegacy/interface_ccl.py), `construct_interface_ccl`
 
-All three generated kernels register `construct_FD_functions_prefunc()` unchanged;
+The Ricci, RHS, and constraints kernels register `construct_FD_functions_prefunc()` unchanged;
 the finite-difference helpers carry no inlining attribute (the former `NO_INLINE`
 rewrite to `CCTK_ATTRIBUTE_NOINLINE`, a workaround for a GCC 10 compile hang, was
 removed together with the macro).
@@ -126,8 +126,8 @@ then calls `compare_or_generate_trusted_results()` itself, its generated
 basenames omit the `KO...` segment and use the local `enable_improvements`
 loop variable.
 
-ETLegacy has six backend-local RHS trusted baselines: four covariant cases span
-both `T4munu` states and both improvements states, while two noncovariant
+ETLegacy has backend-local RHS trusted baselines: the covariant cases span
+both `T4munu` states and both improvements states, while the noncovariant
 KO-enabled cases span both `T4munu` states with improvements disabled.
 
 ## Sources

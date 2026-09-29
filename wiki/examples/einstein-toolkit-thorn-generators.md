@@ -5,7 +5,7 @@
 
 ## Summary
 
-NRPy has four Einstein Toolkit thorn generators. The ETLegacy/Carpet examples
+NRPy has Einstein Toolkit thorn generators. The ETLegacy/Carpet examples
 write classic Carpet thorns: `carpet_wavetoy_thorns.py` writes
 `WaveToyNRPy`, `IDWaveToyNRPy`, and `diagWaveToyNRPy` under
 `project/et_wavetoy/`, while `carpet_baikal_thorns.py` writes `Baikal` and
@@ -60,7 +60,7 @@ mirrors the Carpet Baikal generator. The CarpetX Baikal generator uses
 zero-RHS helpers, and the same BSSN/Ricci/RHS/constraints/poststep-repair
 registration family as the ETLegacy generator.
 
-WaveToy is split into three thorns in both output families. The ID thorn writes
+WaveToy is split into separate thorns in both output families. The ID thorn writes
 the spherical-Gaussian exact solution at `CCTK_INITIAL` and owns initial-data
 parameters such as `sigma` and `wavespeed`. The evolution thorn owns `uu` and
 `vv` evolution variables, registers RHS evaluation for the wave equation, and

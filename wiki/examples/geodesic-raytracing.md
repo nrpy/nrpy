@@ -5,7 +5,7 @@
 
 ## Summary
 
-NRPy has three checked-in geodesic example generators. `mass_geodesic_integrator`
+NRPy has checked-in geodesic example generators. `mass_geodesic_integrator`
 builds a single massive-particle Kerr-Schild Cartesian trajectory and uses GSL's
 RKF45 ODE path. `photon_geodesic_integrator` builds a single photon trajectory
 with the same analytic spacetime target but uses the split-pipeline photon RKF45

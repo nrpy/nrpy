@@ -59,7 +59,7 @@ BOBv2 implementation whose ideal attachment point still requires calibration.
 Stored attachment quantities therefore must not be described as a calibrated
 BOBv2 waveform result.
 
-All three modules validate through the trusted-expression pipeline. The BOB
+All of these modules validate through the trusted-expression pipeline. The BOB
 `(2,2)` trusted dictionary pins `h`, `phi`, and attachment outputs. The
 higher-mode trusted dictionary pins flattened mode keys for the supported mode
 set. The BOBv2 trusted dictionary removes the raw `newsNR` dictionary before

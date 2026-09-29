@@ -84,7 +84,7 @@ when `BSSN_GW_RADAII` is non-empty, one row with the step, time, outermost
 extraction radius, and the ADM energy, linear momentum, and angular momentum,
 printed with up to ten significant digits (default notation, trailing zeros
 dropped). The labeled ASCII diagnostic files (`*_ADM.dat`, the
-two constraint files, the Psi4 mode files, `*_GW_L2.dat`, and
+constraint files, the Psi4 mode files, `*_GW_L2.dat`, and
 `*_BHLocations.dat`) open with column labels in the style of BHaHAHA's horizon
 diagnostics files: when the file is missing or empty, rank 0 first writes a
 title line naming the formulation and evolved conformal factor, then one
@@ -101,7 +101,7 @@ Claim evidence:
 Claim evidence:
 - Claim: When `*_ADM.dat`, either constraint file, a `*_GW_l<l>_m<m>.dat` file, `*_GW_L2.dat`, or `*_BHLocations.dat` is missing or empty, rank 0 writes `# <title>`, `#`, and one `# column N = <name>: <meaning>` line per column before the first row; a file that already has content receives no further labels. The step and time columns are named `TimeStep` and `time` (`t` in the Psi4 files); Psi4 radius columns are `r0`, `r1`, ..., as in native `BSSN_GR`'s headers; the constraint and puncture-location columns use descriptive generated labels. Native waveform-norm and puncture-location files instead use uncommented headers. This applies to the fCCZ4 application as well.
 - Role: public/scientific contract
-- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `open_labeled_output` and its six output paths within `output_solver_context_cpp`, and `diagnostic_meanings`.
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `open_labeled_output` and its output paths within `output_solver_context_cpp`, and `diagnostic_meanings`.
 - Corroboration: `nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_file_output.py`, the horizon diagnostics header this format follows; `nrpy/examples/tests/dendro_application_check.py`, `parse_table` and `parse_modes`, which read the labels.
 
 Each Psi4 mode goes to its own `*_GW_l<l>_m<m>.dat` file, with Dendro-GR
@@ -239,8 +239,12 @@ Claim evidence:
 Both examples accept `--ybs-gamma` and `--ybs-momentum` independently or
 together. Both default to off. `--ybs-gamma` forwards the canonical Gamma
 constraint adjustment to the evolution and shift-driver equations. Its runtime
-coefficient is `YBS_chi`, defaulting to 2/3; this is the additional NRPy
-coefficient, with Brown's BSSN contribution retained separately. The help cites
+coefficient is `YBS_chi`, defaulting to 0, which disables the term; the
+recommended maximum is 2/3 for BSSN and 4/3 for fCCZ4, a customary choice for
+BSSN and a matching choice for fCCZ4, not a stability bound (see
+[BSSN Family](../../equations/general-relativity/bssn-family.md) and
+[fCCZ4](../../equations/general-relativity/fccz4.md)). This is the additional
+NRPy coefficient, with Brown's BSSN contribution retained separately. The help cites
 [Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066](https://arxiv.org/abs/gr-qc/0209066),
 Eq. (45), and [Yo, Lin, and Cao, arXiv:1205.5111](https://arxiv.org/abs/1205.5111),
 Eq. (47).
@@ -250,7 +254,9 @@ lower conformal momentum residual to the conformal extrinsic-curvature RHS.
 The help cites Yo, Lin, and Cao, Eq. (56). NRPy multiplies this term by
 `C_YBS_mom * BSSN_CFL_FACTOR * min(abs(dx), abs(dy), abs(dz))`, using the
 current Cartesian block spacing and runtime CFL factor; `C_YBS_mom` defaults
-to 1. This local coefficient is NRPy's timestep scaling of the paper's term.
+to 0, which disables the term, and its recommended maximum with RK4 is
+`0.18 / BSSN_CFL_FACTOR^2` (see [YBS-MOM](../../equations/general-relativity/ybs-momentum-damping.md#strength-and-timestep-bound)).
+This local coefficient is NRPy's timestep scaling of the paper's term.
 It adds no evolved gridfunction. See [YBS-MOM](../../equations/general-relativity/ybs-momentum-damping.md)
 for the equation and the limits of a damping or stability claim.
 
@@ -260,7 +266,7 @@ There are no `--ko` or `--no-ko` arguments. The runtime strength remains
 `KO_DISS_SIGMA`.
 
 Claim evidence:
-- Claim: The Dendro examples expose independent default-off Gamma and momentum adjustments; the momentum coefficient uses the current block's minimum physical spacing and the evolution CFL factor, without adding evolved fields.
+- Claim: The Dendro examples expose independent default-off Gamma and momentum adjustments whose runtime strengths `YBS_chi` and `C_YBS_mom` default to 0, which removes each term; the recommended maxima are advice from the linked equation pages, not a stability guarantee; the momentum coefficient uses the current block's minimum physical spacing and the evolution CFL factor, without adding evolved fields.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `parse_args` and `main`; `nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py`, `register_CFunction_rhs_eval`; `nrpy/infrastructures/Dendro/CodeParameters.py`, `Q1_TOML_PARAMETER_NAMES`.
 - Corroboration: `nrpy/equations/general_relativity/BSSN_RHSs.py` and `fCCZ4_RHSs.py`, canonical adjustment construction; the cited Yo et al. equations.

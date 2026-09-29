@@ -5,7 +5,7 @@
 
 ## Summary
 
-This example leaf covers four related generator families. The
+This example leaf covers related generator families. The
 `seobnrv5_aligned_spin_inspiral` route creates GSL-backed BHaH C waveform
 projects whose project name is selected from the SEOBNRv5 approximant flag and
 optional calibration suffix. `sebobv2` creates one GSL-backed BHaH C waveform
@@ -157,9 +157,10 @@ Claim evidence:
 These consistency scripts document the example workflow, not a new validation
 subsystem. The broader CI page is context for where generated projects are
 built and compared; this page stays scoped to what the example generators and
-their local helper scripts do. Workflow YAML configures all nine SEOBNRv5
-approximant/calibration projects plus `sebobv2` for trusted/current builds and
-executable comparisons. This is real run/result-check coverage for those stated
+their local helper scripts do. Workflow YAML configures every SEOBNRv5
+approximant in its production, `-calibration_no_spin`, and `-calibration_spin`
+variants, plus `sebobv2`, for trusted/current builds and executable comparisons;
+the `-nrpy_calibrated` variants are built only. This is real run/result-check coverage for those stated
 inputs, but no claim about latest CI success or general waveform accuracy.
 
 ## Sources

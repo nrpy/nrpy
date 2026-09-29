@@ -180,8 +180,8 @@ Claim evidence:
 
 The Dendro BSSN leaf attributed the private-builder-per-formulation layout to
 BHaH. BHaH's `general_relativity/rhs_eval.py` defines the public
-`register_CFunction_rhs_eval` and branches inline on `enable_fCCZ4`
-at two sites. What Dendro does take from BHaH is the module layout -- one
+`register_CFunction_rhs_eval` and branches inline on `enable_fCCZ4`.
+What Dendro does take from BHaH is the module layout -- one
 module per artifact, both formulations behind one boolean -- and that half of
 the sentence stands; the private builder and private registrar per formulation
 inside the module were Dendro's own. CONTR-0011 subsequently removed that
@@ -190,7 +190,7 @@ duplication; this entry preserves the attribution correction.
 Claim evidence:
 - Claim: `BHaH/general_relativity/rhs_eval.py` holds one public registration function and no private per-formulation builder or registrar; the former private-builder-per-formulation split inside a Dendro module was Dendro's own, not BHaH's arrangement.
 - Role: descriptive behavior
-- Deciding authority: [BHaH rhs_eval.py](../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` and its two `enable_fCCZ4` branches
+- Deciding authority: [BHaH rhs_eval.py](../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` and its `enable_fCCZ4` branches
 - Corroboration: none available; BHaH's own module is the whole of the evidence, and no Dendro leaf records the per-formulation split as a peer practice
 
 ### CONTR-0011

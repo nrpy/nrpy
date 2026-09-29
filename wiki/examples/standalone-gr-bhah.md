@@ -7,7 +7,7 @@
 
 Standalone GR/BHaH examples are Python generators that write complete BHaH
 projects under `project/<project_name>/`, then expect `make` and the generated
-executable to run inside that project directory. The four checked-in owners are
+executable to run inside that project directory. The checked-in owners are
 `two_blackholes_collide.py` for compact Brill-Lindquist binary black-hole
 evolution, `blackhole_spectroscopy.py` for a TwoPunctures-backed binary with
 checkpointing and Psi4 diagnostics, `spinning_blackhole.py` for a single
@@ -15,9 +15,9 @@ spinning UIUC black hole, and `kasner_exact_evolution.py` for a vacuum Kasner
 benchmark.
 
 Each generator deletes and recreates its fixed project directory. Configured
-GitHub codegen generates and builds the default OpenMP path for the first three,
-but omits Kasner and runs no executable. The local helper configures OpenMP and
-CUDA builds for the first three, omits Kasner, and also runs no executable or
+GitHub codegen generates and builds the default OpenMP path for every owner
+except Kasner and runs no executable. The local helper configures OpenMP and
+CUDA builds for every owner except Kasner and also runs no executable or
 scientific check. Preserve output before reruns; runtime remains manual here.
 
 ## Detail
