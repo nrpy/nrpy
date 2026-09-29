@@ -37,6 +37,7 @@ def register_CFunctions(
     enable_intrinsics: bool = False,
     register_MoL_step_forward_in_time: bool = True,
     rational_const_alias: str = "const",
+    bhahaha: bool = False,
 ) -> None:
     r"""
     Register all MoL C functions and NRPy basic defines.
@@ -138,10 +139,10 @@ def register_CFunctions(
 
     # Step 1: Build all memory alloc and free:
     BHaH.MoLtimestepping.MoL_malloc_intermediate_stage_gfs.register_CFunction_MoL_malloc_intermediate_stage_gfs(
-        Butcher_dict, MoL_method
+        Butcher_dict, MoL_method, bhahaha=bhahaha
     )
     BHaH.MoLtimestepping.MoL_free_intermediate_stage_gfs.register_CFunction_MoL_free_intermediate_levels(
-        Butcher_dict, MoL_method
+        Butcher_dict, MoL_method, bhahaha=bhahaha
     )
 
     # Step 2: Possibly register the main stepping function:
@@ -156,6 +157,7 @@ def register_CFunctions(
             enable_curviBCs=enable_curviBCs,
             enable_intrinsics=enable_intrinsics,
             rational_const_alias=rational_const_alias,
+            bhahaha=bhahaha,
         )
 
     # Step 3: Register the struct in BHaH_defines_h:

@@ -1,6 +1,9 @@
 #ifndef BHAHAHA_HEADER_H
 #define BHAHAHA_HEADER_H
 
+#ifdef __CUDACC__
+#define restrict __restrict__
+#endif
 // Definition of REAL data type, using double by default.
 #ifndef REAL
 #define REAL double
@@ -220,6 +223,28 @@ typedef struct {
   //==========================
 } bhahaha_diagnostics_struct;
 
+typedef struct __diag_norms__ {
+  REAL min_radius;
+  REAL max_radius; 
+  REAL sum_Theta_squared_for_L2_norm;
+  REAL sum_curr_area;
+  REAL sum_x_centroid;
+  REAL sum_y_centroid;
+  REAL sum_z_centroid;
+  REAL max_Theta_squared_for_Linf_norm;
+  REAL sum_mean_radius;
+  REAL min_radius_squared;
+  REAL max_radius_squared;
+} diag_norms_struct; 
+
+typedef struct __diagnostics_arrays__ {
+  REAL *restrict metric_data_gfs;
+  REAL(*dst_pts)[2];
+  REAL *restrict integrand;
+  REAL *restrict theta;
+  REAL *restrict phi;
+} diagnostics_arrays_struct;
+
 //==================
 // PUBLIC FUNCTIONS
 //==================
@@ -229,6 +254,9 @@ void bah_poisoning_set_inputs(bhahaha_params_and_data_struct *restrict params);
 // (highly recommended) Call bah_poisoning_check_inputs() right before bah_find_horizon(), to check whether external NR code has set inputs properly.
 void bah_poisoning_check_inputs(const bhahaha_params_and_data_struct *restrict params);
 // (required): Set up the (holey) spherical grid for BHaHAHA
+#ifdef __cplusplus
+extern "C" {
+#endif
 #if defined(__cplusplus) || !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 199901L)
 // C++ and pre-C99 C do not support variable-length array parameters.
 void bah_radial_grid_cell_centered_set_up(const int Nr_interp_max, const REAL max_search_radius, const REAL input_r_min, const REAL input_r_max,
@@ -238,6 +266,9 @@ void bah_radial_grid_cell_centered_set_up(const int Nr_interp_max, const REAL ma
                                           int *restrict output_Nr_interp, REAL *restrict output_r_min, REAL *restrict output_dr,
                                           REAL radii[Nr_interp_max]);
 #endif
+#ifdef __CUDACC__
+__host__ __device__
+#endif
 void bah_xyz_center_r_minmax(const bhahaha_params_and_data_struct *restrict pars, REAL *restrict x_center, REAL *restrict y_center,
                              REAL *restrict z_center, REAL *restrict r_min, REAL *restrict r_max);
 // (required): Core BHaHAHA horizon finder
@@ -246,3 +277,6 @@ int bah_find_horizon(bhahaha_params_and_data_struct *restrict bhahaha_params_and
 void bah_diagnostics_file_output(const bhahaha_diagnostics_struct *diags, const bhahaha_params_and_data_struct *bhahaha_params_and_data,
                                  int N_horizons, const REAL x_center_input, const REAL y_center_input, const REAL z_center_input,
                                  const char *output_directory);
+#ifdef __cplusplus
+}
+#endif

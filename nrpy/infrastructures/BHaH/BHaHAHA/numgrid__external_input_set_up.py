@@ -108,139 +108,101 @@ enum {{
              ((j) + commondata->external_input_Nxx_plus_2NGHOSTS1 * ((k) + commondata->external_input_Nxx_plus_2NGHOSTS2 * (g))))
 #define EX_NOGZ_IDX4(g, i, j, k)                                                                                                                     \
   ((i) + bhahaha_params_and_data->Nr_external_input * ((j) + commondata->external_input_Nxx1 * ((k) + commondata->external_input_Nxx2 * (g))))
-"""
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = r"""Initializes and processes the external input metric data (gamma_{ij}, K_{ij}).
 
-This function performs the following steps:
-1. Unpacks input parameters from the common data structure.
-2. Adds ghost zones to the external input arrays to facilitate boundary condition application.
-3. Allocates memory for the external input gridfunctions with ghost zones and assigns it to the common data structure.
-4. Transfers metric data from arrays without ghost zones into the newly allocated arrays with ghost zones.
-5. Sets up coordinate arrays for a uniform, cell-centered spherical grid.
-6. Transforms the metric components (gamma_{ij}, K_{ij}) from Cartesian to spherical coordinates, including necessary rescaling.
-7. Sets up boundary condition structures and applies inner boundary conditions, including parity corrections for all gridfunctions.
-
-@param[in,out] commondata Pointer to the common data structure containing simulation parameters and data.
-@param n_resolutions Number of angular resolutions.
-@param[in] Ntheta Array containing the number of theta points for each resolution.
-@param[in] Nphi Array containing the number of phi points for each resolution.
-
-@return BHAHAHA_SUCCESS on successful setup, or an error code indicating the failure reason.
-"""
-    cfunc_type = "int"
-    name = "numgrid__external_input_set_up"
-    params = "commondata_struct *restrict commondata, const int n_resolutions, const int *restrict Ntheta, const int *restrict Nphi"
-    body = r"""
-  // Step 1: Unpack input parameters from the common data structure.
+/*
+ * Initializes and processes the external input metric data (gamma_{ij}, K_{ij}).
+ *
+ * This function performs the following steps:
+ * 1. Unpacks input parameters and gf allocations from the common data structure.
+ * 2. Transfers metric data from arrays without ghost zones into the newly allocated arrays with ghost zones.
+ * 3. Initializes coordinate arrays for a uniform, cell-centered spherical grid.
+ * 4. Transforms the metric components (gamma_{ij}, K_{ij}) from Cartesian to spherical coordinates, including necessary rescaling.
+ *
+ * @param commondata - Pointer to the common data structure containing simulation parameters and data.
+ *
+ */
+#ifdef __CUDACC__
+__global__
+#endif
+void initialize_transform_and_rescale(commondata_struct *restrict commondata)
+{
+#ifdef __CUDACC__
+  // Set up cooperative group
+  namespace cg = cooperative_groups;
+  cg::grid_group gpu_grid = cg::this_grid();
+#endif
+  // Step 1: Unpack input parameters and gridfunctions from commondata structure.
   const bhahaha_params_and_data_struct *restrict bhahaha_params_and_data = commondata->bhahaha_params_and_data;
 
-  // Calculate the number of interior (non-ghost) radial points by subtracting ghost zones.
-  // Nr from external includes r ~ r_max NGHOSTS.
-  commondata->external_input_Nxx0 = bhahaha_params_and_data->Nr_external_input - NGHOSTS;
-  if (bhahaha_params_and_data->r_min_external_input > 0) {
-    commondata->external_input_Nxx0 = bhahaha_params_and_data->Nr_external_input - 2 * NGHOSTS;
-  }
+
+  // Pointers to the external input gridfunctions with and without ghost zones.
+  REAL *restrict external_input_gfs = commondata->external_input_gfs;
+  REAL *restrict external_input_gfs_no_gzs = commondata->external_input_gfs_Cart_basis_no_gzs;
+
+  
+  // Step 2: Transfer data from the no-ghost zones array to the array with ghost zones.
+  // This involves copying metric data (gamma_{ij} and K_{ij}) from the Cartesian basis into the newly allocated arrays with ghost zones.
   int i0_min_shift = 0;
   if (bhahaha_params_and_data->r_min_external_input == 0)
     i0_min_shift = NGHOSTS;
-
-  // Set fixed angular resolutions for theta and phi directions.
-  {
-    const int max_resolution_i = bhahaha_params_and_data->num_resolutions_multigrid-1;
-    commondata->external_input_Nxx1 = bhahaha_params_and_data->Ntheta_array_multigrid[max_resolution_i];
-    commondata->external_input_Nxx2 = bhahaha_params_and_data->Nphi_array_multigrid[max_resolution_i];
-  }
-
-  // Step 1.a: Calculate grid spacing in each coordinate direction based on the simulation domain and resolution.
-  // x_i = min_i + (j + 0.5) * dx_i, where dx_i = (max_i - min_i) / N_i
-
-  commondata->external_input_dxx0 = bhahaha_params_and_data->dr_external_input;
-  commondata->external_input_dxx1 = M_PI / ((REAL)commondata->external_input_Nxx1);
-  commondata->external_input_dxx2 = 2 * M_PI / ((REAL)commondata->external_input_Nxx2);
-
-  // Precompute inverse grid spacings for performance optimization in calculations.
-  commondata->external_input_invdxx0 = 1.0 / commondata->external_input_dxx0;
-  commondata->external_input_invdxx1 = 1.0 / commondata->external_input_dxx1;
-  commondata->external_input_invdxx2 = 1.0 / commondata->external_input_dxx2;
-
-  // Step 2: Add ghost zones to the external input data.
-  // Ghost zones are added to so that inner boundary conditions may be applied; 2 * NGHOSTS in each angular direction and NGHOSTS in the radial
-  // direction.
-  commondata->external_input_Nxx_plus_2NGHOSTS0 = commondata->external_input_Nxx0 + 2 * NGHOSTS;
-  commondata->external_input_Nxx_plus_2NGHOSTS1 = commondata->external_input_Nxx1 + 2 * NGHOSTS;
-  commondata->external_input_Nxx_plus_2NGHOSTS2 = commondata->external_input_Nxx2 + 2 * NGHOSTS;
-
-  // Calculate the total number of grid points including ghost zones.
-  const int total_elements_incl_gzs =
-      commondata->external_input_Nxx_plus_2NGHOSTS0 * commondata->external_input_Nxx_plus_2NGHOSTS1 * commondata->external_input_Nxx_plus_2NGHOSTS2;
-
-  // Pointers to the external input gridfunctions without ghost zones.
-  REAL *restrict external_input_gfs_no_gzs = commondata->external_input_gfs_Cart_basis_no_gzs;
-
-  // Allocate memory for the external input gridfunctions with ghost zones.
-  REAL *restrict external_input_gfs = (REAL *)malloc(NUM_EXT_INPUT_CONFORMAL_GFS * total_elements_incl_gzs * sizeof(REAL));
-  if (external_input_gfs == NULL) {
-    return NUMGRID_EXTERN_MALLOC_ERROR_GFS;
-  } // END IF: memory allocation for external_input_gfs failed
-
-  // Step 3: Assign the allocated array to commondata for use outside this function.
-  commondata->external_input_gfs = external_input_gfs;
-
-  // Step 4: Transfer data from the no-ghost zones array to the array with ghost zones.
-  // This involves copying metric data (gamma_{ij} and K_{ij}) from the Cartesian basis into the newly allocated arrays with ghost zones.
-  LOOP_OMP("omp parallel for",                        //
+  PARALLEL_LOOP(
            i0, 0, bhahaha_params_and_data->Nr_external_input, //
-           i1, 0, commondata->external_input_Nxx1,    //
-           i2, 0, commondata->external_input_Nxx2) {
+           i1, 0, commondata->external_input_Nxx1,            //
+           i2, 0, commondata->external_input_Nxx2) 
+  {
     for (int gf = 0; gf < NUM_EXT_INPUT_CARTESIAN_GFS; gf++) {
       external_input_gfs[EX_IDX4(gf, i0 + i0_min_shift, i1 + NGHOSTS, i2 + NGHOSTS)] = external_input_gfs_no_gzs[EX_NOGZ_IDX4(gf, i0, i1, i2)];
     }
-  } // END LOOP: for idx over external input grid points
+  } END_PARALLEL_LOOP; // END LOOP: iterating through the external input grid points
 
-  // Step 5: Set up coordinate arrays for a uniform, cell-centered spherical grid.
   {
     const int Nxx_plus_2NGHOSTS0 = commondata->external_input_Nxx_plus_2NGHOSTS0;
     const int Nxx_plus_2NGHOSTS1 = commondata->external_input_Nxx_plus_2NGHOSTS1;
     const int Nxx_plus_2NGHOSTS2 = commondata->external_input_Nxx_plus_2NGHOSTS2;
-
-    // Step 5.a: Allocate memory for coordinate arrays in radial, theta, and phi directions.
-    commondata->external_input_r_theta_phi[0] = (REAL *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS0);
-    commondata->external_input_r_theta_phi[1] = (REAL *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS1);
-    commondata->external_input_r_theta_phi[2] = (REAL *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS2);
-    if (commondata->external_input_r_theta_phi[0] == NULL || commondata->external_input_r_theta_phi[1] == NULL ||
-        commondata->external_input_r_theta_phi[2] == NULL) {
-      free(external_input_gfs);
-      return NUMGRID_EXTERN_MALLOC_ERROR_RTHETAPHI;
-    } // END IF: memory allocation for external_input_r_theta_phi arrays failed
-
-    // Step 5.b: Initialize coordinate arrays for a uniform, cell-centered spherical grid.
+    // Step 3: Initialize coordinate arrays for a uniform, cell-centered spherical grid.
     // The coordinates are centered within each cell by adding 0.5 to the index before scaling.
     const REAL xxmin0 = bhahaha_params_and_data->r_min_external_input;
     const REAL xxmin1 = 0.0;
     const REAL xxmin2 = -M_PI;
 
-    for (int j = 0; j < Nxx_plus_2NGHOSTS0; j++)
+    PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS0) {
       commondata->external_input_r_theta_phi[0][j] = xxmin0 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->external_input_dxx0;
-    for (int j = 0; j < Nxx_plus_2NGHOSTS1; j++)
+    } END_PARALLEL_1D_LOOP;
+    PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS1) {
       commondata->external_input_r_theta_phi[1][j] = xxmin1 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->external_input_dxx1;
-    for (int j = 0; j < Nxx_plus_2NGHOSTS2; j++)
+    } END_PARALLEL_1D_LOOP;
+    PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS2) {
       commondata->external_input_r_theta_phi[2][j] = xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->external_input_dxx2;
-  } // END BLOCK: Step 5 set up external-input coordinate arrays
+    } END_PARALLEL_1D_LOOP;
+  } // END BLOCK: setting up coordinate arrays
 
-  // Step 6: Transform the metric components (gamma_{ij}, K_{ij}) from Cartesian to spherical coordinates,
+#ifdef __CUDACC__
+  //Sync all threads prior to gf access
+  gpu_grid.sync();
+#endif
+
+  // Step 4: Transform the metric components (gamma_{ij}, K_{ij}) from Cartesian to spherical coordinates,
   // including necessary rescaling.
   {
     const int Nxx_plus_2NGHOSTS0 = commondata->external_input_Nxx_plus_2NGHOSTS0;
     const int Nxx_plus_2NGHOSTS1 = commondata->external_input_Nxx_plus_2NGHOSTS1;
     const int Nxx_plus_2NGHOSTS2 = commondata->external_input_Nxx_plus_2NGHOSTS2;
 
-    // Step 6.a: Extract coordinate arrays for easier access during transformation.
+    // Step 4.a: Extract coordinate arrays for easier access during transformation.
     REAL *restrict external_input_r_theta_phi[3];
     for (int ww = 0; ww < 3; ww++)
       external_input_r_theta_phi[ww] = commondata->external_input_r_theta_phi[ww];
 
-    // Step 6.b: Metric components: basis transform from Cartesian to Spherical & convert ADM->rescaled BSSN.
+      // Step 4.b: Metric components: basis transform from Cartesian to Spherical & convert ADM->rescaled BSSN.
+#ifdef __CUDACC__
+    PARALLEL_LOOP(i0, i0_min_shift, commondata->external_input_Nxx_plus_2NGHOSTS0, 
+                  i1, NGHOSTS, commondata->external_input_Nxx1 + NGHOSTS,  // 
+                  i2, NGHOSTS, commondata->external_input_Nxx2 + NGHOSTS)  //
+    {
+      const REAL xx2 = external_input_r_theta_phi[2][i2];
+      const REAL xx1 = external_input_r_theta_phi[1][i1];
+      const REAL xx0 = external_input_r_theta_phi[0][i0];
+#else
 #pragma omp parallel for
     for (int i2 = NGHOSTS; i2 < commondata->external_input_Nxx2 + NGHOSTS; i2++) {
       const REAL xx2 = external_input_r_theta_phi[2][i2];
@@ -249,14 +211,14 @@ This function performs the following steps:
         // Include all valid points, including those near r ~ r_max.
         for (int i0 = i0_min_shift; i0 < commondata->external_input_Nxx_plus_2NGHOSTS0; i0++) {
           const REAL xx0 = external_input_r_theta_phi[0][i0];
-
+#endif
           // Read Cartesian metric components at the current grid point.
 """
     labels = ["X", "Y", "Z"]
     for prefix in ["gammaDD", "KDD"]:
         for i in range(3):
             for j in range(i, 3):
-                body += f"const REAL Cart_{prefix}{i}{j} = external_input_gfs[IDX4(INTERP_{prefix.upper()}{labels[i]}{labels[j]}GF, i0, i1, i2)];\n"
+                prefunc += f"const REAL Cart_{prefix}{i}{j} = external_input_gfs[IDX4(INTERP_{prefix.upper()}{labels[i]}{labels[j]}GF, i0, i1, i2)];\n"
     # Cartesian -> Spherical basis transform
     basis_transforms = bt.basis_transforms["Spherical"]
     Cart_gammaDD = ixp.declarerank2("Cart_gammaDD", symmetry="sym01")
@@ -337,25 +299,184 @@ This function performs the following steps:
             external_input_gfs_no_derivs_exprs += [aDD[i][j]]
 
     # Input gf names & expressions into c_codegen, to complete the conversion.
-    body += ccg.c_codegen(
+    prefunc += ccg.c_codegen(
         external_input_gfs_no_derivs_exprs,
         external_input_gfs_no_derivs_names,
         verbose=False,
         include_braces=False,
     )
-    body += """
-        } // END LOOP: for i0 over radial points in the external-input grid
-      } // END LOOP: for i1 over theta points in the external-input grid
-    } // END LOOP: for i2 over phi points in the external-input grid
-  } // END BLOCK: Step 6 transform Cartesian input data to rescaled spherical BSSN fields
+    prefunc += """
+#ifndef __CUDACC__
+        } // END LOOP over i0
+      } // END LOOP over i1
+    } // END LOOP over i2
+#else
+    } END_PARALLEL_LOOP; // END LOOP over i0, i1, i2
+#endif
+  } // END BLOCK: transformation and rescaling
+} // END FUNCTION transform_and_rescale
 
-  // Step 7: Set up boundary condition structures and apply inner boundary conditions.
+#ifdef __CUDACC__
+__constant__ int8_t c_external_input_gf_parity[14];
+/**
+ *
+ *Applies inner boundary conditions, including parity corrections for all gridfunctions.
+ *
+ * @param commondata - Pointer to the common data structure containing simulation parameters and data.
+ * @param external_input_bcstruct - Pointer to the boundary conditioni structure for external input.
+ *
+ * @return BHAHAHA_SUCCESS on successful setup, or an error code indicating the failure reason.
+ */
+__global__
+#endif
+void apply_bcs_external_src(commondata_struct *restrict commondata, bc_struct *restrict external_input_bcstruct)
+{
+#ifdef __CUDACC__
+  //Set external input parity array from constant memory
+  int8_t *external_input_gf_parity= c_external_input_gf_parity;
+
+  //Set up cooperative group
+  namespace cg = cooperative_groups;
+  cg::grid_group gpu_grid = cg::this_grid();
+#endif
+
+    const int Nxx_plus_2NGHOSTS0 = commondata->external_input_Nxx_plus_2NGHOSTS0;
+    const int Nxx_plus_2NGHOSTS1 = commondata->external_input_Nxx_plus_2NGHOSTS1;
+    const int Nxx_plus_2NGHOSTS2 = commondata->external_input_Nxx_plus_2NGHOSTS2;
+     // Unpack boundary condition information from the boundary condition structure.
+    const bc_info_struct *restrict bc_info = &external_input_bcstruct->bc_info;
+
+    // Apply inner boundary conditions to all gridfunctions.
+    // This involves copying values from source points to destination points with parity corrections.
+#ifdef __CUDACC__
+  PARALLEL_2D_LOOP(pt, 0, bc_info->num_inner_boundary_points, which_gf, 0, NUM_EXT_INPUT_CONFORMAL_GFS) {
+#else
+#pragma omp parallel
+    for (int which_gf = 0; which_gf < NUM_EXT_INPUT_CONFORMAL_GFS; which_gf++) {
+#pragma omp for
+      for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {
+#endif
+        const int dstpt = external_input_bcstruct->inner_bc_array[pt].dstpt;
+        const int srcpt = external_input_bcstruct->inner_bc_array[pt].srcpt;
+        // Apply the boundary condition by copying values from the source point to the destination point,
+        // applying the appropriate parity correction for the gridfunction.
+        commondata->external_input_gfs[IDX4pt(which_gf, dstpt)] =
+            external_input_bcstruct->inner_bc_array[pt].parity[external_input_gf_parity[which_gf]] *
+            commondata->external_input_gfs[IDX4pt(which_gf, srcpt)];
+#ifndef __CUDACC__
+      } // END LOOP over inner boundary points
+    } // END LOOP over gridfunctions
+#else
+      } END_PARALLEL_2D_LOOP; // END LOOP over inner boundary points and gridfunctions
+#endif
+} // END FUNCTION apply_bcs_external_src
+
+"""
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = r"""Initializes and processes the external input metric data (gamma_{ij}, K_{ij}).
+
+This function performs the following steps:
+1. Unpacks input parameters from the common data structure.
+2. Adds ghost zones to the external input arrays to facilitate boundary condition application.
+3. Allocates memory for the external input gridfunctions with ghost zones and assigns it to the common data structure.
+4. Transfers metric data from arrays without ghost zones into the newly allocated arrays with ghost zones.
+5. Sets up coordinate arrays for a uniform, cell-centered spherical grid.
+6. Transforms the metric components (gamma_{ij}, K_{ij}) from Cartesian to spherical coordinates, including necessary rescaling.
+7. Sets up boundary condition structures and applies inner boundary conditions, including parity corrections for all gridfunctions.
+
+@param[in,out] commondata Pointer to the common data structure containing simulation parameters and data.
+@param n_resolutions Number of angular resolutions.
+@param[in] Ntheta Array containing the number of theta points for each resolution.
+@param[in] Nphi Array containing the number of phi points for each resolution.
+
+@return BHAHAHA_SUCCESS on successful setup, or an error code indicating the failure reason.
+"""
+    cfunc_type = "void"
+    name = "numgrid__external_input_set_up"
+    params = "commondata_struct *restrict commondata, const int n_resolutions, const int *restrict Ntheta, const int *restrict Nphi"
+    body = r"""
+  // Step 1: Add ghost zones to the external input data.
+  // Ghost zones are added to so that inner boundary conditions may be applied; 2 * NGHOSTS in each angular direction and NGHOSTS in the radial
+  // direction.
+  commondata->external_input_Nxx_plus_2NGHOSTS0 = commondata->external_input_Nxx0 + 2 * NGHOSTS;
+  commondata->external_input_Nxx_plus_2NGHOSTS1 = commondata->external_input_Nxx1 + 2 * NGHOSTS;
+  commondata->external_input_Nxx_plus_2NGHOSTS2 = commondata->external_input_Nxx2 + 2 * NGHOSTS;
+
+  // Calculate the total number of grid points including ghost zones.
+  const int total_elements_incl_gzs =
+      commondata->external_input_Nxx_plus_2NGHOSTS0 * commondata->external_input_Nxx_plus_2NGHOSTS1 * commondata->external_input_Nxx_plus_2NGHOSTS2;
+
+  // Step 2.a: Allocate memory for the external input gridfunctions without ghost zones.
+#ifdef __CUDACC__
+  REAL *restrict d_external_input_gfs_no_gzs = NULL;
+  cudaMalloc((void**)&d_external_input_gfs_no_gzs, sizeof(REAL)*NUM_EXT_INPUT_CONFORMAL_GFS * total_elements_incl_gzs);
+  cudaMemcpy(d_external_input_gfs_no_gzs, commondata->external_input_gfs_Cart_basis_no_gzs,  sizeof(REAL)*NUM_EXT_INPUT_CONFORMAL_GFS * total_elements_incl_gzs, cudaMemcpyHostToDevice);
+  commondata->external_input_gfs_Cart_basis_no_gzs = d_external_input_gfs_no_gzs;
+#endif
+
+  // Step 2.b: Allocate memory for the external input gridfunctions with ghost zones.
+#ifdef __CUDACC__
+  REAL *external_input_gfs = NULL;
+  cudaMalloc((void**)&external_input_gfs, NUM_EXT_INPUT_CONFORMAL_GFS * total_elements_incl_gzs * sizeof(REAL));
+#else
+  REAL *restrict external_input_gfs = (REAL *)malloc(NUM_EXT_INPUT_CONFORMAL_GFS * total_elements_incl_gzs * sizeof(REAL));
+#endif
+  if (external_input_gfs == NULL) {
+    commondata->error_flag =  NUMGRID_EXTERN_MALLOC_ERROR_GFS;
+    return;
+  } // END IF memory allocation for external_input_gfs failed
+
+  // Assign the allocated array to commondata for use outside this function.
+  commondata->external_input_gfs = external_input_gfs;
+
+  // Step 3: Allocate coordinate arrays for a uniform, cell-centered spherical grid.
   {
     const int Nxx_plus_2NGHOSTS0 = commondata->external_input_Nxx_plus_2NGHOSTS0;
     const int Nxx_plus_2NGHOSTS1 = commondata->external_input_Nxx_plus_2NGHOSTS1;
     const int Nxx_plus_2NGHOSTS2 = commondata->external_input_Nxx_plus_2NGHOSTS2;
 
-    // Assign grid spacings and sizes to the boundary condition structure within commondata.
+    // Step 3.a: Allocate memory for coordinate arrays in radial, theta, and phi directions.
+#ifdef __CUDACC__
+    cudaMalloc((void**)&commondata->external_input_r_theta_phi[0], sizeof(REAL*) * Nxx_plus_2NGHOSTS0);
+    cudaMalloc((void**)&commondata->external_input_r_theta_phi[1], sizeof(REAL*) * Nxx_plus_2NGHOSTS1);
+    cudaMalloc((void**)&commondata->external_input_r_theta_phi[2], sizeof(REAL*) * Nxx_plus_2NGHOSTS2);
+#else
+    commondata->external_input_r_theta_phi[0] = (REAL *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS0);
+    commondata->external_input_r_theta_phi[1] = (REAL *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS1);
+    commondata->external_input_r_theta_phi[2] = (REAL *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS2);
+#endif
+    if (commondata->external_input_r_theta_phi[0] == NULL || commondata->external_input_r_theta_phi[1] == NULL ||
+        commondata->external_input_r_theta_phi[2] == NULL) {
+      FREE(external_input_gfs);
+      commondata->error_flag = NUMGRID_EXTERN_MALLOC_ERROR_RTHETAPHI;
+      return;
+    } // END IF memory allocation for external_input_r_theta_phi arrays failed
+
+  }
+
+  //Step 4: Initialize grid functions and coordinate arrays. Perform the transformation and rescaling, Cartesian->spherical coordinates and ADM->rescaled BSSN
+#ifdef __CUDACC__
+  //Allocate and initialize device side copy of commondata
+  commondata_struct *d_commondata = NULL;
+  gpuErrchk( cudaMalloc((void**)&d_commondata, sizeof(commondata_struct)) );
+  gpuErrchk( cudaMemcpy(d_commondata, commondata, sizeof(commondata_struct), cudaMemcpyHostToDevice) );
+#endif
+
+  {
+#ifdef __CUDACC__
+    void *Args[] = {&d_commondata};
+    COOPERATIVE_KERNEL(initialize_transform_and_rescale, Args);
+    #else
+    initialize_transform_and_rescale(commondata);
+#endif
+  }
+  // Step 5: Set up boundary condition structures and apply inner boundary conditions.
+  {
+    const int Nxx_plus_2NGHOSTS0 = commondata->external_input_Nxx_plus_2NGHOSTS0;
+    const int Nxx_plus_2NGHOSTS1 = commondata->external_input_Nxx_plus_2NGHOSTS1;
+    const int Nxx_plus_2NGHOSTS2 = commondata->external_input_Nxx_plus_2NGHOSTS2;
+
+    // Step 5.a: Assign grid spacings and sizes to the boundary condition structure within commondata.
     commondata->bcstruct_dxx0 = commondata->external_input_dxx0;
     commondata->bcstruct_dxx1 = commondata->external_input_dxx1;
     commondata->bcstruct_dxx2 = commondata->external_input_dxx2;
@@ -363,37 +484,57 @@ This function performs the following steps:
     commondata->bcstruct_Nxx_plus_2NGHOSTS0 = Nxx_plus_2NGHOSTS0;
     commondata->bcstruct_Nxx_plus_2NGHOSTS1 = Nxx_plus_2NGHOSTS1;
     commondata->bcstruct_Nxx_plus_2NGHOSTS2 = Nxx_plus_2NGHOSTS2;
+#ifdef __CUDACC__
+    // Update device side commondata
+    gpuErrchk( cudaMemcpy(d_commondata, commondata, sizeof(commondata_struct), cudaMemcpyHostToDevice) );
+#endif
 
-    // Initialize the boundary condition structure for external input data.
+    // Step 5.b: Initialize the boundary condition structure for external input data.
     bc_struct external_input_bcstruct;
+#ifdef __CUDACC__
+    bah_bcstruct_set_up(d_commondata, NULL, commondata->external_input_r_theta_phi, &external_input_bcstruct);
+#else
     bah_bcstruct_set_up(commondata, NULL, commondata->external_input_r_theta_phi, &external_input_bcstruct);
+#endif
+#ifdef __CUDACC__
+    gpuErrchk( cudaMemcpy(commondata, d_commondata, sizeof(commondata_struct), cudaMemcpyDeviceToHost) );
+#endif
+    if (commondata->error_flag != BHAHAHA_SUCCESS)
+      return;
+#ifdef __CUDACC__
+    //Create a device side copy of external_input_bcstruct
+    bc_struct *d_external_input_bcstruct = NULL;
+    cudaMalloc((void**)&d_external_input_bcstruct, sizeof(bc_struct));
+    cudaMemcpy(d_external_input_bcstruct, &external_input_bcstruct, sizeof(bc_struct), cudaMemcpyHostToDevice);
+#endif
 
-    // Step 7.a: Unpack boundary condition information from the boundary condition structure.
-    const bc_info_struct *restrict bc_info = &external_input_bcstruct.bc_info;
+    // Step 5.c: Apply boundary conditions
+    {
+#ifdef __CUDACC__
+      //Set external source grid function parity in device constant memory
+      gpuErrchk( cudaMemcpyToSymbol(c_external_input_gf_parity, &external_input_gf_parity, 14*sizeof(int8_t)) );
 
-    // Step 7.b: Apply inner boundary conditions to all gridfunctions.
-    // This involves copying values from source points to destination points with parity corrections.
-#pragma omp parallel
-    for (int which_gf = 0; which_gf < NUM_EXT_INPUT_CONFORMAL_GFS; which_gf++) {
-#pragma omp for
-      for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {
-        const int dstpt = external_input_bcstruct.inner_bc_array[pt].dstpt;
-        const int srcpt = external_input_bcstruct.inner_bc_array[pt].srcpt;
-        // Apply the boundary condition by copying values from the source point to the destination point,
-        // applying the appropriate parity correction for the gridfunction.
-        commondata->external_input_gfs[IDX4pt(which_gf, dstpt)] =
-            external_input_bcstruct.inner_bc_array[pt].parity[external_input_gf_parity[which_gf]] *
-            commondata->external_input_gfs[IDX4pt(which_gf, srcpt)];
-      } // END LOOP: for pt over inner boundary points
-    } // END LOOP: for which_gf over gridfunctions
+      void *Args[] = {&d_commondata, &d_external_input_bcstruct};
+      COOPERATIVE_KERNEL(apply_bcs_external_src, Args);
+#else
+      apply_bcs_external_src(commondata, &external_input_bcstruct);
+#endif
+    }
+    
+    // Step 5.d: Free allocated memory for boundary condition structures to prevent memory leaks.
+#ifdef __CUDACC__
+    cudaFree(d_external_input_bcstruct);
+#endif
+    FREE(external_input_bcstruct.inner_bc_array);
+for (int ng = 0; ng < NGHOSTS * 3; ng++)
+      FREE(external_input_bcstruct.pure_outer_bc_array[ng]);
+  } // END BLOCK: applying boundary conditions
 
-    // Step 7.c: Free allocated memory for boundary condition structures to prevent memory leaks.
-    free(external_input_bcstruct.inner_bc_array);
-    for (int ng = 0; ng < NGHOSTS * 3; ng++)
-      free(external_input_bcstruct.pure_outer_bc_array[ng]);
-  } // END BLOCK: Step 7 apply external-input inner boundary conditions
-
-  return BHAHAHA_SUCCESS;
+#ifdef __CUDACC__
+  cudaFree(d_commondata);
+  cudaFree(d_external_input_gfs_no_gzs);
+#endif
+  return;
 """
     cfc.register_CFunction(
         subdirectory="",

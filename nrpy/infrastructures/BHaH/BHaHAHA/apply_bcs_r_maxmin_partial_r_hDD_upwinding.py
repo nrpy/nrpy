@@ -83,10 +83,15 @@ Returns the computed first derivative at the given grid point."""
     name = f"FD1_arbitrary_upwind_x{dirn}_dirn"
     params = """const commondata_struct *restrict commondata,
                 const REAL *restrict gf, const int i0, const int i1, const int i2, const int offset"""
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     body = """
-  const MAYBE_UNUSED int Nxx_plus_2NGHOSTS0 = commondata->bcstruct_Nxx_plus_2NGHOSTS0;
-  const MAYBE_UNUSED int Nxx_plus_2NGHOSTS1 = commondata->bcstruct_Nxx_plus_2NGHOSTS1;
-  const MAYBE_UNUSED int Nxx_plus_2NGHOSTS2 = commondata->bcstruct_Nxx_plus_2NGHOSTS2;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = commondata->bcstruct_Nxx_plus_2NGHOSTS0;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = commondata->bcstruct_Nxx_plus_2NGHOSTS1;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = commondata->bcstruct_Nxx_plus_2NGHOSTS2;
   const REAL invdxx0 = 1.0 / (commondata->bcstruct_dxx0);
   switch(offset) {
 """
@@ -142,6 +147,7 @@ Returns the computed first derivative at the given grid point."""
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )
     return cf.full_function
@@ -179,6 +185,11 @@ the angular directions (x1 and x2).
     name = "apply_bcs_r_maxmin_partial_r_hDD_upwinding"
     params = """const commondata_struct *restrict commondata, REAL *restrict xx[3], REAL *restrict gfs,
                 const bool fill_r_min_ghosts"""
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     body = r"""
   const int Nxx_plus_2NGHOSTS0 = commondata->bcstruct_Nxx_plus_2NGHOSTS0;
   const int Nxx_plus_2NGHOSTS1 = commondata->bcstruct_Nxx_plus_2NGHOSTS1;
@@ -197,9 +208,57 @@ the angular directions (x1 and x2).
     const int offset = -NGHOSTS + ((Nxx_plus_2NGHOSTS0 - i0) - 1);
 
     // Parallelize computations over the angular (x1 and x2) directions to leverage multi-core processing.
-#pragma omp parallel for
-    for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
-      for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {
+    PARALLEL_2D_LOOP(i1, NGHOSTS, Nxx_plus_2NGHOSTS1 - NGHOSTS, i2, NGHOSTS, Nxx_plus_2NGHOSTS2 - NGHOSTS) {
+      for (int which_gf = 0; which_gf < NUM_INTERP_SRC_GFS; which_gf++) {
+        int base_gf = -1;
+
+        // Map the interpolation source grid function to its corresponding base grid function.
+        switch (which_gf) {
+        case SRC_PARTIAL_D_HDD000GF:
+          base_gf = SRC_HDD00GF;
+          break;
+        case SRC_PARTIAL_D_HDD001GF:
+          base_gf = SRC_HDD01GF;
+          break;
+        case SRC_PARTIAL_D_HDD002GF:
+          base_gf = SRC_HDD02GF;
+          break;
+        case SRC_PARTIAL_D_HDD011GF:
+          base_gf = SRC_HDD11GF;
+          break;
+        case SRC_PARTIAL_D_HDD012GF:
+          base_gf = SRC_HDD12GF;
+          break;
+        case SRC_PARTIAL_D_HDD022GF:
+          base_gf = SRC_HDD22GF;
+          break;
+        case SRC_PARTIAL_D_WW0GF:
+          base_gf = SRC_WWGF;
+          break;
+        default:
+          // Skip processing for undefined grid function indices to maintain data integrity.
+          break;
+        } // END SWITCH: set base_gf
+
+        if (base_gf != -1) {
+          // Compute the radial derivative using the appropriate upwind stencil based on the offset.
+          const REAL partial_x0_f = FD1_arbitrary_upwind_x0_dirn(commondata, &gfs[base_gf * Nxxtot012], i0, i1, i2, offset);
+          // Store the computed derivative in the target grid function array.
+          gfs[IDX4(which_gf, i0, i1, i2)] = partial_x0_f;
+        } // END IF: the derivative gridfunction needs to be set
+      } // END LOOP: for which_gf over gridfunctions
+    } END_PARALLEL_2D_LOOP; // END LOOP: i1 over theta points, i2 over phi points on the r_max boundary
+  } // END LOOP: for i0 over r_max radial ghost-zone layers
+
+  /////////////////////////////////////////////////////////////////
+  // Evaluate partial_r hDD at r = r_min boundary if required
+  if (fill_r_min_ghosts) {
+    // Iterate over the r_min boundary points in the radial (x0) direction.
+    for (int i0 = 0; i0 < NGHOSTS; i0++) {
+      const int offset = NGHOSTS - i0;
+
+      // Parallelize computations over the angular (x1 and x2) directions to leverage multi-core processing.
+      PARALLEL_2D_LOOP(i1, NGHOSTS, Nxx_plus_2NGHOSTS1 - NGHOSTS, i2, NGHOSTS, Nxx_plus_2NGHOSTS2 - NGHOSTS) {
         for (int which_gf = 0; which_gf < NUM_INTERP_SRC_GFS; which_gf++) {
           int base_gf = -1;
 
@@ -238,61 +297,7 @@ the angular directions (x1 and x2).
             gfs[IDX4(which_gf, i0, i1, i2)] = partial_x0_f;
           } // END IF: the derivative gridfunction needs to be set
         } // END LOOP: for which_gf over gridfunctions
-      } // END LOOP: for i1 over theta points on the r_max boundary
-    } // END LOOP: for i2 over phi points on the r_max boundary
-  } // END LOOP: for i0 over r_max radial ghost-zone layers
-
-  /////////////////////////////////////////////////////////////////
-  // Evaluate partial_r hDD at r = r_min boundary if required
-  if (fill_r_min_ghosts) {
-    // Iterate over the r_min boundary points in the radial (x0) direction.
-    for (int i0 = 0; i0 < NGHOSTS; i0++) {
-      const int offset = NGHOSTS - i0;
-
-      // Parallelize computations over the angular (x1 and x2) directions to leverage multi-core processing.
-#pragma omp parallel for
-      for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
-        for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {
-          for (int which_gf = 0; which_gf < NUM_INTERP_SRC_GFS; which_gf++) {
-            int base_gf = -1;
-
-            // Map the interpolation source grid function to its corresponding base grid function.
-            switch (which_gf) {
-            case SRC_PARTIAL_D_HDD000GF:
-              base_gf = SRC_HDD00GF;
-              break;
-            case SRC_PARTIAL_D_HDD001GF:
-              base_gf = SRC_HDD01GF;
-              break;
-            case SRC_PARTIAL_D_HDD002GF:
-              base_gf = SRC_HDD02GF;
-              break;
-            case SRC_PARTIAL_D_HDD011GF:
-              base_gf = SRC_HDD11GF;
-              break;
-            case SRC_PARTIAL_D_HDD012GF:
-              base_gf = SRC_HDD12GF;
-              break;
-            case SRC_PARTIAL_D_HDD022GF:
-              base_gf = SRC_HDD22GF;
-              break;
-            case SRC_PARTIAL_D_WW0GF:
-              base_gf = SRC_WWGF;
-              break;
-            default:
-              // Skip processing for undefined grid function indices to maintain data integrity.
-              break;
-            } // END SWITCH: set base_gf
-
-            if (base_gf != -1) {
-              // Compute the radial derivative using the appropriate upwind stencil based on the offset.
-              const REAL partial_x0_f = FD1_arbitrary_upwind_x0_dirn(commondata, &gfs[base_gf * Nxxtot012], i0, i1, i2, offset);
-              // Store the computed derivative in the target grid function array.
-              gfs[IDX4(which_gf, i0, i1, i2)] = partial_x0_f;
-            } // END IF: the derivative gridfunction needs to be set
-          } // END LOOP: for which_gf over gridfunctions
-        } // END LOOP: for i1 over theta points on the r_min boundary
-      } // END LOOP: for i2 over phi points on the r_min boundary
+      } END_PARALLEL_2D_LOOP; // END LOOP: i1 over theta points and i2 over phi points on the r_min boundary
     } // END LOOP: for i0 over r_min radial ghost-zone layers
   } // END IF: fill_r_min_ghosts requested
 """
@@ -305,5 +310,6 @@ the angular directions (x1 and x2).
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )
