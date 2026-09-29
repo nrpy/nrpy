@@ -416,6 +416,20 @@ Claim evidence:
 - Deciding authority: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` and `BSSNRHSs_dict.get_rhs`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` and `FCCZ4RHSsDict.get_rhs`
 - Corroboration: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints.__init__`; [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), representative jointly enabled `trusted_dict`
 
+The fCCZ4 connection RHS already contains `+(2/3) C^i Dbar_j beta^j`, so the
+net coefficient of `C^i Dbar_j beta^j` in the constraint propagation is
+`2/3 - YBS_chi`. It vanishes at `YBS_chi = 2/3`. The BSSN `xi=1` coefficient
+`-2/3` therefore needs `YBS_chi = 4/3` in fCCZ4, which is the recommended
+maximum. It is set by matching the BSSN `xi=1` coefficient, not by a stability
+bound. The runtime default `YBS_chi = 0` removes the term. Larger
+values have no supporting derivation or source here.
+
+Claim evidence:
+- Claim: the fCCZ4 net coefficient of `C^i*Dbar_j beta^j` in the constraint propagation is `2/3 - YBS_chi`, so `YBS_chi = 4/3` reproduces the BSSN `xi=1` coefficient by matching, not by a derived stability bound, and the default `YBS_chi = 0` removes the term.
+- Role: descriptive behavior
+- Deciding authority: [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` connection composition; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS Gamma branch
+- Corroboration: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` parameter registration; [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (47)
+
 Claim evidence:
 - Claim: `FCCZ4Constraints` constructs the fCCZ4-only connection, Z4 Ricci, and `H_Z4` aggregates; `FCCZ4ConstraintsDict` and `fCCZ4_constraints` cache them; `FCCZ4RHSs` retrieves option-matched cached BSSN and fCCZ4 constraint objects, copies mutable aggregates without mutation, applies the displayed corrections at reference-rescaled output boundaries, and delegates enabled matter sources to the established `T4munu` helpers.
 - Role: descriptive behavior

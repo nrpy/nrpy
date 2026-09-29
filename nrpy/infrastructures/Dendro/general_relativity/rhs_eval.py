@@ -69,9 +69,11 @@ def register_CFunction_rhs_eval(
     :param CoordSystem: Reference-metric coordinate system.
     :param LapseEvolutionOption: Lapse gauge condition.
     :param ShiftEvolutionOption: Shift gauge condition.
-    :param enable_YBS_Gamma_constraint_adjustment: Add Yo et al. Gamma driving.
+    :param enable_YBS_Gamma_constraint_adjustment: Add the Yo et al. Gamma-constraint
+        term and register YBS_chi, whose default 0 disables it.
     :param enable_YBS_momentum_constraint_adjustment: Add Yo et al. momentum
-        damping with coefficient C_YBS_mom times CFL_FACTOR times local spacing.
+        damping with coefficient C_YBS_mom times CFL_FACTOR times local spacing,
+        and register C_YBS_mom, whose default 0 disables it.
     :param enable_SSL: Add slow-start lapse.
     :param enable_CAHD: Add formulation-specific Hamiltonian damping.
     :param enable_intrinsics: Generate SIMD-intrinsic kernels; every vector stays
@@ -108,15 +110,33 @@ def register_CFunction_rhs_eval(
 
         if enable_YBS_Gamma_constraint_adjustment:
             par.register_CodeParameter(
-                "REAL", __name__, "YBS_chi", 2.0 / 3.0, add_to_parfile=True
+                "REAL",
+                __name__,
+                "YBS_chi",
+                0.0,
+                add_to_parfile=True,
+                description=(
+                    "YBS Gamma-constraint strength; 0 disables the term. "
+                    "Recommended maximum (the usual xi=1 choice of Yo, Lin, and Cao; "
+                    "no stability bound was derived): 2/3 for BSSN and 4/3 for "
+                    "fCCZ4 (same C^i Dbar_k beta^k coefficient as BSSN with xi=1)."
+                ),
             )
         if enable_YBS_momentum_constraint_adjustment:
             par.register_CodeParameters(
                 "REAL",
                 __name__,
                 ["C_YBS_mom", "CFL_FACTOR"],
-                [1.0, 0.25],
+                [0.0, 0.25],
                 add_to_parfile=True,
+                descriptions=[
+                    "YBS momentum-damping strength; 0 disables the term. "
+                    "Recommended maximum, assuming CFL_FACTOR = 0.45: 0.89 with RK4 "
+                    "and finite-difference orders up to 8. "
+                    "The maximum scales as 1/CFL_FACTOR^2 "
+                    "(0.18 at CFL_FACTOR = 1; 2.9 at the registered default 0.25).",
+                    "Evolution CFL factor.",
+                ],
             )
 
         if enable_fCCZ4:

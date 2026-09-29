@@ -87,9 +87,11 @@ def register_CFunction_rhs_eval(
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :param validate_expressions: Whether to validate generated sympy expressions against trusted values.
     :param enable_fCCZ4: Use fCCZ4 instead of BSSN evolution equations.
-    :param enable_YBS_Gamma_constraint_adjustment: Enable the YBS connection-constraint adjustment.
+    :param enable_YBS_Gamma_constraint_adjustment: Enable the YBS connection-constraint
+        adjustment and register the runtime parameter YBS_chi, whose default 0 disables it.
     :param enable_YBS_momentum_constraint_adjustment: Enable the timestep-scaled
-        Yo--Lin--Cao momentum-constraint adjustment.
+        Yo--Lin--Cao momentum-constraint adjustment and register the runtime parameter
+        C_YBS_mom, whose default 0 disables it.
     :param enable_cfdD_alphadD_vetUdD_gridfunctions: Whether to read the first derivatives of
         cf, alpha and vetU from the gridfunctions cfdD_alphadD_vetUdD_eval stores, and to
         build each mixed second derivative of them as a single first derivative of those
@@ -164,9 +166,15 @@ def register_CFunction_rhs_eval(
             "REAL",
             __name__,
             "YBS_chi",
-            2.0 / 3.0,
+            0.0,
             commondata=True,
             add_to_parfile=True,
+            description=(
+                "YBS Gamma-constraint strength; 0 disables the term. "
+                "Recommended maximum (the usual xi=1 choice of Yo, Lin, and Cao; "
+                "no stability bound was derived): 2/3 for BSSN and 4/3 for fCCZ4 "
+                "(same C^i Dbar_k beta^k coefficient as BSSN with xi=1)."
+            ),
         )
     if enable_CAHD or enable_YBS_momentum_constraint_adjustment:
         if "dsmin" not in gri.glb_gridfcs_dict:
@@ -180,9 +188,17 @@ def register_CFunction_rhs_eval(
             "REAL",
             __name__,
             "C_YBS_mom",
-            1.0,
+            0.0,
             commondata=True,
             add_to_parfile=True,
+            description=(
+                "YBS momentum-damping strength; 0 disables the term. "
+                "Recommended maximum, assuming CFL_FACTOR = 0.45: 0.89 with RK4 and "
+                "0.64 for any Runge-Kutta method with real-axis limit of at least 2, "
+                "for finite-difference orders up to 8. "
+                "The maximum scales as 1/CFL_FACTOR^2 "
+                "(0.18 and 0.13 at CFL_FACTOR = 1)."
+            ),
         )
     if enable_fCCZ4:
         # The shared fCCZ4 expression factory is the single fCCZ4 expression
