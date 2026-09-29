@@ -84,7 +84,7 @@ __global__
     if (commondata->nn == 0) {
       PARALLEL_LOOP(i0, NGHOSTS, NGHOSTS+1, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
         commondata->h_p[IDX3(i0,i1,i2)] = 0.0;
-      } END_PARALLEL_LOOP 
+      } END_PARALLEL_LOOP;
       #ifdef __CUDACC__
       gpu_grid.sync();
       #endif
@@ -118,13 +118,13 @@ __global__
         const REAL eta_damping_times_M = NRPYMAX(eta_min_times_M, eta_max_times_M * sqrt(bhahaha_diags->Theta_Linf_times_M));
         commondata->eta_damping = eta_damping_times_M / bhahaha_params_and_data->M_scale;
 #ifdef __CUDACC__
-      } END_CUDA_ONE_THREAD //End global variable modification
+      } END_CUDA_ONE_THREAD; //End global variable modification
       gpu_grid.sync();
 #endif
       PARALLEL_LOOP(i0, NGHOSTS, NGHOSTS+1, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
         griddata[0].gridfuncs.y_n_gfs[IDX4(VVGF, i0, i1, i2)] =
             commondata->eta_damping * griddata[0].gridfuncs.y_n_gfs[IDX4(HHGF, i0, i1, i2)];
-      } END_PARALLEL_LOOP // END LOOP over all gridpoints on horizon surface.
+      } END_PARALLEL_LOOP; // END LOOP over all gridpoints on horizon surface.
       #ifdef __CUDACC__
       gpu_grid.sync();
       #endif

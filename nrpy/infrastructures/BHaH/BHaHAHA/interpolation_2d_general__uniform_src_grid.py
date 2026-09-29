@@ -57,12 +57,32 @@ def register_CFunction_interpolation_2d_general__uniform_src_grid(
 #define bah_interpolation_2d_general__uniform_src_grid interpolation_2d_general__uniform_src_grid
 #endif
 
+#ifdef __CUDACC__
+/* Device-side helper: record the first error and its payload. */
+__device__ static inline
+int bhahaha_gpu_set_error(int *error_flag, int code)
+{
+  /* First error wins: change code from 0 to 'code' atomically. */
+  return atomicCAS(error_flag, 0, code);
+  //int old =atomicCAS(&st->code, 0, code);
+  /*
+  if (old == 0) {
+    st->stage_id = stage_id;
+    st->i0 = i0;
+    st->i1 = i1;
+    st->i2 = i2;
+  }
+  */
+}
+#endif
+
 // LOOP_OMP: Similar to LOOP_REGION but inserts an OpenMP pragma (via __OMP_PRAGMA__) for parallelization.
 #define LOOP_OMP(__OMP_PRAGMA__, i0, i0min, i0max, i1, i1min, i1max, i2, i2min, i2max)                                                               \
   _Pragma(__OMP_PRAGMA__) for (int(i2) = (i2min); (i2) < (i2max); (i2)++) for (int(i1) = (i1min); (i1) < (i1max);                                    \
                                                                                (i1)++) for (int(i0) = (i0min); (i0) < (i0max); (i0)++)
 
 
+#ifdef __CUDACC__
 // CUDA_3D_LOOP: Similar to LOOP_OMP, in practice, but different in structure, uses threads of a 1D CUDA block structure to evaluate a 3D "loop"
 #define CUDA_3D_LOOP(i0, i0_min, i0_max, i1, i1_min, i1_max, i2, i2_min, i2_max) \
   for (int j = 0; j < ( (i0_max - i0_min)*(i1_max-i1_min)*(i2_max - i2_min) )/(blockDim.x*gridDim.x) + 1; j++) { \
@@ -76,6 +96,7 @@ def register_CFunction_interpolation_2d_general__uniform_src_grid(
             i2 += i2_min;
 
 #define END_CUDA_3D_LOOP }}
+#endif
 
 
 // PARALLEL_LOOP: Calls either LOOP_OMP(omp parallel for", ...) or CUDA_3D LOOP chosen at compile time. Because of the slightly more complex nature of the bracketing for CUDA_3D_LOOPs, it MUST be paired with an END_PARALLEL_LOOP macro.
@@ -109,7 +130,9 @@ typedef enum {
     for item in BHaH.BHaHAHA.error_message.error_code_msg_tuples_list:
         prefunc += f"  {item[0]},\n"
     prefunc += """} bhahaha_error_codes;
-#pragma GCC optimize("unroll-loops")"""
+#ifndef __CUDACC__
+#pragma GCC optimize("unroll-loops")
+#endif"""
     desc = r"""
 Performs 2D Lagrange interpolation on a uniform source grid.
 
@@ -309,7 +332,7 @@ __device__
       dst_data[dst_pt] = sum * src_invdxx12_INTERP_ORDERm1;
     
     } //END IF: Successfully interpolated points. 
-  } END_PARALLEL_1D_LOOP // END LOOP: Interpolate all destination points.
+  } END_PARALLEL_1D_LOOP; // END LOOP: Interpolate all destination points.
 """
     postfunc = r"""
 #pragma GCC reset_options // Reset compiler optimizations after the function.

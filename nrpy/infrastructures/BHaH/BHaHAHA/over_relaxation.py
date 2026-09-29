@@ -44,6 +44,11 @@ by enforcing partial_t h = 0.
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     body = r"""
 #ifdef __CUDACC__
   // Set up cooperative group
@@ -103,7 +108,7 @@ by enforcing partial_t h = 0.
         const REAL t_prev = commondata->time_of_h_p, t_curr = commondata->time;
         const REAL dst_time = t_prev + overstep * (t_curr - t_prev);
         in_gfs[IDX4pt(HHGF, idx3)] = y_curr + (y_prev - y_curr) * (dst_time - t_curr) / (t_prev - t_curr);
-      } END_PARALLEL_LOOP  // END LOOP: Apply overstep to gridpoints.
+      } END_PARALLEL_LOOP;  // END LOOP: Apply overstep to gridpoints.
 
 #ifdef __CUDACC__
       gpu_grid.sync();
@@ -122,7 +127,7 @@ by enforcing partial_t h = 0.
 #endif         
           commondata->error_flag = BHAHAHA_SUCCESS;
 #ifdef __CUDACC__
-        } END_CUDA_ONE_THREAD //End global variable modification
+        } END_CUDA_ONE_THREAD; //End global variable modification
 #endif
       }
 #ifdef __CUDACC__
@@ -131,7 +136,7 @@ by enforcing partial_t h = 0.
 
       PARALLEL_LOOP(i0, NGHOSTS, NGHOSTS+1, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
         in_gfs[IDX4(HHGF, i0, i1, i2)] = in_gfs[IDX4(HHGF, i0 + 1, i1, i2)]; // Revert horizon values to their original state.
-      } END_PARALLEL_LOOP  // END LOOP: Revert horizon values to their original state.
+      } END_PARALLEL_LOOP;  // END LOOP: Revert horizon values to their original state.
 #ifdef __CUDACC__
       gpu_grid.sync();
 #endif
@@ -148,7 +153,7 @@ by enforcing partial_t h = 0.
             printf("# Iteration %d: Best overstep factor = %e, Improvement ratio = %.15e\n", commondata->nn, best_overstep,
                  fabs(M_irr_orig - min_Theta_Linf_times_M) / M_irr_orig);
 #ifdef __CUDACC__
-        } END_CUDA_ONE_THREAD //End global variable modification
+        } END_CUDA_ONE_THREAD; //End global variable modification
 #endif
       } else {
         break; // Exit loop early if no further improvement is found.
@@ -170,7 +175,7 @@ by enforcing partial_t h = 0.
   
         // Update v(theta, phi) to reset time dynamics.
         in_gfs[IDX4(VVGF, i0, i1, i2)] = commondata->eta_damping * in_gfs[IDX4(HHGF, i0, i1, i2)];
-      } END_PARALLEL_LOOP // END LOOP over grid interior.
+      } END_PARALLEL_LOOP; // END LOOP over grid interior.
 #ifdef __CUDACC__
       gpu_grid.sync();
 #endif
@@ -195,14 +200,14 @@ by enforcing partial_t h = 0.
     // Reset the stored horizon guess h_p and its time t_p.
     PARALLEL_LOOP(i0, NGHOSTS, NGHOSTS+1, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
       commondata->h_p[IDX3(i0, i1, i2)] = 0.0; //
-    } END_PARALLEL_LOOP //END LOOP: Reset horizon
+    } END_PARALLEL_LOOP; //END LOOP: Reset horizon
 #ifdef __CUDACC__
     gpu_grid.sync();
     CUDA_ONE_THREAD(gpu_grid) {
 #endif
       commondata->time_of_h_p = 0.0; // Reset time for h_p.
 #ifdef __CUDACC__
-    } END_CUDA_ONE_THREAD //End global variable modification
+    } END_CUDA_ONE_THREAD; //End global variable modification
     gpu_grid.sync();
 #endif
     return;
@@ -216,14 +221,14 @@ by enforcing partial_t h = 0.
   if (commondata->nn % relax_every_nn == 0) {
     PARALLEL_LOOP(i0, NGHOSTS, NGHOSTS+1, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2)
       commondata->h_p[IDX3(i0, i1, i2)] = in_gfs[IDX4pt(HHGF, IDX3(i0, i1, i2))];
-    END_PARALLEL_LOOP // END LOOP over all gridpoints
+    END_PARALLEL_LOOP; // END LOOP over all gridpoints
 #ifdef __CUDACC__
     gpu_grid.sync();
     CUDA_ONE_THREAD(gpu_grid) {
 #endif
       commondata->time_of_h_p = commondata->time; // Update time for h_p.
 #ifdef __CUDACC__
-    } END_CUDA_ONE_THREAD //End global variable modification
+    } END_CUDA_ONE_THREAD; //End global variable modification
 
 #endif
   } // END IF nn % relax_every_nn == 0
@@ -239,5 +244,6 @@ by enforcing partial_t h = 0.
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )

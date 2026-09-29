@@ -16,6 +16,12 @@ from nrpy.infrastructures.BHaH.CurviBoundaryConditions.apply_bcs_inner_only impo
 def register_CFunction_apply_bcs_inner_only() -> None:
     """Register C function for inner boundary conditions."""
     includes = ["BHaH_defines.h"]
+    prefunc = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+""" 
+    prefunc += APPLY_PARITY_BRANCHLESS_PREFUNC
     desc = r"""
 Apply BCs to inner boundary points only,
 using data stored in bcstruct->inner_bc_array.
@@ -27,7 +33,15 @@ boundary points ("inner maps to outer").
     cfunc_type = "void"
     name = "apply_bcs_inner_only"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict gfs"
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     body = r"""
+#ifdef __CUDACC__
+  static const int8_t evol_gf_parity[2] = {0,0};
+#endif
   // Unpack bc_info from bcstruct
   const bc_info_struct *bc_info = &bcstruct->bc_info;
 
@@ -58,17 +72,18 @@ boundary points ("inner maps to outer").
     } // END LOOP: for pt over inner boundary points
   } // END LOOP: for which_gf over evolution gridfunctions
 #else
-  } END_PARALLEL_2D_LOOP
+  } END_PARALLEL_2D_LOOP;
 #endif
 """
     cfc.register_CFunction(
-        prefunc=APPLY_PARITY_BRANCHLESS_PREFUNC,
+        prefunc=prefunc,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=True,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )
 

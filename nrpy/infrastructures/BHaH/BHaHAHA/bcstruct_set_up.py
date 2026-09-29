@@ -215,6 +215,11 @@ and consistency in the transformation.
     params = """commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],
 const int i0, const int i1, const int i2,
 REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     body = r"""
   // Step 0: Unpack grid spacings dxx0, dxx1, dxx2
   const REAL dxx0 = commondata->bcstruct_dxx0;
@@ -283,7 +288,7 @@ reference_metric::CoordSystem = {CoordSystem}. Boundary conditions in curvilinea
     if param_symbols:
         body += rf"""
   if (params == NULL) {{
-    fprintf(stderr, "Error in {rfm_orig.CoordSystem}: coordinate map needs params, but params == NULL.\n");
+    printf("Error in {rfm_orig.CoordSystem}: coordinate map needs params, but params == NULL.\n");
 #ifdef __CUDACC__
     bhahaha_gpu_set_error(&commondata->error_flag, BCSTRUCT_EIGENCOORD_FAILURE);
 #else
@@ -411,7 +416,7 @@ REAL Cart_to_xx0_inbounds, Cart_to_xx1_inbounds, Cart_to_xx2_inbounds;
     // const int Nxx_plus_2NGHOSTS0 = commondata->bcstruct_Nxx_plus_2NGHOSTS0;
     // const int Nxx_plus_2NGHOSTS1 = commondata->bcstruct_Nxx_plus_2NGHOSTS1;
     // const int Nxx_plus_2NGHOSTS2 = commondata->bcstruct_Nxx_plus_2NGHOSTS2;
-    // fprintf(stderr,"Error in Spherical coordinate system: Inner boundary point does not map to grid interior point: ( %.15e %.15e %.15e ) != ( %.15e %.15e %.15e ) | xx: %e %e %e -> %e %e %e | %d %d %d\n",
+    // printf("Error in Spherical coordinate system: Inner boundary point does not map to grid interior point: ( %.15e %.15e %.15e ) != ( %.15e %.15e %.15e ) | xx: %e %e %e -> %e %e %e | %d %d %d\n",
     //         (double)xCart_from_xx,(double)yCart_from_xx,(double)zCart_from_xx,
     //         (double)xCart_from_xx_inbounds,(double)yCart_from_xx_inbounds,(double)zCart_from_xx_inbounds,
     //         xx[0][i0],xx[1][i1],xx[2][i2],
@@ -443,6 +448,7 @@ REAL Cart_to_xx0_inbounds, Cart_to_xx1_inbounds, Cart_to_xx2_inbounds;
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )
     return cf.full_function
@@ -527,7 +533,7 @@ def Cfunction__set_parity_for_inner_boundary_single_pt(CoordSystem: str) -> str:
         params_unused = ""
         jac_param_guard = rf"""
   if (params == NULL) {{
-    fprintf(stderr, "Error in {rfm_orig.CoordSystem}: derivative-Jacobian map needs params, but params == NULL.\n");
+    printf("Error in {rfm_orig.CoordSystem}: derivative-Jacobian map needs params, but params == NULL.\n");
 #ifdef __CUDACC__
       bhahaha_gpu_set_error(&commondata->error_flag, BCSTRUCT_SET_PARITY_ERROR);
 #else
@@ -578,6 +584,11 @@ incorrect sign.
             const params_struct *restrict params,
             const REAL xx0,const REAL xx1,const REAL xx2,  const REAL x0x1x2_inbounds[3], const int idx,
             innerpt_bc_struct *restrict innerpt_bc_arr"""
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     body = rf"""
 #define EPS_REL {'1e-6' if par.parval_from_str("fp_type") == "float" else '1e-8'}
 (void)commondata;
@@ -596,10 +607,8 @@ REAL REAL_parity_array[10];
     // Next perform sanity check on parity array output: should be +1 or -1 to within 8 significant digits:
     for(int whichparity=0; whichparity<10; whichparity++) {{
         if( fabs(REAL_parity_array[whichparity]) < 1 - EPS_REL || fabs(REAL_parity_array[whichparity]) > 1 + EPS_REL ) {{
-            fprintf(stderr,"Error at point (%e %e %e), which maps to (%e %e %e).\n",
-                xx0,xx1,xx2, xx0_inbounds,xx1_inbounds,xx2_inbounds);
-            fprintf(stderr,"Parity evaluated to %e , which is not within 8 significant digits of +1 or -1.\n",
-                REAL_parity_array[whichparity]);
+            printf("Error at point (%e %e %e), which maps to (%e %e %e).\nParity evaluated to %e , which is not within 8 significant digits of +1 or -1.\n",
+                xx0,xx1,xx2, xx0_inbounds,xx1_inbounds,xx2_inbounds, REAL_parity_array[whichparity]);
 #ifdef __CUDACC__
       bhahaha_gpu_set_error(&commondata->error_flag, BCSTRUCT_SET_PARITY_ERROR);
 #else
@@ -628,8 +637,7 @@ REAL REAL_parity_array[10];
           else if (fabs(v) < JAC_TOL)
             jac_parity = 0;
           else {{
-            fprintf(stderr,
-                    "Error at point (%e %e %e), which maps to (%e %e %e): analytic deriv Jacobian[%d][%d]=%.15e is not a parity value.\n",
+            printf("Error at point (%e %e %e), which maps to (%e %e %e): analytic deriv Jacobian[%d][%d]=%.15e is not a parity value.\n",
                     xx0, xx1, xx2, xx0_inbounds, xx1_inbounds, xx2_inbounds, dst_dirn, src_dirn, (double)v);
 #ifdef __CUDACC__
       bhahaha_gpu_set_error(&commondata->error_flag, BCSTRUCT_SET_PARITY_ERROR);
@@ -651,8 +659,7 @@ REAL REAL_parity_array[10];
         if (innerpt_bc_arr[idx].deriv_jacobian[src_dirn][dst_dirn] != 0) col_nonzero++;
       }} // END LOOP: for src_dirn over signed-permutation checks
       if (row_nonzero != 1 || col_nonzero != 1) {{
-        fprintf(stderr,
-                "Error at point (%e %e %e), which maps to (%e %e %e): derivative Jacobian is not a signed permutation.\n",
+        printf("Error at point (%e %e %e), which maps to (%e %e %e): derivative Jacobian is not a signed permutation.\n",
                 xx0, xx1, xx2, xx0_inbounds, xx1_inbounds, xx2_inbounds);
 #ifdef __CUDACC__
       bhahaha_gpu_set_error(&commondata->error_flag, BCSTRUCT_SET_PARITY_ERROR);
@@ -674,6 +681,7 @@ REAL REAL_parity_array[10];
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )
     return cf.full_function
@@ -804,6 +812,11 @@ This helper intentionally omits Cartesian-origin offsets and remains local to ba
         params_helper = """commondata_struct *restrict commondata,
                            const params_struct *restrict params,
                            const REAL xx[3], REAL xCart[3]"""
+        cfunc_decorators_helper = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
         body_helper = ""
         if commondata_definitions:
             body_helper += f"{commondata_definitions}\n"
@@ -814,7 +827,7 @@ This helper intentionally omits Cartesian-origin offsets and remains local to ba
         if param_symbols:
             body_helper += rf"""
   if (params == NULL) {{
-    fprintf(stderr, "Error in {helper_coord_system}: xx_to_Cart_no_origin needs params, but params == NULL.\n");
+    printf("Error in {helper_coord_system}: xx_to_Cart_no_origin needs params, but params == NULL.\n");
 #ifdef __CUDACC__
     bhahaha_gpu_set_error(&commondata->error_flag, BCSTRUCT_EIGENCOORD_FAILURE);
 #else
@@ -842,6 +855,7 @@ This helper intentionally omits Cartesian-origin offsets and remains local to ba
             name=name_helper,
             params=params_helper,
             include_CodeParameters_h=False,
+            cfunc_decorators=cfunc_decorators_helper,
             body=body_helper,
         )
         prefunc += cf_helper.full_function
@@ -907,7 +921,7 @@ void set_inner_pts(commondata_struct *restrict commondata, params_struct *restri
     }
   }
 #ifdef __CUDACC__
-  END_PARALLEL_LOOP
+  END_PARALLEL_LOOP;
 #endif
 }
 
@@ -927,7 +941,7 @@ void count_num_inner_pts(commondata_struct *restrict commondata, params_struct *
   //Reset number of inner boundary points to 0
   CUDA_ONE_THREAD(gpu_grid) {
     bcstruct->bc_info.num_inner_boundary_points = 0;
-  } END_CUDA_ONE_THREAD
+  } END_CUDA_ONE_THREAD;
 
   REAL *restrict xx[3] = {xx0, xx1, xx2};
 #endif
@@ -971,7 +985,7 @@ void count_num_inner_pts(commondata_struct *restrict commondata, params_struct *
     }
   }
 #ifdef __CUDACC__
-  END_PARALLEL_LOOP
+  END_PARALLEL_LOOP;
 #endif
 
   if (commondata->error_flag != BHAHAHA_SUCCESS)
@@ -1049,7 +1063,7 @@ void set_outer_pts(commondata_struct *restrict commondata, params_struct *restri
           }
         }
 #ifdef __CUDACC__
-        END_PARALLEL_LOOP
+        END_PARALLEL_LOOP;
 #endif
       } // END LOOP over lower faces
       // UPPER FACE: dirn=0 -> x0max; dirn=1 -> x1max; dirn=2 -> x2max
@@ -1089,7 +1103,7 @@ void set_outer_pts(commondata_struct *restrict commondata, params_struct *restri
           }
         }
 #ifdef __CUDACC__
-        END_PARALLEL_LOOP
+        END_PARALLEL_LOOP;
 #endif
       } // END LOOP over upper faces
 #ifdef __CUDACC__
@@ -1182,6 +1196,12 @@ void set_outer_pts(commondata_struct *restrict commondata, params_struct *restri
   bc_struct *d_bcstruct = NULL;
   gpuErrchk( cudaMalloc((void**)&d_bcstruct, sizeof(bc_struct)) );
   gpuErrchk( cudaMemcpy(d_bcstruct, bcstruct, sizeof(bc_struct), cudaMemcpyHostToDevice) );
+  
+  params_struct *d_bc_params = NULL;
+  if (bc_params != NULL) {
+    gpuErrchk( cudaMalloc((void**)&d_bc_params, sizeof(params_struct )) );
+    gpuErrchk( cudaMemcpy(d_bc_params, bc_params, sizeof(params_struct ), cudaMemcpyHostToDevice) );
+  }
 #endif
 
   ////////////////////////////////////////
@@ -1189,7 +1209,7 @@ void set_outer_pts(commondata_struct *restrict commondata, params_struct *restri
   {
     // First count the number of inner points
 #ifdef __CUDACC__
-    void *Args[] = {(void *)&commondata, (void)&bc_params, (void *)&xx[0], (void *)&xx[1], (void *)&xx[2], &d_bcstruct};
+    void *Args[] = {(void *)&commondata, (void *)&d_bc_params, (void *)&xx[0], (void *)&xx[1], (void *)&xx[2], &d_bcstruct};
     COOPERATIVE_KERNEL(count_num_inner_pts, Args); 
 
     gpuErrchk( cudaMemcpy(bcstruct, d_bcstruct, sizeof(bc_struct), cudaMemcpyDeviceToHost) );
@@ -1211,7 +1231,7 @@ void set_outer_pts(commondata_struct *restrict commondata, params_struct *restri
     int *which_inner = NULL;
     cudaMalloc((void**)&which_inner, sizeof(int));
 
-    set_inner_pts<<<12,64>>>(commondata, bc_params, xx[0], xx[1], xx[2], d_bcstruct, which_inner);
+    set_inner_pts<<<12,64>>>(commondata, d_bc_params, xx[0], xx[1], xx[2], d_bcstruct, which_inner);
     cudaDeviceSynchronize();
     cudaFree(which_inner);
     cudaMemcpy(h_commondata, commondata, sizeof(commondata_struct), cudaMemcpyDeviceToHost);
@@ -1320,7 +1340,7 @@ void set_outer_pts(commondata_struct *restrict commondata, params_struct *restri
 #ifdef __CUDACC__
     gpuErrchk( cudaMemcpy(d_bcstruct, bcstruct, sizeof(bc_struct), cudaMemcpyHostToDevice) );
   
-    set_outer_pts<<<1, 64>>>(commondata, bc_params, xx[0], xx[1], xx[2], d_bcstruct);
+    set_outer_pts<<<1, 64>>>(commondata, d_bc_params, xx[0], xx[1], xx[2], d_bcstruct);
     gpuErrchk( cudaMemcpy(bcstruct, d_bcstruct, sizeof(bc_struct), cudaMemcpyDeviceToHost) );
     cudaFree(d_bcstruct);
 #else

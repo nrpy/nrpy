@@ -99,6 +99,7 @@ def simple_loop(
     enable_OpenMP: bool = True,
     OMP_custom_pragma: str = "",
     OMP_collapse: int = 1,
+    cuda_parallel_pair: bool = False,
 ) -> str:
     """
     Generate a simple loop in C (for use inside of a function).
@@ -277,6 +278,7 @@ def simple_loop(
             increment,
             prefix_loop_with,
             loop_body=final_loop_body,
+            cuda_parallel_pair=cuda_parallel_pair,
         )
     )
 

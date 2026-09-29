@@ -346,26 +346,34 @@ to identify the apparent horizon with progressively refined grid resolutions.
 
       // Allocate arrays needed for proper circumference diagnostics only on the final iteration
       if (commondata.is_final_iteration) {
-        int NUM_DIAG_GFS = 2;
+        int NUM_DIAG_GFS = 5;
         int N_angle = griddata[grid].params.Nxx2;
 #ifdef __CUDACC__
         cudaMalloc((void**)&commondata.diagnostics_arrays.metric_data_gfs, griddata[grid].params.Nxx_plus_2NGHOSTS0 * griddata[grid].params.Nxx_plus_2NGHOSTS1 * griddata[grid].params.Nxx_plus_2NGHOSTS2 * NUM_DIAG_GFS * sizeof(REAL));
         cudaMalloc((void**)&commondata.diagnostics_arrays.dst_pts, sizeof(REAL) * N_angle*2);
-        cudaMalloc((void**)&commondata.diagnostics_arrays.circumference, N_angle  * sizeof(REAL));
+        cudaMalloc((void**)&commondata.diagnostics_arrays.integrand, N_angle  * sizeof(REAL));
+        cudaMalloc((void**)&commondata.diagnostics_arrays.theta, N_angle  * sizeof(REAL));
+        cudaMalloc((void**)&commondata.diagnostics_arrays.phi, N_angle  * sizeof(REAL));
         // Update device side with diagnostics arrays allocations
         gpuErrchk( cudaMemcpy(d_commondata, &commondata, sizeof(commondata_struct), cudaMemcpyHostToDevice) );
 #else
         BHAH_MALLOC(commondata.diagnostics_arrays.metric_data_gfs, griddata[grid].params.Nxx_plus_2NGHOSTS0 * griddata[grid].params.Nxx_plus_2NGHOSTS1 * griddata[grid].params.Nxx_plus_2NGHOSTS2 * NUM_DIAG_GFS * sizeof(REAL));
         commondata.diagnostics_arrays.dst_pts = (REAL (*)[2])malloc(sizeof(REAL) * N_angle*2);
-        commondata.diagnostics_arrays.circumference = (REAL*)malloc(N_angle  * sizeof(REAL));
+        commondata.diagnostics_arrays.integrand = (REAL*)malloc(N_angle  * sizeof(REAL));
+        commondata.diagnostics_arrays.theta = (REAL*)malloc(N_angle  * sizeof(REAL));
+        commondata.diagnostics_arrays.phi = (REAL*)malloc(N_angle  * sizeof(REAL));
 #endif
-        if (commondata.diagnostics_arrays.metric_data_gfs == NULL || commondata.diagnostics_arrays.dst_pts == NULL  ||commondata.diagnostics_arrays.circumference == NULL) {
+        if (commondata.diagnostics_arrays.metric_data_gfs == NULL || commondata.diagnostics_arrays.dst_pts == NULL || commondata.diagnostics_arrays.integrand== NULL || commondata.diagnostics_arrays.theta== NULL || commondata.diagnostics_arrays.phi == NULL) {
           if (commondata.diagnostics_arrays.metric_data_gfs != NULL)
             FREE(commondata.diagnostics_arrays.metric_data_gfs);
-          if (commondata.diagnostics_arrays.circumference != NULL)
-            FREE(commondata.diagnostics_arrays.circumference);
+          if (commondata.diagnostics_arrays.integrand!= NULL)
+            FREE(commondata.diagnostics_arrays.integrand);
           if (commondata.diagnostics_arrays.dst_pts != NULL)
             FREE(commondata.diagnostics_arrays.dst_pts);
+          if (commondata.diagnostics_arrays.theta!= NULL)
+            FREE(commondata.diagnostics_arrays.theta);
+          if (commondata.diagnostics_arrays.phi!= NULL)
+            FREE(commondata.diagnostics_arrays.phi);
           compute_proper_circumferences= 0;
         }
       }
@@ -385,7 +393,9 @@ to identify the apparent horizon with progressively refined grid resolutions.
       if (commondata.is_final_iteration && compute_proper_circumferences) {
         FREE(commondata.diagnostics_arrays.metric_data_gfs);
         FREE(commondata.diagnostics_arrays.dst_pts);
-        FREE(commondata.diagnostics_arrays.circumference);
+        FREE(commondata.diagnostics_arrays.integrand);
+        FREE(commondata.diagnostics_arrays.theta);
+        FREE(commondata.diagnostics_arrays.phi);
       }
 #endif
 

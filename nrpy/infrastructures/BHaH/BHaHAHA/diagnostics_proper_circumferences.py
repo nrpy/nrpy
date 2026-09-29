@@ -180,11 +180,16 @@ Computes proper circumferences along the equator and polar directions for appare
 @return Status code indicating success or type of error (e.g., BHAHAHA_SUCCESS or INITIAL_DATA_MALLOC_ERROR).
 @note This function uses OpenMP for parallel loops and performs interpolation and integration over grid data.
 """
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "diagnostics_proper_circumferences"
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
+    cfunc_decorators= r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     body = r"""
 #ifdef __CUDACC__
   // Set up cooperative group
@@ -252,7 +257,7 @@ Computes proper circumferences along the equator and polar directions for appare
       } // END LOOP over i1 (theta)
     } // END LOOP over i2 (phi)
 #else
-    } END_PARALLEL_2D_LOOP
+    } END_PARALLEL_2D_LOOP;
     gpu_grid.sync();
 #endif
 
@@ -299,7 +304,7 @@ Computes proper circumferences along the equator and polar directions for appare
         } // END LOOP over inner boundary points
       } // END LOOP over gridfunctions
       #else
-      } END_PARALLEL_2D_LOOP
+      } END_PARALLEL_2D_LOOP;
       gpu_grid.sync();
       #endif
     } // END application of inner boundary conditions
@@ -313,7 +318,7 @@ Computes proper circumferences along the equator and polar directions for appare
   // Allocate arrays for destination points (theta, phi) and circumference values.
   //#ifdef __CUDACC__
   REAL(*dst_pts)[2] = commondata->diagnostics_arrays.dst_pts;
-  REAL *restrict circumference = commondata->diagnostics_arrays.circumference;
+  REAL *restrict circumference = commondata->diagnostics_arrays.integrand;
   /*
   #else
   REAL(*dst_pts)[2] = (REAL (*)[2])malloc(N_angle * sizeof(*dst_pts));
@@ -339,7 +344,7 @@ Computes proper circumferences along the equator and polar directions for appare
     PARALLEL_1D_LOOP(i2, 0, N_angle) { 
       dst_pts[i2][0] = M_PI / 2;                                   // Equator: theta = pi/2.
       dst_pts[i2][1] = -M_PI + ((REAL)i2 + (1.0 / 2.0)) * d_angle; // Equator: phi = [-pi, pi].
-    } END_PARALLEL_1D_LOOP // END LOOP over phi angles
+    } END_PARALLEL_1D_LOOP; // END LOOP over phi angles
 
     // Interpolate sqrt(q_{phi phi}) values onto the equator points to compute the circumference;
     //   note that sqrt(q_{phi phi}) is stored in metric_data_gfs[IDX4(1,...)]
@@ -372,7 +377,7 @@ Computes proper circumferences along the equator and polar directions for appare
     // Multiply the sum by d[angle]
     commondata->bhahaha_diagnostics->xy_plane_circumference = sum_circumference * d_angle;
     #ifdef __CUDACC__
-    } END_CUDA_ONE_THREAD
+    } END_CUDA_ONE_THREAD;
     gpu_grid.sync();
     #endif
   } // END xy-plane circumference
@@ -390,7 +395,7 @@ Computes proper circumferences along the equator and polar directions for appare
         dst_pts[i2][0] = ((REAL)(N_angle - i2) - 0.5) * (M_PI / ((REAL)(N_angle) / 2.0));
         dst_pts[i2][1] = -M_PI; // phi spans from [-pi, pi), so instead of interpolating at phi=pi, must interpolate at phi=-pi.
       } // END IF theta is going from 0 to pi or vice-versa.
-    } END_PARALLEL_1D_LOOP // END LOOP over angle
+    } END_PARALLEL_1D_LOOP; // END LOOP over angle
 
     // Interpolate sqrt(q_{theta theta}) values onto the polar (xz-plane) points to compute the circumference;
     //   note that sqrt(q_{theta theta}) is stored in metric_data_gfs[IDX4(0,...)]
@@ -423,7 +428,7 @@ Computes proper circumferences along the equator and polar directions for appare
     // Multiply the sum by d[angle]
     commondata->bhahaha_diagnostics->xz_plane_circumference = sum_circumference * d_angle;
     #ifdef __CUDACC__
-    } END_CUDA_ONE_THREAD
+    } END_CUDA_ONE_THREAD;
     gpu_grid.sync();
     #endif
   } // END xz-plane circumference
@@ -441,7 +446,7 @@ Computes proper circumferences along the equator and polar directions for appare
         dst_pts[i2][0] = ((REAL)(N_angle - i2) - 0.5) * (M_PI / ((REAL)(N_angle) / 2.0));
         dst_pts[i2][1] = -M_PI / 2.0;
       } // END IF theta is going from 0 to pi or vice-versa.
-    } END_PARALLEL_1D_LOOP // END LOOP over angle
+    } END_PARALLEL_1D_LOOP; // END LOOP over angle
 
     // Interpolate sqrt(q_{theta theta}) values onto the polar (yz-plane) points to compute the circumference;
     //   note that sqrt(q_{theta theta}) is stored in metric_data_gfs[IDX4(0,...)]
@@ -474,7 +479,7 @@ Computes proper circumferences along the equator and polar directions for appare
     // Multiply the sum by d[angle]
     commondata->bhahaha_diagnostics->yz_plane_circumference = sum_circumference * d_angle;
     #ifdef __CUDACC__
-    } END_CUDA_ONE_THREAD
+    } END_CUDA_ONE_THREAD;
     gpu_grid.sync();
     #endif
   } // END yz-plane circumference
@@ -501,7 +506,7 @@ Computes proper circumferences along the equator and polar directions for appare
     commondata->bhahaha_diagnostics->spin_a_z_from_yz_over_xy_prop_circumfs = compute_spin(C_yz_xy);
   }
   #ifdef __CUDACC__
-  } END_CUDA_ONE_THREAD
+  } END_CUDA_ONE_THREAD;
   gpu_grid.sync();
   #endif
 """
@@ -514,6 +519,7 @@ Computes proper circumferences along the equator and polar directions for appare
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )
     return pcg.NRPyEnv()

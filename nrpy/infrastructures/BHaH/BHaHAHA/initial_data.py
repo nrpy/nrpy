@@ -41,7 +41,7 @@ void set_initial_data(commondata_struct *restrict commondata, griddata_struct *r
     PARALLEL_2D_LOOP(i1, NGHOSTS, Nxx1 + NGHOSTS, i2, NGHOSTS, Nxx2 + NGHOSTS) {
           dst_pts[IDX2(i1 - NGHOSTS, i2 - NGHOSTS)][0] = griddata->xx[1][i1];
           dst_pts[IDX2(i1 - NGHOSTS, i2 - NGHOSTS)][1] = griddata->xx[2][i2];
-    } END_PARALLEL_2D_LOOP
+    } END_PARALLEL_2D_LOOP;
       // Choosing an NGHOSTS stencil half-width significantly speeds up BHaHAHA finds.
 
     bah_interpolation_2d_general__uniform_src_grid(NGHOSTS, commondata->coarse_horizon_dxx1, commondata->coarse_horizon_dxx2,
@@ -84,7 +84,7 @@ void set_initial_data(commondata_struct *restrict commondata, griddata_struct *r
     // set VVGF = eta * HHGF,
     //  so that partial_t h = VVGF - eta * HHGF = 0 at t=0. Otherwise we get really ugly dynamics.
     griddata[grid].gridfuncs.y_n_gfs[IDX4(VVGF, i0, i1, i2)] = eta_damping * griddata[grid].gridfuncs.y_n_gfs[IDX4(HHGF, i0, i1, i2)];
-  } END_PARALLEL_LOOP // END LOOP over all gridpoints
+  } END_PARALLEL_LOOP; // END LOOP over all gridpoints
 
 #ifdef __CUDACC__
   gpu_grid.sync();

@@ -22,6 +22,27 @@ def register_CFunction_cfl_limited_timestep_based_on_h_equals_r() -> None:
     This ensures stability by adhering to the CFL condition.
     """
     includes = ["BHaH_defines.h"]
+    prefunc = r"""
+#ifdef __CUDACC__
+/**
+ * Function that leverages CUDA's atomicCAS to compute the minimum between 
+ * a double stored at the initial address and a new double. Akin to CUDA's 
+ * atomicMin function but for doubles, this function returns the previous 
+ * value stored at the original address.
+ */
+__device__ static double atomicMin_double(double* address, double val)
+{
+  unsigned long long int* address_as_ull = (unsigned long long int*) address;
+  unsigned long long int old = *address_as_ull, assumed;
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, 
+        __double_as_longlong(fmin(val, __longlong_as_double(assumed))));
+  } while (assumed != old);
+  return __longlong_as_double(old);
+}
+#endif
+"""
     description = "Compute minimum timestep dt = CFL_FACTOR * ds_min on a 2D spherical numerical grid."
     cfunc_type = "void"
     name = "cfl_limited_timestep_based_on_h_equals_r"
@@ -47,7 +68,7 @@ __device__
 #endif
   commondata->dt = 1e30;
 #ifdef __CUDACC__
-  } END_CUDA_ONE_THREAD //End global variable modification
+  } END_CUDA_ONE_THREAD; //End global variable modification
 #endif
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     const params_struct *restrict params = &griddata[grid].params;
@@ -86,7 +107,7 @@ __device__
 #ifndef __CUDACC__
     }
 #else
-    } END_PARALLEL_LOOP
+    } END_PARALLEL_LOOP;
     gpu_grid.sync();
 #endif
 #ifdef __CUDACC__
@@ -115,10 +136,12 @@ __device__
     cfc.register_CFunction(
         subdirectory="",
         includes=includes,
+        prefunc=prefunc,
         desc=description,
         cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )

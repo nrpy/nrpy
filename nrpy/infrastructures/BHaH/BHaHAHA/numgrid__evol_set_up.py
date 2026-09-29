@@ -148,7 +148,7 @@ void bah_numgrid__evol_set_up_kernel(commondata_struct *restrict commondata, gri
   for (int dir = 0; dir < 3; dir++) {
     PARALLEL_1D_LOOP(i, 0, Nxx_plus_2NGHOSTS[dir]) {
       griddata[grid].xx[dir][i] = xxmin[dir] + ((REAL)(i - NGHOSTS) + (1.0 / 2.0)) * dxx[dir];
-    } END_PARALLEL_1D_LOOP
+    } END_PARALLEL_1D_LOOP;
   }
 #ifdef __CUDACC__
   gpu_grid.sync();

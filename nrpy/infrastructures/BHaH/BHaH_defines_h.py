@@ -510,7 +510,75 @@ def output_BHaH_defines_h(
 #define restrict __restrict__
 #endif // __cplusplus
 #ifdef __CUDACC__
-#include "BHaH_device_defines.h"
+#include <cooperative_groups.h>
+#define NUM_STREAMS 1
+#define THREADSPERBLOCK 64 
+
+/* Device-side helper: record the first error and its payload. */
+__device__ static inline
+int bhahaha_gpu_set_error(int *error_flag, int code)
+{
+  /* First error wins: change code from 0 to 'code' atomically. */
+  return atomicCAS(error_flag, 0, code);
+}
+
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess) 
+   {
+      fprintf(stderr,"GPUassert: %s %s %d\\n", cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
+
+// CUDA Error checking macro only active if compiled with -DDEBUG
+// Otherwise additional synchronization overhead will occur
+#ifdef DEBUG
+#define cudaCheckErrors(v, msg)                                                                                                                      \
+  do {                                                                                                                                               \
+    cudaError_t __err = cudaGetLastError();                                                                                                          \
+    if (__err != cudaSuccess) {                                                                                                                      \
+      fprintf(stderr, "Fatal error: %s %s (%s at %s:%d)\\n", #v, msg, cudaGetErrorString(__err), __FILE__, __LINE__);                                 \
+      fprintf(stderr, "*** FAILED - ABORTING\\n");                                                                                                    \
+      exit(1);                                                                                                                                       \
+    }                                                                                                                                                \
+  } while (0);
+#else
+#define cudaCheckErrors(v, msg)
+#endif
+
+#ifndef CUDART_VERSION
+#error CUDART_VERSION Undefined!
+#elif (CUDART_VERSION < 9000)
+#error BHaHAHA requires CUDA 9.0
+#elif (CUDART_VERSION < 12020)
+#define CUDA_ONE_THREAD(call_group) if (blockIdx.x*blockDim.x + threadIdx.x == 0) {
+#define END_CUDA_ONE_THREAD }
+#elif (CUDART_VERSION >= 12020)
+#define CUDA_ONE_THREAD(call_group) cooperative_groups::invoke_one((call_group), [&]() {
+#define END_CUDA_ONE_THREAD });
+#else
+#error  urecognized CUDART_VERSION
+#endif
+
+#define COOPERATIVE_KERNEL_NO_SHARED_MEMORY(kernel_name, kernel_args)                    \
+    gpuErrchk( cudaLaunchCooperativeKernel((void*)(kernel_name), gridDim, blockDim, (kernel_args)) );
+
+#define COOPERATIVE_KERNEL_SHARED_MEMORY(kernel_name, kernel_args, kernel_sharesize)                    \
+    gpuErrchk( cudaLaunchCooperativeKernel((void*)(kernel_name), gridDim, blockDim, (kernel_args), (kernel_sharesize)) );
+
+#define GET_COOPERATIVE_KERNEL(_1, _2, NAME, ...) NAME
+#define COOPERATIVE_KERNEL(kernel_name, ...)                          \
+  do {                                                                \
+    int dev = 0;                                                      \
+    cudaDeviceProp deviceProp;                                        \
+    cudaGetDeviceProperties(&deviceProp, dev);                        \
+    int blockDim = THREADSPERBLOCK;                                   \
+    int gridDim = deviceProp.multiProcessorCount;                     \
+    GET_COOPERATIVE_KERNEL(__VA_ARGS__, COOPERATIVE_KERNEL_SHARED_MEMORY, COOPERATIVE_KERNEL_NO_SHARED_MEMORY)(kernel_name, __VA_ARGS__)            \
+    cudaDeviceSynchronize();                                          \
+  } while (0); 
 #endif // __CUDACC__
 
 #ifndef BHAH_TYPEOF
@@ -547,6 +615,18 @@ do { \
         BHAH_FREE(a->b); \
     } \
 } while(0);
+
+#ifdef __CUDACC__
+#define MALLOC(a, sz)                                                   \
+  do {                                                                  \
+    gpuErrchk( cudaMalloc((void**)&(a),sz) );                           \
+  } while (0);
+#else
+#define MALLOC(a, sz)                                                   \
+  do {                                                                  \
+    a = (BHAH_TYPEOF(a))malloc(sz);                                     \
+  } while (0);
+#endif
 
 #ifdef __CUDACC__
 #define FREE(a) gpuErrchk( cudaFree((a)) );

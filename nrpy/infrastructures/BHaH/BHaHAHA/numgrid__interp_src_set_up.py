@@ -174,15 +174,15 @@ void initialize_and_interpolate(commondata_struct *restrict commondata)
     // Initialize radial coordinates by copying from external input.
     PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS0) {
       commondata->interp_src_r_theta_phi[0][j] = commondata->external_input_r_theta_phi[0][j];
-    } END_PARALLEL_1D_LOOP
+    } END_PARALLEL_1D_LOOP;
     // Initialize theta coordinates with cell-centered values.
     PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS1) {
       commondata->interp_src_r_theta_phi[1][j] = xxmin1 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->interp_src_dxx1;
-    } END_PARALLEL_1D_LOOP
+    } END_PARALLEL_1D_LOOP;
     // Initialize phi coordinates with cell-centered values.
     PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS2) {
       commondata->interp_src_r_theta_phi[2][j] = xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->interp_src_dxx2;
-    } END_PARALLEL_1D_LOOP
+    } END_PARALLEL_1D_LOOP;
   } // END STEP 2: Initialize coordinate arrays for the interpolation source grid.
 #ifdef __CUDACC__
   gpu_grid.sync();
@@ -251,7 +251,7 @@ void initialize_and_interpolate(commondata_struct *restrict commondata)
       } // END LOOP over i1
     } // END LOOP over i2
 #else
-    } END_PARALLEL_LOOP
+    } END_PARALLEL_LOOP;
 #endif
   } // END STEP 4: Transfer interpolated data to interpolation source grid functions.
 }
@@ -320,7 +320,7 @@ void apply_bcs_interp_src(commondata_struct *restrict commondata, bc_struct *res
               interp_src_bcstruct->inner_bc_array[pt].parity[interp_src_gf_parity[which_gf]] * commondata->interp_src_gfs[IDX4pt(which_gf, srcpt)];
         } // END LOOP over inner boundary points
         #ifdef __CUDACC__
-        END_PARALLEL_1D_LOOP // END LOOP over inner boundary points
+        END_PARALLEL_1D_LOOP; // END LOOP over inner boundary points
         #endif
         break;
       }
@@ -366,7 +366,7 @@ void apply_bcs_interp_src(commondata_struct *restrict commondata, bc_struct *res
       } // END LOOP over inner boundary points
     } // END LOOP over gridfunctions
 #else
-    } END_PARALLEL_2D_LOOP // END LOOP over inner boundary points and gridfunctions
+    } END_PARALLEL_2D_LOOP; // END LOOP over inner boundary points and gridfunctions
 #endif
   } // END STEP 4: Enforce boundary conditions on all interpolation source grid functions.
 } // END FUNCTION apply_bcs_interp_src

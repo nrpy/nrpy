@@ -32,6 +32,45 @@ def register_CFunction_diagnostics_min_max_mean_radii_wrt_centroid(
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    prefunc = r"""
+#ifdef __CUDACC__
+/**
+ * Function that leverages CUDA's atomicCAS to compute the minimum between 
+ * a double stored at the initial address and a new double. Akin to CUDA's 
+ * atomicMin function but for doubles, this function returns the previous 
+ * value stored at the original address.
+ */
+__device__ double atomicMin_double(double* address, double val)
+{
+  unsigned long long int* address_as_ull = (unsigned long long int*) address;
+  unsigned long long int old = *address_as_ull, assumed;
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, 
+        __double_as_longlong(fmin(val, __longlong_as_double(assumed))));
+  } while (assumed != old);
+  return __longlong_as_double(old);
+}
+
+/**
+ * Function that leverages CUDA's atomicCAS to compute the maximium between 
+ * a double stored at the initial address and a new double. Akin to CUDA's 
+ * atomicMax function but for doubles, this function returns the previous 
+ * value stored at the original address.
+ */
+__device__ double atomicMax_double(double* address, double val)
+{
+  unsigned long long int* address_as_ull = (unsigned long long int*) address;
+  unsigned long long int old = *address_as_ull, assumed;
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, 
+        __double_as_longlong(fmax(val, __longlong_as_double(assumed))));
+  } while (assumed != old);
+  return __longlong_as_double(old);
+}
+#endif
+"""
     desc = "BHaHAHA apparent horizon diagnostics: Compute Theta L2 and Linfinity norms."
     cfunc_type = "void"
     name = "diagnostics_min_max_mean_radii_wrt_centroid"
@@ -77,7 +116,7 @@ __device__
     norms->sum_mean_radius = 0.0;
     norms->min_radius_squared = +1e30;
     norms->max_radius_squared = -1e30;
-  } END_CUDA_ONE_THREAD
+  } END_CUDA_ONE_THREAD;
   REAL *s_sum_curr_area = &s[0];
   REAL *s_sum_mean_radius = &s[1*blockDim.x];
   REAL *s_min_radius_squared = &s[2*blockDim.x];
@@ -212,13 +251,14 @@ __device__
     bhahaha_diags->mean_coord_radius_wrt_centroid = sum_mean_radius * params->dxx1 * params->dxx2 / curr_area;
   }
 #ifdef __CUDACC__
-  END_CUDA_ONE_THREAD
+  END_CUDA_ONE_THREAD;
 #endif
 """
     )
     cfc.register_CFunction(
         subdirectory="",
         includes=includes,
+        prefunc=prefunc,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,

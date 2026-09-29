@@ -132,7 +132,7 @@ __device__
                bhahaha_diags->Theta_eval_points_counter);
       } // END IF verbosity level == 2
 #ifdef __CUDACC__
-    } END_CUDA_ONE_THREAD //End verbose==2 printing
+    } END_CUDA_ONE_THREAD; //End verbose==2 printing
     gpu_grid.sync();
 #endif
     // Verify that the minimum coordinate radius meets the required threshold.

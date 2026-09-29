@@ -46,23 +46,23 @@ __global__
   const int NUM_THETA = Nxx_plus_2NGHOSTS1; // NUM_THETA needed for IDX2() macro.
   PARALLEL_2D_LOOP(i1,0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
       commondata->coarse_horizon[IDX2(i1, i2)] = griddata[grid].gridfuncs.y_n_gfs[IDX4(HHGF, NGHOSTS, i1, i2)];
-  } END_PARALLEL_2D_LOOP // END LOOP: over i1 (theta) and i2 (phi)
+  } END_PARALLEL_2D_LOOP; // END LOOP: over i1 (theta) and i2 (phi)
 
   //for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
   PARALLEL_1D_LOOP(i0, 0, Nxx_plus_2NGHOSTS0) {
     commondata->coarse_horizon_r_theta_phi[0][i0] = griddata[grid].xx[0][i0];
-  } END_PARALLEL_LOOP // END LOOP: radial coordinates
+  } END_PARALLEL_LOOP; // END LOOP: radial coordinates
 
 
   //for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
   PARALLEL_1D_LOOP(i1, 0, Nxx_plus_2NGHOSTS1) {
     commondata->coarse_horizon_r_theta_phi[1][i1] = griddata[grid].xx[1][i1];
-  } END_PARALLEL_LOOP // END LOOP: theta coordinates
+  } END_PARALLEL_LOOP; // END LOOP: theta coordinates
 
   //for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
   PARALLEL_1D_LOOP(i2, 0, Nxx_plus_2NGHOSTS2) {
     commondata->coarse_horizon_r_theta_phi[2][i2] = griddata[grid].xx[2][i2];
-  } END_PARALLEL_LOOP // END LOOP: phi coordinates
+  } END_PARALLEL_LOOP; // END LOOP: phi coordinates
 """
     cfc.register_CFunction(
         subdirectory="",

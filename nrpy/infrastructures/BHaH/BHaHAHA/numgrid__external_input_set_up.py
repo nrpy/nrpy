@@ -153,7 +153,7 @@ void initialize_transform_and_rescale(commondata_struct *restrict commondata)
     for (int gf = 0; gf < NUM_EXT_INPUT_CARTESIAN_GFS; gf++) {
       external_input_gfs[EX_IDX4(gf, i0 + i0_min_shift, i1 + NGHOSTS, i2 + NGHOSTS)] = external_input_gfs_no_gzs[EX_NOGZ_IDX4(gf, i0, i1, i2)];
     }
-  } END_PARALLEL_LOOP // END LOOP: iterating through the external input grid points
+  } END_PARALLEL_LOOP; // END LOOP: iterating through the external input grid points
 
   {
     const int Nxx_plus_2NGHOSTS0 = commondata->external_input_Nxx_plus_2NGHOSTS0;
@@ -167,13 +167,13 @@ void initialize_transform_and_rescale(commondata_struct *restrict commondata)
 
     PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS0) {
       commondata->external_input_r_theta_phi[0][j] = xxmin0 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->external_input_dxx0;
-    } END_PARALLEL_1D_LOOP
+    } END_PARALLEL_1D_LOOP;
     PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS1) {
       commondata->external_input_r_theta_phi[1][j] = xxmin1 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->external_input_dxx1;
-    } END_PARALLEL_1D_LOOP
+    } END_PARALLEL_1D_LOOP;
     PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS2) {
       commondata->external_input_r_theta_phi[2][j] = xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->external_input_dxx2;
-    } END_PARALLEL_1D_LOOP
+    } END_PARALLEL_1D_LOOP;
   } // END BLOCK: setting up coordinate arrays
 
 #ifdef __CUDACC__
@@ -311,7 +311,7 @@ void initialize_transform_and_rescale(commondata_struct *restrict commondata)
       } // END LOOP over i1
     } // END LOOP over i2
 #else
-    } END_PARALLEL_LOOP // END LOOP over i0, i1, i2
+    } END_PARALLEL_LOOP; // END LOOP over i0, i1, i2
 #endif
   } // END BLOCK: transformation and rescaling
 } // END FUNCTION transform_and_rescale
@@ -367,7 +367,7 @@ void apply_bcs_external_src(commondata_struct *restrict commondata, bc_struct *r
       } // END LOOP over inner boundary points
     } // END LOOP over gridfunctions
 #else
-      } END_PARALLEL_2D_LOOP // END LOOP over inner boundary points and gridfunctions
+      } END_PARALLEL_2D_LOOP; // END LOOP over inner boundary points and gridfunctions
 #endif
 } // END FUNCTION apply_bcs_external_src
 

@@ -15,6 +15,7 @@ import nrpy.c_function as cfc
 import nrpy.equations.general_relativity.bhahaha.area as bhahaha_area
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
+from nrpy.infrastructures import BHaH
 from nrpy.equations.general_relativity.bhahaha.ExpansionFunctionTheta import (
     ExpansionFunctionTheta,
 )
@@ -51,7 +52,54 @@ def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
         add_to_parfile=False,
     )
 
+    BHaH.griddata_commondata.register_griddata_commondata(
+        __name__,
+        "diag_norms_struct *norms",
+        "intermediate diagnostics used in GPU versions",
+        is_commondata=True,
+    )
+
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    prefunc = r"""
+#ifdef __CUDACC__
+/**
+ * Function that leverages CUDA's atomicCAS to compute the minimum between 
+ * a double stored at the initial address and a new double. Akin to CUDA's 
+ * atomicMin function but for doubles, this function returns the previous 
+ * value stored at the original address.
+ */
+__device__ static double atomicMin_double(double* address, double val)
+{
+  unsigned long long int* address_as_ull = (unsigned long long int*) address;
+  unsigned long long int old = *address_as_ull, assumed;
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, 
+        __double_as_longlong(fmin(val, __longlong_as_double(assumed))));
+  } while (assumed != old);
+  return __longlong_as_double(old);
+}
+
+/**
+ * Function that leverages CUDA's atomicCAS to compute the maximium between 
+ * a double stored at the initial address and a new double. Akin to CUDA's 
+ * atomicMax function but for doubles, this function returns the previous 
+ * value stored at the original address.
+ */
+__device__ static double atomicMax_double(double* address, double val)
+{
+  unsigned long long int* address_as_ull = (unsigned long long int*) address;
+  unsigned long long int old = *address_as_ull, assumed;
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, 
+        __double_as_longlong(fmax(val, __longlong_as_double(assumed))));
+  } while (assumed != old);
+  return __longlong_as_double(old);
+}
+#endif
+
+"""
     desc = "BHaHAHA apparent horizon diagnostics: compute area, centroid location, and Theta (L2 and Linfinity) norms."
     cfunc_type = "void"
     name = "diagnostics_area_centroid_and_Theta_norms"
@@ -104,7 +152,7 @@ __device__
     norms->sum_y_centroid = 0.0;
     norms->sum_z_centroid = 0.0;
     norms->max_Theta_squared_for_Linf_norm = -1e30;
-  } END_CUDA_ONE_THREAD //End global variable modification
+  } END_CUDA_ONE_THREAD; //End global variable modification
   REAL *s_min_radius = &s[0];
   REAL *s_max_radius = &s[1*blockDim.x];
   REAL *s_sum_Theta_squared_for_L2_norm = &s[2*blockDim.x];
@@ -194,7 +242,7 @@ __device__
             s_max_radius[tid] = hh;
           if (hh < s_min_radius[tid])
             s_min_radius[tid] = hh;
-  } END_PARALLEL_LOOP 
+  } END_PARALLEL_LOOP;
   gpu_grid.sync();
 #endif
 
@@ -278,13 +326,14 @@ __device__
     bhahaha_diags->z_centroid_wrt_coord_origin = sum_z_centroid * params->dxx1 * params->dxx2 / bhahaha_diags->area;
   } // END store diagnostics in commondata->bhahaha_diagnostics struct.
   #ifdef __CUDACC__
-  END_CUDA_ONE_THREAD //End global variable modification
+  END_CUDA_ONE_THREAD; //End global variable modification
   gpu_grid.sync();
   #endif"""
     )
     cfc.register_CFunction(
         subdirectory="",
         includes=includes,
+        prefunc=prefunc,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,

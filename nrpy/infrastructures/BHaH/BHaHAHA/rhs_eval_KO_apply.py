@@ -73,6 +73,11 @@ def register_CFunction_rhs_eval(
         commondata=True,
     )
 
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     # vv and hh are gridfunctions:
     hh_rhs = sp.Symbol("vv", real=True) - eta_damping * sp.Symbol("hh", real=True)
     # wavespeed = sp.Symbol("variable_wavespeed", real=True)
@@ -97,6 +102,7 @@ def register_CFunction_rhs_eval(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
+        cuda_parallel_pair=True, 
     )
 
     cfc.register_CFunction(
@@ -106,6 +112,7 @@ def register_CFunction_rhs_eval(
         name=name,
         params=params,
         include_CodeParameters_h=True,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )
     return pcg.NRPyEnv()
@@ -172,6 +179,11 @@ def register_CFunction_KO_apply(
         hh_rhs += KO_diss_strength * hh_dKOD[k] * rfm.ReU[k]
         vv_rhs += KO_diss_strength * vv_dKOD[k] * rfm.ReU[k]
 
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     body = "if(commondata->KO_diss_strength == 0.0) return;\n"
     h = sp.Symbol("hh", real=True)
     surface_replacements = {
@@ -198,6 +210,7 @@ def register_CFunction_KO_apply(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
+        cuda_parallel_pair=True,
     )
     par.set_parval_from_str("fd_order", orig_fd_order)
 
@@ -209,6 +222,7 @@ def register_CFunction_KO_apply(
         name=name,
         params=params,
         include_CodeParameters_h=True,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )
     return pcg.NRPyEnv()

@@ -220,7 +220,7 @@ __device__
       #ifdef __CUDACC__
       } // END IF final interpolation
       #endif
-  } END_PARALLEL_2D_LOOP // End LOOP over theta and phi
+  } END_PARALLEL_2D_LOOP; // End LOOP over theta and phi
 """
     postfunc = r"""#pragma GCC reset_options // Reset compiler optimizations after the function
 

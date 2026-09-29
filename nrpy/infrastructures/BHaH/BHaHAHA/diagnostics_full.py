@@ -154,31 +154,32 @@ void bah_diagnostics_final(commondata_struct *restrict commondata, griddata_stru
         printf("#(%+4.4e, %+4.4e, %+4.4e) = (x, y, z) centroid, wrt global origin\n", commondata->bhahaha_params_and_data->x_center_m1,
                commondata->bhahaha_params_and_data->y_center_m1, commondata->bhahaha_params_and_data->z_center_m1);
     
-      if (commondata->bhahaha_params_and_data->verbosity_level > 0) {
+      if (commondata->bhahaha_params_and_data->verbosity_level > 0)
         printf("#(%5.5e, %5.5e, %5.5e) = (min, max, mean) coord radii, relative to centroid\n", bhahaha_diags->min_coord_radius_wrt_centroid,
                bhahaha_diags->max_coord_radius_wrt_centroid, bhahaha_diags->mean_coord_radius_wrt_centroid);
     
-  if (compute_proper_circumferences) {
-        printf("#(%5.5e, %5.5e, %5.5e) = (xy, xz, yz) proper circumferences\n", bhahaha_diags->xy_plane_circumference,
-               bhahaha_diags->xz_plane_circumference, bhahaha_diags->yz_plane_circumference);
+      if (compute_proper_circumferences) {
+        if (commondata->bhahaha_params_and_data->verbosity_level > 0) {
+          printf("#(%5.5e, %5.5e, %5.5e) = (xy, xz, yz) proper circumferences\n", bhahaha_diags->xy_plane_circumference,
+                 bhahaha_diags->xz_plane_circumference, bhahaha_diags->yz_plane_circumference);
     
-        // Display spin_x based on (xy/yz, xz/yz) ratios
-        display_spin("spin_x", bhahaha_diags->spin_a_x_from_xy_over_yz_prop_circumfs, bhahaha_diags->spin_a_x_from_xz_over_yz_prop_circumfs, //
-                     "xy/yz", "xz/yz");
+          // Display spin_x based on (xy/yz, xz/yz) ratios
+          display_spin("spin_x", bhahaha_diags->spin_a_x_from_xy_over_yz_prop_circumfs, bhahaha_diags->spin_a_x_from_xz_over_yz_prop_circumfs, //
+                       "xy/yz", "xz/yz");
     
-        // Display spin_y based on (xy/xz, yz/xz) ratios
-        display_spin("spin_y", bhahaha_diags->spin_a_y_from_xy_over_xz_prop_circumfs, bhahaha_diags->spin_a_y_from_yz_over_xz_prop_circumfs, //
-                     "xy/xz", "yz/xz");
+          // Display spin_y based on (xy/xz, yz/xz) ratios
+          display_spin("spin_y", bhahaha_diags->spin_a_y_from_xy_over_xz_prop_circumfs, bhahaha_diags->spin_a_y_from_yz_over_xz_prop_circumfs, //
+                       "xy/xz", "yz/xz");
     
-        // Display spin_z based on (xz/xy, yz/xy) ratios
-        display_spin("spin_z", bhahaha_diags->spin_a_z_from_xz_over_xy_prop_circumfs, bhahaha_diags->spin_a_z_from_yz_over_xy_prop_circumfs, //
-                     "xz/xy", "yz/xy");
-      } // END IF verbosity level > 0
+          // Display spin_z based on (xz/xy, yz/xy) ratios
+          display_spin("spin_z", bhahaha_diags->spin_a_z_from_xz_over_xy_prop_circumfs, bhahaha_diags->spin_a_z_from_yz_over_xy_prop_circumfs, //
+                       "xz/xy", "yz/xy");
+        } // END IF verbosity level > 0
+      } // END display proper circumference diagnostics if verbosity is enabled.
     } // END compute, store, and (optionally) print final diagnostics
 #ifdef __CUDACC__
-    } END_CUDA_ONE_THREAD
+  } END_CUDA_ONE_THREAD;
 #endif
-  } //END IF: compute proper circumferences
 }
 """
     desc = """
