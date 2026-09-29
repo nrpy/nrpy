@@ -65,10 +65,10 @@ Claim evidence:
 - Corroboration: [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py), and [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py), forwarded `enable_YBS_Gamma_constraint_adjustment` constants
 
 The separate `enable_YBS_momentum_constraint_adjustment` option controls the
-default-disabled timestep-scaled momentum adjustment for either formulation.
-When enabled, the registrar adds the shared raw-spacing `DSMINGF` auxiliary
-gridfunction and runtime `C_YBS_mom` parameter (default 0, which disables the
-term). The selected equation owner
+default-disabled timestep-scaled, `W`-weighted momentum adjustment for either
+formulation. When enabled, the registrar adds the shared raw-spacing `DSMINGF`
+auxiliary gridfunction and runtime `C_YBS_mom` parameter (default 0, which
+disables the term; recommended 1.75). The selected equation owner
 changes existing `a_rhsDD` outputs; no evolved cleaner state, cleaner RHS,
 initial-data path, boundary path, or KO route is added.
 `blackhole_spectroscopy.py` keeps a false source constant, forwards it only to
