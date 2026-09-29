@@ -395,7 +395,7 @@ jobs:
           # python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
           python -m nrpy.examples.bhahaha && (cd project/BHaHAHA && make && make clean) &&
           python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make && make clean) &&
-          python -m nrpy.examples.sebobv1_jax
+          python -m nrpy.examples.sebobv1_jax && (cd project/sebobv1_jax && pip install . && python -c "from sebobv1_jax import SEOBNRv5_aligned_spin_coefficients as f; print(f(1.5, 0.3, -0.2, 0.02, 2.4627455127717882e-05, 50.0))")
 
   codegen-mac:
     runs-on: ${{ matrix.os }}
@@ -458,7 +458,8 @@ jobs:
           # python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
           python -m nrpy.examples.bhahaha && (cd project/BHaHAHA && make && make clean) &&
           python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make && make clean) &&
-          python -m nrpy.examples.sebobv1_jax
+          python -m nrpy.examples.sebobv1_jax && (cd project/sebobv1_jax && pip install . && python -c "from sebobv1_jax import SEOBNRv5_aligned_spin_coefficients as f; print(f(1.5, 0.3, -0.2, 0.02, 2.4627455127717882e-05, 50.0))")
+
 
   sebob-consistency-test:
     runs-on: ${{ matrix.os }}
