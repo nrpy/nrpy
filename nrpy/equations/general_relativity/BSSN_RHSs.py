@@ -535,9 +535,11 @@ class BSSNRHSs:
             CFL_FACTOR = sp.Symbol("CFL_FACTOR", real=True)
             # The coefficient carries the conformal factor W = e^{-2 phi}, which is 1 far
             # from the holes and vanishes at a puncture. There the computed momentum
-            # residual is dominated by discretization error, and W switches the
-            # adjustment off; it still vanishes on exact solutions, since it is a
-            # multiple of the derivative of the residual.
+            # residual is dominated by discretization error, and second derivatives
+            # of phi grow like 1/r^2. W attenuates the added term, but W times the
+            # derivative of the computed residual does not vanish in general. The
+            # adjustment still vanishes on exact solutions, since it is a multiple
+            # of the derivative of the residual.
             if EvolvedConformalFactor_cf == "W":
                 W = cf
             elif EvolvedConformalFactor_cf == "chi":

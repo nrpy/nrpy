@@ -81,19 +81,27 @@ Claim evidence:
 CAKO Kreiss--Oliger weight: `cf` for `W`, `sqrt(cf)` for `chi`, and
 `exp(-2 cf)` for `phi`. Far from black holes `W` is 1. At a puncture `W`
 vanishes, the fields are under-resolved, and the added term contains second
-derivatives of `phi`, which grow like `1/r^2`; the weight is meant to switch the
-adjustment off there. It does not change what the term means elsewhere: the
-addition is a multiple of the derivative of the momentum residual, so it still
-vanishes on an exact solution for any weight. The preserved specification
+derivatives of `phi`, which grow like `1/r^2`. The weight multiplies the added
+term by `W` and so attenuates it there. It does not by itself make the term
+vanish, because `W` times the derivative of the computed residual need not
+vanish: in Cartesian coordinates with flat `gammabar_ij`, a constant trace-free
+error `delta Abar_ij` gives the residual error `6 delta Abar_ij d_j phi`. For
+example, for `delta Abar_ij = epsilon diag(1, -1, 0)` on the +x axis, `W` times
+the derivative of that residual error tends to a nonzero constant for
+`psi ~ M / (2 r)` (`W ~ r^2`) and grows like `1/r` on the static trumpet
+(`W = r / (r + M)`). The weight does not change what the term means
+elsewhere: the addition is a multiple of the derivative of the momentum
+residual, so it still vanishes on an exact solution for any weight. The
+preserved specification
 records the paper's coefficient with a lapse window; NRPy uses `W` in its place
 and carries no lapse factor. The choice of `W`, like the recommended strength,
 is a maintainer decision and not a result derived in the cited sources.
 
 Claim evidence:
-- Claim: the YBS-MOM coefficient is multiplied by the conformal factor `W = e^{-2 phi}`, built from the evolved conformal-factor option; the weight is 1 far from black holes and vanishes at a puncture, and the addition still vanishes on an exact solution.
+- Claim: the YBS-MOM coefficient is multiplied by the conformal factor `W = e^{-2 phi}`, built from the evolved conformal-factor option; the weight is 1 far from black holes and vanishes at a puncture, and the addition still vanishes on an exact solution; the weight attenuates the addition near a puncture but does not by itself make it vanish, because `W` times the derivative of the computed residual need not vanish: for example, for `delta Abar_ij = epsilon diag(1, -1, 0)` with flat `gammabar_ij` in Cartesian coordinates, on the +x axis `W` times the derivative of the residual error `6 delta Abar_ij d_j phi` tends to a nonzero constant for `psi ~ M / (2 r)` and grows like `1/r` on the static trumpet.
 - Role: descriptive behavior
 - Deciding authority: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS momentum branch (`W`, `ell_M`)
-- Corroboration: [kreiss_oliger_terms.py](../../../nrpy/equations/general_relativity/kreiss_oliger_terms.py), `add_KreissOliger_dissipation_terms` (the same `W` pattern for CAKO); none available for the choice of `W`, which is a maintainer decision
+- Corroboration: [kreiss_oliger_terms.py](../../../nrpy/equations/general_relativity/kreiss_oliger_terms.py), `add_KreissOliger_dissipation_terms` (the same `W` pattern for CAKO); none available for the choice of `W`, which is a maintainer decision; none available for the two puncture scalings, which follow from the momentum-residual expression in `BSSNRHSs` and the stated `W`
 
 ### Ownership and defaults
 
@@ -117,9 +125,13 @@ value is 1.75. The timestep is `Delta t = CFL_FACTOR * ds_min`, and the
 coefficient is `ell_M = C_YBS_mom * CFL_FACTOR * dsmin * W`, whose first three
 factors are, in BHaH, the same prefactor as `C_CAHD`. In a cell of spacing
 `h = dsmin`, the product `ell_M * Delta t / h^2` equals
-`C_YBS_mom * CFL_FACTOR^2 * W * ds_min / dsmin`. It is at most
+`C_YBS_mom * CFL_FACTOR^2 * W * ds_min / dsmin`. Because `ds_min <= dsmin`, it
+is at most `C_YBS_mom * CFL_FACTOR^2 * W_max`, where `W_max` is the largest `W`
+on the grid at any step. Where `W <= 1` everywhere, as for Brill--Lindquist and
+static trumpet initial data, `W_max <= 1` and the product is at most
 `C_YBS_mom * CFL_FACTOR^2`, reached only where `W` is near 1 and `dsmin` equals
-`ds_min`.
+`ds_min`. Data with `W > 1`, such as Kasner data at physical time `t < 1`
+(`W = t^(-1/3)`), can exceed that bound by up to the factor `W_max`.
 
 At principal order the term makes the momentum constraint diffuse, with rates
 `-ell_M |k|^2 / 2` (transverse) and `-2 ell_M |k|^2 / 3` (longitudinal). For
@@ -131,13 +143,17 @@ when `C_YBS_mom * CFL_FACTOR^2 * lambda_FD * W * ds_min / dsmin` does not
 exceed the real-axis limit of the method: 2.785 for RK4, 2.513 for RK3, and 2.0
 for RK2.
 
-The condition holds in every cell when `C_YBS_mom * CFL_FACTOR^2 * lambda_FD`
-does not exceed the limit. At `CFL_FACTOR = 0.45` with RK3 that means
-`C_YBS_mom` up to about 2.2 for order 4 and 1.6 for order 8 (1.9 and 1.3 once
-propagation is included, below). A larger value stays stable only while no cell
-has both `W` and `ds_min / dsmin` near 1. The finest cells of a black-hole
-grid lie beside the punctures, where `W` is small. The range 0 (off) to about 2
-at `CFL_FACTOR = 0.45` follows from this condition, and its upper end scales as
+The condition holds in every cell when
+`C_YBS_mom * CFL_FACTOR^2 * lambda_FD * W_max` does not exceed the limit; where
+`W <= 1` everywhere it suffices that `C_YBS_mom * CFL_FACTOR^2 * lambda_FD` does
+not exceed the limit. At
+`CFL_FACTOR = 0.45` with RK3 and `W <= 1` that means `C_YBS_mom` up to about 2.2
+for order 4 and 1.6 for order 8 (1.9 and 1.3 once propagation is included,
+below); for `W_max > 1`, divide each of these by `W_max`. For `W <= 1`, a larger
+value stays stable only while no cell has both `W` and `ds_min / dsmin` near 1.
+The finest cells of a black-hole grid lie beside the punctures, where `W` is
+small. For `W <= 1` everywhere, the range 0 (off) to about 2 at
+`CFL_FACTOR = 0.45` follows from this condition, and its upper end scales as
 `1 / CFL_FACTOR^2`. The recommended value 1.75 is a maintainer choice, not a
 derived bound.
 
@@ -155,12 +171,12 @@ real-axis limits in the condition above.
 The analysis is frozen-coefficient and principal-part only. It omits variable
 coefficients, larger gauge speeds, Kreiss--Oliger dissipation, and the
 lower-order terms with derivatives of `phi` and of the connection, which vanish
-in flat space and are largest at a puncture; the weight `W` addresses that region
-by construction, and no analysis bounds it. The coefficient carries `W` but no
-lapse factor.
+in flat space and are largest at a puncture; the weight `W` attenuates the term
+in that region, and no analysis bounds the remaining term. The coefficient
+carries `W` but no lapse factor.
 
 Claim evidence:
-- Claim: the runtime default `C_YBS_mom = 0.0` removes the term exactly; the recommended value is 1.75, a maintainer choice and not a derived bound; the explicit-Runge-Kutta diffusion condition is `C_YBS_mom * CFL_FACTOR^2 * lambda_FD * W * ds_min / dsmin` below the real-axis limit in each cell; the analysis is frozen-coefficient and principal-part only and omits the strong-field lower-order terms.
+- Claim: the runtime default `C_YBS_mom = 0.0` removes the term exactly; the recommended value is 1.75, a maintainer choice and not a derived bound; the explicit-Runge-Kutta diffusion condition is `C_YBS_mom * CFL_FACTOR^2 * lambda_FD * W * ds_min / dsmin` below the real-axis limit in each cell; because `ds_min <= dsmin`, it holds in every cell when `C_YBS_mom * CFL_FACTOR^2 * lambda_FD * W_max` does not exceed the limit, with `W_max` the largest `W` on the grid at any step, and where `W <= 1` everywhere it suffices that `C_YBS_mom * CFL_FACTOR^2 * lambda_FD` does not exceed the limit; the range 0 to about 2 at `CFL_FACTOR = 0.45` is stated for `W <= 1` everywhere; the analysis is frozen-coefficient and principal-part only and omits the strong-field lower-order terms.
 - Role: descriptive behavior
 - Deciding authority: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS momentum branch (`ell_M`, `W`); [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` (default value and parameter description); [numerical_grids_and_timestep.py](../../../nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py), `register_CFunction_cfl_limited_timestep`
 - Corroboration: [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (56), for the operator only; none available for the `lambda_FD`, real-axis-limit, and propagation values, because they follow from NRPy's centered finite-difference stencils and the Runge-Kutta stability limits, which Eq. (56) does not treat; none available for the recommended value, which is a maintainer choice

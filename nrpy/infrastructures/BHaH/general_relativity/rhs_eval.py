@@ -193,8 +193,9 @@ def register_CFunction_rhs_eval(
             add_to_parfile=True,
             description=(
                 "1.75 = recommended; diffusive damping of momentum-constraint "
-                "violations, weighted by the conformal factor W so it switches off "
-                "at punctures. Range: 0 (off) to about 2 at CFL_FACTOR = 0.45. "
+                "violations, weighted by the conformal factor W, which vanishes at "
+                "punctures and attenuates the term there. Range: 0 (off) to about 2 "
+                "at CFL_FACTOR = 0.45 when W <= 1 everywhere. "
                 "Stability needs C_YBS_mom * CFL_FACTOR^2 * lambda_FD * W * ds_min / dsmin "
                 "below the Runge-Kutta real-axis limit (2.5 for RK3), where ds_min is "
                 "the smallest grid spacing and lambda_FD = 5.6 to 7.6 for 4th to 8th order."
