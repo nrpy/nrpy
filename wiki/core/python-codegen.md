@@ -27,15 +27,21 @@ Claim evidence:
 - Claim: `py_codegen()` prints each temporary and output as `name = <printed right-hand side>`, calling `printer.doprint()` on the right-hand side only; quotients and negative integer powers are therefore printed as divisions or reciprocals on every supported SymPy version. This makes no claim about output formatting beyond the printer's own conventions.
 - Role: descriptive behavior
 - Deciding authority: [nrpy/py_codegen.py](../../nrpy/py_codegen.py), `py_codegen`
-- Corroboration: the `py_codegen` doctests print `m2/m1`, `1/x**2`, and `y/(x + z)` with CSE disabled and enabled, including a CSE temporary `tmp0 = m2/m1`.
+- Corroboration: `none available`; the only targeted check is the `py_codegen` doctest in the deciding module, which prints `m2/m1`, `1/x**2`, and `y/(x + z)` with CSE disabled and enabled but is not a separate source.
 
-Neither path calls `sp.expand()`, matching `c_codegen()`. Expanding the SEOBNRv5 final mass `M_f` distributes its rational coefficients over a common denominator and prints coefficients up to about `1e51`; with a float32 JAX input these overflow float32 before they cancel, and `M_f` and the QNM values that depend on it become `nan`. The unexpanded expressions print no coefficient larger than about `1e9`.
+Neither path calls `sp.expand()`, matching `c_codegen()`. Expanding the SEOBNRv5
+final mass `M_f` places its rational coefficients over common denominators and
+prints coefficients larger than the largest finite float32 value. JAX evaluates
+such a Python float literal in the float32 precision of a float32 input array,
+so the coefficient overflows before the terms cancel, and `M_f` and the QNM
+values computed from it become `nan`. The unexpanded expression prints no such
+coefficient.
 
 Claim evidence:
-- Claim: `py_codegen()` prints CSE temporaries and outputs without calling `sp.expand()`, so the emitted SEOBNRv5 `M_f` contains no numerical coefficient that overflows float32.
+- Claim: `py_codegen()` prints CSE temporaries and outputs without calling `sp.expand()`. For the SEOBNRv5 final mass that `register_PyFunction_SEOBNRv5_aligned_spin_coefficients()` passes to `py_codegen()`, the expanded form prints coefficients larger than the largest finite float32 value and the unexpanded form does not. This claims no float32 accuracy bound and no result for other expressions or inputs.
 - Role: descriptive behavior
-- Deciding authority: [nrpy/py_codegen.py](../../nrpy/py_codegen.py), `py_codegen`
-- Corroboration: none available; the owning implementation decides the claim.
+- Deciding authority: [nrpy/py_codegen.py](../../nrpy/py_codegen.py), `py_codegen`; [SEOBNRv5_aligned_spin_constants.py](../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py), `SEOBNR_aligned_spin_constants.final_mass_non_precessing_UIB2016`; [SEOBNRv5_aligned_spin_coefficients.py](../../nrpy/infrastructures/JAX/sebob/SEOBNRv5_aligned_spin_coefficients.py), `register_PyFunction_SEOBNRv5_aligned_spin_coefficients`
+- Corroboration: `none available`; no repository test or CI job evaluates the generated coefficient function with a float32 input
 
 Unlike `c_codegen()`, this path does not run `sort_cse_output_deterministically()` when `cse_sorting="none"`. That option requests SymPy's unsorted CSE path; this page makes no deterministic-output guarantee for it.
 

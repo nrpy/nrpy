@@ -33,7 +33,7 @@ Claim evidence:
 - Claim: `NRPyJaxPrinter` prints integers of magnitude at least `2**31`, and rationals whose numerator magnitude or denominator is at least `2**31`, as Python float literals, and prints `Max`/`Min` as nested `jnp.maximum`/`jnp.minimum` calls. Float printing rounds such values to double precision.
 - Role: descriptive behavior
 - Deciding authority: [nrpy/helpers/jax_printer.py](../../../nrpy/helpers/jax_printer.py), `NRPyJaxPrinter._print_Integer`, `_print_Rational`, `_print_Max`, `_print_Min`
-- Corroboration: the `NRPyJaxPrinter` class doctests in the same module cover large and small integers and rationals and two- and three-argument `Max`/`Min`.
+- Corroboration: `none available`; the only targeted check is the `NRPyJaxPrinter` class doctest in the deciding module, which validates this behavior locally but is not a separate source.
 
 The JAX printer also implements `_print_ArrayElementwiseApplyFunc()`. Unary lambda elementwise application is lowered by printing the array operand once, printing the scalar lambda body with a sentinel symbol, and replacing that sentinel with the parenthesized array expression. Multi-argument lambdas fall back to `jnp.vectorize(...)`, and non-lambda callables are printed as callable applications to the array string.
 

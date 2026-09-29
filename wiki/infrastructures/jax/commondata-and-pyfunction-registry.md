@@ -36,7 +36,7 @@ Claim evidence:
 - Claim: `register_commondata_params()` raises `ValueError` and registers no field when its four input lists differ in length; otherwise it registers every listed field. This says nothing about duplicate names beyond the per-field check in `register_commondata_param()`.
 - Role: descriptive behavior
 - Deciding authority: [nrpy/infrastructures/JAX/commondata.py](../../../nrpy/infrastructures/JAX/commondata.py), `register_commondata_params`
-- Corroboration: the `register_commondata_params` doctest in the same module exercises a length mismatch and checks that no field was registered.
+- Corroboration: `none available`; the only targeted check is the `register_commondata_params` doctest in the deciding module, which exercises a length mismatch but is not a separate source.
 
 `generate_commondata_dataclass()` turns the current registry contents into the
 generated `Commondata.py` module text. It emits `from dataclasses import

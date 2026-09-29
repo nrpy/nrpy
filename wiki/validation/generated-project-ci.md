@@ -28,6 +28,12 @@ Configured GitHub job map:
 | `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the workflow-selected trusted revision | Uses the same ten-input and median-error criterion. |
 
 Claim evidence:
+- Claim: Both `codegen-ubuntu` and `codegen-mac` generate `sebobv1_jax`, run `pip install .` in the generated project, import `SEOBNRv5_aligned_spin_coefficients`, call it once without a JAX transformation such as `jax.jit`, with the Python-scalar inputs `(1.5, 0.3, -0.2, 0.02, 2.4627455127717882e-05, 50.0)`, and print the returned `Commondata`. The step fails only if generation, installation, import, or the call raises; it asserts no returned field or value and does not run the generated pytest, a float32 input, a traced function, or an accelerator.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), jobs `codegen-ubuntu` and `codegen-mac`
+- Corroboration: `none available`; no other configured file restates these job commands
+
+Claim evidence:
 - Claim: Each `sebob-consistency-test` helper invocation uses exactly ten deterministic input sets.
 - Role: CI behavior
 - Deciding authority: [`sebob_consistency_check.py`](../../nrpy/examples/tests/sebob_consistency_check.py), module `__main__` entry point, `num_sets`
