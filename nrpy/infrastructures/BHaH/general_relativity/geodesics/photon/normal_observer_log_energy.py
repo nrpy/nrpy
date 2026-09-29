@@ -17,11 +17,15 @@ import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
 
 
-def normal_observer_log_energy(log_energy_expr: sp.Expr) -> None:
+def normal_observer_log_energy(
+    log_energy_expr: sp.Expr, skip_non_active_status: bool = False
+) -> None:
     r"""
     Register the direct-EOM log-energy helper for CPU or CUDA execution.
 
     :param log_energy_expr: Symbolic expression for ``ln|alpha p^0|``.
+    :param skip_non_active_status: Whether to skip log-energy evaluation for
+        photons whose status is not ``ACTIVE``.
     :raises ValueError: If the expression is empty or the parallelization is unsupported.
 
     Doctests:
@@ -54,6 +58,20 @@ def normal_observer_log_energy(log_energy_expr: sp.Expr) -> None:
         "d_log_energy_bundle": "double *restrict",
         "chunk_size": "const int",
     }
+    status_arg = ""
+    status_desc = ""
+    inactive_ray_guard = ""
+    if skip_non_active_status:
+        arg_dict["d_status"] = "const termination_type_t *restrict"
+        status_arg = "const termination_type_t *restrict d_status, "
+        status_desc = (
+            "@param[in] d_status Per-ray status; only ACTIVE photons are evaluated.\n"
+        )
+        inactive_ray_guard = (
+            "    if (d_status[i] != ACTIVE) return;\n"
+            if parallelization == "cuda"
+            else "    if (d_status[i] != ACTIVE) continue;\n"
+        )
 
     body_math = ccg.c_codegen(
         [log_energy_expr],
@@ -101,6 +119,7 @@ def normal_observer_log_energy(log_energy_expr: sp.Expr) -> None:
 
     {loop_preamble}
     {loop_open}
+        {inactive_ray_guard}
         const double pU0 = ReadCUDA(&d_f_bundle[IDX_F(4, i)]);
         {metric_load_str}
 
@@ -142,15 +161,17 @@ def normal_observer_log_energy(log_energy_expr: sp.Expr) -> None:
         @param[in] d_f_bundle Direct photon state bundle containing $p^0$ in
         component $f^4$.
         @param[in] d_metric_bundle Covariant four-metric bundle $g_{\mu\nu}$.
+        {status_desc}
         @param[out] d_log_energy_bundle Per-ray $\ln|\alpha p^0|$ values.
         @param chunk_size Number of active rays in the bundle.
         @param stream_idx CPU compatibility argument.
-        """,
+        """.replace("{status_desc}", status_desc),
         cfunc_type="void",
         name="normal_observer_log_energy",
         params=(
             "const double *restrict d_f_bundle, "
             "const double *restrict d_metric_bundle, "
+            f"{status_arg}"
             "double *restrict d_log_energy_bundle, "
             "const int chunk_size, "
             "const int stream_idx"

@@ -1,24 +1,24 @@
 """
 Register chunk-based numerical-spacetime metric interpolation.
 
-This module emits the host-side numerical interpolation wrapper used by
-geodesic integrators. The generated C function mirrors the analytic
-interpolation-kernel bundle contract: it consumes one chunk of photon states,
-parallelizes over rays on the CPU, writes the 10-component metric bundle, and
-writes one selected 40-component geometry bundle only when requested.
+This module emits the host-side numerical interpolation function used by
+geodesic integrators. Like the analytic interpolation kernel, the generated C
+function processes one chunk of photon states, parallelizes over rays on the
+CPU, writes a 10-component metric array, and writes a selected 40-component
+geometry array only when requested.
 
-Operationally, this wrapper is the bridge between the data-management layer
-and the numerical interpolation helpers. For each photon, it either spatially
-interpolates the first selected numerical slice directly or asks the numerical
+For each photon, the function either spatially interpolates the first selected
+numerical slice directly or asks the numerical
 time-window manager for one adaptive centered temporal stencil. In the mixed
-case, the wrapper spatially interpolates only the mapped numerical stencil
+case, the function spatially interpolates only the mapped numerical stencil
 subset, fills lower missing stencil nodes from the first selected numerical
 slice, fills upper missing stencil nodes by freezing the final selected
 numerical slice, and then runs the temporal helper once on the reconstructed
 full stencil to recover the final tensors at the photon coordinate time.
 
-The wrapper does not own file or mmap lifetime. A NumericalTimeWindowManager
-must already have an active mapped time window for the slot being processed.
+The function does not open or unmap numerical data files. A
+NumericalTimeWindowManager must already have an active mapped time window for
+the slot being processed.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -30,7 +30,9 @@ from typing import Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.params as par
+
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.azimuthal_symmetry_spatial_lagrange_interpolation import (
     register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation,
 )
@@ -51,13 +53,15 @@ def register_CFunction_numerical_interpolation(
     enable_simd: bool = False,
     project_dir: str = ".",
     normalized_eom: bool = False,
+    skip_non_active_status: bool = False,
+    track_synthetic_slice_usage: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the CPU numerical-spacetime interpolation wrapper.
 
-    This wrapper owns the per-photon orchestration of the numerical-spacetime
-    interpolation pipeline. It does not select or map the active numerical
-    window itself; instead, it assumes a caller already mapped a conservative
+    This function runs the per-photon numerical-spacetime interpolation stages.
+    It does not select or map the active numerical window itself; instead, it
+    assumes a caller already mapped a conservative
     slot-based window and then evaluates every ray in one chunk against that
     shared mapped data. Rays at or below the authoritative first stored slice
     time spatially interpolate that first slice directly. Rays at or above the
@@ -67,8 +71,8 @@ def register_CFunction_numerical_interpolation(
     or apply a C1 temporal interpolator. For `g4DD_d0`, metric time derivatives
     are zeroed at direct endpoints and synthetic frozen nodes; `GammaUDD`
     endpoint Christoffels are reused exactly as stored. Rays between those
-    bounds use the adaptive
-    `time_window_manager_numerical_stencil_for_time()` contract from
+    bounds use the adaptive temporal stencil selected by
+    `time_window_manager_numerical_stencil_for_time()` in
     `time_window_manager_numerical`, spatially interpolate only the mapped
     numerical stencil subset, fill lower missing stencil nodes by spatially
     interpolating the first selected numerical slice, fill upper missing stencil
@@ -89,6 +93,12 @@ def register_CFunction_numerical_interpolation(
     :param project_dir: Destination project directory for copied headers.
     :param normalized_eom: Whether coordinate time is the RKF45 integration
         parameter instead of state component zero.
+    :param skip_non_active_status: Whether to skip every photon whose status is
+        not ``ACTIVE`` before reading its state or interpolating the metric.
+    :param track_synthetic_slice_usage: Whether to emit optional per-photon
+        records for synthetic temporal-stencil nodes outside the numerical
+        spacetime time range. Batch evolution enables this; diagnostic calls
+        pass null record pointers.
     :return: None if in registration phase, else the updated NRPy environment.
     :raises ValueError: If `CoordSystem` or `interpolation_method` is not
         supported.
@@ -148,6 +158,24 @@ def register_CFunction_numerical_interpolation(
         raise ValueError(
             "interpolation_method must be one of ('g4DD', 'g4DD_d0', 'GammaUDD'); "
             f"found '{interpolation_method}'."
+        )
+    if not isinstance(track_synthetic_slice_usage, bool):
+        raise ValueError(
+            "track_synthetic_slice_usage must be a bool, got "
+            f"{type(track_synthetic_slice_usage).__name__}."
+        )
+    if track_synthetic_slice_usage:
+        Bdefines_h.register_BHaH_defines(
+            "synthetic_slice_usage",
+            r"""
+    // Records the first RKF45 interpolation request that uses synthetic temporal nodes.
+    typedef struct {
+      bool used_lower_endpoint;
+      double lower_request_time;
+      bool used_upper_endpoint;
+      double upper_request_time;
+    } synthetic_slice_usage_t; // END STRUCT: synthetic_slice_usage_t
+    """,
         )
     static_endpoint_time_derivative_c_code = (
         """        // Static endpoints must not reuse stored dynamic time derivatives.
@@ -209,6 +237,70 @@ def register_CFunction_numerical_interpolation(
         coordinate_time_c_code = "const REAL t = (REAL)f_local[0];"
 
     fixed_spatial_center_argument = "fixed_spatial_center,"
+    synthetic_slice_usage_params = (
+        "const long int *restrict d_photon_indices,\n"
+        "                synthetic_slice_usage_t *restrict synthetic_slice_usage_by_photon,"
+        if track_synthetic_slice_usage
+        else ""
+    )
+    synthetic_slice_usage_update = (
+        r"""
+    // Record only successful RKF45 calls with a synthetic stencil node
+    // outside the physical time range. Endpoint dispatch has no missing nodes.
+    if (commondata->perform_synthetic_slice_check &&
+        d_photon_indices != NULL &&
+        synthetic_slice_usage_by_photon != NULL && num_missing_slices > 0) {
+      const long int photon_index = d_photon_indices[i];
+      if (photon_index >= 0) {
+        for (int missing_idx = 0; missing_idx < num_missing_slices; missing_idx++) {
+          if (missing_slice_times[missing_idx] < 0.0 &&
+              !synthetic_slice_usage_by_photon[photon_index].used_lower_endpoint) {
+            synthetic_slice_usage_by_photon[photon_index].used_lower_endpoint = true;
+            synthetic_slice_usage_by_photon[photon_index].lower_request_time = (double)t;
+          } // END IF: first synthetic node below t=0
+          if (missing_slice_times[missing_idx] > t_numerical_end &&
+              !synthetic_slice_usage_by_photon[photon_index].used_upper_endpoint) {
+            synthetic_slice_usage_by_photon[photon_index].used_upper_endpoint = true;
+            synthetic_slice_usage_by_photon[photon_index].upper_request_time = (double)t;
+          } // END IF: first synthetic node above t_final
+        } // END LOOP: inspect synthetic stencil nodes
+      } // END IF: tile photon index is valid
+    } // END IF: synthetic slice-use tracking enabled
+"""
+        if track_synthetic_slice_usage
+        else ""
+    )
+    synthetic_slice_usage_desc = (
+        """@param[in] d_photon_indices Tile-local bundle of global photon indices.
+@param[in,out] synthetic_slice_usage_by_photon Optional per-photon synthetic
+    temporal-stencil usage records; both pointers may be NULL for diagnostics.
+"""
+        if track_synthetic_slice_usage
+        else ""
+    )
+
+    inactive_ray_skip = (
+        r"""    if (d_status[i] != ACTIVE) {
+      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
+        d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
+      if (d_rhs_geometry_bundle != NULL)
+        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
+          d_rhs_geometry_bundle[IDX_RHS_GEOMETRY(comp, i)] = NAN;
+      continue;
+    } // END IF: photon is not active
+"""
+        if skip_non_active_status
+        else r"""    if (d_status[i] == FAILURE_SPATIAL_INTERPOLATION ||
+        d_status[i] == FAILURE_TEMPORAL_INTERPOLATION) {
+      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
+        d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
+      if (d_rhs_geometry_bundle != NULL)
+        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
+          d_rhs_geometry_bundle[IDX_RHS_GEOMETRY(comp, i)] = NAN;
+      continue;
+    } // END IF: ray already failed interpolation
+"""
+    )
 
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
@@ -279,7 +371,7 @@ independently ray-by-ray.
 @param[in] numerical_window Active mapped numerical time-window manager.
 @param[in] d_f_bundle Photon state bundle.
 @param[in,out] d_status Per-ray integration status bundle.
-{spatial_center_desc}{integration_parameter_desc}@param[out] d_metric_bundle Destination metric bundle.
+{spatial_center_desc}{integration_parameter_desc}{synthetic_slice_usage_desc}@param[out] d_metric_bundle Destination metric bundle.
 @param[out] d_rhs_geometry_bundle Destination 40-component geometry bundle, or NULL.
 @param chunk_size Number of active rays in the chunk.
 @param stream_idx Analytic-kernel compatibility argument; ignored on CPU.
@@ -288,7 +380,8 @@ independently ray-by-ray.
 """
     cfunc_type = "void"
     name = "numerical_interpolation"
-    params = """const commondata_struct *restrict commondata,
+    params = (
+        """const commondata_struct *restrict commondata,
                 const params_struct *restrict params,
                 const azimuthal_symmetry_spatial_lagrange_context_struct *restrict spatial_context,
                 const NumericalTimeWindowManager *restrict numerical_window,
@@ -296,12 +389,16 @@ independently ray-by-ray.
                 termination_type_t *restrict d_status,
                 {spatial_center_params}
                 {integration_parameter_params}
+                {synthetic_slice_usage_params}
                 double *restrict d_metric_bundle,
                 double *restrict d_rhs_geometry_bundle,
                 const long int chunk_size,
                 const int stream_idx""".replace(
-        "{spatial_center_params}", spatial_center_params
-    ).replace("{integration_parameter_params}", integration_parameter_params)
+            "{spatial_center_params}", spatial_center_params
+        )
+        .replace("{integration_parameter_params}", integration_parameter_params)
+        .replace("{synthetic_slice_usage_params}", synthetic_slice_usage_params)
+    )
     body = (
         r"""
   (void)stream_idx;
@@ -382,15 +479,7 @@ independently ray-by-ray.
 
   #pragma omp parallel for
   for (long int i = 0; i < chunk_size; i++) {
-    if (d_status[i] == FAILURE_SPATIAL_INTERPOLATION ||
-        d_status[i] == FAILURE_TEMPORAL_INTERPOLATION) {
-      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
-        d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
-      if (d_rhs_geometry_bundle != NULL)
-        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
-          d_rhs_geometry_bundle[IDX_RHS_GEOMETRY(comp, i)] = NAN;
-      continue;
-    } // END IF: ray already failed interpolation
+{inactive_ray_skip}
 
     double f_local[9];
     for (int comp = 0; comp < 9; comp++)
@@ -670,6 +759,8 @@ independently ray-by-ray.
       continue;
     } // END IF: ray-local interpolation failed
 
+{synthetic_slice_usage_update}
+
     for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
       d_metric_bundle[IDX_METRIC(comp, i)] = (double)g4dd_local[comp];
     if (d_rhs_geometry_bundle != NULL)
@@ -687,7 +778,10 @@ independently ray-by-ray.
         .replace("{spatial_center_setup}", spatial_center_setup)
         .replace("{fixed_spatial_center_argument}", fixed_spatial_center_argument)
         .replace("{integration_parameter_params}", integration_parameter_params)
+        .replace("{synthetic_slice_usage_params}", synthetic_slice_usage_params)
+        .replace("{synthetic_slice_usage_update}", synthetic_slice_usage_update)
         .replace("{coordinate_time_c_code}", coordinate_time_c_code)
+        .replace("{inactive_ray_skip}", inactive_ray_skip)
         .replace(
             "{static_endpoint_time_derivative_c_code}",
             static_endpoint_time_derivative_c_code,
@@ -697,8 +791,10 @@ independently ray-by-ray.
             frozen_node_time_derivative_c_code,
         )
     )
-    desc = desc.replace("{spatial_center_desc}", spatial_center_desc).replace(
-        "{integration_parameter_desc}", integration_parameter_desc
+    desc = (
+        desc.replace("{spatial_center_desc}", spatial_center_desc)
+        .replace("{integration_parameter_desc}", integration_parameter_desc)
+        .replace("{synthetic_slice_usage_desc}", synthetic_slice_usage_desc)
     )
 
     cfc.register_CFunction(

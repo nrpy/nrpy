@@ -244,6 +244,9 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/examples/photon_batch_geodesic_integrator_analytical.py` | living |
 | `nrpy/examples/photon_single_geodesic_integrator_numerical.py` | living |
 | `nrpy/examples/photon_batch_geodesic_integrator_numerical.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/find_event_time_and_state.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/batch_integrator_numerical.py` | living |
 | `nrpy/examples/tovola_neutron_star.py` | living |
 | `nrpy/examples/hydro_without_hydro.py` | living |
 | `nrpy/examples/groovy_TOV_BSSN.py` | living |

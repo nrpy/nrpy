@@ -830,7 +830,8 @@ def pack_slice_entry(entry: SliceEntry) -> bytes:
 
     :param entry: Slice-table entry values.
     :return: Fixed-width packed entry bytes.
-    :raises RuntimeError: If the packed entry size differs from the schema.
+    :raises RuntimeError: If the packed entry size differs from the required
+        fixed-width slice-table layout.
     """
     packed = struct.pack(
         SLICE_TABLE_ENTRY_FORMAT,

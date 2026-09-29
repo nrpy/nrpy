@@ -54,14 +54,15 @@ batch_structs_c_code = r"""
         ACTIVE = 7, // Photon is currently undergoing integration.
         REJECTED = 8, // Photon RKF45 step was rejected.
         FAILURE_SPATIAL_INTERPOLATION = 9, // Spatial interpolation failed for this photon.
-        FAILURE_TEMPORAL_INTERPOLATION = 10 // Temporal interpolation failed for this photon.
+        FAILURE_TEMPORAL_INTERPOLATION = 10, // Temporal interpolation failed for this photon.
+        FAILURE_PLANE_INTERPOLATION_HISTORY = 11 // Too few distinct accepted states for quadratic plane interpolation.
     } termination_type_t; // END ENUM: termination_type_t
 
     // Native same-build metadata for one serialized blueprint tile.
     #define BLUEPRINT_MAGIC "NRPYBP01"
-    // Binary-layout version 6 stores fields of view once in the tile header and stores each
-    // ray's normalized image sample directly in the record.
-    #define BLUEPRINT_SCHEMA_VERSION 6U
+    // Version 7 adds the axial angular momentum at the first accepted state
+    // after a nonterminal-plane crossing, with its time and signed distance.
+    #define BLUEPRINT_SCHEMA_VERSION 7U
     typedef struct {
         char magic[8];
         uint32_t native_schema_version;
@@ -91,7 +92,23 @@ batch_structs_c_code = r"""
         double t_f; // Physical coordinate time $t$ when the photon terminated.
         double image_width_fraction; // Normalized width coordinate in [0,1].
         double image_height_fraction; // Normalized height coordinate in [0,1].
+        double non_terminal_post_step_Lz; // Axial angular momentum at the first accepted state beyond the nonterminal plane.
+        double non_terminal_post_step_t; // Coordinate time of that accepted state.
+        double non_terminal_post_step_distance; // Signed distance from that state to the nonterminal plane.
     } __attribute__((packed)) blueprint_data_t; // END STRUCT: blueprint_data_t
+
+    // One successful crossing in a sparse per-plane diagnostic file.
+    // The integration parameter is affine parameter for direct geodesic EOM
+    // and coordinate time for normalized EOM. State component zero holds the
+    // complementary time or affine parameter, respectively.
+    typedef struct {
+        uint64_t photon_index; // Tile-local photon index.
+        uint32_t interpolation_degree; // Polynomial degree used at this crossing.
+        double integration_param; // Independent integration parameter at the plane.
+        double y_local; // Local horizontal plane coordinate.
+        double z_local; // Local vertical plane coordinate.
+        double state[9]; // Interpolated nine-component photon state.
+    } __attribute__((packed)) plane_crossing_record_t;
 
 #if defined(__cplusplus)
     static_assert(sizeof(blueprint_header_t) == 60, "blueprint_header_t size changed");
@@ -106,7 +123,8 @@ batch_structs_c_code = r"""
     static_assert(offsetof(blueprint_header_t, record_count) == 36, "blueprint header count offset changed");
     static_assert(offsetof(blueprint_header_t, alpha_w) == 44, "blueprint alpha_w offset changed");
     static_assert(offsetof(blueprint_header_t, alpha_h) == 52, "blueprint alpha_h offset changed");
-    static_assert(sizeof(blueprint_data_t) == 100, "blueprint_data_t size changed");
+    static_assert(sizeof(blueprint_data_t) == 124, "blueprint_data_t size changed");
+    static_assert(sizeof(plane_crossing_record_t) == 108, "plane crossing record size changed");
     static_assert(offsetof(blueprint_data_t, termination_type) == 0, "blueprint termination offset changed");
     static_assert(offsetof(blueprint_data_t, y_nt) == 4, "blueprint y_nt offset changed");
     static_assert(offsetof(blueprint_data_t, z_nt) == 12, "blueprint z_nt offset changed");
@@ -120,6 +138,9 @@ batch_structs_c_code = r"""
     static_assert(offsetof(blueprint_data_t, t_f) == 76, "blueprint t_f offset changed");
     static_assert(offsetof(blueprint_data_t, image_width_fraction) == 84, "blueprint width fraction offset changed");
     static_assert(offsetof(blueprint_data_t, image_height_fraction) == 92, "blueprint height fraction offset changed");
+    static_assert(offsetof(blueprint_data_t, non_terminal_post_step_Lz) == 100, "blueprint post-step Lz offset changed");
+    static_assert(offsetof(blueprint_data_t, non_terminal_post_step_t) == 108, "blueprint post-step time offset changed");
+    static_assert(offsetof(blueprint_data_t, non_terminal_post_step_distance) == 116, "blueprint post-step distance offset changed");
 #else
     _Static_assert(sizeof(blueprint_header_t) == 60, "blueprint_header_t size changed");
     _Static_assert(offsetof(blueprint_header_t, magic) == 0, "blueprint header magic offset changed");
@@ -133,7 +154,8 @@ batch_structs_c_code = r"""
     _Static_assert(offsetof(blueprint_header_t, record_count) == 36, "blueprint header count offset changed");
     _Static_assert(offsetof(blueprint_header_t, alpha_w) == 44, "blueprint alpha_w offset changed");
     _Static_assert(offsetof(blueprint_header_t, alpha_h) == 52, "blueprint alpha_h offset changed");
-    _Static_assert(sizeof(blueprint_data_t) == 100, "blueprint_data_t size changed");
+    _Static_assert(sizeof(blueprint_data_t) == 124, "blueprint_data_t size changed");
+    _Static_assert(sizeof(plane_crossing_record_t) == 108, "plane crossing record size changed");
     _Static_assert(offsetof(blueprint_data_t, termination_type) == 0, "blueprint termination offset changed");
     _Static_assert(offsetof(blueprint_data_t, y_nt) == 4, "blueprint y_nt offset changed");
     _Static_assert(offsetof(blueprint_data_t, z_nt) == 12, "blueprint z_nt offset changed");
@@ -147,18 +169,19 @@ batch_structs_c_code = r"""
     _Static_assert(offsetof(blueprint_data_t, t_f) == 76, "blueprint t_f offset changed");
     _Static_assert(offsetof(blueprint_data_t, image_width_fraction) == 84, "blueprint width fraction offset changed");
     _Static_assert(offsetof(blueprint_data_t, image_height_fraction) == 92, "blueprint height fraction offset changed");
+    _Static_assert(offsetof(blueprint_data_t, non_terminal_post_step_Lz) == 100, "blueprint post-step Lz offset changed");
+    _Static_assert(offsetof(blueprint_data_t, non_terminal_post_step_t) == 108, "blueprint post-step time offset changed");
+    _Static_assert(offsetof(blueprint_data_t, non_terminal_post_step_distance) == 116, "blueprint post-step distance offset changed");
 #endif
 
     // ==========================================
     // Flattened SoA Struct (Master Storage)
     // ==========================================
     typedef struct {
-        double *f; // Flattened state vector: t, x, y, z, mode-specific energy, p^x, p^y, p^z, aux.
-        double *f_p; // State vector at the previous integration step.
-        double *f_p_p; // State vector at two integration steps prior.
+        double *f; // Current nine-component state; component meanings depend on the photon EOM.
+        double *f_history; // Accepted states before f, indexed by history step then component then photon.
         double *integration_param; // Current mode-dependent integration parameter.
-        double *integration_param_p; // Integration parameter at the previous step.
-        double *integration_param_p_p; // Integration parameter at two steps prior.
+        double *integration_param_history; // Accepted parameters before the current step, indexed by history step then photon.
         double *h; // Current adaptive step size $h$ for the RKF45 integrator.
         termination_type_t *status; // Current physical/numerical status of the photon.
         int *rejection_retries; // Counter for consecutive RKF45 error tolerance rejections.
@@ -168,10 +191,16 @@ batch_structs_c_code = r"""
         bool *on_positive_side_of_terminal_plane_prev; // True if photon was previously 'above' the terminal plane.
 
         bool *terminal_plane_event_found; // Flag indicating a terminal plane intersection was detected.
+        bool *terminal_plane_crossing_pending; // A crossing awaits enough accepted states for centered interpolation.
+        int *terminal_plane_steps_past; // Accepted states after the pending terminal crossing.
+        int *terminal_plane_event_degree; // Polynomial degree used for the accepted terminal crossing.
         double *terminal_plane_event_lambda; // Exact affine parameter $\lambda$ at terminal crossing.
         double *terminal_plane_event_f_intersect; // State vector at terminal crossing.
 
         bool *non_terminal_plane_event_found; // Nonterminal-plane intersection lock.
+        bool *non_terminal_plane_crossing_pending; // A nonterminal crossing awaits centered interpolation.
+        int *non_terminal_plane_steps_past; // Accepted states after the pending nonterminal crossing.
+        int *non_terminal_plane_event_degree; // Polynomial degree used for the accepted nonterminal crossing.
         double *non_terminal_plane_event_lambda; // Affine parameter $\lambda$ at nonterminal plane.
         double *non_terminal_plane_event_f_intersect; // State at nonterminal-plane intersection.
 
@@ -199,7 +228,9 @@ def register_photon_batch_structs() -> None:
 
 
 def set_initial_conditions_kernel(
-    normalized_eom: bool = False, initialize_event_history: bool = True
+    normalized_eom: bool = False,
+    initialize_event_history: bool = True,
+    tile_indices_add_to_parfile: bool = False,
 ) -> None:
     """
     Register shared photon initialization from one observer-event metric.
@@ -219,10 +250,16 @@ def set_initial_conditions_kernel(
     initializer therefore always constructs the complete direct momentum
     first.  No algebraic temporal-momentum recovery is needed.
 
+    The batch integrator fills accepted-state history after any normalized
+    momentum conversion, so every history slot initially matches the EOM used
+    for evolution.
+
     :param normalized_eom: Whether to initialize the normalized photon state
         layout.
     :param initialize_event_history: Whether to validate event-plane parameters
-        and initialize the batch event-side arrays.
+        and initialize the photon event-side flags.
+    :param tile_indices_add_to_parfile: Include tile indices in the parameter
+        file for a single numerical ray.
     """
     # Step 1: Register tile-sampling state.  Tile indices are the only mutable
     # tile state.  Each tile origin is derived below from the active indices;
@@ -236,7 +273,7 @@ def set_initial_conditions_kernel(
         ],
         [0, 0],
         commondata=True,
-        add_to_parfile=False,
+        add_to_parfile=tile_indices_add_to_parfile,
     )
     par.register_CodeParameter(
         "int",
@@ -305,18 +342,15 @@ def set_initial_conditions_kernel(
     parallelization = par.parval_from_str("parallelization")
     cd_access = parallel_utils.get_commondata_access(parallelization)
     initial_state_parameter = "0.0" if normalized_eom else f"{cd_access}t_start"
-    normalized_tracker_initialization = (
-        """
-    // Normalized evolution uses coordinate time as its external integration
-    // parameter.  The affine parameter remains in f[0].
+    integration_param_initialization = r"""
+    // Direct geodesic EOM starts at affine parameter zero. Normalized EOM
+    // starts at coordinate time t_start, while affine parameter is in f[0].
     for (long int ray = 0; ray < num_rays; ++ray) {
-        all_photons->integration_param[ray] = commondata->t_start;
-        all_photons->integration_param_p[ray] = commondata->t_start;
-        all_photons->integration_param_p_p[ray] = commondata->t_start;
-    } // END LOOP: initialize normalized coordinate-time trackers
-"""
-        if normalized_eom
-        else ""
+        all_photons->integration_param[ray] = INITIAL_INTEGRATION_PARAM;
+    } // END LOOP: initialize independent integration parameter
+""".replace(
+        "INITIAL_INTEGRATION_PARAM",
+        "commondata->t_start" if normalized_eom else "0.0",
     )
 
     # Step 3: Describe kernel arguments.  Tetrad components are passed as
@@ -386,8 +420,9 @@ __TETRAD_LOADS__
     // direction.  The host validates the derived height-side sample count and
     // passes it as a scalar so CUDA and CPU use identical sample ordering.
     const int scan_density_width = __CD_ACCESS__scan_density;
-    const int local_col = (int)(c % scan_density_width);
-    const int local_row = (int)(c / scan_density_width);
+    const long int sample_idx = start_idx + c;
+    const int local_col = (int)(sample_idx % scan_density_width);
+    const int local_row = (int)(sample_idx / scan_density_width);
     const double a =
         ((double)__CD_ACCESS__tile_index_width +
          ((double)local_col + 0.5) / (double)scan_density_width) /
@@ -510,7 +545,7 @@ __OBSERVER_RAY_MATH__
         if (err != cudaSuccess) {
             fprintf(
                 stderr,
-                    "ERROR: numerical observer initialization kernel failed at start %ld: %s\n",
+                    "ERROR: photon initialization kernel failed at start %d: %s\n",
                 start_idx,
                 cudaGetErrorString(err));
             exit(EXIT_FAILURE);
@@ -563,6 +598,14 @@ __OBSERVER_RAY_MATH__
     # for this initializer.  The determinant still checks singular/non-Lorentzian
     # input before any tetrad normalization occurs.
     tetrad_helpers = r"""
+/**
+ * Contract two four-vectors with the covariant observer metric.
+ *
+ * @param[in] metric Covariant metric at the observer.
+ * @param[in] left First contravariant four-vector.
+ * @param[in] right Second contravariant four-vector.
+ * @return Metric inner product of the two vectors.
+ */
 static double nrpy_photon_metric_inner(
     const double metric[4][4], const double left[4], const double right[4])
 {
@@ -570,22 +613,35 @@ static double nrpy_photon_metric_inner(
     for (int mu = 0; mu < 4; ++mu) {
         for (int nu = 0; nu < 4; ++nu) {
             result += metric[mu][nu] * left[mu] * right[nu];
-        }
-    }
+        } // END LOOP: right vector components
+    } // END LOOP: left vector components
     return result;
-}
+} // END FUNCTION: nrpy_photon_metric_inner
 
+/**
+ * Find the largest absolute observer-metric component, with unit floor.
+ *
+ * @param[in] metric Covariant metric at the observer.
+ * @return Maximum of one and the absolute metric components.
+ */
 static double nrpy_photon_metric_scale(const double metric[4][4])
 {
     double scale = 1.0;
     for (int mu = 0; mu < 4; ++mu) {
         for (int nu = 0; nu < 4; ++nu) {
             scale = fmax(scale, fabs(metric[mu][nu]));
-        }
-    }
+        } // END LOOP: metric columns
+    } // END LOOP: metric rows
     return scale;
-}
+} // END FUNCTION: nrpy_photon_metric_scale
 
+/**
+ * Compute the observer-metric determinant by Gaussian elimination.
+ *
+ * @param[in] metric Covariant metric at the observer.
+ * @param pivot_tolerance Minimum accepted pivot magnitude.
+ * @return Metric determinant, or NAN for an invalid pivot.
+ */
 static double nrpy_photon_metric_determinant(
     const double metric[4][4], const double pivot_tolerance)
 {
@@ -593,8 +649,8 @@ static double nrpy_photon_metric_determinant(
     for (int mu = 0; mu < 4; ++mu) {
         for (int nu = 0; nu < 4; ++nu) {
             work[mu][nu] = metric[mu][nu];
-        }
-    }
+        } // END LOOP: copy metric columns
+    } // END LOOP: copy metric rows
 
     double determinant = 1.0;
     for (int pivot_col = 0; pivot_col < 4; ++pivot_col) {
@@ -605,30 +661,42 @@ static double nrpy_photon_metric_determinant(
             if (candidate_abs > pivot_abs) {
                 pivot_row = row;
                 pivot_abs = candidate_abs;
-            }
-        }
+            } // END IF: larger pivot found
+        } // END LOOP: search pivot rows
         if (!isfinite(pivot_abs) || pivot_abs <= pivot_tolerance) {
             return NAN;
-        }
+        } // END IF: invalid metric pivot
         if (pivot_row != pivot_col) {
             for (int nu = 0; nu < 4; ++nu) {
                 const double temporary = work[pivot_col][nu];
                 work[pivot_col][nu] = work[pivot_row][nu];
                 work[pivot_row][nu] = temporary;
-            }
+            } // END LOOP: exchange pivot rows
             determinant = -determinant;
-        }
+        } // END IF: pivot row exchange
         determinant *= work[pivot_col][pivot_col];
         for (int row = pivot_col + 1; row < 4; ++row) {
             const double factor = work[row][pivot_col] / work[pivot_col][pivot_col];
             for (int nu = pivot_col + 1; nu < 4; ++nu) {
                 work[row][nu] -= factor * work[pivot_col][nu];
-            }
-        }
-    }
+            } // END LOOP: eliminate metric columns
+        } // END LOOP: eliminate lower rows
+    } // END LOOP: metric pivot columns
     return determinant;
-}
+} // END FUNCTION: nrpy_photon_metric_determinant
 
+/**
+ * Project a seed away from three tetrad vectors and normalize it.
+ *
+ * @param[in] metric Covariant metric at the observer.
+ * @param[in] e0 Unit timelike tetrad vector.
+ * @param[in] e1 First unit spacelike tetrad vector.
+ * @param[in] e2 Second unit spacelike tetrad vector, or zero seed.
+ * @param[in] seed Contravariant vector to project.
+ * @param norm_tolerance Minimum accepted squared metric norm.
+ * @param[out] output Unit spacelike vector when projection succeeds.
+ * @return True for a finite spacelike projection, false otherwise.
+ */
 static bool nrpy_photon_metric_orthogonalize_spacelike(
     const double metric[4][4],
     const double e0[4],
@@ -643,7 +711,7 @@ static bool nrpy_photon_metric_orthogonalize_spacelike(
     const double seed_e0 = nrpy_photon_metric_inner(metric, seed, e0);
     for (int mu = 0; mu < 4; ++mu) {
         output[mu] = seed[mu] + seed_e0 * e0[mu];
-    }
+    } // END LOOP: timelike seed projection
 
     // Project away from already-normalized spacelike e_1 and e_2.  Their norms
     // are +1, so both projections use minus signs.
@@ -651,23 +719,23 @@ static bool nrpy_photon_metric_orthogonalize_spacelike(
     const double output_e2 = nrpy_photon_metric_inner(metric, output, e2);
     for (int mu = 0; mu < 4; ++mu) {
         output[mu] -= output_e1 * e1[mu] + output_e2 * e2[mu];
-    }
+    } // END LOOP: spacelike seed projection
 
     // A small or non-finite norm means seed is degenerate after metric
     // projection.  Caller may try a fallback seed.
     const double output_norm = nrpy_photon_metric_inner(metric, output, output);
     if (!isfinite(output_norm) || output_norm <= norm_tolerance) {
         return false;
-    }
+    } // END IF: invalid projected norm
     const double inverse_norm = 1.0 / sqrt(output_norm);
     if (!isfinite(inverse_norm)) {
         return false;
-    }
+    } // END IF: invalid normalization factor
     for (int mu = 0; mu < 4; ++mu) {
         output[mu] *= inverse_norm;
-    }
+    } // END LOOP: normalize spacelike vector
     return true;
-}
+} // END FUNCTION: nrpy_photon_metric_orthogonalize_spacelike
 
 static void nrpy_photon_cross_spatial(
     const double left[4], const double right[4], double output[4])
@@ -676,8 +744,15 @@ static void nrpy_photon_cross_spatial(
     output[1] = left[2] * right[3] - left[3] * right[2];
     output[2] = left[3] * right[1] - left[1] * right[3];
     output[3] = left[1] * right[2] - left[2] * right[1];
-}
+} // END FUNCTION: nrpy_photon_cross_spatial
 
+/**
+ * Construct a stationary observer tetrad from metric and camera directions.
+ *
+ * @param[in] commondata Observer position and camera directions.
+ * @param[in] metric_components Ten independent covariant metric components.
+ * @param[out] observer_tetrad Four contravariant unit tetrad vectors.
+ */
 static void nrpy_photon_construct_observer_tetrad(
     const commondata_struct *commondata,
     const double metric_components[10],
@@ -692,15 +767,15 @@ static void nrpy_photon_construct_observer_tetrad(
             metric[mu][nu] = metric_components[component];
             metric[nu][mu] = metric_components[component];
             ++component;
-        }
-    }
+        } // END LOOP: symmetric metric columns
+    } // END LOOP: symmetric metric rows
 
     // Step 2: Reject non-finite or singular metrics before tetrad algebra.
     double metric_scale = nrpy_photon_metric_scale(metric);
     if (!isfinite(metric_scale) || metric_scale <= 0.0) {
         fprintf(stderr, "ERROR: observer metric has invalid scale.\n");
         exit(EXIT_FAILURE);
-    }
+    } // END IF: invalid metric scale
     const double metric_entry_tolerance = 1.0e-14 * metric_scale;
     const double determinant_tolerance =
         1.0e-14 * metric_scale * metric_scale * metric_scale * metric_scale;
@@ -713,7 +788,7 @@ static void nrpy_photon_construct_observer_tetrad(
             "det(g)=% .17e.\n",
             determinant);
         exit(EXIT_FAILURE);
-    }
+    } // END IF: invalid metric determinant
 
     // Step 3: Build e_0 from stationary numerical-coordinate seed v_0=(1,0,0,0).
     const double v0[4] = {1.0, 0.0, 0.0, 0.0};
@@ -725,16 +800,16 @@ static void nrpy_photon_construct_observer_tetrad(
             "g(v0,v0)=% .17e.\n",
             v0_norm);
         exit(EXIT_FAILURE);
-    }
+    } // END IF: stationary seed not timelike
     const double inverse_e0_norm = 1.0 / sqrt(-v0_norm);
     if (!isfinite(inverse_e0_norm)) {
         fprintf(stderr, "ERROR: stationary observer normalization is non-finite.\n");
         exit(EXIT_FAILURE);
-    }
+    } // END IF: invalid timelike normalization
     double e0[4];
     for (int mu = 0; mu < 4; ++mu) {
         e0[mu] = v0[mu] * inverse_e0_norm;
-    }
+    } // END LOOP: normalize timelike tetrad
 
     // Step 4: Build e_1 from the observer's supplied look-forward direction.
     // This is a direction vector, not a point and not a plane normal. It is
@@ -752,12 +827,12 @@ static void nrpy_photon_construct_observer_tetrad(
             stderr,
             "ERROR: observer look-forward direction is zero; cannot construct e_1.\n");
         exit(EXIT_FAILURE);
-    }
+    } // END IF: zero look-forward direction
     const double v1_e0 = nrpy_photon_metric_inner(metric, v1, e0);
     double e1_seed[4];
     for (int mu = 0; mu < 4; ++mu) {
         e1_seed[mu] = v1[mu] + v1_e0 * e0[mu];
-    }
+    } // END LOOP: project forward seed
     const double e1_norm = nrpy_photon_metric_inner(metric, e1_seed, e1_seed);
     const double vector_norm_tolerance = 1.0e-14 * metric_scale;
     if (!isfinite(e1_norm) || e1_norm <= vector_norm_tolerance) {
@@ -767,12 +842,12 @@ static void nrpy_photon_construct_observer_tetrad(
             "g(w1,w1)=% .17e.\n",
             e1_norm);
         exit(EXIT_FAILURE);
-    }
+    } // END IF: invalid forward seed norm
     const double inverse_e1_norm = 1.0 / sqrt(e1_norm);
     double e1[4];
     for (int mu = 0; mu < 4; ++mu) {
         e1[mu] = e1_seed[mu] * inverse_e1_norm;
-    }
+    } // END LOOP: normalize forward tetrad
 
     // Step 5: Build e_2 from the supplied up seed using metric Gram-Schmidt.
     // If up is nearly parallel to e_1, try coordinate-axis seeds, still using
@@ -801,13 +876,13 @@ static void nrpy_photon_construct_observer_tetrad(
         if (found_e2) {
             for (int mu = 0; mu < 4; ++mu) {
                 selected_up_seed[mu] = up_seed_candidates[candidate][mu];
-            }
-        }
-    }
+            } // END LOOP: copy selected up seed
+        } // END IF: usable up seed found
+    } // END LOOP: candidate up seeds
     if (!found_e2) {
         fprintf(stderr, "ERROR: no usable metric-orthogonal up seed for e_2.\n");
         exit(EXIT_FAILURE);
-    }
+    } // END IF: no usable up seed
 
     // Step 6: Construct e_3 by metric Gram-Schmidt from the Euclidean right
     // seed up x forward.  The cross product supplies orientation only; metric
@@ -826,7 +901,7 @@ static void nrpy_photon_construct_observer_tetrad(
     if (!found_e3) {
         fprintf(stderr, "ERROR: no usable metric-orthogonal right seed for e_3.\n");
         exit(EXIT_FAILURE);
-    }
+    } // END IF: no usable right seed
 
     // Preserve expected image handedness.  This dot product does not construct
     // e_3; it only detects whether metric Gram-Schmidt selected the opposite
@@ -836,12 +911,12 @@ static void nrpy_photon_construct_observer_tetrad(
     if (!isfinite(right_orientation)) {
         fprintf(stderr, "ERROR: right-direction orientation check is non-finite.\n");
         exit(EXIT_FAILURE);
-    }
+    } // END IF: invalid right orientation
     if (right_orientation < 0.0) {
         for (int mu = 0; mu < 4; ++mu) {
             e3[mu] = -e3[mu];
-        }
-    }
+        } // END LOOP: reverse right tetrad
+    } // END IF: reversed right orientation
 
     // Step 7: Validate all sixteen metric inner products against eta_ab.
     const double expected_signature[4] = {-1.0, 1.0, 1.0, 1.0};
@@ -861,17 +936,17 @@ static void nrpy_photon_construct_observer_tetrad(
                     inner,
                     expected);
                 exit(EXIT_FAILURE);
-            }
-        }
-    }
+            } // END IF: tetrad inner product mismatch
+        } // END LOOP: second tetrad vector
+    } // END LOOP: first tetrad vector
 
     // Step 8: Return observer tetrad with documented indexing observer_tetrad[a][mu].
     for (int a = 0; a < 4; ++a) {
         for (int mu = 0; mu < 4; ++mu) {
             observer_tetrad[a][mu] = tetrad[a][mu];
-        }
-    }
-}
+        } // END LOOP: tetrad components
+    } // END LOOP: tetrad vectors
+} // END FUNCTION: nrpy_photon_construct_observer_tetrad
 """
 
     # Step 9: Build the host orchestration around one observer metric and one
@@ -903,7 +978,7 @@ static void nrpy_photon_construct_observer_tetrad(
         terminal_plane_normal_norm <= 1.0e-14) {
         fprintf(stderr, "ERROR: an event-plane normal is degenerate.\n");
         exit(EXIT_FAILURE);
-    }
+    } // END IF: degenerate event-plane normal
     if (!isfinite(commondata->terminal_plane_min_coord_radius) ||
         !isfinite(commondata->terminal_plane_max_coord_radius) ||
         commondata->terminal_plane_min_coord_radius < 0.0 ||
@@ -913,7 +988,7 @@ static void nrpy_photon_construct_observer_tetrad(
             stderr,
             "ERROR: terminal-plane coordinate-radius bounds are invalid.\n");
         exit(EXIT_FAILURE);
-    }
+    } // END IF: invalid terminal radius interval
     const double non_terminal_plane_side_value =
         commondata->non_terminal_plane_normal_x *
             (commondata->observer_x - commondata->non_terminal_plane_center_x) +
@@ -935,8 +1010,23 @@ static void nrpy_photon_construct_observer_tetrad(
         for (long int plane_i = 0; plane_i < num_rays; ++plane_i) {
             all_photons->on_positive_side_of_non_terminal_plane_prev[plane_i] = init_non_terminal_plane_side;
             all_photons->on_positive_side_of_terminal_plane_prev[plane_i] = init_terminal_plane_side;
-        }
-    }
+        } // END LOOP: initialize plane sides
+    } // END IF: plane-side arrays allocated
+    if (all_photons->non_terminal_plane_crossing_pending != NULL &&
+        all_photons->terminal_plane_crossing_pending != NULL &&
+        all_photons->non_terminal_plane_steps_past != NULL &&
+        all_photons->terminal_plane_steps_past != NULL &&
+        all_photons->non_terminal_plane_event_degree != NULL &&
+        all_photons->terminal_plane_event_degree != NULL) {
+        for (long int plane_i = 0; plane_i < num_rays; ++plane_i) {
+            all_photons->non_terminal_plane_crossing_pending[plane_i] = false;
+            all_photons->terminal_plane_crossing_pending[plane_i] = false;
+            all_photons->non_terminal_plane_steps_past[plane_i] = 0;
+            all_photons->terminal_plane_steps_past[plane_i] = 0;
+            all_photons->non_terminal_plane_event_degree[plane_i] = 0;
+            all_photons->terminal_plane_event_degree[plane_i] = 0;
+        } // END LOOP: initialize crossing history
+    } // END IF: crossing-history arrays allocated
 """
         if initialize_event_history
         else ""
@@ -950,7 +1040,7 @@ static void nrpy_photon_construct_observer_tetrad(
     if (observer_metric == NULL || observer_tetrad_out == NULL) {
         fprintf(stderr, "ERROR: numerical initializer received a null observer input.\n");
         exit(EXIT_FAILURE);
-    }
+    } // END IF: observer input missing
     nrpy_photon_construct_observer_tetrad(
         commondata,
         observer_metric,
@@ -1030,7 +1120,7 @@ __EVENT_HISTORY_INITIALIZATION__
 
     BHAH_FREE_DEVICE(d_f_bundle);
     BHAH_FREE_DEVICE(d_h_bundle);
-__NORMALIZED_TRACKER_INITIALIZATION__
+__INTEGRATION_PARAM_INITIALIZATION__
 """
     body = body.replace("__TETRAD_SCALAR_DECLARATIONS__", tetrad_scalar_declarations)
     body = body.replace(
@@ -1038,7 +1128,7 @@ __NORMALIZED_TRACKER_INITIALIZATION__
     )
     body = body.replace("__HOST_LOOP_CODE__", str(host_loop_code))
     body = body.replace(
-        "__NORMALIZED_TRACKER_INITIALIZATION__", normalized_tracker_initialization
+        "__INTEGRATION_PARAM_INITIALIZATION__", integration_param_initialization
     )
     if parallelization != "cuda":
         # The CPU backend has no device-allocation macro in generated headers;

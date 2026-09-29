@@ -87,8 +87,49 @@ normal-observer log-energy cutoff, whose default `--evolution-measure-max` is
 `visualize_trajectory.py` into the generated project and print
 `pip install matplotlib numpy`; those Python visualization dependencies are
 source-limited to the checked-in script imports and generator message.
-Single-photon generators do not accept terminal- or nonterminal-plane options;
-plane-crossing detection and event records belong to the batch integrators.
+Both single-photon generators accept optional plane settings. Supply every
+option in each enabled group:
+
+- Terminal: `--terminal-plane-center`, `--terminal-plane-normal`,
+  `--terminal-plane-up`, and `--terminal-plane-radius`.
+- Nonterminal: `--non-terminal-plane-center`, `--non-terminal-plane-normal`,
+  and `--non-terminal-plane-up`.
+
+All four photon generators accept `--plane-interpolation-degree` as the maximum
+polynomial degree; the default is 4 and the minimum is 3. After an accepted
+RKF45 step changes the side of a plane, the integrator keeps evolving until it
+has enough accepted states on both sides for a centered fit. A physical stop
+uses the highest available fit. The generated fits include the requested
+degree and lower even degrees down to 2. A crossing fails with
+`FAILURE_PLANE_INTERPOLATION_HISTORY` if no quadratic fit has distinct
+integration parameters. An even-degree fit tries both equally centered
+contiguous stencils before using a lower degree.
+
+Both single-photon integrators write coordinate time, affine parameter, local
+plane coordinates, and all nine interpolated state components to
+`plane_crossings.txt`. The final column, `interpolation_degree`, records the
+degree used for that crossing. The state columns are:
+
+- Direct EOM: `interpolated_t`, `interpolated_x`, `interpolated_y`,
+  `interpolated_z`, `interpolated_p^t`, `interpolated_p^x`,
+  `interpolated_p^y`, `interpolated_p^z`, `interpolated_L_normal`.
+- Normalized EOM: `interpolated_lambda`, `interpolated_x`,
+  `interpolated_y`, `interpolated_z`, `interpolated_u`,
+  `interpolated_Pi_1`, `interpolated_Pi_2`, `interpolated_Pi_3`,
+  `interpolated_L_normal`.
+
+The numerical single-photon executable also writes `initial_state.txt` with
+the observer event and initial direct `p^mu` at full precision. For normalized
+evolution, it records that momentum before converting to `u` and `Pi_i`.
+
+An in-range terminal crossing stops integration. A nonterminal crossing does
+not stop integration.
+
+Claim evidence:
+- Claim: All four photon generators select a maximum centered plane-interpolation degree of at least 3, with default 4; the single-photon output records crossing time, local coordinates, the nine-component EOM-specific state, and the degree used.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/single_integrator_analytical.py` and `single_integrator_numerical.py` — `plane_crossings.txt` output and EOM state columns
+- Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py` — pending crossings and crossing-state capture; `find_event_time_and_state.py` — degree selection and nine-component interpolation; four photon example generators — interpolation-degree CLI
 
 Both single-photon generators enable RKF45 trial and stage diagnostics by
 default. Their generated executables write adaptive-step controller values to
@@ -99,10 +140,10 @@ the interpolated geometry used at each stage. Pass
 code; use `--enable-rkf45-trial-debug` to select it explicitly.
 
 Claim evidence:
-- Claim: The analytical and numerical single-photon generators construct unit camera-tetrad-energy initial momentum, run the split RKF45 calculation, apply the upper-only log-energy cutoff, write `trajectory.txt`, omit batch event-plane handling, and enable trial/stage diagnostics by default.
-- Role: generated evidence
-- Deciding authority: `nrpy/examples/photon_single_geodesic_integrator_analytical.py` and `nrpy/examples/photon_single_geodesic_integrator_numerical.py` — generator registration and debug-option defaults
-- Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/set_initial_conditions_kernel.py` — observer-tetrad initialization
+- Claim: The analytical and numerical single-photon generators construct unit camera-tetrad-energy initial momentum, run the split RKF45 calculation, apply the upper-only log-energy cutoff, write `trajectory.txt`, enable trial/stage diagnostics by default, and support optional terminal and nonterminal plane crossings recorded in `plane_crossings.txt`.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/examples/photon_single_geodesic_integrator_analytical.py` and `photon_single_geodesic_integrator_numerical.py` — plane options and debug defaults; `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/single_integrator_analytical.py` and `single_integrator_numerical.py` — generated C behavior
+- Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py` — crossing and termination checks
 
 `trajectory.txt` is the input file for the single-ray visualization. The
 massive file header is `# proper_time t x y z u^t u^x u^y u^z`. Direct photon
@@ -155,11 +196,11 @@ make
 
 The batch generator derives `project_dir` from `--outdir` plus
 `photon_batch_geodesic_integrator_analytical`. It sets `parallelization` to `openmp` unless
-`--cuda` is present. OpenMP uses `gcc`, `-fopenmp`, C sources, and a default
-`2x2` tile grid with a width-side `scan_density` of 500; CUDA uses `nvcc`,
-`-lcudart`, `-DUSE_GPU`, `.cu` sources, copied `cuda_intrinsics.h`, a default
-`1x1` tile grid, and a width-side `scan_density` of 1000. Height-side sampling
-is derived internally from the fields of view and tile-grid aspect ratio.
+`--cuda` is present. OpenMP uses `gcc`, `-fopenmp`, and C sources; CUDA uses
+`nvcc`, `-lcudart`, `-DUSE_GPU`, `.cu` sources, and copied `cuda_intrinsics.h`.
+Both modes require `--scan-density` for the width-side ray-sample count per tile,
+and `--tile-counts` defaults to `1 1` in both modes. Height-side sampling is
+derived internally from the fields of view and tile-grid aspect ratio.
 Generated programs expose `tiles_width`, `tiles_height`, and `scan_density` as
 angular ray-sampling controls; `--pixel-width` on `visualize_lensed_image.py`
 controls final PNG resampling only. The visualization reads tile counts and
@@ -331,8 +372,11 @@ Claim evidence:
 
 - [massive_single_geodesic_integrator_analytical.py](../../nrpy/examples/massive_single_geodesic_integrator_analytical.py) - `project_name`, `main_single`, `single_integrator_analytical`, `gsl-config`; official GSL [Using the Library](https://www.gnu.org/software/gsl/doc/html/usage.html) - `Compiling and Linking`
 - [photon_single_geodesic_integrator_analytical.py](../../nrpy/examples/photon_single_geodesic_integrator_analytical.py) - `project_name`, `main_single`, observer-tetrad initialization, `rkf45_stage_update`, `trajectory.txt`
+- [single_integrator_analytical.py](../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/single_integrator_analytical.py) - accepted-step event checks and `plane_crossings.txt` output
 - [photon_batch_geodesic_integrator_analytical.py](../../nrpy/examples/photon_batch_geodesic_integrator_analytical.py) - `--outdir`, `--cuda`, `parallelization_mode`, `vis_command`, `blueprint_command`; official NVIDIA [NVCC guide](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/nvcc.html) - `NVCC: The NVIDIA CUDA Compiler`
-- [photon_single_geodesic_integrator_numerical.py](../../nrpy/examples/photon_single_geodesic_integrator_numerical.py) - numerical dataset CLI, `register_CFunction_numerical_interpolation`, `--t-start`
+- [photon_single_geodesic_integrator_numerical.py](../../nrpy/examples/photon_single_geodesic_integrator_numerical.py) - numerical dataset CLI, terminal/nonterminal plane options, `register_CFunction_numerical_interpolation`, `--t-start`
+- [single_integrator_numerical.py](../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/single_integrator_numerical.py) - single-photon accepted-step event checks and `plane_crossings.txt` output
+- [event_detection_manager_kernel.py](../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py) - plane crossing reconstruction and termination decisions
 - [photon_batch_geodesic_integrator_numerical.py](../../nrpy/examples/photon_batch_geodesic_integrator_numerical.py) - numerical dataset CLI, `combine_raytracing_time_slices.py`, batch visualization workflow
 - [normal_observer_log_energy.py](../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/normal_observer_log_energy.py) - direct-EOM `ln|alpha p^0|` helper
 - [combine_raytracing_time_slices.py](../../nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py) - `InputSliceInfo`, `parse_args`, `--run-metadata`

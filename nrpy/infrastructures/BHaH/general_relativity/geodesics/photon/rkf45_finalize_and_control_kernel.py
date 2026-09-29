@@ -28,7 +28,8 @@ The numerical photon example registers the companion time-window manager before
 registering this kernel, so that the shared `rkf45_max_delta_t` parameter exists
 when the accepted-step cap is emitted.
 
-Together, the time-window manager and this kernel enforce one shared contract:
+Together, the time-window manager and this kernel enforce the mapped-time-window
+requirement for RKF45:
 the manager maps enough lower-time numerical data for one photon slot assuming
 the next accepted RKF45 step will not move farther backward in coordinate time
 than the promised lookahead, and this kernel makes that assumption true by
@@ -57,6 +58,7 @@ def rkf45_finalize_and_control_kernel(
     enable_numerical_time_window_step_cap: bool = False,
     normalized_eom: bool = False,
     enable_rkf45_trial_debug: bool = False,
+    retry_interpolation_failures: bool = False,
 ) -> None:
     r"""
     Global kernel for RKF45 finalization and error control.
@@ -74,6 +76,9 @@ def rkf45_finalize_and_control_kernel(
     :param enable_rkf45_trial_debug: Whether to emit per-trial RKF45 diagnostics
         through an additional output pointer. Disabled by default so existing
         callers keep the current generated interface.
+    :param retry_interpolation_failures: Whether spatial and temporal
+        interpolation failures count as rejected RKF45 trials. Enabled by the
+        numerical batch integrator; disabled by default for existing callers.
 
     Doctests:
     >>> import nrpy.c_function as cfc
@@ -368,6 +373,57 @@ def rkf45_finalize_and_control_kernel(
 
     escape_statement = "return;" if parallelization == "cuda" else "continue;"
 
+    if retry_interpolation_failures:
+        interpolation_failure_debug_retry_output = (
+            r"""
+        WriteCUDA(&d_trial_debug[i].err_norm, NAN);
+        WriteCUDA(
+            &d_trial_debug[i].h_error_controller, h_retry);
+        WriteCUDA(&d_trial_debug[i].limiting_component, -1);
+        WriteCUDA(&d_trial_debug[i].limiting_delta_5_minus_4, NAN);
+        WriteCUDA(&d_trial_debug[i].limiting_error_absolute, NAN);
+        WriteCUDA(&d_trial_debug[i].limiting_scale, NAN);
+        WriteCUDA(&d_trial_debug[i].limiting_error_normalized, NAN);
+"""
+            if enable_rkf45_trial_debug
+            else ""
+        )
+        interpolation_failure_handling = rf"""
+    // Interpolation failures reject this trial without evaluating its NaN
+    // stage derivatives or changing the last accepted state.
+    const termination_type_t incoming_status = d_status[i];
+    if (incoming_status == FAILURE_SPATIAL_INTERPOLATION ||
+        incoming_status == FAILURE_TEMPORAL_INTERPOLATION) {{
+        const double h_local = ReadCUDA(&d_h[i]);
+        const int new_retries = ReadCUDA(&d_retries[i]) + 1;
+        WriteCUDA(&d_retries[i], new_retries);
+
+        const double h_sign = (h_local < 0.0) ? -1.0 : 1.0;
+        const double h_retry_abs =
+            fmax(0.5 * fabs(h_local), {cd_access}rkf45_h_min);
+        const double h_retry = h_sign * h_retry_abs;
+        if (new_retries <= {cd_access}rkf45_max_retries) {{
+            WriteCUDA(&d_status[i], REJECTED);
+        }} // END IF: interpolation failure remains retryable
+        // On the retry-limit trial, retain the spatial or temporal
+        // interpolation-failure status as the terminal cause.
+        WriteCUDA(&d_h[i], h_retry);
+{interpolation_failure_debug_retry_output}
+        {escape_statement}
+    }} // END IF: interpolation failure
+"""
+    else:
+        interpolation_failure_handling = rf"""
+    // Interpolation failures terminate only their owning photon. Preserve the
+    // last accepted state and the owning interpolation-failure classification.
+    const termination_type_t incoming_status = d_status[i];
+    if (incoming_status == FAILURE_SPATIAL_INTERPOLATION ||
+        incoming_status == FAILURE_TEMPORAL_INTERPOLATION) {{
+{interpolation_failure_debug_output}
+        {escape_statement}
+    }} // END IF: interpolation failure already established
+"""
+
     prefunc = (
         r"""
 static inline int rkf45_checked_floor_to_long(
@@ -429,7 +485,7 @@ static inline int rkf45_checked_floor_to_long(
         // current slot plus rkf45_max_delta_t of extra lookahead. Convert that
         // allowed coordinate-time motion into an affine-parameter cap using
         // the accepted fifth-order estimate of p^0 = dt/dlambda.
-        // For the full cross-file contract, see
+        // For the mapped-time-window requirement, see
         // time_window_manager_numerical_required_grid_range() and
         // time_window_manager_numerical_stencil_for_time() in the companion
         // time_window_manager_numerical helper.
@@ -563,14 +619,7 @@ static inline int rkf45_checked_floor_to_long(
     )
 
     core_math = rf"""
-    // Interpolation failures terminate only their owning photon. Preserve the
-    // last accepted state and the owning interpolation-failure classification.
-    const termination_type_t incoming_status = ReadCUDA(&d_status[i]);
-    if (incoming_status == FAILURE_SPATIAL_INTERPOLATION ||
-        incoming_status == FAILURE_TEMPORAL_INTERPOLATION) {{
-{interpolation_failure_debug_output}
-        {escape_statement}
-    }} // END IF: interpolation failure already established
+{interpolation_failure_handling}
 
     //==========================================
     // MACRO DEFINITIONS FOR BUNDLE ACCESS

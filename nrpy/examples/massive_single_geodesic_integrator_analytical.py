@@ -165,23 +165,6 @@ if __name__ == "__main__":
         project_name=project_name
     )
 
-    macro_defs = r"""
-    // Provide standalone indexing helpers used by the shared geodesic kernels.
-    #ifndef IDX_LOCAL
-    #define IDX_LOCAL(component, batch_id, batch_size) ((component) * (batch_size) + (batch_id))
-    #endif
-
-    #ifndef IDX_GLOBAL
-    #define IDX_GLOBAL(component, ray_id, num_rays) ((component) * (num_rays) + (ray_id))
-    #endif
-
-    // Single-particle GSL driver: set BUNDLE_CAPACITY to 1 for shared memory-layout macros.
-    #ifndef BUNDLE_CAPACITY
-    #define BUNDLE_CAPACITY 1
-    #endif
-    """
-    Bdefines_h.register_BHaH_defines("gpu_batch_macros", macro_defs)
-
     cpu_macros = {
         "BHAH_MALLOC_DEVICE(a, sz)": "#define BHAH_MALLOC_DEVICE(a, sz) BHAH_MALLOC((a), (sz))",
         "BHAH_FREE_DEVICE(a)": "#define BHAH_FREE_DEVICE(a) BHAH_FREE((a))",

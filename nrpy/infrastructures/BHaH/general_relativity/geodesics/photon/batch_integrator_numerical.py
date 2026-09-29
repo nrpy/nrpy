@@ -23,8 +23,10 @@ detection; normalized mode reads it directly from ``u``.
 
 The script keeps the broad photon orchestration, RKF45 stepping, and
 ``TimeSlotManager`` structure used by the analytic photon batch integrator, but
-all geometry evaluations go through the numerical ``.bin`` data path.
-It does not compute analytic conserved quantities.
+all geometry evaluations go through the numerical ``.bin`` data path. When the
+generator declares axial symmetry about the Cartesian ``z`` axis, optional
+initial, nonterminal post-step, and final ``L_z`` evaluations measure
+angular-momentum conservation.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -40,28 +42,36 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_man
 def batch_integrator_numerical(
     spacetime_name: str,
     dataset_coord_system: str,
+    maximum_degree: int,
     interpolation_method: str = "g4DD",
     normalized_eom: bool = False,
+    axisymmetric_about_z: bool = False,
 ) -> None:
     r"""
     Construct the CPU numerical-spacetime photon batch integrator.
 
     :param spacetime_name: Spacetime identifier used to validate registration context.
     :param dataset_coord_system: Coordinate system used by the numerical dataset.
+    :param maximum_degree: Largest generated plane interpolation polynomial degree.
     :param interpolation_method: Numerical geometry payload method used by the generated project.
     :param normalized_eom: Whether to evolve normalized coordinate-time photon equations.
+    :param axisymmetric_about_z: Whether the numerical spacetime has a rotational
+        Killing vector about the Cartesian ``z`` axis, permitting ``L_z`` checks.
+    :raises ValueError: If maximum_degree is below three.
     :raises ValueError: If the parallelization mode, interpolation method, or
         dataset coordinate system is unsupported.
 
     Doctests:
     >>> import os
+    >>> import tempfile
+    >>> from unittest.mock import patch
     >>> import nrpy.c_function as cfc
-    >>> os.environ["XDG_CACHE_HOME"] = "/tmp"
-    >>> cfc.CFunction_dict.clear()
-    >>> batch_integrator_numerical(
-    ...     "Schwarzschild", "SinhCylindricalv2n2", interpolation_method="g4DD"
-    ... )
-    >>> generated = cfc.CFunction_dict["batch_integrator_numerical"].full_function
+    >>> with tempfile.TemporaryDirectory() as cache_dir, patch.dict(os.environ, {"XDG_CACHE_HOME": cache_dir}):
+    ...     cfc.CFunction_dict.clear()
+    ...     batch_integrator_numerical(
+    ...         "Schwarzschild", "SinhCylindricalv2n2", 4, interpolation_method="g4DD"
+    ...     )
+    ...     generated = cfc.CFunction_dict["batch_integrator_numerical"].full_function
     >>> "@param[in,out] commondata" in generated
     True
     >>> "time_window_manager_numerical_mmap_for_slot" in generated
@@ -74,12 +84,13 @@ def batch_integrator_numerical(
     True
     >>> "d_log_energy_bundle[current]" in generated
     True
-    >>> cfc.CFunction_dict.clear()
-    >>> batch_integrator_numerical(
-    ...     "Schwarzschild", "SinhCylindricalv2n2", interpolation_method="g4DD",
-    ...     normalized_eom=True
-    ... )
-    >>> generated = cfc.CFunction_dict["batch_integrator_numerical"].full_function
+    >>> with tempfile.TemporaryDirectory() as cache_dir, patch.dict(os.environ, {"XDG_CACHE_HOME": cache_dir}):
+    ...     cfc.CFunction_dict.clear()
+    ...     batch_integrator_numerical(
+    ...         "Schwarzschild", "SinhCylindricalv2n2", 4, interpolation_method="g4DD",
+    ...         normalized_eom=True
+    ...     )
+    ...     generated = cfc.CFunction_dict["batch_integrator_numerical"].full_function
     >>> "fabs(exp(2.0 * d_f_bundle[0][4 * BUNDLE_CAPACITY + norm_i]) * (d_norm_bundle[norm_i].C - 1.0))" in generated
     True
     >>> "const double current_norm_err = fabs(d_norm_bundle[norm_i].C - 1.0);" in generated
@@ -102,6 +113,14 @@ def batch_integrator_numerical(
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
 
+    if maximum_degree < 3:
+        raise ValueError("Plane interpolation degree must be at least three")
+
+    if not isinstance(axisymmetric_about_z, bool):
+        raise ValueError(
+            "axisymmetric_about_z must be a bool, got "
+            f"{type(axisymmetric_about_z).__name__}."
+        )
     if not spacetime_name:
         raise ValueError("spacetime_name must contain a valid identifier.")
 
@@ -157,18 +176,53 @@ def batch_integrator_numerical(
         commondata=True,
         add_to_parfile=True,
     )
+    par.register_CodeParameter(
+        "bool",
+        __name__,
+        "perform_synthetic_slice_check",
+        False,
+        commondata=True,
+        add_to_parfile=True,
+        description=(
+            "Record first RKF45 interpolation request times that use synthetic "
+            "temporal-stencil nodes below t=0 or above t_numerical_end, then "
+            "write one per-photon tile sidecar."
+        ),
+    )
+    if axisymmetric_about_z:
+        par.register_CodeParameter(
+            "bool",
+            __name__,
+            "perform_Lz_check",
+            False,
+            commondata=True,
+            add_to_parfile=True,
+            description=(
+                "Evaluate initial and final axial angular momentum L_z and report "
+                "the largest absolute change. Valid only for a numerical spacetime "
+                "with rotational symmetry about the Cartesian z axis."
+            ),
+        )
 
     includes = [
         "BHaH_defines.h",
         "BHaH_function_prototypes.h",
         "<math.h>",
         "<stdio.h>",
+        "<stdint.h>",
         "<stdlib.h>",
         "<string.h>",
         "<time.h>",
     ]
 
-    desc = r"""CPU numerical-spacetime photon batch integrator.
+    angular_momentum_desc = (
+        r"""
+    @param[in] Lz_bin_path Optional output filename containing photon index,
+                           initial $L_z$, and final $L_z$ for every ray."""
+        if axisymmetric_about_z
+        else ""
+    )
+    desc = rf"""CPU numerical-spacetime photon batch integrator.
 
     This function bins active rays by coordinate time using TimeSlotManager,
     maps combined numerical-spacetime .bin time windows through
@@ -193,18 +247,80 @@ def batch_integrator_numerical(
                                  error sidecar.
     @param[in] norm_abs_non_terminal_bin_path Optional output filename for the
                                               sparse accepted-state nonterminal
-                                              normalization sidecar."""
+                                              normalization sidecar.
+    @param[in] synthetic_slice_usage_bin_path Optional output filename for the
+                                               per-photon synthetic temporal-
+                                               stencil usage sidecar.
+    @param[in] non_terminal_crossings_path Per-tile nonterminal crossing file.
+    @param[in] terminal_crossings_path Per-tile terminal crossing file.{angular_momentum_desc}"""
 
     cfunc_type = "void"
 
     name = "batch_integrator_numerical"
 
+    angular_momentum_param = (
+        ", const char *restrict Lz_bin_path" if axisymmetric_about_z else ""
+    )
     params = (
         "commondata_struct *restrict commondata, "
         "long int num_rays, "
         "blueprint_data_t *restrict results_buffer, "
         "const char *restrict norm_abs_bin_path, "
-        "const char *restrict norm_abs_non_terminal_bin_path"
+        "const char *restrict norm_abs_non_terminal_bin_path, "
+        "const char *restrict synthetic_slice_usage_bin_path, "
+        "const char *restrict non_terminal_crossings_path, "
+        "const char *restrict terminal_crossings_path"
+        f"{angular_momentum_param}"
+    )
+
+    crossing_parameter_fields = (
+        ("t_f", "non_terminal_plane_t")
+        if normalized_eom
+        else ("L_f", "non_terminal_plane_lambda")
+    )
+    plane_crossing_writer = r"""
+static void write_plane_crossings(
+    const char *restrict path,
+    const long int num_rays,
+    const bool *restrict event_found,
+    const int *restrict event_degree,
+    const double *restrict event_state,
+    const blueprint_data_t *restrict results,
+    const bool terminal_plane)
+{
+    FILE *restrict output = fopen(path, "wb");
+    if (output == NULL) {
+        fprintf(stderr, "ERROR: Could not open plane crossing file '%s'.\n", path);
+        exit(EXIT_FAILURE);
+    }
+    for (long int photon_index = 0; photon_index < num_rays; ++photon_index) {
+        if (!event_found[photon_index]) continue;
+        plane_crossing_record_t record = {0};
+        record.photon_index = (uint64_t)photon_index;
+        record.interpolation_degree = (uint32_t)event_degree[photon_index];
+        record.integration_param = terminal_plane
+            ? results[photon_index].@TERMINAL_PARAMETER@
+            : results[photon_index].@NON_TERMINAL_PARAMETER@;
+        record.y_local = terminal_plane
+            ? results[photon_index].y_t : results[photon_index].y_nt;
+        record.z_local = terminal_plane
+            ? results[photon_index].z_t : results[photon_index].z_nt;
+        for (int component = 0; component < 9; ++component) {
+            record.state[component] = event_state[component * num_rays + photon_index];
+        }
+        if (fwrite(&record, sizeof(record), 1, output) != 1) {
+            fprintf(stderr, "ERROR: Could not write plane crossing to '%s'.\n", path);
+            fclose(output);
+            exit(EXIT_FAILURE);
+        }
+    }
+    if (fclose(output) != 0) {
+        fprintf(stderr, "ERROR: Could not close plane crossing file '%s'.\n", path);
+        exit(EXIT_FAILURE);
+    }
+}
+""".replace("@TERMINAL_PARAMETER@", crossing_parameter_fields[0]).replace(
+        "@NON_TERMINAL_PARAMETER@", crossing_parameter_fields[1]
     )
 
     include_CodeParameters_h = True
@@ -279,6 +395,14 @@ def batch_integrator_numerical(
         if normalized_eom
         else "f_bridge[current][0 * BUNDLE_CAPACITY + fin_i]"
     )
+    interpolation_synthetic_usage_args_current = (
+        "commondata->perform_synthetic_slice_check ? chunk_buffer[current] : NULL, "
+        "commondata->perform_synthetic_slice_check ? synthetic_slice_usage_by_photon : NULL, "
+    )
+    interpolation_synthetic_usage_args_next = (
+        "commondata->perform_synthetic_slice_check ? chunk_buffer[next] : NULL, "
+        "commondata->perform_synthetic_slice_check ? synthetic_slice_usage_by_photon : NULL, "
+    )
     interpolation_integration_param_args = (
         "d_spatial_stencil_center_i0[current], "
         "d_spatial_stencil_center_i2[current], "
@@ -287,6 +411,7 @@ def batch_integrator_numerical(
             if normalized_eom
             else ""
         )
+        + interpolation_synthetic_usage_args_current
     )
     interpolation_integration_param_args_next = (
         "d_spatial_stencil_center_i0[next], "
@@ -296,12 +421,17 @@ def batch_integrator_numerical(
             if normalized_eom
             else ""
         )
+        + interpolation_synthetic_usage_args_next
     )
-    interpolation_initial_integration_param_args = "NULL, NULL, " + (
-        "d_integration_param_bundle[0], d_h[0], 1," if normalized_eom else ""
+    interpolation_initial_integration_param_args = (
+        "NULL, NULL, "
+        + ("d_integration_param_bundle[0], d_h[0], 1," if normalized_eom else "")
+        + "NULL, NULL, "
     )
-    interpolation_terminal_integration_param_args = "NULL, NULL, " + (
-        "d_integration_param_bundle[0], d_h[0], 1," if normalized_eom else ""
+    interpolation_terminal_integration_param_args = (
+        "NULL, NULL, "
+        + ("d_integration_param_bundle[0], d_h[0], 1," if normalized_eom else "")
+        + "NULL, NULL, "
     )
     initial_integration_param_setup = (
         """
@@ -432,6 +562,60 @@ def batch_integrator_numerical(
         else "fabs(d_norm_bundle[norm_i].C)"
     )
     initial_constraint_target = "1.0" if normalized_eom else "0.0"
+    angular_momentum_metric_argument = "" if normalized_eom else "d_metric_bundle[0], "
+    angular_momentum_allocation = (
+        r"""
+    // Axial-angular-momentum arrays exist only in projects generated for a
+    // numerical spacetime with rotational symmetry about the Cartesian z axis.
+    axial_angular_momentum_t *d_angular_momentum_bundle = NULL;
+    axial_angular_momentum_t *initial_angular_momentum = NULL;
+    axial_angular_momentum_t *final_angular_momentum = NULL;
+    if (commondata->perform_Lz_check) {
+        BHAH_MALLOC(
+            d_angular_momentum_bundle,
+            sizeof(axial_angular_momentum_t) * BUNDLE_CAPACITY);
+        BHAH_MALLOC(
+            initial_angular_momentum,
+            sizeof(axial_angular_momentum_t) * num_rays);
+        BHAH_MALLOC(
+            final_angular_momentum,
+            sizeof(axial_angular_momentum_t) * num_rays);
+        for (long int Lz_init_i = 0; Lz_init_i < num_rays; ++Lz_init_i) {
+            initial_angular_momentum[Lz_init_i].Lz = NAN;
+            final_angular_momentum[Lz_init_i].Lz = NAN;
+        }
+    } // END IF: allocate axial-angular-momentum arrays
+"""
+        if axisymmetric_about_z
+        else ""
+    )
+    initial_angular_momentum_evaluation = (
+        f"""
+        if (commondata->perform_Lz_check) {{
+            axial_angular_momentum_z(
+                d_f_bundle[0],
+                {angular_momentum_metric_argument}d_angular_momentum_bundle,
+                chunk_size,
+                0);
+            for (long int Lz_i = 0; Lz_i < chunk_size; ++Lz_i) {{
+                const long int master_idx = start_idx + Lz_i;
+                const double initial_Lz = d_angular_momentum_bundle[Lz_i].Lz;
+                if (!isfinite(initial_Lz)) {{
+                    fprintf(
+                        stderr,
+                        "ERROR: Initial L_z is non-finite for ray %ld.\\n",
+                        master_idx);
+                    time_window_manager_numerical_free(&numerical_window);
+                    slot_manager_free(&tsm);
+                    exit(1);
+                }}
+                initial_angular_momentum[master_idx].Lz = initial_Lz;
+            }} // END LOOP: store initial L_z by photon index
+        }} // END IF: evaluate initial L_z
+"""
+        if axisymmetric_about_z
+        else ""
+    )
     finalize_current = """
             // Finalize step: apply RKF45 error control and update the
             // integration-parameter baseline and step size $h$.
@@ -452,10 +636,12 @@ def batch_integrator_numerical(
                 &spatial_context,
                 &numerical_window,
                 d_f_bundle[current],
-                d_status[current],
-                d_spatial_stencil_center_i0[current],
-                d_spatial_stencil_center_i2[current],
-                d_metric_bundle[current],
+                    d_status[current],
+                    d_spatial_stencil_center_i0[current],
+                    d_spatial_stencil_center_i2[current],
+                    NULL,
+                    NULL,
+                    d_metric_bundle[current],
                 NULL,
                 active_chunks[current],
                 current);
@@ -477,6 +663,8 @@ def batch_integrator_numerical(
                     d_status[next],
                     d_spatial_stencil_center_i0[next],
                     d_spatial_stencil_center_i2[next],
+                    NULL,
+                    NULL,
                     d_metric_bundle[next],
                     NULL,
                     active_chunks[next],
@@ -489,6 +677,9 @@ def batch_integrator_numerical(
         """
             for (long int log_energy_i = 0;
                  log_energy_i < active_chunks[current]; ++log_energy_i) {
+                if (d_status[current][log_energy_i] != ACTIVE) {
+                    continue;
+                } // END IF: skip log-energy for non-active photons
                 d_log_energy_bundle[current][log_energy_i] =
                     d_f_bundle[current][4 * BUNDLE_CAPACITY + log_energy_i];
             } // END LOOP: for i over normalized log-energy
@@ -498,6 +689,7 @@ def batch_integrator_numerical(
             normal_observer_log_energy(
                 d_f_bundle[current],
                 d_metric_bundle[current],
+                d_status[current],
                 d_log_energy_bundle[current],
                 active_chunks[current],
                 0);
@@ -505,10 +697,13 @@ def batch_integrator_numerical(
     )
     log_energy_evaluation_next = (
         """
-                for (long int log_energy_i = 0;
-                     log_energy_i < active_chunks[next]; ++log_energy_i) {
-                    d_log_energy_bundle[next][log_energy_i] =
-                        d_f_bundle[next][4 * BUNDLE_CAPACITY + log_energy_i];
+                    for (long int log_energy_i = 0;
+                         log_energy_i < active_chunks[next]; ++log_energy_i) {
+                        if (d_status[next][log_energy_i] != ACTIVE) {
+                            continue;
+                        } // END IF: skip log-energy for non-active photons
+                        d_log_energy_bundle[next][log_energy_i] =
+                            d_f_bundle[next][4 * BUNDLE_CAPACITY + log_energy_i];
                 } // END LOOP: for i over normalized log-energy
 """
         if normalized_eom
@@ -516,6 +711,7 @@ def batch_integrator_numerical(
                 normal_observer_log_energy(
                     d_f_bundle[next],
                     d_metric_bundle[next],
+                    d_status[next],
                     d_log_energy_bundle[next],
                     active_chunks[next],
                     0);
@@ -539,14 +735,58 @@ def batch_integrator_numerical(
     )
 
     # The nonterminal diagnostic deliberately uses the accepted state saved by
-    # the host synchronization path, not the quadratically reconstructed event
+    # the host synchronization path, not the reconstructed plane-intersection
     # state. Keep this separate from event detection: the event manager remains
     # responsible only for geometric crossing detection and the persistent lock.
+    non_terminal_diagnostic_condition = "commondata->perform_normalization_check"
+    non_terminal_Lz_kernel_call = ""
+    non_terminal_Lz_store = ""
+    if axisymmetric_about_z:
+        non_terminal_diagnostic_condition += " || commondata->perform_Lz_check"
+        non_terminal_Lz_kernel_call = f"""
+                    if (commondata->perform_Lz_check) {{
+                        axial_angular_momentum_z(
+                            d_f_bundle[0],
+                            {angular_momentum_metric_argument}d_angular_momentum_bundle,
+                            chunk_size,
+                            0);
+                    }}
+"""
+        non_terminal_Lz_store = r"""
+                        if (commondata->perform_Lz_check) {
+                            const double post_step_Lz =
+                                d_angular_momentum_bundle[norm_i].Lz;
+                            const double post_step_t =
+                                all_photons_host.non_terminal_norm_coordinate_time[master_idx];
+                            const double post_step_x =
+                                f_bridge[0][1 * BUNDLE_CAPACITY + norm_i];
+                            const double post_step_y =
+                                f_bridge[0][2 * BUNDLE_CAPACITY + norm_i];
+                            const double post_step_z =
+                                f_bridge[0][3 * BUNDLE_CAPACITY + norm_i];
+                            const double signed_distance =
+                                (post_step_x - commondata->non_terminal_plane_center_x) *
+                                    commondata->non_terminal_plane_normal_x +
+                                (post_step_y - commondata->non_terminal_plane_center_y) *
+                                    commondata->non_terminal_plane_normal_y +
+                                (post_step_z - commondata->non_terminal_plane_center_z) *
+                                    commondata->non_terminal_plane_normal_z;
+                            if (isfinite(post_step_Lz) && isfinite(post_step_t) &&
+                                isfinite(signed_distance)) {
+                                results_buffer[master_idx].non_terminal_post_step_Lz = post_step_Lz;
+                                results_buffer[master_idx].non_terminal_post_step_t = post_step_t;
+                                results_buffer[master_idx].non_terminal_post_step_distance = signed_distance;
+                            } else {
+                                non_terminal_skipped_count++;
+                            }
+                        } // END IF: store axial angular momentum at accepted state
+"""
+
     non_terminal_normalization_block = r"""
         //==========================================
-        // NONTERMINAL ACCEPTED-STATE NORMALIZATION DIAGNOSTIC
+        // NONTERMINAL ACCEPTED-STATE NORM AND ANGULAR MOMENTUM DIAGNOSTICS
         //==========================================
-        if (commondata->perform_normalization_check) {
+        if ({NON_TERMINAL_DIAGNOSTIC_CONDITION}) {
             TimeSlotManager non_terminal_norm_tsm;
             long int non_terminal_recorded_count = 0;
             long int non_terminal_skipped_count = 0;
@@ -558,7 +798,8 @@ def batch_integrator_numerical(
                 num_rays);
 
             for (long int norm_ray = 0; norm_ray < num_rays; ++norm_ray) {
-                if (!all_photons_host.non_terminal_norm_recorded[norm_ray]) {
+                if (!all_photons_host.non_terminal_norm_recorded[norm_ray] ||
+                    !all_photons_host.non_terminal_plane_event_found[norm_ray]) {
                     continue;
                 }
                 non_terminal_recorded_count++;
@@ -633,12 +874,15 @@ def batch_integrator_numerical(
                         chunk_size,
                         0);
 
-                    {NORMALIZATION_KERNEL_NAME}(
-                        d_f_bundle[0],
-                        d_metric_bundle[0],
-                        d_norm_bundle,
-                        chunk_size,
-                        0);
+                    if (commondata->perform_normalization_check) {
+                        {NORMALIZATION_KERNEL_NAME}(
+                            d_f_bundle[0],
+                            d_metric_bundle[0],
+                            d_norm_bundle,
+                            chunk_size,
+                            0);
+                    }
+{NON_TERMINAL_LZ_KERNEL_CALL}
 
                     for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {
                         const long int master_idx = chunk_buffer[0][norm_i];
@@ -647,25 +891,28 @@ def batch_integrator_numerical(
                             non_terminal_skipped_count++;
                             continue;
                         }
-                        const double current_norm_err = {NORMALIZATION_ERROR_EXPR};
-                        const double sidecar_norm_err = {NORMALIZATION_SIDECAR_ERROR_EXPR};
-                        if (!isfinite(current_norm_err) || !isfinite(sidecar_norm_err)) {
-                            non_terminal_skipped_count++;
-                            continue;
+                        if (commondata->perform_normalization_check) {
+                            const double current_norm_err = {NORMALIZATION_ERROR_EXPR};
+                            const double sidecar_norm_err = {NORMALIZATION_SIDECAR_ERROR_EXPR};
+                            if (!isfinite(current_norm_err) || !isfinite(sidecar_norm_err)) {
+                                non_terminal_skipped_count++;
+                            } else {
+                                normalization_abs_non_terminal_by_ray[master_idx] =
+                                    sidecar_norm_err;
+                            }
                         }
-                        normalization_abs_non_terminal_by_ray[master_idx] =
-                            sidecar_norm_err;
-                    } // END LOOP: evaluate accepted nonterminal norms
+{NON_TERMINAL_LZ_STORE}
+                    } // END LOOP: evaluate accepted nonterminal diagnostics
                 } // END WHILE: evaluate nonterminal normalization slot
             } // END LOOP: evaluate nonterminal normalization slots
 
             slot_manager_free(&non_terminal_norm_tsm);
 
             printf(
-                "Nonterminal accepted-state normalization records: %ld; skipped diagnostics: %ld\n",
+                "Nonterminal accepted-state diagnostic records: %ld; skipped diagnostics: %ld\n",
                 non_terminal_recorded_count,
                 non_terminal_skipped_count);
-        } // END IF: evaluate accepted-state nonterminal normalization
+        } // END IF: evaluate accepted-state nonterminal diagnostics
 """
     non_terminal_normalization_block = (
         non_terminal_normalization_block.replace(
@@ -679,6 +926,386 @@ def batch_integrator_numerical(
         .replace("{NORMALIZATION_KERNEL_NAME}", normalization_kernel_name)
         .replace("{NORMALIZATION_ERROR_EXPR}", normalization_error_expr)
         .replace("{NORMALIZATION_SIDECAR_ERROR_EXPR}", normalization_sidecar_error_expr)
+        .replace("{NON_TERMINAL_DIAGNOSTIC_CONDITION}", non_terminal_diagnostic_condition)
+        .replace("{NON_TERMINAL_LZ_KERNEL_CALL}", non_terminal_Lz_kernel_call)
+        .replace("{NON_TERMINAL_LZ_STORE}", non_terminal_Lz_store)
+    )
+
+    terminal_diagnostic_condition = "commondata->perform_normalization_check"
+    terminal_diagnostic_declarations = ""
+    terminal_skip_one = r"""
+                    if (commondata->perform_normalization_check) {
+                        normalization_skipped_count++;
+                    }
+"""
+    terminal_skip_count = r"""
+                    if (commondata->perform_normalization_check) {
+                        normalization_skipped_count += diagnostic_count;
+                    }
+"""
+    terminal_angular_momentum_kernel_call = ""
+    terminal_angular_momentum_evaluation = ""
+    terminal_angular_momentum_report = ""
+    if axisymmetric_about_z:
+        terminal_diagnostic_condition += " || commondata->perform_Lz_check"
+        terminal_diagnostic_declarations = r"""
+            long int angular_momentum_skipped_count = 0;
+            double max_abs_delta_Lz = NAN;
+            long int worst_ray_Lz = -1;
+            double worst_initial_Lz = NAN;
+            double worst_final_Lz = NAN;
+"""
+        terminal_skip_one += r"""
+                    if (commondata->perform_Lz_check) {
+                        angular_momentum_skipped_count++;
+                    }
+"""
+        terminal_skip_count += r"""
+                    if (commondata->perform_Lz_check) {
+                        angular_momentum_skipped_count += diagnostic_count;
+                    }
+"""
+        terminal_angular_momentum_kernel_call = f"""
+                    if (commondata->perform_Lz_check) {{
+                        axial_angular_momentum_z(
+                            d_f_bundle[0],
+                            {angular_momentum_metric_argument}d_angular_momentum_bundle,
+                            chunk_size,
+                            0);
+                    }}
+"""
+        terminal_angular_momentum_evaluation = r"""
+                        if (commondata->perform_Lz_check) {
+                            const double initial_Lz =
+                                initial_angular_momentum[master_idx].Lz;
+                            const double final_Lz =
+                                d_angular_momentum_bundle[diagnostic_i].Lz;
+                            const double abs_delta_Lz = fabs(final_Lz - initial_Lz);
+                            if (!isfinite(initial_Lz) || !isfinite(final_Lz) ||
+                                !isfinite(abs_delta_Lz)) {
+                                angular_momentum_skipped_count++;
+                            } else {
+                                final_angular_momentum[master_idx].Lz = final_Lz;
+                                if (worst_ray_Lz < 0 ||
+                                    abs_delta_Lz > max_abs_delta_Lz) {
+                                    max_abs_delta_Lz = abs_delta_Lz;
+                                    worst_ray_Lz = master_idx;
+                                    worst_initial_Lz = initial_Lz;
+                                    worst_final_Lz = final_Lz;
+                                }
+                            }
+                        } // END IF: evaluate terminal L_z
+"""
+        terminal_angular_momentum_report = r"""
+            if (commondata->perform_Lz_check) {
+                printf("\n=================================================\n");
+                printf(" AXIAL ANGULAR MOMENTUM DIAGNOSTIC REPORT\n");
+                printf("=================================================\n");
+                printf(
+                    "  Max Absolute Delta L_z: %e (Ray %ld)\n",
+                    max_abs_delta_Lz,
+                    worst_ray_Lz);
+                printf("  Initial L_z for worst ray: %e\n", worst_initial_Lz);
+                printf("  Final L_z for worst ray: %e\n", worst_final_Lz);
+                printf(
+                    "  Skipped terminal L_z diagnostics: %ld\n",
+                    angular_momentum_skipped_count);
+            }
+"""
+
+    terminal_diagnostics_block = r"""
+        //==========================================
+        // TERMINAL PHOTON DIAGNOSTICS
+        //==========================================
+        if ({TERMINAL_DIAGNOSTIC_CONDITION}) {
+            TimeSlotManager diagnostic_tsm;
+            long int normalization_skipped_count = 0;
+            double max_err_norm = 0.0;
+            long int worst_ray_norm = -1;
+            double max_err_norm_excluding_failures = 0.0;
+            long int worst_ray_norm_excluding_failures = -1;
+{TERMINAL_DIAGNOSTIC_DECLARATIONS}
+            slot_manager_init(
+                &diagnostic_tsm,
+                commondata->slot_manager_t_min,
+                slot_manager_t_max,
+                commondata->slot_manager_delta_t,
+                num_rays);
+
+            for (long int diagnostic_ray = 0;
+                 diagnostic_ray < num_rays;
+                 ++diagnostic_ray) {
+                const int diagnostic_slot_idx = slot_get_index(
+                    &diagnostic_tsm, {TERMINAL_COORDINATE_TIME});
+                if (diagnostic_slot_idx < 0) {
+{TERMINAL_SKIP_ONE}
+                    continue;
+                }
+                slot_add_photon(
+                    &diagnostic_tsm, diagnostic_slot_idx, diagnostic_ray);
+            } // END LOOP: bin terminal photon states by coordinate time
+
+            for (int diagnostic_slot_idx = diagnostic_tsm.num_slots - 1;
+                 diagnostic_slot_idx >= 0;
+                 --diagnostic_slot_idx) {
+                if (diagnostic_tsm.slot_counts[diagnostic_slot_idx] <= 0) {
+                    continue;
+                }
+
+                if (time_window_manager_numerical_mmap_for_slot(
+                        &numerical_window,
+                        &diagnostic_tsm,
+                        diagnostic_slot_idx) !=
+                    TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+                    const long int diagnostic_count =
+                        diagnostic_tsm.slot_counts[diagnostic_slot_idx];
+{TERMINAL_SKIP_COUNT}
+                    continue;
+                }
+
+                while (diagnostic_tsm.slot_counts[diagnostic_slot_idx] > 0) {
+                    const long int chunk_size = NRPYMIN(
+                        (long int)BUNDLE_CAPACITY,
+                        diagnostic_tsm.slot_counts[diagnostic_slot_idx]);
+                    slot_remove_chunk(
+                        &diagnostic_tsm,
+                        diagnostic_slot_idx,
+                        chunk_buffer[0],
+                        chunk_size);
+
+                    for (int diagnostic_k = 0; diagnostic_k < 9; ++diagnostic_k) {
+                        for (long int diagnostic_i = 0;
+                             diagnostic_i < chunk_size;
+                             ++diagnostic_i) {
+                            const long int master_idx =
+                                chunk_buffer[0][diagnostic_i];
+                            f_bridge[0][
+                                diagnostic_k * BUNDLE_CAPACITY + diagnostic_i] =
+                                all_photons_host.f[
+                                    diagnostic_k * num_rays + master_idx];
+                        }
+                    }
+
+                    for (int diagnostic_k = 0; diagnostic_k < 9; ++diagnostic_k) {
+                        memcpy(
+                            d_f_bundle[0] + diagnostic_k * BUNDLE_CAPACITY,
+                            f_bridge[0] + diagnostic_k * BUNDLE_CAPACITY,
+                            sizeof(double) * chunk_size);
+                    }
+                    for (long int diagnostic_i = 0;
+                         diagnostic_i < chunk_size;
+                         ++diagnostic_i) {
+                        // Diagnostic interpolation failures do not replace the
+                        // photon's physical termination status.
+                        d_status[0][diagnostic_i] = ACTIVE;
+                    }
+{TERMINAL_INTEGRATION_PARAM_SETUP}
+
+                    numerical_interpolation(
+                        commondata,
+                        &numerical_params,
+                        &spatial_context,
+                        &numerical_window,
+                        d_f_bundle[0],
+                        d_status[0],
+                        {INTERPOLATION_TERMINAL_ARGS}
+                        d_metric_bundle[0],
+                        NULL,
+                        chunk_size,
+                        0);
+
+                    if (commondata->perform_normalization_check) {
+                        {NORMALIZATION_KERNEL_NAME}(
+                            d_f_bundle[0],
+                            d_metric_bundle[0],
+                            d_norm_bundle,
+                            chunk_size,
+                            0);
+                    }
+{TERMINAL_ANGULAR_MOMENTUM_KERNEL_CALL}
+                    for (long int diagnostic_i = 0;
+                         diagnostic_i < chunk_size;
+                         ++diagnostic_i) {
+                        const long int master_idx =
+                            chunk_buffer[0][diagnostic_i];
+                        if (d_status[0][diagnostic_i] ==
+                                FAILURE_SPATIAL_INTERPOLATION ||
+                            d_status[0][diagnostic_i] ==
+                                FAILURE_TEMPORAL_INTERPOLATION) {
+{TERMINAL_SKIP_ONE}
+                            continue;
+                        }
+                        if (commondata->perform_normalization_check) {
+                            const double current_norm_err =
+                                {NORMALIZATION_ERROR_EXPR};
+                            const double sidecar_norm_err =
+                                {NORMALIZATION_SIDECAR_ERROR_EXPR};
+                            if (!isfinite(current_norm_err) ||
+                                !isfinite(sidecar_norm_err)) {
+                                normalization_skipped_count++;
+                            } else {
+                                normalization_abs_by_ray[master_idx] =
+                                    sidecar_norm_err;
+                                if (current_norm_err > max_err_norm) {
+                                    max_err_norm = current_norm_err;
+                                    worst_ray_norm = master_idx;
+                                }
+                                if (all_photons_host.status[master_idx] !=
+                                        STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED &&
+                                    all_photons_host.status[master_idx] !=
+                                        FAILURE_RKF45_REJECTION_LIMIT &&
+                                    current_norm_err >
+                                        max_err_norm_excluding_failures) {
+                                    max_err_norm_excluding_failures =
+                                        current_norm_err;
+                                    worst_ray_norm_excluding_failures = master_idx;
+                                }
+                            }
+                        } // END IF: evaluate terminal normalization
+{TERMINAL_ANGULAR_MOMENTUM_EVALUATION}
+                    } // END LOOP: evaluate terminal diagnostics in chunk
+                } // END WHILE: terminal diagnostic slot has photons
+            } // END LOOP: terminal diagnostic slots
+
+            slot_manager_free(&diagnostic_tsm);
+
+            if (commondata->perform_normalization_check) {
+                printf("\n=================================================\n");
+                printf(" NORMALIZATION DIAGNOSTIC REPORT\n");
+                printf("=================================================\n");
+                printf(
+                    "  Max Absolute Error, all checked photons: %e (Ray %ld)\n",
+                    max_err_norm,
+                    worst_ray_norm);
+                printf(
+                    "  Max Absolute Error, excluding STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED; FAILURE_RKF45_REJECTION_LIMIT: %e (Ray %ld)\n",
+                    max_err_norm_excluding_failures,
+                    worst_ray_norm_excluding_failures);
+                printf(
+                    "  Skipped terminal normalization diagnostics: %ld\n",
+                    normalization_skipped_count);
+            }
+{TERMINAL_ANGULAR_MOMENTUM_REPORT}
+        } // END IF: evaluate enabled terminal photon diagnostics
+"""
+    terminal_diagnostics_block = (
+        terminal_diagnostics_block.replace(
+            "{TERMINAL_DIAGNOSTIC_CONDITION}", terminal_diagnostic_condition
+        )
+        .replace(
+            "{TERMINAL_DIAGNOSTIC_DECLARATIONS}",
+            terminal_diagnostic_declarations,
+        )
+        .replace(
+            "{TERMINAL_COORDINATE_TIME}",
+            terminal_coordinate_time.replace("norm_ray", "diagnostic_ray"),
+        )
+        .replace("{TERMINAL_SKIP_ONE}", terminal_skip_one)
+        .replace("{TERMINAL_SKIP_COUNT}", terminal_skip_count)
+        .replace("{TERMINAL_INTEGRATION_PARAM_SETUP}", terminal_integration_param_setup)
+        .replace(
+            "{INTERPOLATION_TERMINAL_ARGS}",
+            interpolation_terminal_integration_param_args,
+        )
+        .replace("{NORMALIZATION_KERNEL_NAME}", normalization_kernel_name)
+        .replace(
+            "{NORMALIZATION_ERROR_EXPR}",
+            normalization_error_expr.replace("norm_i", "diagnostic_i"),
+        )
+        .replace(
+            "{NORMALIZATION_SIDECAR_ERROR_EXPR}",
+            normalization_sidecar_error_expr.replace("norm_i", "diagnostic_i"),
+        )
+        .replace(
+            "{TERMINAL_ANGULAR_MOMENTUM_KERNEL_CALL}",
+            terminal_angular_momentum_kernel_call,
+        )
+        .replace(
+            "{TERMINAL_ANGULAR_MOMENTUM_EVALUATION}",
+            terminal_angular_momentum_evaluation,
+        )
+        .replace(
+            "{TERMINAL_ANGULAR_MOMENTUM_REPORT}",
+            terminal_angular_momentum_report,
+        )
+    )
+
+    angular_momentum_output = (
+        r"""
+        if (commondata->perform_Lz_check &&
+            Lz_bin_path != NULL && Lz_bin_path[0] != '\0') {
+            if (write_axial_angular_momentum_z(
+                    Lz_bin_path,
+                    initial_angular_momentum,
+                    final_angular_momentum,
+                    num_rays) != 0) {
+                exit(1);
+            }
+        } // END IF: write per-photon initial and final L_z
+"""
+        if axisymmetric_about_z
+        else ""
+    )
+    synthetic_slice_usage_output = r"""
+        if (commondata->perform_synthetic_slice_check &&
+            synthetic_slice_usage_bin_path != NULL &&
+            synthetic_slice_usage_bin_path[0] != '\0') {
+            FILE *synthetic_slice_usage_file =
+                fopen(synthetic_slice_usage_bin_path, "wb");
+            if (synthetic_slice_usage_file == NULL) {
+                fprintf(stderr,
+                        "ERROR: Could not open synthetic slice-use file '%s' for writing.\n",
+                        synthetic_slice_usage_bin_path);
+                exit(1);
+            }
+            for (long int photon_index = 0; photon_index < num_rays; ++photon_index) {
+                const uint64_t serialized_photon_index = (uint64_t)photon_index;
+                const uint8_t used_lower_endpoint =
+                    synthetic_slice_usage_by_photon[photon_index].used_lower_endpoint ? 1U : 0U;
+                const uint8_t used_upper_endpoint =
+                    synthetic_slice_usage_by_photon[photon_index].used_upper_endpoint ? 1U : 0U;
+                const double lower_request_time = used_lower_endpoint
+                    ? synthetic_slice_usage_by_photon[photon_index].lower_request_time
+                    : NAN;
+                const double upper_request_time = used_upper_endpoint
+                    ? synthetic_slice_usage_by_photon[photon_index].upper_request_time
+                    : NAN;
+                if (fwrite(&serialized_photon_index, sizeof(serialized_photon_index), 1,
+                           synthetic_slice_usage_file) != 1 ||
+                    fwrite(&used_lower_endpoint, sizeof(used_lower_endpoint), 1,
+                           synthetic_slice_usage_file) != 1 ||
+                    fwrite(&used_upper_endpoint, sizeof(used_upper_endpoint), 1,
+                           synthetic_slice_usage_file) != 1 ||
+                    fwrite(&lower_request_time, sizeof(lower_request_time), 1,
+                           synthetic_slice_usage_file) != 1 ||
+                    fwrite(&upper_request_time, sizeof(upper_request_time), 1,
+                           synthetic_slice_usage_file) != 1) {
+                    fprintf(stderr,
+                            "ERROR: Could not write synthetic slice-use record for photon %ld to '%s'.\n",
+                            photon_index,
+                            synthetic_slice_usage_bin_path);
+                    fclose(synthetic_slice_usage_file);
+                    exit(1);
+                }
+            }
+            if (fclose(synthetic_slice_usage_file) != 0) {
+                fprintf(stderr,
+                        "ERROR: Could not close synthetic slice-use file '%s'.\n",
+                        synthetic_slice_usage_bin_path);
+                exit(1);
+            }
+        } // END IF: write per-photon synthetic temporal-stencil use records
+"""
+    angular_momentum_cleanup = (
+        r"""
+        if (commondata->perform_Lz_check) {
+            BHAH_FREE(d_angular_momentum_bundle);
+            BHAH_FREE(initial_angular_momentum);
+            BHAH_FREE(final_angular_momentum);
+        } // END IF: free axial-angular-momentum arrays
+"""
+        if axisymmetric_about_z
+        else ""
     )
 
     def memcpy_cpu(dest: str, src: str, size: str) -> str:
@@ -690,11 +1317,69 @@ def batch_integrator_numerical(
     stream_arg_current = ", current"
     stream_arg_next = ", next"
 
+    plane_fields = (
+        "non_terminal_plane_crossing_pending",
+        "terminal_plane_crossing_pending",
+        "non_terminal_plane_steps_past",
+        "terminal_plane_steps_past",
+        "non_terminal_plane_event_degree",
+        "terminal_plane_event_degree",
+    )
+    plane_pack_current = "\n".join(
+        f"d_{field}[current][bridge_i] = all_photons_host.{field}[m_idx];"
+        for field in plane_fields
+    )
+    plane_pack_next = plane_pack_current.replace("current", "next")
+    plane_unpack = "\n".join(
+        f"all_photons_host.{field}[m_idx] = d_{field}[current][fin_i];"
+        for field in plane_fields
+    )
+    plane_event_capture = "\n".join(
+        (
+            f"if (d_{plane}_plane_event_found[current][fin_i] && "
+            f"!all_photons_host.{plane}_plane_event_found[m_idx]) {{\n"
+            "    for (int component = 0; component < 9; ++component) {\n"
+            f"        all_photons_host.{plane}_plane_event_f_intersect[component * num_rays + m_idx] = "
+            f"d_{plane}_plane_event_state_bundle[current][component * BUNDLE_CAPACITY + fin_i];\n"
+            "    }\n"
+            "}"
+        )
+        for plane in ("non_terminal", "terminal")
+    )
+
+    def event_manager_call(slot: str) -> str:
+        """Return the accepted-state event call for one CPU processing slot."""
+        return (
+            f"event_detection_manager_kernel(commondata, d_f_bundle[{slot}], "
+            f"d_log_energy_bundle[{slot}], d_f_history_bundle[{slot}], "
+            f"d_integration_param_bundle[{slot}], d_integration_param_history[{slot}], "
+            f"results_buffer, d_status[{slot}], "
+            f"d_on_pos_non_terminal_plane_prev[{slot}], "
+            f"d_on_pos_terminal_plane_prev[{slot}], "
+            f"d_non_terminal_plane_event_found[{slot}], "
+            f"d_terminal_plane_event_found[{slot}], "
+            f"d_non_terminal_plane_crossing_pending[{slot}], "
+            f"d_terminal_plane_crossing_pending[{slot}], "
+            f"d_non_terminal_plane_steps_past[{slot}], "
+            f"d_terminal_plane_steps_past[{slot}], "
+            f"d_non_terminal_plane_event_degree[{slot}], "
+            f"d_terminal_plane_event_degree[{slot}], "
+            f"d_non_terminal_plane_event_state_bundle[{slot}], "
+            f"d_terminal_plane_event_state_bundle[{slot}], "
+            f"d_chunk_buffer[{slot}], active_chunks[{slot}], {slot});"
+        )
+
+    event_manager_current = event_manager_call("current")
+    event_manager_next = event_manager_call("next")
+
     body = rf"""
     // Initialize caller-owned output records before any event handler writes fields.
     for (long int i = 0; i < num_rays; ++i) {{
         results_buffer[i] = (blueprint_data_t){{0}};
         results_buffer[i].termination_type = FAILURE_GENERIC;
+        results_buffer[i].non_terminal_post_step_Lz = NAN;
+        results_buffer[i].non_terminal_post_step_t = NAN;
+        results_buffer[i].non_terminal_post_step_distance = NAN;
     }} // END LOOP: initialize deterministic numerical-batch result records
 
     //==========================================
@@ -702,14 +1387,12 @@ def batch_integrator_numerical(
     //==========================================
 
     // The master host-side Structure of Arrays (SoA) tracking all photons $f^\mu$.
-    PhotonStateSoA all_photons_host;
+    PhotonStateSoA all_photons_host = {{0}};
 
     // {pin_comment} the state vector $f^\mu$.
     {malloc_pinned}(all_photons_host.f, sizeof(double) * 9 * num_rays);
-    // {pin_comment} the first derivative $\dot{{f}}^\mu$.
-    {malloc_pinned}(all_photons_host.f_p, sizeof(double) * 9 * num_rays);
-    // {pin_comment} the second derivative $\ddot{{f}}^\mu$.
-    {malloc_pinned}(all_photons_host.f_p_p, sizeof(double) * 9 * num_rays);
+    // {pin_comment} accepted states preceding the current state.
+    {malloc_pinned}(all_photons_host.f_history, sizeof(double) * {maximum_degree} * 9 * num_rays);
     // {pin_comment} the integration parameter.
     {malloc_pinned}(all_photons_host.integration_param, sizeof(double) * num_rays);
     // {pin_comment} individual integration step sizes $h$.
@@ -722,23 +1405,29 @@ def batch_integrator_numerical(
     {malloc_pinned}(all_photons_host.on_positive_side_of_non_terminal_plane_prev, sizeof(bool) * num_rays);
     // {pin_comment} the previous terminal-plane boundary state.
     {malloc_pinned}(all_photons_host.on_positive_side_of_terminal_plane_prev, sizeof(bool) * num_rays);
-    // {pin_comment} the history step $\lambda_{{n-1}}$.
-    {malloc_pinned}(all_photons_host.integration_param_p, sizeof(double) * num_rays);
-    // {pin_comment} the history step $\lambda_{{n-2}}$.
-    {malloc_pinned}(all_photons_host.integration_param_p_p, sizeof(double) * num_rays);
+    // {pin_comment} accepted integration parameters preceding the current state.
+    {malloc_pinned}(all_photons_host.integration_param_history, sizeof(double) * {maximum_degree} * num_rays);
     // {pin_comment} the nonterminal plane intersection lock.
     {malloc_pinned}(all_photons_host.non_terminal_plane_event_found, sizeof(bool) * num_rays);
     // {pin_comment} the terminal-plane intersection lock.
     {malloc_pinned}(all_photons_host.terminal_plane_event_found, sizeof(bool) * num_rays);
-    // Optional per-ray latch for the first accepted state after a nonterminal crossing.
+    {malloc_pinned}(all_photons_host.non_terminal_plane_crossing_pending, sizeof(bool) * num_rays);
+    {malloc_pinned}(all_photons_host.terminal_plane_crossing_pending, sizeof(bool) * num_rays);
+    {malloc_pinned}(all_photons_host.non_terminal_plane_steps_past, sizeof(int) * num_rays);
+    {malloc_pinned}(all_photons_host.terminal_plane_steps_past, sizeof(int) * num_rays);
+    {malloc_pinned}(all_photons_host.non_terminal_plane_event_degree, sizeof(int) * num_rays);
+    {malloc_pinned}(all_photons_host.terminal_plane_event_degree, sizeof(int) * num_rays);
+    {malloc_pinned}(all_photons_host.non_terminal_plane_event_f_intersect, sizeof(double) * 9 * num_rays);
+    {malloc_pinned}(all_photons_host.terminal_plane_event_f_intersect, sizeof(double) * 9 * num_rays);
+    // Optional per-ray state for norm and angular momentum after a nonterminal crossing.
     all_photons_host.non_terminal_norm_recorded = NULL;
     all_photons_host.non_terminal_norm_f = NULL;
     all_photons_host.non_terminal_norm_coordinate_time = NULL;
-    if (commondata->perform_normalization_check) {{
+    if ({non_terminal_diagnostic_condition}) {{
         {malloc_pinned}(all_photons_host.non_terminal_norm_recorded, sizeof(bool) * num_rays);
         {malloc_pinned}(all_photons_host.non_terminal_norm_f, sizeof(double) * 9 * num_rays);
         {malloc_pinned}(all_photons_host.non_terminal_norm_coordinate_time, sizeof(double) * num_rays);
-    }} // END IF: allocate accepted-state nonterminal normalization storage
+    }} // END IF: allocate accepted-state nonterminal diagnostic storage
 
     // CPU-only numerical integration: direct commondata access and no extra execution-buffer setup.
 
@@ -749,10 +1438,6 @@ def batch_integrator_numerical(
     long int *chunk_buffer[2];
     // Bridge array staging the state vector $f^\mu$ for memory transfers.
     double *f_bridge[2];
-    // Bridge array staging the first derivative $\dot{{f}}^\mu$ for memory transfers.
-    double *f_p_bridge[2];
-    // Bridge array staging the second derivative $\ddot{{f}}^\mu$ for memory transfers.
-    double *f_p_p_bridge[2];
     // Bridge array staging the integration parameter for memory transfers.
     double *integration_param_bridge[2];
     // Bridge array staging the current integration step size $h$ for memory transfers.
@@ -765,10 +1450,6 @@ def batch_integrator_numerical(
     bool *on_pos_non_terminal_plane_prev_bridge[2];
     // Bridge array staging the previous terminal-plane boundary side flag for memory transfers.
     bool *on_pos_terminal_plane_prev_bridge[2];
-    // Bridge array staging the preceding integration parameter for chunked memory transfers.
-    double *integration_param_p_bridge[2];
-    // Bridge array staging the second preceding integration parameter for chunked memory transfers.
-    double *integration_param_p_p_bridge[2];
     // Bridge array staging the nonterminal plane event lock for memory transfers.
     bool *non_terminal_plane_event_found_bridge[2];
     // Bridge array staging the terminal-plane event lock for memory transfers.
@@ -783,10 +1464,8 @@ def batch_integrator_numerical(
     double *d_f_start_bundle[2];
     // Scratchpad tracking the intermediate cumulative RKF45 stage updates.
     double *d_f_temp_bundle[2];
-    // Scratchpad tracking the history state $f^\mu_{{n-1}}$ for geometric intersection detection.
-    double *d_f_prev_bundle[2];
-    // Scratchpad tracking the history state $f^\mu_{{n-2}}$ for geometric intersection detection.
-    double *d_f_pre_prev_bundle[2];
+    // Accepted state history for centered plane interpolation.
+    double *d_f_history_bundle[2];
     // Scratchpad persisting the symmetric metric tensor $g_{{\mu\nu}}$.
     double *d_metric_bundle[2];
     // Scratchpad carrying the common upper-only log-energy measure.
@@ -807,14 +1486,20 @@ def batch_integrator_numerical(
     bool *d_on_pos_non_terminal_plane_prev[2];
     // Array flagging the previous terminal-plane boundary side.
     bool *d_on_pos_terminal_plane_prev[2];
-    // Array tracking the preceding integration parameter.
-    double *d_integration_param_prev[2];
-    // Array tracking the integration parameter two accepted steps ago.
-    double *d_integration_param_pre_prev[2];
+    // Accepted integration-parameter history for centered plane interpolation.
+    double *d_integration_param_history[2];
     // Array guarding nonterminal-plane intersection coordinates from multi-trigger overwrites.
     bool *d_non_terminal_plane_event_found[2];
     // Array guarding the terminal-plane intersection coordinates from multi-trigger overwrites.
     bool *d_terminal_plane_event_found[2];
+    bool *d_non_terminal_plane_crossing_pending[2];
+    bool *d_terminal_plane_crossing_pending[2];
+    int *d_non_terminal_plane_steps_past[2];
+    int *d_terminal_plane_steps_past[2];
+    int *d_non_terminal_plane_event_degree[2];
+    int *d_terminal_plane_event_degree[2];
+    double *d_non_terminal_plane_event_state_bundle[2];
+    double *d_terminal_plane_event_state_bundle[2];
     // Array carrying the absolute master indices $m_{{idx}}$ mapping the execution chunk.
     long int *d_chunk_buffer[2];
 {spatial_center_declarations}
@@ -824,16 +1509,12 @@ def batch_integrator_numerical(
         // {bridge_alloc_comment}
         {malloc_pinned}(chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Pin chunk buffers.
         {malloc_pinned}(f_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $f^\mu$ bridges.
-        {malloc_pinned}(f_p_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $\dot{{f}}^\mu$ bridges.
-        {malloc_pinned}(f_p_p_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $\ddot{{f}}^\mu$ bridges.
         {malloc_pinned}(integration_param_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin integration-parameter bridges.
         {malloc_pinned}(h_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $h$ bridges.
         {malloc_pinned}(status_bridge[s], sizeof(termination_type_t) * BUNDLE_CAPACITY); // Pin status bridges.
         {malloc_pinned}(retries_bridge[s], sizeof(int) * BUNDLE_CAPACITY); // Pin retries bridges.
         {malloc_pinned}(on_pos_non_terminal_plane_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin nonterminal-plane flag bridges.
         {malloc_pinned}(on_pos_terminal_plane_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source flag bridges.
-        {malloc_pinned}(integration_param_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin preceding integration-parameter bridges.
-        {malloc_pinned}(integration_param_p_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin second preceding integration-parameter bridges.
         {malloc_pinned}(non_terminal_plane_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin nonterminal-plane lock bridges.
         {malloc_pinned}(terminal_plane_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin terminal-plane lock bridges.
 
@@ -841,8 +1522,7 @@ def batch_integrator_numerical(
         {malloc_device}(d_f_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu$ scratchpad.
         {malloc_device}(d_f_start_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f_{{start}}$ scratchpad.
         {malloc_device}(d_f_temp_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate temporary stage scratchpad.
-        {malloc_device}(d_f_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-1}}$ scratchpad.
-        {malloc_device}(d_f_pre_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-2}}$ scratchpad.
+        {malloc_device}(d_f_history_bundle[s], sizeof(double) * {maximum_degree} * 9 * BUNDLE_CAPACITY);
         {malloc_device}(d_metric_bundle[s], sizeof(double) * 10 * BUNDLE_CAPACITY); // Allocate $g_{{\mu\nu}}$ scratchpad.
         {malloc_device}(d_log_energy_bundle[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate common log-energy scratchpad.
         {malloc_device}(d_rhs_geometry_bundle[s], sizeof(double) * 40 * BUNDLE_CAPACITY); // Allocate the geometry scratchpad.
@@ -853,10 +1533,17 @@ def batch_integrator_numerical(
         {malloc_device}(d_retries[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate retries scratchpad.
         {malloc_device}(d_on_pos_non_terminal_plane_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate nonterminal-plane flag scratchpad.
         {malloc_device}(d_on_pos_terminal_plane_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source flag scratchpad.
-        {malloc_device}(d_integration_param_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate preceding integration-parameter scratchpad.
-        {malloc_device}(d_integration_param_pre_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate second preceding integration-parameter scratchpad.
+        {malloc_device}(d_integration_param_history[s], sizeof(double) * {maximum_degree} * BUNDLE_CAPACITY);
         {malloc_device}(d_non_terminal_plane_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate nonterminal-plane lock scratchpad.
         {malloc_device}(d_terminal_plane_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate terminal-plane lock scratchpad.
+        {malloc_device}(d_non_terminal_plane_crossing_pending[s], sizeof(bool) * BUNDLE_CAPACITY);
+        {malloc_device}(d_terminal_plane_crossing_pending[s], sizeof(bool) * BUNDLE_CAPACITY);
+        {malloc_device}(d_non_terminal_plane_steps_past[s], sizeof(int) * BUNDLE_CAPACITY);
+        {malloc_device}(d_terminal_plane_steps_past[s], sizeof(int) * BUNDLE_CAPACITY);
+        {malloc_device}(d_non_terminal_plane_event_degree[s], sizeof(int) * BUNDLE_CAPACITY);
+        {malloc_device}(d_terminal_plane_event_degree[s], sizeof(int) * BUNDLE_CAPACITY);
+        {malloc_device}(d_non_terminal_plane_event_state_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
+        {malloc_device}(d_terminal_plane_event_state_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
         {malloc_device}(d_chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Allocate chunk mapping scratchpad.
 {spatial_center_allocations}
     }} // END LOOP: for s over 2
@@ -874,6 +1561,8 @@ def batch_integrator_numerical(
     double *normalization_abs_by_ray = NULL;
     // Host array storing the accepted-state nonterminal norm in master-ray order.
     double *normalization_abs_non_terminal_by_ray = NULL;
+    // Host array storing first synthetic temporal-stencil use times per photon.
+    synthetic_slice_usage_t *synthetic_slice_usage_by_photon = NULL;
 
     if (commondata->perform_normalization_check) {{
         {malloc_device}(d_norm_bundle, sizeof(normalization_constraint_t) * BUNDLE_CAPACITY); // Allocate terminal normalization scratchpad.
@@ -884,6 +1573,16 @@ def batch_integrator_numerical(
             normalization_abs_non_terminal_by_ray[norm_init_i] = NAN; // Marks photons not yet captured after a nonterminal crossing.
         }} // END LOOP: for norm_init_i over num_rays
     }} // END IF: commondata->perform_normalization_check to allocate normalization scratchpad
+    if (commondata->perform_synthetic_slice_check) {{
+        {malloc_pinned}(synthetic_slice_usage_by_photon, sizeof(synthetic_slice_usage_t) * num_rays);
+        for (long int usage_init_i = 0; usage_init_i < num_rays; ++usage_init_i) {{
+            synthetic_slice_usage_by_photon[usage_init_i].used_lower_endpoint = false;
+            synthetic_slice_usage_by_photon[usage_init_i].lower_request_time = NAN;
+            synthetic_slice_usage_by_photon[usage_init_i].used_upper_endpoint = false;
+            synthetic_slice_usage_by_photon[usage_init_i].upper_request_time = NAN;
+        }} // END LOOP: initialize synthetic temporal-stencil usage records
+    }} // END IF: allocate synthetic temporal-stencil usage records
+{angular_momentum_allocation}
 
     // Event-detection kernels write final physical plane intersections directly to results_buffer.
 
@@ -1103,6 +1802,7 @@ def batch_integrator_numerical(
 
         // The tetrad initializer already supplied the complete direct p^mu.
         {normalized_momentum_conversion}
+{initial_angular_momentum_evaluation}
 
         // Evaluate the applicable initial constraint after normalized
         // conversion, if requested. For direct evolution this is g_mu_nu p^mu
@@ -1183,20 +1883,27 @@ def batch_integrator_numerical(
 
     long int sync_i; // Loop iterator index $sync_i$ spanning the entire global ray count to synchronize starting properties across history states.
     for(sync_i = 0; sync_i < num_rays; ++sync_i) {{
-        int sync_k; // Loop index $sync_k$ iterating over the 9 tensor components to populate the historical derivatives $\dot{{f}}^\mu$ and $\ddot{{f}}^\mu$.
-        for (sync_k = 0; sync_k < 9; ++sync_k) {{
-            all_photons_host.f_p[sync_k * num_rays + sync_i] = all_photons_host.f[sync_k * num_rays + sync_i]; // Propagates the initial coordinate state vector $f^\mu$ to the first history derivative matrix.
-            all_photons_host.f_p_p[sync_k * num_rays + sync_i] = all_photons_host.f[sync_k * num_rays + sync_i]; // Propagates the initial coordinate state vector $f^\mu$ to the second history derivative matrix.
-        }} // END LOOP: for sync_k over 9
+        for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
+            for (int component = 0; component < 9; ++component) {{
+                all_photons_host.f_history[(history_step * 9 + component) * num_rays + sync_i] =
+                    all_photons_host.f[component * num_rays + sync_i];
+            }}
+            all_photons_host.integration_param_history[history_step * num_rays + sync_i] =
+                {initial_integration_param};
+        }}
         all_photons_host.status[sync_i] = ACTIVE; // Assigns the initial trajectory activity enum for the global physics engine.
         all_photons_host.integration_param[sync_i] = {initial_integration_param}; // Sets the initial integration parameter.
         all_photons_host.rejection_retries[sync_i] = 0; // Clears the error rejection scalar to initialize the step size convergence tracking.
 
-        all_photons_host.integration_param_p[sync_i] = {initial_integration_param}; // Initializes the preceding integration parameter.
-        all_photons_host.integration_param_p_p[sync_i] = {initial_integration_param}; // Initializes the second preceding integration parameter.
         all_photons_host.non_terminal_plane_event_found[sync_i] = false; // Sets the nonterminal plane intersection logical lock to false.
         all_photons_host.terminal_plane_event_found[sync_i] = false; // Sets the terminal-plane intersection logical lock to false.
-        if (commondata->perform_normalization_check) {{
+        all_photons_host.non_terminal_plane_crossing_pending[sync_i] = false;
+        all_photons_host.terminal_plane_crossing_pending[sync_i] = false;
+        all_photons_host.non_terminal_plane_steps_past[sync_i] = 0;
+        all_photons_host.terminal_plane_steps_past[sync_i] = 0;
+        all_photons_host.non_terminal_plane_event_degree[sync_i] = 0;
+        all_photons_host.terminal_plane_event_degree[sync_i] = 0;
+        if ({non_terminal_diagnostic_condition}) {{
             all_photons_host.non_terminal_norm_recorded[sync_i] = false;
             all_photons_host.non_terminal_norm_coordinate_time[sync_i] = NAN;
             for (int norm_state_component = 0; norm_state_component < 9; ++norm_state_component) {{
@@ -1276,8 +1983,10 @@ def batch_integrator_numerical(
                 for (int bridge_i = 0; bridge_i < active_chunks[current]; ++bridge_i) {{  // Loop iterator $bridge_i$ packing the physical state payloads into the Host-side bridge arrays.
                     long int m_idx = chunk_buffer[current][bridge_i]; // Absolute master index $m_{{ idx}}$ mapping the active payload to the global trajectory matrix.
                     f_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx]; // Packs the coordinate state vector $f^\mu$ into the transfer bridge.
-                    f_p_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p[c_k * num_rays + m_idx]; // Packs the first derivative $\dot{{ f}}^\mu$ into the transfer bridge.
-                    f_p_p_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p_p[c_k * num_rays + m_idx]; // Packs the second derivative $\ddot{{ f}}^\mu$ into the transfer bridge.
+                    for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
+                        d_f_history_bundle[current][(history_step * 9 + c_k) * BUNDLE_CAPACITY + bridge_i] =
+                            all_photons_host.f_history[(history_step * 9 + c_k) * num_rays + m_idx];
+                    }}
                 }} // END LOOP: for bridge_i over active_chunks[current]
             }} // END LOOP: for c_k over 9
 
@@ -1290,19 +1999,18 @@ def batch_integrator_numerical(
                 integration_param_bridge[current][bridge_i] = all_photons_host.integration_param[m_idx]; // Packs the integration parameter into the transfer bridge.
                 on_pos_non_terminal_plane_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_non_terminal_plane_prev[m_idx]; // Packs the nonterminal plane boundary flag into the transfer bridge.
                 on_pos_terminal_plane_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx]; // Packs the terminal-plane boundary flag into the transfer bridge.
-                integration_param_p_bridge[current][bridge_i] = all_photons_host.integration_param_p[m_idx]; // Packs the preceding integration parameter into the transfer bridge.
-                integration_param_p_p_bridge[current][bridge_i] = all_photons_host.integration_param_p_p[m_idx]; // Packs the second preceding integration parameter into the transfer bridge.
                 non_terminal_plane_event_found_bridge[current][bridge_i] = all_photons_host.non_terminal_plane_event_found[m_idx]; // Packs the nonterminal plane intersection lock into the transfer bridge.
                 terminal_plane_event_found_bridge[current][bridge_i] = all_photons_host.terminal_plane_event_found[m_idx]; // Packs the terminal-plane intersection lock into the transfer bridge.
+                for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
+                    d_integration_param_history[current][history_step * BUNDLE_CAPACITY + bridge_i] =
+                        all_photons_host.integration_param_history[history_step * num_rays + m_idx];
+                }}
+                {plane_pack_current}
             }} // END LOOP: for bridge_i over active_chunks[current]
 
             for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components.
                 // CPU buffer copy: Synchronously pushes bounded state vectors $f^\mu$ to CPU scratch strictly on buffer [current] to minimize latency.
                 {memcpy_cpu("d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "f_bridge[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
-                // CPU buffer copy: Synchronously pushes first derivatives $\dot{{ f}}^\mu$ to CPU scratch strictly on buffer [current] to minimize latency.
-                {memcpy_cpu("d_f_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "f_p_bridge[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
-                // CPU buffer copy: Synchronously pushes second derivatives $\ddot{{ f}}^\mu$ to CPU scratch strictly on buffer [current] to minimize latency.
-                {memcpy_cpu("d_f_pre_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "f_p_p_bridge[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
             }} // END LOOP: for c_k over 9
             // CPU buffer copy: Synchronously pushes step sizes $h$ to CPU scratch strictly on buffer [current] to minimize latency.
             {memcpy_cpu("d_h[current]", "h_bridge[current]", "sizeof(double) * active_chunks[current]")}
@@ -1316,10 +2024,6 @@ def batch_integrator_numerical(
             {memcpy_cpu("d_on_pos_non_terminal_plane_prev[current]", "on_pos_non_terminal_plane_prev_bridge[current]", "sizeof(bool) * active_chunks[current]")}
             // CPU buffer copy: Synchronously pushes terminal-plane boundary flags to CPU scratch strictly on buffer [current] to minimize latency.
             {memcpy_cpu("d_on_pos_terminal_plane_prev[current]", "on_pos_terminal_plane_prev_bridge[current]", "sizeof(bool) * active_chunks[current]")}
-            // CPU buffer copy: Synchronously pushes preceding integration parameters to CPU scratch on buffer [current].
-            {memcpy_cpu("d_integration_param_prev[current]", "integration_param_p_bridge[current]", "sizeof(double) * active_chunks[current]")}
-            // CPU buffer copy: Synchronously pushes second preceding integration parameters to CPU scratch on buffer [current].
-            {memcpy_cpu("d_integration_param_pre_prev[current]", "integration_param_p_p_bridge[current]", "sizeof(double) * active_chunks[current]")}
             // CPU buffer copy: Synchronously pushes nonterminal-plane intersection locks to CPU scratch strictly on buffer [current] to minimize latency.
             {memcpy_cpu("d_non_terminal_plane_event_found[current]", "non_terminal_plane_event_found_bridge[current]", "sizeof(bool) * active_chunks[current]")}
             // CPU buffer copy: Synchronously pushes terminal-plane intersection locks to CPU scratch strictly on buffer [current] to minimize latency.
@@ -1367,15 +2071,11 @@ def batch_integrator_numerical(
             attempted_rkf45_steps_since_print += active_chunks[current];
             // Event step: detect geometric events and record intersection coordinate
             // states on the active buffer.
-            event_detection_manager_kernel(commondata, d_f_bundle[current], d_log_energy_bundle[current], d_f_prev_bundle[current], d_f_pre_prev_bundle[current], d_integration_param_bundle[current], d_integration_param_prev[current], d_integration_param_pre_prev[current], results_buffer, d_status[current], d_on_pos_non_terminal_plane_prev[current], d_on_pos_terminal_plane_prev[current], d_non_terminal_plane_event_found[current], d_terminal_plane_event_found[current], d_chunk_buffer[current], active_chunks[current]{stream_arg_current});
+            {event_manager_current}
 
             for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components.
                 // CPU buffer copy: Retrieves updated coordinate states $f^\mu$ back to CPU RAM synchronously on the active buffer.
                 {memcpy_cpu("f_bridge[current] + c_k * BUNDLE_CAPACITY", "d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
-                // CPU buffer copy: Retrieves updated first derivatives $\dot{{ f}}^\mu$ back to CPU RAM synchronously on the active buffer.
-                {memcpy_cpu("f_p_bridge[current] + c_k * BUNDLE_CAPACITY", "d_f_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
-                // CPU buffer copy: Retrieves updated second derivatives $\ddot{{ f}}^\mu$ back to CPU RAM synchronously on the active buffer.
-                {memcpy_cpu("f_p_p_bridge[current] + c_k * BUNDLE_CAPACITY", "d_f_pre_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
             }} // END LOOP: for c_k over 9
             // CPU buffer copy: Retrieves active step sizes $h$ back to CPU RAM synchronously on the active buffer.
             {memcpy_cpu("h_bridge[current]", "d_h[current]", "sizeof(double) * active_chunks[current]")}
@@ -1389,10 +2089,6 @@ def batch_integrator_numerical(
             {memcpy_cpu("on_pos_non_terminal_plane_prev_bridge[current]", "d_on_pos_non_terminal_plane_prev[current]", "sizeof(bool) * active_chunks[current]")}
             // CPU buffer copy: Retrieves updated terminal-plane boundary flags back to CPU RAM synchronously on the active buffer.
             {memcpy_cpu("on_pos_terminal_plane_prev_bridge[current]", "d_on_pos_terminal_plane_prev[current]", "sizeof(bool) * active_chunks[current]")}
-            // CPU buffer copy: Retrieves preceding integration parameters from the active buffer.
-            {memcpy_cpu("integration_param_p_bridge[current]", "d_integration_param_prev[current]", "sizeof(double) * active_chunks[current]")}
-            // CPU buffer copy: Retrieves second preceding integration parameters from the active buffer.
-            {memcpy_cpu("integration_param_p_p_bridge[current]", "d_integration_param_pre_prev[current]", "sizeof(double) * active_chunks[current]")}
             // CPU buffer copy: Retrieves active nonterminal-plane locks back to CPU RAM synchronously on the active buffer.
             {memcpy_cpu("non_terminal_plane_event_found_bridge[current]", "d_non_terminal_plane_event_found[current]", "sizeof(bool) * active_chunks[current]")}
             // CPU buffer copy: Retrieves active terminal-plane locks back to CPU RAM synchronously on the active buffer.
@@ -1415,8 +2111,10 @@ def batch_integrator_numerical(
                     for (int bridge_i = 0; bridge_i < active_chunks[next]; ++bridge_i) {{  // Loop iterator $bridge_i$ packing the physical state payloads into the next Host-side bridge array.
                         long int m_idx = chunk_buffer[next][bridge_i]; // Absolute master index $m_{{ idx}}$ mapping the active payload to the global trajectory matrix.
                         f_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx]; // Packs the coordinate state vector $f^\mu$ into the transfer bridge.
-                        f_p_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p[c_k * num_rays + m_idx]; // Packs the first derivative $\dot{{ f}}^\mu$ into the transfer bridge.
-                        f_p_p_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p_p[c_k * num_rays + m_idx]; // Packs the second derivative $\ddot{{ f}}^\mu$ into the transfer bridge.
+                        for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
+                            d_f_history_bundle[next][(history_step * 9 + c_k) * BUNDLE_CAPACITY + bridge_i] =
+                                all_photons_host.f_history[(history_step * 9 + c_k) * num_rays + m_idx];
+                        }}
                     }} // END LOOP: for bridge_i over active_chunks[next]
                 }} // END LOOP: for c_k over 9
 
@@ -1429,19 +2127,18 @@ def batch_integrator_numerical(
                     integration_param_bridge[next][bridge_i] = all_photons_host.integration_param[m_idx]; // Packs the integration parameter into the transfer bridge.
                     on_pos_non_terminal_plane_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_non_terminal_plane_prev[m_idx]; // Packs the nonterminal plane boundary flag into the transfer bridge.
                     on_pos_terminal_plane_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx]; // Packs the terminal-plane boundary flag into the transfer bridge.
-                    integration_param_p_bridge[next][bridge_i] = all_photons_host.integration_param_p[m_idx]; // Packs the preceding integration parameter into the transfer bridge.
-                    integration_param_p_p_bridge[next][bridge_i] = all_photons_host.integration_param_p_p[m_idx]; // Packs the second preceding integration parameter into the transfer bridge.
                     non_terminal_plane_event_found_bridge[next][bridge_i] = all_photons_host.non_terminal_plane_event_found[m_idx]; // Packs the nonterminal plane intersection lock into the transfer bridge.
                     terminal_plane_event_found_bridge[next][bridge_i] = all_photons_host.terminal_plane_event_found[m_idx]; // Packs the terminal-plane intersection lock into the transfer bridge.
+                    for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
+                        d_integration_param_history[next][history_step * BUNDLE_CAPACITY + bridge_i] =
+                            all_photons_host.integration_param_history[history_step * num_rays + m_idx];
+                    }}
+                    {plane_pack_next}
                 }} // END LOOP: for bridge_i over active_chunks[next]
 
                 for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components for the upcoming payload.
                     // CPU buffer copy: Synchronously pushes bounded state vectors $f^\mu$ to CPU scratch strictly on buffer [next] to overlap execution.
                     {memcpy_cpu("d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "f_bridge[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
-                    // CPU buffer copy: Synchronously pushes first derivatives $\dot{{ f}}^\mu$ to CPU scratch strictly on buffer [next] to overlap execution.
-                    {memcpy_cpu("d_f_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "f_p_bridge[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
-                    // CPU buffer copy: Synchronously pushes second derivatives $\ddot{{ f}}^\mu$ to CPU scratch strictly on buffer [next] to overlap execution.
-                    {memcpy_cpu("d_f_pre_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "f_p_p_bridge[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
                 }} // END LOOP: for c_k over 9
                 // CPU buffer copy: Synchronously pushes step sizes $h$ to CPU scratch strictly on buffer [next] to overlap execution.
                 {memcpy_cpu("d_h[next]", "h_bridge[next]", "sizeof(double) * active_chunks[next]")}
@@ -1455,10 +2152,6 @@ def batch_integrator_numerical(
                 {memcpy_cpu("d_on_pos_non_terminal_plane_prev[next]", "on_pos_non_terminal_plane_prev_bridge[next]", "sizeof(bool) * active_chunks[next]")}
                 // CPU buffer copy: Synchronously pushes terminal-plane boundary flags to CPU scratch strictly on buffer [next] to overlap execution.
                 {memcpy_cpu("d_on_pos_terminal_plane_prev[next]", "on_pos_terminal_plane_prev_bridge[next]", "sizeof(bool) * active_chunks[next]")}
-                // CPU buffer copy: Synchronously pushes preceding integration parameters to CPU scratch on buffer [next].
-                {memcpy_cpu("d_integration_param_prev[next]", "integration_param_p_bridge[next]", "sizeof(double) * active_chunks[next]")}
-                // CPU buffer copy: Synchronously pushes second preceding integration parameters to CPU scratch on buffer [next].
-                {memcpy_cpu("d_integration_param_pre_prev[next]", "integration_param_p_p_bridge[next]", "sizeof(double) * active_chunks[next]")}
                 // CPU buffer copy: Synchronously pushes nonterminal-plane intersection locks to CPU scratch strictly on buffer [next] to overlap execution.
                 {memcpy_cpu("d_non_terminal_plane_event_found[next]", "non_terminal_plane_event_found_bridge[next]", "sizeof(bool) * active_chunks[next]")}
                 // CPU buffer copy: Synchronously pushes terminal-plane intersection locks to CPU scratch strictly on buffer [next] to overlap execution.
@@ -1507,14 +2200,10 @@ def batch_integrator_numerical(
                 attempted_rkf45_steps_since_print += active_chunks[next];
                 // Event step: detect geometric events and record intersection
                 // coordinate states on the alternate buffer.
-                event_detection_manager_kernel(commondata, d_f_bundle[next], d_log_energy_bundle[next], d_f_prev_bundle[next], d_f_pre_prev_bundle[next], d_integration_param_bundle[next], d_integration_param_prev[next], d_integration_param_pre_prev[next], results_buffer, d_status[next], d_on_pos_non_terminal_plane_prev[next], d_on_pos_terminal_plane_prev[next], d_non_terminal_plane_event_found[next], d_terminal_plane_event_found[next], d_chunk_buffer[next], active_chunks[next]{stream_arg_next});
+                {event_manager_next}
                 for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 upcoming state vector components.
                     // CPU buffer copy: Retrieves updated coordinate states $f^\mu$ back to CPU RAM synchronously on the alternate buffer.
                     {memcpy_cpu("f_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
-                    // CPU buffer copy: Retrieves updated first derivatives $\dot{{ f}}^\mu$ back to CPU RAM synchronously on the alternate buffer.
-                    {memcpy_cpu("f_p_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
-                    // CPU buffer copy: Retrieves updated second derivatives $\ddot{{ f}}^\mu$ back to CPU RAM synchronously on the alternate buffer.
-                    {memcpy_cpu("f_p_p_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_pre_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
                 }} // END LOOP: for c_k over 9
                 // CPU buffer copy: Retrieves upcoming active step sizes $h$ back to CPU RAM synchronously on the alternate buffer.
                 {memcpy_cpu("h_bridge[next]", "d_h[next]", "sizeof(double) * active_chunks[next]")}
@@ -1528,10 +2217,6 @@ def batch_integrator_numerical(
                 {memcpy_cpu("on_pos_non_terminal_plane_prev_bridge[next]", "d_on_pos_non_terminal_plane_prev[next]", "sizeof(bool) * active_chunks[next]")}
                 // CPU buffer copy: Retrieves upcoming updated terminal-plane boundary flags back to CPU RAM synchronously on the alternate buffer.
                 {memcpy_cpu("on_pos_terminal_plane_prev_bridge[next]", "d_on_pos_terminal_plane_prev[next]", "sizeof(bool) * active_chunks[next]")}
-                // CPU buffer copy: Retrieves preceding integration parameters from the alternate buffer.
-                {memcpy_cpu("integration_param_p_bridge[next]", "d_integration_param_prev[next]", "sizeof(double) * active_chunks[next]")}
-                // CPU buffer copy: Retrieves second preceding integration parameters from the alternate buffer.
-                {memcpy_cpu("integration_param_p_p_bridge[next]", "d_integration_param_pre_prev[next]", "sizeof(double) * active_chunks[next]")}
                 // CPU buffer copy: Retrieves upcoming active nonterminal-plane locks back to CPU RAM synchronously on the alternate buffer.
                 {memcpy_cpu("non_terminal_plane_event_found_bridge[next]", "d_non_terminal_plane_event_found[next]", "sizeof(bool) * active_chunks[next]")}
                 // CPU buffer copy: Retrieves upcoming active terminal-plane locks back to CPU RAM synchronously on the alternate buffer.
@@ -1547,8 +2232,10 @@ def batch_integrator_numerical(
                     for (int fin_i = 0; fin_i < active_chunks[current]; ++fin_i) {{  // Loop iterator $fin_i$ unpacking the finalized physical data back to the global Host matrix.
                         long int m_idx = chunk_buffer[current][fin_i]; // Absolute master index $m_{{ idx}}$ retrieving the specific photon index from the execution chunk.
                         all_photons_host.f[fin_k * num_rays + m_idx] = f_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i]; // Unpacks the synchronized state vector $f^\mu$ into the global Host matrix.
-                        all_photons_host.f_p[fin_k * num_rays + m_idx] = f_p_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i]; // Unpacks the synchronized first derivative $\dot{{ f}}^\mu$ into the global Host matrix.
-                        all_photons_host.f_p_p[fin_k * num_rays + m_idx] = f_p_p_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i]; // Unpacks the synchronized second derivative $\ddot{{ f}}^\mu$ into the global Host matrix.
+                        for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
+                            all_photons_host.f_history[(history_step * 9 + fin_k) * num_rays + m_idx] =
+                                d_f_history_bundle[current][(history_step * 9 + fin_k) * BUNDLE_CAPACITY + fin_i];
+                        }}
                     }} // END LOOP: for fin_i over active_chunks[current]
                 }} // END LOOP: for fin_k over 9
 
@@ -1559,20 +2246,23 @@ def batch_integrator_numerical(
                     all_photons_host.status[m_idx] = status_bridge[current][fin_i]; // Unpacks the synchronized trajectory status into the global Host matrix.
                     all_photons_host.rejection_retries[m_idx] = retries_bridge[current][fin_i]; // Unpacks the synchronized rejection count into the global Host matrix.
                     all_photons_host.integration_param[m_idx] = integration_param_bridge[current][fin_i]; // Unpacks the synchronized integration parameter into the global Host matrix.
+                    for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
+                        all_photons_host.integration_param_history[history_step * num_rays + m_idx] =
+                            d_integration_param_history[current][history_step * BUNDLE_CAPACITY + fin_i];
+                    }}
                     all_photons_host.on_positive_side_of_non_terminal_plane_prev[m_idx] = on_pos_non_terminal_plane_prev_bridge[current][fin_i]; // Unpacks the synchronized nonterminal-plane boundary flag into the global Host matrix.
                     all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx] = on_pos_terminal_plane_prev_bridge[current][fin_i]; // Unpacks the synchronized terminal-plane boundary flag into the global Host matrix.
-                    all_photons_host.integration_param_p[m_idx] = integration_param_p_bridge[current][fin_i]; // Unpacks the synchronized preceding integration parameter into the global Host matrix.
-                    all_photons_host.integration_param_p_p[m_idx] = integration_param_p_p_bridge[current][fin_i]; // Unpacks the synchronized second preceding integration parameter into the global Host matrix.
+                    {plane_event_capture}
                     all_photons_host.non_terminal_plane_event_found[m_idx] = non_terminal_plane_event_found_bridge[current][fin_i]; // Unpacks the synchronized nonterminal-plane lock into the global Host matrix.
                     all_photons_host.terminal_plane_event_found[m_idx] = terminal_plane_event_found_bridge[current][fin_i]; // Unpacks the synchronized terminal-plane lock into the global Host matrix.
+                    {plane_unpack}
 
-                    // Capture the accepted RK state exactly once, immediately
-                    // after the nonterminal crossing latch becomes visible on
-                    // the host. The event manager remains geometry-only; the
-                    // normalization is evaluated later from this saved state.
-                    if (commondata->perform_normalization_check &&
+                    // Save the first accepted RK state past the nonterminal
+                    // plane. Centered interpolation may finish on a later step.
+                    if (({non_terminal_diagnostic_condition}) &&
                         !all_photons_host.non_terminal_norm_recorded[m_idx] &&
-                        all_photons_host.non_terminal_plane_event_found[m_idx]) {{
+                        (all_photons_host.non_terminal_plane_crossing_pending[m_idx] ||
+                         all_photons_host.non_terminal_plane_event_found[m_idx])) {{
                         for (int norm_state_component = 0; norm_state_component < 9; ++norm_state_component) {{
                             all_photons_host.non_terminal_norm_f[
                                 norm_state_component * num_rays + m_idx] =
@@ -1596,7 +2286,8 @@ def batch_integrator_numerical(
                             total_active_photons--; // Decrements the global counter as the physical trajectory has reached a terminal state.
                         }} // END ELSE: state flagged failed
                     }} // END IF: trajectory remains active
-                    else if (status_bridge[current][fin_i] == REJECTED) {{   // Evaluates the retry logic if the numerical step exceeded the requested tolerances.
+                    else if (status_bridge[current][fin_i] == REJECTED) {{   // RK error or interpolation failure remains retryable.
+                        all_photons_host.status[m_idx] = ACTIVE; // Requeue status is active; retry count is preserved.
                         slot_add_photon(&tsm, slot_idx, m_idx); // Re-adds to the current bin to attempt integration with an adapted step-size scalar $h$.
                     }} else {{
                         total_active_photons--; // Decrements the global counter as the physical trajectory has reached a terminal state.
@@ -1707,139 +2398,18 @@ def batch_integrator_numerical(
         // CPU buffer copy: Extracts validated CPU-side blueprints $b_i$ containing geometric plane intersections.
         {results_memcpy}
 
-        //==========================================
-        // TERMINAL NORMALIZATION DIAGNOSTIC
-        //==========================================
-        if (commondata->perform_normalization_check) {{
-            TimeSlotManager norm_tsm;
-            long int normalization_skipped_count = 0;
-            slot_manager_init(
-                &norm_tsm,
-                commondata->slot_manager_t_min,
-                slot_manager_t_max,
-                commondata->slot_manager_delta_t,
-                num_rays);
+        write_plane_crossings(non_terminal_crossings_path, num_rays,
+            all_photons_host.non_terminal_plane_event_found,
+            all_photons_host.non_terminal_plane_event_degree,
+            all_photons_host.non_terminal_plane_event_f_intersect,
+            results_buffer, false);
+        write_plane_crossings(terminal_crossings_path, num_rays,
+            all_photons_host.terminal_plane_event_found,
+            all_photons_host.terminal_plane_event_degree,
+            all_photons_host.terminal_plane_event_f_intersect,
+            results_buffer, true);
 
-            double max_err_norm = 0.0;
-            long int worst_ray_norm = -1;
-            double max_err_norm_excluding_failures = 0.0;
-            long int worst_ray_norm_excluding_failures = -1;
-
-            for (long int norm_ray = 0; norm_ray < num_rays; ++norm_ray) {{
-                const int norm_slot_idx = slot_get_index(
-                    &norm_tsm, {terminal_coordinate_time});
-                if (norm_slot_idx < 0) {{
-                    normalization_skipped_count++;
-                    continue;
-                }} // END IF: norm_slot_idx < 0 to skip
-                slot_add_photon(&norm_tsm, norm_slot_idx, norm_ray);
-            }} // END LOOP: for norm_ray over num_rays
-
-            for (int norm_slot_idx = norm_tsm.num_slots - 1;
-                 norm_slot_idx >= 0;
-                 --norm_slot_idx) {{
-                if (norm_tsm.slot_counts[norm_slot_idx] <= 0) {{
-                    continue;
-                }} // END IF: normalization slot empty
-
-                if (time_window_manager_numerical_mmap_for_slot(
-                        &numerical_window, &norm_tsm, norm_slot_idx) !=
-                    TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {{
-                    normalization_skipped_count +=
-                        norm_tsm.slot_counts[norm_slot_idx];
-                    continue;
-                }} // END IF: terminal normalization mmap fails
-
-                while (norm_tsm.slot_counts[norm_slot_idx] > 0) {{
-                    const long int chunk_size = NRPYMIN(
-                        (long int)BUNDLE_CAPACITY, norm_tsm.slot_counts[norm_slot_idx]);
-                    slot_remove_chunk(
-                        &norm_tsm, norm_slot_idx, chunk_buffer[0], chunk_size);
-
-                    for (int norm_k = 0; norm_k < 9; ++norm_k) {{
-                        for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {{
-                            const long int master_idx = chunk_buffer[0][norm_i];
-                            f_bridge[0][norm_k * BUNDLE_CAPACITY + norm_i] =
-                                all_photons_host.f[norm_k * num_rays + master_idx];
-                        }} // END LOOP: for norm_i over chunk_size
-                    }} // END LOOP: for norm_k over 9
-
-                    for (int norm_k = 0; norm_k < 9; ++norm_k) {{
-                        {memcpy_cpu("d_f_bundle[0] + norm_k * BUNDLE_CAPACITY", "f_bridge[0] + norm_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size")}
-                    }} // END LOOP: for norm_k over 9
-                    for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {{
-                        // This status buffer is diagnostic scratch space. An
-                        // interpolation failure skips only this diagnostic and
-                        // never overwrites the photon's physical termination.
-                        d_status[0][norm_i] = ACTIVE;
-                    }} // END LOOP: for norm_i over chunk_size
-{terminal_integration_param_setup}
-
-                    numerical_interpolation(
-                        commondata,
-                        &numerical_params,
-                        &spatial_context,
-                        &numerical_window,
-                        d_f_bundle[0],
-                        d_status[0],
-                        {interpolation_terminal_integration_param_args}
-                        d_metric_bundle[0],
-                        NULL,
-                        chunk_size,
-                        0);
-
-                    {normalization_kernel_name}(
-                        d_f_bundle[0],
-                        d_metric_bundle[0],
-                        d_norm_bundle,
-                        chunk_size,
-                        0);
-
-                    for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {{
-                        const long int master_idx = chunk_buffer[0][norm_i];
-                        if (d_status[0][norm_i] == FAILURE_SPATIAL_INTERPOLATION ||
-                            d_status[0][norm_i] == FAILURE_TEMPORAL_INTERPOLATION) {{
-                            normalization_skipped_count++;
-                            continue;
-                        }} // END IF: interpolation failed for terminal diagnostic
-                        const double current_norm_err = {normalization_error_expr};
-                        const double sidecar_norm_err = {normalization_sidecar_error_expr};
-                        if (!isfinite(current_norm_err) || !isfinite(sidecar_norm_err)) {{
-                            normalization_skipped_count++;
-                            continue;
-                        }} // END IF: normalization diagnostic is non-finite
-                        normalization_abs_by_ray[master_idx] = sidecar_norm_err;
-                        if (current_norm_err > max_err_norm) {{
-                            max_err_norm = current_norm_err;
-                            worst_ray_norm = master_idx;
-                        }} // END IF: current_norm_err > max_err_norm
-                        if (all_photons_host.status[master_idx] != STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED &&
-                            all_photons_host.status[master_idx] != FAILURE_RKF45_REJECTION_LIMIT &&
-                            current_norm_err > max_err_norm_excluding_failures) {{
-                            max_err_norm_excluding_failures = current_norm_err;
-                            worst_ray_norm_excluding_failures = master_idx;
-                        }} // END IF: current_norm_err updates maximum
-                    }} // END LOOP: for norm_i over chunk_size
-                }} // END WHILE: normalization slot has photons
-            }} // END LOOP: for norm_slot_idx down to 0
-
-            slot_manager_free(&norm_tsm);
-
-            printf("\n=================================================\n");
-            printf(" NORMALIZATION DIAGNOSTIC REPORT\n");
-            printf("=================================================\n");
-            printf(
-                "  Max Absolute Error, all checked photons: %e (Ray %ld)\n",
-                max_err_norm,
-                worst_ray_norm);
-            printf(
-                "  Max Absolute Error, excluding STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED; FAILURE_RKF45_REJECTION_LIMIT: %e (Ray %ld)\n",
-                max_err_norm_excluding_failures,
-                worst_ray_norm_excluding_failures);
-            printf(
-                "  Skipped terminal normalization diagnostics: %ld\n",
-                normalization_skipped_count);
-        }} // END IF: commondata->perform_normalization_check to evaluate terminal normalization
+{terminal_diagnostics_block}
 
 {non_terminal_normalization_block}
 
@@ -1854,28 +2424,30 @@ def batch_integrator_numerical(
         }} else {{
             {calc_blueprint}
         }} // END ELSE: blueprint post-processing without normalization sidecar
+{angular_momentum_output}
+{synthetic_slice_usage_output}
 
         if (commondata->perform_normalization_check) {{
             {free_device}(d_norm_bundle); // Purges the terminal normalization diagnostic scratchpad.
             {free_pinned}(normalization_abs_by_ray); // Purges the per-photon normalization sidecar buffer.
             {free_pinned}(normalization_abs_non_terminal_by_ray); // Purges the sparse nonterminal normalization values.
         }} // END IF: commondata->perform_normalization_check to purge normalization scratchpad
+        if (commondata->perform_synthetic_slice_check) {{
+            {free_pinned}(synthetic_slice_usage_by_photon);
+        }} // END IF: free synthetic temporal-stencil usage records
+{angular_momentum_cleanup}
 
         // Loop iterator $s$ purging the double-buffered arrays across both CPU buffers.
         for (int s = 0; s < 2; ++s) {{
             // Host Memory Free: Purges bridge components supporting scatter logic mapped to CPU memory transfers.
             {free_pinned}(chunk_buffer[s]); // Purges the execution chunk mapping bridge.
             {free_pinned}(f_bridge[s]); // Purges the state vector $f^\mu$ bridge.
-            {free_pinned}(f_p_bridge[s]); // Purges the first derivative $\dot{{f}}^\mu$ bridge.
-            {free_pinned}(f_p_p_bridge[s]); // Purges the second derivative $\ddot{{f}}^\mu$ bridge.
             {free_pinned}(integration_param_bridge[s]); // Purges the integration-parameter bridge.
             {free_pinned}(h_bridge[s]); // Purges the integration step size $h$ bridge.
             {free_pinned}(status_bridge[s]); // Purges the trajectory status bridge.
             {free_pinned}(retries_bridge[s]); // Purges the error rejection scalar bridge.
             {free_pinned}(on_pos_non_terminal_plane_prev_bridge[s]); // Purges the nonterminal plane boundary flag bridge.
             {free_pinned}(on_pos_terminal_plane_prev_bridge[s]); // Purges the terminal-plane boundary flag bridge.
-            {free_pinned}(integration_param_p_bridge[s]); // Purges the preceding integration-parameter bridge.
-            {free_pinned}(integration_param_p_p_bridge[s]); // Purges the second preceding integration-parameter bridge.
             {free_pinned}(non_terminal_plane_event_found_bridge[s]); // Purges the nonterminal plane intersection lock bridge.
             {free_pinned}(terminal_plane_event_found_bridge[s]); // Purges the terminal-plane intersection lock bridge.
 
@@ -1883,22 +2455,28 @@ def batch_integrator_numerical(
             {free_device}(d_f_bundle[s]); // Purges the state vector $f^\mu$ scratchpad.
             {free_device}(d_f_start_bundle[s]); // Purges the anchor state vector $f_{{start}}$ scratchpad.
             {free_device}(d_f_temp_bundle[s]); // Purges the temporary stage $f^\mu_{{temp}}$ scratchpad.
-            {free_device}(d_f_prev_bundle[s]); // Purges the history state $f^\mu_{{n-1}}$ scratchpad.
-            {free_device}(d_f_pre_prev_bundle[s]); // Purges the history state $f^\mu_{{n-2}}$ scratchpad.
+            {free_device}(d_f_history_bundle[s]);
             {free_device}(d_metric_bundle[s]); // Purges the symmetric metric tensor $g_{{\mu\nu}}$ scratchpad.
             {free_device}(d_log_energy_bundle[s]); // Purges the common log-energy scratchpad.
             {free_device}(d_rhs_geometry_bundle[s]); // Purges the geometry scratchpad.
             {free_device}(d_k_bundle[s]); // Purges the derivative tensor $\dot{{f}}^\mu$ scratchpad.
             {free_device}(d_h[s]); // Purges the active integration step sizing $h$ scratchpad.
             {free_device}(d_integration_param_bundle[s]); // Purges the integration-parameter scratchpad.
+            {free_device}(d_integration_param_history[s]);
             {free_device}(d_status[s]); // Purges the current trajectory status limit scratchpad.
             {free_device}(d_retries[s]); // Purges the sequential error rejection scratchpad.
             {free_device}(d_on_pos_non_terminal_plane_prev[s]); // Purges the previous nonterminal plane boundary side scratchpad.
             {free_device}(d_on_pos_terminal_plane_prev[s]); // Purges the previous terminal-plane boundary side scratchpad.
-            {free_device}(d_integration_param_prev[s]); // Purges the preceding integration-parameter scratchpad.
-            {free_device}(d_integration_param_pre_prev[s]); // Purges the second preceding integration-parameter scratchpad.
             {free_device}(d_non_terminal_plane_event_found[s]); // Purges the nonterminal-plane intersection coordinate guard scratchpad.
             {free_device}(d_terminal_plane_event_found[s]); // Purges the terminal-plane intersection coordinate guard scratchpad.
+            {free_device}(d_non_terminal_plane_crossing_pending[s]);
+            {free_device}(d_terminal_plane_crossing_pending[s]);
+            {free_device}(d_non_terminal_plane_steps_past[s]);
+            {free_device}(d_terminal_plane_steps_past[s]);
+            {free_device}(d_non_terminal_plane_event_degree[s]);
+            {free_device}(d_terminal_plane_event_degree[s]);
+            {free_device}(d_non_terminal_plane_event_state_bundle[s]);
+            {free_device}(d_terminal_plane_event_state_bundle[s]);
             {free_device}(d_chunk_buffer[s]); // Purges the absolute master indices $m_{{idx}}$ mapping scratchpad.
 {spatial_center_frees}
         }} // END LOOP: for s over 2
@@ -1906,19 +2484,25 @@ def batch_integrator_numerical(
 
         // Host Memory Free: Purges the primary Host state and integration-parameter arrays.
         {free_pinned}(all_photons_host.f); // Purges the primary Host array state $f^\mu$.
-        {free_pinned}(all_photons_host.f_p); // Purges the primary Host array first derivative $\dot{{f}}^\mu$.
-        {free_pinned}(all_photons_host.f_p_p); // Purges the primary Host array second derivative $\ddot{{f}}^\mu$.
+        {free_pinned}(all_photons_host.f_history);
         {free_pinned}(all_photons_host.integration_param); // Purges the primary Host integration-parameter array.
+        {free_pinned}(all_photons_host.integration_param_history);
         {free_pinned}(all_photons_host.h); // Purges the primary Host array integration step size $h$.
         {free_pinned}(all_photons_host.status); // Purges the primary Host array trajectory status enum.
         {free_pinned}(all_photons_host.rejection_retries); // Purges the primary Host array error rejection scalar.
         {free_pinned}(all_photons_host.on_positive_side_of_non_terminal_plane_prev); // Purges the primary Host array nonterminal plane boundary flag.
         {free_pinned}(all_photons_host.on_positive_side_of_terminal_plane_prev); // Purges the primary Host array terminal-plane boundary flag.
-        {free_pinned}(all_photons_host.integration_param_p); // Purges the preceding Host integration-parameter array.
-        {free_pinned}(all_photons_host.integration_param_p_p); // Purges the second preceding Host integration-parameter array.
         {free_pinned}(all_photons_host.non_terminal_plane_event_found); // Purges the primary Host array nonterminal plane intersection lock.
         {free_pinned}(all_photons_host.terminal_plane_event_found); // Purges the primary Host array terminal-plane intersection lock.
-        if (commondata->perform_normalization_check) {{
+        {free_pinned}(all_photons_host.non_terminal_plane_crossing_pending);
+        {free_pinned}(all_photons_host.terminal_plane_crossing_pending);
+        {free_pinned}(all_photons_host.non_terminal_plane_steps_past);
+        {free_pinned}(all_photons_host.terminal_plane_steps_past);
+        {free_pinned}(all_photons_host.non_terminal_plane_event_degree);
+        {free_pinned}(all_photons_host.terminal_plane_event_degree);
+        {free_pinned}(all_photons_host.non_terminal_plane_event_f_intersect);
+        {free_pinned}(all_photons_host.terminal_plane_event_f_intersect);
+        if ({non_terminal_diagnostic_condition}) {{
             {free_pinned}(all_photons_host.non_terminal_norm_recorded);
             {free_pinned}(all_photons_host.non_terminal_norm_f);
             {free_pinned}(all_photons_host.non_terminal_norm_coordinate_time);
@@ -1933,6 +2517,7 @@ def batch_integrator_numerical(
 
     cfc.register_CFunction(
         includes=includes,
+        prefunc=plane_crossing_writer,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,

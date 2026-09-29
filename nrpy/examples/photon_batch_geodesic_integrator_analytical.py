@@ -117,6 +117,13 @@ if __name__ == "__main__":
         help="Width-side ray samples per tile; height-side count is derived.",
     )
     parser.add_argument(
+        "--plane-interpolation-degree",
+        type=int,
+        default=4,
+        metavar="DEGREE",
+        help="Maximum polynomial degree for centered plane crossings (at least 3; default: 4).",
+    )
+    parser.add_argument(
         "--tile-counts",
         nargs=2,
         type=int,
@@ -227,6 +234,8 @@ if __name__ == "__main__":
         parser.error("--observer-fov values must be positive.")
     if args.scan_density < 1:
         parser.error("--scan-density must be a positive integer.")
+    if args.plane_interpolation_degree < 3:
+        parser.error("--plane-interpolation-degree must be at least 3.")
     if any(value < 1 for value in args.tile_counts):
         parser.error("--tile-counts values must be positive integers.")
     if args.escape_radius <= 0.0:
@@ -313,17 +322,23 @@ if __name__ == "__main__":
     )
 
     # Step 5.d: Register event-detection and boundary-intersection kernels.
-    find_event_time_and_state.find_event_time_and_state()
+    find_event_time_and_state.find_event_time_and_state(args.plane_interpolation_degree)
     handle_terminal_plane_intersection.handle_terminal_plane_intersection()
     handle_non_terminal_plane_intersection.handle_non_terminal_plane_intersection()
-    event_detection_manager_kernel.event_detection_manager_kernel(normalized_eom=False)
+    event_detection_manager_kernel.event_detection_manager_kernel(
+        normalized_eom=False,
+        maximum_degree=args.plane_interpolation_degree,
+        capture_event_state=True,
+    )
     calculate_and_fill_blueprint_data_universal.calculate_and_fill_blueprint_data_universal(
         normalized_eom=False
     )
 
     # Step 5.e: Register project-level orchestration helpers.
     time_slot_manager_helpers.time_slot_manager_helpers()
-    batch_integrator_analytical.batch_integrator_analytical(SPACETIME)
+    batch_integrator_analytical.batch_integrator_analytical(
+        SPACETIME, args.plane_interpolation_degree
+    )
     main_batch.main(SPACETIME, normalized_eom=False)
 
     # Step 5.f: Remove helper registrations emitted only through other kernels.
@@ -334,7 +349,7 @@ if __name__ == "__main__":
     # wrappers in both OpenMP and CUDA builds, and also avoids duplicate CUDA
     # definitions during device linking.
     for internal_func in [
-        "find_event_time_and_state",
+        "find_event_time_and_state_centered",
         "handle_terminal_plane_intersection",
         "handle_non_terminal_plane_intersection",
         f"g4DD_metric_{SPACETIME}",
@@ -606,8 +621,8 @@ if __name__ == "__main__":
         CC=compiler,
         src_code_file_ext=ext,
     )
-    # Step 8: Copy the v6 blueprint schema/reader/renderer/diagnostic helpers
-    # and print usage instructions.
+    # Step 8: Copy the version-6 blueprint file-format definitions, reader,
+    # renderer, and diagnostic functions; then print usage instructions.
     vis_dir = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "geodesic_visualizations"
     )

@@ -299,7 +299,7 @@ def register_CFunction_output_raytracing_data(
         var_access="commondata->",
     )
 
-    # Step 5: Define the fixed-width header schema.
+    # Step 5: Define the fixed-width header layout.
     record_component_names = ["x", "y", "z"]
     record_component_names.extend(name for _, name in metric_components)
     record_component_names.extend(name for _, name in secondary_components)

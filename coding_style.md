@@ -446,8 +446,19 @@ range. This applies in all handwritten, emitted, and generated languages and to
 functions, methods, callers, helpers, wrappers, lambdas, inline functions,
 templates, and function-like macros.
 
-Authorization exists only when the current task's user-authored request
-expressly requests coordinate bounds checking and names the exact target.
+Image-output exception: `iter_blueprint_chunks()` in
+`nrpy/examples/geodesic_visualizations/blueprint_io.py` may reject non-finite
+`image_width_fraction` and `image_height_fraction` values and fractions outside
+`[0, 1]`. `pixel_indices_from_record()` in
+`nrpy/examples/geodesic_visualizations/render_lensed_image.py` may clamp the
+raster indices calculated from those fractions to the output image dimensions.
+These checks protect image-pixel writes from invalid blueprint records. This
+exception does not apply to photon positions, spacetime grids, interpolation
+points, or plane intersections.
+
+Apart from this image-output exception, authorization exists only when the
+current task's user-authored request expressly requests coordinate bounds
+checking and names the exact target.
 Prior reviews or plans, generic requests to fix, harden, review, or address
 undefined behavior, theoretical undefined behavior, and an inferred need do
 not authorize such a change. Existing checks are grandfathered unchanged and

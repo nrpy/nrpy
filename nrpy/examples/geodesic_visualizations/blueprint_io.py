@@ -56,13 +56,14 @@ def read_blueprint_header(
     header = BlueprintHeader(*values)
     if header.magic != cfg.BLUEPRINT_MAGIC:
         raise ValueError(f"Blueprint '{filename}' has an invalid magic value")
-    if header.schema_version != cfg.BLUEPRINT_SCHEMA_VERSION:
+    record_dtype = cfg.BLUEPRINT_DTYPES_BY_VERSION.get(header.schema_version)
+    if record_dtype is None:
         raise ValueError(
             f"Blueprint '{filename}' has an unsupported binary-layout version"
         )
     if header.header_size != cfg.BLUEPRINT_HEADER_SIZE:
         raise ValueError(f"Blueprint '{filename}' has an invalid header size")
-    if header.record_size != cfg.BLUEPRINT_RECORD_SIZE:
+    if header.record_size != record_dtype.itemsize:
         raise ValueError(f"Blueprint '{filename}' has an invalid record size")
     if header.tiles_width <= 0 or header.tiles_height <= 0:
         raise ValueError(f"Blueprint '{filename}' has invalid tile dimensions")
@@ -78,9 +79,7 @@ def read_blueprint_header(
         raise ValueError(f"Blueprint '{filename}' has an invalid record count")
     if expected_tile is not None and (header.tile_x, header.tile_y) != expected_tile:
         raise ValueError(f"Blueprint '{filename}' has an unexpected tile identity")
-    expected_size = cfg.BLUEPRINT_HEADER_SIZE + (
-        header.record_count * cfg.BLUEPRINT_RECORD_SIZE
-    )
+    expected_size = cfg.BLUEPRINT_HEADER_SIZE + header.record_count * header.record_size
     actual_size = os.path.getsize(filename)
     if actual_size != expected_size:
         raise ValueError(
@@ -108,6 +107,7 @@ def iter_blueprint_chunks(
     if chunk_records <= 0:
         raise ValueError("chunk_records must be positive")
     header = read_blueprint_header(filename, expected_tile)
+    record_dtype = cfg.BLUEPRINT_DTYPES_BY_VERSION[header.schema_version]
     permitted_termination_types = cfg.FINAL_TERMINATION_TYPES
     if allow_active_termination:
         permitted_termination_types = (*permitted_termination_types, cfg.ACTIVE)
@@ -116,13 +116,11 @@ def iter_blueprint_chunks(
         record_start = 0
         while record_start < header.record_count:
             records_to_read = min(chunk_records, header.record_count - record_start)
-            raw_records = blueprint_file.read(
-                records_to_read * cfg.BLUEPRINT_RECORD_SIZE
-            )
-            expected_bytes = records_to_read * cfg.BLUEPRINT_RECORD_SIZE
+            expected_bytes = records_to_read * header.record_size
+            raw_records = blueprint_file.read(expected_bytes)
             if len(raw_records) != expected_bytes:
                 raise ValueError(f"Blueprint '{filename}' has a truncated payload")
-            records = np.frombuffer(raw_records, dtype=cfg.BLUEPRINT_DTYPE)
+            records = np.frombuffer(raw_records, dtype=record_dtype)
             width_fraction = records["image_width_fraction"]
             height_fraction = records["image_height_fraction"]
             if np.any(

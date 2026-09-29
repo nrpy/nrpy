@@ -39,6 +39,13 @@ class AnalyticSpacetimes:
     spacetime_name: str
     g4DD: List[List[sp.Expr]]
     xx: List[sp.Symbol]
+    inertial_coordinates: List[sp.Expr]
+    inertial_xx: List[sp.Symbol]
+    computational_coordinates_from_inertial: List[sp.Expr]
+    flat_a: sp.Expr
+    flat_b: sp.Expr
+    flat_psi: sp.Expr
+    flat_kappa: sp.Expr
 
     def __init__(self, spacetime_name: str) -> None:
         """
@@ -57,8 +64,91 @@ class AnalyticSpacetimes:
                 self.g4DD,
                 self.xx,
             ) = self._define_brill_lindquist_initial_data_static_Cartesian()
+        elif self.spacetime_name == "Minkowski_TimeDependentAxisymmetric_Cartesian":
+            self._define_time_dependent_flat_cartesian()
         else:
             raise ValueError(f"Spacetime '{self.spacetime_name}' is not supported.")
+
+    def _define_time_dependent_flat_cartesian(self) -> None:
+        r"""
+        Define flat spacetime in time-dependent axisymmetric Cartesian coordinates.
+
+        Computational coordinates are ``(t,x,y,z)``. Inertial Cartesian
+        coordinates are ``(T,X,Y,Z)``, with ``T=t``, ``Z=b(t)z``, and
+        ``(X,Y)=a(t) Rot(Omega(t)+kappa(t)z)(x,y)``. The metric is the pullback
+        of ``diag(-1,1,1,1)``. ``GeodesicEquations`` derives its metric
+        derivatives and Christoffel symbols. The inverse map supplies exact
+        photon positions in the computational coordinates.
+
+        ``flat_epsilon_a``, ``flat_epsilon_b``, ``flat_epsilon_Omega``, and
+        ``flat_epsilon_kappa`` are amplitudes. The matching ``flat_omega_*``
+        parameters are frequencies; ``flat_L`` sets the twist length. The
+        dataset generator must enforce ``flat_L>0`` and positive ``a,b`` over
+        its time interval.
+        """
+        t, x, y, z = sp.symbols("t x y z", real=True)
+        self.xx = [t, x, y, z]
+        parameter_defaults = (
+            ("flat_epsilon_a", 0.0),
+            ("flat_omega_a", 1.0),
+            ("flat_epsilon_b", 0.0),
+            ("flat_omega_b", 1.0),
+            ("flat_epsilon_Omega", 0.0),
+            ("flat_omega_Omega", 1.0),
+            ("flat_epsilon_kappa", 0.0),
+            ("flat_omega_kappa", 1.0),
+            ("flat_L", 1.0),
+        )
+        parameters = {
+            name: par.register_CodeParameter(
+                "REAL", __name__, name, default, commondata=True
+            )
+            for name, default in parameter_defaults
+        }
+        a = 1 + parameters["flat_epsilon_a"] * sp.sin(parameters["flat_omega_a"] * t)
+        b = 1 + parameters["flat_epsilon_b"] * sp.sin(parameters["flat_omega_b"] * t)
+        Omega = parameters["flat_epsilon_Omega"] * sp.sin(
+            parameters["flat_omega_Omega"] * t
+        )
+        kappa = (
+            parameters["flat_epsilon_kappa"]
+            * sp.sin(parameters["flat_omega_kappa"] * t)
+            / parameters["flat_L"]
+        )
+        psi = Omega + kappa * z
+        self.flat_a, self.flat_b = a, b
+        self.flat_psi, self.flat_kappa = psi, kappa
+        cos_psi, sin_psi = sp.cos(psi), sp.sin(psi)
+        self.inertial_coordinates = [
+            t,
+            a * (x * cos_psi - y * sin_psi),
+            a * (x * sin_psi + y * cos_psi),
+            b * z,
+        ]
+        T, X, Y, Z = sp.symbols("T X Y Z", real=True)
+        self.inertial_xx = [T, X, Y, Z]
+        z_from_inertial = Z / b.subs(t, T)
+        psi_from_inertial = Omega.subs(t, T) + kappa.subs(t, T) * z_from_inertial
+        self.computational_coordinates_from_inertial = [
+            T,
+            (X * sp.cos(psi_from_inertial) + Y * sp.sin(psi_from_inertial))
+            / a.subs(t, T),
+            (-X * sp.sin(psi_from_inertial) + Y * sp.cos(psi_from_inertial))
+            / a.subs(t, T),
+            z_from_inertial,
+        ]
+
+        jacobian = [
+            [sp.diff(inertial_coordinate, coordinate) for coordinate in self.xx]
+            for inertial_coordinate in self.inertial_coordinates
+        ]
+        self.g4DD = ixp.zerorank2(dimension=4)
+        for mu in range(4):
+            for nu in range(mu, 4):
+                metric_component = -jacobian[0][mu] * jacobian[0][nu] + sum(
+                    jacobian[A][mu] * jacobian[A][nu] for A in range(1, 4)
+                )
+                self.g4DD[mu][nu] = self.g4DD[nu][mu] = metric_component
 
     @staticmethod
     def _define_kerr_metric_Cartesian_Kerr_Schild() -> (

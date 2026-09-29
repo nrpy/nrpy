@@ -7,6 +7,9 @@ control logic, but removes batching, double buffering, device memory, streams,
 and blueprint output. It writes one trajectory row after every accepted RKF45
 step, including a signed normalization diagnostic. Optional RKF45 debugging
 writes trial-level and stage-level records from this single-photon host loop.
+Optional terminal and nonterminal planes use the shared event-time interpolation
+and write crossing times, local plane coordinates, and all nine interpolated
+state components to ``plane_crossings.txt``.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -34,6 +37,10 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation import
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     calculate_ode_rhs_kernel,
+    event_detection_manager_kernel,
+    find_event_time_and_state,
+    handle_non_terminal_plane_intersection,
+    handle_terminal_plane_intersection,
     normal_observer_log_energy,
     photon_momentum_to_normalized_kernel,
     rkf45_finalize_and_control_kernel,
@@ -49,8 +56,11 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     spacetime_name: str,
     dataset_coord_system: str,
     interpolation_method: str = "g4DD",
+    maximum_degree: int = 4,
     normalized_eom: bool = False,
     enable_rkf45_trial_debug: bool = False,
+    axisymmetric_about_z: bool = False,
+    track_synthetic_slice_usage: bool = False,
 ) -> None:
     """
     Register the standalone numerical-spacetime single-photon C integrator.
@@ -58,29 +68,40 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     :param spacetime_name: Spacetime identifier used to select photon equations.
     :param dataset_coord_system: Coordinate system used by the numerical dataset.
     :param interpolation_method: Numerical geometry payload method used by the generated project.
+    :param maximum_degree: Largest generated plane interpolation polynomial degree.
     :param normalized_eom: Whether to evolve normalized coordinate-time equations.
     :param enable_rkf45_trial_debug: Whether to write one diagnostic row for every
         RKF45 trial to ``rkf45_trials.txt`` and one row for each of its six
-        stages to ``rkf45_stages.txt``.
+        stages to ``rkf45_stages.txt``. When axial symmetry is enabled, this
+        also adds accepted-state $L_z$ values to ``trajectory.txt``.
+    :param axisymmetric_about_z: Whether the numerical spacetime has rotational
+        symmetry about the Cartesian ``z`` axis, allowing $L_z$ diagnostics.
+    :param track_synthetic_slice_usage: Whether to enable reporting the first
+        RKF45 request that uses synthetic temporal-stencil nodes outside the
+        numerical-spacetime time range. The numerical interpolation function
+        must be registered with the same option.
     :raises ValueError: If the interpolation method or dataset coordinate system
         is unsupported.
 
     Doctests:
     >>> import os
+    >>> import tempfile
+    >>> from unittest.mock import patch
     >>> import nrpy.c_function as cfc
-    >>> os.environ["XDG_CACHE_HOME"] = "/tmp"
-    >>> cfc.CFunction_dict.clear()
-    >>> single_integrator_numerical("Numerical", "SinhCylindricalv2n2")
-    >>> generated = cfc.CFunction_dict["single_integrator_numerical"].full_function
+    >>> with tempfile.TemporaryDirectory() as cache_dir, patch.dict(os.environ, {"XDG_CACHE_HOME": cache_dir}):
+    ...     cfc.CFunction_dict.clear()
+    ...     single_integrator_numerical("Numerical", "SinhCylindricalv2n2")
+    ...     generated = cfc.CFunction_dict["single_integrator_numerical"].full_function
     >>> "# lambda t x y z p^t p^x p^y p^z L_normal norm" in generated
     True
     >>> "const double trajectory_norm = normalization.C;" in generated
     True
     >>> "fabs(normalization.C)" not in generated
     True
-    >>> cfc.CFunction_dict.clear()
-    >>> single_integrator_numerical("Numerical", "SinhCylindricalv2n2", normalized_eom=True)
-    >>> generated = cfc.CFunction_dict["single_integrator_numerical"].full_function
+    >>> with tempfile.TemporaryDirectory() as cache_dir, patch.dict(os.environ, {"XDG_CACHE_HOME": cache_dir}):
+    ...     cfc.CFunction_dict.clear()
+    ...     single_integrator_numerical("Numerical", "SinhCylindricalv2n2", normalized_eom=True)
+    ...     generated = cfc.CFunction_dict["single_integrator_numerical"].full_function
     >>> ("# lambda t x y z u Pi_1 Pi_2 Pi_3 L_normal norm" in generated and
     ...  "const double trajectory_norm = normalization.C - 1.0;" in generated)
     True
@@ -90,11 +111,12 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     True
     >>> "stage_debug_file" not in generated
     True
-    >>> cfc.CFunction_dict.clear()
-    >>> single_integrator_numerical(
-    ...     "Numerical", "SinhCylindricalv2n2", enable_rkf45_trial_debug=True
-    ... )
-    >>> generated = cfc.CFunction_dict["single_integrator_numerical"].full_function
+    >>> with tempfile.TemporaryDirectory() as cache_dir, patch.dict(os.environ, {"XDG_CACHE_HOME": cache_dir}):
+    ...     cfc.CFunction_dict.clear()
+    ...     single_integrator_numerical(
+    ...         "Numerical", "SinhCylindricalv2n2", enable_rkf45_trial_debug=True
+    ...     )
+    ...     generated = cfc.CFunction_dict["single_integrator_numerical"].full_function
     >>> "rkf45_trials.txt" in generated
     True
     >>> "trial_debug_file" in generated
@@ -115,18 +137,47 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     True
     >>> "k_bundle[(stage - 1) * 9 + 5]" in generated
     True
+    >>> with tempfile.TemporaryDirectory() as cache_dir, patch.dict(os.environ, {"XDG_CACHE_HOME": cache_dir}):
+    ...     cfc.CFunction_dict.clear()
+    ...     single_integrator_numerical(
+    ...         "Numerical", "SinhCylindricalv2n2", track_synthetic_slice_usage=True
+    ...     )
+    ...     generated = cfc.CFunction_dict["single_integrator_numerical"].full_function
+    >>> "Synthetic temporal-stencil nodes outside [0, t_numerical_end]:" in generated
+    True
+    >>> "used_lower_endpoint: %s, photon_request_time: %.15e" in generated
+    True
+    >>> par.glb_code_params_dict["perform_synthetic_slice_check"].add_to_parfile
+    True
     """
     if interpolation_method not in ("g4DD", "g4DD_d0", "GammaUDD"):
         raise ValueError(
             "interpolation_method must be one of ('g4DD', 'g4DD_d0', 'GammaUDD'); "
             f"found '{interpolation_method}'."
         )
+    if maximum_degree < 3:
+        raise ValueError("Plane interpolation degree must be at least three")
     if dataset_coord_system != "SinhCylindricalv2n2":
         raise ValueError(
             "single_integrator_numerical supports only "
             "dataset_coord_system='SinhCylindricalv2n2'; "
             f"found '{dataset_coord_system}'."
         )
+    if not isinstance(enable_rkf45_trial_debug, bool):
+        raise ValueError(
+            "enable_rkf45_trial_debug must be a bool, got "
+            f"{type(enable_rkf45_trial_debug).__name__}."
+        )
+    if not isinstance(axisymmetric_about_z, bool):
+        raise ValueError(
+            f"axisymmetric_about_z must be a bool, got {type(axisymmetric_about_z).__name__}."
+        )
+    if not isinstance(track_synthetic_slice_usage, bool):
+        raise ValueError(
+            "track_synthetic_slice_usage must be a bool, got "
+            f"{type(track_synthetic_slice_usage).__name__}."
+        )
+    enable_accepted_Lz_diagnostic = enable_rkf45_trial_debug and axisymmetric_about_z
     phi_dim = 1
 
     # Register the shared batch state definitions and metric-tetrad initializer.
@@ -139,24 +190,23 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     """,
     )
     set_initial_conditions_kernel(
-        normalized_eom=normalized_eom, initialize_event_history=False
+        normalized_eom=normalized_eom,
+        initialize_event_history=True,
+        tile_indices_add_to_parfile=True,
     )
 
     # The shared initializer uses the batch tile-sampling rules. Expose the tile
     # counts and active tile indices so one single-ray process can reproduce
-    # any batch-camera sample exactly.  The defaults remain the center ray of
-    # one tile.  This registration intentionally replaces the non-parfile tile
-    # indices registered by set_initial_conditions_kernel().
+    # any batch-camera sample exactly. The defaults remain the center ray of
+    # one tile. The shared initializer registers the tile indices.
     par.register_CodeParameters(
         "int",
         __name__,
         [
             "tiles_width",
             "tiles_height",
-            "tile_index_width",
-            "tile_index_height",
         ],
-        [1, 1, 0, 0],
+        [1, 1],
         commondata=True,
         add_to_parfile=True,
     )
@@ -190,6 +240,20 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         commondata=True,
         add_to_parfile=True,
     )
+    if track_synthetic_slice_usage:
+        par.register_CodeParameter(
+            "bool",
+            __name__,
+            "perform_synthetic_slice_check",
+            False,
+            commondata=True,
+            add_to_parfile=True,
+            description=(
+                "Record first RKF45 photon request times that use synthetic "
+                "temporal-stencil nodes below t=0 or above t_numerical_end, "
+                "then print the two flags and request times after integration."
+            ),
+        )
     trial_spatial_center_setup = r"""
     NumericalSpatialStencilCenter trial_spatial_center;
     const REAL trial_cartesian[3] = {
@@ -229,7 +293,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         interpolation_initial_arguments = "NULL, NULL, integration_param, h, 1,"
         rhs_integration_arguments = "integration_param, h,"
         momentum_conversion_call = (
-            "photon_momentum_to_normalized_kernel(" "f, metric, chunk_size);"
+            "photon_momentum_to_normalized_kernel(f, metric, chunk_size);"
         )
         normalization_kernel_name = "normalization_constraint_photon_normalized"
         normalization_diagnostic_expression = "normalization.C - 1.0"
@@ -251,10 +315,119 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         normalization_kernel_name = "normalization_constraint_photon"
         normalization_diagnostic_expression = "normalization.C"
 
+    event_state_columns = (
+        "interpolated_lambda interpolated_x interpolated_y interpolated_z "
+        "interpolated_u interpolated_Pi_1 interpolated_Pi_2 "
+        "interpolated_Pi_3 interpolated_L_normal"
+        if normalized_eom
+        else "interpolated_t interpolated_x interpolated_y interpolated_z "
+        "interpolated_p^t interpolated_p^x interpolated_p^y "
+        "interpolated_p^z interpolated_L_normal"
+    )
+    event_state_format = " ".join(["%.17e"] * 9)
+    non_terminal_event_state_arguments = ", ".join(
+        f"non_terminal_plane_event_state[{component}]" for component in range(9)
+    )
+    terminal_event_state_arguments = ", ".join(
+        f"terminal_plane_event_state[{component}]" for component in range(9)
+    )
+
+    if enable_accepted_Lz_diagnostic:
+        trajectory_header = trajectory_header[:-2] + " L_z\\n"
+        axial_angular_momentum_metric_argument = "" if normalized_eom else "metric, "
+        initial_Lz_evaluation = f"""
+  axial_angular_momentum_t initial_angular_momentum;
+  axial_angular_momentum_z(
+      f,
+      {axial_angular_momentum_metric_argument}&initial_angular_momentum,
+      chunk_size,
+      stream_idx);
+  const double initial_Lz = initial_angular_momentum.Lz;
+  if (!isfinite(initial_Lz)) {{
+    fprintf(stderr, "ERROR: initial axial angular momentum was not finite.\\n");
+    exit_status = EXIT_FAILURE;
+    goto cleanup;
+  }} // END IF: initial L_z diagnostic was invalid
+  printf("Initial axial angular momentum L_z = %.17e\\n", initial_Lz);
+"""
+        accepted_Lz_evaluation = f"""
+      axial_angular_momentum_t accepted_angular_momentum;
+      axial_angular_momentum_z(
+          f,
+          {axial_angular_momentum_metric_argument}&accepted_angular_momentum,
+          chunk_size,
+          stream_idx);
+      const double accepted_Lz = accepted_angular_momentum.Lz;
+      if (!isfinite(accepted_Lz)) {{
+        fprintf(
+            stderr,
+            "ERROR: accepted-state axial angular momentum was not finite.\\n");
+        exit_status = EXIT_FAILURE;
+        goto cleanup;
+      }} // END IF: accepted-state L_z diagnostic was invalid
+"""
+        accepted_Lz_before_interpolation = (
+            accepted_Lz_evaluation if normalized_eom else ""
+        )
+        accepted_Lz_after_interpolation = (
+            "" if normalized_eom else accepted_Lz_evaluation
+        )
+        accepted_Lz_format = " %.17e"
+        accepted_Lz_argument = ", accepted_Lz"
+        failed_interpolation_Lz_format = " %.17e"
+        failed_interpolation_Lz_argument = (
+            ", accepted_Lz" if normalized_eom else ", NAN"
+        )
+    else:
+        initial_Lz_evaluation = ""
+        accepted_Lz_evaluation = ""
+        accepted_Lz_before_interpolation = ""
+        accepted_Lz_after_interpolation = ""
+        accepted_Lz_format = ""
+        accepted_Lz_argument = ""
+        failed_interpolation_Lz_format = ""
+        failed_interpolation_Lz_argument = ""
+
     accepted_metric_interpolation_arguments = (
         interpolation_initial_arguments
         if normalized_eom
         else "&trial_spatial_center.i0, &trial_spatial_center.i2,"
+    )
+    synthetic_slice_usage_declarations = (
+        r"""
+  const long int single_photon_indices[1] = {0};
+  synthetic_slice_usage_t synthetic_slice_usage_by_photon[1] = {
+      {false, NAN, false, NAN}};
+"""
+        if track_synthetic_slice_usage
+        else ""
+    )
+    synthetic_slice_usage_stage_arguments = (
+        "single_photon_indices,\n          synthetic_slice_usage_by_photon,"
+        if track_synthetic_slice_usage
+        else ""
+    )
+    synthetic_slice_usage_null_arguments = (
+        "NULL,\n          NULL," if track_synthetic_slice_usage else ""
+    )
+    synthetic_slice_usage_report = (
+        r"""
+  if (commondata.perform_synthetic_slice_check) {
+    const synthetic_slice_usage_t *usage =
+        &synthetic_slice_usage_by_photon[0];
+    printf("Synthetic temporal-stencil nodes outside [0, t_numerical_end]:\n");
+    printf(
+        "  used_lower_endpoint: %s, photon_request_time: %.15e\n",
+        usage->used_lower_endpoint ? "true" : "false",
+        usage->lower_request_time);
+    printf(
+        "  used_upper_endpoint: %s, photon_request_time: %.15e\n",
+        usage->used_upper_endpoint ? "true" : "false",
+        usage->upper_request_time);
+  } // END IF: synthetic temporal-stencil reporting enabled
+"""
+        if track_synthetic_slice_usage
+        else ""
     )
     log_energy_evaluation = (
         "const double log_energy_measure = f[4];"
@@ -536,14 +709,24 @@ The executable initializes one photon from direct position and momentum paramete
 solves the initial null constraint, maps numerical time windows by coordinate-time
 slot, and advances the state with the shared six-stage RKF45 pipeline. A trajectory
 row, including signed normalization deviation, is written only after an accepted
-step. When RKF45 trial debugging is enabled, ``rkf45_trials.txt`` records every
-trial and ``rkf45_stages.txt`` records all six interpolation/RHS stages of every
-trial in execution order.
+step. ``initial_state.txt`` stores the initial event and direct contravariant
+momentum at full precision before any normalized-state conversion. If the
+numerical spacetime is axisymmetric about the Cartesian ``z`` axis
+and RKF45 trial debugging is enabled, the initial $L_z$ is printed and each
+accepted-state $L_z$ is appended to that row. When RKF45 trial debugging is
+enabled, ``rkf45_trials.txt`` records every trial and ``rkf45_stages.txt``
+records all six interpolation/RHS stages of every trial in execution order.
+When a terminal or nonterminal plane is enabled, accepted steps pass through the
+shared event detector. It interpolates each crossing state and writes one row per
+detected plane to ``plane_crossings.txt`` with plane type, coordinate time,
+affine parameter, local plane coordinates, and all nine interpolated state
+components. A terminal-plane hit stops the integration only when its local radius
+is within the configured bounds.
 
 For normalized equations, the state layout is
 ``(lambda, x, y, z, u, Pi_1, Pi_2, Pi_3, L_normal)``: ``f[0]`` is lambda and
 the RKF45 integration parameter is coordinate time. For non-normalized
-equations, the state layout is ``(t, x, y, z, p_0, p_1, p_2, p_3, L_normal)``:
+equations, the state layout is ``(t, x, y, z, p^t, p^x, p^y, p^z, L_normal)``:
 the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
 
 @param argc Number of command-line arguments.
@@ -583,13 +766,16 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
     "ACTIVE",
     "REJECTED",
     "FAILURE_SPATIAL_INTERPOLATION",
-    "FAILURE_TEMPORAL_INTERPOLATION"
+    "FAILURE_TEMPORAL_INTERPOLATION",
+    "FAILURE_PLANE_INTERPOLATION_HISTORY"
   }};
 
   int exit_status = EXIT_SUCCESS;
   FILE *trajectory_file = NULL;
+  FILE *plane_crossings_file = NULL;
 {trial_debug_declarations}
 {stage_debug_declarations}
+{synthetic_slice_usage_declarations}
   bool slot_manager_initialized = false;
   bool numerical_window_initialized = false;
 
@@ -606,6 +792,24 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   int *rejection_retries = NULL;
   termination_type_t *status = NULL;
   PhotonStateSoA initial_photon = {{0}};
+  double f_event_history[{maximum_degree} * 9] = {{0.0}};
+  double integration_param_event_history[{maximum_degree}] = {{0.0}};
+  bool on_positive_side_of_non_terminal_plane_prev = false;
+  bool on_positive_side_of_terminal_plane_prev = false;
+  bool non_terminal_plane_event_found = false;
+  bool terminal_plane_event_found = false;
+  bool non_terminal_plane_crossing_pending = false;
+  bool terminal_plane_crossing_pending = false;
+  int non_terminal_plane_steps_past = 0;
+  int terminal_plane_steps_past = 0;
+  int non_terminal_plane_event_degree = 0;
+  int terminal_plane_event_degree = 0;
+  double non_terminal_plane_event_state[9] = {{0.0}};
+  double terminal_plane_event_state[9] = {{0.0}};
+  blueprint_data_t plane_crossing_results = {{0}};
+  const long int event_chunk_index[1] = {{0}};
+  const bool event_planes_enabled =
+      commondata.non_terminal_plane_enabled || commondata.terminal_plane_enabled;
 
   //==========================================
   // 2. SINGLE-RAY CPU MEMORY
@@ -791,6 +995,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
       f,
       &observer_interpolation_status,
       {interpolation_initial_arguments}
+      {synthetic_slice_usage_null_arguments}
       metric,
       NULL,
       chunk_size,
@@ -815,11 +1020,34 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   initial_photon.f = f;
   initial_photon.h = h;
   initial_photon.integration_param = integration_param;
-  initial_photon.integration_param_p = integration_param;
-  initial_photon.integration_param_p_p = integration_param;
+  initial_photon.f_history = f_event_history;
+  initial_photon.integration_param_history = integration_param_event_history;
+  initial_photon.on_positive_side_of_non_terminal_plane_prev =
+      &on_positive_side_of_non_terminal_plane_prev;
+  initial_photon.on_positive_side_of_terminal_plane_prev =
+      &on_positive_side_of_terminal_plane_prev;
+  initial_photon.non_terminal_plane_crossing_pending =
+      &non_terminal_plane_crossing_pending;
+  initial_photon.terminal_plane_crossing_pending =
+      &terminal_plane_crossing_pending;
+  initial_photon.non_terminal_plane_steps_past = &non_terminal_plane_steps_past;
+  initial_photon.terminal_plane_steps_past = &terminal_plane_steps_past;
+  initial_photon.non_terminal_plane_event_degree =
+      &non_terminal_plane_event_degree;
+  initial_photon.terminal_plane_event_degree = &terminal_plane_event_degree;
   set_initial_conditions_kernel(
       &commondata, num_rays, &initial_photon, observer_metric, observer_tetrad);
+  // Retain the direct tangent before normalized-EOM conversion. It defines
+  // the inertial straight-line reference for an analytic spacetime.
+  const double initial_direct_momentum[4] = {{f[4], f[5], f[6], f[7]}};
   {momentum_conversion_call}
+
+  // Seed accepted-state history after normalized-momentum conversion.
+  for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
+    for (int component = 0; component < 9; ++component)
+      f_event_history[history_step * 9 + component] = f[component];
+    integration_param_event_history[history_step] = *integration_param;
+  }} // END LOOP: initialize accepted-state history
 
   normalization_constraint_t initial_normalization;
   {normalization_kernel_name}(
@@ -846,6 +1074,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
       goto cleanup;
     }} // END IF: one initial constrained state component
   }} // END LOOP: for component over initial state
+{initial_Lz_evaluation}
 
   *rejection_retries = 0;
   *status = ACTIVE;
@@ -871,6 +1100,24 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   fprintf(
       trajectory_file,
       "{trajectory_header}");
+  FILE *initial_state_file = fopen("initial_state.txt", "w");
+  if (initial_state_file == NULL) {{
+    fprintf(stderr, "ERROR: could not open initial_state.txt for writing.\n");
+    exit_status = EXIT_FAILURE;
+    goto cleanup;
+  }} // END IF: initial-state output unavailable
+  fprintf(initial_state_file, "# t x y z p^t p^x p^y p^z\n");
+  fprintf(
+      initial_state_file,
+      "%.17e %.17e %.17e %.17e %.17e %.17e %.17e %.17e\n",
+      (double)commondata.t_start, f[1], f[2], f[3],
+      initial_direct_momentum[0], initial_direct_momentum[1],
+      initial_direct_momentum[2], initial_direct_momentum[3]);
+  if (fclose(initial_state_file) != 0) {{
+    fprintf(stderr, "ERROR: failed to close initial_state.txt.\n");
+    exit_status = EXIT_FAILURE;
+    goto cleanup;
+  }} // END IF: initial-state output failed
 {trial_debug_open}
 {stage_debug_open}
 
@@ -927,6 +1174,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
           f_temp,
           status,
           {interpolation_stage_arguments}
+          {synthetic_slice_usage_stage_arguments}
           metric,
           rhs_geometry,
           chunk_size,
@@ -981,6 +1229,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
         }} // END IF: accepted state component invalid
       }} // END LOOP: for component over accepted state
 
+{accepted_Lz_before_interpolation}
       numerical_interpolation(
           &commondata,
           &numerical_params,
@@ -989,6 +1238,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
           f,
           status,
           {accepted_metric_interpolation_arguments}
+          {synthetic_slice_usage_null_arguments}
           metric,
           NULL,
           chunk_size,
@@ -1000,7 +1250,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
         // trajectory even though its normalization diagnostic is unavailable.
         fprintf(
             trajectory_file,
-            "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
+            "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e{failed_interpolation_Lz_format}\n",
             {trajectory_lambda_expression},
             {trajectory_time_expression},
             f[1],
@@ -1011,7 +1261,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
             f[6],
             f[7],
             f[8],
-            NAN);
+            NAN{failed_interpolation_Lz_argument});
         fflush(trajectory_file);
         accepted_steps++;
         printf(
@@ -1021,12 +1271,43 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
         break;
       }} // END IF: accepted-state interpolation failed
 
+{accepted_Lz_after_interpolation}
       {log_energy_evaluation}
       if (!isfinite(log_energy_measure)) {{
         fprintf(stderr, "ERROR: accepted-state log-energy measure was not finite.\n");
         exit_status = EXIT_FAILURE;
         goto cleanup;
       }} // END IF: accepted-state log-energy measure invalid
+
+      if (event_planes_enabled) {{
+        event_detection_manager_kernel(
+            &commondata,
+            f,
+            &log_energy_measure,
+            f_event_history,
+            integration_param,
+            integration_param_event_history,
+            &plane_crossing_results,
+            status,
+            &on_positive_side_of_non_terminal_plane_prev,
+            &on_positive_side_of_terminal_plane_prev,
+            &non_terminal_plane_event_found,
+            &terminal_plane_event_found,
+            &non_terminal_plane_crossing_pending,
+            &terminal_plane_crossing_pending,
+            &non_terminal_plane_steps_past,
+            &terminal_plane_steps_past,
+            &non_terminal_plane_event_degree,
+            &terminal_plane_event_degree,
+            non_terminal_plane_event_state,
+            terminal_plane_event_state,
+            accepted_steps + 1 >= max_accepted_steps ||
+                rkf45_attempts >= max_rkf45_attempts ||
+                slot_get_index(&tsm, {coordinate_time_expression}) < 0,
+            event_chunk_index,
+            chunk_size,
+            stream_idx);
+      }} // END IF: a physical plane is enabled
 
       normalization_constraint_t normalization;
       {normalization_kernel_name}(
@@ -1040,7 +1321,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
 
       fprintf(
           trajectory_file,
-          "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
+          "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e{accepted_Lz_format}\n",
           {trajectory_lambda_expression},
           {trajectory_time_expression},
           f[1],
@@ -1051,9 +1332,26 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
           f[6],
           f[7],
           f[8],
-          trajectory_norm);
+          trajectory_norm{accepted_Lz_argument});
       fflush(trajectory_file);
       accepted_steps++;
+
+      if (event_planes_enabled && *status != ACTIVE) {{
+        if (*status == STOP_CONDITION_TERMINAL_PLANE) {{
+          printf("Photon crossed the configured terminal plane.\n");
+        }} else if (*status == STOP_CONDITION_COORD_RADIUS_EXCEEDED) {{
+          printf("Photon escaped to r > %.15e.\n", (double)commondata.r_escape);
+        }} else if (*status == STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED) {{
+          printf(
+              "Evolution measure exceeded %.15e.\n",
+              commondata.evolution_measure_max);
+        }} else if (*status == FAILURE_PLANE_INTERPOLATION_HISTORY ||
+                   *status == FAILURE_GENERIC) {{
+          fprintf(stderr, "Plane crossing failed with status %d.\n", (int)*status);
+          exit_status = EXIT_FAILURE;
+        }} // END ELSE IF: event manager established a stop status
+        break;
+      }} // END IF: event manager stopped the photon
 
       const double radius_squared = f[1] * f[1] + f[2] * f[2] + f[3] * f[3];
       if (radius_squared > commondata.r_escape * commondata.r_escape) {{
@@ -1067,8 +1365,10 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
         printf("Evolution measure exceeded %.15e.\n", commondata.evolution_measure_max);
         break;
       }} // END IF: evolution measure exceeded limit
-    }} else if (*status == REJECTED)
+    }} else if (*status == REJECTED) {{
+      *status = ACTIVE;
       continue;
+    }} // END ELSE IF: retry rejected RKF45 step
     else if (*status == FAILURE_RKF45_REJECTION_LIMIT) {{
       printf("RKF45 reached its consecutive-rejection limit.\n");
       break;
@@ -1080,8 +1380,61 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
       fprintf(stderr, "ERROR: unexpected integration status %d.\n", (int)*status);
       exit_status = EXIT_FAILURE;
       goto cleanup;
-    }} // END ELSE: unexpected RKF45 finalization status
+  }} // END ELSE: unexpected RKF45 finalization status
   }} // END WHILE: evolve photon through accepted steps
+
+  if (event_planes_enabled) {{
+    plane_crossings_file = fopen("plane_crossings.txt", "w");
+    if (plane_crossings_file == NULL) {{
+      fprintf(stderr, "ERROR: could not open plane_crossings.txt for writing.\n");
+      exit_status = EXIT_FAILURE;
+    }} else {{
+      fprintf(
+          plane_crossings_file,
+          "# plane_type coordinate_time affine_parameter local_y local_z {event_state_columns} interpolation_degree\n");
+      if (non_terminal_plane_event_found) {{
+        fprintf(
+            plane_crossings_file,
+            "nonterminal %.17e %.17e %.17e %.17e {event_state_format} %d\n",
+            plane_crossing_results.non_terminal_plane_t,
+            plane_crossing_results.non_terminal_plane_lambda,
+            plane_crossing_results.y_nt,
+            plane_crossing_results.z_nt,
+            {non_terminal_event_state_arguments},
+            non_terminal_plane_event_degree);
+        printf(
+            "Nonterminal-plane crossing: t=%.15e, lambda=%.15e, "
+            "local=(%.15e, %.15e)\n",
+            plane_crossing_results.non_terminal_plane_t,
+            plane_crossing_results.non_terminal_plane_lambda,
+            plane_crossing_results.y_nt,
+            plane_crossing_results.z_nt);
+      }} // END IF: nonterminal plane was crossed
+      if (terminal_plane_event_found) {{
+        fprintf(
+            plane_crossings_file,
+            "terminal %.17e %.17e %.17e %.17e {event_state_format} %d\n",
+            plane_crossing_results.t_f,
+            plane_crossing_results.L_f,
+            plane_crossing_results.y_t,
+            plane_crossing_results.z_t,
+            {terminal_event_state_arguments},
+            terminal_plane_event_degree);
+        printf(
+            "Terminal-plane crossing: t=%.15e, lambda=%.15e, "
+            "local=(%.15e, %.15e)\n",
+            plane_crossing_results.t_f,
+            plane_crossing_results.L_f,
+            plane_crossing_results.y_t,
+            plane_crossing_results.z_t);
+      }} // END IF: terminal plane was crossed
+      if (fclose(plane_crossings_file) != 0) {{
+        fprintf(stderr, "ERROR: failed to close plane_crossings.txt.\n");
+        exit_status = EXIT_FAILURE;
+      }}
+      plane_crossings_file = NULL;
+    }} // END ELSE: crossing output file opened
+  }} // END IF: at least one physical plane is enabled
 
   if ((*status == ACTIVE || *status == REJECTED) &&
       accepted_steps >= max_accepted_steps) {{
@@ -1095,7 +1448,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
 
   const int final_status_index = (int)*status;
   const char *final_status_name =
-      (final_status_index >= 0 && final_status_index < 11)
+      (final_status_index >= 0 && final_status_index < 12)
           ? status_names[final_status_index]
           : "UNKNOWN_STATUS";
   printf(
@@ -1147,6 +1500,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
             f,
             &terminal_interpolation_status,
             {interpolation_initial_arguments}
+            {synthetic_slice_usage_null_arguments}
             metric,
             NULL,
             chunk_size,
@@ -1178,10 +1532,13 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   }} // END IF: terminal normalization diagnostics were requested
 
   cleanup:
+{synthetic_slice_usage_report}
 {trial_debug_cleanup}
 {stage_debug_cleanup}
   if (trajectory_file != NULL)
     fclose(trajectory_file);
+  if (plane_crossings_file != NULL)
+    fclose(plane_crossings_file);
   if (numerical_window_initialized)
     time_window_manager_numerical_free(&numerical_window);
   if (slot_manager_initialized)
@@ -1269,6 +1626,7 @@ if __name__ == "__main__":
         enable_simd=False,
         project_dir=project_dir,
         normalized_eom=NORMALIZED_EOM,
+        skip_non_active_status=True,
     )
     calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
         geodesic_rhs,
@@ -1277,8 +1635,18 @@ if __name__ == "__main__":
         normalized_eom=NORMALIZED_EOM,
     )
     rkf45_stage_update.rkf45_stage_update()
+    find_event_time_and_state.find_event_time_and_state(4)
+    handle_terminal_plane_intersection.handle_terminal_plane_intersection()
+    handle_non_terminal_plane_intersection.handle_non_terminal_plane_intersection()
+    event_detection_manager_kernel.event_detection_manager_kernel(
+        maximum_degree=4,
+        normalized_eom=NORMALIZED_EOM,
+        capture_event_state=True,
+        single_photon_step_limit=True,
+    )
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
         enable_numerical_time_window_step_cap=True,
+        retry_interpolation_failures=True,
     )
     single_integrator_numerical(
         SPACETIME,
@@ -1287,6 +1655,13 @@ if __name__ == "__main__":
         normalized_eom=NORMALIZED_EOM,
     )
     main_single.main_single("single_integrator_numerical")
+
+    for internal_func in [
+        "find_event_time_and_state_centered",
+        "handle_terminal_plane_intersection",
+        "handle_non_terminal_plane_intersection",
+    ]:
+        cfc.CFunction_dict.pop(internal_func, None)
 
     # Step 7: Generate parameter headers, the default parfile, and CPU definitions.
     print("Generating headers, parameter handling, and Makefile...")

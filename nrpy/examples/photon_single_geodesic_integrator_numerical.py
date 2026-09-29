@@ -10,7 +10,11 @@ writes accepted trajectory states to ``trajectory.txt``. Initialization uses
 the shared observer-tetrad initializer with one ray and runtime-selectable camera
 tile geometry. RKF45 trial and stage diagnostics are enabled by default and
 written to ``rkf45_trials.txt`` and ``rkf45_stages.txt``; diagnostic code can be
-disabled from the command line.
+disabled from the command line. It also records the first RKF45 requests that
+use synthetic temporal-stencil nodes outside the numerical time range and prints
+the lower/upper flags and request times after integration. Optional terminal
+and nonterminal planes record crossing times, local plane coordinates, and all
+nine interpolated state components in ``plane_crossings.txt``.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -23,6 +27,7 @@ import sys
 
 import sympy as sp
 
+import nrpy.c_function as cfc
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.equations.general_relativity.geodesics import geodesics as geo
@@ -41,7 +46,12 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation import
     time_window_manager_numerical,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
+    axial_angular_momentum,
     calculate_ode_rhs_kernel,
+    event_detection_manager_kernel,
+    find_event_time_and_state,
+    handle_non_terminal_plane_intersection,
+    handle_terminal_plane_intersection,
     normal_observer_log_energy,
     normalization_constraint_photon_normalized,
     photon_momentum_to_normalized_kernel,
@@ -181,6 +191,62 @@ if __name__ == "__main__":
         help="Coordinate-radius termination threshold.",
     )
     arg_parser.add_argument(
+        "--terminal-plane-center",
+        nargs=3,
+        type=float,
+        metavar=("X", "Y", "Z"),
+        help="Terminal-plane center; requires all terminal-plane options.",
+    )
+    arg_parser.add_argument(
+        "--terminal-plane-normal",
+        nargs=3,
+        type=float,
+        metavar=("NX", "NY", "NZ"),
+        help="Terminal-plane normal; requires all terminal-plane options.",
+    )
+    arg_parser.add_argument(
+        "--terminal-plane-up",
+        nargs=3,
+        type=float,
+        metavar=("UX", "UY", "UZ"),
+        help="Terminal-plane up direction; requires all terminal-plane options.",
+    )
+    arg_parser.add_argument(
+        "--terminal-plane-radius",
+        nargs=2,
+        type=float,
+        metavar=("MIN_RADIUS", "MAX_RADIUS"),
+        help="Terminal-plane accepted coordinate-radius range.",
+    )
+    arg_parser.add_argument(
+        "--non-terminal-plane-center",
+        nargs=3,
+        type=float,
+        metavar=("X", "Y", "Z"),
+        help="Nonterminal-plane center; requires all nonterminal-plane options.",
+    )
+    arg_parser.add_argument(
+        "--non-terminal-plane-normal",
+        nargs=3,
+        type=float,
+        metavar=("NX", "NY", "NZ"),
+        help="Nonterminal-plane normal; requires all nonterminal-plane options.",
+    )
+    arg_parser.add_argument(
+        "--non-terminal-plane-up",
+        nargs=3,
+        type=float,
+        metavar=("UX", "UY", "UZ"),
+        help="Nonterminal-plane up direction; requires all nonterminal-plane options.",
+    )
+    arg_parser.add_argument(
+        "--plane-interpolation-degree",
+        type=int,
+        default=4,
+        metavar="DEGREE",
+        help="Maximum polynomial degree for centered plane crossings (at least 3; default: 4).",
+    )
+    arg_parser.add_argument(
         "--eom",
         type=str,
         choices=("geodesic", "normalized"),
@@ -192,6 +258,14 @@ if __name__ == "__main__":
         choices=SUPPORTED_INTERPOLATION_METHODS,
         required=True,
         help="""Numerical spacetime payload and interpolation method.""",
+    )
+    arg_parser.add_argument(
+        "--axisymmetric-about-z",
+        action="store_true",
+        help=(
+            "Generate accepted-step L_z diagnostics. Use only when the numerical "
+            "spacetime has rotational symmetry about the Cartesian z axis."
+        ),
     )
     arg_parser.add_argument(
         "--initial-step",
@@ -276,6 +350,7 @@ if __name__ == "__main__":
         sys.exit(0)
     args = arg_parser.parse_args()
     normalized_eom = args.eom == "normalized"
+    axisymmetric_about_z = args.axisymmetric_about_z
     interpolation_method = args.interpolation_method
     rhs_uses_metric_derivatives = interpolation_method != "GammaUDD"
 
@@ -302,6 +377,31 @@ if __name__ == "__main__":
     _require(
         args.escape_radius > 0.0,
         "--escape-radius must be positive.",
+    )
+    _require(
+        args.plane_interpolation_degree >= 3,
+        "--plane-interpolation-degree must be at least 3.",
+    )
+    terminal_plane_values = (
+        args.terminal_plane_center,
+        args.terminal_plane_normal,
+        args.terminal_plane_up,
+        args.terminal_plane_radius,
+    )
+    _require(
+        not any(value is not None for value in terminal_plane_values)
+        or all(value is not None for value in terminal_plane_values),
+        "Terminal-plane options must be supplied as one complete group.",
+    )
+    non_terminal_plane_values = (
+        args.non_terminal_plane_center,
+        args.non_terminal_plane_normal,
+        args.non_terminal_plane_up,
+    )
+    _require(
+        not any(value is not None for value in non_terminal_plane_values)
+        or all(value is not None for value in non_terminal_plane_values),
+        "Nonterminal-plane options must be supplied as one complete group.",
     )
     _require(
         all(value > 0.0 for value in args.observer_fov),
@@ -435,6 +535,8 @@ if __name__ == "__main__":
         normalization_constraint.normalization_constraint(
             normalization_constraint_expr, PARTICLE
         )
+    if axisymmetric_about_z and args.enable_rkf45_trial_debug:
+        axial_angular_momentum.axial_angular_momentum(normalized_eom=normalized_eom)
 
     # Step 5.c: Register numerical interpolation helpers.
     register_azimuthal_interp = (
@@ -458,6 +560,8 @@ if __name__ == "__main__":
         enable_simd=enable_simd,
         project_dir=project_dir,
         normalized_eom=normalized_eom,
+        skip_non_active_status=True,
+        track_synthetic_slice_usage=True,
     )
 
     # Step 5.e: Register RKF45 evolution kernels.
@@ -472,19 +576,41 @@ if __name__ == "__main__":
         enable_numerical_time_window_step_cap=True,
         normalized_eom=normalized_eom,
         enable_rkf45_trial_debug=args.enable_rkf45_trial_debug,
+        retry_interpolation_failures=True,
     )
 
-    # Step 5.f: Register the single-photon integration function and C entry point.
+    # Step 5.f: Register plane-crossing functions with full state capture.
+    find_event_time_and_state.find_event_time_and_state(args.plane_interpolation_degree)
+    handle_terminal_plane_intersection.handle_terminal_plane_intersection()
+    handle_non_terminal_plane_intersection.handle_non_terminal_plane_intersection()
+    event_detection_manager_kernel.event_detection_manager_kernel(
+        maximum_degree=args.plane_interpolation_degree,
+        normalized_eom=normalized_eom,
+        capture_event_state=True,
+        single_photon_step_limit=True,
+    )
+
+    # Step 5.g: Register the single-photon integration function and C entry point.
     # The numerical interpolation and RKF45 registrations above pull in the
     # shared slot/time-window helpers required by the single integrator.
     single_integrator_numerical.single_integrator_numerical(
         SPACETIME,
         coord_system_numerical,
         interpolation_method=interpolation_method,
+        maximum_degree=args.plane_interpolation_degree,
         normalized_eom=normalized_eom,
         enable_rkf45_trial_debug=args.enable_rkf45_trial_debug,
+        axisymmetric_about_z=axisymmetric_about_z,
+        track_synthetic_slice_usage=True,
     )
     main_single.main_single("single_integrator_numerical")
+
+    for internal_func in [
+        "find_event_time_and_state_centered",
+        "handle_terminal_plane_intersection",
+        "handle_non_terminal_plane_intersection",
+    ]:
+        cfc.CFunction_dict.pop(internal_func, None)
 
     # Step 6: Override CodeParameter defaults before parfile generation.
     print(" -> Overriding desired photon CodeParameters before .par generation...")
@@ -551,11 +677,74 @@ if __name__ == "__main__":
         par.adjust_CodeParam_default(name, value)
     par.adjust_CodeParam_default("alpha_w", args.observer_fov[0])
     par.adjust_CodeParam_default("alpha_h", args.observer_fov[1])
+
+    terminal_defaults = {
+        "terminal_plane_center_x": -1.0e4,
+        "terminal_plane_center_y": 0.0,
+        "terminal_plane_center_z": 0.0,
+        "terminal_plane_normal_x": 1.0,
+        "terminal_plane_normal_y": 0.0,
+        "terminal_plane_normal_z": 0.0,
+        "terminal_plane_up_x": 0.0,
+        "terminal_plane_up_y": 0.0,
+        "terminal_plane_up_z": 1.0,
+        "terminal_plane_min_coord_radius": 0.0,
+        "terminal_plane_max_coord_radius": 1.0,
+        "terminal_plane_enabled": False,
+    }
+    if args.terminal_plane_center is not None:
+        terminal_defaults.update(
+            {
+                "terminal_plane_center_x": args.terminal_plane_center[0],
+                "terminal_plane_center_y": args.terminal_plane_center[1],
+                "terminal_plane_center_z": args.terminal_plane_center[2],
+                "terminal_plane_normal_x": args.terminal_plane_normal[0],
+                "terminal_plane_normal_y": args.terminal_plane_normal[1],
+                "terminal_plane_normal_z": args.terminal_plane_normal[2],
+                "terminal_plane_up_x": args.terminal_plane_up[0],
+                "terminal_plane_up_y": args.terminal_plane_up[1],
+                "terminal_plane_up_z": args.terminal_plane_up[2],
+                "terminal_plane_min_coord_radius": args.terminal_plane_radius[0],
+                "terminal_plane_max_coord_radius": args.terminal_plane_radius[1],
+                "terminal_plane_enabled": True,
+            }
+        )
+    non_terminal_defaults = {
+        "non_terminal_plane_center_x": -1.0e4,
+        "non_terminal_plane_center_y": 0.0,
+        "non_terminal_plane_center_z": 0.0,
+        "non_terminal_plane_normal_x": 1.0,
+        "non_terminal_plane_normal_y": 0.0,
+        "non_terminal_plane_normal_z": 0.0,
+        "non_terminal_plane_up_x": 0.0,
+        "non_terminal_plane_up_y": 0.0,
+        "non_terminal_plane_up_z": 1.0,
+        "non_terminal_plane_enabled": False,
+    }
+    if args.non_terminal_plane_center is not None:
+        non_terminal_defaults.update(
+            {
+                "non_terminal_plane_center_x": args.non_terminal_plane_center[0],
+                "non_terminal_plane_center_y": args.non_terminal_plane_center[1],
+                "non_terminal_plane_center_z": args.non_terminal_plane_center[2],
+                "non_terminal_plane_normal_x": args.non_terminal_plane_normal[0],
+                "non_terminal_plane_normal_y": args.non_terminal_plane_normal[1],
+                "non_terminal_plane_normal_z": args.non_terminal_plane_normal[2],
+                "non_terminal_plane_up_x": args.non_terminal_plane_up[0],
+                "non_terminal_plane_up_y": args.non_terminal_plane_up[1],
+                "non_terminal_plane_up_z": args.non_terminal_plane_up[2],
+                "non_terminal_plane_enabled": True,
+            }
+        )
+    for name, value in {**terminal_defaults, **non_terminal_defaults}.items():
+        par.adjust_CodeParam_default(name, value)
+
     par.adjust_CodeParam_default("initial_h", -0.05 if normalized_eom else 0.05)
 
     # Step 6.e: Set single-integrator and numerical-limit defaults.
     par.adjust_CodeParam_default("evolution_measure_max", 3.0)
     par.adjust_CodeParam_default("perform_normalization_check", True)
+    par.adjust_CodeParam_default("perform_synthetic_slice_check", True)
     par.adjust_CodeParam_default("r_escape", args.escape_radius)
 
     # Step 6.f: Set the lower analytic / numerical transition defaults.
@@ -661,6 +850,10 @@ if __name__ == "__main__":
     print(
         " -> RKF45 trial/stage debugging: "
         f"{'enabled' if args.enable_rkf45_trial_debug else 'disabled'}"
+    )
+    print(
+        " -> Accepted-step L_z diagnostics: "
+        f"{'enabled' if axisymmetric_about_z and args.enable_rkf45_trial_debug else 'disabled'}"
     )
     print(f" -> Numerical domain: {domain}")
     print(f" -> Numerical SINHWRHO: {sinhw_numerical_rho}")

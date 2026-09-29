@@ -7,8 +7,9 @@
 
 The geodesics package builds symbolic metric, Christoffel, equation-of-motion,
 constraint, and diagnostic expressions for particle paths. Its analytic
-registry implements `KerrSchild_Cartesian` and an analytic-like static
-continuation of coincident Brill-Lindquist initial data; `GeodesicEquations`
+registry implements `KerrSchild_Cartesian`, an analytic-like static
+continuation of coincident Brill-Lindquist initial data, and a time-dependent
+Cartesian representation of flat spacetime; `GeodesicEquations`
 supports massive and photon RHS variants; `GeodesicDiagnostics` provides
 energy, Cartesian angular momentum, and Kerr-Schild Carter-constant diagnostics
 where the required symmetries are available.
@@ -21,13 +22,24 @@ registers `M_scale` and `a_spin`. The
 uses coincident Brill-Lindquist spatial data with
 `gamma_ij = psi^4 delta_ij`, `alpha = psi^-2`, and zero shift. This second
 branch is a chosen static four-metric continuation for controlled tests, not
-the standard Schwarzschild four-metric in isotropic coordinates. Both branches
-define coordinates `[t, x, y, z]` and store the covariant four-metric `g4DD`.
+the standard Schwarzschild four-metric in isotropic coordinates.
+`Minkowski_TimeDependentAxisymmetric_Cartesian` defines inertial coordinates
+`T=t`, `(X,Y)=a(t) Rot(Omega(t)+kappa(t)z)(x,y)`, and `Z=b(t)z`. It registers
+the four amplitudes, four frequencies, and twist length `flat_L` as CodeParameters.
+The metric is formed from the Cartesian coordinate Jacobian. This branch also
+stores the inverse coordinate map for exact photon positions.
+`GeodesicEquations` differentiates `g4DD` to form `g4DD_dD`. For the
+time-dependent flat metric it forms `Gamma4UDD` from the Cartesian coordinate
+map's inverse Jacobian and second derivatives; the generic Christoffel formula
+remains available for other metrics.
+The metric remains flat and rotationally symmetric about the `z`
+axis when `a(t)` and `b(t)` are nonzero. All three branches define coordinates
+`[t, x, y, z]` and store the covariant four-metric `g4DD`.
 Unsupported analytic spacetime names raise `ValueError`; the lazy
 `Analytic_Spacetimes` dictionary caches constructed instances.
 
 Claim evidence:
-- Claim: The analytic registry contains Kerr-Schild and the documented analytic-like static Brill-Lindquist recipe; the latter is not identified as the standard isotropic Schwarzschild four-metric.
+- Claim: The analytic registry contains Kerr-Schild, the documented analytic-like static Brill-Lindquist recipe, and a time-dependent Cartesian coordinate transformation of Minkowski spacetime; the Brill-Lindquist recipe is not identified as the standard isotropic Schwarzschild four-metric.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/equations/general_relativity/geodesics/analytic_spacetimes.py` — `AnalyticSpacetimes`
 - Corroboration: `nrpy/equations/general_relativity/geodesics/tests/analytic_spacetimes_BrillLindquist_InitialData_Static_Cartesian.py` — trusted expressions

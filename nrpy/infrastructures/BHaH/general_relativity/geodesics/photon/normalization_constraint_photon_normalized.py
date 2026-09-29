@@ -34,14 +34,16 @@ def normalization_constraint_photon_normalized(norm_expr: sp.Expr) -> None:
 
     Doctests:
     >>> import os
+    >>> import tempfile
+    >>> from unittest.mock import patch
     >>> import nrpy.c_function as cfc
     >>> import nrpy.equations.general_relativity.geodesics.geodesics as geo
-    >>> os.environ["XDG_CACHE_HOME"] = "/tmp"
-    >>> cfc.CFunction_dict.clear()
-    >>> generic_geodesic_equations = geo.GeodesicEquations.__new__(geo.GeodesicEquations)
-    >>> norm_expr = generic_geodesic_equations.normalization_constraint_photon_normalized()
-    >>> normalization_constraint_photon_normalized(norm_expr)
-    >>> generated = cfc.CFunction_dict["normalization_constraint_photon_normalized"].full_function
+    >>> with tempfile.TemporaryDirectory() as cache_dir, patch.dict(os.environ, {"XDG_CACHE_HOME": cache_dir}):
+    ...     cfc.CFunction_dict.clear()
+    ...     generic_geodesic_equations = geo.GeodesicEquations.__new__(geo.GeodesicEquations)
+    ...     norm_expr = generic_geodesic_equations.normalization_constraint_photon_normalized()
+    ...     normalization_constraint_photon_normalized(norm_expr)
+    ...     generated = cfc.CFunction_dict["normalization_constraint_photon_normalized"].full_function
     >>> "#pragma omp parallel for" in generated
     True
     >>> "d_norm_bundle[c].C" in generated

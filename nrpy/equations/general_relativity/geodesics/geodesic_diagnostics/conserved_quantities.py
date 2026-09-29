@@ -70,6 +70,85 @@ from nrpy.equations.general_relativity.geodesics.analytic_spacetimes import (
 )
 
 
+def axial_angular_momentum_z_cartesian(
+    x: sp.Expr,
+    y: sp.Expr,
+    pU: List[sp.Expr],
+    g4DD: List[List[sp.Expr]],
+) -> sp.Expr:
+    r"""
+    Compute axial angular momentum from Cartesian position and four-momentum.
+
+    For rotational Killing vector
+    ``xi = -y partial_x + x partial_y``, contraction with covariant momentum
+    gives ``L_z = xi^mu p_mu = x p_y - y p_x``. The supplied momentum is
+    contravariant, so this function first lowers its spatial index using the
+    complete four-metric, ``p_i = g_{i mu} p^mu``. Thus ``p_x`` and ``p_y``
+    generally depend on all four components of ``p^mu``.
+
+    Coordinates ``x`` and ``y`` must be Cartesian coordinates whose rotation
+    axis is the Cartesian ``z`` axis. Conservation requires the stated
+    rotational Killing vector but does not require stationarity.
+
+    :param x: Cartesian ``x`` coordinate.
+    :param y: Cartesian ``y`` coordinate.
+    :param pU: Contravariant four-momentum components ``p^mu``.
+    :param g4DD: Covariant four-metric components ``g_{mu nu}``.
+    :return: Symbolic expression for ``L_z``.
+    """
+    # Step 1: Lower spatial momentum with the complete four-metric. Access the
+    # stored upper triangle explicitly, matching NRPy's symmetric metric data.
+    pD = ixp.zerorank1(dimension=4)
+    for spatial_index in range(1, 4):
+        for spacetime_index in range(4):
+            if spatial_index <= spacetime_index:
+                covariant_metric_component = g4DD[spatial_index][spacetime_index]
+            else:
+                covariant_metric_component = g4DD[spacetime_index][spatial_index]
+            pD[spatial_index] += covariant_metric_component * pU[spacetime_index]
+
+    # Step 2: Contract p_mu with xi^mu = (0, -y, x, 0).
+    return cast(sp.Expr, x * pD[2] - y * pD[1])
+
+
+def photon_axial_angular_momentum_z_normalized(
+    x: sp.Expr,
+    y: sp.Expr,
+    u: sp.Expr,
+    PiD: List[sp.Expr],
+) -> sp.Expr:
+    r"""
+    Reconstruct photon axial angular momentum from normalized variables.
+
+    Normalized photon state stores ``u = ln|alpha p^0|`` and
+    ``Pi_i = p_i / (alpha p^0)``. Numerical reverse ray tracing uses
+    past-directed branch ``alpha p^0 = -exp(u)``. Therefore
+    ``p_i = -exp(u) Pi_i``, giving
+
+    ``L_z = -exp(u) (x Pi_2 - y Pi_1)``.
+
+    This expression reconstructs same affine-scaled covariant momentum used by
+    direct equations. Its sign follows current past-directed normalized photon
+    equations. Coordinates must be Cartesian with symmetry axis along ``z``.
+
+    :param x: Cartesian ``x`` coordinate.
+    :param y: Cartesian ``y`` coordinate.
+    :param u: Logarithmic momentum magnitude ``ln|alpha p^0|``.
+    :param PiD: Normalized covariant spatial momentum components ``Pi_i``.
+    :return: Symbolic expression for ``L_z``.
+    """
+    # Step 1: Restore signed past-directed momentum scale discarded by absolute
+    # value in u = ln|alpha p^0|.
+    alpha_p0 = -sp.exp(u)
+
+    # Step 2: Reconstruct p_x and p_y. PiD[0] is Pi_1; PiD[1] is Pi_2.
+    p_x = alpha_p0 * PiD[0]
+    p_y = alpha_p0 * PiD[1]
+
+    # Step 3: Contract with Cartesian rotational Killing vector.
+    return cast(sp.Expr, x * p_y - y * p_x)
+
+
 class GeodesicDiagnostics:
     """
     Generate and store symbolic expressions for conserved quantities.
@@ -193,24 +272,10 @@ class GeodesicDiagnostics:
         :param pU: The symbolic 4-momentum vector.
         :return: The symbolic expression for L_z.
         """
-        # First, compute covariant spatial momentum p_k = g_{k,mu} p^mu.
-        pD = ixp.zerorank1(dimension=4)
-        for k in range(1, 4):
-            for mu in range(4):
-                if k <= mu:
-                    pD[k] += self.g4DD[k][mu] * pU[mu]
-                else:
-                    pD[k] += self.g4DD[mu][k] * pU[mu]
-
-        # Map inputs to Cartesian logic for cross product
-        # xx[0] is time, so x,y,z are indices 1,2,3
+        # Map the configured Cartesian coordinates into the shared symbolic
+        # expression. xx[0] is time, so x and y are indices 1 and 2.
         x, y = self.xx[1], self.xx[2]
-        p_x, p_y = pD[1], pD[2]
-
-        # L = x × p  (Cartesian cross product)
-        L_z = x * p_y - y * p_x
-
-        return L_z
+        return axial_angular_momentum_z_cartesian(x, y, pU, self.g4DD)
 
     def compute_carter_constant_KerrSchild_Cartesian(
         self,
@@ -331,8 +396,8 @@ if __name__ == "__main__":
     # We verify that Q_kerr(a=0) + L_z^2 == L^2.
     kerr_diag = Geodesic_Diagnostics["KerrSchild_Cartesian_massive"]
 
-    # Reconstruct full Cartesian L^2 locally for this identity check. The
-    # public diagnostic contract exposes only the axial component Lz.
+    # Reconstruct full Cartesian L^2 locally for this identity check.
+    # The public diagnostic returns only the axial component Lz.
     validation_pU = [sp.Symbol(f"p{i}", real=True) for i in range(4)]
     validation_pD = ixp.zerorank1(dimension=4)
     for validation_k in range(1, 4):

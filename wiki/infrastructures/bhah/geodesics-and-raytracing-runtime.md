@@ -6,13 +6,14 @@
 ## Summary
 
 BHaH has standalone single- and batch-photon geodesic programs plus an
-evolution-time raytracing-data export. Single-photon programs integrate one
-trajectory without event-plane options. The batch program initializes observer
-and independent plane parameters, tiles the angular pixel grid, integrates
-photon groups with RKF45, and writes per-tile light-blueprint binary files. The
-evolution-time export writes mode-selected Cartesian `g4DD`, `g4DD_d0`, and
-`Gamma4UDD` time-slice data from a live BSSN evolution; a combiner validates and
-stacks those slices for later numerical-spacetime interpolation.
+evolution-time raytracing-data export. Both analytical and numerical
+single-photon programs support optional terminal and nonterminal planes. The
+batch program initializes observer and independent plane parameters, tiles the
+angular pixel grid, integrates photon groups with RKF45, and writes per-tile
+light-blueprint binary files. The evolution-time export writes mode-selected
+Cartesian `g4DD`, `g4DD_d0`, and `Gamma4UDD` time-slice data from a live BSSN
+evolution; a combiner validates and stacks those slices for later
+numerical-spacetime interpolation.
 
 ## Detail
 
@@ -25,10 +26,10 @@ vectors. Each record receives normalized image-sample
 coordinates before serialization; image placement does not depend on integer
 pixel identity fields.
 This path is a standalone geodesic program; it is not the same as
-diagnostics emitted by an evolving BHaH spacetime.
-Single-photon generators instead use the particle-independent forwarding
-`main` from `geodesics/main_single.py` and do not register event-plane
-parameters or call the event-detection manager.
+diagnostics emitted by an evolving BHaH spacetime. Single-photon generators use
+the particle-independent forwarding `main` from `geodesics/main_single.py`.
+Both single-photon generators register optional event-plane parameters and the
+crossing functions used by their integrators.
 
 Claim evidence:
 - Claim: The standalone batch-photon entrypoint registers angular tile-grid controls, delegates observer-tetrad construction to the shared initializer, assigns normalized image-sample coordinates, and is distinct from both single-photon programs and evolution-time diagnostics.
@@ -40,20 +41,20 @@ The shared `set_initial_conditions_kernel` receives one metric evaluated at the
 observer event and constructs one validated metric-orthonormal tetrad per call.
 It uses that tetrad for every requested ray, writes complete contravariant
 `p^mu`, and only then performs any requested normalized-variable conversion.
-Batch generators also request initialization of each ray's event-plane-side
-history. Single-photon generators disable that calculation and require no
-event-plane parameters. Event-plane bases used by batch crossing handlers are
-not the metric tetrad used to initialize momentum.
+Batch generators and both single-photon generators request initialization of
+event-plane-side history when registering their shared initializer.
+Event-plane bases used by crossing handlers are not the metric tetrad used to
+initialize momentum.
 The generated ray construction sets the initial camera-tetrad photon energy
 magnitude to `E_camera = 1` before any normalized-variable conversion. This
 affine normalization is distinct from the hypersurface-normal measure
 `|alpha p^0|` used by later termination diagnostics.
 
 Claim evidence:
-- Claim: `set_initial_conditions_kernel` constructs one validated metric-orthonormal camera tetrad per call, initializes unit camera-tetrad energy magnitude `E_camera=1`, writes complete contravariant momentum, optionally initializes batch event-plane-side history, and performs normalized-variable conversion afterward when requested; the later hypersurface-normal energy magnitude is `|alpha p^0|`.
+- Claim: `set_initial_conditions_kernel` constructs one validated metric-orthonormal camera tetrad per call, initializes unit camera-tetrad energy magnitude `E_camera=1`, writes complete contravariant momentum, optionally initializes batch or single-photon event-plane-side history, and performs normalized-variable conversion afterward when requested; the later hypersurface-normal energy magnitude is `|alpha p^0|`.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/set_initial_conditions_kernel.py` — observer initialization
-- Corroboration: `nrpy/examples/photon_batch_geodesic_integrator_numerical.py` — shared observer initialization arguments
+- Corroboration: `nrpy/examples/photon_batch_geodesic_integrator_numerical.py`, `nrpy/examples/photon_single_geodesic_integrator_analytical.py`, `nrpy/examples/photon_single_geodesic_integrator_numerical.py`, `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/single_integrator_analytical.py`, and `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/single_integrator_numerical.py` — shared observer and event-history initialization arguments
 
 `batch_integrator_numerical` is the host orchestrator for photon batches. It
 registers integration limits and RKF45 controls in `commondata`, allocates the
@@ -94,21 +95,40 @@ Claim evidence:
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/interpolation_kernel.py`, `calculate_ode_rhs_kernel.py`, and `rkf45_stage_update.py` — generated kernel interfaces
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/rkf45_finalize_and_control_kernel.py` — acceptance/control
 
-`event_detection_manager_kernel` owns energy/geometric termination and result
-capture. It first consumes the common per-ray log-energy bundle and marks rays
-whose measure exceeds the upper-only `evolution_measure_max` threshold; direct
-mode's bundle value is `ln|alpha p^0|`, while normalized mode's value is `u`.
-It then marks rays outside `r_escape`, checks crossings of the independent nonterminal and terminal planes
-using current and two historical states, calls `find_event_time_and_state` to
-reconstruct the crossing, delegates physical coordinate extraction to
-`handle_non_terminal_plane_intersection` or `handle_terminal_plane_intersection`,
-and shifts the state history only for rays that remain active.
+`event_detection_manager_kernel` applies log-energy and coordinate-radius
+termination rules and checks enabled planes. Both single-photon integrators call
+it after each accepted step when a plane is enabled. The manager marks a sign
+change of the plane function as pending, counts subsequent accepted states, and
+calls `find_event_time_and_state_centered` when the requested centered stencil
+is available or a stop requires an earlier fit. Rejected RKF45 steps do not
+advance this count. The interpolator tries the requested polynomial degree,
+then lower even degrees through 2. It checks distinct integration parameters
+in each contiguous stencil and returns the nine-component crossing state and
+the degree used. The integration parameter is affine parameter for direct EOM
+and coordinate time for normalized EOM; state component zero stores the other
+quantity. The plane handlers compute local coordinates and apply the terminal
+plane's radial bounds. An accepted terminal crossing stops the photon; a
+nonterminal crossing does not.
+
+For numerical batches, the manager applies the coordinate-time slot limit on
+the accepted state before resolving pending crossings. This preserves a
+crossing when that state reaches the last allowed time slot. The host time-slot
+manager then removes stopped photons from the active list.
+
+Batch integrators shift accepted-state history and write separate sparse
+`light_blueprint_non_terminal_crossings_XX_YY.bin` and
+`light_blueprint_terminal_crossings_XX_YY.bin` files. Each native record holds
+the tile-local photon index, polynomial degree, crossing integration parameter,
+two local plane coordinates, and nine interpolated state components. The image
+blueprint retains its existing fields. Single-photon integrators write
+`plane_crossings.txt` with plane type, coordinate time, affine parameter, local
+coordinates, nine state components, and `interpolation_degree`.
 
 Claim evidence:
-- Claim: `event_detection_manager_kernel` owns photon termination and result capture for the common upper-only log-energy limit, escape radius, independent plane crossings, event-state reconstruction, and active-ray history shifts.
-- Role: public/scientific contract
+- Claim: The event manager delays detected plane crossings until a centered stencil or physical stop is available, selects the highest usable generated degree, and stores full crossing states and actual degrees in separate batch files or `plane_crossings.txt` for single photons.
+- Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py` — `event_detection_manager_kernel`
-- Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/find_event_time_and_state.py` — event reconstruction
+- Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/find_event_time_and_state.py` — stencil selection and crossing state; `single_integrator_analytical.py` and `single_integrator_numerical.py` — text output; `batch_integrator_analytical.py` and `batch_integrator_numerical.py` — sparse crossing files; `handle_non_terminal_plane_intersection.py` and `handle_terminal_plane_intersection.py` — local coordinates and radius filtering
 
 Blueprint headers carry tile identity/counts, `alpha_w`, `alpha_h`, and binary-layout
 version 6. Records carry plane diagnostics, final angles, termination times,
@@ -165,6 +185,19 @@ endpoint refresh. Normalized-EOM calls also provide the integration parameter,
 trial step, and RK stage so interpolated geometry uses the RK stage coordinate
 time; direct-EOM calls continue to read coordinate time from the state.
 
+The numerical batch integrator can enable `perform_synthetic_slice_check` to
+record synthetic temporal-stencil nodes whose times lie strictly below `0` or
+above `t_numerical_end`. Direct first/final-slice endpoint dispatch does not
+count, and normalization or `L_z` diagnostic interpolations do not count. The
+wrapper records the first successful RKF45 interpolation request time for each
+photon and boundary. It writes one separate 26-byte tile sidecar record per
+photon: a `uint64_t` photon index, two `uint8_t` lower/upper-use flags, then
+lower and upper `f64` request times. A false flag has a `NaN` time. Records
+have no file header and use native byte order.
+The numerical single-photon integrator uses the same wrapper check for RKF45
+stage interpolations and prints its lower/upper flags and first request times
+once the run finishes; it does not write a sidecar file.
+
 The spatial helper performs tensor-product Lagrange interpolation only in the
 two non-azimuthal native coordinates. It obtains spatial metric derivatives
 from analytic derivatives of the same uniform-grid basis, rotates tensors from
@@ -193,6 +226,18 @@ Claim evidence:
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/azimuthal_symmetry_spatial_lagrange_interpolation.py`, `temporal_lagrange_interpolation.py`, and `time_window_manager_numerical.py` — spatial interpolation, temporal interpolation, and time-window behavior
 - Corroboration: `nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py` — combined layout and metadata; `nrpy/infrastructures/BHaH/interpolation/differentiate_interpolation_lagrange_uniform.h` — uniform-basis derivative helper
+
+Claim evidence:
+- Claim: Optional batch tracking records the first successful RKF45 request that uses synthetic stencil nodes outside `[0, t_numerical_end]`; direct endpoint and diagnostic interpolations are excluded, and each tile writes fixed-order per-photon records with `NaN` times for false flags.
+- Role: runtime diagnostic output
+- Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/numerical_interpolation.py` and `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/batch_integrator_numerical.py` — stencil classification, per-photon storage, and binary output
+- Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/main_batch.py` — optional parameter, per-tile filename, and runtime telemetry
+
+Claim evidence:
+- Claim: The numerical single-photon integrator passes tracking storage only to RKF45 stage interpolations and prints each boundary flag and first request time during cleanup when `perform_synthetic_slice_check` is enabled; diagnostic interpolations pass null tracking pointers.
+- Role: runtime diagnostic output
+- Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/single_integrator_numerical.py` — single-photon tracker storage, evolution calls, and terminal reporting
+- Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/numerical_interpolation.py` — synthetic-node detection and first-request recording
 
 Numerical endpoint dispatch is piecewise constant. At or below the first stored
 time, the first slice is spatially interpolated; at or above the selected final

@@ -42,6 +42,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation import
     time_window_manager_numerical,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
+    axial_angular_momentum,
     batch_integrator_numerical,
     calculate_and_fill_blueprint_data_universal,
     calculate_ode_rhs_kernel,
@@ -165,6 +166,14 @@ if __name__ == "__main__":
         help="""Numerical spacetime payload and interpolation method.""",
     )
     parser.add_argument(
+        "--axisymmetric-about-z",
+        action="store_true",
+        help=(
+            "Generate the optional L_z conservation check. Use only when the "
+            "numerical spacetime has rotational symmetry about the Cartesian z axis."
+        ),
+    )
+    parser.add_argument(
         "--observer-position",
         nargs=3,
         type=float,
@@ -202,6 +211,13 @@ if __name__ == "__main__":
         required=True,
         metavar="SAMPLES_PER_TILE_WIDTH",
         help="Width-side ray samples per tile; height-side count is derived.",
+    )
+    parser.add_argument(
+        "--plane-interpolation-degree",
+        type=int,
+        default=4,
+        metavar="DEGREE",
+        help="Maximum polynomial degree for centered plane crossings (at least 3; default: 4).",
     )
     parser.add_argument(
         "--tile-counts",
@@ -339,6 +355,7 @@ if __name__ == "__main__":
         sys.exit(0)
     args = parser.parse_args()
     normalized_eom = args.eom == "normalized"
+    axisymmetric_about_z = args.axisymmetric_about_z
     interpolation_method = args.interpolation_method
     rhs_uses_metric_derivatives = interpolation_method != "GammaUDD"
 
@@ -367,6 +384,10 @@ if __name__ == "__main__":
         "--observer-fov values must be positive.",
     )
     _require(args.scan_density >= 1, "--scan-density must be positive.")
+    _require(
+        args.plane_interpolation_degree >= 3,
+        "--plane-interpolation-degree must be at least 3.",
+    )
     _require(
         all(value >= 1 for value in args.tile_counts),
         "--tile-counts values must be positive.",
@@ -517,7 +538,9 @@ if __name__ == "__main__":
             u_expr, PiD_exprs
         )
     else:
-        normal_observer_log_energy.normal_observer_log_energy(u_expr)
+        normal_observer_log_energy.normal_observer_log_energy(
+            u_expr, skip_non_active_status=True
+        )
 
     # Step 5.b: Register normalization diagnostics.
     if normalized_eom:
@@ -528,6 +551,8 @@ if __name__ == "__main__":
         normalization_constraint.normalization_constraint(
             normalization_constraint_expr, PARTICLE
         )
+    if axisymmetric_about_z:
+        axial_angular_momentum.axial_angular_momentum(normalized_eom=normalized_eom)
 
     # Step 5.c: Register numerical interpolation helpers.
     register_azimuthal_interp = (
@@ -554,6 +579,8 @@ if __name__ == "__main__":
         enable_simd=enable_simd,
         project_dir=project_dir,
         normalized_eom=normalized_eom,
+        skip_non_active_status=True,
+        track_synthetic_slice_usage=True,
     )
 
     # Step 5.d: Register RKF45 evolution kernels.
@@ -567,14 +594,18 @@ if __name__ == "__main__":
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
         enable_numerical_time_window_step_cap=True,
         normalized_eom=normalized_eom,
+        retry_interpolation_failures=True,
     )
 
     # Step 5.e: Register event-detection and boundary-intersection kernels.
-    find_event_time_and_state.find_event_time_and_state()
+    find_event_time_and_state.find_event_time_and_state(args.plane_interpolation_degree)
     handle_terminal_plane_intersection.handle_terminal_plane_intersection()
     handle_non_terminal_plane_intersection.handle_non_terminal_plane_intersection()
     event_detection_manager_kernel.event_detection_manager_kernel(
-        normalized_eom=normalized_eom
+        normalized_eom=normalized_eom,
+        maximum_degree=args.plane_interpolation_degree,
+        capture_event_state=True,
+        numerical_time_limit=True,
     )
     calculate_and_fill_blueprint_data_universal.calculate_and_fill_blueprint_data_universal(
         normalized_eom=normalized_eom
@@ -587,16 +618,23 @@ if __name__ == "__main__":
     batch_integrator_numerical.batch_integrator_numerical(
         SPACETIME,
         coord_system_numerical,
+        args.plane_interpolation_degree,
         interpolation_method=interpolation_method,
         normalized_eom=normalized_eom,
+        axisymmetric_about_z=axisymmetric_about_z,
     )
-    main_batch.main(SPACETIME, integrator_mode, normalized_eom=normalized_eom)
+    main_batch.main(
+        SPACETIME,
+        integrator_mode,
+        normalized_eom=normalized_eom,
+        axisymmetric_about_z=axisymmetric_about_z,
+    )
 
     # Step 5.g: Remove helper registrations emitted only through other kernels.
     # The event manager emits its local event helpers through prefunc, so keeping
     # standalone registrations would add unused source files and prototypes.
     internal_funcs_to_remove = [
-        "find_event_time_and_state",
+        "find_event_time_and_state_centered",
         "handle_terminal_plane_intersection",
         "handle_non_terminal_plane_intersection",
     ]
@@ -654,6 +692,9 @@ if __name__ == "__main__":
     # Step 6.e: Set batch-integrator and numerical-limit defaults.
     par.adjust_CodeParam_default("evolution_measure_max", 3.0)
     par.adjust_CodeParam_default("perform_normalization_check", True)
+    par.adjust_CodeParam_default("perform_synthetic_slice_check", True)
+    if axisymmetric_about_z:
+        par.adjust_CodeParam_default("perform_Lz_check", True)
     par.adjust_CodeParam_default("r_escape", args.escape_radius)
 
     # Step 6.f: Set numerical-spacetime time-range defaults.
@@ -936,8 +977,8 @@ if __name__ == "__main__":
         CC=compiler,
         src_code_file_ext=ext,
     )
-    # Step 8: Copy the v6 blueprint schema/reader/renderer/diagnostic helpers
-    # and print usage instructions.
+    # Step 8: Copy the version-6 blueprint file-format definitions, reader,
+    # renderer, and diagnostic functions; then print usage instructions.
     vis_dir = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "geodesic_visualizations"
     )
