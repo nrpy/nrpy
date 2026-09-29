@@ -47,7 +47,7 @@ generation, build, or runtime coverage.
 | `nrpypn_quasicircular_momenta.py` | `python -m nrpy.examples.nrpypn_quasicircular_momenta` | Standalone BHaH PN momentum utility project | Python, C compiler, `make` | Configured Ubuntu/macOS CI generation and build; no runtime/result check | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
 | `photon_geodesic_batch_integrator.py` | `python -m nrpy.examples.photon_geodesic_batch_integrator [--cuda] [--outdir DIR]` | Standalone tiled photon raytracing project emitting light-blueprint ZIP artifacts | Python, C or CUDA toolchain, `make`, NumPy/Matplotlib/Pillow for visualization; Numba optional for acceleration | Manual/source-supported batch route | [Geodesic Raytracing](geodesic-raytracing.md) |
 | `photon_geodesic_integrator.py` | `python -m nrpy.examples.photon_geodesic_integrator` | Standalone single-photon geodesic project plus trajectory visualization copy | Python, C compiler, `make`, NumPy/Matplotlib for visualization | Manual/source-supported single-ray route | [Geodesic Raytracing](geodesic-raytracing.md) |
-| `sebobv1_jax.py` | `python -m nrpy.examples.sebobv1_jax` | Python/JAX package generation intended for SEOBNRv5 coefficient initialization | Python for generation; generated package declares JAX, `jaxlib`, and NumPy | Configured Ubuntu/macOS generation only; no generated-package install, import, test, accelerator, or numerical check | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
+| `sebobv1_jax.py` | `python -m nrpy.examples.sebobv1_jax` | Python/JAX package generation intended for SEOBNRv5 coefficient initialization | Python for generation; generated package declares JAX, `jaxlib`, and NumPy | Configured Ubuntu/macOS generation, generated-package install, and one coefficient-function call with Python-scalar inputs; no generated test, accelerator, or numerical check | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
 | `sebobv2.py` | `python -m nrpy.examples.sebobv2` | GSL-backed BHaH C waveform project | Python, C compiler, `make`, GSL | Configured trusted/current build, executable run, and ten-input perturbation-relative comparison | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
 | `seobnrv5_aligned_spin_inspiral.py` | `python -m nrpy.examples.seobnrv5_aligned_spin_inspiral [-seobnrv5_bob|-seobnrv5_nrnqc_bob|-seobnrv5_nrpy] [-calibration_no_spin|-calibration_spin|-nrpy_calibrated]` | GSL-backed BHaH C SEOBNRv5 waveform project family | Python, C compiler, `make`, GSL | Configured trusted/current build and ten-input executable comparison for all nine calibration/production variants; the three additional `-nrpy_calibrated` variants are build-only | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
 | `spinning_blackhole.py` | `python -m nrpy.examples.spinning_blackhole [--cuda] [--floating_point_precision TYPE]` | Standalone BHaH spinning black-hole project | Python, C or CUDA toolchain, `make`; BHaHAHA in supported OpenMP/double path | Configured Ubuntu/macOS default OpenMP build; local helper configures CUDA build; neither runs the executable | [Standalone GR/BHaH](standalone-gr-bhah.md) |
@@ -76,6 +76,16 @@ Claim evidence:
 - Deciding authority: [main.yml](../../.github/workflows/main.yml), jobs `codegen-ubuntu`, `codegen-mac`, `sebob-consistency-test`
 - Corroboration: [sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py), `__main__` invocation list
 
+The `sebobv1_jax.py` row's validation-route cell states that CI generates and
+installs the package and calls the coefficient function once without checking
+returned values.
+
+Claim evidence:
+- Claim: Both `codegen-ubuntu` and `codegen-mac` generate `sebobv1_jax`, run `pip install .` in the generated project, import `SEOBNRv5_aligned_spin_coefficients`, call it once without a JAX transformation such as `jax.jit`, with the Python-scalar inputs `(1.5, 0.3, -0.2, 0.02, 2.4627455127717882e-05, 50.0)`, and print the returned `Commondata`. The step fails only if generation, installation, import, or the call raises; it asserts no returned field or value and does not run the generated pytest, a float32 input, a traced function, or an accelerator.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), jobs `codegen-ubuntu` and `codegen-mac`
+- Corroboration: `none available`; no other configured file restates these job commands
+
 Companion groups:
 
 | Companion group | Checked-in source shape | Artifact boundary | Owning page |
@@ -91,11 +101,11 @@ rows in [Sources](../../raw/SOURCES.md) register the cited files. Aggregate stat
 remains `partial` because file-set ownership does not by itself prove complete
 semantic reconciliation or future-file ingestion.
 
-Claim status: contested; contradiction: CONTR-0002. The `sebobv1_jax` row
-records generation intent only: current Commondata list truncation omits `a_f`
-while the emitted function passes `a_f`. See
-[CONTR-0002](../contradictions.md#contr-0002). Generation is configured in CI;
-generated-package installation or execution is not.
+The `sebobv1_jax` row records generation intent. CI generates and installs the
+package and calls the coefficient function once without checking its returned
+values. See
+[SEBOBv1 JAX Workflow](../infrastructures/jax/sebobv1-jax-workflow.md) for the
+generated coefficient function and its `Commondata` fields.
 
 ## Sources
 

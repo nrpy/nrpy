@@ -25,6 +25,8 @@ from nrpy.helpers.type_annotation_utilities import (
     validate_literal_arguments,
 )
 
+# Print only right-hand sides: printer.doprint(expr, assign_to) drops negative
+# powers (e.g., m2/m1 -> m2) in SymPy 1.11 to 1.14 and in some SymPy development commits.
 printer = NRPyJaxPrinter()
 
 
@@ -113,6 +115,18 @@ def py_codegen(
     tmp0 = ((x)*(x)*(x))
     blah = tmp0 + ((x)*(x)*(x)*(x)*(x)) + jnp.sin(tmp0)
     <BLANKLINE>
+    >>> m1, m2 = sp.symbols("m1 m2", real=True)
+    >>> print(py_codegen([m2/m1, 1/x**2, y/(x + z)], ["a", "b", "c"], verbose=False, enable_cse=False))
+    a = m2/m1
+    b = (1.0/(((x)*(x))))
+    c = y/(x + z)
+    <BLANKLINE>
+    >>> print(py_codegen([m2/m1 + sp.sin(m2/m1), 1/x**2, y/(x + z)], ["a", "b", "c"], verbose=False))
+    tmp0 = m2/m1
+    a = tmp0 + jnp.sin(tmp0)
+    b = (1.0/(((x)*(x))))
+    c = y/(x + z)
+    <BLANKLINE>
     """
     # Injected tuples wreak havoc in this function, so check for them & error out if spotted.
     if isinstance(sympyexpr, tuple):
@@ -176,11 +190,7 @@ def py_codegen(
                 expr = apply_substitution_dict(
                     expr, PCGParams.postproc_substitution_dict
                 )
-            processed_code = printer.doprint(
-                expr,
-                output_varname_str[i],
-            )
-            outstring += f"{processed_code}\n"
+            outstring += f"{output_varname_str[i]} = {printer.doprint(expr)}\n"
     # Step 3b: If CSE enabled, then perform CSE using SymPy and then
     #          resulting JAX code.
     else:
@@ -228,13 +238,7 @@ def py_codegen(
                 common_subexpression[1] = apply_substitution_dict(
                     common_subexpression[1], PCGParams.postproc_substitution_dict
                 )
-            outstring += (
-                printer.doprint(
-                    sp.expand(common_subexpression[1]),
-                    common_subexpression[0],
-                )
-                + "\n"
-            )
+            outstring += f"{common_subexpression[0]} = {printer.doprint(common_subexpression[1])}\n"
 
         # cse_results[1] specifies the varnames in terms of CSE variables.
         for i, result in enumerate(cse_results[1]):
@@ -242,13 +246,7 @@ def py_codegen(
                 result = apply_substitution_dict(
                     result, PCGParams.postproc_substitution_dict
                 )
-            outstring += (
-                printer.doprint(
-                    sp.expand(result),
-                    varnames[i],
-                )
-                + "\n"
-            )
+            outstring += f"{varnames[i]} = {printer.doprint(result)}\n"
 
         # End of group processing
     # Step 4: Construct final output string

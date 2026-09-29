@@ -94,14 +94,21 @@ JAX work are roadmap items in the example source, not completed workflow
 features. Existing JAX infrastructure pages own the generated-package lifecycle
 and the narrower Commondata/PyFunction details.
 
-Claim status: contested; contradiction: CONTR-0002. The generator supplies 14
-Commondata names and descriptions but only 13 dtypes and defaults. Batch
-registration uses `zip()`, so generated `Commondata.py` omits `a_f`, while the
-emitted coefficient function constructs `Commondata(..., a_f=a_f)`. See
-[CONTR-0002](../contradictions.md#contr-0002). GitHub codegen invokes only
-generation; it does not install/import the package, run the generated basic
-test, call the coefficient function, or validate any JAX accelerator/numerical
-result. The generated metadata declares `jax`, `jaxlib>=0.4.0`, and
+The generator supplies 14 Commondata names, dtypes, defaults, and
+descriptions, and batch registration rejects lists of unequal length, so
+generated `Commondata.py` includes the `a_f` field that the emitted coefficient
+function passes to `Commondata(...)`. GitHub codegen generates and installs
+the package, imports the coefficient function, and calls it once with
+Python-scalar inputs; it does not run the generated basic test or check any
+returned value, JAX accelerator, or numerical result.
+
+Claim evidence:
+- Claim: Both `codegen-ubuntu` and `codegen-mac` generate `sebobv1_jax`, run `pip install .` in the generated project, import `SEOBNRv5_aligned_spin_coefficients`, call it once without a JAX transformation such as `jax.jit`, with the Python-scalar inputs `(1.5, 0.3, -0.2, 0.02, 2.4627455127717882e-05, 50.0)`, and print the returned `Commondata`. The step fails only if generation, installation, import, or the call raises; it asserts no returned field or value and does not run the generated pytest, a float32 input, a traced function, or an accelerator.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), jobs `codegen-ubuntu` and `codegen-mac`
+- Corroboration: `none available`; no other configured file restates these job commands
+
+The generated metadata declares `jax`, `jaxlib>=0.4.0`, and
 `numpy>=1.21.0`; official JAX [Installation](https://docs.jax.dev/en/latest/installation.html)
 under `Supported platforms` remains authority for current platform-specific JAX
 installation, not NRPy's workflow.
