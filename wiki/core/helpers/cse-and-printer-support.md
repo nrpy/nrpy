@@ -27,16 +27,24 @@ Claim evidence:
 
 `NRPyJaxPrinter` subclasses SymPy's JAX printer when available and falls back to the NumPy printer on older SymPy installs. It rewrites known function and constant mappings to use the `jnp` namespace, sets `_module = "jnp"`, and mirrors NRPy's C power simplifications for JAX output: square roots and cube roots become `jnp.sqrt()` and `jnp.cbrt()`, small positive integer powers become repeated multiplication, and small negative integer powers become reciprocals of repeated multiplication. Unsupported powers fall back to the parent printer.
 
+Two further rules keep the printed expressions evaluable by JAX. An integer that does not fit in a signed 32-bit integer is printed as a float, and a rational whose numerator or denominator does not fit in a signed 32-bit integer is printed as the float value of the rational; smaller integers and rationals keep their exact form, such as `3` or `1/3`. In operations with arrays, JAX rejects Python integers that do not fit in a signed 32-bit integer (signed 64-bit with `jax_enable_x64`). `Max` and `Min` are printed as nested two-argument `jnp.maximum` and `jnp.minimum` calls, so the printed code needs no import of `functools`, which SymPy 1.14 and later use for these functions.
+
+Claim evidence:
+- Claim: `NRPyJaxPrinter` prints integers of magnitude at least `2**31`, and rationals whose numerator magnitude or denominator is at least `2**31`, as Python float literals, and prints `Max`/`Min` as nested `jnp.maximum`/`jnp.minimum` calls. Float printing rounds such values to double precision.
+- Role: descriptive behavior
+- Deciding authority: [nrpy/helpers/jax_printer.py](../../../nrpy/helpers/jax_printer.py), `NRPyJaxPrinter._print_Integer`, `_print_Rational`, `_print_Max`, `_print_Min`
+- Corroboration: `none available`; the only targeted check is the `NRPyJaxPrinter` class doctest in the deciding module, which validates this behavior locally but is not a separate source.
+
 The JAX printer also implements `_print_ArrayElementwiseApplyFunc()`. Unary lambda elementwise application is lowered by printing the array operand once, printing the scalar lambda body with a sentinel symbol, and replacing that sentinel with the parenthesized array expression. Multi-argument lambdas fall back to `jnp.vectorize(...)`, and non-lambda callables are printed as callable applications to the array string.
 
-`py_codegen()` is the local integration point for `NRPyJaxPrinter`: it constructs a module-level printer, requires the `Infrastructure` parameter to be `JAX`, optionally runs SymPy CSE through `cse_postprocess()`, and emits assignments through `printer.doprint()`. Unlike the C path, this Python path does not call `cse_preprocess()` or the deterministic `order="none"` post-sort helper in the current source.
+`py_codegen()` is the local integration point for `NRPyJaxPrinter`: it constructs a module-level printer, requires the `Infrastructure` parameter to be `JAX`, optionally runs SymPy CSE through `cse_postprocess()`, prints each unexpanded right-hand side through `printer.doprint()`, and writes the assignment itself; see [Python Codegen](../python-codegen.md) for why the output name is not passed to the printer. Unlike the C path, this Python path does not call `cse_preprocess()` or the deterministic `order="none"` post-sort helper in the current source.
 
 ## Sources
 
 - [nrpy/helpers/cse_preprocess_postprocess.py](../../../nrpy/helpers/cse_preprocess_postprocess.py) - `cse_preprocess`, `cse_postprocess`, `sort_cse_output_deterministically`
 - [nrpy/helpers/register_pressure_ordering.py](../../../nrpy/helpers/register_pressure_ordering.py) - `order_statements_for_register_pressure`
 - [nrpy/helpers/custom_c_codegen_functions.py](../../../nrpy/helpers/custom_c_codegen_functions.py) - `custom_functions_for_SymPy_ccode`
-- [nrpy/helpers/jax_printer.py](../../../nrpy/helpers/jax_printer.py) - `NRPyJaxPrinter`, `_print_Pow`, `_print_ArrayElementwiseApplyFunc`
+- [nrpy/helpers/jax_printer.py](../../../nrpy/helpers/jax_printer.py) - `NRPyJaxPrinter`, `_print_Pow`, `_print_Integer`, `_print_Rational`, `_print_Max`, `_print_Min`, `_print_ArrayElementwiseApplyFunc`
 - [nrpy/c_codegen.py](../../../nrpy/c_codegen.py) - `CCodeGen`, `c_codegen`
 - [nrpy/py_codegen.py](../../../nrpy/py_codegen.py) - `PyCodeGen`, `py_codegen`
 

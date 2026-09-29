@@ -74,6 +74,14 @@ do {
 }
 while (status == GSL_CONTINUE && iter < max_iter);
 
+if (status != GSL_SUCCESS){
+  fprintf(stderr,
+          "Error: in root_finding_1d(), gsl_root_fsolver_iterate() did not converge within %d iterations (interval=[%.15e,%.15e])\\n",
+          max_iter, x_lo, x_hi);
+  gsl_root_fsolver_free (s);
+  exit(1);
+} // END IF: 1D root not converged
+
 gsl_root_fsolver_free (s);
 return x;
 """

@@ -5,7 +5,7 @@ Author: Terrence Pierre Jacques
         terrencepierrej **at** gmail **dot* com
 """
 
-from typing import Any, Dict, List, Tuple, cast
+from typing import Any, Dict, List, Tuple
 
 import sympy as sp
 
@@ -14,7 +14,8 @@ from nrpy.equations.grhd.characteristic_speeds import find_cmax_cmin
 from nrpy.equations.grhd.GRHD_equations import GRHD_Equations
 
 
-def calculate_GRHD_Tmunu_and_contractions(
+def calculate_Tmunu_and_contractions_from_equations(
+    grhd_eqs: GRHD_Equations,
     flux_dirn: int,
     gammaDD: List[List[sp.Expr]],
     betaU: List[sp.Expr],
@@ -41,14 +42,18 @@ def calculate_GRHD_Tmunu_and_contractions(
     """
     Compute conserved quantities and fluxes entering the HLL solver.
 
+    The called equation methods implement Jacques et al., Eqs. (13)-(19),
+    https://arxiv.org/abs/2412.03659v2, with GRHayL-compatible entropy advection.
+
+    :param grhd_eqs: Cartesian equation object; its metric and fluid state are overwritten.
     :param flux_dirn: Flux direction.
     :param gammaDD: Spatial metric.
     :param betaU: Shift vector.
     :param alpha: Lapse function.
-    :param e6phi: Exponential conformal factor.
+    :param e6phi: Reference-metric volume factor e^(6 phi), equal to sqrt(gamma/gammahat) when det(gammabar) = det(gammahat); for rescaled face data it equals sqrt(det gammaDD).
     :param rho_b: Baryon density.
     :param Ye: Electron fraction.
-    :param S: Specific entropy.
+    :param S: Primitive entropy variable in the selected EOS convention.
     :param P: Pressure.
     :param h: Specific enthalpy.
     :param u4U: Four-velocity.
@@ -57,9 +62,7 @@ def calculate_GRHD_Tmunu_and_contractions(
     Note: Written in terms of rescaled quantities, the rescaled fluxes have the
     same mathematical form as the Cartesian expressions.
     """
-    # Step 1: Initialize the GRHD equations in Cartesian-equivalent form.
-    grhd_eqs = GRHD_Equations(CoordSystem="Cartesian", enable_rfm_precompute=False)
-
+    # Step 1: Replace the equation object's metric and fluid state.
     grhd_eqs.gammaDD = gammaDD.copy()
     grhd_eqs.betaU = betaU.copy()
     grhd_eqs.u4U = u4U.copy()
@@ -71,7 +74,7 @@ def calculate_GRHD_Tmunu_and_contractions(
     grhd_eqs.P = P
     grhd_eqs.h = h
 
-    # Step 2: Recover the Valencia velocity and stress-energy tensor pieces.
+    # Step 2: Compute the transport velocity u^i/u^0 and the stress-energy tensors.
     grhd_eqs.compute_vU_from_u4U__no_speed_limit()
     grhd_eqs.VU = grhd_eqs.VU_from_u4U
     grhd_eqs.compute_T4UU()
@@ -131,8 +134,11 @@ def HLL_solver(
     """
     Solve the one-dimensional Riemann problem using the HLL algorithm.
 
-    :param cmax: Maximum characteristic speed.
-    :param cmin: Minimum characteristic speed.
+    Duez et al., Phys. Rev. D 72, 024028 (2005), Eq. (48),
+    https://arxiv.org/abs/astro-ph/0503420v2.
+
+    :param cmax: Nonnegative right-going bound, max(0, c_+R, c_+L).
+    :param cmin: Nonnegative left-going magnitude, -min(0, c_-R, c_-L).
     :param Fr: Hydrodynamic flux at the right state.
     :param Fl: Hydrodynamic flux at the left state.
     :param Ur: Conserved variable at the right state.
@@ -166,19 +172,21 @@ def calculate_HLL_fluxes(
     """
     Calculate symbolic HLL fluxes for the GRHD evolution system.
 
+    The HLL combination is Duez et al. (2005), Eq. (48); see HLL_solver.
+
     :param flux_dirn: Flux direction.
     :param alpha_face: Lapse on the cell face.
     :param gamma_faceDD: Spatial metric on the cell face.
     :param beta_faceU: Shift vector on the cell face.
-    :param e6phi_face: Exponential conformal factor on the cell face.
+    :param e6phi_face: Face reference-metric volume factor e^(6 phi), equal to sqrt(gamma/gammahat) when det(gammabar) = det(gammahat); for rescaled face data it equals sqrt(det gamma_faceDD).
     :param u4rU: Four-velocity reconstructed to the right side.
     :param u4lU: Four-velocity reconstructed to the left side.
     :param rho_b_r: Density on the right side.
     :param rho_b_l: Density on the left side.
     :param Ye_r: Electron fraction on the right side.
     :param Ye_l: Electron fraction on the left side.
-    :param S_r: Specific entropy on the right side.
-    :param S_l: Specific entropy on the left side.
+    :param S_r: Primitive entropy variable on the right side.
+    :param S_l: Primitive entropy variable on the left side.
     :param P_r: Pressure on the right side.
     :param P_l: Pressure on the left side.
     :param h_r: Specific enthalpy on the right side.
@@ -200,7 +208,8 @@ def calculate_HLL_fluxes(
         F_tau_tilde_r,
         U_S_tilde_rD,
         F_S_tilde_rD,
-    ) = calculate_GRHD_Tmunu_and_contractions(
+    ) = calculate_Tmunu_and_contractions_from_equations(
+        GRHD_Equations(CoordSystem="Cartesian", enable_rfm_precompute=False),
         flux_dirn,
         gamma_faceDD,
         beta_faceU,
@@ -225,7 +234,8 @@ def calculate_HLL_fluxes(
         F_tau_tilde_l,
         U_S_tilde_lD,
         F_S_tilde_lD,
-    ) = calculate_GRHD_Tmunu_and_contractions(
+    ) = calculate_Tmunu_and_contractions_from_equations(
+        GRHD_Equations(CoordSystem="Cartesian", enable_rfm_precompute=False),
         flux_dirn,
         gamma_faceDD,
         beta_faceU,
@@ -374,7 +384,8 @@ if __name__ == "__main__":
         exprs_dict["F_tau_tilde"],
         exprs_dict["U_S_tildeD"],
         exprs_dict["F_S_tildeD"],
-    ) = calculate_GRHD_Tmunu_and_contractions(
+    ) = calculate_Tmunu_and_contractions_from_equations(
+        GRHD_Equations(CoordSystem="Cartesian", enable_rfm_precompute=False),
         2,
         gamma_faceDD_test,
         beta_faceU_test,

@@ -62,7 +62,7 @@ Claim evidence:
 
 The cited validation evidence covers representative `Spherical` trusted files
 for the BCL arXiv v3 Eq. (5.6) tetrad, symbolic-tetrad Psi4, and direct tetrad
-construction, plus one `SinhSpherical_rfm_precompute` representative. The page
+construction, plus a `SinhSpherical_rfm_precompute` representative. The page
 does not enumerate every coordinate variant as direct source evidence.
 
 ## Sources

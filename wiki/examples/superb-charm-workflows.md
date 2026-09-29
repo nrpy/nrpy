@@ -1,6 +1,6 @@
 # superB Charm++ Workflows
 
-> Route the three superB example generators to their Charm++ project, build, run, and validation shape. · Status: confirmed
+> Route the superB example generators to their Charm++ project, build, run, and validation shape. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
@@ -9,7 +9,7 @@ The `superB_*` examples generate Charm++/superB projects, not plain standalone
 executables. They target distributed-memory Charm++ runs through chares,
 chare-local grids, PUP support, CkIO-linked builds, and `charmrun` launches.
 
-The three checked examples are `superB_two_blackholes_collide`,
+The checked examples are `superB_two_blackholes_collide`,
 `superB_blackhole_spectroscopy`, and
 `superB_nrpyelliptic_conformally_flat`. Each writes `project/<project_name>/`,
 prints `make` as the build step, and runs as `./charmrun +pN ./<project_name>`
@@ -34,7 +34,7 @@ external toolchain shape: `charmc` compiles Charm++ applications and
 `charmrun +pN` launches them. NRPy's exact generated assets and CI scope still
 come from local generators and workflow YAML.
 
-All three examples set the generated infrastructure parameter to BHaH but
+All of these examples set the generated infrastructure parameter to BHaH but
 assemble through superB helpers. That means they reuse BHaH equation,
 diagnostic, reference-metric, boundary-condition, and CodeParameters machinery,
 then emit Charm++ project assets: chare interface and C++ files for the `Main`
@@ -95,7 +95,7 @@ tolerances of `-11.2` for double and `-6.5` for float. It passes
 by calling `stop_conditions_check` before `mainProxy.done()`.
 
 Precision and GSL support are source-specific. The elliptic superB example is
-the only one of these three with a command-line precision option. The collision
+the only one of these examples with a command-line precision option. The collision
 and spectroscopy examples do not define a precision flag in their argument
 parsers. Spectroscopy is the GSL-backed workflow because its Makefile helper
 adds `gsl-config` compiler and linker flags; the collision and elliptic

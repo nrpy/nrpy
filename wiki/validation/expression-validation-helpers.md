@@ -83,12 +83,13 @@ expression is converted to `mpf` first. If that raises `TypeError`, an
 `sp.nan` result takes the diagnostic print path, positive and negative SymPy
 infinities convert explicitly to their `mpmath` counterparts, and other
 non-real results are split into real and imaginary components before each
-finite, NaN, or infinity component is converted and combined as `mpc`. On the
-recorded SymPy 1.14.0/mpmath 1.3.0 stack, both signed SymPy infinities raise
-`TypeError` in the initial `mpf` conversion and exercise the explicit fallback.
+finite, NaN, or infinity component is converted and combined as `mpc`. The
+colocated doctests check that both signed SymPy infinities return `mpf('+inf')`
+and `mpf('-inf')`; the explicit fallback supplies those values whenever the
+initial `mpf` conversion raises `TypeError`.
 
 Claim evidence:
-- Claim: `inject_mpfs_into_cse_expression()` first attempts `mpf` conversion; SymPy NaN uses the diagnostic fallback, on the recorded SymPy 1.14.0/mpmath 1.3.0 stack signed SymPy infinities raise `TypeError` and use the explicit signed-infinity fallback, and other non-real fallback values are converted component by component before constructing an `mpc` value.
+- Claim: `inject_mpfs_into_cse_expression()` first attempts `mpf` conversion; when that raises `TypeError`, SymPy NaN uses the diagnostic fallback, signed SymPy infinities use the explicit signed-infinity fallback, and other non-real fallback values are converted component by component before constructing an `mpc` value.
 - Role: descriptive behavior
 - Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `inject_mpfs_into_cse_expression`
 - Corroboration: none available; direct signed-infinity and `assert_equal()` doctests are colocated with the deciding helper, and no separate source exercises every conversion branch

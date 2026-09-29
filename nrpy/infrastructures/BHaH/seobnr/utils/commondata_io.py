@@ -96,29 +96,30 @@ fwrite(&data->nsteps_fine, sizeof(size_t), 1, fp);
 fwrite(&data->nsteps_inspiral, sizeof(size_t), 1, fp);
 fwrite(&data->nsteps_low, sizeof(size_t), 1, fp);
 fwrite(&data->nsteps_raw, sizeof(size_t), 1, fp);
-int num_dynamics_vars = 8;
 
 // Write pointer members (arrays)
+// Each dynamics record holds NUMVARS REAL values; each waveform record holds
+// NUMMODES double complex values (index 0 is TIME, the rest are mode strains).
 if (data->dynamics_fine != NULL) {
-    fwrite(data->dynamics_fine, sizeof(REAL), data->nsteps_fine*num_dynamics_vars, fp);
+    fwrite(data->dynamics_fine, sizeof(REAL), data->nsteps_fine*NUMVARS, fp);
 }
 if (data->dynamics_low != NULL) {
-    fwrite(data->dynamics_low, sizeof(REAL), data->nsteps_low*num_dynamics_vars, fp);
+    fwrite(data->dynamics_low, sizeof(REAL), data->nsteps_low*NUMVARS, fp);
 }
 if (data->dynamics_raw != NULL) {
-    fwrite(data->dynamics_raw, sizeof(REAL), data->nsteps_raw*num_dynamics_vars, fp);
+    fwrite(data->dynamics_raw, sizeof(REAL), data->nsteps_raw*NUMVARS, fp);
 }
 if (data->waveform_IMR != NULL) {
-    fwrite(data->waveform_IMR, sizeof(double complex), data->nsteps_IMR*2, fp);
+    fwrite(data->waveform_IMR, sizeof(double complex), data->nsteps_IMR*NUMMODES, fp);
 }
 if (data->waveform_fine != NULL) {
-    fwrite(data->waveform_fine, sizeof(double complex), data->nsteps_fine*2, fp);
+    fwrite(data->waveform_fine, sizeof(double complex), data->nsteps_fine*NUMMODES, fp);
 }
 if (data->waveform_inspiral != NULL) {
-    fwrite(data->waveform_inspiral, sizeof(double complex), data->nsteps_inspiral*2, fp);
+    fwrite(data->waveform_inspiral, sizeof(double complex), data->nsteps_inspiral*NUMMODES, fp);
 }
 if (data->waveform_low != NULL) {
-    fwrite(data->waveform_low, sizeof(double complex), data->nsteps_low*2, fp);
+    fwrite(data->waveform_low, sizeof(double complex), data->nsteps_low*NUMMODES, fp);
 }
 
 fclose(fp);

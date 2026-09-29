@@ -46,7 +46,8 @@ Claim evidence:
 
 The historical YBS Gamma option applies to either formulation. When enabled,
 the registrar leaves the coordinate/options cache string unchanged, registers
-the runtime `YBS_chi` parameter after the parallel-registration guard, and
+the runtime `YBS_chi` parameter (default 0, which disables the term) after the
+parallel-registration guard, and
 forwards the Boolean to the selected nongauge and gauge owners. BSSN defines
 the symbolic addition once; fCCZ4 reuses that adjusted base, with the
 connection slot interpreted as `LambdatildeU`. Each formulation keeps enabled
@@ -58,7 +59,7 @@ each declares an explicit false source constant and forwards it to this shared
 registrar.
 
 Claim evidence:
-- Claim: the shared registrar conditionally owns the runtime YBS parameter and forwards the opt-in flag to the selected BSSN or fCCZ4 equation and gauge owners; the four black-hole generators keep it explicitly false by default and share this registrar.
+- Claim: the shared registrar conditionally owns the runtime YBS parameter, whose default is 0, and forwards the opt-in flag to the selected BSSN or fCCZ4 equation and gauge owners; `two_blackholes_collide.py`, `blackhole_spectroscopy.py`, `superB_two_blackholes_collide.py`, and `superB_blackhole_spectroscopy.py` keep it explicitly false by default and share this registrar.
 - Role: descriptive behavior
 - Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
 - Corroboration: [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py), and [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py), forwarded `enable_YBS_Gamma_constraint_adjustment` constants
@@ -66,7 +67,8 @@ Claim evidence:
 The separate `enable_YBS_momentum_constraint_adjustment` option controls the
 default-disabled timestep-scaled momentum adjustment for either formulation.
 When enabled, the registrar adds the shared raw-spacing `DSMINGF` auxiliary
-gridfunction and runtime `C_YBS_mom` parameter. The selected equation owner
+gridfunction and runtime `C_YBS_mom` parameter (default 0, which disables the
+term). The selected equation owner
 changes existing `a_rhsDD` outputs; no evolved cleaner state, cleaner RHS,
 initial-data path, boundary path, or KO route is added.
 `blackhole_spectroscopy.py` keeps a false source constant, forwards it only to
@@ -76,7 +78,7 @@ its RHS coefficient. The continuum equations and validation limits remain
 owned by [YBS-MOM Timestep-Scaled Momentum Adjustment](../../equations/general-relativity/ybs-momentum-damping.md).
 
 Claim evidence:
-- Claim: `register_CFunction_rhs_eval` exposes an independent default-false YBS-MOM option for BSSN or fCCZ4, conditionally owns shared raw `DSMINGF` and `C_YBS_mom`, changes existing `a_rhsDD` expressions without new evolved state, and shares one local-spacing helper with CAHD in the black-hole spectroscopy example.
+- Claim: `register_CFunction_rhs_eval` exposes an independent default-false YBS-MOM option for BSSN or fCCZ4, conditionally owns shared raw `DSMINGF` and `C_YBS_mom` (default 0), changes existing `a_rhsDD` expressions without new evolved state, and shares one local-spacing helper with CAHD in the black-hole spectroscopy example.
 - Role: descriptive behavior
 - Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
 - Corroboration: [dsmin_gf.py](../../../nrpy/infrastructures/BHaH/general_relativity/dsmin_gf.py), `register_CFunction_dsmin_auxevol_gridfunction`; [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), shared CAHD/YBS-MOM registration and scheduling gate; [representative BHaH rhs_eval trusted output](../../../nrpy/infrastructures/BHaH/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_SinhSpherical_RbargfsFalse_T4munuFalse_ImprovementsFalse.py), `trusted_dict`
@@ -255,7 +257,7 @@ coordinate-specialized by `register_CFunction_sqrt_detgammahat_d3xx_volume_eleme
 when diagnostics are registered.
 
 Basis transforms are registered through
-`basis_transforms.register_all.register_CFunctions`. The two production modules
+`basis_transforms.register_all.register_CFunctions`. The basis-transform modules
 emit private per-coordinate single-point kernels with coordinate-system suffixes.
 The public unsuffixed runtime dispatchers are emitted later by
 `rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs`. The

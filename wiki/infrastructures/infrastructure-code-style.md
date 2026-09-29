@@ -70,20 +70,17 @@ Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md) owns
 oracle mechanics, selection, focused assertions, variant coverage, state, and
 safe updates.
 
-Size is part of that rule. A right-hand side or a Ricci or constraint
-evaluation never gets a trusted generated-source file: those run to hundreds of
-kilobytes, and no tracked oracle file in this repository is larger than about
-eighty. Dendro follows the rule on both sides: its initial-data, connection and
-algebraic-constraint-enforcement builders capture small `.cpp` baselines through
-`validate_strings` on the registered `full_function`. Equation owners pin the
-upstream right-hand-side and constraint expressions; complete generated C++
-product tests check Dendro lowering and numerical behavior.
+Size is part of that rule. A right-hand side, Ricci, constraint, initial-data,
+connection, or algebraic-projection kernel does not receive a trusted generated
+source file when its main content comes from symbolic lowering. Equation owners
+pin the symbolic expressions. Complete generated C++ application checks exercise
+Dendro lowering and numerical behavior.
 
 Claim evidence:
-- Claim: golden-output baselines are for small, largely structural emitted code; a right-hand side, Ricci or constraint kernel never receives one and is proven through equation-owner symbolic validation plus complete generated-product checks instead. Dendro uses small generated-source baselines, equation-owner trusted expressions, and no kernel-scale generated source.
+- Claim: golden-output baselines are for small, largely structural emitted code; symbolically lowered numerical kernels are validated through equation-owner expressions and complete generated-application checks instead.
 - Role: normative rule
 - Deciding authority: [coding_style.md](../../coding_style.md), `#### validate_strings pattern`, its generated-kernel and size bullets
-- Corroboration: [initial_data.py](../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py), the `__main__` sweep that writes the small initial-data baselines for each formulation
+- Corroboration: [ADM_to_BSSN.py](../../nrpy/infrastructures/Dendro/general_relativity/ADM_to_BSSN.py), the generated pointwise conversion kernel without a generated-source baseline.
 
 BHaH `compile_Makefile()` contains a retained unsafe external-compilation
 doctest. It is not precedent. A substantive touch follows the scoped-CI
@@ -187,7 +184,7 @@ checks integer return codes immediately, and returns early when
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### Standard Struct Pointer Params`, `### Gridfunction Naming / Grouping`, `### Memory / Error Handling`
 - [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `compile_Makefile`
 - [coding_style.md](../../coding_style.md) - `#### validate_strings pattern`, its generated-kernel and size bullets
-- [initial_data.py](../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py) - the `__main__` generated-source baseline sweep
+- [ADM_to_BSSN.py](../../nrpy/infrastructures/Dendro/general_relativity/ADM_to_BSSN.py) - generated pointwise initial-data conversion.
 
 ## See Also
 

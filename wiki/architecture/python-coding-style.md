@@ -158,12 +158,11 @@ Claim evidence:
 - Claim: new code under `nrpy/` does not import `re`; plain string methods are used instead, and the seven grandfathered sites under `nrpy/` -- five legacy modules and two doctests -- are legacy rather than precedent. Repository tooling outside the package is not covered by the rule.
 - Role: normative rule
 - Deciding authority: [coding_style.md](../../coding_style.md), `### Prohibited Dependencies`, the `import re` bullet
-- Corroboration: [gridfunction_name_decorations.py](../../nrpy/infrastructures/Dendro/gridfunction_name_decorations.py), `validate_cpp_identifier`, which validates an identifier with `str.isidentifier` and `str.isascii` rather than a pattern
+- Corroboration: none available; the repository-wide dependency rule is the deciding authority.
 
 ## Sources
 
 - [coding_style.md](../../coding_style.md) - `### Prohibited Dependencies`, the `import re` bullet
-- [gridfunction_name_decorations.py](../../nrpy/infrastructures/Dendro/gridfunction_name_decorations.py) - `validate_cpp_identifier`, which validates without a pattern
 - [coding_style.md](../../coding_style.md) - `## Python Coding Style`, `### Module Docstring Format`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `## Python Style`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### Python String Literals`, `### Module Docstrings`, `### Type Hints`, `### Comments`
