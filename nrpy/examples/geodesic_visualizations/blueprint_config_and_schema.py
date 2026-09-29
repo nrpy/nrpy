@@ -101,7 +101,9 @@ if BLUEPRINT_FIELDS["non_terminal_post_step_Lz"][1] != 100:
 if BLUEPRINT_FIELDS["non_terminal_post_step_t"][1] != 108:
     raise RuntimeError("non_terminal_post_step_t offset changed in BLUEPRINT_DTYPE")
 if BLUEPRINT_FIELDS["non_terminal_post_step_distance"][1] != 116:
-    raise RuntimeError("non_terminal_post_step_distance offset changed in BLUEPRINT_DTYPE")
+    raise RuntimeError(
+        "non_terminal_post_step_distance offset changed in BLUEPRINT_DTYPE"
+    )
 BLUEPRINT_NORM_ABS_DTYPE = np.dtype("=f8")
 BLUEPRINT_NORM_ABS_FILENAME_TEMPLATE = (
     "light_blueprint_norm_abs_{tile_x:02d}_{tile_y:02d}.bin"

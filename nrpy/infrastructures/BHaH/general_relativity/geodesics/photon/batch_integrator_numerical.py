@@ -926,7 +926,9 @@ static void write_plane_crossings(
         .replace("{NORMALIZATION_KERNEL_NAME}", normalization_kernel_name)
         .replace("{NORMALIZATION_ERROR_EXPR}", normalization_error_expr)
         .replace("{NORMALIZATION_SIDECAR_ERROR_EXPR}", normalization_sidecar_error_expr)
-        .replace("{NON_TERMINAL_DIAGNOSTIC_CONDITION}", non_terminal_diagnostic_condition)
+        .replace(
+            "{NON_TERMINAL_DIAGNOSTIC_CONDITION}", non_terminal_diagnostic_condition
+        )
         .replace("{NON_TERMINAL_LZ_KERNEL_CALL}", non_terminal_Lz_kernel_call)
         .replace("{NON_TERMINAL_LZ_STORE}", non_terminal_Lz_store)
     )
