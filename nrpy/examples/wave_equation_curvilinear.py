@@ -12,6 +12,7 @@ import os
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
+from typing import Optional
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
@@ -76,11 +77,22 @@ CoordSystem = "SinhCylindrical"
 if CoordSystem.startswith("GeneralRFM") and not enable_rfm_precompute:
     raise ValueError("GeneralRFM requires enable_rfm_precompute=True.")
 
-num_fisheye_transitions = (
-    int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
-    if CoordSystem.startswith("GeneralRFM_fisheyeN")
-    else None
-)
+fisheye_provider_kind: Optional[str]
+num_fisheye_transitions: Optional[int]
+if CoordSystem.startswith("GeneralRFM_spheroidal_fisheyeN"):
+    fisheye_provider_kind = "spheroidal_fisheye"
+    num_fisheye_transitions = int(
+        CoordSystem.replace("GeneralRFM_spheroidal_fisheyeN", "")
+    )
+else:
+    fisheye_provider_kind = (
+        "fisheye" if CoordSystem.startswith("GeneralRFM_fisheyeN") else None
+    )
+    num_fisheye_transitions = (
+        int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
+        if CoordSystem.startswith("GeneralRFM_fisheyeN")
+        else None
+    )
 set_of_CoordSystems = {CoordSystem}
 list_of_grid_physical_sizes = []
 for CoordSystem in set_of_CoordSystems:
@@ -229,9 +241,14 @@ if __name__ == "__main__" and enable_parallel_codegen:
 #         create a Makefile for this project.
 #         Project is output to project/[project_name]/
 if num_fisheye_transitions is not None:
-    BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
-        num_transitions=num_fisheye_transitions
-    )
+    if fisheye_provider_kind == "spheroidal_fisheye":
+        BHaH.fisheye.phys_params_to_fisheye.register_CFunction_spheroidal_fisheye_params_from_physical_N(
+            num_transitions=num_fisheye_transitions
+        )
+    else:
+        BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
+            num_transitions=num_fisheye_transitions
+        )
 
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
@@ -301,7 +318,12 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 compute_griddata = "griddata_device" if parallelization == "cuda" else "griddata"
 post_params_struct_set_to_default = ""
 if num_fisheye_transitions is not None:
-    post_params_struct_set_to_default = BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+    fisheye_post_hook = (
+        BHaH.fisheye.phys_params_to_fisheye.build_spheroidal_post_params_struct_set_to_default_hook
+        if fisheye_provider_kind == "spheroidal_fisheye"
+        else BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook
+    )
+    post_params_struct_set_to_default = fisheye_post_hook(
         num_transitions=num_fisheye_transitions,
         compute_griddata=compute_griddata,
     )

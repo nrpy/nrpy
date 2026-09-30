@@ -24,14 +24,15 @@ expression coverage for those transforms, not a round-trip or generated-code
 runtime proof.
 
 `GeneralRFMFisheye` builds an N-transition radial fisheye map from raw
-Cartesian coordinates `xx[i]` to physical Cartesian coordinates. It registers
-the plateau, transition-center, width, and global-scale code parameters,
-stores `xx_to_CartU` and `dCart_dxxUD`, and constructs the induced flat
-reference metric `ghatDD` plus first and second derivatives in the raw
-coordinates. `build_fisheye` is the public constructor wrapper, and trusted
-files cover only the N=1 and N=2 variants. The class accepts any integer
-`num_transitions >= 1`; larger N is implemented but not covered by those two
-trusted files.
+Cartesian coordinates `xx[i]` to physical Cartesian coordinates. The shared
+fisheye radial-map helper registers plateau, transition-center, width, and
+scale code parameters and provides the transition kernel used by radial and
+spheroidal providers. `GeneralRFMSpheroidalFisheye` composes separate xy and z
+radial maps into `Cart = (lambda_xy(r)x, lambda_xy(r)y, lambda_z(r)z)`.
+Both providers store `xx_to_CartU`, metric data `ghatDD`, and first and second
+metric derivatives in raw coordinates. `build_fisheye` and
+`build_spheroidal_fisheye` are the constructor wrappers; trusted radial files
+cover only the N=1 and N=2 variants.
 
 `SO3Expressions` stores symbolic matrix-rotation expressions used by equation
 validation and by the generated BHaH SO(3) helper layer. Its helpers build a
@@ -71,7 +72,7 @@ Pipeline](trusted-expression-pipeline.md) for that boundary.
 - [jacobians_Cartesian.py](../../nrpy/equations/basis_transforms/tests/jacobians_Cartesian.py) - `trusted_dict`
 - [jacobians_Spherical.py](../../nrpy/equations/basis_transforms/tests/jacobians_Spherical.py) - `trusted_dict`
 - [jacobians_GeneralRFM_fisheyeN2.py](../../nrpy/equations/basis_transforms/tests/jacobians_GeneralRFM_fisheyeN2.py) - `trusted_dict`
-- [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py) - `GeneralRFMFisheye`, `build_fisheye`, `xx_to_CartU`, `ghatDD`, `ghatDDdD`, `ghatDDdDD`
+- [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py) - `FisheyeRadialMap`, `GeneralRFMFisheye`, `GeneralRFMSpheroidalFisheye`, `build_fisheye`, `build_spheroidal_fisheye`, `xx_to_CartU`, `ghatDD`, `ghatDDdD`, `ghatDDdDD`
 - [fisheye_N1.py](../../nrpy/equations/generalrfm/tests/fisheye_N1.py) - `trusted_dict`
 - [fisheye_N2.py](../../nrpy/equations/generalrfm/tests/fisheye_N2.py) - `trusted_dict`
 - [SO3_rotations.py](../../nrpy/equations/rotation/SO3_rotations.py) - `SO3Expressions`, `apply_R_to_vector`, `apply_R_to_tensorDD`, `rodrigues_matrix_from_axis_angle`

@@ -18,48 +18,57 @@ Author: Nishita Jadoo
         njadoo **at** uidaho **dot* edu
 """
 
-from typing import List, Union
+from typing import List, Tuple, Union, cast
 
 import nrpy.params as par
 from nrpy.c_function import register_CFunction
 from nrpy.equations.generalrfm import fisheye as fisheye_eqs
 
 
-def _register_physical_fisheye_codeparams(num_transitions: int) -> None:
+def _register_physical_fisheye_codeparams(
+    num_transitions: int,
+    add_to_parfile: bool = True,
+    register_shared_phys_params: bool = True,
+) -> None:
     """
     Register physical fisheye CodeParameters in commondata_struct.
 
     :param num_transitions: Number of fisheye transitions.
+    :param add_to_parfile: Whether to emit the registered parameters into the
+        generated parameter file.
+    :param register_shared_phys_params: Whether to register the shared outer
+        radius and plateau-factor parameters.
     """
-    _ = par.register_CodeParameter(
-        "REAL",
-        __name__,
-        "fisheye_phys_L",
-        10.0,
-        commondata=True,
-        add_to_parfile=True,
-        description="Outer physical boundary radius.",
-    )
+    if register_shared_phys_params:
+        _ = par.register_CodeParameter(
+            "REAL",
+            __name__,
+            "fisheye_phys_L",
+            10.0,
+            commondata=True,
+            add_to_parfile=add_to_parfile,
+            description="Outer physical boundary radius.",
+        )
 
-    # Step 1: Register runtime-steerable fisheye plateau/stretch factors in commondata.
-    # These are copied into params->fisheye_a* in the post-params hook so users
-    # can tune a_i from the .par file without recompiling.
-    a_phys_names = [f"fisheye_phys_a{i}" for i in range(num_transitions + 1)]
-    a_phys_defaults: List[Union[str, int, float]] = [
-        float(2**i) for i in range(num_transitions + 1)
-    ]
-    _ = par.register_CodeParameters(
-        "REAL",
-        __name__,
-        a_phys_names,
-        a_phys_defaults,
-        commondata=True,
-        add_to_parfile=True,
-        descriptions=[
-            f"Physical/input fisheye plateau factor a{i} (copied to params->fisheye_a{i})."
-            for i in range(num_transitions + 1)
-        ],
-    )
+        # Step 1: Register runtime-steerable fisheye plateau/stretch factors in commondata.
+        # These are copied into params->fisheye_a* in the post-params hook so users
+        # can tune a_i from the .par file without recompiling.
+        a_phys_names = [f"fisheye_phys_a{i}" for i in range(num_transitions + 1)]
+        a_phys_defaults: List[Union[str, int, float]] = [
+            float(2**i) for i in range(num_transitions + 1)
+        ]
+        _ = par.register_CodeParameters(
+            "REAL",
+            __name__,
+            a_phys_names,
+            a_phys_defaults,
+            commondata=True,
+            add_to_parfile=add_to_parfile,
+            descriptions=[
+                f"Physical/input fisheye plateau factor a{i} (copied to params->fisheye_a{i})."
+                for i in range(num_transitions + 1)
+            ],
+        )
 
     r_names = [f"fisheye_phys_r_trans{i + 1}" for i in range(num_transitions)]
     w_names = [f"fisheye_phys_w_trans{i + 1}" for i in range(num_transitions)]
@@ -76,7 +85,7 @@ def _register_physical_fisheye_codeparams(num_transitions: int) -> None:
         r_names,
         r_defaults,
         commondata=True,
-        add_to_parfile=True,
+        add_to_parfile=add_to_parfile,
         descriptions=[
             f"Physical center radius of transition {i + 1}."
             for i in range(num_transitions)
@@ -88,11 +97,123 @@ def _register_physical_fisheye_codeparams(num_transitions: int) -> None:
         w_names,
         w_defaults,
         commondata=True,
-        add_to_parfile=True,
+        add_to_parfile=add_to_parfile,
         descriptions=[
             f"Physical width of transition {i + 1}." for i in range(num_transitions)
         ],
     )
+
+
+def _spheroidal_axis_defaults(
+    num_transitions: int, axis: str
+) -> Tuple[List[float], List[float]]:
+    """
+    Return default physical transition centers and widths for one axis.
+
+    :param num_transitions: Number of fisheye transitions.
+    :param axis: Spheroidal axis whose defaults should be returned.
+    :return: Lists of transition-center and transition-width defaults.
+    """
+    if num_transitions == 8:
+        xy_centers_raw = [
+            4.75,
+            5.5,
+            9.0,
+            16.0,
+            34.0,
+            60.0,
+            115.0,
+            208.0,
+        ]
+        xy_widths_raw = [
+            1.0,
+            1.0,
+            2.0,
+            4.0,
+            12.0,
+            20.0,
+            40.0,
+            80.0,
+        ]
+        z_centers_raw = [
+            0.75,
+            1.5,
+            5.0,
+            12.0,
+            30.0,
+            60.0,
+            115.0,
+            208.0,
+        ]
+        z_widths_raw = [
+            width * z_center / xy_center
+            for width, z_center, xy_center in zip(
+                xy_widths_raw, z_centers_raw, xy_centers_raw
+            )
+        ]
+        return (
+            (xy_centers_raw, xy_widths_raw)
+            if axis == "xy"
+            else (z_centers_raw, z_widths_raw)
+        )
+    centers = [2.0 * (i + 1) for i in range(num_transitions)]
+    widths = [1.0 for _ in range(num_transitions)]
+    return centers, widths
+
+
+def _register_spheroidal_physical_fisheye_codeparams(num_transitions: int) -> None:
+    """
+    Register shared and axis-specific physical spheroidal parameters.
+
+    :param num_transitions: Number of fisheye transitions on each axis.
+    """
+    _ = par.register_CodeParameter(
+        "REAL",
+        __name__,
+        "fisheye_phys_L",
+        10.0,
+        commondata=True,
+        add_to_parfile=True,
+        description="Outer physical boundary radius.",
+    )
+    _ = par.register_CodeParameters(
+        "REAL",
+        __name__,
+        [f"fisheye_phys_a{i}" for i in range(num_transitions + 1)],
+        [float(2**i) for i in range(num_transitions + 1)],
+        commondata=True,
+        add_to_parfile=True,
+        descriptions=[
+            f"Physical/input fisheye plateau factor a{i} (copied to params->fisheye_a{i})."
+            for i in range(num_transitions + 1)
+        ],
+    )
+    for axis in ("xy", "z"):
+        centers, widths = _spheroidal_axis_defaults(num_transitions, axis)
+        _ = par.register_CodeParameters(
+            "REAL",
+            __name__,
+            [f"fisheye_phys_{axis}_r_trans{i + 1}" for i in range(num_transitions)],
+            cast(List[Union[str, int, float]], centers),
+            commondata=True,
+            add_to_parfile=True,
+            descriptions=[
+                f"Physical {axis} center radius of spheroidal fisheye transition {i + 1}."
+                for i in range(num_transitions)
+            ],
+        )
+        _ = par.register_CodeParameters(
+            "REAL",
+            __name__,
+            [f"fisheye_phys_{axis}_w_trans{i + 1}" for i in range(num_transitions)],
+            cast(List[Union[str, int, float]], widths),
+            commondata=True,
+            add_to_parfile=True,
+            descriptions=[
+                f"Physical {axis} width of spheroidal fisheye transition {i + 1}."
+                for i in range(num_transitions)
+            ],
+        )
 
 
 def _c_array_initializer(values: List[str]) -> str:
@@ -138,8 +259,41 @@ def build_post_params_struct_set_to_default_hook(
 }}\n"""
 
 
+def build_spheroidal_post_params_struct_set_to_default_hook(
+    num_transitions: int,
+    compute_griddata: str,
+) -> str:
+    """
+    Build the post-default hook for spheroidal fisheye parameters.
+
+    :param num_transitions: Number of fisheye transitions on each axis.
+    :param compute_griddata: Griddata array symbol in generated main C code.
+    :raises ValueError: If num_transitions is less than 1.
+    :return: C code string suitable for the post-default hook.
+    """
+    if num_transitions < 1:
+        raise ValueError("num_transitions must be >= 1")
+
+    copy_a_lines = "\n".join(
+        [
+            f"  {compute_griddata}[grid].params.fisheye_a{i} = commondata.fisheye_phys_a{i};"
+            for i in range(num_transitions + 1)
+        ]
+    )
+
+    return f"""for(int grid=0; grid<commondata.NUMGRIDS; grid++) {{
+{copy_a_lines}
+  if (spheroidal_fisheye_params_from_physical_N{num_transitions}(&commondata, &{compute_griddata}[grid].params) != 0) {{
+    fprintf(stderr, "Error: spheroidal_fisheye_params_from_physical_N{num_transitions} failed for grid %d. Check fisheye_phys_a*, fisheye_phys_L, and fisheye_phys_{{xy,z}}_{{r,w}}_trans* values.\\n", grid);
+    exit(1);
+  }}
+}}\n"""
+
+
 def register_CFunction_fisheye_params_from_physical_N(
     num_transitions: int = 2,
+    physical_params_add_to_parfile: bool = True,
+    register_shared_phys_params: bool = True,
 ) -> None:
     """
     Register a C function that solves for fisheye (R_i, s_i) and computes c from physical parameters.
@@ -162,6 +316,10 @@ def register_CFunction_fisheye_params_from_physical_N(
     ...     validate_strings(generated_str, name, file_ext="c")
 
     :param num_transitions: Number of fisheye transitions.
+    :param physical_params_add_to_parfile: Whether the radial fisheye physical
+        input parameters should be emitted into the generated parfile.
+    :param register_shared_phys_params: Whether to register the shared
+        `fisheye_phys_L` and `fisheye_phys_a*` parameters in this call.
     :raises ValueError: If num_transitions is less than 1.
     """
     if num_transitions < 1:
@@ -171,7 +329,11 @@ def register_CFunction_fisheye_params_from_physical_N(
     _ = fisheye_eqs.build_fisheye(num_transitions=num_transitions)
 
     # Step 2: Register physical parameters in commondata_struct.
-    _register_physical_fisheye_codeparams(num_transitions)
+    _register_physical_fisheye_codeparams(
+        num_transitions,
+        add_to_parfile=physical_params_add_to_parfile,
+        register_shared_phys_params=register_shared_phys_params,
+    )
 
     includes = ["<math.h>", "<stdio.h>", "<stdlib.h>"]
     desc = """\
@@ -660,6 +822,85 @@ int main(void) {{
         include_CodeParameters_h=False,
         body=body,
         postfunc=postfunc,
+    )
+
+
+def register_CFunction_spheroidal_fisheye_params_from_physical_N(
+    num_transitions: int = 8,
+) -> None:
+    """
+    Register a spheroidal fisheye physical-parameter converter.
+
+    The converter reuses the radial fisheye converter on temporary structs for
+    the xy and z axes, then copies the solved parameters into the axis-specific
+    internal fields.
+
+    :param num_transitions: Number of fisheye transitions on each axis.
+    :raises ValueError: If num_transitions is less than 1.
+    """
+    if num_transitions < 1:
+        raise ValueError("num_transitions must be >= 1")
+
+    _ = fisheye_eqs.build_spheroidal_fisheye(num_transitions)
+    _register_spheroidal_physical_fisheye_codeparams(num_transitions)
+    register_CFunction_fisheye_params_from_physical_N(
+        num_transitions,
+        physical_params_add_to_parfile=False,
+        register_shared_phys_params=False,
+    )
+
+    def assign_axis_commondata(axis: str) -> str:
+        lines = [
+            f"  {axis}_commondata.fisheye_phys_r_trans{i + 1} = commondata->fisheye_phys_{axis}_r_trans{i + 1};\n"
+            f"  {axis}_commondata.fisheye_phys_w_trans{i + 1} = commondata->fisheye_phys_{axis}_w_trans{i + 1};"
+            for i in range(num_transitions)
+        ]
+        return "\n".join(lines)
+
+    def copy_axis_params(axis: str) -> str:
+        lines = []
+        for i in range(num_transitions):
+            lines.append(
+                f"  params->fisheye_{axis}_R{i + 1} = {axis}_params.fisheye_R{i + 1};"
+            )
+            lines.append(
+                f"  params->fisheye_{axis}_s{i + 1} = {axis}_params.fisheye_s{i + 1};"
+            )
+        lines.append(f"  params->fisheye_{axis}_c = {axis}_params.fisheye_c;")
+        return "\n".join(lines)
+
+    desc = """\
+Compute spheroidal fisheye internal parameters from physical xy and z axis inputs.
+
+This function intentionally reuses fisheye_params_from_physical_N* for each axis
+so the nonlinear radial parameter solve remains single-source.
+"""
+    body = rf"""
+  commondata_struct xy_commondata = *commondata;
+  params_struct xy_params = *params;
+{assign_axis_commondata("xy")}
+  if (fisheye_params_from_physical_N{num_transitions}(&xy_commondata, &xy_params) != 0)
+    return 1;
+{copy_axis_params("xy")}
+
+  commondata_struct z_commondata = *commondata;
+  params_struct z_params = *params;
+{assign_axis_commondata("z")}
+  if (fisheye_params_from_physical_N{num_transitions}(&z_commondata, &z_params) != 0)
+    return 1;
+{copy_axis_params("z")}
+
+  return 0;
+"""
+    register_CFunction(
+        subdirectory="fisheye",
+        includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
+        desc=desc,
+        cfunc_type="int",
+        name=f"spheroidal_fisheye_params_from_physical_N{num_transitions}",
+        params="const commondata_struct *restrict commondata, params_struct *restrict params",
+        include_CodeParameters_h=False,
+        body=body,
     )
 
 

@@ -23,6 +23,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
@@ -37,11 +38,22 @@ CoordSystem = "Spherical"
 set_of_CoordSystems = {CoordSystem}
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
-num_fisheye_transitions = (
-    int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
-    if CoordSystem.startswith("GeneralRFM_fisheyeN")
-    else None
-)
+fisheye_provider_kind: Optional[str]
+num_fisheye_transitions: Optional[int]
+if CoordSystem.startswith("GeneralRFM_spheroidal_fisheyeN"):
+    fisheye_provider_kind = "spheroidal_fisheye"
+    num_fisheye_transitions = int(
+        CoordSystem.replace("GeneralRFM_spheroidal_fisheyeN", "")
+    )
+else:
+    fisheye_provider_kind = (
+        "fisheye" if CoordSystem.startswith("GeneralRFM_fisheyeN") else None
+    )
+    num_fisheye_transitions = (
+        int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
+        if CoordSystem.startswith("GeneralRFM_fisheyeN")
+        else None
+    )
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 1.0
@@ -170,9 +182,7 @@ if enable_BHaHAHA:
     from nrpy.infrastructures.BHaH.BHaHAHA import (
         interpolation_3d_general__uniform_src_grid,
     )
-    from nrpy.infrastructures.superB import (
-        BHaH_implementation,
-    )
+    from nrpy.infrastructures.superB import BHaH_implementation
 
     BHaH_implementation.register_CFunction_bhahaha_find_horizons(
         CoordSystem=CoordSystem, max_horizons=3
@@ -266,9 +276,14 @@ if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
 if num_fisheye_transitions is not None:
-    BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
-        num_transitions=num_fisheye_transitions
-    )
+    if fisheye_provider_kind == "spheroidal_fisheye":
+        BHaH.fisheye.phys_params_to_fisheye.register_CFunction_spheroidal_fisheye_params_from_physical_N(
+            num_transitions=num_fisheye_transitions
+        )
+    else:
+        BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
+            num_transitions=num_fisheye_transitions
+        )
 
 superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems={CoordSystem},
@@ -375,10 +390,15 @@ superB.main_chare.output_commondata_object_h_and_main_h_cpp_ci(
 )
 post_params_struct_set_to_default = ""
 if num_fisheye_transitions is not None:
-    post_params_struct_set_to_default = BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+    fisheye_post_hook = (
+        BHaH.fisheye.phys_params_to_fisheye.build_spheroidal_post_params_struct_set_to_default_hook
+        if fisheye_provider_kind == "spheroidal_fisheye"
+        else BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook
+    )
+    post_params_struct_set_to_default = fisheye_post_hook(
         num_transitions=num_fisheye_transitions,
         compute_griddata="griddata",
-    ) + BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+    ) + fisheye_post_hook(
         num_transitions=num_fisheye_transitions,
         compute_griddata="griddata_chare",
     )

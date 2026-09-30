@@ -87,7 +87,7 @@ def register_CFunction_generalrfm_precompute(
     if not CoordSystem.startswith("GeneralRFM"):
         raise ValueError(f"{CoordSystem} is not a GeneralRFM coordinate system.")
     provider_name = getattr(rfm, "general_rfm_provider_name", "")
-    if provider_name != "fisheye":
+    if provider_name not in {"fisheye", "spheroidal_fisheye"}:
         raise ValueError(
             f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in generalrfm_precompute."
         )
