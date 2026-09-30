@@ -396,7 +396,14 @@ independently ray-by-ray.
             "{spatial_center_params}", spatial_center_params
         )
         .replace("{integration_parameter_params}", integration_parameter_params)
-        .replace("{synthetic_slice_usage_params}", synthetic_slice_usage_params)
+        .replace(
+            "                {synthetic_slice_usage_params}\n",
+            (
+                f"                {synthetic_slice_usage_params}\n"
+                if track_synthetic_slice_usage
+                else ""
+            ),
+        )
     )
     body = (
         r"""
