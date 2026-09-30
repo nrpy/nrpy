@@ -27,6 +27,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
@@ -48,11 +49,22 @@ CoordSystem = "SinhCylindrical"
 set_of_CoordSystems = {CoordSystem}
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
-num_fisheye_transitions = (
-    int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
-    if CoordSystem.startswith("GeneralRFM_fisheyeN")
-    else None
-)
+fisheye_provider_kind: Optional[str]
+num_fisheye_transitions: Optional[int]
+if CoordSystem.startswith("GeneralRFM_spheroidal_fisheyeN"):
+    fisheye_provider_kind = "spheroidal_fisheye"
+    num_fisheye_transitions = int(
+        CoordSystem.replace("GeneralRFM_spheroidal_fisheyeN", "")
+    )
+else:
+    fisheye_provider_kind = (
+        "fisheye" if CoordSystem.startswith("GeneralRFM_fisheyeN") else None
+    )
+    num_fisheye_transitions = (
+        int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
+        if CoordSystem.startswith("GeneralRFM_fisheyeN")
+        else None
+    )
 
 initial_sep = 0.5 if not paper else 10.0
 mass_ratio = 1.0  # must be >= 1.0. Will need higher resolution for > 1.0.
@@ -203,9 +215,7 @@ if enable_BHaHAHA:
             ],
             check=True,
         )
-    from nrpy.infrastructures.superB import (
-        BHaH_implementation,
-    )
+    from nrpy.infrastructures.superB import BHaH_implementation
 
     BHaH_implementation.register_CFunction_bhahaha_find_horizons(
         CoordSystem=CoordSystem, max_horizons=3
@@ -324,9 +334,14 @@ if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
 if num_fisheye_transitions is not None:
-    BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
-        num_transitions=num_fisheye_transitions
-    )
+    if fisheye_provider_kind == "spheroidal_fisheye":
+        BHaH.fisheye.phys_params_to_fisheye.register_CFunction_spheroidal_fisheye_params_from_physical_N(
+            num_transitions=num_fisheye_transitions
+        )
+    else:
+        BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
+            num_transitions=num_fisheye_transitions
+        )
 if enable_psi4:
     superB.general_relativity.psi4_spinweightm2_decomposition.register_CFunction_psi4_spinweightm2_decomposition()
 
@@ -496,11 +511,19 @@ if enable_CAHD:
 
 superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     post_params_struct_set_to_default=(
-        BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+        (
+            BHaH.fisheye.phys_params_to_fisheye.build_spheroidal_post_params_struct_set_to_default_hook
+            if fisheye_provider_kind == "spheroidal_fisheye"
+            else BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook
+        )(
             num_transitions=num_fisheye_transitions,
             compute_griddata="griddata",
         )
-        + BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+        + (
+            BHaH.fisheye.phys_params_to_fisheye.build_spheroidal_post_params_struct_set_to_default_hook
+            if fisheye_provider_kind == "spheroidal_fisheye"
+            else BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook
+        )(
             num_transitions=num_fisheye_transitions,
             compute_griddata="griddata_chare",
         )

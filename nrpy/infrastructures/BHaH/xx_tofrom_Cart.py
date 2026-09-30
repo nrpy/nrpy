@@ -13,7 +13,7 @@ from inspect import currentframe as cfr
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import FrameType as FT
-from typing import Dict, List, Set, Tuple, Union, cast
+from typing import Any, Dict, List, Set, Tuple, Union, cast
 
 import sympy as sp
 
@@ -234,6 +234,184 @@ def _generate_bracketed_radial_inverse_body(
     }} // END IF: inverse failed
 {success_body}
   }} // END ELSE: invert fisheye radius
+"""
+
+
+def _generate_spheroidal_fisheye_inverse_body(
+    provider: Any,
+    cart_components: Tuple[str, str, str],
+    origin_body: str,
+    success_body: str,
+    failure_body: str,
+) -> str:
+    """
+    Generate a bracketed 1D inverse for axis-scaled spheroidal fisheye maps.
+    """
+    cartx, carty, cartz = cart_components
+    r_symbol = sp.Symbol("r", real=True, positive=True)
+    lam_xy, lam_z, dlam_xy, dlam_z, asymptotic_scale = provider.axis_maps_for_inverse(
+        r_symbol
+    )
+    cartx_sym, carty_sym, cartz_sym = sp.symbols("Cartx Carty Cartz", real=True)
+    cart_xy2 = cartx_sym * cartx_sym + carty_sym * carty_sym
+    residual_expr = (
+        cart_xy2 / (lam_xy * lam_xy)
+        + cartz_sym * cartz_sym / (lam_z * lam_z)
+        - r_symbol * r_symbol
+    )
+    residual_deriv_expr = (
+        -2 * cart_xy2 * dlam_xy / (lam_xy**3)
+        - 2 * cartz_sym * cartz_sym * dlam_z / (lam_z**3)
+        - 2 * r_symbol
+    )
+
+    def emit_codegen(
+        radius_var: str,
+        outputs: Tuple[Tuple[str, sp.Expr], ...],
+        cse_varprefix: str,
+    ) -> str:
+        local_vars = {"rCart", "high", "radial_seed", "trial_seed", radius_var}
+        local_vars |= {cartx, carty, cartz}
+        local_radius = sp.Symbol(radius_var, real=True, positive=True)
+        substitutions = {
+            r_symbol: local_radius,
+            cartx_sym: sp.Symbol(cartx),
+            carty_sym: sp.Symbol(carty),
+            cartz_sym: sp.Symbol(cartz),
+        }
+        processed_exprs = _prepare_sympy_exprs_for_codegen(
+            [expr.xreplace(substitutions) for _, expr in outputs],
+            local_vars,
+        )
+        return ccg.c_codegen(
+            processed_exprs,
+            [name for name, _ in outputs],
+            include_braces=False,
+            verbose=False,
+            cse_varprefix=cse_varprefix,
+        )
+
+    asymptotic_scale_codegen = emit_codegen(
+        "radial_seed",
+        (("asymptotic_scale", asymptotic_scale),),
+        "asymptotic_",
+    )
+    high_residual_codegen = emit_codegen(
+        "high",
+        (("high_residual", residual_expr),),
+        "high_",
+    )
+    radial_codegen = emit_codegen(
+        "radial_seed",
+        (
+            ("radial_residual", residual_expr),
+            ("radial_residual_prime", residual_deriv_expr),
+        ),
+        "radial_",
+    )
+    trial_residual_codegen = emit_codegen(
+        "trial_seed",
+        (("trial_residual", residual_expr),),
+        "trial_",
+    )
+    fallback_residual_codegen = emit_codegen(
+        "trial_seed",
+        (("trial_residual_fallback", residual_expr),),
+        "fallback_",
+    )
+    final_lam_codegen = emit_codegen(
+        "radial_seed",
+        (("lam_xy", lam_xy), ("lam_z", lam_z)),
+        "final_",
+    )
+
+    return rf"""
+  const REAL rCart = sqrt(({cartx}) * ({cartx}) + ({carty}) * ({carty}) + ({cartz}) * ({cartz}));
+  if (!(isfinite(rCart))) {{
+{failure_body}
+  }} // END IF: invalid radius
+  else if (rCart <= (REAL)0.0) {{
+{origin_body}
+  }} // END ELSE IF: handle origin
+  else {{
+    const REAL radial_scale = rCart;
+    const REAL inverse_relative_tol =
+        (sizeof(REAL) == sizeof(float)) ? (REAL)1.0e-5 : (REAL)1.0e-12;
+    const REAL derivative_floor =
+        (sizeof(REAL) == sizeof(float)) ? (REAL)1.0e-7 : (REAL)1.0e-14;
+    const REAL residual_tolerance = inverse_relative_tol * radial_scale * radial_scale;
+    REAL asymptotic_scale;
+{asymptotic_scale_codegen}
+    const REAL inv_asymptotic_scale =
+        (fabs(asymptotic_scale) > (REAL)1.0e-15) ? (REAL)1.0 / asymptotic_scale : (REAL)1.0;
+    REAL low = (REAL)0.0;
+    REAL high = NRPYMAX(rCart * inv_asymptotic_scale, radial_scale);
+    const REAL bracket_tolerance = inverse_relative_tol * NRPYMAX(high, radial_scale);
+    REAL radial_seed = (REAL)0.5 * high;
+    int bracket_found = 0;
+    int converged = 0;
+    for (int expand = 0; expand < 80; expand++) {{
+      REAL high_residual;
+{high_residual_codegen}
+      if (isfinite(high_residual) && high_residual <= (REAL)0.0) {{
+        bracket_found = 1;
+        break;
+      }} // END IF: found bracket
+      high = NRPYMAX(high * (REAL)2.0, (REAL)1.0);
+    }} // END LOOP: for expand over bracket expansions
+    if (!bracket_found) {{
+{failure_body}
+    }} // END IF: bracket failed
+    radial_seed = (REAL)0.5 * (low + high);
+    for (int iter = 0; iter < 80; iter++) {{
+      REAL radial_residual;
+      REAL radial_residual_prime;
+{radial_codegen}
+      REAL trial_seed = (REAL)0.5 * (low + high);
+      if (isfinite(radial_residual_prime) && fabs(radial_residual_prime) > derivative_floor) {{
+        const REAL newton_seed = radial_seed - radial_residual / radial_residual_prime;
+        if (isfinite(newton_seed) && newton_seed >= low && newton_seed <= high)
+          trial_seed = newton_seed;
+      }} // END IF: use Newton seed
+      REAL trial_residual;
+{trial_residual_codegen}
+      if (!isfinite(trial_residual)) {{
+        trial_seed = (REAL)0.5 * (low + high);
+        REAL trial_residual_fallback;
+{fallback_residual_codegen}
+        trial_residual = trial_residual_fallback;
+        if (!isfinite(trial_residual)) {{
+{failure_body}
+        }} // END IF: fallback residual is non-finite
+      }} // END IF: primary trial residual is non-finite
+      if (trial_residual <= (REAL)0.0)
+        high = trial_seed;
+      else
+        low = trial_seed;
+      const REAL bracket_width = fabs(high - low);
+      if (fabs(trial_residual) < residual_tolerance || bracket_width < bracket_tolerance) {{
+        radial_seed = trial_seed;
+        converged = 1;
+        break;
+      }} // END IF: inverse converged
+      radial_seed = trial_seed;
+    }} // END LOOP: for iter over inverse
+    if (!converged && isfinite(low) && isfinite(high) && high >= low) {{
+      radial_seed = (REAL)0.5 * (low + high);
+      converged = 1;
+    }} // END IF: use final bracket midpoint
+    if (!converged || !isfinite(radial_seed) || radial_seed < (REAL)0.0) {{
+{failure_body}
+    }} // END IF: inverse failed
+    REAL lam_xy;
+    REAL lam_z;
+{final_lam_codegen}
+    if (!(isfinite(lam_xy)) || !(isfinite(lam_z)) ||
+        fabs(lam_xy) <= (REAL)0.0 || fabs(lam_z) <= (REAL)0.0) {{
+{failure_body}
+    }} // END IF: invalid final scaling
+{success_body}
+  }} // END ELSE: invert spheroidal fisheye radius
 """
 
 
@@ -512,8 +690,15 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     is_generalrfm = CoordSystem.startswith("GeneralRFM")
     provider_name = getattr(rfm, "general_rfm_provider_name", "")
     provider = getattr(rfm, "general_rfm_provider", None)
+    is_supported_fisheye_provider = is_generalrfm and provider_name in {
+        "fisheye",
+        "spheroidal_fisheye",
+    }
     is_fisheye_provider = is_generalrfm and provider_name == "fisheye"
-    if is_generalrfm and not is_fisheye_provider:
+    is_spheroidal_fisheye_provider = (
+        is_generalrfm and provider_name == "spheroidal_fisheye"
+    )
+    if is_generalrfm and not is_supported_fisheye_provider:
         raise ValueError(
             f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in Cart_to_xx_and_nearest_i0i1i2_assume_valid."
         )
@@ -522,7 +707,7 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
             "GeneralRFM Cart_to_xx_and_nearest_i0i1i2 does not support CUDA parallelization."
         )
     local_C_vars = {"xx0", "xx1", "xx2", "Cartx", "Carty", "Cartz"} | (
-        {"r", "rCart"} if is_fisheye_provider else set()
+        {"r", "rCart"} if is_supported_fisheye_provider else set()
     )
 
     namesuffix = f"_{relative_to}" if relative_to == "global_grid_center" else ""
@@ -579,6 +764,27 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
             failure_body,
         )
         core_body_list.append(fisheye_body)
+
+    elif is_spheroidal_fisheye_provider:
+        if provider is None:
+            raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
+        origin_body = r"""    xx[0] = (REAL)0.0;
+    xx[1] = (REAL)0.0;
+    xx[2] = (REAL)0.0;"""
+        success_body = r"""    xx[0] = Cartx / lam_xy;
+    xx[1] = Carty / lam_xy;
+    xx[2] = Cartz / lam_z;"""
+        failure_body = rf"""      fprintf(stderr, "ERROR: bracketed inverse failed for {CoordSystem} (spheroidal fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\n",
+              (double)rCart, (double)Cartx, (double)Carty, (double)Cartz);
+      exit(1);"""
+        spheroidal_body = _generate_spheroidal_fisheye_inverse_body(
+            provider,
+            ("Cartx", "Carty", "Cartz"),
+            origin_body,
+            success_body,
+            failure_body,
+        )
+        core_body_list.append(spheroidal_body)
 
     elif rfm_obj.requires_NewtonRaphson_for_Cart_to_xx:
         # Step 2.a: Handle mixed analytical and Newton-Raphson inversions.
@@ -857,15 +1063,24 @@ def register_CFunction_xx_to_Cart(
     is_generalrfm = CoordSystem.startswith("GeneralRFM")
     provider_name = getattr(rfm, "general_rfm_provider_name", "")
     provider = getattr(rfm, "general_rfm_provider", None)
+    is_supported_fisheye_provider = is_generalrfm and provider_name in {
+        "fisheye",
+        "spheroidal_fisheye",
+    }
     is_fisheye_provider = is_generalrfm and provider_name == "fisheye"
-    if is_generalrfm and not is_fisheye_provider:
+    is_spheroidal_fisheye_provider = (
+        is_generalrfm and provider_name == "spheroidal_fisheye"
+    )
+    if is_generalrfm and not is_supported_fisheye_provider:
         raise ValueError(
             f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in xx_to_Cart."
         )
     if parallelization == "cuda" and is_generalrfm:
         raise ValueError("GeneralRFM xx_to_Cart does not support CUDA parallelization.")
 
-    local_C_vars = {"xx0", "xx1", "xx2"} | ({"r"} if is_fisheye_provider else set())
+    local_C_vars = {"xx0", "xx1", "xx2"} | (
+        {"r"} if is_supported_fisheye_provider else set()
+    )
 
     # Step 2: Prepare SymPy expressions for C code generation.
     if is_fisheye_provider:
@@ -906,6 +1121,37 @@ if(r2 <= (REAL)0.0) {{
   xCart[2] = lam*xx2 + params->Cart_originz;
 }}
 """
+    elif is_spheroidal_fisheye_provider:
+        if provider is None:
+            raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
+        raw_xx_to_Cart_exprs = [
+            provider.xx_to_CartU[i] + gri.Cart_origin[i] for i in range(3)
+        ]
+        processed_exprs = _prepare_sympy_exprs_for_codegen(
+            raw_xx_to_Cart_exprs, local_C_vars
+        )
+        codegen_results = ccg.c_codegen(
+            processed_exprs,
+            ["xCart[0]", "xCart[1]", "xCart[2]"],
+        )
+        body = (
+            """
+const REAL xx0 = xx[0];
+const REAL xx1 = xx[1];
+const REAL xx2 = xx[2];
+const REAL r2 = xx0*xx0 + xx1*xx1 + xx2*xx2;
+
+if(r2 <= (REAL)0.0) {
+  xCart[0] = params->Cart_originx;
+  xCart[1] = params->Cart_originy;
+  xCart[2] = params->Cart_originz;
+} else {
+"""
+            + codegen_results
+            + """
+}
+"""
+        )
     else:
         raw_xx_to_Cart_exprs = [
             rfm.xx_to_Cart[i] + gri.Cart_origin[i] for i in range(3)

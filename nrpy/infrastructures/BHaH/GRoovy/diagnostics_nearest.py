@@ -112,7 +112,9 @@ def register_CFunction_diagnostics_nearest(
             i0_center_expr = "NGHOSTS"
             i1_center_expr = "params->Nxx_plus_2NGHOSTS1 / 2"
             i2_center_expr = "params->Nxx_plus_2NGHOSTS2 / 2"
-        elif "Cartesian" in CoordSystem or CoordSystem.startswith("GeneralRFM_fisheye"):
+        elif "Cartesian" in CoordSystem or CoordSystem.startswith(
+            ("GeneralRFM_fisheye", "GeneralRFM_spheroidal_fisheye")
+        ):
             i0_center_expr = "params->Nxx_plus_2NGHOSTS0 / 2"
             i1_center_expr = "params->Nxx_plus_2NGHOSTS1 / 2"
             i2_center_expr = "params->Nxx_plus_2NGHOSTS2 / 2"

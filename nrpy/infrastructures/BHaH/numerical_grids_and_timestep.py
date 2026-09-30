@@ -270,6 +270,17 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
                 sp.sqrt(sp.Abs(fisheye.ghatDD[dirn][dirn])) * sp.Abs(dxx[dirn])
             ]
             ds_str_list += [f"ds{dirn}"]
+    elif CoordSystem.startswith("GeneralRFM_spheroidal_fisheyeN"):
+        rfm = refmetric.reference_metric[CoordSystem]
+        spheroidal_provider = getattr(rfm, "general_rfm_provider", None)
+        if spheroidal_provider is None:
+            raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
+        for dirn in rfm.radial_like_dirns:
+            ds_expr_list += [
+                sp.sqrt(sp.Abs(spheroidal_provider.ghatDD[dirn][dirn]))
+                * sp.Abs(dxx[dirn])
+            ]
+            ds_str_list += [f"ds{dirn}"]
     elif CoordSystem.startswith("GeneralRFM"):
         body += (
             f'fprintf(stderr, "ERROR in {name}__rfm__{CoordSystem}: ds_min for non-fisheye GeneralRFM is not yet supported.\\n");\n'
@@ -326,19 +337,29 @@ def ds_min_single_pt_exprs(CoordSystem: str) -> Optional[List[sp.Expr]]:
     :return: The three spacing expressions, or None for an unsupported
         non-fisheye GeneralRFM coordinate system.
     """
-    if CoordSystem.startswith("GeneralRFM") and not CoordSystem.startswith(
-        "GeneralRFM_fisheyeN"
+    radial_fisheye = CoordSystem.startswith("GeneralRFM_fisheyeN")
+    spheroidal_fisheye = CoordSystem.startswith("GeneralRFM_spheroidal_fisheyeN")
+    if CoordSystem.startswith("GeneralRFM") and not (
+        radial_fisheye or spheroidal_fisheye
     ):
         return None
     rfm = refmetric.reference_metric[CoordSystem]
     dxx = sp.symbols("dxx0 dxx1 dxx2", real=True)
-    if CoordSystem.startswith("GeneralRFM_fisheyeN"):
+    if radial_fisheye:
         num_transitions = int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
         fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
         # GeneralRFM fisheye coordinates are generally nonorthogonal. Measuring
         # each coordinate-line tangent therefore uses sqrt(|ghat_ii|) dxx_i.
         return [
             sp.sqrt(sp.Abs(fisheye.ghatDD[i][i])) * sp.Abs(dxx[i]) for i in range(3)
+        ]
+    if spheroidal_fisheye:
+        spheroidal_provider = getattr(rfm, "general_rfm_provider", None)
+        if spheroidal_provider is None:
+            raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
+        return [
+            sp.sqrt(sp.Abs(spheroidal_provider.ghatDD[i][i])) * sp.Abs(dxx[i])
+            for i in range(3)
         ]
     return [sp.Abs(rfm.scalefactor_orthog[i] * dxx[i]) for i in range(3)]
 

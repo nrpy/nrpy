@@ -114,17 +114,50 @@ class Psi4Tetrads:
         v1UCart = [-y, x, sp.sympify(0)]
         v2UCart = [x, y, z]
 
-        # Step 2.d: Construct the Jacobian d x_Cart^i / d xx^j
-        # Step 2.e: Invert above Jacobian to get needed d xx^j / d x_Cart^i
-        Jac_dUrfm_dDCartUD = rfm.Jac_dUrfm_dDCartUD
+        # Step 2.d-2.f: Transform v1U and v2U from the Cartesian to the xx^i basis.
+        #
+        # For spheroidal GeneralRFM fisheye, the generic inverse-Jacobian
+        # expressions become very large. The seed vectors admit much simpler
+        # closed forms in the raw coordinates.
+        provider = getattr(rfm, "general_rfm_provider", None)
+        provider_kind = getattr(provider, "provider_kind", None)
+        if provider is not None and provider_kind == "spheroidal_fisheye":
+            raw_x, raw_y, raw_z = rfm.xx
+            r = provider.r
+            lam_xy, lam_z, dlam_xy, dlam_z, _ = provider.axis_maps_for_inverse(r)
+            dlam_xy_over_r = dlam_xy / r
+            dlam_z_over_r = dlam_z / r
+            rho2 = raw_x**2 + raw_y**2
+            z2 = raw_z**2
+            denom = (
+                dlam_xy_over_r * lam_z * rho2
+                + dlam_z_over_r * lam_xy * z2
+                + lam_xy * lam_z
+            )
+            u = (
+                -dlam_xy_over_r * lam_z * z2
+                + dlam_z_over_r * lam_xy * z2
+                + lam_xy * lam_z
+            ) / denom
+            v = (
+                dlam_xy_over_r * lam_z * rho2
+                - dlam_z_over_r * lam_xy * rho2
+                + lam_xy * lam_z
+            ) / denom
+            v1U = [-raw_y, raw_x, sp.sympify(0)]
+            v2U = [u * raw_x, u * raw_y, v * raw_z]
+        else:
+            # Step 2.d: Construct the Jacobian d x_Cart^i / d xx^j
+            # Step 2.e: Invert above Jacobian to get needed d xx^j / d x_Cart^i
+            Jac_dUrfm_dDCartUD = rfm.Jac_dUrfm_dDCartUD
 
-        # Step 2.f: Transform v1U and v2U from the Cartesian to the xx^i basis
-        v1U = ixp.zerorank1()
-        v2U = ixp.zerorank1()
-        for i in range(3):
-            for j in range(3):
-                v1U[i] += Jac_dUrfm_dDCartUD[i][j] * v1UCart[j]
-                v2U[i] += Jac_dUrfm_dDCartUD[i][j] * v2UCart[j]
+            # Step 2.f: Transform v1U and v2U from the Cartesian to the xx^i basis
+            v1U = ixp.zerorank1()
+            v2U = ixp.zerorank1()
+            for i in range(3):
+                for j in range(3):
+                    v1U[i] += Jac_dUrfm_dDCartUD[i][j] * v1UCart[j]
+                    v2U[i] += Jac_dUrfm_dDCartUD[i][j] * v2UCart[j]
 
         # Step 2.g: Define v3U, completing Eq. (5.7)'s spatial seed vectors.
         v3U = ixp.zerorank1()
