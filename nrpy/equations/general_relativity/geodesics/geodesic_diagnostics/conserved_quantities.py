@@ -57,7 +57,7 @@ import doctest
 import logging
 import os
 import sys
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
 
 # Step 0.b: Import third-party modules
 import sympy as sp
@@ -73,7 +73,7 @@ from nrpy.equations.general_relativity.geodesics.analytic_spacetimes import (
 def axial_angular_momentum_z_cartesian(
     x: sp.Expr,
     y: sp.Expr,
-    pU: List[sp.Expr],
+    pU: Sequence[sp.Expr],
     g4DD: List[List[sp.Expr]],
 ) -> sp.Expr:
     r"""
@@ -108,7 +108,7 @@ def axial_angular_momentum_z_cartesian(
             pD[spatial_index] += covariant_metric_component * pU[spacetime_index]
 
     # Step 2: Contract p_mu with xi^mu = (0, -y, x, 0).
-    return cast(sp.Expr, x * pD[2] - y * pD[1])
+    return x * pD[2] - y * pD[1]
 
 
 def photon_axial_angular_momentum_z_normalized(
