@@ -54,6 +54,17 @@ class InitialData_Spherical:
                 self.betaU,
                 self.BU,
             ) = self.OffsetKerrSchild()
+        elif IDtype == "TeukolskyWave":
+            if override_gauge_with_standard:
+                raise ValueError("TeukolskyWave requires alpha=1 and betaU=0")
+            ID_defines_gauge_quantities = True
+            (
+                self.gammaDD,
+                self.KDD,
+                self.alpha,
+                self.betaU,
+                self.BU,
+            ) = self.TeukolskyWave()
         else:
             raise ValueError(f"IDtype = {IDtype} is not supported.")
 
