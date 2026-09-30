@@ -34,6 +34,10 @@ def _register_physical_fisheye_codeparams(
     Register physical fisheye CodeParameters in commondata_struct.
 
     :param num_transitions: Number of fisheye transitions.
+    :param add_to_parfile: Whether to emit the registered parameters into the
+        generated parameter file.
+    :param register_shared_phys_params: Whether to register the shared outer
+        radius and plateau-factor parameters.
     """
     if register_shared_phys_params:
         _ = par.register_CodeParameter(
@@ -103,7 +107,13 @@ def _register_physical_fisheye_codeparams(
 def _spheroidal_axis_defaults(
     num_transitions: int, axis: str
 ) -> Tuple[List[float], List[float]]:
-    """Return default physical transition centers and widths for one axis."""
+    """
+    Return default physical transition centers and widths for one axis.
+
+    :param num_transitions: Number of fisheye transitions.
+    :param axis: Spheroidal axis whose defaults should be returned.
+    :return: Lists of transition-center and transition-width defaults.
+    """
     if num_transitions == 8:
         xy_centers_raw = [
             4.75,
@@ -152,7 +162,11 @@ def _spheroidal_axis_defaults(
 
 
 def _register_spheroidal_physical_fisheye_codeparams(num_transitions: int) -> None:
-    """Register shared and axis-specific physical spheroidal parameters."""
+    """
+    Register shared and axis-specific physical spheroidal parameters.
+
+    :param num_transitions: Number of fisheye transitions on each axis.
+    """
     _ = par.register_CodeParameter(
         "REAL",
         __name__,
@@ -249,7 +263,14 @@ def build_spheroidal_post_params_struct_set_to_default_hook(
     num_transitions: int,
     compute_griddata: str,
 ) -> str:
-    """Build the post-default hook for spheroidal fisheye parameters."""
+    """
+    Build the post-default hook for spheroidal fisheye parameters.
+
+    :param num_transitions: Number of fisheye transitions on each axis.
+    :param compute_griddata: Griddata array symbol in generated main C code.
+    :raises ValueError: If num_transitions is less than 1.
+    :return: C code string suitable for the post-default hook.
+    """
     if num_transitions < 1:
         raise ValueError("num_transitions must be >= 1")
 
@@ -813,6 +834,9 @@ def register_CFunction_spheroidal_fisheye_params_from_physical_N(
     The converter reuses the radial fisheye converter on temporary structs for
     the xy and z axes, then copies the solved parameters into the axis-specific
     internal fields.
+
+    :param num_transitions: Number of fisheye transitions on each axis.
+    :raises ValueError: If num_transitions is less than 1.
     """
     if num_transitions < 1:
         raise ValueError("num_transitions must be >= 1")
