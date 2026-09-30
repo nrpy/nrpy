@@ -1350,7 +1350,12 @@ static void write_plane_crossings(
     )
 
     def event_manager_call(slot: str) -> str:
-        """Return the accepted-state event call for one CPU processing slot."""
+        """
+        Return the accepted-state event call for one CPU processing slot.
+
+        :param slot: Name of the current or next CPU processing slot.
+        :return: C call to the event-detection function for that slot.
+        """
         return (
             f"event_detection_manager_kernel(commondata, d_f_bundle[{slot}], "
             f"d_log_energy_bundle[{slot}], d_f_history_bundle[{slot}], "
