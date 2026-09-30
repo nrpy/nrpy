@@ -318,40 +318,7 @@ class InitialData_Spherical:
 
     # fmt: on
 
-
-if __name__ == "__main__":
-    import doctest
-    import os
-    import sys
-
-    import nrpy.validate_expressions.validate_expressions as ve
-
-    results = doctest.testmod()
-    if results.failed > 0:
-        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-        sys.exit(1)
-    else:
-        print(f"Doctest passed: All {results.attempted} test(s) passed")
-
-    for ID_type in [
-        "UIUCBlackHole",
-        "StaticTrumpet",
-        "OffsetKerrSchild",
-    ]:
-        ID = InitialData_Spherical(ID_type)
-        results_dict = ve.process_dictionary_of_expressions(
-            ID.__dict__, fixed_mpfs_for_free_symbols=True
-        )
-        ve.compare_or_generate_trusted_results(
-            os.path.abspath(__file__),
-            os.getcwd(),
-            # File basename. If this is set to "trusted_module_test1", then
-            #   trusted results_dict will be stored in tests/trusted_module_test1.py
-            f"{os.path.splitext(os.path.basename(__file__))[0]}_{ID_type}",
-            results_dict,
-        )
-
-    def TeukolskyWave (self):
+def TeukolskyWave (self):
         """Set ADM quantities for an analytic linearized Teukolsky wave."""
 
         # Define math symbols
@@ -420,3 +387,35 @@ if __name__ == "__main__":
         BU = ixp.zerorank1()
 
         return gammaDD, KDD, alpha, betaU, BU
+
+if __name__ == "__main__":
+    import doctest
+    import os
+    import sys
+
+    import nrpy.validate_expressions.validate_expressions as ve
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
+
+    for ID_type in [
+        "UIUCBlackHole",
+        "StaticTrumpet",
+        "OffsetKerrSchild",
+    ]:
+        ID = InitialData_Spherical(ID_type)
+        results_dict = ve.process_dictionary_of_expressions(
+            ID.__dict__, fixed_mpfs_for_free_symbols=True
+        )
+        ve.compare_or_generate_trusted_results(
+            os.path.abspath(__file__),
+            os.getcwd(),
+            # File basename. If this is set to "trusted_module_test1", then
+            #   trusted results_dict will be stored in tests/trusted_module_test1.py
+            f"{os.path.splitext(os.path.basename(__file__))[0]}_{ID_type}",
+            results_dict,
+        )
