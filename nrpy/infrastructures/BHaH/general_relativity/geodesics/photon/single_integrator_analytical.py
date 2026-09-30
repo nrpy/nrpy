@@ -51,6 +51,7 @@ def single_integrator_analytical(
         RKF45 trial to ``rkf45_trials.txt`` and one analytic metric, connection,
         and right-hand-side row for each of its six stages to
         ``rkf45_stages.txt``.
+    :raises ValueError: If maximum_degree is below three.
 
     Doctests:
     >>> import nrpy.c_function as cfc
