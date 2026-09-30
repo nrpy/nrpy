@@ -403,4 +403,9 @@ if __name__ == "__main__":
         KDD[1][2] = KDD[2][1] = sp.sympify(0)
         KDD[2][2] = r**2 * s**2 * (sp.Rational(1, 4)*A_dot*Y + sp.Rational(3, 2)*C_dot*s**2)
 
-        return self.gammaDD, self.KDD
+        # Teukolsky-wave gauge quantities
+        alpha = sp.sympify(1)
+        betaU = ixp.zerorank1()
+        BU = ixp.zerorank1()
+
+        return gammaDD, KDD, alpha, betaU, BU
