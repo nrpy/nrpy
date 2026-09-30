@@ -389,7 +389,7 @@ if __name__ == "__main__":
         gammaDD[0][0] = 1 + A*Y
         gammaDD[0][1] = gammaDD[1][0] = -6*r*B*s*c
         gammaDD[0][2] = gammaDD[2][0] = sp.sympify(0)
-        gammaDD[1][1] = r**2(1 - A*Y/2 + 3*C*s**2)
+        gammaDD[1][1] = r**2 * (1 - A*Y/2 + 3*C*s**2)
         gammaDD[1][2] = gammaDD[2][1] = sp.sympify(0)
         gammaDD[2][2] = r**2 * s**2 * (1 - A*Y/2 - 3*C*s**2)
 
