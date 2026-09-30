@@ -318,7 +318,7 @@ class InitialData_Spherical:
 
     # fmt: on
 
-def TeukolskyWave (self):
+    def TeukolskyWave (self):
         """Set ADM quantities for an analytic linearized Teukolsky wave."""
 
         # Define math symbols
