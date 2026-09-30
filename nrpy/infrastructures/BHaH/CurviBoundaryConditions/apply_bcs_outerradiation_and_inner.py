@@ -43,6 +43,10 @@ def _radiation_r_and_partials_exprs(CoordSystem: str) -> List[sp.Expr]:
 
     For spheroidal GeneralRFM fisheye, use provider-specific closed forms
     instead of the generic inverse spherical Jacobian column.
+
+    :param CoordSystem: Coordinate system used by the radiation boundary.
+    :return: Physical radius followed by its three Cartesian-direction
+        derivative factors.
     """
     rfm = refmetric.reference_metric[CoordSystem]
     provider = getattr(rfm, "general_rfm_provider", None)
@@ -92,6 +96,10 @@ def _radiation_partial_is_identically_zero(
     For spheroidal GeneralRFM fisheye, all three partial_r x^i expressions are
     generically nonzero, and asking SymPy/mpmath to numerically prove
     nonzeroness is more expensive than emitting the small extra FD helper.
+
+    :param CoordSystem: Coordinate system used by the radiation boundary.
+    :param partial_expr: Partial-derivative expression to test.
+    :return: Whether the expression is identically zero.
     """
     rfm = refmetric.reference_metric[CoordSystem]
     provider = getattr(rfm, "general_rfm_provider", None)

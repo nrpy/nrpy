@@ -246,6 +246,13 @@ def _generate_spheroidal_fisheye_inverse_body(
 ) -> str:
     """
     Generate a bracketed 1D inverse for axis-scaled spheroidal fisheye maps.
+
+    :param provider: Spheroidal fisheye reference-metric provider.
+    :param cart_components: C expressions for the Cartesian coordinates.
+    :param origin_body: C code emitted when the Cartesian point is the origin.
+    :param success_body: C code emitted after successful radial inversion.
+    :param failure_body: C code emitted when radial inversion fails.
+    :return: Generated C body implementing the inverse map.
     """
     cartx, carty, cartz = cart_components
     r_symbol = sp.Symbol("r", real=True, positive=True)

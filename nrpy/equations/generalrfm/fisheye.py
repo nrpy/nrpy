@@ -151,7 +151,12 @@ class FisheyeRadialMap:
     def unscaled_and_derivs_closed_form(
         self, r: sp.Expr
     ) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
-        """Return the unscaled radial map and its first three derivatives."""
+        """
+        Return the unscaled radial map and its first three derivatives.
+
+        :param r: Raw radial coordinate.
+        :return: Unscaled map value and its first three derivatives.
+        """
         return _radius_map_unscaled_and_derivs_closed_form(
             r=r,
             a_list=self.a_list,
@@ -162,12 +167,22 @@ class FisheyeRadialMap:
     def scaled_and_derivs_closed_form(
         self, r: sp.Expr
     ) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
-        """Return the scaled radial map and its first three derivatives."""
+        """
+        Return the scaled radial map and its first three derivatives.
+
+        :param r: Raw radial coordinate.
+        :return: Scaled map value and its first three derivatives.
+        """
         rb0, rb1, rb2, rb3 = self.unscaled_and_derivs_closed_form(r)
         return self.c * rb0, self.c * rb1, self.c * rb2, self.c * rb3
 
     def scaled_value_stable_and_deriv(self, r: sp.Expr) -> Tuple[sp.Expr, sp.Expr]:
-        """Return the stable scaled map value and its first derivative."""
+        """
+        Return the stable scaled map value and its first derivative.
+
+        :param r: Raw radial coordinate.
+        :return: Stable scaled map value and its first derivative.
+        """
         rb0 = _radius_map_unscaled(
             r=r,
             a_list=self.a_list,
@@ -180,10 +195,14 @@ class FisheyeRadialMap:
     def scaled_stable_value_and_derivs_closed_form(
         self, r: sp.Expr
     ) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
-        """Return the stable map value with closed-form derivatives.
+        """
+        Return the stable map value with closed-form derivatives.
 
         The stable value is needed in the spheroidal forward map, while its
         derivatives are kept in the same closed form used by the metric.
+
+        :param r: Raw radial coordinate.
+        :return: Stable scaled map value and its first three derivatives.
         """
         rb0 = _radius_map_unscaled(
             r=r,
@@ -695,8 +714,11 @@ class GeneralRFMSpheroidalFisheye:
         self, r: sp.Expr
     ) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
         """
-        Return lambda_xy, lambda_z, d(lambda_xy)/dr, d(lambda_z)/dr, and
-        conservative far-field scale for inverse code generation.
+        Return axis maps needed for inverse code generation.
+
+        :param r: Raw radial coordinate.
+        :return: Equatorial and axial scale factors, their radial derivatives,
+            and a conservative far-field scale.
         """
         xy_rbar, xy_drbar = self.xy_map.scaled_value_stable_and_deriv(r)
         z_rbar, z_drbar = self.z_map.scaled_value_stable_and_deriv(r)
@@ -723,6 +745,9 @@ def build_fisheye(num_transitions: int) -> GeneralRFMFisheye:
 def build_spheroidal_fisheye(num_transitions: int) -> GeneralRFMSpheroidalFisheye:
     """
     Construct a spheroidal GeneralRFM fisheye instance.
+
+    :param num_transitions: Number of fisheye transitions. Must be at least 1.
+    :return: A newly constructed GeneralRFMSpheroidalFisheye instance.
 
     Doctests:
     >>> radial = build_fisheye(1)

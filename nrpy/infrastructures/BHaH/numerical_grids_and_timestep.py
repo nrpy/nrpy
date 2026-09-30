@@ -249,6 +249,7 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
     ds_min_radial_like_dirns is the minimum spacing between neighboring gridpoints on a numerical grid.
 
     :param CoordSystem: The coordinate system of the numerical grid.
+    :raises ValueError: If a spheroidal GeneralRFM provider is unavailable.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Examining only radial-like (non-angular) directions at a given point on a numerical grid, find the minimum grid spacing ds_min."
@@ -336,6 +337,7 @@ def ds_min_single_pt_exprs(CoordSystem: str) -> Optional[List[sp.Expr]]:
 
     :return: The three spacing expressions, or None for an unsupported
         non-fisheye GeneralRFM coordinate system.
+    :raises ValueError: If a spheroidal GeneralRFM provider is unavailable.
     """
     radial_fisheye = CoordSystem.startswith("GeneralRFM_fisheyeN")
     spheroidal_fisheye = CoordSystem.startswith("GeneralRFM_spheroidal_fisheyeN")
