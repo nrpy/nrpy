@@ -2,9 +2,12 @@
 Construct symbolic expressions for analytic spacetime metrics.
 
 This module provides a class-based structure for generating the symbolic
-metric tensor for the Kerr-Schild analytic solution to Einstein's equations.
+metric tensor for supported analytic or analytic-like spacetime recipes.
 It is designed to integrate with nrpy's CodeParameter system.
 
+For Kerr, ``a_spin`` is the dimensional Kerr parameter ``a = J/M`` in
+geometric units, with the same length units as ``M_scale``. The dimensionless
+spin is ``a_spin / M_scale``. Analytic geodesic examples use ``M_scale = 1``.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -18,7 +21,6 @@ from typing import Dict, List, Tuple
 # Step 0.b: Import third-party modules
 import sympy as sp
 
-# Step 0.c: Import NRPy core modules
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 import nrpy.validate_expressions.validate_expressions as ve
@@ -37,21 +39,116 @@ class AnalyticSpacetimes:
     spacetime_name: str
     g4DD: List[List[sp.Expr]]
     xx: List[sp.Symbol]
+    inertial_coordinates: List[sp.Expr]
+    inertial_xx: List[sp.Symbol]
+    computational_coordinates_from_inertial: List[sp.Expr]
+    flat_a: sp.Expr
+    flat_b: sp.Expr
+    flat_psi: sp.Expr
+    flat_kappa: sp.Expr
 
     def __init__(self, spacetime_name: str) -> None:
         """
         Initialize and generate the symbolic metric for a given spacetime.
 
         :param spacetime_name: The name of the spacetime to generate
-                               (e.g., "KerrSchild_Cartesian", "Schwarzschild_Cartesian_Isotropic").
+                               (e.g., "KerrSchild_Cartesian").
         :raises ValueError: If the requested spacetime is not supported.
         """
         self.spacetime_name = spacetime_name
 
         if self.spacetime_name == "KerrSchild_Cartesian":
             self.g4DD, self.xx = self._define_kerr_metric_Cartesian_Kerr_Schild()
+        elif self.spacetime_name == "BrillLindquist_InitialData_Static_Cartesian":
+            (
+                self.g4DD,
+                self.xx,
+            ) = self._define_brill_lindquist_initial_data_static_Cartesian()
+        elif self.spacetime_name == "Minkowski_TimeDependentAxisymmetric_Cartesian":
+            self._define_time_dependent_flat_cartesian()
         else:
             raise ValueError(f"Spacetime '{self.spacetime_name}' is not supported.")
+
+    def _define_time_dependent_flat_cartesian(self) -> None:
+        r"""
+        Define flat spacetime in time-dependent axisymmetric Cartesian coordinates.
+
+        Computational coordinates are ``(t,x,y,z)``. Inertial Cartesian
+        coordinates are ``(T,X,Y,Z)``, with ``T=t``, ``Z=b(t)z``, and
+        ``(X,Y)=a(t) Rot(Omega(t)+kappa(t)z)(x,y)``. The metric is the pullback
+        of ``diag(-1,1,1,1)``. ``GeodesicEquations`` derives its metric
+        derivatives and Christoffel symbols. The inverse map supplies exact
+        photon positions in the computational coordinates.
+
+        ``flat_epsilon_a``, ``flat_epsilon_b``, ``flat_epsilon_Omega``, and
+        ``flat_epsilon_kappa`` are amplitudes. The matching ``flat_omega_*``
+        parameters are frequencies; ``flat_L`` sets the twist length. The
+        dataset generator must enforce ``flat_L>0`` and positive ``a,b`` over
+        its time interval.
+        """
+        t, x, y, z = sp.symbols("t x y z", real=True)
+        self.xx = [t, x, y, z]
+        parameter_defaults = (
+            ("flat_epsilon_a", 0.0),
+            ("flat_omega_a", 1.0),
+            ("flat_epsilon_b", 0.0),
+            ("flat_omega_b", 1.0),
+            ("flat_epsilon_Omega", 0.0),
+            ("flat_omega_Omega", 1.0),
+            ("flat_epsilon_kappa", 0.0),
+            ("flat_omega_kappa", 1.0),
+            ("flat_L", 1.0),
+        )
+        parameters = {
+            name: par.register_CodeParameter(
+                "REAL", __name__, name, default, commondata=True
+            )
+            for name, default in parameter_defaults
+        }
+        a = 1 + parameters["flat_epsilon_a"] * sp.sin(parameters["flat_omega_a"] * t)
+        b = 1 + parameters["flat_epsilon_b"] * sp.sin(parameters["flat_omega_b"] * t)
+        Omega = parameters["flat_epsilon_Omega"] * sp.sin(
+            parameters["flat_omega_Omega"] * t
+        )
+        kappa = (
+            parameters["flat_epsilon_kappa"]
+            * sp.sin(parameters["flat_omega_kappa"] * t)
+            / parameters["flat_L"]
+        )
+        psi = Omega + kappa * z
+        self.flat_a, self.flat_b = a, b
+        self.flat_psi, self.flat_kappa = psi, kappa
+        cos_psi, sin_psi = sp.cos(psi), sp.sin(psi)
+        self.inertial_coordinates = [
+            t,
+            a * (x * cos_psi - y * sin_psi),
+            a * (x * sin_psi + y * cos_psi),
+            b * z,
+        ]
+        T, X, Y, Z = sp.symbols("T X Y Z", real=True)
+        self.inertial_xx = [T, X, Y, Z]
+        z_from_inertial = Z / b.subs(t, T)
+        psi_from_inertial = Omega.subs(t, T) + kappa.subs(t, T) * z_from_inertial
+        self.computational_coordinates_from_inertial = [
+            T,
+            (X * sp.cos(psi_from_inertial) + Y * sp.sin(psi_from_inertial))
+            / a.subs(t, T),
+            (-X * sp.sin(psi_from_inertial) + Y * sp.cos(psi_from_inertial))
+            / a.subs(t, T),
+            z_from_inertial,
+        ]
+
+        jacobian = [
+            [sp.diff(inertial_coordinate, coordinate) for coordinate in self.xx]
+            for inertial_coordinate in self.inertial_coordinates
+        ]
+        self.g4DD = ixp.zerorank2(dimension=4)
+        for mu in range(4):
+            for nu in range(mu, 4):
+                metric_component = -jacobian[0][mu] * jacobian[0][nu] + sum(
+                    jacobian[A][mu] * jacobian[A][nu] for A in range(1, 4)
+                )
+                self.g4DD[mu][nu] = self.g4DD[nu][mu] = metric_component
 
     @staticmethod
     def _define_kerr_metric_Cartesian_Kerr_Schild() -> (
@@ -75,7 +172,9 @@ class AnalyticSpacetimes:
         t, x, y, z = sp.symbols("t x y z", real=True)
         xx = [t, x, y, z]
 
-        # Step 1.b: Register physical parameters (G=c=1; M_scale = ADM mass)
+        # Step 1.b: Register physical parameters in geometric units (G=c=1).
+        # M_scale is ADM mass; a_spin is dimensional Kerr a=J/M. The
+        # dimensionless spin is a_spin / M_scale.
         M_scale = par.register_CodeParameter(
             "REAL", __name__, "M_scale", 1.0, commondata=True
         )
@@ -118,6 +217,38 @@ class AnalyticSpacetimes:
 
         return g4DD, xx
 
+    @staticmethod
+    def _define_brill_lindquist_initial_data_static_Cartesian() -> (
+        Tuple[List[List[sp.Expr]], List[sp.Symbol]]
+    ):
+        """
+        Define a static four-metric from coincident Brill-Lindquist spatial data.
+
+        This analytic-like recipe uses ``gamma_ij = psi^4 delta_ij``,
+        ``alpha = psi^-2``, and zero shift. It is a chosen static continuation
+        of the coincident initial data, not the standard Schwarzschild
+        four-metric in isotropic coordinates. Separated Brill-Lindquist data do
+        not define a static four-metric.
+
+        :return: A tuple (g4DD, xx), where g4DD is the symbolic 4-metric and
+                 xx is the list of coordinate variables (t, x, y, z).
+        """
+        t, x, y, z = sp.symbols("t x y z", real=True)
+        xx = [t, x, y, z]
+
+        M_total = par.register_CodeParameter(
+            "REAL", __name__, "M_total", 1.0, commondata=True
+        )
+        isotropic_radius = sp.sqrt(x**2 + y**2 + z**2)
+        psi = sp.sympify(1) + M_total / (2 * isotropic_radius)
+
+        g4DD = ixp.zerorank2(dimension=4)
+        g4DD[0][0] = -(psi ** (-4))
+        for spatial_index in range(1, 4):
+            g4DD[spatial_index][spatial_index] = psi**4
+
+        return g4DD, xx
+
 
 class AnalyticSpacetimes_dict(Dict[str, "AnalyticSpacetimes"]):
     """A caching dictionary for AnalyticSpacetimes instances."""
@@ -157,7 +288,10 @@ if __name__ == "__main__":
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
     # Use a distinct loop variable name to avoid pylint redefined-outer-name warnings.
-    for spacetime_name_str in ["KerrSchild_Cartesian"]:
+    for spacetime_name_str in [
+        "KerrSchild_Cartesian",
+        "BrillLindquist_InitialData_Static_Cartesian",
+    ]:
         spacetimes = Analytic_Spacetimes[spacetime_name_str]
         results_dict = ve.process_dictionary_of_expressions(
             spacetimes.__dict__, fixed_mpfs_for_free_symbols=True

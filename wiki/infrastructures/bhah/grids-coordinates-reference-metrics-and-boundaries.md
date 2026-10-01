@@ -61,8 +61,13 @@ and maps them to `xx`. When the caller supplies `Cart_to_i0i1i2`, the emitted C
 function then converts `xx` to nearest indices with `xxmin`, `dxx`, and
 `NGHOSTS`; this conversion assumes a valid, in-domain, cell-centered point and
 does not perform a bounds check. When `Cart_to_i0i1i2 == NULL`, it returns after
-computing `xx`, before any floating-to-integer index conversion. For a
-multipatch grid with `params->grid_rotates`, inverse conversion builds the
+computing `xx`, before any floating-to-integer index conversion. For an
+ordinary coordinate map whose inverse requires a
+numerical root, each affected native coordinate is solved inside
+`[xxmin, xxmax]` with endpoint checks and safeguarded Newton iterations;
+out-of-bracket Newton proposals fall back to bisection, and failure after 100
+iterations is fatal. For a multipatch grid with `params->grid_rotates`,
+inverse conversion builds the
 cumulative rotation matrix and applies `R^T` to the Cartesian vector before
 local-origin handling and native-coordinate inversion; forward `xx_to_Cart`
 applies `R` after native-to-Cartesian mapping and origin handling. GeneralRFM
@@ -107,7 +112,7 @@ coordinate-specific function, and registers uppercase coordinate hash macros in
 `BHaH_defines.h`.
 
 Claim evidence:
-- Claim: `Cart_to_xx_and_nearest_i0i1i2_assume_valid` returns logical coordinates without index conversion when `Cart_to_i0i1i2 == NULL`; each multipatch converter self-registers its exact SO(3) dependency closure; and rotating-multipatch inverse/forward conversion applies `R^T` and `R`, respectively.
+- Claim: `Cart_to_xx_and_nearest_i0i1i2_assume_valid` returns logical coordinates without index conversion when `Cart_to_i0i1i2 == NULL`; ordinary numerical inverses use bounded safeguarded Newton iterations with bisection fallback; each multipatch converter self-registers its exact SO(3) dependency closure; and rotating-multipatch inverse/forward conversion applies `R^T` and `R`, respectively.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, `register_CFunction_xx_to_Cart`
 - Corroboration: none available; owner-derived emitted-source comparisons are not independent evidence.

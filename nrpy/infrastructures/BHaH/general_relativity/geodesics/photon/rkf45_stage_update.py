@@ -1,13 +1,18 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/rkf45_stage_update.py
 r"""
-Provides the CUDA or OpenMP function and host-side driver for RKF45 stage updates.
+Provides the native kernel and host-side orchestrator for the RKF45 Stage Update.
 
-This module generates the parallel function that evaluates the intermediate
-stages of the Runge-Kutta-Fehlberg 4(5) algorithm for relativistic ray tracing on
-numerical spacetimes. The step size is loaded into local variables, minimizing repeated
-array reads during the nine-component state-vector loop. The implementation branches on the
-RKF45 stage index and bypasses stage 6. It evaluates the corresponding Butcher-tableau
-sum and writes the intermediate state required by the next RKF45 stage.
+This module provides the computational kernel responsible for evaluating the intermediate
+stages of the Runge-Kutta-Fehlberg 4(5) algorithm for relativistic photon ray tracing.
+The step size is loaded into local variables, minimizing repeated
+memory accesses during the 9-component tensor loop. The implementation explicitly
+branches based on the RKF45 stage index; stage 6 needs no intermediate state because
+finalization follows immediately. It uses fused multiply-add intrinsics to calculate
+the intermediate Runge-Kutta stages. The update operates on the
+mode-independent nine-component photon state: direct geodesic and normalized
+evolution choose their state interpretation when generating the RHS. Finally,
+writing the calculated update directly to memory enforces the split-pipeline
+communication constraint required for the architecture.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -20,11 +25,11 @@ import nrpy.params as par
 
 def rkf45_stage_update() -> None:
     r"""
-    Register the CUDA or OpenMP function for RKF45 intermediate stage updates.
+    Orchestrates the global memory kernel for RKF45 intermediate stage updates.
 
-    The kernel reads the base state $f_{start}$ and the computed derivative vectors $k^{\mu}$
-    from memory arrays, applies the Butcher Tableau coefficients, and writes the
-    resulting temporary state $f_{temp}$ back to memory for the next interpolation step.
+    The kernel reads the base nine-component state and its computed derivative
+    vectors from memory bundles, applies the Butcher Tableau coefficients, and
+    writes the resulting temporary state for the next interpolation step.
     """
     parallelization = par.parval_from_str("parallelization")
 
@@ -61,7 +66,7 @@ def rkf45_stage_update() -> None:
     else:
         loop_preamble = """
     //==========================================
-    // OPENMP PARALLEL LOOP
+    // OPENMP LOOP ARCHITECTURE
     //==========================================
     // Distribute photon rays across available CPU threads for parallel evaluation.
     #pragma omp parallel for
@@ -71,26 +76,26 @@ def rkf45_stage_update() -> None:
 
     core_math = r"""
     //==========================================
-    // MACRO DEFINITIONS FOR ARRAY ACCESS
+    // MACRO DEFINITIONS FOR BUNDLE ACCESS
     //==========================================
-    // Mapping function for the state array layout $f^{\mu}$.
+    // Mapping function for the mode-independent nine-component state bundle.
     #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
 
-    // Mapping function for the derivative array layout $k^{\mu}$.
+    // Mapping function for the RKF45 derivative bundle.
     #define IDX_K(s, c, ray_id) ((s) * 9 * BUNDLE_CAPACITY + (c) * BUNDLE_CAPACITY + (ray_id))
 
     //==========================================
     // STATE LOADING
     //==========================================
-    // Read step size $h$ once for the nine-component loop.
-    const double h = ReadCUDA(&d_h[i]); // Step size $h$ for this photon.
+    // Loading step size $h$ into local registers minimizes repeated global memory accesses during the 9-component loop.
+    const double h = ReadCUDA(&d_h[i]); // Local register for step size $h$.
 
     //==========================================
     // BUTCHER TABLEAU EVALUATION
     //==========================================
-    // Evaluate the Butcher-tableau sum for the requested Runge-Kutta stage.
+    // Fused multiply-add intrinsics evaluate the intermediate Runge-Kutta stages.
 
-    // Stage 6 supplies the final derivative and requires no next intermediate state.
+    // Stage 6 is followed immediately by finalization, so no intermediate state is needed.
     if (stage != 6) {
         int comp; // Loop index for iterating over the tensor components.
         for (comp = 0; comp < 9; ++comp) {
@@ -98,8 +103,8 @@ def rkf45_stage_update() -> None:
             // Load the base state component $f_{start}$ from memory.
             const double f_n = ReadCUDA(&d_f_start[IDX_F(comp, i)]); // Component of the base state $f_{start}$.
 
-            // Accumulator for the intermediate update step $f_{temp}$.
-            double update_val = 0.0; // Accumulates the stage update $k^{\mu}$ contributions.
+            // Accumulator for the intermediate state update.
+            double update_val = 0.0; // Accumulates weighted stage derivatives.
 
             // Apply coefficients based on the current RKF45 stage.
             switch (stage) {
@@ -133,23 +138,23 @@ def rkf45_stage_update() -> None:
                                                                         FusedMulAddCUDA(1859.0 / 4104.0, ReadCUDA(&d_k_bundle[IDX_K(3, comp, i)]),
                                                                                         MulCUDA(-0.275, ReadCUDA(&d_k_bundle[IDX_K(4, comp, i)])))))); // Applies coefficients up to $k_5$.
             break;
-            } // END SWITCH: apply Butcher Tableau coefficients for current RKF45 stage
+            } // END SWITCH: apply RKF45 coefficients
 
             //==========================================
-            // INTERMEDIATE STATE WRITE
+            // GLOBAL MEMORY WRITE
             //==========================================
-            // Compute $f_{temp} = f_n + h \times update_val$ for the next RKF45 stage.
+            // Writing the computed update $f_{temp} = f_n + h \times update_val$ to global memory strictly enforces the split-pipeline communication constraint.
             const double f_result = FusedMulAddCUDA(h, update_val, f_n); // Computes the step update and stores it in $f_{result}$.
 
-            // Write the intermediate state $f_{temp}$ to the destination array in memory.
-            WriteCUDA(&d_f_temp[IDX_F(comp, i)], f_result); // Write $f_{temp}$ to the intermediate-state array.
-        } // END LOOP: for comp over 9 tensor components
+            // Write the intermediate state $f_{temp}$ to the destination bundle in memory.
+            WriteCUDA(&d_f_temp[IDX_F(comp, i)], f_result); // Writes $f_{temp}$ to global memory.
+        } // END LOOP: for comp over 9 tensor
     } // END IF: stage != 6
 
     //==========================================
     // MACRO CLEANUP
     //==========================================
-    // Undefine local indexing macros to prevent redefinition errors.
+    // Undefine macros to ensure hermetic compilation and prevent redefinition errors.
     #undef IDX_F
     #undef IDX_K
     """
@@ -176,15 +181,15 @@ def rkf45_stage_update() -> None:
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
 
-    desc = r""" Runs the CUDA or OpenMP function for RKF45 intermediate stage updates.
+    desc = r""" Orchestrates the memory kernel for RKF45 intermediate stage updates.
 
-    @param d_f_start Pointer to the base state array ($f_{start}$) in memory.
-    @param d_k_bundle Pointer to the flattened derivative array $k^{\mu}$ in memory.
+    @param d_f_start Pointer to the base nine-component state bundle in memory.
+    @param d_k_bundle Pointer to the flattened RKF45 derivative bundle.
     @param d_h Pointer to the step size array $h$ in memory.
     @param stage The current RKF45 stage index ($1-6$).
-    @param chunk_size The number of active rays in the current chunk.
-    @param d_f_temp Pointer to the destination array for the intermediate state ($f_{temp}$).
-    @param stream_idx Work-array index; CUDA uses the corresponding stream.
+    @param chunk_size The number of active rays in the current bundle.
+    @param d_f_temp Pointer to the destination bundle for the intermediate state.
+    @param stream_idx The active execution stream identifier.
     """
 
     cfunc_type = "void"
@@ -205,9 +210,9 @@ def rkf45_stage_update() -> None:
 
     body = f"""
     //==========================================
-    // HOST-SIDE PARALLEL FUNCTION CALL
+    // HOST-SIDE ORCHESTRATION
     //==========================================
-    // Call the generated CUDA kernel or OpenMP function.
+    // Wraps the generated launch code to initiate the execution kernel.
     {launch_code}
     """
 
