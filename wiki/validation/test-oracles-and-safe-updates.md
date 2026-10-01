@@ -263,23 +263,23 @@ when a baseline is regenerated through a scoped reviewed change; bulk migration
 is separate work. Retained BOB support is a non-precedent under the store
 admission rule.
 
-BHaH `compile_Makefile()` currently runs an external compilation doctest through
-`shell=True`, broad host-derived parallelism, and no explicit timeout.
+BHaH `compile_Makefile()` runs `make` through `shell=True`, broad host-derived
+parallelism, and no explicit timeout. It contains no doctest.
 
 Claim evidence:
-- Claim: BHaH `compile_Makefile()` currently runs an external compilation doctest through `shell=True`, broad host-derived parallelism, and no explicit timeout.
+- Claim: BHaH `compile_Makefile()` runs `make` through `shell=True`, broad host-derived parallelism, and no explicit timeout, and contains no doctest.
 - Role: descriptive behavior
 - Deciding authority: [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `compile_Makefile`
-- Corroboration: none available; the compile doctest and subprocess implementation share one owner
+- Corroboration: none available; the subprocess implementation is local to the function
 
 It is an unsafe legacy outlier, not a bounded template.
 
-A substantive change to that compile doctest must migrate it to scoped CI. Only
-when migration is outside the authorized task scope may the existing surface be
-hardened in place with `TemporaryDirectory`, `shell=False` argument vectors,
-small fixed parallelism, explicit timeout, checked failure, cwd restoration,
-and `try/finally` cleanup. The fallback must not broaden the tested matrix,
-generated project, toolchain work, or subprocess surface.
+A substantive change to an existing compile doctest must migrate it to scoped
+CI. Only when migration is outside the authorized task scope may the existing
+surface be hardened in place with `TemporaryDirectory`, `shell=False` argument
+vectors, small fixed parallelism, explicit timeout, checked failure, cwd
+restoration, and `try/finally` cleanup. The fallback must not broaden the tested
+matrix, generated project, toolchain work, or subprocess surface.
 
 ### Workspace Safety
 
