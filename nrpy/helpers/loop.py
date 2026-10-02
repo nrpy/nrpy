@@ -174,24 +174,21 @@ def loop(
 
     if (cuda_parallel_pair):
         cuda_loop_header = "#ifdef __CUDACC__\n"
-        match len(idx_var):
-            case 1:
-                cuda_loop_header += "PARALLEL_1D_LOOP("
-                cuda_loop_footer = "#else\n } END_PARALLEL_1D_LOOP\n#endif"
-            case 2:
-                cuda_loop_header += "PARALLEL_2D_LOOP("
-                cuda_loop_footer = "#else\n} END_PARALLEL_2D_LOOP\n#endif"
-            case 3:
-                cuda_loop_header += "PARALLEL_LOOP("
-                cuda_loop_footer = "#else\n} END_PARALLEL_LOOP\n#endif"
-            case _:
-                raise ValueError( 
-                    f"A cuda PARALLEL_LOOP is only currently possible with 1,2 or 3 Dimensions but you have provided {len(a)}: (idx_var)"
-                )
+        if (len(idx_var) == 1):
+            cuda_loop_header += "PARALLEL_1D_LOOP("
+            cuda_loop_footer = "#else\n } END_PARALLEL_1D_LOOP\n#endif"
+        elif (len(idx_var == 2):
+            cuda_loop_header += "PARALLEL_2D_LOOP("
+            cuda_loop_footer = "#else\n} END_PARALLEL_2D_LOOP\n#endif"
+        elif (len(idx_var == 3):
+            cuda_loop_header += "PARALLEL_LOOP("
+            cuda_loop_footer = "#else\n} END_PARALLEL_LOOP\n#endif"
+        else:
+            raise ValueError( 
+                f"A cuda PARALLEL_LOOP is only currently possible with 1,2 or 3 Dimensions but you have provided {len(a)}: (idx_var)"
+            )
         for i, var in enumerate(idx_var[::1]):
-        #for i in reversed(range(len(idx_var))):
             if (i != 0):
-            #if (i != len(idx_var)-1):
                 cuda_loop_header += ", "
             cuda_loop_header += idx_var[i] + ", " + lower_bound[i] + ", " + upper_bound[i]
         cuda_loop_header += ") {\n"

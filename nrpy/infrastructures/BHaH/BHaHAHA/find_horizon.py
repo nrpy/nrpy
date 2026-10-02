@@ -360,7 +360,6 @@ to identify the apparent horizon with progressively refined grid resolutions.
 #endif
       }
 
-#ifdef __CUDACC__
       // Free diagnostic arrays
       if (commondata.is_final_iteration && compute_proper_circumferences) {
         FREE(commondata.diagnostics_arrays.metric_data_gfs);
@@ -369,7 +368,6 @@ to identify the apparent horizon with progressively refined grid resolutions.
         FREE(commondata.diagnostics_arrays.theta);
         FREE(commondata.diagnostics_arrays.phi);
       }
-#endif
 
       commondata.output_diagnostics_every_nn = orig_output_diagnostics_every_nn;
     } // END BLOCK: Compute final diagnostics 
