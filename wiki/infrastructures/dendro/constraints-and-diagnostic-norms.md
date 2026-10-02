@@ -6,7 +6,7 @@
 ## Summary
 
 The Dendro BSSN and fCCZ4 connectors lower NRPy's contravariant momentum constraint
-before writing the fixed `MU0..MU2` diagnostic slots. It also reports scalar
+before writing the fixed `MD0..MD2` diagnostic slots. They also report scalar
 momentum and conformal connection residual magnitudes. Separate files contain
 conformal-factor volume-weighted and unique-node RMS values; the latter matches the native
 Dendro-BSSN node-weighting convention. Diagnostic kernels run on the
@@ -19,15 +19,21 @@ The equation module constructs `M^i`. The Dendro connector writes
 Here `exp(-4 phi)=W^2=chi`. This is a tensorial index lowering, not a single
 scalar rescaling: off-diagonal conformal-metric terms contribute. The
 Hamiltonian expression is unchanged. The conversion occurs immediately before
-C code generation, leaving the shared equation module untouched.
+C code generation, leaving the shared equation module untouched. The generated
+diagnostic fields are named `MD0..MD2` to denote the lower index; the shared
+equation module's `MU` expressions still denote the upper index. Constraint-file
+columns and VTU field names use `MD0..MD2`. Plot readers that select columns by
+name must use these names; the column positions and computed quantities are
+unchanged. Existing nonempty diagnostic files retain their original headers
+when rows are appended; use a new output prefix to obtain the `MD` column labels.
 
 Claim evidence:
-- Claim: Dendro's BSSN `MU` diagnostic slots contain `M_i = gammabar_ij M^j / exp(-4 phi)`, while the equation module still constructs `M^i`.
+- Claim: Dendro's BSSN `MD0..MD2` diagnostic slots contain `M_i = gammabar_ij M^j / exp(-4 phi)`, while the equation module still constructs `M^i`; the constraint-file columns and VTU fields use the lower-index names without changing their positions or computed quantities.
 - Role: public/scientific contract
-- Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py`, `register_CFunction_BSSN_constraints`, `momentum_covariant`.
+- Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py`, `register_CFunction_BSSN_constraints`, `momentum_covariant`; `nrpy/infrastructures/Dendro/state_h.py`, `BSSN_DIAGNOSTIC_GRIDFUNCTIONS`; `nrpy/infrastructures/Dendro/solver_context.py`, `diagnostic_meanings` and `vtu_constraint_names`.
 - Corroboration: `nrpy/equations/general_relativity/BSSN_constraints.py`, `BSSN_constraints.MU`; `nrpy/equations/general_relativity/BSSN_quantities.py`, `BSSN_quantities.exp_m4phi`.
 
-After `H` and `MU0..MU2`, the BSSN diagnostic kernel writes
+After `H` and `MD0..MD2`, the BSSN diagnostic kernel writes
 `M_CONSTRAINT = sqrt(gamma_ij M^i M^j)` and
 `LAMBDA_CONSTRAINT = sqrt(gammabar_ij C^i C^j)`, where
 `C^i = Lambdabar^i - DeltaGamma^i`. Both contractions include off-diagonal
@@ -67,7 +73,7 @@ the same spherical excision regions. It counts a shared node once and weights
 each retained node equally, matching the native Dendro-BSSN reporting
 convention. The file also records the node count after all diagnostic RMS
 columns (six for BSSN and ten for fCCZ4). For BSSN, columns 3-6 (`H`,
-`MU0..MU2`) correspond to native `C_HAM` and `C_MOM0..2`; fCCZ4 lists its four
+`MD0..MD2`) correspond to native `C_HAM` and `C_MOM0..2`; fCCZ4 lists its four
 Z4 fields first. Rows in both files begin with the step and physical time. Each
 file opens with column labels in the style of BHaHAHA's horizon diagnostics
 files: a title line naming the formulation and evolved conformal factor, then

@@ -181,7 +181,7 @@ deviation of the conformal metric from flat) and `aDD` in place of `Gt`, `gt`
 and `At`, and B^i in NRPy's normalization. fCCZ4 adds `Theta_fCCZ4` at index
 24. The first `BSSN_NUM_CONST_VARS_VTU_OUTPUT` entries of
 `BSSN_VTU_OUTPUT_CONST_INDICES` select, in `BSSN_GR` numbering, `H`,
-`MU0..MU2`, `psi4_real` and `psi4_imag`. Both counts default to 1, so a
+`MD0..MD2`, `psi4_real` and `psi4_imag`. Both counts default to 1, so a
 parameter file without these keys writes `alpha` and `H`. Requested constraint
 or Psi4 fields are computed at the output step. Field names are NRPy's (`H`,
 not `C_HAM`).
@@ -202,7 +202,7 @@ conformal factor at `sqrt(CHI_FLOOR)` for W or `CHI_FLOOR` for chi. Thus both
 representations use the same physical chi floor. The chi variant has distinct
 checkpoint formulation metadata, preventing an incompatible W/chi restart.
 
-The Dendro connector writes covariant momentum components to its fixed `MU`
+The Dendro connector writes covariant momentum components to its fixed `MD0..MD2`
 diagnostic slots, followed by scalar `M_CONSTRAINT` and
 `LAMBDA_CONSTRAINT` magnitudes. [Constraints And Diagnostic
 Norms](constraints-and-diagnostic-norms.md) gives the contractions and explains

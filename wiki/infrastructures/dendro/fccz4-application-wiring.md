@@ -79,7 +79,7 @@ puncture positions and a per-launch TOML parameter dump, described there.
 
 The diagnostic kernel retains `H_Z4` and the three `Z4constraintU` components
 as its first four fields. It then reports `H`, physical lower-index momentum
-components `MU0..MU2`, `M_CONSTRAINT=sqrt(gamma_ij M^i M^j)`, and
+components `MD0..MD2`, `M_CONSTRAINT=sqrt(gamma_ij M^i M^j)`, and
 `LAMBDA_CONSTRAINT=sqrt(gammabar_ij Z4constraintU^i Z4constraintU^j)`.
 The connection residual is reported, not enforced. Both excised physical-volume
 and unique-node RMS files include all ten fields and are emitted after remeshing.

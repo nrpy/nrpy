@@ -77,9 +77,9 @@ def register_CFunction_BSSN_constraints(
         ]
         expressions_by_gridfunction: Dict[str, sp.Expr] = {
             "H": constraints.H,
-            "MU0": momentum_covariant[0],
-            "MU1": momentum_covariant[1],
-            "MU2": momentum_covariant[2],
+            "MD0": momentum_covariant[0],
+            "MD1": momentum_covariant[1],
+            "MD2": momentum_covariant[2],
             "M_CONSTRAINT": sp.sqrt(constraints.Msquared),
             "LAMBDA_CONSTRAINT": constraints.LambdaConstraintMagnitude,
         }

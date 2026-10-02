@@ -547,9 +547,9 @@ def output_solver_context_cpp(
             if enable_fCCZ4
             else "Hamiltonian constraint"
         ),
-        "MU0": "momentum constraint M_x (lower index)",
-        "MU1": "momentum constraint M_y (lower index)",
-        "MU2": "momentum constraint M_z (lower index)",
+        "MD0": "momentum constraint M_x (lower index)",
+        "MD1": "momentum constraint M_y (lower index)",
+        "MD2": "momentum constraint M_z (lower index)",
         "M_CONSTRAINT": "momentum-constraint magnitude sqrt(gamma_ij M^i M^j)",
         "LAMBDA_CONSTRAINT": "connection-constraint magnitude sqrt(gammabar_ij C^i C^j), "
         f"C^i = {connection} - DeltaGamma^i",
@@ -594,7 +594,7 @@ namespace {{
 // VTU constraint-field names in Dendro-GR BSSN_GR's numbering: C_HAM,
 // C_MOM0-2, C_PSI4_REAL, C_PSI4_IMG.
 constexpr std::array<std::string_view, 6> vtu_constraint_names{{
-    "H", "MU0", "MU1", "MU2", "psi4_real", "psi4_imag"}};
+    "H", "MD0", "MD1", "MD2", "psi4_real", "psi4_imag"}};
 // Apparent-horizon finder checkpoint file, named as in Dendro-GR BSSN_GR.
 std::string horizon_checkpoint_name(const std::string& prefix,
                                     unsigned int checkpoint_index) {{
