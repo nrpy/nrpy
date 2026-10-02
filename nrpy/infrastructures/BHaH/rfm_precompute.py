@@ -92,13 +92,13 @@ class ReferenceMetricPrecompute:
     on CUDA-enabled builds.
     """
 
-    def __init__(self, CoordSystem: str) -> None:
+    def __init__(self, CoordSystem: str, dual_compile: bool=False) -> None:
         self._initialize_configuration(CoordSystem)
         self._initialize_properties()
 
         for symbol, expr in self._get_sorted_precomputed_expressions():
             if "_of_xx" in str(symbol):
-                self._process_expression(symbol, expr)
+                self._process_expression(symbol, expr, dual_compile)
 
         # Rewrite host-only reader intrinsics to CUDA variants when targeting CUDA.
         self._apply_intrinsics_mode()
@@ -193,7 +193,7 @@ class ReferenceMetricPrecompute:
         return " * ".join(size_terms) if size_terms else "(size_t)1"
 
     # --------------------------- per-symbol processing (single-pass emit) ---------------------------
-    def _process_expression(self, symbol: sp.Expr, expr: sp.Expr) -> None:
+    def _process_expression(self, symbol: sp.Expr, expr: sp.Expr, dual_compile: bool = False) -> None:
         # Dependency detection:
         dependencies = [expr.has(self.rfm.xx[i]) for i in range(self.N_DIMS)]
 
@@ -224,6 +224,7 @@ class ReferenceMetricPrecompute:
                 kernel_param_sig=kernel_param_sig,
                 kernel_param_vals=kernel_param_vals,
                 host_param_copies=host_param_copies,
+                dual_compile=dual_compile,
             )
             self._emit_readers_1d(symbol_name=sname, ax=ax)
 
@@ -249,9 +250,24 @@ class ReferenceMetricPrecompute:
         kernel_param_sig: str,
         kernel_param_vals: str,
         host_param_copies: str,
+        dual_compile: bool = False,
     ) -> None:
-        # CUDA kernel (1D)
-        self._kernels_parts.append(f"""
+        if dual_compile:
+            launch_setup = _emit_launch_setup_1d("N")
+
+            self._defines_parts.append(f"""
+/* {symbol_name}: 1D precompute */
+  {{
+    PARALLEL_1D_LOOP(i{ax}, 0, params->Nxx_plus_2NGHOSTS{ax}) {{
+      const REAL xx{ax} = x{ax}[i{ax}];
+      rfmstruct->{symbol_name}[i{ax}] = {expr_cc};
+    }} END_PARALLEL_LOOP;
+  }}
+
+""")
+        else:
+            # CUDA kernel (1D)
+            self._kernels_parts.append(f"""
 #ifdef __CUDACC__
 __global__ static void rfm_precompute_defines__{symbol_name}(
     const size_t N,
@@ -267,10 +283,10 @@ __global__ static void rfm_precompute_defines__{symbol_name}(
 #endif // __CUDACC__
 """)
 
-        launch_setup = _emit_launch_setup_1d("N")
+            launch_setup = _emit_launch_setup_1d("N")
 
-        # Host loop + CUDA branch (1D)
-        self._defines_parts.append(f"""
+            # Host loop + CUDA branch (1D)
+            self._defines_parts.append(f"""
 /* {symbol_name}: 1D precompute */
 if (params->is_host) {{
   {{
@@ -397,7 +413,8 @@ if (params->is_host) {{
 # --------------------------------------------------------------------------
 # Public entry: register malloc/defines/free for all CoordSystems
 # --------------------------------------------------------------------------
-def register_CFunctions_rfm_precompute(set_of_CoordSystems: Set[str]) -> None:
+def register_CFunctions_rfm_precompute(set_of_CoordSystems: Set[str],
+                                       dual_compile: bool = False) -> None:
     """
     Register C functions for reference-metric precomputation.
 
@@ -409,7 +426,7 @@ def register_CFunctions_rfm_precompute(set_of_CoordSystems: Set[str]) -> None:
     """
     combined_BHaH_defines_list: List[str] = []
     for CoordSystem in set_of_CoordSystems:
-        rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
+        rfm_precompute = ReferenceMetricPrecompute(CoordSystem, dual_compile)
         combined_BHaH_defines_list.extend(list(rfm_precompute.BHaH_defines_list))
 
         includes = ["BHaH_defines.h"]
@@ -420,16 +437,35 @@ def register_CFunctions_rfm_precompute(set_of_CoordSystems: Set[str]) -> None:
             "rfm_struct * restrict rfmstruct"
         )
 
+        cfunc_decorators = ""
         # --- malloc/free bodies from single member-spec list (host/device macro swap) ---
-        host_malloc_lines = "\n".join(
-            f"BHAH_MALLOC__PtrMember(rfmstruct, {m}, sizeof(REAL) * ({sz}));"
-            for m, sz in rfm_precompute.member_specs
-        )
-        device_malloc_lines = "\n".join(
-            f"BHAH_MALLOC_DEVICE__PtrMember(rfmstruct, {m}, sizeof(REAL) * ({sz}));"
-            for m, sz in rfm_precompute.member_specs
-        )
-        malloc_body = f"""
+        if dual_compile:
+            malloc_lines = "#ifdef __CUDACC__\nrfm_struct* tmp_rfmstruct = (rfm_struct *)malloc(sizeof(rfm_struct));\n#endif\n"
+            malloc_lines += "\n".join(
+                f"""
+#ifdef __CUDACC__
+REAL* {m} = NULL;
+gpuErrchk( cudaMalloc((void**)&{m}, sizeof(REAL) * ({sz})) );
+tmp_rfmstruct->{m} = {m};
+#else
+BHAH_MALLOC__PtrMember(rfmstruct, {m}, sizeof(REAL) * ({sz}));
+#endif
+"""
+                for m, sz in rfm_precompute.member_specs
+)
+            malloc_lines += "#ifdef __CUDACC__\ncudaMemcpy(rfmstruct, tmp_rfmstruct, sizeof(rfm_struct), cudaMemcpyHostToDevice);\nfree(tmp_rfmstruct);\n#endif\n"
+            malloc_body = f"""
+{malloc_lines}"""
+        else:
+            host_malloc_lines = "\n".join(
+                f"BHAH_MALLOC__PtrMember(rfmstruct, {m}, sizeof(REAL) * ({sz}));"
+                for m, sz in rfm_precompute.member_specs
+            )
+            device_malloc_lines = "\n".join(
+                f"BHAH_MALLOC_DEVICE__PtrMember(rfmstruct, {m}, sizeof(REAL) * ({sz}));"
+                for m, sz in rfm_precompute.member_specs
+            )
+            malloc_body = f"""
 // rfm_precompute_malloc: allocate rfmstruct arrays on host or device
 if (params->is_host) {{
 {host_malloc_lines}
@@ -439,15 +475,38 @@ IFCUDARUN({{
 }});
 }} // END IF params->is_host
 """
-        host_free_lines = "\n".join(
-            f"BHAH_FREE__PtrMember(rfmstruct, {m});"
-            for m, _ in rfm_precompute.member_specs
-        )
-        device_free_lines = "\n".join(
-            f"BHAH_FREE_DEVICE__PtrMember(rfmstruct, {m});"
-            for m, _ in rfm_precompute.member_specs
-        )
-        free_body = f"""
+        
+        if dual_compile:  
+            free_lines = """
+#ifdef __CUDACC__
+  rfm_struct* tmp_rfmstruct = (rfm_struct *)malloc(sizeof(rfm_struct));
+  cudaMemcpy(tmp_rfmstruct, rfmstruct, sizeof(rfmstruct), cudaMemcpyDeviceToHost);
+#endif
+"""
+            free_lines += "\n".join(
+                f"""
+#ifdef __CUDACC__
+  cudaFree(tmp_rfmstruct->{m});
+#else
+BHAH_FREE__PtrMember(rfmstruct, {m});
+#endif
+"""
+                for m, _ in rfm_precompute.member_specs
+            )
+            free_body = f"""
+{free_lines}
+"""
+        else:
+            host_free_lines = "\n".join(
+                f"BHAH_FREE__PtrMember(rfmstruct, {m});"
+                for m, _ in rfm_precompute.member_specs
+            )
+
+            device_free_lines = "\n".join(
+                f"BHAH_FREE_DEVICE__PtrMember(rfmstruct, {m});"
+                for m, _ in rfm_precompute.member_specs
+            )
+            free_body = f"""
 // rfm_precompute_free: free rfmstruct arrays from host or device
 if (params->is_host) {{
 {host_free_lines}
@@ -472,6 +531,24 @@ IFCUDARUN({{
             "malloc": malloc_body,
             "defines": rfm_precompute.rfm_struct__define,
             "free": free_body,
+        }
+
+        # --- decorators ---
+        malloc_decorators = "" 
+        free_decorators = ""
+        if dual_compile:
+            defines_decorators  = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+""" 
+        else:
+            defines_decorators  = ""
+
+        decorators_dict = {
+            "malloc": malloc_decorators,
+            "defines": defines_decorators,
+            "free": free_decorators,
         }
 
         desc_dict = {
@@ -531,6 +608,10 @@ IFCUDARUN({{
             if prefunc and not prefunc.endswith("\n"):
                 prefunc += "\n"
 
+            cfunc_decorators = decorators_dict.get(func_name, "")
+            if cfunc_decorators and not cfunc_decorators.endswith("\n"):
+                cfunc_decorators += "\n"
+
             cfc.register_CFunction(
                 prefunc=prefunc,
                 includes=includes,
@@ -540,6 +621,7 @@ IFCUDARUN({{
                 name=function_name,
                 params=params_sig,
                 include_CodeParameters_h=False,
+                cfunc_decorators=cfunc_decorators,
                 body=final_body,
             )
 

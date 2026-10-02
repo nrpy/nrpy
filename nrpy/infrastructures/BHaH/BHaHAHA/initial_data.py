@@ -17,48 +17,49 @@ def register_CFunction_initial_data() -> None:
     and initializes the field h(theta, phi) on all grids.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = "Read 3D metric data (in Cartesian basis) from file, basis transform, apply BCs, compute h_{ij,k}, then set up initial guess h(r,theta)"
-    cfunc_type = "int"
-    name = "initial_data"
-    params = (
-        "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
-    )
-    body = r"""
-  const int grid = 0;
-  const params_struct *restrict params = &griddata[grid].params;
+    prefunc = r"""
+/**
+ * Reads 3D metric data (in Cartesian basis) from file, basis transform, apply BCs, compute h_{ij,k}, then set up initial guess h(r,theta)
+ */
+#ifdef __CUDACC__
+__global__
+#endif
+void set_initial_data(commondata_struct *restrict commondata, griddata_struct *restrict griddata, REAL *coarse_to_fine, REAL dst_pts[][2])
+{
+#ifdef __CUDACC__
+  // Set up cooperative group
+  namespace cg = cooperative_groups;
+  cg::grid_group gpu_grid = cg::this_grid();
+#endif
 
+  int grid = 0;
+  params_struct *params = &griddata[0].params;
 #include "set_CodeParameters.h"
   const int NUM_THETA = Nxx1;
-  REAL *restrict coarse_to_fine = NULL;
   if (commondata->use_coarse_horizon) {
     const int num_dst_pts = Nxx1 * Nxx2;
-    REAL(*dst_pts)[2] = malloc(num_dst_pts * sizeof(*dst_pts));
-    coarse_to_fine = malloc(sizeof(REAL) * Nxx1 * Nxx2);
-    if (dst_pts == NULL || coarse_to_fine == NULL)
-      return INITIAL_DATA_MALLOC_ERROR;
+    PARALLEL_2D_LOOP(i1, NGHOSTS, Nxx1 + NGHOSTS, i2, NGHOSTS, Nxx2 + NGHOSTS) {
+          dst_pts[IDX2(i1 - NGHOSTS, i2 - NGHOSTS)][0] = griddata->xx[1][i1];
+          dst_pts[IDX2(i1 - NGHOSTS, i2 - NGHOSTS)][1] = griddata->xx[2][i2];
+    } END_PARALLEL_2D_LOOP;
+      // Choosing an NGHOSTS stencil half-width significantly speeds up BHaHAHA finds.
 
-#pragma omp parallel for
-    for (int i2 = NGHOSTS; i2 < Nxx2 + NGHOSTS; i2++)
-      for (int i1 = NGHOSTS; i1 < Nxx1 + NGHOSTS; i1++) {
-        dst_pts[IDX2(i1 - NGHOSTS, i2 - NGHOSTS)][0] = griddata->xx[1][i1];
-        dst_pts[IDX2(i1 - NGHOSTS, i2 - NGHOSTS)][1] = griddata->xx[2][i2];
-      }
-    // Choosing an NGHOSTS stencil half-width significantly speeds up BHaHAHA finds.
     bah_interpolation_2d_general__uniform_src_grid(NGHOSTS, commondata->coarse_horizon_dxx1, commondata->coarse_horizon_dxx2,
                                                    commondata->coarse_horizon_Nxx_plus_2NGHOSTS1, commondata->coarse_horizon_Nxx_plus_2NGHOSTS2,
                                                    commondata->coarse_horizon_r_theta_phi, commondata->coarse_horizon, num_dst_pts, dst_pts,
-                                                   coarse_to_fine);
-    free(dst_pts);
-    free(commondata->coarse_horizon);
-    for (int ii = 0; ii < 3; ii++)
-      free(commondata->coarse_horizon_r_theta_phi[ii]);
+                                                   coarse_to_fine, &commondata->error_flag);
+#ifdef __CUDACC__
+    gpu_grid.sync();
+#endif
+    if (commondata->error_flag != BHAHAHA_SUCCESS)
+      return;
   }
 
-  // Step 2.a: Use OpenMP to parallelize the loop over the entire grid, initializing the h(theta, phi) scalar.
-  const REAL times[3] = { commondata->bhahaha_params_and_data->t_m1, //
-                          commondata->bhahaha_params_and_data->t_m2, //
-                          commondata->bhahaha_params_and_data->t_m3 };
-  LOOP_OMP("omp parallel for",            //
+  // Step 2.a: Use CUDA or OpenMP to parallelize the loop over the entire grid, initializing the h(theta, phi) scalar.
+  const REAL times[3] = {commondata->bhahaha_params_and_data->t_m1, //
+                         commondata->bhahaha_params_and_data->t_m2, //
+                         commondata->bhahaha_params_and_data->t_m3};
+  PARALLEL_LOOP(
            i0, NGHOSTS, Nxx0 + NGHOSTS,   // Loop over radial grid points
            i1, NGHOSTS, Nxx1 + NGHOSTS,   // Loop over polar grid points
            i2, NGHOSTS, Nxx2 + NGHOSTS) { // Loop over azimuthal grid points
@@ -83,19 +84,90 @@ def register_CFunction_initial_data() -> None:
     // set VVGF = eta * HHGF,
     //  so that partial_t h = VVGF - eta * HHGF = 0 at t=0. Otherwise we get really ugly dynamics.
     griddata[grid].gridfuncs.y_n_gfs[IDX4(VVGF, i0, i1, i2)] = eta_damping * griddata[grid].gridfuncs.y_n_gfs[IDX4(HHGF, i0, i1, i2)];
-  } // END LOOP: for i0/i1/i2 over all gridpoints
-  if (commondata->use_coarse_horizon)
-    free(coarse_to_fine);
+  } END_PARALLEL_LOOP; // END LOOP over all gridpoints
+
+#ifdef __CUDACC__
+  gpu_grid.sync();
+#endif
 
   bah_apply_bcs_inner_only(commondata, &griddata[grid].params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.y_n_gfs);
 
+  return;
+}
+"""
+    desc = "Read 3D metric data (in Cartesian basis) from file, basis transform, apply BCs, compute h_{ij,k}, then set up initial guess h(r,theta)"
+    cfunc_type = "void"
+    name = "initial_data"
+    params = (
+        "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
+    )
+    body = r"""
+  const int grid = 0;
+  const params_struct *restrict params = &griddata[grid].params;
+
+  // Allocate memory for set_initial_data kernel
+#include "set_CodeParameters.h"
+  REAL *restrict coarse_to_fine = NULL;
+  REAL(*dst_pts)[2] = NULL;
+  if (commondata->use_coarse_horizon) {
+    const int num_dst_pts = Nxx1 * Nxx2;
+    #ifdef __CUDACC__
+    cudaMalloc((void**)&coarse_to_fine, sizeof(REAL) * Nxx1 * Nxx2);
+    cudaMalloc((void**)&dst_pts, sizeof(REAL)*num_dst_pts*2);
+    #else
+    coarse_to_fine = (double *)malloc(sizeof(REAL) * Nxx1 * Nxx2);
+    dst_pts = (double (*)[2])malloc(num_dst_pts * sizeof(*dst_pts));
+    #endif
+    if (dst_pts == NULL || coarse_to_fine == NULL) {
+      commondata->error_flag = INITIAL_DATA_MALLOC_ERROR;
+      return;
+    }
+  }
+#ifdef __CUDACC__
+  // Create device side copies of commondata and griddata
+  commondata_struct *d_commondata = NULL;
+  cudaMalloc((void**)&d_commondata, sizeof(commondata_struct));
+  cudaMemcpy(d_commondata, commondata, sizeof(commondata_struct), cudaMemcpyHostToDevice);
+
+  griddata_struct *d_griddata = NULL;
+  cudaMalloc((void**)&d_griddata, sizeof(griddata_struct));
+  cudaMemcpy(d_griddata, griddata, sizeof(griddata_struct), cudaMemcpyHostToDevice);
+#endif
+    
+#ifdef __CUDACC__
+  void *Args[] = {&d_commondata, &d_griddata, (void *)&coarse_to_fine, &dst_pts};
+  int INTERP_ORDER = (2 * NGHOSTS + 1);
+  int sharesize = sizeof(REAL)*(INTERP_ORDER + (THREADSPERBLOCK*4)*INTERP_ORDER + THREADSPERBLOCK*INTERP_ORDER*INTERP_ORDER);
+  COOPERATIVE_KERNEL(set_initial_data, Args, sharesize)
+#else
+  set_initial_data(commondata, griddata, coarse_to_fine, dst_pts); 
+#endif
+
+#ifdef __CUDACC__
+  //Retrieve commondata
+  gpuErrchk( cudaMemcpy(commondata, d_commondata, sizeof(commondata_struct), cudaMemcpyDeviceToHost) );
+  //Free device side copies of commondata and griddata
+  cudaFree(d_commondata);
+  cudaFree(d_griddata);
+#endif
+
+  // Free memory
+  if (commondata->use_coarse_horizon) {
+    FREE(coarse_to_fine);
+    FREE(dst_pts);
+    FREE(commondata->coarse_horizon);
+    for (int ii = 0; ii < 3; ii++)
+      FREE(commondata->coarse_horizon_r_theta_phi[ii]);
+  }
+
   commondata->use_coarse_horizon = 1; // for next time initial_data() is called
 
-  return BHAHAHA_SUCCESS;
+  return;
 """
     cfc.register_CFunction(
         subdirectory="",
         includes=includes,
+        prefunc=prefunc,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,
