@@ -54,6 +54,17 @@ class InitialData_Spherical:
                 self.betaU,
                 self.BU,
             ) = self.OffsetKerrSchild()
+        elif IDtype == "TeukolskyWave":
+            if override_gauge_with_standard:
+                raise ValueError("TeukolskyWave requires alpha=1 and betaU=0")
+            ID_defines_gauge_quantities = True
+            (
+                self.gammaDD,
+                self.KDD,
+                self.alpha,
+                self.betaU,
+                self.BU,
+            ) = self.TeukolskyWave()
         else:
             raise ValueError(f"IDtype = {IDtype} is not supported.")
 
@@ -307,6 +318,75 @@ class InitialData_Spherical:
 
     # fmt: on
 
+    def TeukolskyWave (self):
+        """Set ADM quantities for an analytic linearized Teukolsky wave."""
+
+        # Define math symbols
+        self.r, self.th, self.ph = sp.symbols("r th ph", real=True)
+        r, th, ph = self.r, self.th, self.ph
+        t = sp.symbols("t", real=True)
+        Amp, lam = sp.symbols("Amp lam", real=True)
+
+        # Define retarded time argument
+        u = t - r
+
+        # Define the base profile, exponential helper, and profile derivatives
+        E = sp.exp(-lam * u**2)
+
+        F0 = u * E
+        F1 = (1 - 2 * lam * u**2) * E
+        F2 = (-6 * lam * u + 4 * lam**2 * u**3) * E
+        F3 = (-6 * lam + 24 * lam**2 * u**2 - 8 * lam**3 * u**4) * E
+        F4 = (60 * lam**2 * u - 80 * lam**3 * u**3 + 16 * lam**4 * u**5) * E
+        F5 = (60 * lam**2 - 360 * lam**3 * u**2 + 240 * lam**4 * u**4 - 32 * lam**5 * u**6) * E
+
+        # Calculate outgoing radial components
+        A_OUT = 24 * Amp * ((F2 / r**3) + (3 * F1 / r**4) + (3 * F0 / r**5))
+        B_OUT = -4 * Amp * ((F3 / r**2) + (3 * F2 / r**3) + (6 * F1 / r**4) + (6 * F0 / r**5))
+        C_OUT = 2 * Amp * ((F4 / r) + (2 * F3 / r**2) + (3 * F2 / r**3) + (3 * F1 / r**4) + (3 * F0 / r**5))
+        K_rad_OUT = -4 * Amp * ((F2 / r**2) + (3 * F1 / r**3) + (3 * F0 / r**4))
+        L_rad_OUT = 2 * Amp * ((F3 / r ) + (2 * F2 / r**2) + (3 * F1 / r**3) + (3 * F0 / r**4))
+
+        A = A_OUT
+        B = B_OUT
+        C = C_OUT
+
+        # Time derivatives for Extrinsic Curvature K_ij
+        A_dot = 24 * Amp * ((F3 / r**3) + (3 * F2 / r**4) + (3 * F1 / r**5))
+        B_dot = -4 * Amp * ((F4 / r**2) + (3 * F3 / r**3) + (6 * F2 / r**4) + (6 * F1 / r**5))
+        C_dot = 2 * Amp * ((F5 / r) + (2 * F4 / r**2) + (3 * F3 / r**3) + (3 * F2 / r**4) + (3 * F1 / r**5))
+
+        # Define Mode 20 angular terms
+        s = sp.sin(th)
+        c = sp.cos(th)
+        Y = 3 * c**2 - 1
+
+        # Assemble the mode-20 spatial metric in spherical coordinates
+        gammaDD = ixp.zerorank2()
+
+        gammaDD[0][0] = 1 + A*Y
+        gammaDD[0][1] = gammaDD[1][0] = -6*r*B*s*c
+        gammaDD[0][2] = gammaDD[2][0] = sp.sympify(0)
+        gammaDD[1][1] = r**2 * (1 - A*Y/2 + 3*C*s**2)
+        gammaDD[1][2] = gammaDD[2][1] = sp.sympify(0)
+        gammaDD[2][2] = r**2 * s**2 * (1 - A*Y/2 - 3*C*s**2)
+
+        # Assemble the mode-20 extrinsic curvature from the time derivatives
+        KDD = ixp.zerorank2()
+
+        KDD[0][0] = -sp.Rational(1, 2)*A_dot*Y
+        KDD[0][1] = KDD[1][0] = 3*r*B_dot*s*c
+        KDD[0][2] = KDD[2][0] = sp.sympify(0)
+        KDD[1][1] = r**2 * (sp.Rational(1, 4)*A_dot*Y - sp.Rational(3, 2)*C_dot*s**2)
+        KDD[1][2] = KDD[2][1] = sp.sympify(0)
+        KDD[2][2] = r**2 * s**2 * (sp.Rational(1, 4)*A_dot*Y + sp.Rational(3, 2)*C_dot*s**2)
+
+        # Teukolsky-wave gauge quantities
+        alpha = sp.sympify(1)
+        betaU = ixp.zerorank1()
+        BU = ixp.zerorank1()
+
+        return gammaDD, KDD, alpha, betaU, BU
 
 if __name__ == "__main__":
     import doctest
