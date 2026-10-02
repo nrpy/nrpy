@@ -138,58 +138,30 @@ to identify the apparent horizon with progressively refined grid resolutions.
   memcpy(Ntheta, bhahaha_params_and_data->Ntheta_array_multigrid, sizeof(int) * MAX_RESOLUTIONS);
   memcpy(Nphi, bhahaha_params_and_data->Nphi_array_multigrid, sizeof(int) * MAX_RESOLUTIONS);
 
-  // Step 1.d: Set up external grid parameters
-  // Calculate the number of interior (non-ghost) radial points by subtracting ghost zones.
-  // Nr from external includes r ~ r_max NGHOSTS.
-  commondata.external_input_Nxx0 = bhahaha_params_and_data->Nr_external_input - NGHOSTS;
-  if (bhahaha_params_and_data->r_min_external_input > 0) {
-    commondata.external_input_Nxx0 = bhahaha_params_and_data->Nr_external_input - 2 * NGHOSTS;
-  }
+  // Step 1.d: Set up external input grids by adding inner ghost zones and applying boundary conditions.
+  // A deep copy of bhahaha_params_and_data and bhahaha_diagnostics occurs within the external set up.
 
-  // Set fixed angular resolutions for theta and phi directions.
-  {
-    const int max_resolution_i = bhahaha_params_and_data->num_resolutions_multigrid - 1;
-    commondata.external_input_Nxx1 = bhahaha_params_and_data->Ntheta_array_multigrid[max_resolution_i];
-    commondata.external_input_Nxx2 = bhahaha_params_and_data->Nphi_array_multigrid[max_resolution_i];
-  }
-
-  // Calculate grid spacing in each coordinate direction based on the simulation domain and resolution.
-  // x_i = min_i + (j + 0.5) * dx_i, where dx_i = (max_i - min_i) / N_i
-
-  commondata.external_input_dxx0 = bhahaha_params_and_data->dr_external_input;
-  commondata.external_input_dxx1 = M_PI / ((REAL)commondata.external_input_Nxx1);
-  commondata.external_input_dxx2 = 2 * M_PI / ((REAL)commondata.external_input_Nxx2);
-
-  // Precompute inverse grid spacings for performance optimization in calculations.
-  commondata.external_input_invdxx0 = 1.0 / commondata.external_input_dxx0;
-  commondata.external_input_invdxx1 = 1.0 / commondata.external_input_dxx1;
-  commondata.external_input_invdxx2 = 1.0 / commondata.external_input_dxx2;
- 
-
-  // Step 1.e: Set up external input grids by adding inner ghost zones and applying boundary conditions.
-  commondata.external_input_gfs_Cart_basis_no_gzs = bhahaha_params_and_data->input_metric_data;
 #ifdef __CUDACC__
-  //Deep copy bhahaha_params_and_data & bhahaha_diagnostics
-  bhahaha_params_and_data_struct *d_bhahaha_params_and_data = NULL;
+  // Variables for deep copies used after GPU kernels
   bhahaha_params_and_data_struct *h_bhahaha_params_and_data = commondata.bhahaha_params_and_data;
-  gpuErrchk( cudaMalloc((void**)&d_bhahaha_params_and_data, sizeof(bhahaha_params_and_data_struct)) );
-  gpuErrchk( cudaMemcpy(d_bhahaha_params_and_data, commondata.bhahaha_params_and_data, sizeof(bhahaha_params_and_data_struct), cudaMemcpyHostToDevice) );
-  commondata.bhahaha_params_and_data = d_bhahaha_params_and_data;
-
-  bhahaha_diagnostics_struct *d_bhahaha_diagnostics = NULL;
   bhahaha_diagnostics_struct *h_bhahaha_diagnostics = commondata.bhahaha_diagnostics;
-  cudaMalloc((void**)&d_bhahaha_diagnostics, sizeof(bhahaha_diagnostics_struct));
-  cudaMemcpy(d_bhahaha_diagnostics, commondata.bhahaha_diagnostics, sizeof(bhahaha_diagnostics_struct), cudaMemcpyHostToDevice);
-  commondata.bhahaha_diagnostics = d_bhahaha_diagnostics;
-
-  commondata_struct *d_commondata = NULL;
-  cudaMalloc((void**)&d_commondata, sizeof(commondata_struct));
 #endif
+
+  commondata.external_input_gfs_Cart_basis_no_gzs = bhahaha_params_and_data->input_metric_data;
   bah_numgrid__external_input_set_up(&commondata, n_resolutions, Ntheta, Nphi);
   if (commondata.error_flag != BHAHAHA_SUCCESS) {
     return commondata.error_flag;
   }
+  
+#ifdef __CUDACC__
+  //Variables for Deep copy bhahaha_params_and_data & bhahaha_diagnostics
+  bhahaha_params_and_data_struct *d_bhahaha_params_and_data = commondata.bhahaha_params_and_data;
+  bhahaha_diagnostics_struct *d_bhahaha_diagnostics = commondata.bhahaha_diagnostics;
 
+  commondata_struct *d_commondata = NULL;
+  cudaMalloc((void**)&d_commondata, sizeof(commondata_struct));
+#endif
+  
   // Step 2: Iterate over different grid resolutions to refine the apparent horizon.
   commondata.error_flag = BHAHAHA_SUCCESS; // Assume success initially.
 

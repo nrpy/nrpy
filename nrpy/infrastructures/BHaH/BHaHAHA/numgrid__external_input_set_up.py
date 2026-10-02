@@ -395,7 +395,49 @@ This function performs the following steps:
     name = "numgrid__external_input_set_up"
     params = "commondata_struct *restrict commondata, const int n_resolutions, const int *restrict Ntheta, const int *restrict Nphi"
     body = r"""
-  // Step 1: Add ghost zones to the external input data.
+  // Step 1: Unpack input parameters from the common data structure.
+  const bhahaha_params_and_data_struct *restrict bhahaha_params_and_data = commondata->bhahaha_params_and_data;
+
+  // Calculate the number of interior (non-ghost) radial points by subtracting ghost zones.
+  // Nr from external includes r ~ r_max NGHOSTS.
+  commondata->external_input_Nxx0 = bhahaha_params_and_data->Nr_external_input - NGHOSTS;
+  if (bhahaha_params_and_data->r_min_external_input > 0) {
+    commondata->external_input_Nxx0 = bhahaha_params_and_data->Nr_external_input - 2 * NGHOSTS;
+  }
+
+  // Set fixed angular resolutions for theta and phi directions.
+  {
+    const int max_resolution_i = bhahaha_params_and_data->num_resolutions_multigrid - 1;
+    commondata->external_input_Nxx1 = bhahaha_params_and_data->Ntheta_array_multigrid[max_resolution_i];
+    commondata->external_input_Nxx2 = bhahaha_params_and_data->Nphi_array_multigrid[max_resolution_i];
+  }
+
+  // Step 1.a: Calculate grid spacing in each coordinate direction based on the simulation domain and resolution.
+  // x_i = min_i + (j + 0.5) * dx_i, where dx_i = (max_i - min_i) / N_i
+
+  commondata->external_input_dxx0 = bhahaha_params_and_data->dr_external_input;
+  commondata->external_input_dxx1 = M_PI / ((REAL)commondata->external_input_Nxx1);
+  commondata->external_input_dxx2 = 2 * M_PI / ((REAL)commondata->external_input_Nxx2);
+
+  // Precompute inverse grid spacings for performance optimization in calculations.
+  commondata->external_input_invdxx0 = 1.0 / commondata->external_input_dxx0;
+  commondata->external_input_invdxx1 = 1.0 / commondata->external_input_dxx1;
+  commondata->external_input_invdxx2 = 1.0 / commondata->external_input_dxx2;
+
+#ifdef __CUDACC__
+  //Deep copy bhahaha_params_and_data & bhahaha_diagnostics
+  bhahaha_params_and_data_struct *d_bhahaha_params_and_data = NULL;
+  gpuErrchk( cudaMalloc((void**)&d_bhahaha_params_and_data, sizeof(bhahaha_params_and_data_struct)) );
+  gpuErrchk( cudaMemcpy(d_bhahaha_params_and_data, commondata->bhahaha_params_and_data, sizeof(bhahaha_params_and_data_struct), cudaMemcpyHostToDevice) );
+  commondata->bhahaha_params_and_data = d_bhahaha_params_and_data;
+
+  bhahaha_diagnostics_struct *d_bhahaha_diagnostics = NULL;
+  cudaMalloc((void**)&d_bhahaha_diagnostics, sizeof(bhahaha_diagnostics_struct));
+  cudaMemcpy(d_bhahaha_diagnostics, commondata->bhahaha_diagnostics, sizeof(bhahaha_diagnostics_struct), cudaMemcpyHostToDevice);
+  commondata->bhahaha_diagnostics = d_bhahaha_diagnostics;
+#endif
+
+  // Step 2: Add ghost zones to the external input data.
   // Ghost zones are added to so that inner boundary conditions may be applied; 2 * NGHOSTS in each angular direction and NGHOSTS in the radial
   // direction.
   commondata->external_input_Nxx_plus_2NGHOSTS0 = commondata->external_input_Nxx0 + 2 * NGHOSTS;
@@ -408,9 +450,10 @@ This function performs the following steps:
 
   // Step 2.a: Allocate memory for the external input gridfunctions without ghost zones.
 #ifdef __CUDACC__
+  const int total_elements_no_gzs = commondata->external_input_Nxx0 * commondata->external_input_Nxx1 * commondata->external_input_Nxx2;
   REAL *restrict d_external_input_gfs_no_gzs = NULL;
-  cudaMalloc((void**)&d_external_input_gfs_no_gzs, sizeof(REAL)*NUM_EXT_INPUT_CONFORMAL_GFS * total_elements_incl_gzs);
-  cudaMemcpy(d_external_input_gfs_no_gzs, commondata->external_input_gfs_Cart_basis_no_gzs,  sizeof(REAL)*NUM_EXT_INPUT_CONFORMAL_GFS * total_elements_incl_gzs, cudaMemcpyHostToDevice);
+  cudaMalloc((void**)&d_external_input_gfs_no_gzs, sizeof(REAL)*NUM_EXT_INPUT_CARTESIAN_GFS * total_elements_incl_gzs);
+  cudaMemcpy(d_external_input_gfs_no_gzs, commondata->external_input_gfs_Cart_basis_no_gzs,  sizeof(REAL)*NUM_EXT_INPUT_CARTESIAN_GFS * total_elements_no_gzs, cudaMemcpyHostToDevice);
   commondata->external_input_gfs_Cart_basis_no_gzs = d_external_input_gfs_no_gzs;
 #endif
 
