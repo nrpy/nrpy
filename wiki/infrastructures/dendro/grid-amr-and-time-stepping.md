@@ -77,18 +77,28 @@ produce finite positive widths and a finite positive CFL factor. This rule
 preserves cubic-domain timesteps but reduces timesteps when Y or Z is finer
 than X.
 
-A requested restore with no checkpoint metadata stops before loading puncture
-data or appending diagnostics. The separate `--tpid` mode still generates
-initial-data coefficients without requiring a checkpoint. A valid restore
-retains its stored timestep; the driver rejects a timestep above the current
-minimum-axis CFL bound before initializing RK4. Registered nonfinite floating
-parameters are rejected before puncture-file access.
+With `BSSN_RESTORE_SOLVER = 1` and no checkpoint metadata file in either slot
+under `BSSN_CHKPT_FILE_PREFIX`, rank 0 prints a warning naming that prefix and
+evolution starts from the initial data exactly as with `BSSN_RESTORE_SOLVER = 0`,
+including loading the TwoPunctures coefficients and appending to any existing
+diagnostic files. Rank 0 alone inspects the metadata files and broadcasts the
+slot, so all ranks agree. A parameter file that always sets
+`BSSN_RESTORE_SOLVER = 1` therefore serves the first submission and every
+resubmission of a job; a wrong working directory or prefix also starts a fresh
+evolution, and the warning is the only signal. Existing metadata that cannot be
+restored (for example
+an incompatible formulation or field layout, or a missing octree or state file)
+remains a fatal error. The separate `--tpid` mode still generates initial-data
+coefficients without requiring a checkpoint. A valid restore retains its stored
+timestep; the driver rejects a timestep above the current minimum-axis CFL
+bound before initializing RK4. Registered nonfinite floating parameters are
+rejected before puncture-file access.
 
 Claim evidence:
-- Claim: New timesteps use the minimum physical axis spacing; restore requires checkpoint metadata and preserves a stored timestep only if it satisfies the current CFL bound. The driver checks generated parameter validation before loading puncture data.
+- Claim: New timesteps use the minimum physical axis spacing; a restore request with checkpoint metadata preserves a stored timestep only if it satisfies the current CFL bound, and a restore request without checkpoint metadata in either slot prints a warning on rank 0 and starts from the initial data as with `BSSN_RESTORE_SOLVER = 0`, while unreadable existing metadata stays fatal. The driver checks generated parameter validation before loading puncture data.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`.
-- Corroboration: `nrpy/infrastructures/Dendro/CodeParameters.py`, generated parameter validation; Dendrolib `Block::computeDx`, `computeDy`, and `computeDz` define the physical axis spacings.
+- Corroboration: `nrpy/infrastructures/Dendro/CodeParameters.py`, generated parameter validation; Dendrolib `Block::computeDx`, `computeDy`, and `computeDz` define the physical axis spacings; `Leg.run_negatives` in `nrpy/examples/tests/dendro_application_check.py` runs the restore-without-metadata case; Dendro-GR `BSSN_GR/src/bssnCtx.cpp`, `BSSNCtx::initialize` and `BSSNCtx::restore_checkpt`, continue as if `BSSN_RESTORE_SOLVER` were false when no checkpoint files are found and abort on a corrupted one.
 
 When the apparent-horizon finder is enabled (`AEH_SOLVER_FREQ > 0`), each
 checkpoint also writes the finder's search state to
