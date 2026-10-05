@@ -135,7 +135,10 @@ than one rank, a TwoPunctures parameter mismatch, a missing TwoPunctures file,
 an unsupported element order, an unsupported refinement mode, an excessive CFL
 factor, `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = false`, an integer given for a
 real-valued parameter, and a lapse blow-up with constraint output off; a run
-given an unread key must warn about it and still succeed.
+given an unread key must warn about it and still succeed, and a run with
+`BSSN_RESTORE_SOLVER = 1` and no checkpoint metadata must warn that no
+metadata was found, start from the initial data, and write its first
+constraint row at step 0.
 
 The stored reference is a generated `trusted_dict` keyed by formulation and
 conformal factor. It changes only through the helper's `--update-reference`

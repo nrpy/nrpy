@@ -70,10 +70,12 @@ with one MPI task before starting a fresh evolution. This computes the
 TwoPunctures spectral solution once and writes
 `TPID_FILEPREFIX_nrpy_tpid_sol.bin`. Either generated solver can load that
 file for the same puncture inputs. Fresh MPI evolutions read the coefficients
-on every rank; they do not solve the puncture equations. A checkpoint restart
-does not read the file. The reader rejects a missing, truncated, or
-parameter-mismatched file. The NRPy suffix keeps these coefficients separate
-from native Dendro-GR's `TPID_FILEPREFIX_tpid_sol.bin` format.
+on every rank; they do not solve the puncture equations. A restore from a
+checkpoint does not read the file; a restore request that finds no checkpoint
+metadata starts a fresh evolution and does read it. The reader rejects a missing,
+truncated, or parameter-mismatched file. The NRPy suffix keeps these
+coefficients separate from native Dendro-GR's `TPID_FILEPREFIX_tpid_sol.bin`
+format.
 
 The solver reads every host parameter through a small parameter-file object that
 records each key it reads; the generated binding loop assigns registered

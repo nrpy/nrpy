@@ -1436,7 +1436,7 @@ class Leg:
 
     def run_negatives(self) -> None:
         """
-        Run the invalid-input cases and the unread-parameter warning case once.
+        Run the invalid-input, unread-parameter, and restore-without-checkpoint cases.
 
         :raises CheckError: If a copied checkpoint does not record its writer's
             formulation.
@@ -1488,26 +1488,6 @@ class Leg:
                 run_dir,
                 "invalid runtime parameters",
             )
-        run_dir = self.prepare(
-            "W", "N-restore-missing", dict(o4, BSSN_RESTORE_SOLVER="1")
-        )
-        diagnostic = run_dir / "dat/dgr_Constraints.dat"
-        previous_output = b"# Existing evolution output\n80 1.0 0.25\n"
-        diagnostic.write_bytes(previous_output)
-        self.negative(
-            "restore requested without checkpoint metadata",
-            self.mpi(2, exe, "ci.toml"),
-            run_dir,
-            "checkpoint restore requested but no checkpoint metadata found",
-        )
-        self.report.check(
-            "N1",
-            "runtime error behavior",
-            "missing checkpoint preserves diagnostics",
-            "unchanged" if diagnostic.read_bytes() == previous_output else "changed",
-            "unchanged",
-            diagnostic.read_bytes() == previous_output,
-        )
         run_dir = self.prepare("W", "N-output-failure", o4)
         (run_dir / "dat/dgr_ADM.dat").mkdir()
         self.negative(
@@ -1628,6 +1608,32 @@ class Leg:
             f"exit 0, warning {'found' if warned else 'missing'}",
             f"exit 0 with '{expected}'",
             warned,
+        )
+        run_dir = self.prepare(
+            "W",
+            "N-restore-missing",
+            dict(o4, BSSN_MAX_ITERATIONS="1", BSSN_RESTORE_SOLVER="1"),
+        )
+        run_checked(
+            self.mpi(2, exe, "ci.toml"), run_dir, run_dir / "run.log", TIMEOUT_RUN
+        )
+        expected = (
+            f"{self.exe_name}: warning: BSSN_RESTORE_SOLVER = 1, "
+            "but no checkpoint metadata was found"
+        )
+        warned = expected in (run_dir / "run.log").read_text(errors="replace")
+        # A restored run skips the initial output; a fresh start writes step 0.
+        rows = parse_table(run_dir / "dat" / "dgr_Constraints.dat")[1]
+        first_step = int(round(rows[0][0])) if rows else -1
+        self.report.check(
+            "N2",
+            "runtime warning behavior",
+            "a restore request without checkpoint metadata is reported and the run "
+            "starts from the initial data",
+            f"exit 0, warning {'found' if warned else 'missing'}, "
+            f"first constraint row at step {first_step}",
+            f"exit 0 with '{expected}' and a first constraint row at step 0",
+            warned and first_step == 0,
         )
 
     def run(self) -> None:
