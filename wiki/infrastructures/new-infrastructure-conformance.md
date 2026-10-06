@@ -52,8 +52,8 @@ Any match outside `general_relativity/` needs a demonstrated generic-layer
 reason.
 
 In `nrpy/infrastructures/Dendro/` the top-level modules carry formulation names
-for four reasons, and each passes the threaded-or-hardcoded test stated under
-"Names identify both NRPy and the target code":
+for the following reasons, and each passes the threaded-or-hardcoded test stated
+under "Names identify both NRPy and the target code":
 
 - `state_h.py`, `checkpoint.py`, and `solver_context.py` receive
   `enable_fCCZ4` and use it to select the evolved-field list, the checkpoint
@@ -61,7 +61,12 @@ for four reasons, and each passes the threaded-or-hardcoded test stated under
   column labels;
 - `main_cpp.py`, `param_toml.py`, and `CodeParameters.py` use the `BSSN_*`
   runtime keys that Dendro-GR's parameter file defines, which the host's
-  vocabulary requires;
+  vocabulary requires, and `checkpoint.py` names `BSSN_ELE_ORDER` in its
+  diagnostic for a mismatched element order;
+- `solver_context.py` calls the kernels `ADM_to_BSSN_order_N` and `BSSN_to_ADM`
+  by their BSSN-based names, and `main_cpp.py` indexes the horizon-finder fields
+  with `BSSN_EVOLVED_GRIDFUNCTIONS`, whose entries the fCCZ4 list repeats before
+  its extra `Theta_fCCZ4`;
 - `CMakeLists.py` names the native `BSSN_GR` source fragments it rejects;
 - the doctests, the docstring examples, and two local lambda names in
   `main_cpp.py` (`initial_bssn_fields`, `bssn_to_adm`) use BSSN names where no
@@ -71,7 +76,7 @@ A path, namespace, or file stem written as a literal formulation name in these
 modules fails the test.
 
 Claim evidence:
-- Claim: no top-level Dendro module writes a formulation name into a generated path, namespace, or file stem; the formulation names these modules carry select state, checkpoint, kernel, or label text from `enable_fCCZ4`, name host-required `BSSN_*` keys, name native sources to reject, or appear in doctests, docstring examples, and local variable names.
+- Claim: no top-level Dendro module writes a formulation name into a generated path, namespace, or file stem; the formulation names these modules carry select state, checkpoint, kernel, or label text from `enable_fCCZ4`, name host-required `BSSN_*` keys, call the BSSN-named conversion kernels, index horizon fields with the BSSN evolved list, name native sources to reject, or appear in doctests, docstring examples, and local variable names.
 - Role: descriptive behavior
 - Deciding authority: [state_h.py](../../nrpy/infrastructures/Dendro/state_h.py), `evolved_gridfunctions`; [checkpoint.py](../../nrpy/infrastructures/Dendro/checkpoint.py), `output_checkpoint_cpp`; [solver_context.py](../../nrpy/infrastructures/Dendro/solver_context.py), `output_solver_context_cpp`; [main_cpp.py](../../nrpy/infrastructures/Dendro/main_cpp.py), `output_main_cpp`; [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), `output_CFunctions_function_prototypes_and_construct_CMakeLists`, the native-source screen
 - Corroboration: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) pass the solver stem and namespace into these modules
@@ -212,6 +217,9 @@ their purpose", was too weak to prevent any of them.
 - [main_c.py](../../nrpy/infrastructures/BHaH/main_c.py) - `register_CFunction_main_c`
 - [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - `main`, the inline project assembly
 - [coding_style.md](../../coding_style.md) - `## Python Coding Style`, module naming
+- [state_h.py](../../nrpy/infrastructures/Dendro/state_h.py), [checkpoint.py](../../nrpy/infrastructures/Dendro/checkpoint.py), [solver_context.py](../../nrpy/infrastructures/Dendro/solver_context.py), and [main_cpp.py](../../nrpy/infrastructures/Dendro/main_cpp.py) - the Dendro top-level modules that carry formulation names.
+- [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py) - the native-source screen.
+- [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) - the solver stem and namespace that the examples thread into the generators.
 
 ## See Also
 

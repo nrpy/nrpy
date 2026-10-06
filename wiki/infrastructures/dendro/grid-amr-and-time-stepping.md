@@ -124,7 +124,7 @@ Claim evidence:
 - Claim: A restore is accepted only when the stored formulation, field list, parameter names, every emitted `CodeParameter` value, domain bounds, time data, puncture history, element order (4, 6, or 8, and equal to `BSSN_ELE_ORDER`), and projected algebraic residual (at most 1e-10, rechecked on the restored state, and infinite for a nonpositive or nonfinite determinant or a nonfinite trace) pass, and when the launch has at least the stored number of active MPI ranks; a metadata failure prints `Checkpoint metadata does not match <formulation>` (an element-order mismatch also prints the stored and the running order) and the run aborts with `checkpoint restore failed`.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/checkpoint.py`, `output_checkpoint_cpp` (the metadata tests and the rank-count test); `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::restore_checkpt` within `output_solver_context_cpp` (the residual recheck).
-- Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.run_negatives`, the W/chi cross-restore rejection, and `Leg.run_variant`, the restore of an unchanged run.
+- Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.run_negatives`, the W/chi cross-restore rejection, and `Leg.run_variant`, the restore of an unchanged run; no CI case exercises the element-order mismatch or the refusal of a checkpoint whose trace is nonfinite.
 
 Claim evidence:
 - Claim: Restart preserves the checkpoint-written-after-merger state used to select the post-merger AMR coarsening factor.
@@ -170,16 +170,17 @@ checkpoint after the step's output at every nonzero multiple of
 ends without a final write, so a run that ends between multiples leaves no
 checkpoint of its last steps. Within one write the octree and state files are
 published first and the metadata file last, and the horizon search-state file
-follows. Native `BSSN_GR` instead honors an explicit `BSSN_RESTORE_CHECKPT_SLOT`,
+follows. Native `BSSN_GR` instead honors an explicit `BSSN_RESTORE_CHECKPT_SLOT` when that
+slot exists (a missing slot falls back to the steps below),
 otherwise reads the `.latest` sentinel it writes after each complete normal
 checkpoint, otherwise compares the step numbers of the slots, restores the other
 normal slot when a slot it chose itself is incomplete, and aborts when the
-selected slot's metadata, octree, or state file cannot be read. Its merger snapshot in
+metadata, octree, or state file of the selected existing slot cannot be read. Its merger snapshot in
 slot 3 is never named by `.latest` and is restorable only through an explicit
 slot request.
 
 Claim evidence:
-- Claim: The generated driver restores only the metadata slot with the newest modification time and falls back to no other slot; it writes checkpoints only at nonzero multiples of `BSSN_CHECKPT_FREQ`, into slot `(step / BSSN_CHECKPT_FREQ) mod 2`, publishing the metadata after the octree and state files and then writing the horizon search-state file, with no write after the last step. Native `BSSN_GR` restores the slot named by `BSSN_RESTORE_CHECKPT_SLOT`, otherwise the one the `.latest` sentinel names, otherwise the newer by step number, falls back to the other normal slot when a slot it chose itself is incomplete, aborts when the selected slot cannot be read, and writes its merger snapshot in slot 3 without publishing it in `.latest`.
+- Claim: The generated driver restores only the metadata slot with the newest modification time and falls back to no other slot; it writes checkpoints only at nonzero multiples of `BSSN_CHECKPT_FREQ`, into slot `(step / BSSN_CHECKPT_FREQ) mod 2`, publishing the metadata after the octree and state files and then writing the horizon search-state file, with no write after the last step. Native `BSSN_GR` restores the slot named by `BSSN_RESTORE_CHECKPT_SLOT` when it exists (a missing slot falls back to auto-detection), otherwise the one the `.latest` sentinel names, otherwise the newer by step number, falls back to the other normal slot when a slot it chose itself is incomplete, aborts when an existing selected slot cannot be read, and writes its merger snapshot in slot 3 without publishing it in `.latest`.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp` (slot choice, write-then-evolve loop); `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::write_checkpt`; `nrpy/infrastructures/Dendro/checkpoint.py`, `output_checkpoint_cpp` (file publication order); Dendro-GR `BSSN_GR/src/bssnCtx.cpp`, `BSSNCtx::write_checkpt` and `BSSNCtx::restore_checkpt`.
 - Corroboration: none available; no CI case checks slot choice, the write schedule, or the native restore order.
@@ -378,6 +379,13 @@ for the columns, count reduction, scaling, and restart behavior.
 - [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - analytic seed, AMR parameters, and scheduling.
 - [Dendro-GR dataUtils.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/dataUtils.cpp) - native black-hole refinement path.
 - [Dendro-GR bssnCtx.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssnCtx.cpp) - native apparent-horizon checkpoint file name and restore.
+- [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py) - shift-driver equation.
+- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - generated parameter validation and the q1 key names.
+- [state_h.py](../../../nrpy/infrastructures/Dendro/state_h.py) - the `f_infinity` values registered for the evolved fields.
+- [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py) - CI checks of restart, reflection, and rejections.
+- [Dendro-GR rhs.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/rhs.cpp) - native RIT `eta` selection.
+- [Dendro-GR bssneqs_SSL_HD_dxsq.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssneqs_SSL_HD_dxsq.cpp) - native `B_rhs`.
+- [Dendro-GR grUtils.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/grUtils.cpp) - native analytic puncture seed `punctureDataPhysicalCoord`.
 
 ## See Also
 

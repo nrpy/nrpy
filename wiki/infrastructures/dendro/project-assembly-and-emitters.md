@@ -186,7 +186,7 @@ Claim evidence:
 - Corroboration: none available; no CI job installs the package and generates from the installed copy
 
 Claim evidence:
-- Claim: The generated CMake project is standalone: it declares its own project and CMake minimum 3.18, fetches Dendrolib from `master` and toml11, and applies the selected CPU architecture to the solver and the fetched libraries. The minimum matches the imported targets `BLAS::BLAS` and `LAPACK::LAPACK` that Dendrolib's default `WITH_BLAS_LAPACK` path links; the KB records no configure on an older CMake.
+- Claim: The generated CMake project is standalone: it declares its own project and CMake minimum 3.18, fetches Dendrolib from `master` and toml11, and applies the selected CPU architecture to the solver and the fetched libraries, where `CPU_ARCH` accepts only `native`, `generic_avx2`, `x86-64-v3`, `znver1` through `znver4`, `haswell`, `broadwell`, `skylake-avx512`, `cascadelake`, and `icelake-server` and any other value is a fatal CMake error. The minimum matches the imported targets `BLAS::BLAS` and `LAPACK::LAPACK` that Dendrolib's default `WITH_BLAS_LAPACK` path links; the KB records no configure on an older CMake.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/CMakeLists.py`, `output_CFunctions_function_prototypes_and_construct_CMakeLists`.
 - Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.generate_and_build`, configures and builds each generated tree on its own; Dendrolib `CMakeLists.txt` (`paralab/Dendro-5.01`), the `WITH_BLAS_LAPACK` option and its `target_link_libraries` line.
@@ -202,6 +202,11 @@ Claim evidence:
 - [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) - BSSN registration wave and file emission.
 - [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - fCCZ4 registration wave and file emission.
 - [parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py) - worker execution and registry merge.
+- [state_h.py](../../../nrpy/infrastructures/Dendro/state_h.py) - `validate_registered_state` and the canonical state lists.
+- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) and [Ricci_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/Ricci_eval.py) - the `enable_intrinsics` kernels.
+- [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py) - the generation and run checks that corroborate this page.
+- [param_toml.py](../../../nrpy/infrastructures/Dendro/param_toml.py) - the generated `pars/<stem>.toml`.
+- [twopunctures.py](../../../nrpy/infrastructures/Dendro/general_relativity/twopunctures.py) - the TwoPunctures registrar and its `Infrastructure` toggle.
 - [setup.py](../../../setup.py) - package data that ships the packaged q1 parameter file.
 - [CMakeLists.py](../../../nrpy/infrastructures/Dendro/CMakeLists.py) - prototype and explicit CMake source emission, standalone project, and build/run instructions.
 - [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - application entry point, parameter-file reading, and startup checks.

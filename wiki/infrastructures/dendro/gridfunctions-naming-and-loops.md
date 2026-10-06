@@ -57,6 +57,12 @@ Claim evidence:
 - Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/floor_the_lapse_and_conformal_factor.py` and `enforce_detgbar_equals_detghat_trAzero.py`, CFunction registrations.
 - Corroboration: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::post_timestep` within `output_solver_context_cpp`, passes the zipped stage and owned-node range.
 
+Claim evidence:
+- Claim: Each Dendro registrar that binds field arrays emits its pointer declarations once, and each array index is the position of the field in an explicit canonical list or tuple (the evolved, Ricci scratch, diagnostic, and ADM component orders), not in the alphabetical registry order.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py`, `register_CFunction_rhs_eval` (the `evol_order` bindings); `nrpy/infrastructures/Dendro/general_relativity/Ricci_eval.py`, `register_CFunction_Ricci_eval`; `BSSN_constraints.py`, `register_CFunction_BSSN_constraints`, and `ADM_to_BSSN.py`, `register_CFunction_ADM_to_BSSN`, in the same directory; `nrpy/infrastructures/Dendro/state_h.py`, `BSSN_EVOLVED_GRIDFUNCTIONS`, `BSSN_DIAGNOSTIC_GRIDFUNCTIONS`, and `RICCI_GRIDFUNCTIONS`.
+- Corroboration: none available; the CI helper checks no pointer index.
+
 ## Sources
 
 - [grid.py](../../../nrpy/grid.py) - `DendroGridFunction`.
@@ -66,6 +72,8 @@ Claim evidence:
 - [Ricci_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/Ricci_eval.py) - separate Ricci scratch binding.
 - [floor_the_lapse_and_conformal_factor.py](../../../nrpy/infrastructures/Dendro/general_relativity/floor_the_lapse_and_conformal_factor.py) - owned-node floor.
 - [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/Dendro/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - owned-node projection.
+- [ADM_to_BSSN.py](../../../nrpy/infrastructures/Dendro/general_relativity/ADM_to_BSSN.py) and [BSSN_constraints.py](../../../nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py) - pointer declarations from canonical lists.
+- [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - the floor and projection calls.
 
 ## See Also
 

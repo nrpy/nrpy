@@ -172,7 +172,7 @@ only the listed `l` values, which is the same set for the default list.
 Claim evidence:
 - Claim: Rank 0 appends each (l, m) mode, for l = 2..max(`BSSN_GW_L_MODES`) and m = -l..l, to `<BSSN_PROFILE_FILE_PREFIX>_GW_l<l>_m<m>.dat`: column labels, then one row per extraction step with the step, time and one `(Re,Im)` pair per extraction radius, in scientific notation with 10 digits after the decimal point. Each entry is `4 pi` times the Lebedev-weighted sum of Psi4 times the conjugate spin-weight -2 harmonic on coordinate spheres about the origin, with no radius factor; native `BSSN_GR` extracts the same way. Native `BSSN_GR` uses the same name and row layout, with an uncommented step-0 header line instead of the labels, and writes only the listed l values. This applies to the fCCZ4 application as well.
 - Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::gravitational_wave_output` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/general_relativity/gravitational_waves.py`, `register_CFunction_gravitational_waves`; `nrpy/infrastructures/Dendro/general_relativity/psi4_eval.py`, the tetrad seeds.
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::gravitational_wave_output` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/general_relativity/gravitational_waves.py`, `register_CFunction_gravitational_waves`; `nrpy/infrastructures/Dendro/general_relativity/psi4_eval.py`, `register_CFunction_psi4_eval` (the tetrad seeds).
 - Corroboration: Dendro-GR `BSSN_GR/include/gwExtract.h`, `GW::extractFarFieldPsi4`, per-mode file writer.
 
 At the effective gravitational-wave extraction cadence, rank 0 also appends
@@ -276,7 +276,7 @@ evolutions equivalent:
 | Evolved conformal factor | W by default; `--conformal-factor chi` selects chi at generation | chi |
 | TwoPunctures initial lapse | Always `alpha=(psi_background+u)^(-2)=W`; startup rejects `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = false`, and `INITIAL_LAPSE` and `TPID_INITIAL_LAPSE_PSI_EXPONENT` are reported as having no effect | `TPID_REPLACE_LAPSE_WITH_SQRT_CHI=true` is needed to replace the ordinary `INITIAL_LAPSE=2` result with full-psi W |
 | Shift-driver damping in the SSL/CAHD path | Spatially constant `eta`; default 1 in the generated file, overridden by `ETA_CONST` in an input file (the packaged q1 file sets 2.0) | Radial RIT profile in the CPU RHS, `eta = (RIT_ETA_CENTRAL - RIT_ETA_OUTER) exp(-(r / RIT_ETA_WIDTH)^4) + RIT_ETA_OUTER` with defaults 2.0, 0.25, and 40.0, constant only when `RIT_ETA_CENTRAL` equals `RIT_ETA_OUTER`; the CPU RHS does not read `ETA_CONST`, so the packaged q1 file, which sets `ETA_CONST = 2.0` and no `RIT_ETA_*` key, runs natively with the falling profile |
-| Gamma-driver auxiliary `B^i` | `d_t beta^i = B^i + advection`, `d_t B^i = beta^j Dbar_j B^i + (3/4)(d_t Lambdabar^i - beta^j Dbar_j Lambdabar^i) - eta B^i`, the `GammaDriving2ndOrder_Covariant__Hatted` option, where `d_t Lambdabar^i` includes its own advection; the wavelet refinement test scales `betU` by 4/3 (see [Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md)) | `d_t beta^i = (3/4) B^i + advection` with `BSSN_LAMBDA_F = (1, 0)`, `d_t B^i = d_t Gt^i - eta B^i + lambda[2] beta^j d_j B^i - lambda[3] beta^j d_j Gt^i` with `lambda = BSSN_LAMBDA`; with `BSSN_LAMBDA = (1, 1, 1, 1)` and the same `eta`, `B` is 4/3 of the generated `betU`; where the RIT profile differs from the generated constant `eta`, the relation does not hold |
+| Gamma-driver auxiliary `B^i` | `d_t beta^i = B^i + advection`, `d_t B^i = beta^j Dhat_j B^i + (3/4)(d_t Lambdabar^i - beta^j Dhat_j Lambdabar^i) - eta B^i`, with `Dhat_j` the covariant derivative of the reference metric (the `GammaDriving2ndOrder_Covariant__Hatted` option) and `d_t Lambdabar^i` including its own advection; the wavelet refinement test scales `betU` by 4/3 (see [Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md)) | `d_t beta^i = (3/4) B^i + advection` with `BSSN_LAMBDA_F = (1, 0)`, `d_t B^i = d_t Gt^i - eta B^i + lambda[2] beta^j d_j B^i - lambda[3] beta^j d_j Gt^i` with `lambda = BSSN_LAMBDA`; with `BSSN_LAMBDA = (1, 1, 1, 1)` and the same `eta`, `B` is 4/3 of the generated `betU`; where the RIT profile differs from the generated constant `eta`, the relation does not hold |
 | KO strength | Both generated strengths read `KO_DISS_SIGMA`; the emitted sample sets 0.4 when KO is enabled | Reads `KO_DISS_SIGMA` with CAKO off; when CAKO is enabled, uses `sqrt(chi)` times separate gauge and other CAKO coefficients |
 | Puncture tracker | After each step and any remesh, each center moves by `-dt beta^i`, with `beta^i` interpolated from the evolved state at the center's previous position and `dt` the time since the previous update: one explicit displacement, no predictor, no stored velocity | Heun predictor and corrector on `dx/dt = -beta(x)` using the velocity stored from the previous step, with a single Euler displacement when none is stored |
 | Time integrator and step | RK4 only; `BSSN_RK_TYPE` is not read; the spacing in the CFL step is the smallest axis spacing | `BSSN_RK_TYPE` selects among RK3, RK4, RK5, and three multistep types; the CFL spacing comes from the X-domain width |
@@ -291,9 +291,9 @@ diagnostic norms also does not prove identical mesh histories or evolved
 fields.
 
 Claim evidence:
-- Claim: Native CPU SSL/CAHD evolution uses radial RIT eta even when `ETA_CONST` is present, whereas generated BSSN uses constant eta; native requires its lapse-replacement option to match the generated full-psi W initial lapse. Native KO uses `KO_DISS_SIGMA` only with CAKO off; enabling CAKO selects chi-scaled gauge/other coefficients instead. Native tracks the punctures with a Heun predictor and corrector, selects its integrator by `BSSN_RK_TYPE`, takes its CFL spacing from the X-domain width, and defaults `BSSN_BH{1,2}_CONSTRAINT_R` to 5.0 and `BSSN_SCALE_VTU_AND_GW_EXTRACTION` to false, where the generated solver uses one explicit displacement, RK4, the smallest axis spacing, 1.0, and true.
+- Claim: Native CPU SSL/CAHD evolution uses radial RIT eta even when `ETA_CONST` is present, whereas generated BSSN uses constant eta; native requires its lapse-replacement option to match the generated full-psi W initial lapse. Native KO uses `KO_DISS_SIGMA` only with CAKO off; enabling CAKO selects chi-scaled gauge/other coefficients instead. Native tracks the punctures with a Heun predictor and corrector, selects its integrator by `BSSN_RK_TYPE`, takes its CFL spacing from the X-domain width, and defaults `BSSN_BH{1,2}_CONSTRAINT_R` to 5.0 and `BSSN_SCALE_VTU_AND_GW_EXTRACTION` to false, where the generated solver uses one explicit displacement, RK4, the smallest axis spacing, 1.0, and true. The native radial profile is `eta = (RIT_ETA_CENTRAL - RIT_ETA_OUTER) exp(-(r / RIT_ETA_WIDTH)^4) + RIT_ETA_OUTER` with defaults 2.0, 0.25, and 40.0, and the CPU RHS does not read `ETA_CONST`. The generated shift equations are `d_t beta^i = B^i + advection` and `d_t B^i = beta^j Dhat_j B^i + (3/4)(d_t Lambdabar^i - beta^j Dhat_j Lambdabar^i) - eta B^i`, with `d_t Lambdabar^i` including its own advection; native has `d_t B^i = d_t Gt^i - eta B^i + lambda[2] beta^j d_j B^i - lambda[3] beta^j d_j Gt^i`.
 - Role: descriptive behavior
-- Deciding authority: `nrpy/examples/dendro_bssn.py`, `main`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::evolve_excision_centers` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `BSSN_GR/src/rhs.cpp`, CPU eta, SSL/CAHD include selection, and CAKO branches; `BSSN_GR/src/TwoPunctures.cpp`, lapse replacement.
+- Deciding authority: `nrpy/examples/dendro_bssn.py`, `main`; `nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py`, `register_CFunction_rhs_eval` (the default shift option); `nrpy/equations/general_relativity/BSSN_gauge_RHSs.py`, `BSSN_gauge_RHSs` (the `GammaDriving2ndOrder_Covariant__Hatted` branch); `BSSN_GR/src/bssneqs_SSL_HD_dxsq.cpp`, `B_rhs`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::evolve_excision_centers` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `BSSN_GR/src/rhs.cpp`, CPU eta, SSL/CAHD include selection, and CAKO branches; `BSSN_GR/src/TwoPunctures.cpp`, lapse replacement.
 - Corroboration: `nrpy/infrastructures/Dendro/CodeParameters.py`, q1 parameter mapping; `BSSN_GR/src/eta_RIT.inc.cpp`, radial formula; `BSSN_GR/src/parameters.cpp`, lapse and CAKO settings, `RIT_ETA_*`, constraint-radius, and scaling defaults; `BSSN_GR/src/bssngr_main.cpp`, post-merger CAKO switch, integrator selection, and CFL spacing; `BSSN_GR/src/grUtils.cpp`, `computeBHLocations`.
 
 ### Optional Yo et al. adjustments
@@ -352,14 +352,10 @@ both formulations, the CAHD coefficient 0.06 in both (the fCCZ4 default of 0.15
 does not apply), and finite-difference order 6 whatever `--fd-order` was. The
 closing message of each example, "TwoPunctures alpha=W, and eta=1 enabled",
 describes the generated default, not the q1 file. The q1 file also sets keys that
-the generated file leaves to host fallbacks: the evolved and constraint VTU
-field counts (24 and 6, against a fallback of 1 each), `BSSN_CHECKPT_FREQ` (800,
-against 100), the apparent-horizon search `AEH_SOLVER_FREQ` (80, against 0, which
-disables it), the causal wavelet tolerance `BSSN_USE_WAVELET_TOL_FUNCTION = 6`
-(fallback 0, constant), the wave-zone Nyquist refinement `BSSN_NYQUIST_M = 7`
-(fallback 0, off), the puncture-centered AMR keys, and the `[AEH_PARAMS]` table.
-A run from the generated file alone therefore has no horizon finder, constant
-wavelet tolerance, no Nyquist refinement, and one VTU field of each kind.
+the generated file leaves to host fallbacks; [Runtime Parameter
+Keys](runtime-parameters.md) gives each key's fallback and q1 value. A run from
+the generated file alone therefore has no horizon finder, constant wavelet
+tolerance, no Nyquist refinement, and one VTU field of each kind.
 
 Claim evidence:
 - Claim: The packaged q1 file sets `ETA_CONST = 2.0`, `TPID_FILEPREFIX = "tp_q001"`, `BSSN_CAHD_C = 0.06`, and `BSSN_ELE_ORDER = 6`, whereas the generated `pars/bssn.toml` sets `ETA_CONST = 1.0`, `TPID_FILEPREFIX = "tp"`, `BSSN_CAHD_C = 0.06`, and `BSSN_ELE_ORDER` equal to the `--fd-order` value (the generated `pars/fccz4.toml` sets `BSSN_CAHD_C = 0.15`); the printed run commands name the q1 file; keys that q1 sets and the generated file omits take the host fallbacks in the generated run.
@@ -424,6 +420,16 @@ Claim evidence:
 - [adm_quantities_surface_data.py](../../../nrpy/infrastructures/Dendro/general_relativity/adm_quantities_surface_data.py) - ADM mass-flux and `K_ij - gamma_ij K` surface fields.
 - [ID_persist_struct.py](../../../nrpy/infrastructures/BHaH/general_relativity/TwoPunctures/ID_persist_struct.py) - TwoPunctures mass, momentum, spin, and separation assignment.
 - [q1.par.lowres.toml](../../../nrpy/examples/q1.par.lowres.toml) - packaged parameter file used by the printed run commands.
+- [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py) - lapse and shift gauge equations, including the hatted Gamma driver.
+- [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py) - BSSN right-hand sides.
+- [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py) - fCCZ4 right-hand sides and the canonical adjustment construction.
+- [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/Dendro/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - algebraic projection kernel.
+- [psi4_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/psi4_eval.py) - Psi4 evaluation and tetrad seeds.
+- [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py) - CI checks that read the output files.
+- [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - fCCZ4 generation profile.
+- [Dendro-GR bssneqs_SSL_HD_dxsq.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssneqs_SSL_HD_dxsq.cpp) - native `B_rhs` in the SSL/CAHD path.
+- [Dendro-GR grUtils.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/grUtils.cpp) - native puncture tracker `computeBHLocations`.
+- [Dendro-GR eta_RIT.inc.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/eta_RIT.inc.cpp) - native radial `eta` formula.
 
 ## See Also
 

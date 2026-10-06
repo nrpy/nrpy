@@ -95,7 +95,7 @@ Claim evidence:
 - Claim: The generated solver reports distinct excised conformal-factor volume-weighted and unique-owned-node RMS norms, and only the latter matches native Dendro-BSSN's node-weighting convention. The unique-node norm goes to `*_Constraints.dat`, native `BSSN_GR`'s file name, labelled `TimeStep` and `time` (native `BSSN_GR`'s names), the generated diagnostic names, and `unexcised_nodes`; for BSSN its columns 3-6 correspond to native `C_HAM` and `C_MOM0..2`, and native's further column `MIN_DET_GT` has no generated counterpart. Both norms leave out points whose coordinate distance from a tracked puncture center is below `BSSN_BH{1,2}_CONSTRAINT_R`, a finite nonnegative radius. The volume-weighted norm goes to `*_Constraints_volweighted.dat`, which labels an RMS and a maximum absolute value per field. A new or empty file of either kind first receives a title line and one `# column N = <name>: <meaning>` line per column. Both files print floating-point values with up to ten significant digits.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `output_solver_context_cpp` / `Ctx::diagnostic_output`, `open_labeled_output`, and `diagnostic_meanings`; `nrpy/infrastructures/Dendro/general_relativity/diagnostics.py`, `register_CFunction_diagnostics`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp` (the radius range check).
-- Corroboration: `BSSN_GR/include/grUtils.tcc`, `bssn::computeConstraintL2Norm(const ot::Mesh*,...)`, native ownership, excision, and RMS reduction, and `bssn::extractConstraints`, native file name and its `TimeStep` and `time` header names; `nrpy/infrastructures/Dendro/state_h.py`, diagnostic component order.
+- Corroboration: `BSSN_GR/include/grUtils.tcc`, `bssn::computeConstraintL2Norm(const ot::Mesh*,...)`, native ownership, excision, and RMS reduction, and `bssn::extractConstraints`, native file name and its `TimeStep` and `time` header names; `nrpy/infrastructures/Dendro/state_h.py`, diagnostic component order; no CI case exercises the constraint-radius rejection.
 
 The generated main loop evolves, remeshes and transfers when scheduled, then
 advances puncture centers before diagnostic output. This ordering prevents a
@@ -173,6 +173,8 @@ Claim evidence:
 - [Dendro-GR bssnCtx.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssnCtx.cpp) - native GridInfo writer and mesh counts.
 - [Dendro-GR parameters.h](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/include/parameters.h) - native frequency scaling.
 - [Dendro-GR bssngr_main.cpp](https://github.com/paralab/Dendro-GR/blob/master/BSSN_GR/src/bssngr_main.cpp) - native output scheduling.
+- [param_toml.py](../../../nrpy/infrastructures/Dendro/param_toml.py) - generated parameter defaults.
+- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - the BSSN-shaped Hamiltonian in the CAHD term.
 
 ## See Also
 

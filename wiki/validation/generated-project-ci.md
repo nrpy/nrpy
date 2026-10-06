@@ -209,11 +209,11 @@ Claim evidence:
 - Deciding authority: [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml), `on`, `dendro-validation-dendrolib-master`; [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `Leg.generate_and_build`, `--dendrolib-ref`
 - Corroboration: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), the emitted Dendrolib `FetchContent_Declare`
 
-The helper generates only with Kreiss-Oliger dissipation enabled, with
-`--fd-order 6`, and with neither `--ybs-gamma` nor `--ybs-momentum`; it evolves the
-generated `pars/<stem>.toml` with profile overrides and never reads the packaged
-`pars/q1.par.lowres.toml`. The apt
-packages, compilers, and `requirements.txt` packages are not pinned; the helper
+The helper's profile limits, among them Kreiss-Oliger dissipation enabled,
+`--fd-order 6`, no Yo et al. option, and the packaged q1 file never read, are
+stated in [Production Validation And Deferred
+Checks](../infrastructures/dendro/production-validation-and-deferred-checks.md).
+The apt packages, compilers, and `requirements.txt` packages are not pinned; the helper
 prints their resolved versions, and a pass is evidence only for those versions.
 Every subprocess has an argument vector, a timeout, and a bounded log tail on
 failure, and the work directory is removed unconditionally.

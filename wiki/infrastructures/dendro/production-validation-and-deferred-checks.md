@@ -12,7 +12,8 @@ Production examples generate complete Dendro applications.
 Required generator checks, with the layer that enforces each:
 
 - Isolated static analysis of each generator module: the `static-analysis` CI
-  job, which skips `*/tests/*` paths, so the helper itself is not analyzed.
+  job, whose file search skips `*/tests/*` paths among others, so the helper
+  itself is not analyzed.
 - BSSN and fCCZ4 import and registration, and two byte-identical clean
   generations: the helper generates each W and chi variant twice and compares
   the trees (a CI assertion).
@@ -21,12 +22,25 @@ Required generator checks, with the layer that enforces each:
   keys differ from the canonical order, and `validate_registered_state` raises
   when the registered names differ from the canonical state.
 - Direct Python/CFunction/C++ name correspondence and final-state pointer
-  indices: review-time checks. No generation-time guard or CI assertion tests
-  them.
+  indices: the kernel-presence guard above enforces that the order-specific
+  kernels and the five services `BSSN_to_ADM`, the lapse and conformal-factor
+  floor, `gravitational_waves`, `adm_quantities`, and `physical_boundary_ghosts`
+  are registered; the calls to `twopunctures`,
+  `physical_boundary`, `diagnostics`, `apparent_horizon`, and
+  `enforce_detgbar_equals_detghat_trAzero` have no generation-time registration
+  check. That a Python module's basename equals its registrar suffix, and that
+  pointer indices follow the canonical state order beyond the RHS key-order
+  guard, are review-time checks.
 - Rejection of native `BSSN_GR` sources: a generation-time `ValueError` from
   `output_CFunctions_function_prototypes_and_construct_CMakeLists`. The screen
   applies only to the application-supplied sources; registered CFunction sources
   get duplicate and path checks, and no test triggers the screen.
+
+Claim evidence:
+- Claim: The generators raise `ValueError` at generation when an order-specific kernel or one of the named runtime services (`BSSN_to_ADM`, the lapse and conformal-factor floor, `gravitational_waves`, `adm_quantities`, `physical_boundary_ghosts`) is not registered (`output_solver_context_cpp`; the calls to `twopunctures`, `physical_boundary`, `diagnostics`, `apparent_horizon`, and `enforce_detgbar_equals_detghat_trAzero` have no registration check), when the RHS keys differ from the canonical evolved order (`register_CFunction_rhs_eval`), when the registered EVOL or AUXEVOL names differ from the canonical state (`validate_registered_state`), and when an application-supplied CMake source is unsafe, duplicated, or a native `BSSN_GR` source (`output_CFunctions_function_prototypes_and_construct_CMakeLists`); registered CFunction sources get only the duplicate and path checks; the generators contain no check that a Python module's basename equals its registrar suffix and none of pointer indices beyond the canonical-order check of the RHS keys.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py`, `register_CFunction_rhs_eval`; `nrpy/infrastructures/Dendro/state_h.py`, `validate_registered_state`; `nrpy/infrastructures/Dendro/CMakeLists.py`, `output_CFunctions_function_prototypes_and_construct_CMakeLists`
+- Corroboration: none available; the helper generates every variant, so each guard runs in CI, but no case makes a guard fail
 
 Required application checks configure and build both standalone applications with
 Dendrolib. Both BSSN and fCCZ4 checks must generate W and chi variants.
@@ -111,12 +125,19 @@ The hand-run capability test below tests each error as `err > 1e-9`, which is
 false for a NaN, and its injected defects use zeroed or shifted data, so a host
 that writes NaN would pass the affected axes.
 
+Claim evidence:
+- Claim: The `static-analysis` job analyzes the Python modules found by its file search, which skips `__init__.py` files and the paths `./project/`, `./build/`, `*/tests/*`, `*manga*`, and `./nrpy/examples/visualization_scripts/`, so the Dendro generator modules are analyzed and `dendro_application_check.py` is not; the helper generates each W and chi variant twice and compares the trees; the rank comparison of wave-mode and GridInfo files requires only one step in common and compares rows pairwise, the stored reference holds no wave values, the FD-order comparison shows one shared mesh only through equal element counts after the initial-grid remesh, and the W-versus-chi comparison covers the node count, `E`, `J_z`, and the Psi4 modes only.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../../.github/workflows/main.yml), `static-analysis`; [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py), `Leg.generate_and_build`, `Leg.compare_runs`, `Leg.check_orders`, `Leg.compare_variants`, `Leg.check_reference`
+- Corroboration: none available; no case in the helper fails these comparisons by design
+
 Every tolerance in the helper is a literal in `dendro_application_check.py`.
 The helper derives none of them; it ties the stored-reference tolerance to the
 printed digits of the output columns. A pass shows agreement within those
 thresholds, not an error bound for the evolution.
 
-The helper generates only with `--fd-order 6` and with neither `--ybs-gamma` nor
+The helper generates only with Kreiss-Oliger dissipation enabled (the example
+scripts set it), with `--fd-order 6`, and with neither `--ybs-gamma` nor
 `--ybs-momentum`. It evolves the generated `pars/<stem>.toml` with profile
 overrides and never reads `pars/q1.par.lowres.toml` or runs the printed run
 commands, so the packaged q1 file is outside the CI evidence. Run-time orders 4
@@ -125,9 +146,9 @@ generation with `--fd-order 4` or `8`, and with either Yo et al. option, is
 exercised by no job.
 
 Claim evidence:
-- Claim: `dendro-validation` configures the listed required application checks through `dendro_application_check.py`, covers the evolution and the scheduled remesh test through a stored-reference regression check, covers Lambda initialization through the stored step-0 constraint row and the algebraic projection through the checkpoint write-time and restore-time residual checks, covers halo exchange through rank-count agreement and block boundaries within a rank only through the numerical checks and the stored reference, and omits field-data inspection, the pointwise initial-lapse check, the temporary direct numerical comparisons, and native-control comparisons. Its stored-reference and checkpoint-residual comparisons are upper bounds where the stored value is at round-off level, and the helper derives none of its tolerances. The helper generates only with `--fd-order 6` and without `--ybs-gamma` or `--ybs-momentum`, and it never reads the packaged q1 parameter file or runs the printed commands.
+- Claim: `dendro-validation` configures the listed required application checks through `dendro_application_check.py`, covers the evolution and the scheduled remesh test through a stored-reference regression check, covers Lambda initialization through the stored step-0 constraint row and the algebraic projection through the checkpoint write-time and restore-time residual checks, covers halo exchange through rank-count agreement and block boundaries within a rank only through the numerical checks and the stored reference, and omits field-data inspection, the pointwise initial-lapse check, the temporary direct numerical comparisons, and native-control comparisons. Its stored-reference and checkpoint-residual comparisons are upper bounds where the stored value is at round-off level, and the helper derives none of its tolerances. The helper generates only with Kreiss-Oliger dissipation enabled, with `--fd-order 6`, and without `--ybs-gamma` or `--ybs-momentum`, and it never reads the packaged q1 parameter file or runs the printed commands.
 - Role: CI behavior
-- Deciding authority: [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py), `Leg.run_variant`, `Leg.check_run_a`, `Leg.check_reference`, `Leg.check_orders`, `Leg.compare_runs`, `Leg.run_negatives`; [main.yml](../../../.github/workflows/main.yml), `dendro-validation`; [checkpoint.py](../../../nrpy/infrastructures/Dendro/checkpoint.py), `output_checkpoint_cpp`, write-time and restore-time projection-residual checks
+- Deciding authority: [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py), `Leg.run_variant`, `Leg.check_run_a`, `Leg.check_reference`, `Leg.check_orders`, `Leg.compare_runs`, `Leg.run_negatives`; [main.yml](../../../.github/workflows/main.yml), `dendro-validation`; [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py), `main` (Kreiss-Oliger enabled in the script); [checkpoint.py](../../../nrpy/infrastructures/Dendro/checkpoint.py), `output_checkpoint_cpp`, write-time and restore-time projection-residual checks
 - Corroboration: [Generated Project CI](../../validation/generated-project-ci.md), Dendro job description
 
 Runtime results belong in active review or CI output, not as KB snapshots.
@@ -146,7 +167,7 @@ checker can be shown to fail; the README tabulates the values. The weekly
 `master`.
 
 Claim evidence:
-- Claim: The capability test checks the scalar ABI, padded block dimensions, padding rule, unzip offsets, x-fastest layout, padded origin, and halo validity against a chosen Dendrolib build; it is built and run by hand, appears in no workflow, and accepts `CAPTEST_ORDERS` and `CAPTEST_INJECT`.
+- Claim: The capability test checks the scalar ABI, padded block dimensions, padding rule, unzip offsets, x-fastest layout, padded origin, and halo validity against a chosen Dendrolib build; it is built and run by hand, appears in no workflow, and accepts `CAPTEST_ORDERS` and `CAPTEST_INJECT`; its error comparisons `err > 1e-9` are false for a NaN, and its injected defects use zeroed or shifted data, so a host that writes NaN would pass the affected axes.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp`, the axis checkers and the `CAPTEST_*` reads; `nrpy/infrastructures/Dendro/tests_infra/README.md`, build and run commands; [main.yml](../../../.github/workflows/main.yml) and [dendrolib-canary.yml](../../../.github/workflows/dendrolib-canary.yml), which contain no capability-test step.
 - Corroboration: none available; the program is not part of any automated run.
@@ -161,11 +182,19 @@ per-launch parameter dumps; every other byte of every compared file must match.
 These fixed-cadence checks do not establish that native frequency scaling is
 correct.
 
+Claim evidence:
+- Claim: The helper sets `BSSN_SCALE_VTU_AND_GW_EXTRACTION = false` for its stored-reference profiles and reads the native GridInfo header; rank comparisons exclude wall time and the active rank count; the restart comparison normalizes only the GridInfo wall-time column, skips only the per-launch `dgr__PARAM_DUMP__*.toml` files under `dat/`, and requires every other file under `dat/`, `bah/`, and `vtu/` to match byte for byte.
+- Role: CI behavior
+- Deciding authority: [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py), `COMMON_OVERRIDES`, `trees_identical`, `Leg.run_variant`, `Leg.compare_runs`
+- Corroboration: none available; the configuration shows the comparison rules, not any run outcome
+
 ## Sources
 
 - [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) - complete BSSN application generation.
 - [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - complete fCCZ4 application generation.
 - [CMakeLists.py](../../../nrpy/infrastructures/Dendro/CMakeLists.py) - explicit generated source manifest.
+- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - the RHS key-order guard.
+- [state_h.py](../../../nrpy/infrastructures/Dendro/state_h.py) - `validate_registered_state`.
 - [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py) - configured CI checks for both applications.
 - [dendro_application_check_reference.py](../../../nrpy/examples/tests/dendro_application_check_reference.py) - stored run-A reference values.
 - [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - production evolution and service scheduling.
@@ -176,6 +205,8 @@ correct.
 - [dendrolib-canary.yml](../../../.github/workflows/dendrolib-canary.yml) - weekly helper run against Dendrolib `master`.
 - [dendrolib_capability_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp) and [README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md) - hand-run host-assumption tests.
 - [Code Test Policy](../../validation/code-test-policy.md) - permitted test changes and proof limits.
+- [BSSN_constraints.py](../../../nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py) - momentum lowering.
+- [checkpoint.py](../../../nrpy/infrastructures/Dendro/checkpoint.py) - formulation metadata and the residual checks.
 
 ## See Also
 

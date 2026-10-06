@@ -112,8 +112,12 @@ constraint or CAHD equations identical to BSSN's.
 ## Sources
 
 - [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - fCCZ4 generation profile.
+- [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) - the BSSN generator that shares the TwoPunctures registration.
 - [param_toml.py](../../../nrpy/infrastructures/Dendro/param_toml.py) - sample parameter file and TwoPunctures lapse default.
 - [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - fCCZ4 RHS and CAHD registration.
+- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `Q1_TOML_PARAMETER_NAMES` and the coefficient bindings.
+- [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py) - the `kappa1` and `kappa2` registration and the damping terms.
+- [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py) - `Z4constraintU` and `ZbarU`.
 - [fCCZ4_constraints.py](../../../nrpy/infrastructures/Dendro/general_relativity/fCCZ4_constraints.py) - fCCZ4 constraint registration.
 - [Ricci_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/Ricci_eval.py) - separate conformal Ricci kernel.
 - [ADM_to_BSSN.py](../../../nrpy/infrastructures/Dendro/general_relativity/ADM_to_BSSN.py) - ADM conversion.

@@ -31,10 +31,10 @@ are collected in [BSSN Application
 Wiring](bssn-application-wiring.md#q1-versus-generated-defaults).
 
 Claim evidence:
-- Claim: The generated solver reads each host key with the call-site fallback listed in this page, accepts an omitted key, stops with a located type error on a wrong TOML type, rejects the values listed under "Values the solver rejects at startup" (all but the solver-context constructor checks before the TwoPunctures data are loaded), and prints `warning: parameter KEY has no effect` on rank 0 for every key or table member that no call site reads. A key under a TOML table header is looked up only through the table-qualified read.
+- Claim: The generated solver reads each host key with the call-site fallback listed in this page, accepts an omitted key, stops with a located type error on a wrong TOML type, rejects the values listed under "Values the solver rejects at startup" (all but the solver-context constructor checks before the TwoPunctures data are loaded), and prints `warning: parameter KEY has no effect` on rank 0 for every key or table member that no call site reads, which includes every key of the packaged q1 file that the tables below do not list. A key under a TOML table header is looked up only through the table-qualified read.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp` (the `ParameterFile` reads in `main`, the startup range checks, and the unread-parameter report); `nrpy/infrastructures/Dendro/solver_context.py`, the `Ctx` constructor within `output_solver_context_cpp` (the context checks).
-- Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.run_negatives` (rejected element order, refinement mode, CFL factor, lapse option, wrong value type, and the unread-key warning) and `Leg.universal_checks` (no unread-parameter warning in the profiles).
+- Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.run_negatives` (rejected element order, refinement mode, CFL factor, lapse option, wrong value type, and the unread-key warning) and `Leg.universal_checks` (no unread-parameter warning in the profiles); no CI case exercises the constraint-radius rejection or restores a checkpoint at a different `BSSN_ELE_ORDER`.
 
 ### Run control and domain
 
@@ -63,7 +63,7 @@ Claim evidence:
 | `BSSN_DENDRO_AMR_FAC` | 0.1 | none | 0.2 | Coarsening factor of the wavelet test; in (0, 1]. |
 | `BSSN_DENDRO_AMR_FAC_POST_MERGER` | 0.0 | none | 0.03125 | Coarsening factor used once a post-merger checkpoint has been written, when positive; in [0, 1]. A value of 0 keeps the base factor. |
 | `BSSN_REFINE_VARIABLE_INDICES` | every evolved field, in generated order | none | indices 0 to 23 | Evolved fields whose wavelet coefficients enter the refinement test. |
-| `BSSN_NUM_REFINE_VARS` | length of the index list | none | 24 | Uses the first entries of the list; must be at least 1 and at most the list length, and every index must be a valid evolved field. |
+| `BSSN_NUM_REFINE_VARS` | length of the index list | none | 24 | Uses the first entries of the list; must be at least 1 and at most the list length, and each used index must be a valid evolved field. |
 | `BSSN_REMESH_TEST_FREQ` | 50 | none | 50 | Remesh test cadence in steps. |
 | `BSSN_REMESH_TEST_FREQ_AFTER_MERGER` | 10 | none | none | Remesh test cadence once the punctures have merged. |
 | `BSSN_INIT_GRID_ITER` | 10 | none | 10 | Initial-grid refinement iterations; at most this many passes (one fewer when the value exceeds 1). |
@@ -173,21 +173,12 @@ Claim evidence:
 
 ### Keys of the q1 file that the solver never reads
 
-The packaged q1 file also carries native Dendro-GR keys that the generated
-solver has no counterpart for. Each is reported as having no effect: `BSSN_ASYNC_COMM_K`,
-`BSSN_DIM`, `BSSN_WAVELET_TOL_FUNCTION_R0`, `BSSN_WAVELET_TOL_FUNCTION_R1`,
-`BSSN_RK_TYPE`, `BSSN_RK45_TIME_STEP_SIZE`, `BSSN_RK45_DESIRED_TOL`,
-`BSSN_ENABLE_BLOCK_ADAPTIVITY`, `BSSN_BLK_MIN_X`, `BSSN_BLK_MIN_Y`,
-`BSSN_BLK_MIN_Z`, `BSSN_BLK_MAX_X`, `BSSN_BLK_MAX_Y`, `BSSN_BLK_MAX_Z`,
-`ETA_R0`, `ETA_DAMPING`, `ETA_DAMPING_EXP`, `BSSN_LAMBDA`, `BSSN_LAMBDA_F`,
-`BSSN_XI`, `BSSN_TRK0`, `BSSN_ETA_R0`, `BSSN_ETA_POWER`, the table
-`TPID_CENTER_OFFSET`, `TPID_VERBOSE`, `TPID_GRID_SETUP_METHOD`, `INITIAL_LAPSE`,
-`TPID_INITIAL_LAPSE_PSI_EXPONENT`, `TPID_SOLVE_MOMENTUM_CONSTRAINT`,
-`EXTRACTION_VAR_ID`, `EXTRACTION_TOL`, `BSSN_KO_SIGMA_SCALE_BY_CONFORMAL`,
-`DENDRO_LOG_FILE`, `DENDRO_LOG_FILE_LEVEL`, `DENDRO_LOG_CONSOLE_LEVEL`, and
-`DENDRO_LOG_FORCE_FILE_FLUSH`. In particular the mode-6 wavelet radii of the
-native tolerance function are not read: the generated mode-6 profile uses the
-fixed radii described in [Octree Grid, AMR, And Time
+Every key of the packaged q1 file that the tables above do not list is a native
+Dendro-GR key for which the generated solver has no counterpart, and the solver
+reports each as having no effect. In particular the mode-6 wavelet radii of the
+native tolerance function (`BSSN_WAVELET_TOL_FUNCTION_R0` and
+`BSSN_WAVELET_TOL_FUNCTION_R1`) are not read: the generated mode-6 profile uses
+the fixed radii described in [Octree Grid, AMR, And Time
 Stepping](grid-amr-and-time-stepping.md), and `BSSN_RK_TYPE` does not change the
 fixed RK4 stepper.
 
@@ -199,7 +190,7 @@ these; invalid command-line arguments return status 2.
 - `BSSN_ID_TYPE` other than 0, or `TPID_REPLACE_LAPSE_WITH_SQRT_CHI` false.
 - `BSSN_ELE_ORDER` other than 4, 6, or 8, and, at a restore, a value that differs from the element order stored in the checkpoint (see [Octree Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md)).
 - `BSSN_MINDEPTH` above `BSSN_MAXDEPTH`, or `BSSN_MAXDEPTH` of 31 or more.
-- `BSSN_NUM_REFINE_VARS` of 0 or above the list length, or a refinement index that is not an evolved field.
+- `BSSN_NUM_REFINE_VARS` of 0 or above the list length, or a used refinement index (one of the first `BSSN_NUM_REFINE_VARS` entries) that is not an evolved field.
 - `BSSN_REFINEMENT_MODE` other than 4, or `BSSN_USE_WAVELET_TOL_FUNCTION` other than 0 or 6.
 - A nonpositive or nonfinite wavelet tolerance, `BSSN_DENDRO_AMR_FAC` outside (0, 1], `BSSN_DENDRO_AMR_FAC_POST_MERGER` outside [0, 1], a nonpositive or nonfinite `BSSN_CFL_FACTOR`, an end time not above the begin time, or a domain axis with a nonpositive or nonfinite width.
 - `BSSN_INIT_GRID_ITER` positive while `BSSN_USE_SET_REF_MODE_FOR_INITIAL_CONVERGE` is false.
@@ -208,12 +199,14 @@ these; invalid command-line arguments return status 2.
 - A negative or nonfinite `BSSN_BH1_CONSTRAINT_R` or `BSSN_BH2_CONSTRAINT_R`.
 - `BSSN_GW_NUM_RADAII` or `BSSN_GW_NUM_LMODES` not equal to its list length, an empty `BSSN_GW_RADAII` or `BSSN_GW_L_MODES`, a largest l outside [2, 8], or, in wavelet mode 6, a first radius not above 8 or a last radius below the first.
 - An empty `TPID_FILEPREFIX`, and any registered coefficient that is nonfinite or fails the generated validation.
-- The solver-context constructor also rejects a nonpositive or nonfinite `BSSN_BH{1,2}.MASS`, a `BSSN_BH{1,2}_MAX_LEV` below `max(BSSN_MINDEPTH, 2)`, a nonpositive or nonfinite entry of `BSSN_GW_RADAII`, and a VTU field index that is not a valid evolved field or constraint field. These checks run in evolution runs only, after the mesh is built and after the point where a fresh run loads the TwoPunctures file; a `--tpid` run does not reach them.
+- The solver-context constructor also rejects a nonpositive or nonfinite `BSSN_BH{1,2}.MASS`, a `BSSN_BH{1,2}_MAX_LEV` below `max(BSSN_MINDEPTH, 2)`, a nonpositive or nonfinite entry of `BSSN_GW_RADAII`, and a used VTU field index (one of the first entries counted by the matching `BSSN_NUM_*_VARS_VTU_OUTPUT`) that is not a valid evolved field or constraint field. These checks run in evolution runs only, after the mesh is built and after the point where a fresh run loads the TwoPunctures file; a `--tpid` run does not reach them.
 
 ## Sources
 
 - [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - host key reads, fallbacks, range checks, and the unread-key report.
 - [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - key mapping and bindings of registered coefficients.
+- [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - the solver-context constructor checks.
+- [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - the `eta` default and the generated parameter files.
 - [param_toml.py](../../../nrpy/infrastructures/Dendro/param_toml.py) - keys of the generated parameter file.
 - [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - coefficient registrations and defaults.
 - [floor_the_lapse_and_conformal_factor.py](../../../nrpy/infrastructures/Dendro/general_relativity/floor_the_lapse_and_conformal_factor.py) - `chi_floor`.
