@@ -141,7 +141,7 @@ and no CI job runs it; its README in the same directory gives the build and run
 commands, to be repeated when the selected Dendrolib changes. `CAPTEST_ORDERS`
 selects the element orders (a nonempty comma-separated list of positive even
 integers), and `CAPTEST_INJECT` introduces one known defect per axis so that each
-checker can be shown to fail; the README tabulates the ten values. The weekly
+checker can be shown to fail; the README tabulates the values. The weekly
 `dendrolib-canary.yml` run, not this program, is the CI check against Dendrolib's
 `master`.
 
