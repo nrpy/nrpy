@@ -288,7 +288,7 @@ rules in addition to the keys in [Runtime Parameter Keys](runtime-parameters.md)
   by 1e12.
 - Level floors apply to an element whose nearest corner lies within
   `orbital_radius = max(M1, M2) / (M1 + M2) * separation + 8` of the origin: the
-  element is refined to at least level 9. Elements farther than `orbital_radius`
+  element requests at least level 9. Elements farther than `orbital_radius`
   from a puncture receive no floor from that puncture.
 - While the punctures are separate, the floor around each puncture is
   `BSSN_BH{1,2}_MAX_LEV - 2` inside `BSSN_BH{1,2}_AMR_R`, and each coarser level down
@@ -298,7 +298,10 @@ rules in addition to the keys in [Runtime Parameter Keys](runtime-parameters.md)
   `r_lim = max(BSSN_BH1_AMR_R, BSSN_BH2_AMR_R, 1.55 (M1 + M2))`, where `Lx` is the
   x-width of the domain and `order` the element order, and each coarser level
   down to 10 applies inside a radius twice as large (the loop stops when the level
-  reaches 9). The puncture-radius loops never apply level 9; the origin rule above sets the level-9 floor.
+  reaches 9). The puncture-radius loops never apply level 9; the origin rule above makes the level-9 request.
+- Each floor above is a requested level, and the largest request is limited to
+  `BSSN_MAXDEPTH - 2`. The origin floor is therefore `min(9, BSSN_MAXDEPTH - 2)`:
+  level 9 for the packaged q1 depth of 14 and level 8 for `BSSN_MAXDEPTH = 10`.
 - In wavelet mode 6 the radial tolerance is `BSSN_WAVELET_TOL` for `r <= 8`,
   interpolates logarithmically in `r` to `BSSN_GW_REFINE_WTOL` at the first
   extraction radius, equals `BSSN_GW_REFINE_WTOL` out to the last extraction
@@ -309,7 +312,7 @@ rules in addition to the keys in [Runtime Parameter Keys](runtime-parameters.md)
   are not read.
 
 Claim evidence:
-- Claim: The generated solver treats the punctures as merged below a separation of 0.1; multiplies the wavelet tolerance by 1e12 inside `BSSN_BH{1,2}_AMR_R`; applies level floors with the constants 9, 8, 1.55, 25, 2, the levels 10 and above of the puncture loops, and the ratio `BSSN_AMR_R_RATIO` as written above; uses the mode-6 radial and causal tolerance profile with the fixed radius 8 and the time constants 120 and 100; and does not read `BSSN_WAVELET_TOL_FUNCTION_R0` or `_R1`.
+- Claim: The generated solver treats the punctures as merged below a separation of 0.1; multiplies the wavelet tolerance by 1e12 inside `BSSN_BH{1,2}_AMR_R`; applies level floors with the constants 9, 8, 1.55, 25, 2, the levels 10 and above of the puncture loops, and the ratio `BSSN_AMR_R_RATIO` as written above, and limits every requested level to `BSSN_MAXDEPTH - 2`; uses the mode-6 radial and causal tolerance profile with the fixed radius 8 and the time constants 120 and 100; and does not read `BSSN_WAVELET_TOL_FUNCTION_R0` or `_R1`.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::is_remesh`, `Ctx::is_remesh_due`, and `Ctx::get_wtol_function` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp` (the key reads).
 - Corroboration: none available: no test drives the merged branch or the mode-6 profile; the constants follow Dendro-GR `BSSN_GR/src/dataUtils.cpp`, `isRemeshBH`.

@@ -143,7 +143,8 @@ metadata was found, start from the initial data, and write its first
 constraint row at step 0.
 
 To run the helper, execute `python nrpy/examples/tests/dendro_application_check.py
---formulation {bssn,fccz4} --work-dir DIR` from the repository root. Both options
+--formulation bssn --work-dir DIR` from the repository root; `--formulation fccz4`
+selects the other formulation. Both options
 are required, and `DIR` must not exist; the helper removes it on exit.
 `--launcher` defaults to `mpiexec --oversubscribe --bind-to none`, `--ranks` to 4
 (at least 4, above the 3-rank comparison run), and `--build-jobs` to 4; the
