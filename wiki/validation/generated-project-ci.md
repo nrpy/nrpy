@@ -21,7 +21,7 @@ Configured GitHub job map:
 | `codegen-ubuntu` | Configured Ubuntu/Python matrix | Installs NRPy, generates in `tmp/`, and builds the selected default C/library projects with `make`, spanning elliptic, wave, black-hole, PN, SEOBNR, TOV, hydro, BHaHAHA, and `sebobv2` routes. It generates and installs `sebobv1_jax`, then calls `SEOBNRv5_aligned_spin_coefficients` once with Python-scalar inputs and prints the result. | The `make` builds run no generated executable, and `make clean` follows each; the JAX call checks no returned value; MANGA commands are commented out. |
 | `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation, install, and call as Ubuntu; no Dendro generation or build; GSL installed with Homebrew | No generated C executable or test is run; the JAX call checks no returned value. |
 | `einsteintoolkit-validation` | Configured Ubuntu/Apptainer Einstein Toolkit image | Generates `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs the configured Baikal, BaikalVacuum, and WaveToyNRPy Cactus testsuites and fails on reported failures. No `carpetx_*` generation/build/run. |
-| `dendro-validation` | Ubuntu 24.04 runner with apt-installed Open MPI, GSL, BLAS/LAPACK, and gfortran; matrix `formulation: [bssn, fccz4]`; 75-minute job timeout | Each leg runs `nrpy/examples/tests/dendro_application_check.py`, which generates the W and chi projects twice, configures and builds them against Dendrolib master, solves TwoPunctures once per variant, and runs short MPI evolutions with forced remeshing, horizon finds, wave extraction, checkpoint and restore, 1/3/4-rank repeats, FD4/6/8 initialization, a stored-reference comparison of the evolved diagnostics, and process-boundary rejections. | Proves only the named layers for the helper's CI profiles: generation determinism, compile/link compatibility, closed-form TwoPunctures ADM and horizon-mass agreement, symmetry properties, restart identity, rank-count agreement, agreement with the stored reference for the evolved diagnostics (a regression check, not a correctness proof), ordering of the initial Hamiltonian-constraint norm with FD order (not a convergence test), and the listed rejections. It is not long-time, merger, or production-resolution evidence. |
+| `dendro-validation` | Ubuntu 24.04 runner with apt-installed Open MPI, GSL, BLAS/LAPACK, and gfortran; matrix `formulation: [bssn, fccz4]`; 75-minute job timeout | Each leg runs `nrpy/examples/tests/dendro_application_check.py`, which generates the W and chi projects twice, configures and builds them against Dendrolib master, solves TwoPunctures once per variant, and runs short MPI evolutions with a scheduled remesh test, horizon finds, wave extraction, checkpoint and restore, 1/3/4-rank repeats, FD4/6/8 initialization, a stored-reference comparison of the evolved diagnostics, and process-boundary rejections. | Proves only the named layers for the helper's CI profiles: generation determinism, compile/link compatibility, closed-form TwoPunctures ADM and horizon-mass agreement, symmetry properties, restart identity, rank-count agreement, agreement with the stored reference for the evolved diagnostics (a regression check, not a correctness proof), ordering of the initial Hamiltonian-constraint norm with FD order (not a convergence test), and the listed rejections. It is not long-time, merger, or production-resolution evidence. |
 | `dendro-validation-dendrolib-master` (`dendrolib-canary.yml`) | Weekly schedule and manual dispatch only; same runner, packages, matrix, and timeout as `dendro-validation`. | Runs the same helper with `--dendrolib-ref master`: Dendrolib is cloned at the head of its master branch through an explicit shallow clone, and the resolved commit is printed. | Same checks as `dendro-validation`; a pass or failure is evidence only for the printed Dendrolib commit, and pull requests also use master through the generated CMake project. |
 | `charmpp-validation` | Configured Ubuntu/Apptainer Charm++ context | Generates and builds the configured superB elliptic, spectroscopy, and collision projects | Runs the configured collision executable through `charmrun`; no explicit scientific-output assertion beyond process success. |
 | `sebob-consistency-test` | Configured Ubuntu matrix | Checks out the workflow-selected trusted revision; generates/builds trusted and current SEOBNRv5 variants | Each helper invocation rebuilds both executables, uses exactly ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed the perturbation-derived baseline. |
@@ -113,15 +113,15 @@ at two radii, point reflection of the checkpointed puncture centers at step 4
 and their motion along the puncture momenta, byte-identical diagnostic outputs
 in `dat/`, `bah/`, and `vtu/` after a stop at step 4 and restore, and agreement
 of a 3-rank run, which writes a horizon checkpoint, with the diagnostics of the main runs
-within a relative tolerance (horizon observables through the irreducible mass;
+within a fixed relative and absolute tolerance, with equal unexcised node counts (horizon observables through the irreducible mass;
 the finder's convergence residuals are not compared). The restore comparison
 normalizes the GridInfo wall-time column and excludes the per-launch
-`dgr__PARAM_DUMP__*.toml` files; it compares all diagnostic `.dat` files.
+`dgr__PARAM_DUMP__*.toml` files; it compares every other file under `dat/`, `bah/`, and `vtu/`.
 Run A's constraint and ADM
 rows and horizon observables at steps 0, 4, and 8 must also match a stored
 reference, `nrpy/examples/tests/dendro_application_check_reference.py`, within a
 fixed relative and absolute tolerance; because it covers the evolved state after
-the forced remesh, including node counts, it is the job's regression check on
+the remesh tests that `BSSN_REMESH_TEST_FREQ = 4` schedules at steps 4 and 8, including node counts (the only evidence that a remesh occurred), it is the job's regression check on
 the evolution equations, gauge, and grid transfer. Profile O (maximum depth 10,
 four steps) checks that the initial Hamiltonian-constraint norm falls by at
 least half per order increase from FD4 to FD8 on one shared mesh, an ordering
@@ -151,8 +151,10 @@ change alters these values beyond the tolerance. The constraint and ADM rows are
 printed with up to ten significant digits; the horizon radii and circumferences
 with ten, area and irreducible mass with sixteen, and time and centroid in fixed
 point. The last printed digits can vary between math-library paths and rank
-counts; a one-unit difference in the tenth digit lies within the tolerance. The
-ADM linear-momentum components and the angular-momentum components J_x and J_y
+counts; a one-unit difference in the tenth digit lies within the tolerance for the
+ten-digit columns, but the time and centroid columns, printed with three and six
+decimals, have no such margin, so a rounding-boundary change in their last printed
+digit exceeds it. The ADM linear-momentum components and the angular-momentum components J_x and J_y
 vanish for this configuration, so their printed digits are round-off and the
 absolute tolerance, not the stored value, bounds them. The check reports the
 worst entry.
@@ -228,14 +230,9 @@ These jobs intentionally create generated `project/` outputs. Treat those as CI
 products, not committed documentation or hand-authored source, unless a selected
 generated file has been deliberately registered as frozen evidence.
 
-The helper uses fixed output frequencies for its stored-reference profiles by
-setting `BSSN_SCALE_VTU_AND_GW_EXTRACTION = false`; the generated production
-parameter files enable native scaling. The helper reads the native GridInfo
-CSV header and includes grid counts, timestep, and physical time in its
-existing restart and rank comparisons. Rank comparisons exclude wall time and active MPI rank count. Exact restart
-comparisons exclude only the GridInfo wall-time column; every other byte in
-GridInfo and the other output files must match. These fixed-cadence checks do
-not establish that native frequency scaling is correct.
+The helper's fixed output frequencies and its restart and rank comparison rules
+are stated in [Production Validation And Deferred
+Checks](../infrastructures/dendro/production-validation-and-deferred-checks.md).
 
 ## Sources
 
