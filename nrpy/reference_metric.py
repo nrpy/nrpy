@@ -11,7 +11,7 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 import re
-from typing import Any, Dict, List, Tuple, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union, cast
 
 import sympy as sp
 
@@ -20,6 +20,12 @@ import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.helpers.cached_functions import cached_simplify
 from nrpy.helpers.generic import superfast_uniq
+
+if TYPE_CHECKING:
+    from nrpy.equations.generalrfm.fisheye import (
+        GeneralRFMFisheye,
+        GeneralRFMSpheroidalFisheye,
+    )
 
 par.register_param(str, __name__, "CoordSystem_to_register_CodeParameters", "All")
 
@@ -1843,7 +1849,9 @@ class ReferenceMetric:
 
         # Provider metadata for downstream infrastructure.
         self.general_rfm_provider_name = "identity_placeholder"
-        self.general_rfm_provider: Any = None
+        self.general_rfm_provider: Optional[
+            Union["GeneralRFMFisheye", "GeneralRFMSpheroidalFisheye"]
+        ] = None
         self.general_rfm_provider_meta: Dict[str, Any] = {}
 
         # If this is a known GeneralRFM provider, override the default map.

@@ -13,7 +13,7 @@ from inspect import currentframe as cfr
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import FrameType as FT
-from typing import Any, Dict, List, Set, Tuple, Union, cast
+from typing import TYPE_CHECKING, Dict, List, Set, Tuple, Union, cast
 
 import sympy as sp
 
@@ -28,6 +28,9 @@ from nrpy.infrastructures.BHaH.rotation import (
     so3_apply_RT_to_vector,
     so3_build_R_from_hats,
 )
+
+if TYPE_CHECKING:
+    from nrpy.equations.generalrfm.fisheye import GeneralRFMSpheroidalFisheye
 
 
 def _prepare_sympy_exprs_for_codegen(
@@ -238,7 +241,7 @@ def _generate_bracketed_radial_inverse_body(
 
 
 def _generate_spheroidal_fisheye_inverse_body(
-    provider: Any,
+    provider: "GeneralRFMSpheroidalFisheye",
     cart_components: Tuple[str, str, str],
     origin_body: str,
     success_body: str,
