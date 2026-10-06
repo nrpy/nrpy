@@ -70,7 +70,7 @@ reject cross-formulation restores.
 
 Claim evidence:
 - Claim: Fresh fCCZ4 evolution can load the same precomputed TwoPunctures solution as generated BSSN, then converts ADM fields and initializes the fCCZ4 state; checkpoint formulation IDs remain distinct.
-- Role: public/scientific contract
+- Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::initialize` within `output_solver_context_cpp`.
 - Corroboration: `nrpy/examples/dendro_fccz4.py` and `nrpy/examples/dendro_bssn.py`, use the same entry-point generator and TwoPunctures registration.
 

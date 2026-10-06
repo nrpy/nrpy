@@ -143,7 +143,7 @@ Claim evidence:
 
 Claim evidence:
 - Claim: When `*_ADM.dat`, either constraint file, a `*_GW_l<l>_m<m>.dat` file, `*_GW_L2.dat`, or `*_BHLocations.dat` is missing or empty, rank 0 writes `# <title>`, `#`, and one `# column N = <name>: <meaning>` line per column before the first row; a file that already has content receives no further labels. The step and time columns are named `TimeStep` and `time` (`t` in the Psi4 files); Psi4 radius columns are `r0`, `r1`, ..., as in native `BSSN_GR`'s headers; the constraint and puncture-location columns use descriptive generated labels. Native waveform-norm and puncture-location files instead use uncommented headers. This applies to the fCCZ4 application as well.
-- Role: public/scientific contract
+- Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `open_labeled_output` and its output paths within `output_solver_context_cpp`, and `diagnostic_meanings`.
 - Corroboration: `nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_file_output.py`, the horizon diagnostics header this format follows; `nrpy/examples/tests/dendro_application_check.py`, `parse_table` and `parse_modes`, which read the labels.
 
@@ -159,7 +159,7 @@ only the listed `l` values, which is the same set for the default list.
 
 Claim evidence:
 - Claim: Rank 0 appends each (l, m) mode, for l = 2..max(`BSSN_GW_L_MODES`) and m = -l..l, to `<BSSN_PROFILE_FILE_PREFIX>_GW_l<l>_m<m>.dat`: column labels, then one row per extraction step with the step, time and one `(Re,Im)` pair per extraction radius, in scientific notation with 10 digits after the decimal point. Native `BSSN_GR` uses the same name and row layout, with an uncommented step-0 header line instead of the labels, and writes only the listed l values. This applies to the fCCZ4 application as well.
-- Role: public/scientific contract
+- Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::gravitational_wave_output` within `output_solver_context_cpp`.
 - Corroboration: Dendro-GR `BSSN_GR/include/gwExtract.h`, `GW::extractFarFieldPsi4`, per-mode file writer.
 
@@ -185,7 +185,7 @@ centers updated before diagnostics.
 
 Claim evidence:
 - Claim: At each active gravitational-wave extraction step, rank 0 appends `<BSSN_PROFILE_FILE_PREFIX>_GW_L2.dat` with the step, time and one complex pair per radius. Each pair contains the square roots of the MPI-reduced, unweighted sums of the squared real and imaginary interpolated Psi4 samples over valid Lebedev points. Rank 0 also appends `<BSSN_PROFILE_FILE_PREFIX>_BHLocations.dat` with the step, time and coordinates of both tracked puncture centers. Fresh runs write step 0; restarts do not repeat the checkpoint step. The same behavior is used by the fCCZ4 application.
-- Role: public/scientific contract
+- Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/gravitational_waves.py`, `register_CFunction_gravitational_waves`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::gravitational_wave_output` and `Ctx::black_hole_locations_output`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`.
 - Corroboration: Dendro-GR `BSSN_GR/include/gwExtract.h`, `GW::extractFarFieldPsi4`; Dendro-GR `BSSN_GR/src/dataUtils.cpp`, `writeBHCoordinates`; `nrpy/examples/tests/dendro_application_check.py`, universal output parsing.
 
@@ -208,7 +208,7 @@ parameter dump.
 
 Claim evidence:
 - Claim: A normal solver launch writes one rank-0 TOML file named `<BSSN_PROFILE_FILE_PREFIX>__PARAM_DUMP__YYYY-MM-DD-HH-MM-SS.toml`. It preserves supplied keys and tables, and adds consumed host fallback and registered runtime CodeParameter defaults only when every host fallback and mapped CodeParameter default for a missing key agrees. Inserted floating-point defaults retain enough digits to recover their double values, so the same TwoPunctures solution file can be reused. Conflicting keys remain absent to preserve their distinct call-site behavior. `--tpid` does not write the file. This applies to the fCCZ4 application as well.
-- Role: public/scientific contract
+- Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `ParameterFile` and `output_main_cpp`; `nrpy/infrastructures/Dendro/CodeParameters.py`, `output_toml_default_assignments`.
 - Corroboration: Dendro-GR `BSSN_GR/src/bssngr_main.cpp`, `writeParamTOMLFile` call; Dendro-GR `BSSN_GR/src/parameters.cpp`, resolved parameter writer.
 
@@ -276,7 +276,7 @@ fields.
 
 Claim evidence:
 - Claim: Native CPU SSL/CAHD evolution uses radial RIT eta even when `ETA_CONST` is present, whereas generated BSSN uses constant eta; native requires its lapse-replacement option to match the generated full-psi W initial lapse. Native KO uses `KO_DISS_SIGMA` only with CAKO off; enabling CAKO selects chi-scaled gauge/other coefficients instead.
-- Role: public/scientific contract
+- Role: descriptive behavior
 - Deciding authority: `nrpy/examples/dendro_bssn.py`, `main`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `BSSN_GR/src/rhs.cpp`, CPU eta, SSL/CAHD include selection, and CAKO branches; `BSSN_GR/src/TwoPunctures.cpp`, lapse replacement.
 - Corroboration: `nrpy/infrastructures/Dendro/CodeParameters.py`, q1 parameter mapping; `BSSN_GR/src/eta_RIT.inc.cpp`, radial formula; `BSSN_GR/src/parameters.cpp`, lapse and CAKO settings; `BSSN_GR/src/bssngr_main.cpp`, post-merger CAKO switch.
 

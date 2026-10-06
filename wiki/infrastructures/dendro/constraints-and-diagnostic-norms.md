@@ -29,7 +29,7 @@ when rows are appended; use a new output prefix to obtain the `MD` column labels
 
 Claim evidence:
 - Claim: Dendro's BSSN `MD0..MD2` diagnostic slots contain `M_i = gammabar_ij M^j / exp(-4 phi)`, while the equation module still constructs `M^i`; the constraint-file columns and VTU fields use the lower-index names without changing their positions or computed quantities.
-- Role: public/scientific contract
+- Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py`, `register_CFunction_BSSN_constraints`, `momentum_covariant`; `nrpy/infrastructures/Dendro/state_h.py`, `BSSN_DIAGNOSTIC_GRIDFUNCTIONS`; `nrpy/infrastructures/Dendro/solver_context.py`, `diagnostic_meanings` and `vtu_constraint_names`.
 - Corroboration: `nrpy/equations/general_relativity/BSSN_constraints.py`, `BSSN_constraints.MU`; `nrpy/equations/general_relativity/BSSN_quantities.py`, `BSSN_quantities.exp_m4phi`.
 
@@ -46,13 +46,13 @@ it or change its evolution equation.
 
 Claim evidence:
 - Claim: Dendro BSSN reports the physical-metric scalar momentum magnitude and conformal-metric scalar connection-residual magnitude after the three lower-index momentum components; the generated header and diagnostic kernel use the same indices, and neither residual is enforced by this output.
-- Role: public/scientific contract
+- Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py`, `register_CFunction_BSSN_constraints`; `nrpy/infrastructures/Dendro/state_h.py`, `BSSN_DIAGNOSTIC_GRIDFUNCTIONS` and `output_state_h`.
 - Corroboration: `nrpy/equations/general_relativity/BSSN_constraints.py`, `BSSNconstraints.Msquared`, `LambdaConstraintSquared`, and `LambdaConstraintMagnitude`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::diagnostic_output`.
 
 Claim evidence:
 - Claim: fCCZ4 reports its four original Z4 diagnostic fields followed by six BSSN-comparable fields, including lower-index momentum and covariant scalar magnitudes; `H` is the BSSN-shaped Hamiltonian, distinct from `H_Z4`.
-- Role: public/scientific contract
+- Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/fCCZ4_constraints.py`, `register_CFunction_fCCZ4_constraints`; `nrpy/infrastructures/Dendro/state_h.py`, `FCCZ4_DIAGNOSTIC_GRIDFUNCTIONS`.
 - Corroboration: `nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py`, `register_CFunction_rhs_eval`, uses the same BSSN-shaped `H` in CAHD.
 
@@ -88,7 +88,7 @@ trailing zeros dropped).
 
 Claim evidence:
 - Claim: The generated solver reports distinct excised conformal-factor volume-weighted and unique-owned-node RMS norms, and only the latter matches native Dendro-BSSN's node-weighting convention. The unique-node norm goes to `*_Constraints.dat`, native `BSSN_GR`'s file name, labelled `TimeStep` and `time` (native `BSSN_GR`'s names), the generated diagnostic names, and `unexcised_nodes`; for BSSN its columns 3-6 correspond to native `C_HAM` and `C_MOM0..2`. The volume-weighted norm goes to `*_Constraints_volweighted.dat`, which labels an RMS and a maximum absolute value per field. A new or empty file of either kind first receives a title line and one `# column N = <name>: <meaning>` line per column. Both files print floating-point values with up to ten significant digits.
-- Role: public/scientific contract
+- Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `output_solver_context_cpp` / `Ctx::diagnostic_output`, `open_labeled_output`, and `diagnostic_meanings`; `nrpy/infrastructures/Dendro/general_relativity/diagnostics.py`, `register_CFunction_diagnostics`.
 - Corroboration: `BSSN_GR/include/grUtils.tcc`, `bssn::computeConstraintL2Norm(const ot::Mesh*,...)`, native ownership, excision, and RMS reduction, and `bssn::extractConstraints`, native file name and its `TimeStep` and `time` header names; `nrpy/infrastructures/Dendro/state_h.py`, diagnostic component order.
 

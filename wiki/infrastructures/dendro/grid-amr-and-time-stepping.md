@@ -31,7 +31,7 @@ extraction.
 
 Claim evidence:
 - Claim: Physical exterior ghosts are filled after inter-block exchange and before centered derivatives, using five interior points for FD4 or six for FD6/FD8.
-- Role: public/numerical contract
+- Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/physical_boundary_ghosts.py`, `register_CFunction_physical_boundary_ghosts`.
 - Corroboration: `nrpy/infrastructures/Dendro/solver_context.py`, `output_solver_context_cpp`, calls the generated ghost fill before derivative kernels.
 
