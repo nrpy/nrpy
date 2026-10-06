@@ -205,7 +205,9 @@ def build_and_run_instructions(
     The --tpid run solves the TwoPunctures initial data once, on one MPI rank;
     step 5 evolves it, with -n set to the MPI ranks to use. The
     default parameter file is a production binary-black-hole run. For a short
-    test, add BSSN_MAX_ITERATIONS = 100 to the parameter file before step 5.
+    test, add BSSN_MAX_ITERATIONS = 100 to the parameter file before step 5, above
+    its first [table] header: a line below a [table] header belongs to that table,
+    and the solver does not read it as BSSN_MAX_ITERATIONS.
     >>> text = build_and_run_instructions(Path("my dir/Dendro_NRPy_BSSN"), "x", "p.toml")
     >>> [line for line in text.splitlines() if line.startswith("cd ")]
     ["cd 'my dir/Dendro_NRPy_BSSN'"]
@@ -231,7 +233,9 @@ mpiexec -n 4 build/{executable_name} {parfile}
 The --tpid run solves the TwoPunctures initial data once, on one MPI rank;
 step 5 evolves it, with -n set to the MPI ranks to use. The
 default parameter file is a production binary-black-hole run. For a short
-test, add BSSN_MAX_ITERATIONS = 100 to the parameter file before step 5."""
+test, add BSSN_MAX_ITERATIONS = 100 to the parameter file before step 5, above
+its first [table] header: a line below a [table] header belongs to that table,
+and the solver does not read it as BSSN_MAX_ITERATIONS."""
 
 
 if __name__ == "__main__":

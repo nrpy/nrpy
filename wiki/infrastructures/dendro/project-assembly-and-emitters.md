@@ -122,7 +122,7 @@ the TwoPunctures data with `mpiexec -n 1 build/<executable> --tpid
 pars/q1.par.lowres.toml`, and evolve with `mpiexec -n 4 build/<executable>
 pars/q1.par.lowres.toml`, noting that the default parameter file is a production binary-black-hole
 run whose values differ from the generated defaults (see [BSSN Application
-Wiring](bssn-application-wiring.md#q1-versus-generated-defaults)). Add `BSSN_MAX_ITERATIONS = 100` to the parameter file for a short test.
+Wiring](bssn-application-wiring.md#q1-versus-generated-defaults)). For a short test, add `BSSN_MAX_ITERATIONS = 100` to the parameter file above its first `[table]` header: a line below a `[table]` header belongs to that table and is not read as `BSSN_MAX_ITERATIONS`, and the packaged q1 file ends inside `[AEH_PARAMS]`, so a line appended at its end has no effect.
 The solver's default output prefixes are relative, so a run from the application
 directory writes `dat/` diagnostics, the TwoPunctures file, `vtu/`, and `cp/`
 there, and `bah/` when `AEH_SOLVER_FREQ` is positive.
@@ -137,7 +137,7 @@ Claim evidence:
 - Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.generate_and_build`, configures and builds each generated tree on its own.
 
 Claim evidence:
-- Claim: Each Dendro example writes its application to `<project-dir>/<SOLVER_NAME>/` (default `project`) and prints the prerequisites and the copy-paste commands that configure, build, solve the TwoPunctures data, and evolve inside that directory.
+- Claim: Each Dendro example writes its application to `<project-dir>/<SOLVER_NAME>/` (default `project`) and prints the prerequisites and the copy-paste commands that configure, build, solve the TwoPunctures data, and evolve inside that directory, followed by a short-test hint to set `BSSN_MAX_ITERATIONS = 100` above the first `[table]` header of the parameter file.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `parse_args` and `main`; `nrpy/infrastructures/Dendro/CMakeLists.py`, `build_and_run_instructions`.
 - Corroboration: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`, relative default output prefixes and the `--tpid` requirement; `nrpy/infrastructures/Dendro/param_toml.py`, `generate_default_parfile`.
