@@ -9,11 +9,24 @@ Production examples generate complete Dendro applications.
 
 ## Detail
 
-Required generator checks include isolated static analysis, BSSN and fCCZ4
-import and registration, two byte-identical clean generations, presence of all
-order-specific kernels, direct Python/CFunction/C++ name correspondence,
-final-state pointer indices, and rejection of native `BSSN_GR` sources in each
-explicit CMake source list.
+Required generator checks, with the layer that enforces each:
+
+- Isolated static analysis of each generator module: the `static-analysis` CI
+  job, which skips `*/tests/*` paths, so the helper itself is not analyzed.
+- BSSN and fCCZ4 import and registration, and two byte-identical clean
+  generations: the helper generates each W and chi variant twice and compares
+  the trees (a CI assertion).
+- Presence of all order-specific kernels: a generation-time `ValueError` from
+  `output_solver_context_cpp`. The RHS registrar raises at generation when its
+  keys differ from the canonical order, and `validate_registered_state` raises
+  when the registered names differ from the canonical state.
+- Direct Python/CFunction/C++ name correspondence and final-state pointer
+  indices: review-time checks. No generation-time guard or CI assertion tests
+  them.
+- Rejection of native `BSSN_GR` sources: a generation-time `ValueError` from
+  `output_CFunctions_function_prototypes_and_construct_CMakeLists`. The screen
+  applies only to the application-supplied sources; registered CFunction sources
+  get duplicate and path checks, and no test triggers the screen.
 
 Required application checks configure and build both standalone applications with
 Dendrolib. Both BSSN and fCCZ4 checks must generate W and chi variants.
@@ -25,9 +38,9 @@ constraints, wave extraction, apparent horizons, remeshing, checkpoint,
 and restart. W/chi checkpoint-formulation mismatches must be rejected.
 Temporary direct numerical comparisons must cover interior stencils, block
 boundaries, conformal-factor algebra, SSL, CAHD, and separate Ricci/RHS
-coupling. Native-control comparisons must use the same initial data, post-remesh
-state, puncture excision, momentum-component convention, and unique-node RMS;
-conformal-factor volume-weighted RMS is a distinct diagnostic. Compare by physical time and check
+coupling. A native-control comparison is meaningful only with the same initial data,
+post-remesh state, puncture excision, momentum-component convention, and
+unique-node RMS; conformal-factor volume-weighted RMS is a distinct diagnostic. Compare by physical time and check
 the initial diagnostic before interpreting long evolutions. Record the evolved
 conformal-factor choice, native full-psi lapse replacement, eta prescription,
 KO strength, native CAKO state, any post-merger CAKO switch, puncture tracker,
@@ -35,10 +48,10 @@ time integrator and CFL spacing, and the defaults of omitted keys before
 attributing any later difference to the formulation.
 
 Claim evidence:
-- Claim: Complete BSSN and fCCZ4 qualification requires W and chi generation and rejection of incompatible restarts; BSSN native comparisons require matching initial data, excision, momentum components, and post-remesh unique-node RMS. Native comparisons must record the conformal-factor choice, full-psi lapse replacement, eta prescription, KO strength, CAKO state, any post-merger CAKO switch, puncture tracker, time integrator and CFL spacing, and the defaults of omitted keys; matching a parfile alone is insufficient.
-- Role: normative rule
-- Deciding authority: this page, `Required application checks`.
-- Corroboration: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `parse_args`; `nrpy/infrastructures/Dendro/checkpoint.py`, formulation metadata; `nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py`, momentum lowering; `nrpy/infrastructures/Dendro/solver_context.py`, diagnostic scheduling and node reduction; `BSSN_GR/src/parameters.cpp`, native lapse and CAKO settings; `BSSN_GR/src/bssngr_main.cpp`, post-merger CAKO switch.
+- Claim: A generated Dendro-BSSN run and a native Dendro-GR run that share one parameter file still differ in the evolved conformal factor, lapse replacement, eta prescription, KO strength and CAKO state (including any post-merger CAKO switch), puncture tracker, time integrator and CFL spacing, omitted-key defaults, constraint-norm weighting, and momentum-component convention, so a comparison that matches only the parameter file does not isolate the formulation. W and chi checkpoints carry distinct formulation identifiers, and a restore across them is rejected.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `parse_args`; `nrpy/infrastructures/Dendro/checkpoint.py`, `output_checkpoint_cpp` (formulation metadata); `nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py`, momentum lowering; `nrpy/infrastructures/Dendro/solver_context.py`, diagnostic scheduling and node reduction; Dendro-GR `BSSN_GR/src/parameters.cpp`, native lapse, CAKO, eta, and default settings; `BSSN_GR/src/bssngr_main.cpp`, post-merger CAKO switch and time stepping; `BSSN_GR/src/grUtils.cpp`, `computeBHLocations`.
+- Corroboration: none available; no CI job builds native Dendro-GR, and the helper's W/chi cross-restore rejection covers only the checkpoint identifiers.
 
 AMR parameter parity is not proof of identical remesh histories. The generated
 and native Nyquist paths both use all three components of the puncture
@@ -79,7 +92,24 @@ boundaries within a rank are covered only indirectly, through the numerical
 checks and the stored reference. The job does not inspect field data, does not check
 `alpha=W=sqrt(chi)` pointwise, and it runs none of the temporary direct
 numerical comparisons or native-control comparisons above; those remain
-review-time checks.
+review-time checks. The list above omits several helper checks that [Generated
+Project CI](../../validation/generated-project-ci.md) describes: the closed-form
+ADM energy and angular momentum, the vanishing ADM momentum and in-plane angular
+momentum, the horizon reflection symmetry, the W-and-chi agreement at step 0,
+the per-run sanity check, and the full list of rejection and warning cases.
+
+Three limits bound what the comparisons show. The rank comparison of the
+wave-mode and GridInfo files needs only one step in common with the compared
+steps and compares rows pairwise, so a run that lacks later wave rows passes on
+the rows both files have; the stored reference holds no wave values, and the
+helper's other checks require the 21 wave files at two radii and step-checked
+constraint rows. The "one shared mesh" of the FD-order comparison is shown by
+equal element counts after the initial-grid remesh, which does not show equal
+octant coordinates or levels, and the W-versus-chi comparison covers the node
+count, `E`, `J_z`, and the Psi4 modes but not the constraint or horizon columns.
+The hand-run capability test below tests each error as `err > 1e-9`, which is
+false for a NaN, and its injected defects use zeroed or shifted data, so a host
+that writes NaN would pass the affected axes.
 
 Every tolerance in the helper is a literal in `dendro_application_check.py`.
 The helper derives none of them; it ties the stored-reference tolerance to the
@@ -102,6 +132,25 @@ Claim evidence:
 
 Runtime results belong in active review or CI output, not as KB snapshots.
 
+The hand-run capability test `nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp`
+checks, against a chosen Dendrolib build, the host assumptions that the generated
+kernels make: the scalar ABI, the padded block dimensions, the padding rule, the
+unzip offsets, the variable-major x-fastest layout, the padded origin, and the
+validity of the halo. NRPy does not build it, no generated project contains it,
+and no CI job runs it; its README in the same directory gives the build and run
+commands, to be repeated when the selected Dendrolib changes. `CAPTEST_ORDERS`
+selects the element orders (a nonempty comma-separated list of positive even
+integers), and `CAPTEST_INJECT` introduces one known defect per axis so that each
+checker can be shown to fail; the README tabulates the ten values. The weekly
+`dendrolib-canary.yml` run, not this program, is the CI check against Dendrolib's
+`master`.
+
+Claim evidence:
+- Claim: The capability test checks the scalar ABI, padded block dimensions, padding rule, unzip offsets, x-fastest layout, padded origin, and halo validity against a chosen Dendrolib build; it is built and run by hand, appears in no workflow, and accepts `CAPTEST_ORDERS` and `CAPTEST_INJECT`.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp`, the axis checkers and the `CAPTEST_*` reads; `nrpy/infrastructures/Dendro/tests_infra/README.md`, build and run commands; [main.yml](../../../.github/workflows/main.yml) and [dendrolib-canary.yml](../../../.github/workflows/dendrolib-canary.yml), which contain no capability-test step.
+- Corroboration: none available; the program is not part of any automated run.
+
 The helper uses fixed output frequencies for its stored-reference profiles by
 setting `BSSN_SCALE_VTU_AND_GW_EXTRACTION = false`; the generated production
 parameter files enable native scaling. The helper reads the native GridInfo
@@ -123,10 +172,13 @@ correct.
 - [Constraints And Diagnostic Norms](constraints-and-diagnostic-norms.md) - momentum convention and comparable RMS diagnostics.
 - [Octree Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md) - remesh path and limits of native parity.
 - [main.yml](../../../.github/workflows/main.yml) - currently configured CI jobs.
+- [Dendro-GR](https://github.com/paralab/Dendro-GR) - `BSSN_GR/src/parameters.cpp`, `bssngr_main.cpp`, `grUtils.cpp`, and `rhs.cpp`, the native settings that a comparison must record.
+- [dendrolib-canary.yml](../../../.github/workflows/dendrolib-canary.yml) - weekly helper run against Dendrolib `master`.
+- [dendrolib_capability_test.cpp](../../../nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp) and [README.md](../../../nrpy/infrastructures/Dendro/tests_infra/README.md) - hand-run host-assumption tests.
 - [Code Test Policy](../../validation/code-test-policy.md) - permitted test changes and proof limits.
 
 ## See Also
 
 - Parent: [Dendro](index.md)
 - Depends on: [Generated Project CI](../../validation/generated-project-ci.md)
-- Validates: [Project Assembly And Generating Functions](project-assembly-and-emitters.md)
+- See also: [Project Assembly And Generating Functions](project-assembly-and-emitters.md)

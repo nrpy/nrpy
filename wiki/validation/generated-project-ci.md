@@ -126,19 +126,45 @@ the evolution equations, gauge, and grid transfer. Profile O (maximum depth 10,
 four steps) checks that the initial Hamiltonian-constraint norm falls by at
 least half per order increase from FD4 to FD8 on one shared mesh, an ordering
 check rather than a convergence test, plus a 1-rank repeat. The W and chi
-variants must agree at the shared initial diagnostic. Every evolution run the
+variants must agree at step 0 in node count, `E`, `J_z`, and the Psi4 modes. Every evolution run the
 helper checks (runs A, B, B restored, C, and the profile-O runs) must pass
 one sanity check: finite output, constraint rows at the configured cadence, a
 node ceiling, and no unread-parameter warning. Negative cases require exit
 status 1-123 and a named diagnostic for a W/chi cross-restore, `--tpid` on more
 than one rank, a TwoPunctures parameter mismatch, a missing TwoPunctures file,
 an unsupported element order, an unsupported refinement mode, an excessive CFL
-factor, `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = false`, an integer given for a
+factor that blows up the evolution, a nonfinite `BSSN_CFL_FACTOR`,
+`BSSN_SSL_SIGMA`, or `ETA_CONST`, an unwritable ADM file (a directory in its
+place), `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = false`, an integer given for a
 real-valued parameter, and a lapse blow-up with constraint output off; a run
 given an unread key must warn about it and still succeed, and a run with
 `BSSN_RESTORE_SOLVER = 1` and no checkpoint metadata must warn that no
 metadata was found, start from the initial data, and write its first
 constraint row at step 0.
+
+To run the helper, execute `python nrpy/examples/tests/dendro_application_check.py
+--formulation {bssn,fccz4} --work-dir DIR` from the repository root. Both options
+are required, and `DIR` must not exist; the helper removes it on exit.
+`--launcher` defaults to `mpiexec --oversubscribe --bind-to none`, `--ranks` to 4
+(at least 4, above the 3-rank comparison run), and `--build-jobs` to 4; the
+1-, 3-, and 4-rank description above holds at the default `--ranks`. Run without
+arguments, the helper runs only its doctests, which is the job's first Dendro
+step. Configuring each generated project downloads Dendrolib and toml11, so the
+run needs network access. `--update-reference` imports `black` and merges the
+candidate into the stored reference file, so run the two formulations' update legs
+one after the other. The helper always configures with `-DCPU_ARCH=x86-64-v3`, so
+CI never configures the `native` default, and it creates `dat/`, `vtu/`, `cp/`,
+and `bah/` in each run directory, so the solver's own directory creation is not
+exercised. Both Dendro workflows set `OMP_NUM_THREADS: 1`. `main.yml` runs the
+job on pushes and pull requests to `main` and on its twice-monthly schedule, and
+the helper prints the resolved Dendrolib commit for each variant. The job installs
+`liblapack-dev`, which is not among the packages whose versions the helper prints.
+
+Claim evidence:
+- Claim: The Dendro helper requires `--formulation` and a nonexistent `--work-dir`, defaults to `mpiexec --oversubscribe --bind-to none`, 4 ranks (at least 4), and 4 build jobs, runs only its doctests without arguments, needs network access, always configures with `-DCPU_ARCH=x86-64-v3`, pre-creates `dat/`, `vtu/`, `cp/`, and `bah/` in each run directory, merges `--update-reference` candidates through `black`, and prints the resolved Dendrolib commit per variant; both Dendro workflows set `OMP_NUM_THREADS: 1`, and `main.yml` runs on pushes and pull requests to `main` and on a twice-monthly schedule.
+- Role: CI behavior
+- Deciding authority: [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `main`, `Leg.run`, `Leg.generate_and_build`, `Leg.prepare`, `Leg.record_versions`; [main.yml](../../.github/workflows/main.yml), `on` and `dendro-validation`; [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml), `env`
+- Corroboration: none available; the configuration shows the job shape, not any run outcome
 
 The stored reference is a generated `trusted_dict` keyed by formulation and
 conformal factor. It changes only through the helper's `--update-reference`
@@ -202,7 +228,7 @@ Claim evidence:
 - Claim: the helper's pass results cover only its CI profiles, eight-step or shorter evolutions, and Kreiss-Oliger-enabled generation; they are not evidence for long-time, merger, production-resolution, or Dendro generation with `enable_KreissOliger_dissipation = False`, with `--fd-order` 4 or 8, or with `--ybs-gamma` or `--ybs-momentum`, or for the packaged q1 parameter file and the printed run commands.
 - Role: CI behavior
 - Deciding authority: [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `PROFILE_P`, `PROFILE_O`, `COMMON_OVERRIDES`, `Leg.generate_and_build`
-- Corroboration: [Production Validation And Deferred Checks](../infrastructures/dendro/production-validation-and-deferred-checks.md), `Required application checks`
+- Corroboration: [Production Validation And Deferred Checks](../infrastructures/dendro/production-validation-and-deferred-checks.md), `Detail`
 
 Explicitly unsupported or unverified by these configurations: CarpetX build or
 runtime; JAX generated basic test, returned-value checks, float32 inputs, or accelerator runtime;
