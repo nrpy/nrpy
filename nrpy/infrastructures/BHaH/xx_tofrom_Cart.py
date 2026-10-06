@@ -1140,6 +1140,7 @@ if(r2 <= (REAL)0.0) {{
         codegen_results = ccg.c_codegen(
             processed_exprs,
             ["xCart[0]", "xCart[1]", "xCart[2]"],
+            include_braces=False,
         )
         body = (
             """
@@ -1156,7 +1157,7 @@ if(r2 <= (REAL)0.0) {
 """
             + codegen_results
             + """
-}
+} // END ELSE: nonzero spheroidal radius
 """
         )
     else:

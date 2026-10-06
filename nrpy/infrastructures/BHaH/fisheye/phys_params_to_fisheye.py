@@ -175,7 +175,7 @@ def build_spheroidal_post_params_struct_set_to_default_hook(
     fprintf(stderr, "Error: spheroidal_fisheye_params_from_physical_N{num_transitions} failed for grid %d. Check fisheye_phys_a*, fisheye_phys_L, and fisheye_phys_{{xy,z}}_{{r,w}}_trans* values.\\n", grid);
     exit(1);
   }}
-}}\n"""
+}} // END LOOP: for grid over numerical grids\n"""
 
 
 def register_CFunction_fisheye_params_from_physical_N(
