@@ -22,12 +22,57 @@ and runtime-service registrar for finite-difference orders 4, 6, and 8. One
 The parent process does not reconstruct those expressions.
 
 After `do_parallel_codegen()`, each example calls
-`state_h.validate_registered_state` to confirm that the merged registry holds
-exactly the canonical Dendro state; no two parallel tasks register the same name
-with different definitions, so the merge order does not matter and repeated
-generation produces byte-identical trees. Inexpensive emitters then write
-headers, parameter input, context, executable entry point, checkpoint support,
-prototypes, and CMake.
+`state_h.validate_registered_state`. It compares name sets only: the registered
+EVOL names must equal the canonical state and the registered AUXEVOL names must
+be exactly the six Ricci scratch components. The merge of the parallel results is
+a last-writer `dict.update` of each task's registries, so a name that several
+tasks register, such as `C_CAHD` in the three order-specific RHS registrars, keeps
+the last definition. The CI helper generates each variant twice at
+`--fd-order 6` and requires byte-identical trees; no check covers other orders.
+Inexpensive emitters then write headers, parameter input, context, executable
+entry point, checkpoint support, prototypes, and CMake.
+
+Each emitting function writes one generated file, and the example places that
+text in the project tree:
+
+| Emitting function | Generated path under `<project>/<SOLVER_NAME>/` |
+| --- | --- |
+| `types_h.output_types_h` | `generated/include/<stem>_types.h` |
+| `constants_h.output_constants_h` | `generated/include/<stem>_constants.h` |
+| `state_h.output_state_h` | `generated/include/<stem>_state.h` |
+| `CodeParameters.output_parameters_h` | `generated/include/<stem>_parameters.h` |
+| `Dendro_defines_h.output_Dendro_defines_h` | `generated/include/<stem>_defines.h` |
+| `solver_context.output_solver_context_h` and `output_solver_context_cpp` | `include/<stem>Ctx.h` and `src/<stem>Ctx.cpp` |
+| `main_cpp.output_main_cpp` | `src/<stem>_main.cpp` |
+| `checkpoint.output_checkpoint_cpp` | `src/checkpoint.cpp` |
+| `param_toml.generate_default_parfile` | `pars/<stem>.toml` |
+| `CMakeLists.output_CFunctions_function_prototypes_and_construct_CMakeLists` | every registered CFunction as `<subdirectory>/<name>.cpp`, `generated/include/<stem>_function_prototypes.h`, and `CMakeLists.txt` |
+
+After `do_parallel_codegen()`, `CodeParameters.register_CFunctions_parameters`
+registers `<stem>_params_struct_set_to_default` and `<stem>_params_validate`
+under `generated/src/parameters/`; it must run after every scientific registrar
+because it reads the parameters they registered. `dendro_bssn.py` and
+`dendro_fccz4.py` each contain this assembly inline, so a change to the emitted
+file set must be made in both.
+
+The TwoPunctures solver and its initial-data support are BHaH modules. The
+examples import `TwoPunctures_lib`, `ID_persist_struct`,
+`ADM_Initial_Data_Reader__BSSN_Converter`, and `BHaH_defines_h`;
+`register_CFunction_twopunctures` registers `TwoPunctures_lib` and
+`NRPyPN_quasicircular_momenta` with `Infrastructure` set to `BHaH` and then
+restores `Dendro`. Each example sets `parallelization` to `openmp` only while it
+writes `BHaH_defines.h`, which it wraps and packages as
+`twopunctures/include/BHaH_defines.h` beside `BHaH_function_prototypes.h`,
+`TP_utilities.h`, and `TwoPunctures.h`. The TwoPunctures input behavior in
+[BSSN Application Wiring](bssn-application-wiring.md#twopunctures-inputs) is
+therefore decided in BHaH's `ID_persist_struct.py`, and a change to these BHaH
+modules changes the Dendro applications.
+
+Claim evidence:
+- Claim: `state_h.validate_registered_state` checks only that the registered EVOL names equal the canonical state and the AUXEVOL names equal the six Ricci scratch components; the parallel merge is a last-writer `dict.update`; each emitting function named in the table writes the listed generated path; the two parameter CFunctions are registered after `do_parallel_codegen()`; the examples reuse BHaH's TwoPunctures, `ID_persist_struct`, initial-data reader, and `BHaH_defines_h` modules and toggle `Infrastructure` and `parallelization` around them.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/state_h.py`, `validate_registered_state`; `nrpy/helpers/parallel_codegen.py`, `unpack_NRPy_environment_dict`; `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `main`; `nrpy/infrastructures/Dendro/CMakeLists.py`, `output_CFunctions_function_prototypes_and_construct_CMakeLists`; `nrpy/infrastructures/Dendro/CodeParameters.py`, `register_CFunctions_parameters`; `nrpy/infrastructures/Dendro/general_relativity/twopunctures.py`, `register_CFunction_twopunctures`.
+- Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.generate_and_build`, the two-generation tree comparison at `--fd-order 6`.
 
 One Python module owns each generated numerical operation. Python basename,
 registrar suffix, CFunction name, and C++ basename correspond directly. Thus
@@ -44,7 +89,9 @@ CMake project is standalone only: it fetches Dendrolib (`paralab/Dendro-5.01`, b
 and toml11 with `FetchContent`, and it is
 not meant to be added to another CMake tree. `CPU_ARCH` defaults to `native` and
 applies to the solver and the fetched libraries; `generic_avx2` selects `-mavx2
--mfma`. The examples emit intrinsic-based Ricci and RHS kernels and package
+-mfma`. The accepted values are `native`, `generic_avx2`, `x86-64-v3`, `znver1`
+through `znver4`, `haswell`, `broadwell`, `skylake-avx512`, `cascadelake`, and
+`icelake-server`; any other value is a fatal CMake error. The examples emit intrinsic-based Ricci and RHS kernels and package
 NRPy's `simd_intrinsics.h` under `generated/include`. The option `--fd-order`
 sets only the default run-time order; see [Finite-Difference Profiles And Dendro
 Conformance](finite-difference-profiles-and-dendro-conformance.md).
@@ -133,6 +180,12 @@ Both examples copy `nrpy/examples/q1.par.lowres.toml` next to their generated
 package by `setup.py`, so installed generators have the same input file.
 
 Claim evidence:
+- Claim: `setup.py` adds `q1.par.lowres.toml` to the package data of `nrpy.examples`, and both Dendro examples read that file from the package directory and write it as `pars/q1.par.lowres.toml` in the generated application.
+- Role: descriptive behavior
+- Deciding authority: [setup.py](../../../setup.py), `setup` (the `nrpy.examples` package-data entry); [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py), `main`
+- Corroboration: none available; no CI job installs the package and generates from the installed copy
+
+Claim evidence:
 - Claim: The generated CMake project is standalone: it declares its own project and CMake minimum 3.18, fetches Dendrolib from `master` and toml11, and applies the selected CPU architecture to the solver and the fetched libraries. The minimum matches the imported targets `BLAS::BLAS` and `LAPACK::LAPACK` that Dendrolib's default `WITH_BLAS_LAPACK` path links; the KB records no configure on an older CMake.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/CMakeLists.py`, `output_CFunctions_function_prototypes_and_construct_CMakeLists`.
@@ -149,6 +202,7 @@ Claim evidence:
 - [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) - BSSN registration wave and file emission.
 - [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - fCCZ4 registration wave and file emission.
 - [parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py) - worker execution and registry merge.
+- [setup.py](../../../setup.py) - package data that ships the packaged q1 parameter file.
 - [CMakeLists.py](../../../nrpy/infrastructures/Dendro/CMakeLists.py) - prototype and explicit CMake source emission, standalone project, and build/run instructions.
 - [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - application entry point, parameter-file reading, and startup checks.
 - [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `output_toml_bindings`, CodeParameter key binding.

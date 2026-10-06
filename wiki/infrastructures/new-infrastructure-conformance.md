@@ -162,7 +162,7 @@ their executable targets identify the NRPy implementation.
 Claim evidence:
 - Claim: NRPy-generated Dendro application directories, CMake projects, namespaces, and executables identify NRPy; child files and functions retain their formulation or host-required names.
 - Role: normative rule
-- Deciding authority: this page, `The host's vocabulary governs emitted identifiers`, Rule
+- Deciding authority: this page, `Names identify both NRPy and the target code`, Rule
 - Corroboration: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) set application, project, namespace, and executable identities; registered Dendro-GR source establishes host conventions
 
 **Wrong** — replacing the C++ namespace `fccz4::generated` with
@@ -183,7 +183,7 @@ for the project instance.
 **Right** — BHaH emits `BHaH_defines.h`, never `<project_name>_defines.h`.
 
 **Precedence.** Where the host itself names solver files for the formulation,
-the host-vocabulary rule above governs and this one yields: Dendro-GR ships
+the rule above on names required by the target code governs and this one yields: Dendro-GR ships
 `bssnCtx.cpp` and `bssn_constraints.h`, so a generated Dendro solver emits
 `<solver_stem>Ctx.cpp`. This rule still governs generated files that are
 infrastructure-generic rather than host-named. The module directory, CMake

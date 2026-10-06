@@ -17,11 +17,16 @@ generated.
 | 6 | 4 | 6 | 3 |
 | 8 | 6 | 8 | 4 |
 
-One generated application contains every profile. Runtime dispatch accepts
-Dendro element order 4, 6, or 8, selects the matching Ricci, RHS, constraint,
-and derivative-dependent initial-data kernels, and requires padding at least
-`order/2`. A mismatched KO order or unsupported element order is a configuration
-error.
+One generated application contains every profile. At run time the executable
+accepts only the `BSSN_ELE_ORDER` values 4, 6, and 8, and the solver context
+dispatches on the element order to the matching kernel for the `ADM_to_BSSN`
+conversion, the connection initialization, Ricci, the RHS, the constraints,
+Psi4, and the ADM surface data; an unsupported order throws. Each block kernel
+requires padding of at least `order/2` and throws otherwise. The relations
+`KO_FD_ORDER = FD_ORDER - 2` and `REQUIRED_PADDING = FD_ORDER/2` are checked when
+the project is generated, where a violation raises `ValueError`; the solver
+reads neither constant at run time, and the `KO=` value it prints is
+`element_order - 2`.
 
 Kreiss-Oliger dissipation is enabled in the production profile. The generated
 default uses order 6 with KO order 4. Validation must exercise each profile in

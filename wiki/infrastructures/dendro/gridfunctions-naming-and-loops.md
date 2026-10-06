@@ -71,4 +71,4 @@ Claim evidence:
 
 - Parent: [Dendro](index.md)
 - Depends on: [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
-- Used by: [BSSN Application Wiring](bssn-application-wiring.md)
+- See also: [BSSN Application Wiring](bssn-application-wiring.md)
