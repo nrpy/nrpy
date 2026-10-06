@@ -159,7 +159,28 @@ Claim evidence:
 - Claim: New timesteps use the minimum physical axis spacing; a restore request with checkpoint metadata preserves a stored timestep only if it satisfies the current CFL bound, and a restore request without checkpoint metadata in either slot prints a warning on rank 0 and starts from the initial data as with `BSSN_RESTORE_SOLVER = 0`, while unreadable existing metadata stays fatal. The driver checks generated parameter validation before loading puncture data.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`.
-- Corroboration: `nrpy/infrastructures/Dendro/CodeParameters.py`, generated parameter validation; Dendrolib `Block::computeDx`, `computeDy`, and `computeDz` define the physical axis spacings; `Leg.run_negatives` in `nrpy/examples/tests/dendro_application_check.py` runs the restore-without-metadata case; Dendro-GR `BSSN_GR/src/bssnCtx.cpp`, `BSSNCtx::initialize` and `BSSNCtx::restore_checkpt`, continue as if `BSSN_RESTORE_SOLVER` were false when no checkpoint files are found and abort on a corrupted one.
+- Corroboration: `nrpy/infrastructures/Dendro/CodeParameters.py`, generated parameter validation; Dendrolib `Block::computeDx`, `computeDy`, and `computeDz` define the physical axis spacings; `Leg.run_negatives` in `nrpy/examples/tests/dendro_application_check.py` runs the restore-without-metadata case; Dendro-GR `BSSN_GR/src/bssnCtx.cpp`, `BSSNCtx::initialize` and `BSSNCtx::restore_checkpt`, continue as if `BSSN_RESTORE_SOLVER` were false when no checkpoint files are found.
+
+The generated driver restores only the metadata slot (index 0 or 1) with the
+newest file modification time, and has no fallback to the other slot. It writes a
+checkpoint after the step's output at every nonzero multiple of
+`BSSN_CHECKPT_FREQ`, into slot `(step / BSSN_CHECKPT_FREQ) mod 2`, and the loop
+ends without a final write, so a run that ends between multiples leaves no
+checkpoint of its last steps. Within one write the octree and state files are
+published first and the metadata file last, and the horizon search-state file
+follows. Native `BSSN_GR` instead honors an explicit `BSSN_RESTORE_CHECKPT_SLOT`,
+otherwise reads the `.latest` sentinel it writes after each complete normal
+checkpoint, otherwise compares the step numbers of the slots, restores the other
+normal slot when a slot it chose itself is incomplete, and aborts when the
+selected slot's metadata, octree, or state file cannot be read. Its merger snapshot in
+slot 3 is never named by `.latest` and is restorable only through an explicit
+slot request.
+
+Claim evidence:
+- Claim: The generated driver restores only the metadata slot with the newest modification time and falls back to no other slot; it writes checkpoints only at nonzero multiples of `BSSN_CHECKPT_FREQ`, into slot `(step / BSSN_CHECKPT_FREQ) mod 2`, publishing the metadata after the octree and state files and then writing the horizon search-state file, with no write after the last step. Native `BSSN_GR` restores the slot named by `BSSN_RESTORE_CHECKPT_SLOT`, otherwise the one the `.latest` sentinel names, otherwise the newer by step number, falls back to the other normal slot when a slot it chose itself is incomplete, aborts when the selected slot cannot be read, and writes its merger snapshot in slot 3 without publishing it in `.latest`.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp` (slot choice, write-then-evolve loop); `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::write_checkpt`; `nrpy/infrastructures/Dendro/checkpoint.py`, `output_checkpoint_cpp` (file publication order); Dendro-GR `BSSN_GR/src/bssnCtx.cpp`, `BSSNCtx::write_checkpt` and `BSSNCtx::restore_checkpt`.
+- Corroboration: none available; no CI case checks slot choice, the write schedule, or the native restore order.
 
 When the apparent-horizon finder is enabled (`AEH_SOLVER_FREQ > 0`), each
 checkpoint also writes the finder's search state to
@@ -168,7 +189,15 @@ of the solver checkpoint, as Dendro-GR `BSSN_GR` names it. The search state is
 the horizon count, the binary-black-hole flag, the previous three horizon
 shapes, centers, times and radii, and the active, failure and fixed-radius-guess
 flags; it seeds the next horizon find. Restore reads it back. A checkpoint
-written without a horizon file leaves the finder in its initial state. `BSSN_GR`
+written without a horizon file leaves the finder in its initial state.
+Dendrolib's `create_checkpoint` returns nothing: when it cannot open the file it
+prints `file open failed for BAH checkpoint` to standard output and returns, and
+the solver does not check a failed write. The file for each index is overwritten
+in place and the index alternates, so after a failed open the file from two
+checkpoints earlier remains, and a later restore reads it without a message and
+seeds the finder with that older search state instead of its initial one.
+`restore_checkpoint` prints `file open failed! Could not restore AH solver!` and
+returns when the file is missing, and a file it cannot parse makes it throw. `BSSN_GR`
 also writes a one-time merger checkpoint with index 3, which the generated
 solver does not. Because a checkpoint is written after its step's output, a
 restored run skips the initial output instead of repeating that step's output
@@ -179,7 +208,7 @@ successfully found horizon only on horizon-find steps (multiples of
 their search state is checkpointed.
 
 Claim evidence:
-- Claim: With the apparent-horizon finder enabled, each checkpoint writes the finder's search state with Dendrolib's `AEH_BHaHAHA::create_checkpoint` to `<BSSN_CHKPT_FILE_PREFIX>_aeh_solver_checkpt-cp<index>.json`, using the same 0/1 index as the solver checkpoint, and restore reads it with `AEH_BHaHAHA::restore_checkpoint`; if the file is missing, the finder keeps its initial state. A restored run skips the initial output at the restored step. The finder writes a diagnostics row for each successfully found horizon only on horizon-find steps (multiples of `AEH_SOLVER_FREQ`) that are also multiples of `BSSN_IO_OUTPUT_FREQ`, and none when that frequency is 0.
+- Claim: With the apparent-horizon finder enabled, each checkpoint writes the finder's search state with Dendrolib's `AEH_BHaHAHA::create_checkpoint` to `<BSSN_CHKPT_FILE_PREFIX>_aeh_solver_checkpt-cp<index>.json`, using the same 0/1 index as the solver checkpoint, and restore reads it with `AEH_BHaHAHA::restore_checkpoint`; if the file is missing, the finder keeps its initial state. A failed open at write time prints a message and leaves any earlier file at that index in place, and a horizon file that cannot be parsed makes restore throw. A restored run skips the initial output at the restored step. The finder writes a diagnostics row for each successfully found horizon only on horizon-find steps (multiples of `AEH_SOLVER_FREQ`) that are also multiples of `BSSN_IO_OUTPUT_FREQ`, and none when that frequency is 0.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::write_checkpt`, `Ctx::restore_checkpt`, and `Ctx::apparent_horizon_output` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; Dendrolib `src/aeh_bhahaha.cpp`, `AEH_BHaHAHA::create_checkpoint` and `AEH_BHaHAHA::restore_checkpoint` (file contents and missing-file return) and `AEH_BHaHAHA::find_horizons` (the `file_output_freq_` guard).
 - Corroboration: Dendro-GR `BSSN_GR/src/bssnCtx.cpp`, `BSSNCtx::write_checkpt` and `BSSNCtx::restore_checkpt`, native file name and calls.
@@ -201,13 +230,16 @@ tolerance modes fail at startup instead of silently substituting a constant
 tolerance. These choices
 target a comparable grid structure under the same parameter file; they do
 not establish bitwise identity of the two remesh histories. The generated
-Nyquist path computes all three components of puncture separation from their
-corresponding coordinates. Native Dendro-BSSN currently duplicates x separation
-into the z component of its relative-position history, so enabling Nyquist
-refinement can produce different remesh decisions even with the same parameters.
+Nyquist path and native `calculate_relative_position_history` both build the
+relative-position history from all three components of the puncture separation.
+The tracked puncture centers that feed that history, and the time integrator,
+still differ between the two codes (see the comparison table in [BSSN
+Application Wiring](bssn-application-wiring.md)), so enabling Nyquist
+refinement can still produce different remesh decisions even with the same
+parameters.
 
 Claim evidence:
-- Claim: The generated binary-puncture path parses native-style wavelet/geometric AMR controls, loads separately solved TwoPunctures data for evolution, and uses the licensed native analytic octree seed, whose lapse and chi floors return the floor value where the native expressions give NaN at a sample exactly on a puncture; its Nyquist history uses the z-coordinate separation, unlike the native path's duplicated x separation.
+- Claim: The generated binary-puncture path parses native-style wavelet/geometric AMR controls, loads separately solved TwoPunctures data for evolution, and uses the licensed native analytic octree seed, whose lapse and chi floors return the floor value where the native expressions give NaN at a sample exactly on a puncture; its Nyquist history uses all three coordinate separations, as the native `calculate_relative_position_history` does.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::get_wtol_function` and `Ctx::is_remesh` within `output_solver_context_cpp`.
 - Corroboration: `BSSN_GR/src/grUtils.cpp`, `punctureDataPhysicalCoord`; `BSSN_GR/src/dataUtils.cpp`, `calculate_relative_position_history` and `isRemeshBH`.

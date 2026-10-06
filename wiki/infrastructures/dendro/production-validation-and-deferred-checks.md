@@ -30,19 +30,21 @@ state, puncture excision, momentum-component convention, and unique-node RMS;
 conformal-factor volume-weighted RMS is a distinct diagnostic. Compare by physical time and check
 the initial diagnostic before interpreting long evolutions. Record the evolved
 conformal-factor choice, native full-psi lapse replacement, eta prescription,
-KO strength, native CAKO state, and any post-merger CAKO switch before
+KO strength, native CAKO state, any post-merger CAKO switch, puncture tracker,
+time integrator and CFL spacing, and the defaults of omitted keys before
 attributing any later difference to the formulation.
 
 Claim evidence:
-- Claim: Complete BSSN and fCCZ4 qualification requires W and chi generation and rejection of incompatible restarts; BSSN native comparisons require matching initial data, excision, momentum components, and post-remesh unique-node RMS. Native comparisons must record the conformal-factor choice, full-psi lapse replacement, eta prescription, KO strength, CAKO state, and any post-merger CAKO switch; matching a parfile alone is insufficient.
+- Claim: Complete BSSN and fCCZ4 qualification requires W and chi generation and rejection of incompatible restarts; BSSN native comparisons require matching initial data, excision, momentum components, and post-remesh unique-node RMS. Native comparisons must record the conformal-factor choice, full-psi lapse replacement, eta prescription, KO strength, CAKO state, any post-merger CAKO switch, puncture tracker, time integrator and CFL spacing, and the defaults of omitted keys; matching a parfile alone is insufficient.
 - Role: normative rule
 - Deciding authority: this page, `Required application checks`.
 - Corroboration: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `parse_args`; `nrpy/infrastructures/Dendro/checkpoint.py`, formulation metadata; `nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py`, momentum lowering; `nrpy/infrastructures/Dendro/solver_context.py`, diagnostic scheduling and node reduction; `BSSN_GR/src/parameters.cpp`, native lapse and CAKO settings; `BSSN_GR/src/bssngr_main.cpp`, post-merger CAKO switch.
 
 AMR parameter parity is not proof of identical remesh histories. The generated
-optional Nyquist path uses the z-coordinate puncture separation, but native
-Dendro-BSSN currently duplicates x separation into the z component of its
-relative-position history. Compare the resulting meshes before interpreting
+and native Nyquist paths both use all three components of the puncture
+separation, but the two codes track the puncture centers with different
+schemes, so the center histories that drive excision, puncture-centered AMR, and
+the Nyquist history can differ. Compare the resulting meshes before interpreting
 constraint differences as differences between evolution equations.
 
 The `dendro-validation` workflow job runs

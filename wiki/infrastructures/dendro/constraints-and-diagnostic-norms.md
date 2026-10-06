@@ -73,8 +73,9 @@ the same spherical excision regions. It counts a shared node once and weights
 each retained node equally, matching the native Dendro-BSSN reporting
 convention. The file also records the node count after all diagnostic RMS
 columns (six for BSSN and ten for fCCZ4). For BSSN, columns 3-6 (`H`,
-`MD0..MD2`) correspond to native `C_HAM` and `C_MOM0..2`; fCCZ4 lists its four
-Z4 fields first. Rows in both files begin with the step and physical time. Each
+`MD0..MD2`) correspond to native `C_HAM` and `C_MOM0..2`, and native appends a
+further column `MIN_DET_GT` after them that the generated file has no counterpart
+for; fCCZ4 lists its four Z4 fields first. Rows in both files begin with the step and physical time. Each
 file opens with column labels in the style of BHaHAHA's horizon diagnostics
 files: a title line naming the formulation and evolved conformal factor, then
 one `# column N = <name>: <meaning>` line per column. `*_Constraints.dat` names
@@ -87,7 +88,7 @@ floating-point values with up to ten significant digits (default notation,
 trailing zeros dropped).
 
 Claim evidence:
-- Claim: The generated solver reports distinct excised conformal-factor volume-weighted and unique-owned-node RMS norms, and only the latter matches native Dendro-BSSN's node-weighting convention. The unique-node norm goes to `*_Constraints.dat`, native `BSSN_GR`'s file name, labelled `TimeStep` and `time` (native `BSSN_GR`'s names), the generated diagnostic names, and `unexcised_nodes`; for BSSN its columns 3-6 correspond to native `C_HAM` and `C_MOM0..2`. The volume-weighted norm goes to `*_Constraints_volweighted.dat`, which labels an RMS and a maximum absolute value per field. A new or empty file of either kind first receives a title line and one `# column N = <name>: <meaning>` line per column. Both files print floating-point values with up to ten significant digits.
+- Claim: The generated solver reports distinct excised conformal-factor volume-weighted and unique-owned-node RMS norms, and only the latter matches native Dendro-BSSN's node-weighting convention. The unique-node norm goes to `*_Constraints.dat`, native `BSSN_GR`'s file name, labelled `TimeStep` and `time` (native `BSSN_GR`'s names), the generated diagnostic names, and `unexcised_nodes`; for BSSN its columns 3-6 correspond to native `C_HAM` and `C_MOM0..2`, and native's further column `MIN_DET_GT` has no generated counterpart. The volume-weighted norm goes to `*_Constraints_volweighted.dat`, which labels an RMS and a maximum absolute value per field. A new or empty file of either kind first receives a title line and one `# column N = <name>: <meaning>` line per column. Both files print floating-point values with up to ten significant digits.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `output_solver_context_cpp` / `Ctx::diagnostic_output`, `open_labeled_output`, and `diagnostic_meanings`; `nrpy/infrastructures/Dendro/general_relativity/diagnostics.py`, `register_CFunction_diagnostics`.
 - Corroboration: `BSSN_GR/include/grUtils.tcc`, `bssn::computeConstraintL2Norm(const ot::Mesh*,...)`, native ownership, excision, and RMS reduction, and `bssn::extractConstraints`, native file name and its `TimeStep` and `time` header names; `nrpy/infrastructures/Dendro/state_h.py`, diagnostic component order.

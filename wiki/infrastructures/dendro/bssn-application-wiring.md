@@ -142,7 +142,7 @@ Claim evidence:
 - Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.check_run_a`, the closed-form comparison of the solved energy and angular momentum and the column use.
 
 Claim evidence:
-- Claim: When `*_ADM.dat`, either constraint file, a `*_GW_l<l>_m<m>.dat` file, `*_GW_L2.dat`, or `*_BHLocations.dat` is missing or empty, rank 0 writes `# <title>`, `#`, and one `# column N = <name>: <meaning>` line per column before the first row; a file that already has content receives no further labels. The step and time columns are named `TimeStep` and `time` (`t` in the Psi4 files); Psi4 radius columns are `r0`, `r1`, ..., as in native `BSSN_GR`'s headers; the constraint and puncture-location columns use descriptive generated labels. Native waveform-norm and puncture-location files instead use uncommented headers. This applies to the fCCZ4 application as well.
+- Claim: When `*_ADM.dat`, either constraint file, a `*_GW_l<l>_m<m>.dat` file, `*_GW_L2.dat`, or `*_BHLocations.dat` is missing or empty, rank 0 writes `# <title>`, `#`, and one `# column N = <name>: <meaning>` line per column before the first row; a file that already has content receives no further labels. The step and time columns are named `TimeStep` and `time` (`t` in the Psi4 files); Psi4 radius columns are `r0`, `r1`, ..., as in native `BSSN_GR`'s mode-file headers (native `*_GW_L2.dat` labels them `r=<radius>`); the constraint and puncture-location columns use descriptive generated labels. Native waveform-norm and puncture-location files instead use uncommented headers. This applies to the fCCZ4 application as well.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `open_labeled_output` and its output paths within `output_solver_context_cpp`, and `diagnostic_meanings`.
 - Corroboration: `nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_file_output.py`, the horizon diagnostics header this format follows; `nrpy/examples/tests/dendro_application_check.py`, `parse_table` and `parse_modes`, which read the labels.
@@ -170,7 +170,8 @@ one `(Re,Im)` pair per extraction radius. The two values are
 valid Lebedev samples and reduced across MPI ranks. The sums use no Lebedev
 weights or `4*pi` factor. Labels name the columns `TimeStep`, `t`, `r0`, `r1`,
 and so on, and give each radius. Unlike Dendro-GR's uncommented step-zero
-header, the generated file uses comment labels. A fresh run writes step 0. A
+header, which labels the radius columns `r=<radius>`, the generated file uses
+comment labels. A fresh run writes step 0. A
 restart skips the checkpoint step already written and appends the next
 scheduled row.
 
@@ -262,9 +263,12 @@ evolutions equivalent:
 | --- | --- | --- |
 | Evolved conformal factor | W by default; `--conformal-factor chi` selects chi at generation | chi |
 | TwoPunctures initial lapse | Always `alpha=(psi_background+u)^(-2)=W`; startup rejects `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = false`, and `INITIAL_LAPSE` and `TPID_INITIAL_LAPSE_PSI_EXPONENT` are reported as having no effect | `TPID_REPLACE_LAPSE_WITH_SQRT_CHI=true` is needed to replace the ordinary `INITIAL_LAPSE=2` result with full-psi W |
-| Shift-driver damping in the SSL/CAHD path | Spatially constant `eta`; default 1 in the generated file, overridden by `ETA_CONST` in an input file (the packaged q1 file sets 2.0) | Radial RIT profile in the CPU RHS; `ETA_CONST` does not select constant damping on this path |
+| Shift-driver damping in the SSL/CAHD path | Spatially constant `eta`; default 1 in the generated file, overridden by `ETA_CONST` in an input file (the packaged q1 file sets 2.0) | Radial RIT profile in the CPU RHS, `eta = (RIT_ETA_CENTRAL - RIT_ETA_OUTER) exp(-(r / RIT_ETA_WIDTH)^4) + RIT_ETA_OUTER` with defaults 2.0, 0.25, and 40.0, constant only when `RIT_ETA_CENTRAL` equals `RIT_ETA_OUTER`; the CPU RHS does not read `ETA_CONST`, so the packaged q1 file, which sets `ETA_CONST = 2.0` and no `RIT_ETA_*` key, runs natively with the falling profile |
 | Gamma-driver auxiliary `B^i` | `d_t beta^i = B^i + advection`, `d_t B^i = (3/4) d_t Lambdabar^i - eta B^i + advection`; the wavelet refinement test scales `betU` by 4/3 (see [Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md)) | `d_t beta^i = (3/4) B^i + advection` with `BSSN_LAMBDA_F = (1, 0)`, `d_t B^i = d_t Gt^i - eta B^i + advection`; with `BSSN_LAMBDA = (1, 1, 1, 1)` and the same `eta`, `B` is 4/3 of the generated `betU`; where the RIT profile differs from the generated constant `eta`, the relation does not hold |
 | KO strength | Both generated strengths read `KO_DISS_SIGMA`; the emitted sample sets 0.4 when KO is enabled | Reads `KO_DISS_SIGMA` with CAKO off; when CAKO is enabled, uses `sqrt(chi)` times separate gauge and other CAKO coefficients |
+| Puncture tracker | After each step and any remesh, each center moves by `-dt beta^i`, with `beta^i` interpolated from the evolved state at the center's previous position and `dt` the time since the previous update: one explicit displacement, no predictor, no stored velocity | Heun predictor and corrector on `dx/dt = -beta(x)` using the velocity stored from the previous step, with a single Euler displacement when none is stored |
+| Time integrator and step | RK4 only; `BSSN_RK_TYPE` is not read; the spacing in the CFL step is the smallest axis spacing | `BSSN_RK_TYPE` selects among RK3, RK4, RK5, and three multistep types; the CFL spacing comes from the X-domain width |
+| Defaults when the file omits the key | `BSSN_BH1_CONSTRAINT_R` and `BSSN_BH2_CONSTRAINT_R` are 1.0; `BSSN_SCALE_VTU_AND_GW_EXTRACTION` is true | 5.0 for both constraint radii (which changes the unique-node RMS); false for the scaling switch |
 
 Thus matching the conformal representation, full-psi lapse, and KO parameter
 still leaves a gauge difference when native uses its radial eta profile. The
@@ -275,10 +279,10 @@ diagnostic norms also does not prove identical mesh histories or evolved
 fields.
 
 Claim evidence:
-- Claim: Native CPU SSL/CAHD evolution uses radial RIT eta even when `ETA_CONST` is present, whereas generated BSSN uses constant eta; native requires its lapse-replacement option to match the generated full-psi W initial lapse. Native KO uses `KO_DISS_SIGMA` only with CAKO off; enabling CAKO selects chi-scaled gauge/other coefficients instead.
+- Claim: Native CPU SSL/CAHD evolution uses radial RIT eta even when `ETA_CONST` is present, whereas generated BSSN uses constant eta; native requires its lapse-replacement option to match the generated full-psi W initial lapse. Native KO uses `KO_DISS_SIGMA` only with CAKO off; enabling CAKO selects chi-scaled gauge/other coefficients instead. Native tracks the punctures with a Heun predictor and corrector, selects its integrator by `BSSN_RK_TYPE`, takes its CFL spacing from the X-domain width, and defaults `BSSN_BH{1,2}_CONSTRAINT_R` to 5.0 and `BSSN_SCALE_VTU_AND_GW_EXTRACTION` to false, where the generated solver uses one explicit displacement, RK4, the smallest axis spacing, 1.0, and true.
 - Role: descriptive behavior
-- Deciding authority: `nrpy/examples/dendro_bssn.py`, `main`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `BSSN_GR/src/rhs.cpp`, CPU eta, SSL/CAHD include selection, and CAKO branches; `BSSN_GR/src/TwoPunctures.cpp`, lapse replacement.
-- Corroboration: `nrpy/infrastructures/Dendro/CodeParameters.py`, q1 parameter mapping; `BSSN_GR/src/eta_RIT.inc.cpp`, radial formula; `BSSN_GR/src/parameters.cpp`, lapse and CAKO settings; `BSSN_GR/src/bssngr_main.cpp`, post-merger CAKO switch.
+- Deciding authority: `nrpy/examples/dendro_bssn.py`, `main`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::evolve_excision_centers` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `BSSN_GR/src/rhs.cpp`, CPU eta, SSL/CAHD include selection, and CAKO branches; `BSSN_GR/src/TwoPunctures.cpp`, lapse replacement.
+- Corroboration: `nrpy/infrastructures/Dendro/CodeParameters.py`, q1 parameter mapping; `BSSN_GR/src/eta_RIT.inc.cpp`, radial formula; `BSSN_GR/src/parameters.cpp`, lapse and CAKO settings, `RIT_ETA_*`, constraint-radius, and scaling defaults; `BSSN_GR/src/bssngr_main.cpp`, post-merger CAKO switch, integrator selection, and CFL spacing; `BSSN_GR/src/grUtils.cpp`, `computeBHLocations`.
 
 ### Optional Yo et al. adjustments
 
