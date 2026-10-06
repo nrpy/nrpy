@@ -90,7 +90,7 @@ Wiring](bssn-application-wiring.md#twopunctures-inputs).
 | `BSSN_BH2.X`, `.Y`, `.Z` | -4.0, 0.0, 0.0 | none | -4.0, 0.0, 0.0 | Same for the second puncture. |
 | `BSSN_BH{1,2}.V_X`, `.V_Y`, `.V_Z` | 0.0 for the initial octree seed and the Nyquist history; for the TwoPunctures momentum `BSSN_BH1.V_X` falls back to -0.002284343811437988 and `BSSN_BH1.V_Y` to 0.11284523509709575 | none | `BSSN_BH1`: -0.002284343811437988, 0.11284523509709575, 0.0; `BSSN_BH2`: the negatives of those values | Initial coordinate velocities. The tracked puncture centers move with the evolved shift, not with these values. |
 | `BSSN_BH{1,2}.SPIN`, `.SPIN_THETA`, `.SPIN_PHI` | 0.0 | none | 0.0 | Read, but they feed only the initial octree seed; the TwoPunctures data are nonspinning. |
-| `BSSN_BH1_CONSTRAINT_R`, `BSSN_BH2_CONSTRAINT_R` | 1.0 | none | 1.0 | Excision radius of the constraint norms around each tracked puncture; points closer than this coordinate distance are excluded. The solver applies no range check to the value. |
+| `BSSN_BH1_CONSTRAINT_R`, `BSSN_BH2_CONSTRAINT_R` | 1.0 | none | 1.0 | Excision radius of the constraint norms around each tracked puncture; points whose coordinate distance from the center is below the radius are excluded (strict inequality, so 0 excludes nothing). The value must be finite and nonnegative. |
 | `TPID_PAR_B` | 4.0 | none | 4.0 | Half of the coordinate separation used by the TwoPunctures solve. |
 | `TPID_NPOINTS_A`, `_B`, `_PHI` | 65, 78, 10 | none | 65, 78, 10 | TwoPunctures spectral grid sizes. |
 | `TPID_GIVE_BARE_MASS` | 1 | none | 1 | Nonzero: `TPID_TARGET_M_PLUS` and `TPID_TARGET_M_MINUS` are bare masses. Zero: the solve iterates the bare masses to the ADM targets and the two keys are not read. |
@@ -205,6 +205,7 @@ these; invalid command-line arguments return status 2.
 - `BSSN_INIT_GRID_ITER` positive while `BSSN_USE_SET_REF_MODE_FOR_INITIAL_CONVERGE` is false.
 - A zero `BSSN_DENDRO_GRAIN_SZ`, a negative or nonfinite `BSSN_LOAD_IMB_TOL`, a nonpositive or nonfinite `BSSN_BH{1,2}_AMR_R`, `BSSN_AMR_R_RATIO` not above 1, or `BSSN_BH{1,2}_MAX_LEV` above `BSSN_MAXDEPTH` or below `MAXDEAPTH_LEVEL_DIFF + 2`.
 - `BSSN_NUM_EVOL_VARS_VTU_OUTPUT` or `BSSN_NUM_CONST_VARS_VTU_OUTPUT` above the length of its index list.
+- A negative or nonfinite `BSSN_BH1_CONSTRAINT_R` or `BSSN_BH2_CONSTRAINT_R`.
 - `BSSN_GW_NUM_RADAII` or `BSSN_GW_NUM_LMODES` not equal to its list length, an empty `BSSN_GW_RADAII` or `BSSN_GW_L_MODES`, a largest l outside [2, 8], or, in wavelet mode 6, a first radius not above 8 or a last radius below the first.
 - An empty `TPID_FILEPREFIX`, and any registered coefficient that is nonfinite or fails the generated validation.
 - The solver-context constructor also rejects a nonpositive or nonfinite `BSSN_BH{1,2}.MASS`, a `BSSN_BH{1,2}_MAX_LEV` below `max(BSSN_MINDEPTH, 2)`, a nonpositive or nonfinite entry of `BSSN_GW_RADAII`, and a VTU field index that is not a valid evolved field or constraint field. These checks run in evolution runs only, after the mesh is built and after the point where a fresh run loads the TwoPunctures file; a `--tpid` run does not reach them.
