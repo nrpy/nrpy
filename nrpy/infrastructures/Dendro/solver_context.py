@@ -309,7 +309,8 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
    *
    * @param[in] mesh Dendro mesh of the fields.
    * @param[in] state Zipped evolved fields.
-   * @return Largest residual, or infinity at a nonpositive or nonfinite determinant.
+   * @return Largest residual, or infinity at a nonpositive or nonfinite determinant
+   *         or a nonfinite trace.
    */
   DendroScalar algebraic_residual(ot::Mesh* mesh, DVec& state);
   /**
