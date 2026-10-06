@@ -289,6 +289,7 @@ int {solver_stem}_restore_checkpoint(
     std::vector<std::array<DendroScalar, 6>>& black_hole_position_history,
     DendroScalar& black_hole_merge_time,
     bool& merged_checkpoint_written,
+    unsigned expected_element_order,
     DendroScalar algebraic_residual_tolerance) {{
     int global_rank = 0;
     int global_size = 0;
@@ -303,6 +304,8 @@ int {solver_stem}_restore_checkpoint(
     std::vector<std::array<DendroScalar, 6>> stored_black_hole_positions;
     DendroScalar stored_merge_time = 0.0;
     bool stored_merged_checkpoint_written = false;
+    unsigned stored_element_order = 0;
+    bool element_order_mismatch = false;
     bool metadata_valid = std::filesystem::exists(metadata_name.str());
     try {{
         if (metadata_valid) {{
@@ -348,6 +351,8 @@ int {solver_stem}_restore_checkpoint(
         }}  // END IF: invalid stored time data
         const unsigned stored_order =
             metadata.at("NRPY_ELEMENT_ORDER").get<unsigned>();
+        stored_element_order = stored_order;
+        element_order_mismatch = stored_order != expected_element_order;
         const std::array<DendroScalar, 3> stored_minimum =
             metadata.at("NRPY_DOMAIN_MINIMUM")
                 .get<std::array<DendroScalar, 3>>();
@@ -389,6 +394,7 @@ int {solver_stem}_restore_checkpoint(
         }}  // END LOOP: for coordinate over excision centers
         if (metadata.at("NRPY_ACTIVE_COMM_SIZE").get<unsigned>() == 0 ||
             (stored_order != 4 && stored_order != 6 && stored_order != 8) ||
+            element_order_mismatch ||
             stored_minimum != std::array<DendroScalar, 3>{{
                 domain_minimum.x(), domain_minimum.y(), domain_minimum.z()}} ||
             stored_maximum != std::array<DendroScalar, 3>{{
@@ -408,6 +414,10 @@ int {solver_stem}_restore_checkpoint(
         if (global_rank == 0) {{
             std::cerr << "Checkpoint metadata does not match {formulation_name}"
                       << std::endl;
+            if (element_order_mismatch)
+                std::cerr << "Checkpoint element order " << stored_element_order
+                          << " differs from BSSN_ELE_ORDER "
+                          << expected_element_order << std::endl;
         }}  // END IF: rank 0 reports mismatch
         return std::filesystem::exists(metadata_name.str()) ? 1 : 2;
     }}  // END IF: checkpoint metadata rejected

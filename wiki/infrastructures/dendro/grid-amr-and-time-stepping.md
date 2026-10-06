@@ -92,8 +92,9 @@ history across restart supports history-dependent AMR decisions.
 
 A restore is accepted only when the checkpoint metadata passes every one of
 these tests. A rejected checkpoint prints `Checkpoint metadata does not match
-<formulation>`, whichever metadata test failed, and the run then aborts with the
-generic `checkpoint restore failed` message:
+<formulation>`, whichever metadata test failed (a mismatch of the element order
+also prints `Checkpoint element order N differs from BSSN_ELE_ORDER M`), and the
+run then aborts with the generic `checkpoint restore failed` message:
 
 - The stored formulation, field count and names, and parameter-name list equal
   the generated solver's.
@@ -108,17 +109,17 @@ generic `checkpoint restore failed` message:
   stored projected algebraic residual is finite and at most 1e-10, and the
   puncture history is finite, strictly increasing in time, and ends at the stored
   time and centers.
-- The stored element order is 4, 6, or 8.
+- The stored element order is 4, 6, or 8 and equals `BSSN_ELE_ORDER`.
 
 After the metadata passes, the residual of the restored state must again be at
 most 1e-10, and the launch must provide at least as many MPI ranks as the stored
 active communicator, because the mesh is rebuilt on that many ranks with the
 stored element order. Host keys that are not emitted `CodeParameter` values, other
-than the domain bounds, are not compared (for example the mesh, output, and
-extraction keys).
+than the domain bounds and `BSSN_ELE_ORDER`, are not compared (for example the
+mesh, output, and extraction keys).
 
 Claim evidence:
-- Claim: A restore is accepted only when the stored formulation, field list, parameter names, every emitted `CodeParameter` value, domain bounds, time data, puncture history, element order (4, 6, or 8), and projected algebraic residual (at most 1e-10, rechecked on the restored state) pass, and when the launch has at least the stored number of active MPI ranks; a metadata failure prints `Checkpoint metadata does not match <formulation>` and the run aborts with `checkpoint restore failed`.
+- Claim: A restore is accepted only when the stored formulation, field list, parameter names, every emitted `CodeParameter` value, domain bounds, time data, puncture history, element order (4, 6, or 8, and equal to `BSSN_ELE_ORDER`), and projected algebraic residual (at most 1e-10, rechecked on the restored state) pass, and when the launch has at least the stored number of active MPI ranks; a metadata failure prints `Checkpoint metadata does not match <formulation>` (an element-order mismatch also prints the stored and the running order) and the run aborts with `checkpoint restore failed`.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/checkpoint.py`, `output_checkpoint_cpp` (the metadata tests and the rank-count test); `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::restore_checkpt` within `output_solver_context_cpp` (the residual recheck).
 - Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.run_negatives`, the W/chi cross-restore rejection, and `Leg.run_variant`, the restore of an unchanged run.

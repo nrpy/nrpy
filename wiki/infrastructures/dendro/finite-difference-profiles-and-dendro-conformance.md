@@ -36,12 +36,13 @@ emitted whatever the option. On a fresh start the order used at run time is the
 `BSSN_ELE_ORDER` value of the parameter file, so a file that sets the key
 overrides the option: the packaged `pars/q1.par.lowres.toml` sets
 `BSSN_ELE_ORDER = 6`, and the printed run commands run FD6 whatever `--fd-order`
-was. A restore keeps the order stored in the checkpoint.
+was. A restore requires `BSSN_ELE_ORDER` to equal the order stored in the
+checkpoint and is rejected otherwise.
 
 Claim evidence:
-- Claim: `--fd-order` sets only the default order (the constants `FD_ORDER`, `KO_FD_ORDER`, `REQUIRED_PADDING`, the `BSSN_ELE_ORDER` line of the generated parameter file, and the fallback of the `BSSN_ELE_ORDER` read); all orders 4, 6, and 8 are emitted, and the order of a fresh run is the `BSSN_ELE_ORDER` value in its parameter file, which the packaged q1 file sets to 6, while a restore keeps the order stored in the checkpoint.
+- Claim: `--fd-order` sets only the default order (the constants `FD_ORDER`, `KO_FD_ORDER`, `REQUIRED_PADDING`, the `BSSN_ELE_ORDER` line of the generated parameter file, and the fallback of the `BSSN_ELE_ORDER` read); all orders 4, 6, and 8 are emitted, and the order of a run is the `BSSN_ELE_ORDER` value in its parameter file, which the packaged q1 file sets to 6; a restore is rejected unless that value equals the element order stored in the checkpoint.
 - Role: descriptive behavior
-- Deciding authority: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `parse_args` and `main`; `nrpy/infrastructures/Dendro/param_toml.py`, `generate_default_parfile`; `nrpy/infrastructures/Dendro/constants_h.py`, `output_constants_h`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp` (the `BSSN_ELE_ORDER` read); `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::restore_checkpt` within `output_solver_context_cpp`, and `nrpy/infrastructures/Dendro/checkpoint.py`, `output_checkpoint_cpp` (the stored element order of a restore).
+- Deciding authority: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `parse_args` and `main`; `nrpy/infrastructures/Dendro/param_toml.py`, `generate_default_parfile`; `nrpy/infrastructures/Dendro/constants_h.py`, `output_constants_h`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp` (the `BSSN_ELE_ORDER` read); `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::restore_checkpt` within `output_solver_context_cpp`, and `nrpy/infrastructures/Dendro/checkpoint.py`, `output_checkpoint_cpp` (the stored element order and the comparison with the running order).
 - Corroboration: `nrpy/examples/q1.par.lowres.toml`, the `BSSN_ELE_ORDER` line; `nrpy/examples/tests/dendro_application_check.py`, `Leg.generate_and_build` and `Leg.run_variant`, which generate at FD6 and select other orders through `BSSN_ELE_ORDER`.
 
 Every generated right-hand side is centered. `register_CFunction_rhs_eval`

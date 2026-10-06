@@ -42,7 +42,7 @@ Claim evidence:
 | --- | --- | --- | --- | --- |
 | `BSSN_ID_TYPE` | 0 | 0 | 0 | Must be 0 (TwoPunctures). |
 | `BSSN_RESTORE_SOLVER` | 0 | 0 | 0 | A nonzero value requests a checkpoint restore; see [Octree Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md). |
-| `BSSN_ELE_ORDER` | the `--fd-order` value used at generation (6 by default) | the same value | 6 | Element and finite-difference order; must be 4, 6, or 8. On a fresh start it selects the order-specific kernels; a restore keeps the order stored in the checkpoint; see [Finite-Difference Profiles And Dendro Conformance](finite-difference-profiles-and-dendro-conformance.md). |
+| `BSSN_ELE_ORDER` | the `--fd-order` value used at generation (6 by default) | the same value | 6 | Element and finite-difference order; must be 4, 6, or 8. It selects the order-specific kernels; a restore requires it to equal the order stored in the checkpoint and is rejected otherwise; see [Finite-Difference Profiles And Dendro Conformance](finite-difference-profiles-and-dendro-conformance.md). |
 | `BSSN_RK_TIME_BEGIN`, `BSSN_RK_TIME_END` | 0.0, 700.0 | 0.0, 1000000.0 | 0.0, 1000000.0 | Evolution runs while time is below the end time; the end time must exceed the begin time. |
 | `BSSN_MAX_ITERATIONS` | no limit | none | none | Maximum number of time steps. It is a root key, so a line appended after the last `[table]` header of a file does not set it. |
 | `BSSN_CFL_FACTOR` | 0.25 | none | 0.25 | Time step is this factor times the smallest physical axis spacing at the current finest level; positive and finite. This is also the CodeParameter `CFL_FACTOR` when `--ybs-momentum` is generated. |
@@ -197,7 +197,7 @@ The solver prints a message and aborts every MPI task with status 1 for each of
 these; invalid command-line arguments return status 2.
 
 - `BSSN_ID_TYPE` other than 0, or `TPID_REPLACE_LAPSE_WITH_SQRT_CHI` false.
-- `BSSN_ELE_ORDER` other than 4, 6, or 8.
+- `BSSN_ELE_ORDER` other than 4, 6, or 8, and, at a restore, a value that differs from the element order stored in the checkpoint (see [Octree Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md)).
 - `BSSN_MINDEPTH` above `BSSN_MAXDEPTH`, or `BSSN_MAXDEPTH` of 31 or more.
 - `BSSN_NUM_REFINE_VARS` of 0 or above the list length, or a refinement index that is not an evolved field.
 - `BSSN_REFINEMENT_MODE` other than 4, or `BSSN_USE_WAVELET_TOL_FUNCTION` other than 0 or 6.

@@ -426,6 +426,8 @@ int {solver_stem}_write_checkpoint(
  * @param[out] black_hole_position_history Stored puncture centers.
  * @param[out] black_hole_merge_time Stored merger time.
  * @param[out] merged_checkpoint_written Whether a checkpoint after merger existed.
+ * @param expected_element_order Element order of the running configuration; a
+ *        checkpoint stored at another order is rejected.
  * @param algebraic_residual_tolerance Largest stored algebraic residual accepted.
  * @return 0 on success, 2 if the metadata file is absent, otherwise 1.
  */
@@ -439,6 +441,7 @@ int {solver_stem}_restore_checkpoint(
     std::vector<DendroScalar>& black_hole_time_history,
     std::vector<std::array<DendroScalar, 6>>& black_hole_position_history,
     DendroScalar& black_hole_merge_time, bool& merged_checkpoint_written,
+    unsigned int expected_element_order,
     DendroScalar algebraic_residual_tolerance);
 // clang-format off
 }}  // END NAMESPACE: {solver_namespace}
@@ -1889,7 +1892,7 @@ int Ctx::restore_checkpt(unsigned int checkpoint_index) {{
       restored_mesh, restored_state, params, iteration, time, time_step,
       excision_centers_, black_hole_time_history_,
       black_hole_position_history_, black_hole_merge_time_,
-      restored_merged_checkpoint_written,
+      restored_merged_checkpoint_written, m_uiElementOrder,
       1.0e-10);
   if (status != 0) return status;
   excision_center_time_ = time;
