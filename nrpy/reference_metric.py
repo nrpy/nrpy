@@ -1873,14 +1873,15 @@ class ReferenceMetric:
                 self.general_rfm_provider_name = "fisheye"
                 self.general_rfm_provider = provider
             else:
-                match = re.match(
-                    r"GeneralRFM_spheroidal_fisheyeN(\d+)$", self.CoordSystem
-                )
-                if not match:
+                spheroidal_prefix = "GeneralRFM_spheroidal_fisheyeN"
+                num_transitions_str = self.CoordSystem[len(spheroidal_prefix) :]
+                if num_transitions_str.endswith("\n"):
+                    num_transitions_str = num_transitions_str[:-1]
+                if not num_transitions_str.isdecimal():
                     raise ValueError(
                         f"GeneralRFM CoordSystem {self.CoordSystem} not supported (expected GeneralRFM_spheroidal_fisheyeN*)."
                     )
-                num_transitions = int(match.group(1))
+                num_transitions = int(num_transitions_str)
                 spheroidal_provider = generalrfm_fisheye.build_spheroidal_fisheye(
                     num_transitions
                 )
