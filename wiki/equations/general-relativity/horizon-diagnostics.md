@@ -1,6 +1,6 @@
 # Horizon Diagnostics
 
-> Map equation-side BHaHAHA apparent-horizon geometry and spin diagnostics. · Status: confirmed · Last reconciled: 08-10-2026
+> Map equation-side BHaHAHA apparent-horizon geometry and spin diagnostics. · Status: confirmed
 > Up: [General Relativity](index.md)
 
 ## Summary

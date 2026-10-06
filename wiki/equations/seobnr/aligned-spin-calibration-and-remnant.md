@@ -1,6 +1,6 @@
 # Aligned-Spin Calibration And Remnant
 
-> Map SEOBNR aligned-spin calibration constants, remnant fits, and NR attachment data. · Status: confirmed · Last reconciled: 07-13-2026
+> Map SEOBNR aligned-spin calibration constants, remnant fits, and NR attachment data. · Status: confirmed
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
@@ -13,15 +13,26 @@ time.
 
 ## Detail
 
-`SEOBNR_aligned_spin_constants` accepts two mutually exclusive calibration
-flags: `calibration_no_spin` and `calibration_spin`. In nonspinning calibration
-mode it exposes `a6` and `Delta_t_NS` as symbols, sets `dSO` and `Delta_t_S` to
+`SEOBNR_aligned_spin_constants` accepts three flags: `calibration_no_spin`,
+`calibration_spin`, and `nrpy_calibrated`; `nrpy_calibrated` cannot be
+combined with either calibration flag. In nonspinning calibration mode it
+exposes `a6` and `Delta_t_NS` as symbols, sets `dSO` and `Delta_t_S` to
 zero, and expects the calibration workflow to provide `chi1=chi2=0`. The class
-does not enforce that spin condition. In spin calibration mode it computes the
-nonspinning pieces first, then exposes
-`dSO` and `Delta_t_S` as symbols. In the default post-calibration mode it calls
-`compute_calibration_params()` and stores calibrated expressions such as
-`pyseobnr_a6`, `pyseobnr_dSO`, `Delta_t_NS`, and `Delta_t_S`.
+does not enforce that spin condition. In spin calibration mode it also
+exposes `a6` and `Delta_t_NS` as symbols — supplied externally by the
+completed nonspinning-calibration stage — and exposes `dSO` and `Delta_t_S`
+as symbols for this stage's own optimization. In the default post-calibration
+mode it calls `compute_calibration_params()` and stores calibrated
+expressions such as `a6`, `pyseobnr_dSO`, `Delta_t_NS`, and `Delta_t_S`; when
+`nrpy_calibrated=True`, `a6` and `Delta_t_NS` are selected from a separate
+NRPy-calibrated fit family instead of the default pySEOBNR fit (`dSO` and
+`Delta_t_S` are unaffected by this flag).
+
+Claim evidence:
+- Claim: `SEOBNR_aligned_spin_constants` accepts `calibration_no_spin`, `calibration_spin`, and `nrpy_calibrated`, where `nrpy_calibrated` cannot be combined with either calibration flag; in the default post-calibration mode, `nrpy_calibrated=True` selects `a6` and `Delta_t_NS` from a separate NRPy-calibrated fit family (`nrpy_par_a6`, `nrpy_par_dtns`) instead of the default pySEOBNR fit (`pySEOBNR_par_a6`, `pySEOBNR_par_dtns`), while `dSO` and `Delta_t_S` are unaffected by that flag.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py), `SEOBNR_aligned_spin_constants.__init__`, `compute_calibration_params`
+- Corroboration: [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_constants.py), `trusted_dict` (`a6_nrpy_calibrated`, `Delta_t_NS_nrpy_calibrated` keys)
 
 For all modes, `Delta_t` is defined as `Delta_t_NS + Delta_t_S`. The class then
 computes remnant properties through `final_spin_non_precessing_HBR2016()` and
@@ -38,11 +49,19 @@ strings. `hNR` and `omegaNR` cover `(2,2)`, `(3,3)`, `(2,1)`, `(4,4)`, `(4,3)`,
 stable keys such as `hNR_22`, `omegaNR_22`, `hNR_55`, and `omegaNR_32` before
 calling the trusted-expression pipeline.
 
-Script validation instantiates only the default post-calibration mode. Neither
+Script validation instantiates the default post-calibration mode twice — once
+with `nrpy_calibrated=False` and once with `nrpy_calibrated=True` — and
+records both selector arms' `a6`/`Delta_t_NS` under distinct keys. Neither
 `calibration_no_spin=True` nor `calibration_spin=True` has a sibling trusted
 variant here. The stored dictionary is sampled numerical evidence for the
 current formulas, not an independent reproduction of the SEOBNRv5HM, HBR2016,
 or UIB2016 calibration data and not a remnant-fit accuracy test.
+
+Claim evidence:
+- Claim: Script validation instantiates `SEOBNR_aligned_spin_constants` in the default post-calibration mode twice — once with `nrpy_calibrated=False` and once with `nrpy_calibrated=True` — and records both selector arms' `a6`/`Delta_t_NS` under the distinct keys `a6_nrpy_calibrated`/`Delta_t_NS_nrpy_calibrated` alongside the unsuffixed default-arm keys; neither `calibration_no_spin=True` nor `calibration_spin=True` has a sibling trusted variant in this script.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py), `__main__` block
+- Corroboration: none available; this script is the sole registered source for its own sampled-dictionary construction
 
 ## Sources
 
@@ -50,9 +69,9 @@ or UIB2016 calibration data and not a remnant-fit accuracy test.
 - [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py) - `compute_calibration_params`, `Kerr_ISCO_radius`
 - [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py) - `final_spin_non_precessing_HBR2016`, `final_mass_non_precessing_UIB2016`
 - [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_constants.py) - `trusted_dict`
-- [SEOBNRv5HM current latest paper page](https://arxiv.org/abs/2303.18039) - background orientation only; Equations 78-81 and calibration context are not yet audited to a pinned revision
-- [HBR2016 current latest paper page](https://arxiv.org/abs/1605.01938) - background orientation only; final-spin fit mapping is not yet audited to a pinned revision
-- [UIB2016 current latest paper page](https://arxiv.org/abs/1611.00332) - background orientation only; final-state fit and ancillary mapping are not yet audited to a pinned revision
+- [SEOBNRv5HM paper landing page](https://arxiv.org/abs/2303.18039) - background orientation only; Equations 78-81 and calibration context have no exact revision mapping here
+- [HBR2016 paper landing page](https://arxiv.org/abs/1605.01938) - background orientation only; final-spin fit has no exact revision mapping here
+- [UIB2016 paper landing page](https://arxiv.org/abs/1611.00332) - background orientation only; final-state fit and ancillary dependency have no exact revision mapping here
 
 ## See Also
 

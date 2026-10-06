@@ -274,6 +274,23 @@ static void set_parity_for_inner_boundary_single_pt(const commondata_struct *res
   } // END for(int whichparity=0;whichparity<10;whichparity++)
 #undef EPS_REL
 } // END FUNCTION: set_parity_for_inner_boundary_single_pt
+/**
+ * Compute r(xx0,xx1,xx2) and partial_r x^i.
+ */
+static inline void r_and_partial_xi_partial_r_derivs(const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *r,
+                                                     REAL *partial_x0_partial_r, REAL *partial_x1_partial_r, REAL *partial_x2_partial_r) {
+  const REAL AMPL = params->AMPL;
+  const REAL SINHW = params->SINHW;
+
+  const REAL tmp0 = (1.0 / (SINHW));
+  const REAL tmp1 = exp(tmp0) - exp(-tmp0);
+  const REAL tmp3 = exp(tmp0 * xx0);
+  const REAL tmp4 = exp(-tmp0 * xx0);
+  *r = AMPL * (tmp3 - tmp4) / tmp1;
+  *partial_x0_partial_r = tmp1 / (AMPL * (tmp0 * tmp3 + tmp0 * tmp4));
+  *partial_x1_partial_r = 0;
+  *partial_x2_partial_r = 0;
+} // END FUNCTION: r_and_partial_xi_partial_r_derivs
 
 /**
  * At each coordinate point (x0,x1,x2) situated at grid index (i0,i1,i2):
@@ -297,17 +314,14 @@ static void set_parity_for_inner_boundary_single_pt(const commondata_struct *res
  *     If (i0,i1,i2) *is* the same as (i0_inbounds,i1_inbounds,i2_inbounds),
  *         then we are at an outer boundary point. Take care of outer BCs in Step 2.
  * Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][idx2d]:
- *   Recall that at each inner boundary point we must set outerpt_bc_struct:
- *     typedef struct __outerpt_bc_struct__ {
- *       short i0,i1,i2;  // the outer boundary point grid index (i0,i1,i2), on the 3D grid
- *       int8_t FACEX0,FACEX1,FACEX2;  // 1-byte integers that store
- *       //                               FACEX0,FACEX1,FACEX2 = +1, 0, 0 if on the i0=i0min face,
- *       //                               FACEX0,FACEX1,FACEX2 = -1, 0, 0 if on the i0=i0max face,
- *       //                               FACEX0,FACEX1,FACEX2 =  0,+1, 0 if on the i1=i2min face,
- *       //                               FACEX0,FACEX1,FACEX2 =  0,-1, 0 if on the i1=i1max face,
- *       //                               FACEX0,FACEX1,FACEX2 =  0, 0,+1 if on the i2=i2min face, or
- *       //                               FACEX0,FACEX1,FACEX2 =  0, 0,-1 if on the i2=i2max face,
- *     } outerpt_bc_struct;
+ *   Recall that at each outer boundary point, outerpt_bc_struct stores:
+ *     i0,i1,i2: the outer boundary point grid index on the 3D grid
+ *     FACEX0,FACEX1,FACEX2: face signs, e.g. +1,0,0 on the i0=i0min face and -1,0,0 on the i0=i0max face
+ *     r, partial_x{0,1,2}_partial_r: the radius and dx^i/dr at this point, precomputed here because they
+ *       are grid-static; the radiation BC would otherwise recompute them for every gridfunction on every
+ *       RK substep
+ *     r_int, partial_x{0,1,2}_partial_r_int: the same quantities at the nearest interior neighbour,
+ *       (i0,i1,i2)+(FACEX0,FACEX1,FACEX2)
  *   Outer boundary points are filled from the inside out, two faces at a time.
  *     E.g., consider a Cartesian coordinate grid that has 14 points in each direction,
  *     including the ghostzones, with NGHOSTS=2.
@@ -496,6 +510,18 @@ void bcstruct_set_up__rfm__HoleySinhSpherical(const commondata_struct *restrict 
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX0 = FACEX0;
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX1 = FACEX1;
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX2 = FACEX2;
+            r_and_partial_xi_partial_r_derivs(params, xx[0][i0], xx[1][i1], xx[2][i2], &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].r,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x0_partial_r,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x1_partial_r,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x2_partial_r);
+            const int i0_int = i0 + FACEX0;
+            const int i1_int = i1 + FACEX1;
+            const int i2_int = i2 + FACEX2;
+            r_and_partial_xi_partial_r_derivs(params, xx[0][i0_int], xx[1][i1_int], xx[2][i2_int],
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].r_int,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x0_partial_r_int,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x1_partial_r_int,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x2_partial_r_int);
             idx2d++;
           } // END IF outer boundary point
         } // END LOOP over all boundary points on lower faces
@@ -519,6 +545,18 @@ void bcstruct_set_up__rfm__HoleySinhSpherical(const commondata_struct *restrict 
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX0 = FACEX0;
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX1 = FACEX1;
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX2 = FACEX2;
+            r_and_partial_xi_partial_r_derivs(params, xx[0][i0], xx[1][i1], xx[2][i2], &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].r,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x0_partial_r,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x1_partial_r,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x2_partial_r);
+            const int i0_int = i0 + FACEX0;
+            const int i1_int = i1 + FACEX1;
+            const int i2_int = i2 + FACEX2;
+            r_and_partial_xi_partial_r_derivs(params, xx[0][i0_int], xx[1][i1_int], xx[2][i2_int],
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].r_int,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x0_partial_r_int,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x1_partial_r_int,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x2_partial_r_int);
             idx2d++;
           } // END IF outer boundary point
         } // END LOOP over all boundary points on upper faces

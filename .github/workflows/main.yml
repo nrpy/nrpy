@@ -219,13 +219,15 @@ jobs:
           git log | head
           python3 -u nrpy/examples/carpet_wavetoy_thorns.py
           python3 -u nrpy/examples/carpet_baikal_thorns.py
+          git clone -q https://bitbucket.org/zach_etienne/wvuthorns.git /tmp/wvuthorns
+          git -C /tmp/wvuthorns checkout -q --detach ae1086c46fd06cedccad22199cbdaae070f3b2a3
           cd /opt/ET_2024_06_beta/arrangements/WVUThorns/
           rm Baikal*
           ln -s /home/runner/work/nrpy/nrpy/project/et_baikal/Baikal* .
           ln -s /home/runner/work/nrpy/nrpy/project/et_wavetoy/* .
           ln -s /home/runner/work/nrpy/nrpy/nrpy/examples/et_WaveToyfiles/test WaveToyNRPy/
-          cp -r /opt/ET_2024_06_beta/repos/wvuthorns/Baikal/tes* Baikal/
-          cp -r /opt/ET_2024_06_beta/repos/wvuthorns/BaikalVacuum/tes* BaikalVacuum/
+          cp -r /tmp/wvuthorns/Baikal/test Baikal/
+          cp -r /tmp/wvuthorns/BaikalVacuum/test BaikalVacuum/
           cd /opt/ET_2024_06_beta/
           ./make_config-runmefirst-gcc
           make
@@ -240,6 +242,45 @@ jobs:
             echo ET TESTS SUCCEEDED
           fi
           "
+
+  dendro-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        formulation: [bssn, fccz4]
+    env:
+      OMP_NUM_THREADS: 1
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install MPI, GSL, BLAS/LAPACK, and Fortran
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            openmpi-bin libopenmpi-dev libgsl-dev libopenblas-dev liblapack-dev gfortran
+
+      - name: Install NRPy requirements
+        run: python -m pip install -r requirements.txt
+
+      - name: Run the Dendro application helper doctests
+        run: python nrpy/examples/tests/dendro_application_check.py
+
+      - name: Generate, build, run, and check the ${{ matrix.formulation }} applications
+        run: |
+          python -u nrpy/examples/tests/dendro_application_check.py \
+            --formulation "${{ matrix.formulation }}" \
+            --work-dir "$RUNNER_TEMP/dendro-${{ matrix.formulation }}"
 
   charmpp-validation:
     runs-on: ubuntu-24.04
@@ -346,20 +387,23 @@ jobs:
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -calibration_spin && (cd project/seobnrv5_bob_calibration_spin && make && make clean) &&
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -calibration_spin && (cd project/seobnrv5_nrpy_calibration_spin && make && make clean) &&
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -calibration_spin && (cd project/seobnrv5_nrnqc_bob_calibration_spin && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -nrpy_calibrated && (cd project/seobnrv5_nrpy_nrpy_calibrated && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -nrpy_calibrated && (cd project/seobnrv5_bob_nrpy_calibrated && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -nrpy_calibrated && (cd project/seobnrv5_nrnqc_bob_nrpy_calibrated && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
           # python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
           python -m nrpy.examples.bhahaha && (cd project/BHaHAHA && make && make clean) &&
           python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make && make clean) &&
-          python -m nrpy.examples.sebobv1_jax
+          python -m nrpy.examples.sebobv1_jax && (cd project/sebobv1_jax && pip install . && python -c "from sebobv1_jax import SEOBNRv5_aligned_spin_coefficients as f; print(f(1.5, 0.3, -0.2, 0.02, 2.4627455127717882e-05, 50.0))")
 
   codegen-mac:
     runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
-        os: [ 'macos-14', 'macos-26' ]
-        # Dropped 3.6/3.7 because macos-14 is Apple Silicon (ARM64).
+        os: [ 'macos-15', 'macos-26' ]
+        # Dropped 3.6/3.7 because the macOS runners are Apple Silicon (ARM64).
         # Python < 3.8 has poor/no support for ARM64 and causes architecture mismatches
         # with Homebrew libraries (like GSL) which are installed as ARM64.
         python-version: [ '3.9', '3.10', '3.11', '3.x' ]
@@ -406,12 +450,16 @@ jobs:
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -calibration_spin && (cd project/seobnrv5_bob_calibration_spin && make && make clean) &&
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -calibration_spin && (cd project/seobnrv5_nrpy_calibration_spin && make && make clean) &&
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -calibration_spin && (cd project/seobnrv5_nrnqc_bob_calibration_spin && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -nrpy_calibrated && (cd project/seobnrv5_nrpy_nrpy_calibrated && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -nrpy_calibrated && (cd project/seobnrv5_bob_nrpy_calibrated && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -nrpy_calibrated && (cd project/seobnrv5_nrnqc_bob_nrpy_calibrated && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
           # python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
           python -m nrpy.examples.bhahaha && (cd project/BHaHAHA && make && make clean) &&
           python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make && make clean) &&
-          python -m nrpy.examples.sebobv1_jax
+          python -m nrpy.examples.sebobv1_jax && (cd project/sebobv1_jax && pip install . && python -c "from sebobv1_jax import SEOBNRv5_aligned_spin_coefficients as f; print(f(1.5, 0.3, -0.2, 0.02, 2.4627455127717882e-05, 50.0))")
+
 
   sebob-consistency-test:
     runs-on: ${{ matrix.os }}
@@ -447,7 +495,7 @@ jobs:
       - name: Checkout trusted commit code
         uses: actions/checkout@v4
         with:
-          ref: '785467615d63669a98fe85c6686c2388a324139e'
+          ref: '0a96c1957970e44f2cd4df201deb8dd6e755ecb8'
           path: trusted_code
 
       - name: Build trusted sebob executable
@@ -546,7 +594,7 @@ jobs:
       - name: Checkout trusted commit code
         uses: actions/checkout@v4
         with:
-          ref: '785467615d63669a98fe85c6686c2388a324139e'
+          ref: '0a96c1957970e44f2cd4df201deb8dd6e755ecb8'
           path: trusted_code
 
       - name: Build trusted sebob executable
@@ -570,4 +618,3 @@ jobs:
         run: |
           (cd trusted_code/project/sebobv2 && make clean) &&
           (cd project/sebobv2 && make clean)
-

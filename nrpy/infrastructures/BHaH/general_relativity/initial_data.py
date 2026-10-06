@@ -34,6 +34,7 @@ def register_CFunction_initial_data(
     post_ADM_Cart_to_BSSN_Cart_hook_str: str = "",
     spin_alignment_vector_params: Optional[Tuple[str, str, str]] = None,
     enable_conformal_projection: bool = False,
+    enable_fCCZ4: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions for converting ADM initial data to BSSN variables and applying boundary conditions.
@@ -62,6 +63,8 @@ def register_CFunction_initial_data(
         these components and ADM data are sampled in the aligned frame.
     :param enable_conformal_projection: Apply the determinant and Abar-trace
         projection after checkpoint/interpatch or fresh-data boundary handling.
+    :param enable_fCCZ4: Initialize fCCZ4's additional evolved Theta field for
+        fresh initial data.
 
     :raises ValueError: If ``set_of_CoordSystems`` is empty, if
         ``spin_alignment_vector_params`` is set for an ID type other than
@@ -181,6 +184,7 @@ components after parsing and before initial-data setup.
         enable_T4munu=enable_T4munu,
         post_ADM_Cart_to_BSSN_Cart_hook_str=post_ADM_Cart_to_BSSN_Cart_hook_str,
         spin_alignment_vector_params=spin_alignment_vector_params,
+        enable_fCCZ4=enable_fCCZ4,
     )
     for coord in sorted(coord_systems_to_register):
         if coord.startswith("GeneralRFM"):

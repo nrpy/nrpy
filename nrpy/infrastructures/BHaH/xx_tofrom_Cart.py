@@ -239,7 +239,7 @@ def _generate_bracketed_radial_inverse_body(
 
 def _remove_c_includes(c_source: str) -> str:
     """
-    Drop generated include directives before embedding C functions in a doctest harness.
+    Drop generated include directives before embedding C functions in a doctest program.
 
     :param c_source: Full generated C function text.
     :return: Generated C function text without `#include` directives.
@@ -255,7 +255,7 @@ def _run_generalrfm_fisheye_inverse_roundtrip_check(real_type: str) -> None:
 
     :param real_type: C floating-point type to use for `REAL`; must be `float` or `double`.
     :raises ValueError: If `real_type` is unsupported.
-    :raises RuntimeError: If the generated C harness fails to compile or run.
+    :raises RuntimeError: If the generated C test program fails to compile or run.
     """
     if real_type not in {"float", "double"}:
         raise ValueError("real_type must be 'float' or 'double'.")
@@ -400,7 +400,7 @@ int main(void) {{
             )
         except subprocess.CalledProcessError as err:
             raise RuntimeError(
-                "GeneralRFM fisheye round-trip harness failed.\n"
+                "GeneralRFM fisheye round-trip test failed.\n"
                 f"Command: {' '.join(err.cmd)}\n"
                 f"stdout:\n{err.stdout}\n"
                 f"stderr:\n{err.stderr}"

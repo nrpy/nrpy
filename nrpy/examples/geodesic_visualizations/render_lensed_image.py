@@ -317,7 +317,7 @@ def _process_blueprint_tile(
                 )
 
     # --- SPARSE MAP-REDUCE COMPRESSION ---
-    # Downcast the output payload to float32 only AFTER the float64 math is done
+    # Downcast the output image data to float32 only AFTER the float64 math is done.
     hit_mask = local_count_acc > 0
     flat_y, flat_x = np.nonzero(hit_mask)
     flat_colors = local_pixel_acc[hit_mask].astype(np.float32)

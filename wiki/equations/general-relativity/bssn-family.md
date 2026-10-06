@@ -1,6 +1,6 @@
 # BSSN Family
 
-> Map the main BSSN equation modules, analytic algebraic constraints, and validation expectations. · Status: confirmed · Last reconciled: 08-26-2026
+> Map the main BSSN equation modules, analytic algebraic constraints, and validation expectations. · Status: confirmed
 > Up: [General Relativity](index.md)
 
 ## Summary
@@ -38,8 +38,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`
 - Corroboration: [test_parse_BSSN.py](../../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`
-- Validation: `inspected=pass; generated=not-applicable; built=not-applicable; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=fixed sampled trusted-expression and cross-representation comparisons; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=six BSSN RHS coordinate variants and nine BSSN quantity variants; date=08-26-2026`
 
 BHaH and ETLegacy provide one combined all-points projector for the determinant
 and trace constraints. The GeneralRFM branch explicitly forms the
@@ -57,16 +55,14 @@ BHaH callers opt in. Its `two_blackholes_collide` example enables projection
 for initial data and calls the same combined projector after boundary handling
 in its Method of Lines hook. ETLegacy schedules its combined projector in
 `CCTK_INITIAL`, after evolved-variable boundary conditions in `MoL_PostStep`,
-and before constraints in `MoL_PseudoEvolution`. The inspected ETLegacy
+and before constraints in `MoL_PseudoEvolution`. The ETLegacy
 projector registration emits no determinant-only repair entry.
 
 Claim evidence:
-- Claim: BHaH and ETLegacy use a combined determinant/trace projector; the inspected BHaH collision caller applies it after boundary handling, while the inspected ETLegacy projector registration assigns the same combined projector to all three repair schedules and emits no determinant-only repair entry.
+- Claim: BHaH and ETLegacy use a combined determinant/trace projector; the BHaH collision caller applies it after boundary handling, while the ETLegacy projector registration assigns the same combined projector to all three repair schedules and emits no determinant-only repair entry.
 - Role: descriptive behavior
 - Deciding authority: [BHaH algebraic constraint projection](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`; [BHaH initial data](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), Method of Lines registration; [ETLegacy algebraic constraint projection](../../../nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - Corroboration: none available; BHaH and ETLegacy own separate backend behavior
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=ETLegacy generated C plus BHaH source inspection; precision=exact determinant/trace identities and generated-source structure; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=ETLegacy Cartesian, SinhSpherical reference-metric precompute, and GeneralRFM projector variants; BHaH Spherical collision wiring inspected only; date=08-26-2026`
 
 `BSSN_gauge_RHSs` handles lapse and shift choices separately from the main RHS
 class. It returns `alpha_rhs`, `vet_rhsU`, and `bet_rhsU`, validates supported
@@ -94,9 +90,7 @@ Claim evidence:
 - Claim: `BSSN_gauge_RHSs(..., LapseEvolutionOption="BHSHarmonicSlicing")` sets the lapse RHS to the total coordinate-time derivative of `exp(6*phi)` by applying the displayed chain rule to `cf_rhs`; it supports `W` and `phi`, rejects `chi`, preserves `alpha-exp(6*phi)`, and therefore preserves `alpha=exp(6*phi)` only from initial data satisfying that relation. The former `HarmonicSlicing` string is rejected. `OnePlusLogAlt` separately implements `partial_0(alpha)=-alpha*(1-alpha)*K`; neither separate formula implies that the BHS branch must be nonzero on exact stationary data.
 - Role: descriptive behavior
 - Deciding authority: [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`
-- Corroboration: [legacy NRPy gauge tutorial](https://github.com/zachetienne/nrpytutorial/blob/a32e120f5642bee00e32e9e04dd8cb4c58ae661c/Tutorial-BSSN_time_evolution-BSSN_gauge_RHSs.ipynb), Steps 2.b and 2.d
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=exact symbolic equality and trusted-expression comparison; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass for chi and the removed HarmonicSlicing string; options=BHSHarmonicSlicing and OnePlusLogAlt across the module validation matrix, with W, phi, and chi checked for the BHS branch; date=08-25-2026`
+- Corroboration: [legacy NRPy tutorial repository](https://github.com/zachetienne/nrpytutorial), `Tutorial-BSSN_time_evolution-BSSN_gauge_RHSs.ipynb`, Steps 2.b and 2.d
 
 General Bona-Masso harmonic slicing is
 `(partial_t-beta^i*partial_i)alpha=-alpha**2*K`. At zero shift, Baumgarte and
@@ -115,16 +109,107 @@ Claim evidence:
 - Corroboration: none available; the papers define the scientific relations, while current NRPy option mapping is covered by the descriptive claim above
 
 `BSSNconstraints` constructs Hamiltonian, momentum, and covariant conformal
-connection constraint expressions. It registers diagnostic gridfunctions for
-`H` and `MSQUARED`, optionally registers `MU`, and stores `H`, `MU`,
-`Msquared`, and rescaled `mU` outputs. Its covariant conformal connection
-constraint vector is `LambdaConstraintU = LambdabarU - DGammaU`.
+connection constraint expressions. It unconditionally registers scalar
+diagnostic gridfunctions `H`, `M`, and `LAMBDA_CONSTRAINT`, optionally
+registers the `MU` components, and stores `H`, `MU`, the internal contraction
+`Msquared`, and rescaled `mU`. The internal contraction is the physical norm
+square `gamma_ij M^i M^j`, implemented as the conformal-metric contraction
+divided by `exp_m4phi`; infrastructure producers export `M` as
+`sqrt(Msquared)`.
 
 Claim evidence:
-- Claim: `BSSNconstraints.LambdaConstraintU` represents the covariant conformal connection constraint vector: evolved `LambdabarU` minus `DGammaU`, where `DGammaU` contracts the conformal/reference connection difference with the inverse conformal metric.
+- Claim: `BSSNconstraints` registers scalar diagnostic storage named `H`, `M`, and `LAMBDA_CONSTRAINT`; its internal `Msquared` is `gamma_ij M^i M^j` with `gamma_ij = gammabar_ij / exp_m4phi`, and the BHaH, ETLegacy, and CarpetX constraint producers export `M = sqrt(Msquared)` rather than the internal square.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`; [ETLegacy BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`; [CarpetX BSSN_constraints.py](../../../nrpy/infrastructures/CarpetX/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
+- Corroboration: [BSSN_constraints_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py), `trusted_dict`; [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints_dict.__getitem__` physical-ADM-norm doctest; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), existing code-generation doctest
+
+Its covariant conformal connection constraint vector is
+`LambdaConstraintU = LambdabarU - DGammaU`.
+Brown's connection equation adds `C^k Dhat_k beta^i` to the coordinate-time
+RHS. Combined with the Lie stretch, its shift-gradient part is
+`-DGammaU[k] Dhat_k betaU[i]`; the change vanishes when `C^i=0`.
+
+Claim evidence:
+- Claim: `BSSNconstraints.LambdaConstraintU` is the covariant conformal connection constraint, and `BSSNRHSs` includes Brown's `C^k Dhat_k beta^i` adjustment.
+- Role: public scientific equation definition
+- Deciding authority: [Brown, *Covariant formulations of BSSN and the standard gauge*, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2), Eqs. (12a), (12b), (15), (21e), and (22e)
+- Corroboration: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`; [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints_dict.__getitem__`
+
+### Opt-in YBS Gamma-constraint adjustment
+
+`BSSNRHSs(..., enable_YBS_Gamma_constraint_adjustment=True)` adds
+
+```text
+-YBS_chi * (LambdabarU[i] - DGammaU[i]) * Dbarbetacontraction
+```
+
+to the unrescaled conformal-connection RHS, where
+`Dbarbetacontraction = Dbar_j beta^j` and the parenthesized factor is the
+Lambda constraint `C^i`. This is the incremental term for NRPy's existing
+equation, not the full paper coefficient: the existing RHS already contains
+`+(2/3) DGammaU[i] * Dbarbetacontraction`, which supplies the paper's baseline
+`-(2/3) C^i Dbar_j beta^j` contribution when the connection equation is
+rewritten in terms of `C^i`. The full Yo-Baumgarte-Shapiro coefficient is
+`-(YBS_chi + 2/3) C^i Dbar_j beta^j`; adding that full expression again would
+double-count the baseline. Yo-Lin-Cao write the same coefficient as
+`-(2/3)(xi + 1)`, so NRPy's incremental parameter satisfies
+`YBS_chi = 2*xi/3`. Their usual `xi=1` choice therefore maps to
+`YBS_chi = 2/3`. The runtime default is `0.0`, which removes the term exactly;
+a user who enables the option sets `YBS_chi` above zero in the parameter file.
+The recommended maximum is `2/3` for BSSN. It is the `xi=1` value that Yo, Lin,
+and Cao state is usually chosen in Eq. (47), a customary choice and not a
+stability bound. No derivation bounds larger values: the term is lower order,
+so it adds no timestep restriction, and it changes the growth rate of `C^i` by
+`-YBS_chi*Dbar_j beta^j`. Larger values have no supporting derivation or source
+here, and negative values amplify `C^i` wherever `Dbar_j beta^j > 0` and should
+not be used.
+
+The equation layer uses a plain real SymPy symbol for `YBS_chi`; constructing
+enabled symbolic RHSs does not register a global `CodeParameter`. The BHaH
+`register_CFunction_rhs_eval` owner registers `YBS_chi` only when the option is
+enabled, for either formulation, as a runtime `REAL`, using the
+default `0.0` (term disabled at run time), with `commondata=True` and
+`add_to_parfile=True`; there is no Python coefficient argument.
+`BSSNRHSs_dict.get_rhs` receives the Boolean
+separately from the unchanged coordinate/options string and keeps enabled
+expressions in a separate internal cache. With the option false, neither the
+term nor BHaH parameter registration is present, and the existing base cache
+is used.
+
+`BSSN_gauge_RHSs` forwards the Boolean to the shared BSSN RHS cache. The
+derivative-based shift choices `GammaDriving2ndOrder_NoCovariant`,
+`GammaDriving2ndOrder_Covariant`,
+`GammaDriving2ndOrder_Covariant__Hatted`, and `NonAdvectingGammaDriving`
+therefore consume the adjusted Lambda RHS. `Frozen` and both first-order
+covariant variants do not consume that RHS and remain unchanged.
+
+With `Theta = Dbar_j beta^j`, the corresponding constraint propagation has
+the lower-order addition `-YBS_chi*Theta*C^i`:
+
+```text
+partial_t C^i = beta^j Dhat_j C^i
+                + 2 alpha exp(4 phi) M^i - YBS_chi Theta C^i.
+```
+
+This term attenuates its isolated local factor only where
+`YBS_chi*Theta > 0`; it amplifies where that product is negative and is neutral
+where it vanishes. Advection and the momentum-constraint source can dominate,
+so a globally positive `YBS_chi` is not a uniform damping guarantee when
+`Theta` changes sign. Because the addition is lower order, it does not change
+the current second-order system's principal symbol or high-frequency
+characteristic speeds; it can still change finite-frequency growth.
+
+Claim evidence:
+- Claim: the opt-in implementation adds only `-YBS_chi*C^i*Theta`, maps the full-paper parameters by `YBS_chi=2*xi/3`, and provides conditional rather than uniform attenuation with the displayed lower-order propagation term.
 - Role: public/scientific contract
-- Deciding authority: [Brown, *Covariant formulations of BSSN and the standard gauge*, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2), Eqs. (12a), (12b), and (15)
-- Corroboration: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints_dict.__getitem__` doctest
+- Deciding authority: [Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066v2](https://arxiv.org/pdf/gr-qc/0209066v2), Eq. (45); [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (47)
+- Corroboration: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`; [BSSN_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py), representative jointly enabled `trusted_dict`
+
+Claim evidence:
+- Claim: the runtime default `YBS_chi = 0.0` removes the term exactly, and the recommended BSSN maximum `2/3` is the usual `xi=1` value stated in the source, a customary choice and not a derived stability bound.
+- Role: descriptive behavior
+- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (47)
+- Corroboration: [Dendro rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS Gamma branch
 
 For local diagnostics, `BSSNconstraints` also stores the direct conformal-metric
 contraction `LambdaConstraintSquared` and its plain square root
@@ -135,11 +220,12 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`
 - Corroboration: [BSSN_constraints_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py), `trusted_dict`; [BSSN_constraints_Spherical.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Spherical.py), `trusted_dict`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction and BHaH OpenMP C generation; precision=symbolic construction and 30-decimal-digit trusted sampling; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian and Spherical symbolic checks through the owner doctest plus six trusted-expression coordinate variants; date=07-28-2026`
 
 Representative trusted files pin the core RHS, quantity, and constraint
-dictionaries. Gauge validation is driven by the supported lapse and shift option
+dictionaries. All BSSN RHS trusted cases jointly enable YBS Gamma and
+YBS-MOM, so they pin the changed `a_rhsDD` expressions and every other output
+already present in those dictionaries without separate option-combination files.
+Gauge validation is driven by the supported lapse and shift option
 names in `BSSN_gauge_RHSs`, while coordinate and reference-metric variants stay
 validation evidence rather than new page scope.
 
@@ -164,8 +250,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [test_parse_BSSN.py](../../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`
 - Corroboration: none available; compatibility handling is local harness behavior, and the validation result below exercises only the installed tuple-result path
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, NRPyLaTeX 1.4.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=tuple-result module-globals path run, returned-object namespace branch inspected only; date=07-13-2026`
 
 The style contract for these modules is part of their interface: tensor
 construction uses explicit loops, established suffixes such as `U`, `D`, `DD`,
@@ -174,15 +258,20 @@ corresponding trusted files.
 
 ## Sources
 
-- [Brown, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2) - Eqs. (12a), (12b), and (15); published as [Phys. Rev. D 79, 104029](https://doi.org/10.1103/PhysRevD.79.104029) (secondary metadata)
+- [Brown, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2) - Eqs. (12a), (12b), (15), (21e), and (22e); published as [Phys. Rev. D 79, 104029](https://doi.org/10.1103/PhysRevD.79.104029) (secondary metadata)
+- [Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066v2](https://arxiv.org/pdf/gr-qc/0209066v2) - Eq. (45), adjusted Gamma-constraint coefficient
+- [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2) - Eq. (47), `xi` parameterization of the adjusted coefficient
 - [Baumgarte and de Oliveira, arXiv:2201.08857v1](https://arxiv.org/pdf/2201.08857v1) - Eq. (1), Bona-Masso slicing and the `f(alpha)=1` harmonic specialization
 - [Baumgarte and Shapiro, arXiv:gr-qc/9810065v1](https://arxiv.org/pdf/gr-qc/9810065v1) - Eqs. (30)-(32), zero-shift harmonic slicing and its integrated lapse relation
 - [Baumgarte, Hughes, and Shapiro, arXiv:gr-qc/9902024v1](https://arxiv.org/pdf/gr-qc/9902024v1) - p. 2, zero-shift harmonic-slicing relation
-- [legacy NRPy gauge tutorial](https://github.com/zachetienne/nrpytutorial/blob/a32e120f5642bee00e32e9e04dd8cb4c58ae661c/Tutorial-BSSN_time_evolution-BSSN_gauge_RHSs.ipynb) - Step 2.b, `HarmonicSlicing` chain-rule derivation
+- [legacy NRPy tutorial repository](https://github.com/zachetienne/nrpytutorial) - `Tutorial-BSSN_time_evolution-BSSN_gauge_RHSs.ipynb`, Step 2.b, `HarmonicSlicing` chain-rule derivation
 - [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py) - `BSSNRHSs`, `BSSN_RHSs_varname_to_expr_dict`
 - [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py) - `BSSNQuantities`, `BSSN_quantities`
 - [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py) - `BSSN_gauge_RHSs`
 - [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py) - `BSSNconstraints`, `BSSN_constraints`
+- [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py) - `register_CFunction_constraints_eval`
+- [ETLegacy BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py) - `register_CFunction_BSSN_constraints`
+- [CarpetX BSSN_constraints.py](../../../nrpy/infrastructures/CarpetX/general_relativity/BSSN_constraints.py) - `register_CFunction_BSSN_constraints`
 - [BHaH algebraic constraint projection](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - [BHaH initial data](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py) - `register_CFunction_initial_data`
 - [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py) - combined-projector registration and Method of Lines hook
@@ -198,6 +287,7 @@ corresponding trusted files.
 
 - [General Relativity](index.md)
 - [Equations](../index.md)
+- [YBS-MOM Timestep-Scaled Momentum Adjustment](ybs-momentum-damping.md)
 - [Fully Covariant Conformal Z4](fccz4.md)
 - [Metric Conversions And Matter](metric-conversions-and-matter.md)
 - [Initial Data](initial-data.md)

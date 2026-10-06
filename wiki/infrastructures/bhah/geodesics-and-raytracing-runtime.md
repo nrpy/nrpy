@@ -1,6 +1,6 @@
 # Geodesics And Raytracing Runtime
 
-> BHaH runtime pieces for standalone geodesics and evolution-time raytracing export. · Status: confirmed · Last reconciled: 06-29-2026
+> BHaH runtime pieces for standalone geodesics and evolution-time raytracing export. · Status: confirmed
 > Up: [BHaH](index.md)
 
 ## Summary

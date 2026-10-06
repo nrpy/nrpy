@@ -311,11 +311,11 @@ void Interpolator3d::pup(PUP::er &p) {
       } // END IF: src_gfs_buffer allocation failed during Interpolator3d PUP
     } else {
       src_gfs_buffer = nullptr;
-    } // END ELSE: no src_gfs_buffer payload to restore
+    } // END ELSE: no src_gfs_buffer data to restore
   } // END IF: unpacking src_gfs_buffer
   if (src_gfs_buffer_len > 0) {
     PUParray(p, src_gfs_buffer, src_gfs_buffer_len);
-  } // END IF: src_gfs_buffer has serialized payload
+  } // END IF: src_gfs_buffer has serialized data
 <<PSI4_PUP_BLOCK>>
 
   if (p.isUnpacking()) {

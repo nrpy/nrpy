@@ -41,7 +41,7 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
 
 If griddata == NULL, read only commondata metadata and return 1 when the
 checkpoint exists. This supports rebuilding grids from restart state before
-loading the full checkpoint payload.
+loading the full checkpoint data.
 
 Serialized grid-point indices must be strictly increasing, as emitted by the
 current writer. Noncanonical indices are treated as fatal checkpoint
@@ -189,7 +189,7 @@ static void sanitize_checkpoint_commondata_pointers(commondata_struct *restrict 
       const size_t npts = (size_t)ntheta_max * (size_t)nphi_max;
       if (npts > SIZE_MAX / sizeof(REAL)) {
         fprintf(stderr,
-                "read_checkpoint: FATAL: horizon-shape payload is too large for horizon %d in %s.\n",
+                "read_checkpoint: FATAL: horizon-shape data block is too large for horizon %d in %s.\n",
                 i, filename);
         exit(EXIT_FAILURE);
       } // END IF: horizon-shape allocation size overflows

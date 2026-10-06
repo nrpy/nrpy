@@ -2,12 +2,12 @@
 """
 Defines the physical conserved quantities evaluated along particle trajectories.
 
-This module implements a streaming bundle architecture to compute physical conserved
+This module processes rays in fixed-size chunks to compute physical conserved
 quantities along particle trajectories. SymPy expressions define a C kernel that
 computes energy, angular momentum, and the Carter constant. A custom C-structure holds
-these quantities. A Structure of Arrays (SoA) layout provides uniform memory mapping.
-Statically allocated execution buffers map to the memory hierarchy. A pagination loop
-orchestrates data transfers.
+these quantities. A Structure of Arrays (SoA) layout provides uniform indexing.
+A chunk loop copies each ray interval into and out of the selected target's
+fixed-size work arrays.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -35,7 +35,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     :param spacetime_name: The target analytic or numerical spacetime.
     :param particle_type: The particle classification (default is photon).
     """
-    # Step 1: Architecture Detection
+    # Step 1: Select CUDA or OpenMP.
     parallelization = par.parval_from_str("parallelization")
     cd_access = parallel_utils.get_commondata_access(parallelization)
 
@@ -75,7 +75,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     } conserved_quantities_t; // END STRUCT: conserved_quantities_t
     """
 
-    # Register the struct definition to the global header generation pipeline.
+    # Register the struct definition for inclusion in the generated global header.
     Bdefines_h.register_BHaH_defines("conserved_quantities", cq_struct_def)
 
     # Generate the highly optimized math evaluation block.
@@ -106,7 +106,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     # Dynamically generate the unpacking logic based on the specific spacetime coordinates.
     preamble_lines = [
         "    //==========================================",
-        "    // COORDINATE HYDRATION",
+        "    // LOAD COORDINATES",
         "    //==========================================",
     ]
 
@@ -131,7 +131,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
 
     preamble_lines.append("")
     preamble_lines.append(
-        "    //==========================================\n    // CONSTANT MEMORY HYDRATION\n    //=========================================="
+        "    //==========================================\n    // LOAD CONSTANT PARAMETERS\n    //=========================================="
     )
 
     # Scrape the SymPy abstract syntax tree for free variables and map them to the memory cache.
@@ -155,21 +155,21 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     //==========================================
     // CUDA THREAD IDENTIFICATION
     //==========================================
-    // Local 1D thread mapping within the current VRAM bundle.
+    // Local 1D thread mapping within the current ray chunk.
     // Thread ID maps to a unique photon index $c$.
     const long int c = blockIdx.x * blockDim.x + threadIdx.x; // Global thread evaluation index $c$.
 
     //==========================================
     // BOUNDARY CHECK
     //==========================================
-    // Ensure out-of-bounds threads do not access invalid bundle addresses.
+    // Ensure out-of-bounds threads do not access invalid array entries.
     if (c >= current_chunk_size) return;
 """
         loop_postamble = ""
     else:
         loop_preamble = """
     //==========================================
-    // OPENMP LOOP ARCHITECTURE
+    // OPENMP PARALLEL LOOP
     //==========================================
     // Distribute photon rays across available CPU threads for parallel evaluation.
     #pragma omp parallel for
@@ -181,7 +181,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     //==========================================
     // MACRO DEFINITIONS
     //==========================================
-    // IDX_LOCAL maps a component to the flattened state bundle using SoA layout.
+    // IDX_LOCAL maps a component to the flattened state array using SoA layout.
     // Layout: [Component][RayID]
     #ifndef IDX_LOCAL
     #define IDX_LOCAL(comp, ray_id, N) ((comp) * (N) + (ray_id))
@@ -229,14 +229,14 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     )
 
     # ==========================================
-    # CONDITIONAL HOST ORCHESTRATION
+    # CONDITIONAL HOST-TO-DEVICE TRANSFERS
     # ==========================================
     if parallelization == "cuda":
         host_to_device_transfer = r"""
     //==========================================
     // ASYNC MEMORY TRANSFER (HOST TO DEVICE)
     //==========================================
-    // Transfer the state vector $f^\mu$ for the current bundle to VRAM.
+    // Transfer the state vector $f^\mu$ for the current ray chunk to VRAM.
     for(int m=0; m<9; m++) { // Loop over all 9 elements of the state vector $f^\mu$.
         cudaMemcpy(d_f_bundle + (m * BUNDLE_CAPACITY),
                    all_photons->f + (m * num_rays) + start_idx,
@@ -256,7 +256,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     //==========================================
     // SYNCHRONOUS MEMORY TRANSFER (HOST TO HOST CHUNK)
     //==========================================
-    // Populating the bundle array for localized CPU chunk processing.
+    // Copy state-vector components into the CPU chunk array.
     for(int m=0; m<9; m++) { // Loop over all 9 elements of the state vector $f^\mu$.
         memcpy(d_f_bundle + (m * BUNDLE_CAPACITY),
                all_photons->f + (m * num_rays) + start_idx,
@@ -275,9 +275,9 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     # Host-side chunked execution loop.
     loop_body = f"""
     //==========================================
-    // BUNDLE SIZING
+    // RAY-CHUNK SIZE
     //==========================================
-    // Variable $current_chunk_size$ defines the active range for the current streaming bundle.
+    // Variable $current_chunk_size$ defines the active range for the current ray chunk.
     const long int current_chunk_size = NRPYMIN(num_rays - start_idx, BUNDLE_CAPACITY); // Safely bounded active chunk parameter $current_chunk_size$.
     {host_to_device_transfer}
         //==========================================
@@ -307,9 +307,9 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     @param cq_result The array of diagnostic structures to be populated.
 
     Detailed algorithm:
-    1. Allocates execution staging buffers for state vectors $f^\mu$ and quantity results.
+    1. Allocates temporary arrays for state vectors $f^\mu$ and quantity results.
     2. Iterates over the global dataset in chunks of $BUNDLE\_CAPACITY$.
-    3. Prepares bundle memory, computes expressions natively on the targeted hardware, and unloads results."""
+    3. Copies each ray chunk, evaluates the expressions, and returns the conserved quantities."""
 
     cfunc_type = "void"
     name = f"calculate_conserved_quantities_universal_{spacetime_name}_{particle_type}"
@@ -323,7 +323,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
 
     body = rf"""
     //==========================================
-    // MEMORY STAGING ALLOCATION
+    // TEMPORARY ARRAY ALLOCATION
     //==========================================
     double *d_f_bundle; // Pointer for the bundled state vector $f^\mu$.
     conserved_quantities_t *d_cq_bundle; // Pointer for the bundled diagnostic outputs.

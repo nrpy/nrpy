@@ -28,7 +28,7 @@ def bhah_plane_configs() -> Dict[str, Dict[str, Dict[str, Any]]]:
     """
     Return the plane_configs dict used to construct the 2D xy/yz plane sampling.
 
-    Schema:
+    Dictionary fields:
       plane_configs[PLANE][FAMILY] -> CONFIG, where:
         PLANE  : "xy" or "yz"
         FAMILY : one of {"Cartesian","Cylindrical","Spherical","SymTP","Wedge"}
@@ -40,7 +40,7 @@ def bhah_plane_configs() -> Dict[str, Dict[str, Dict[str, Any]]]:
     :return: Dictionary mapping PLANE ("xy" or "yz") and coordinate FAMILY to a CONFIG dict.
     """
     # -----------------------------------------------------------------------------
-    # plane_configs SCHEMA (dict of dicts):
+    # plane_configs field layout (dict of dicts):
     #
     # plane_configs[PLANE][FAMILY] -> CONFIG, where:
     #   PLANE  : "xy" or "yz"

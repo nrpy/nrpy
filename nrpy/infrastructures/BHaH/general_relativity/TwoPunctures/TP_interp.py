@@ -44,7 +44,8 @@ def register_CFunction_TP_Interp(
     Provides spectral interpolation at an arbitrary Cartesian point. By default the exported
     tensor components follow the legacy ``swap_xz`` compatibility convention; with
     ``enable_xy_plane=True`` both the query point and tensor output remain in the
-    native Cartesian xy orientation.
+    native Cartesian xy orientation. The ``W`` lapse option uses the corrected total
+    conformal factor, including the spectral correction ``u``.
 
     :param enable_xy_plane: Whether to keep the query point in the native xy-plane orientation
         instead of using the legacy ``swap_xz`` convention.
@@ -73,7 +74,7 @@ def register_CFunction_TP_Interp(
     xx = x - ID_persist->center_offset[0];
     yy = y - ID_persist->center_offset[1];
     zz = z - ID_persist->center_offset[2];
-  }
+  }  // END BLOCK: subtract puncture center offset
 """
         output_assignment_body = """  initial_data->gammaSphorCartDD00 = gxx_out;
   initial_data->gammaSphorCartDD01 = gxy_out;  // Technically gammaSphorCartDD10 = gammaSphorCartDD01
@@ -99,7 +100,7 @@ def register_CFunction_TP_Interp(
     xx = z_dest;
     yy = y_dest;
     zz = x_dest;
-  }
+  }  // END BLOCK: legacy coordinate swap
 """
         output_assignment_body = """  // Legacy swap_xz output: swap x and z tensor components only.
   initial_data->gammaSphorCartDD00 = gzz_out;
@@ -126,19 +127,21 @@ def register_CFunction_TP_Interp(
   int const nvar = 1, n1 = ID_persist->npoints_A, n2 = ID_persist->npoints_B, n3 = ID_persist->npoints_phi;
   // int const ntotal = n1 * n2 * n3 * nvar;
 
-  int antisymmetric_lapse, averaged_lapse, pmn_lapse, brownsville_lapse;
+  int antisymmetric_lapse, averaged_lapse, pmn_lapse, W_lapse, brownsville_lapse;
 
   enum GRID_SETUP_METHOD { GSM_Taylor_expansion, GSM_evaluation };
   enum GRID_SETUP_METHOD gsm;
 
   if (CCTK_EQUALS(ID_persist->grid_setup_method, "Taylor expansion")) {
     gsm = GSM_Taylor_expansion;
-  } else if (CCTK_EQUALS(ID_persist->grid_setup_method, "evaluation")) {
+  }  // END IF: CCTK_EQUALS(ID_persist->grid_setup_method, "Taylor expansion")
+   else if (CCTK_EQUALS(ID_persist->grid_setup_method, "evaluation")) {
     gsm = GSM_evaluation;
-  } else {
+  }  // END ELSE IF: CCTK_EQUALS(ID_persist->grid_setup_method, "evaluation")
+   else {
     fprintf(stderr, "internal error\n");
     exit(1);
-  }
+  }  // END ELSE: unsupported grid setup method
 
   antisymmetric_lapse = CCTK_EQUALS(ID_persist->initial_lapse, "twopunctures-antisymmetric");
   averaged_lapse = CCTK_EQUALS(ID_persist->initial_lapse, "twopunctures-averaged");
@@ -147,6 +150,7 @@ def register_CFunction_TP_Interp(
     if (pmn_lapse)
     fprintf(stderr,"Setting initial lapse to psi^%f profile.\n",(double)ID_persist->initial_lapse_psi_exponent);
   */
+  W_lapse = CCTK_EQUALS(ID_persist->initial_lapse, "W");
   brownsville_lapse = CCTK_EQUALS(ID_persist->initial_lapse, "brownsville");
   /*
     if (brownsville_lapse)
@@ -200,7 +204,7 @@ def register_CFunction_TP_Interp(
     break;
   default:
     assert(0);
-  }
+  }  // END SWITCH: gsm
   r_plus = pow(pow(r_plus, 4) + pow(ID_persist->TP_epsilon, 4), 0.25);
   r_minus = pow(pow(r_minus, 4) + pow(ID_persist->TP_epsilon, 4), 0.25);
   if (r_plus < ID_persist->TP_Tiny)
@@ -211,10 +215,10 @@ def register_CFunction_TP_Interp(
 #define EXTEND(M, r) (M * (3. / 8 * pow(r, 4) / pow(ID_persist->TP_Extend_Radius, 5) - 5. / 4 * pow(r, 2) / pow(ID_persist->TP_Extend_Radius, 3) + 15. / 8 / ID_persist->TP_Extend_Radius))
   if (r_plus < ID_persist->TP_Extend_Radius) {
     psi1 = 1 + 0.5 * EXTEND(mp, r_plus) + 0.5 * mm / r_minus + U;
-  }
+  }  // END IF: r_plus < ID_persist->TP_Extend_Radius
   if (r_minus < ID_persist->TP_Extend_Radius) {
     psi1 = 1 + 0.5 * EXTEND(mm, r_minus) + 0.5 * mp / r_plus + U;
-  }
+  }  // END IF: r_minus < ID_persist->TP_Extend_Radius
   REAL static_psi = 1;
 
   REAL Aij[3][3];
@@ -246,7 +250,7 @@ def register_CFunction_TP_Interp(
 
     if (rp < ID_persist->TP_Extend_Radius) {
       ir = EXTEND(1., rp);
-    }
+    }  // END IF: rp < ID_persist->TP_Extend_Radius
 
     s1 = 0.5 * mp * ir;
     s3 = -s1 * ir * ir;
@@ -277,7 +281,7 @@ def register_CFunction_TP_Interp(
 
     if (rp < ID_persist->TP_Extend_Radius) {
       ir = EXTEND(1., rp);
-    }
+    }  // END IF: rp < ID_persist->TP_Extend_Radius
 
     s1 = 0.5 * mm * ir;
     s3 = -s1 * ir * ir;
@@ -321,7 +325,7 @@ def register_CFunction_TP_Interp(
     if (brownsville_lapse)
       alp_out = 2.0 / (1.0 + pow(p, ID_persist->initial_lapse_psi_exponent));
 
-  } /* if conformal-state > 0 */
+  }  // END IF: conformal-state, psi^n, or Brownsville lapse
 
   // puncture_u_out = U;
 
@@ -331,6 +335,10 @@ def register_CFunction_TP_Interp(
   gyy_out = pow(psi1 / static_psi, 4);
   gyz_out = 0;
   gzz_out = pow(psi1 / static_psi, 4);
+
+  // W=(psi+u)^-2, needed for slow-start lapse; see arXiv:2404.01137.
+  if (W_lapse)
+    alp_out = 1.0 / pow(psi1 / static_psi, 2);
 
   Kxx_out = Aij[0][0] / pow(psi1, 2);
   Kxy_out = Aij[0][1] / pow(psi1, 2);
@@ -344,15 +352,15 @@ def register_CFunction_TP_Interp(
 
     if (r_plus < ID_persist->TP_Extend_Radius) {
       alp_out = ((1.0 - 0.5 * EXTEND(mp, r_plus) - 0.5 * mm / r_minus) / (1.0 + 0.5 * EXTEND(mp, r_plus) + 0.5 * mm / r_minus));
-    }
+    }  // END IF: r_plus < ID_persist->TP_Extend_Radius
     if (r_minus < ID_persist->TP_Extend_Radius) {
       alp_out = ((1.0 - 0.5 * EXTEND(mm, r_minus) - 0.5 * mp / r_plus) / (1.0 + 0.5 * EXTEND(mp, r_minus) + 0.5 * mp / r_plus));
-    }
+    }  // END IF: r_minus < ID_persist->TP_Extend_Radius
 
     if (averaged_lapse) {
       alp_out = 0.5 * (1.0 + alp_out);
-    }
-  }
+    }  // END IF: averaged_lapse
+  }  // END IF: antisymmetric_lapse || averaged_lapse
   if (ID_persist->multiply_old_lapse)
     alp_out *= old_alp;
 
@@ -402,7 +410,7 @@ def register_CFunction_TP_Interp(
     free_derivs(&par.cf_v, par.npoints_A * par.npoints_B * par.npoints_phi * 1);
 
     return 0;
-  }
+  }  // END FUNCTION: main
 
 #endif
 """

@@ -22,7 +22,7 @@ import nrpy.c_function as cfc
 def u0_massive(u0_expr: sp.Expr) -> None:
     """
     Define and register the C function to compute u^0 for a massive particle.
-    Utilizes the flattened SoA architecture via local and global batch indexing.
+    Uses flattened SoA storage with local and global batch indices.
 
     :param u0_expr: The SymPy expression for u^0.
     """
@@ -32,7 +32,7 @@ def u0_massive(u0_expr: sp.Expr) -> None:
 
     Solves the quadratic Hamiltonian constraint equation:
         g_munu u^mu u^nu = -1
-    for the positive root of u^0 using the SoA architecture.
+    for the positive root of u^0 using the SoA storage layout.
 
     Input:
         metric_g4DD: Flattened array of metric components.

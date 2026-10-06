@@ -1025,6 +1025,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     ID_persist_struct_str: str = "",
     post_ADM_Cart_to_BSSN_Cart_hook_str: str = "",
     spin_alignment_vector_params: Optional[Tuple[str, str, str]] = None,
+    enable_fCCZ4: bool = False,
 ) -> None:
     """
     Register the CFunction for converting initial ADM data to BSSN variables.
@@ -1040,6 +1041,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
         ``BSSN_Cart_to_rescaled_BSSN_rfm(...)``.
     :param spin_alignment_vector_params: Optional public spin-vector commondata
         parameter names used to sample aligned initial data and rotate ADM data.
+    :param enable_fCCZ4: Initialize fCCZ4's additional evolved Theta field.
     :raises ValueError: If spin-vector alignment is requested with T4munu.
     """
     if spin_alignment_vector_params is not None and enable_T4munu:
@@ -1087,6 +1089,8 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
         post_ADM_Cart_to_BSSN_Cart_hook_str=post_ADM_Cart_to_BSSN_Cart_hook_str,
         spin_alignment_vector_params=spin_alignment_vector_params,
     )
+    if enable_fCCZ4:
+        body += "    gridfuncs->y_n_gfs[IDX4pt(THETA_FCCZ4GF, idx3)] = 0.0;\n"
 
     post_initial_data_call: str = ""
     if parallelization in ["cuda"]:
@@ -1136,6 +1140,7 @@ def register_CFunctions_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     ID_persist_struct_str: str = "",
     post_ADM_Cart_to_BSSN_Cart_hook_str: str = "",
     spin_alignment_vector_params: Optional[Tuple[str, str, str]] = None,
+    enable_fCCZ4: bool = False,
 ) -> None:
     """
     Register ADM->BSSN converters for multiple coordinate systems.
@@ -1154,6 +1159,7 @@ def register_CFunctions_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
         ``BSSN_Cart_to_rescaled_BSSN_rfm(...)``.
     :param spin_alignment_vector_params: Optional public spin-vector commondata
         parameter names used to sample aligned initial data and rotate ADM data.
+    :param enable_fCCZ4: Initialize fCCZ4's additional evolved Theta field.
     """
     for CoordSystem in sorted(set_of_CoordSystems):
         register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
@@ -1165,6 +1171,7 @@ def register_CFunctions_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
             ID_persist_struct_str=ID_persist_struct_str,
             post_ADM_Cart_to_BSSN_Cart_hook_str=post_ADM_Cart_to_BSSN_Cart_hook_str,
             spin_alignment_vector_params=spin_alignment_vector_params,
+            enable_fCCZ4=enable_fCCZ4,
         )
 
 

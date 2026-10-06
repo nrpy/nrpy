@@ -379,8 +379,8 @@ def register_all_diagnostics(
         if CoordSystem not in ("Cartesian", "Spherical"):
             raise ValueError(
                 "Raytracing binary exporters currently support only Cartesian "
-                "and Spherical coordinate systems. Extend the serialized "
-                f"metadata contract before enabling them for {CoordSystem}."
+                "and Spherical coordinate systems. Extend the raytracing file "
+                f"header and coordinate fields before enabling them for {CoordSystem}."
             )
 
     _register_CFunction_diagnostics(

@@ -27,7 +27,7 @@ except ImportError:
 
 
 def main() -> None:
-    """Parse parameters and orchestrate lensed image creation."""
+    """Parse parameters and render the lensed image."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
     # The default output path is strictly local.

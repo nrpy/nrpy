@@ -13,18 +13,26 @@
 #define CUDA_WIDTH 1 // 1 double per loop iteration
 
 // Basic Operations (Scalar)
+// Plain operators, not __dadd_rn/__dsub_rn/__dmul_rn: under nvcc's default
+// -fmad=true the compiler contracts a*b+c written with operators into a single
+// fma.rn.f64, but it never contracts the opaque round-to-nearest intrinsics, so
+// every add/multiply pair the symbolic lowering did not fuse itself would stay two
+// FP64 instructions. Each operator alone is still IEEE round-to-nearest. This matches
+// the non-CUDA branch below.
 #define ConstCUDA(a) ((a))
 #define AbsCUDA(a) (fabs((a)))
-#define AddCUDA(a, b) __dadd_rn((a), (b))
-#define SubCUDA(a, b) __dsub_rn((a), (b))
-#define MulCUDA(a, b) __dmul_rn((a), (b))
+#define AddCUDA(a, b) ((a) + (b))
+#define SubCUDA(a, b) ((a) - (b))
+#define MulCUDA(a, b) ((a) * (b))
 #define DivCUDA(a, b) __ddiv_rn((a), (b))
 
 // Fused Multiply-Add/Subtract Operations (Scalar)
+// The negations are exact and become free source modifiers on the FMA, so the
+// subtract and negated forms are one instruction each rather than two.
 #define FusedMulAddCUDA(a, b, c) __fma_rn((a), (b), (c))
-#define FusedMulSubCUDA(a, b, c) FusedMulAddCUDA((a), (b), MulCUDA((-1.0), (c)))
-#define NegFusedMulAddCUDA(a, b, c) SubCUDA((c), MulCUDA((a), (b)))
-#define NegFusedMulSubCUDA(a, b, c) MulCUDA((-1.0), (FusedMulAddCUDA((a), (b), (c))))
+#define FusedMulSubCUDA(a, b, c) __fma_rn((a), (b), -(c))
+#define NegFusedMulAddCUDA(a, b, c) __fma_rn(-(a), (b), (c))
+#define NegFusedMulSubCUDA(a, b, c) (-__fma_rn((a), (b), (c)))
 
 // Mathematical Functions (Scalar)
 #define SqrtCUDA(a) (__dsqrt_rn((a)))

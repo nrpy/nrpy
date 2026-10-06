@@ -24,7 +24,7 @@ class BSSN_to_g4Christoffel:
     This class reuses the existing BSSN-to-ADM reconstruction already present in
     NRPy, then assembles the missing time-derivative sector needed to build the
     physical four-metric derivatives and Christoffel symbols. It reuses
-    ``BSSN_to_ADM.KDD``, whose owner consumes the analytically constrained
+    ``BSSN_to_ADM.KDD``; ``BSSN_to_ADM`` uses the analytically constrained
     \bar{A}_{ij} without applying a separate conformal-trace projection.
 
     :param CoordSystem: Coordinate system to use.

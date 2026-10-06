@@ -1,11 +1,11 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/rkf45_finalize_and_control_kernel.py
 r"""
-Defines the native kernel and host-side orchestrator for the RKF45 Finalize step.
+Defines the CUDA or OpenMP function and host-side driver for RKF45 finalization.
 
-This module provides the computational kernel responsible for calculating the final
+This module provides the parallel function that calculates the final
 5th-order solution, estimating the local truncation error, and executing the adaptive
 step-size controller logic. The kernel bounds local memory usage by calculating the
-5th-order candidate and error component-by-component for all 9 tensor components. The
+5th-order candidate and error component-by-component for all nine state-vector components. The
 L1 momentum floor is calculated using the initial state to prevent redundant reads
 during the main loop, while scalar loads map directly to local memory. It calculates
 physical state updates using exact double-precision coefficients, explicitly checking
@@ -19,11 +19,11 @@ rejected or failure status.
 When requested by `enable_numerical_time_window_step_cap`, the generated kernel
 also caps accepted next-step sizes using `rkf45_max_delta_t` so backward
 numerical-spacetime ray tracing remains inside the mapped time window.
-The companion numerical time-window manager owns registration of
-`rkf45_max_delta_t` because it also consumes that runtime parameter when
+The companion numerical time-window manager registers
+`rkf45_max_delta_t` because it also uses that runtime parameter when
 building the required mmap slice window.
 
-Together, the time-window manager and this kernel enforce one shared contract:
+Together, the time-window manager and this kernel enforce one shared requirement:
 the manager maps enough lower-time numerical data for one photon slot assuming
 the next accepted RKF45 step will not move farther backward in coordinate time
 than the promised lookahead, and this kernel makes that assumption true by
@@ -51,16 +51,16 @@ def rkf45_finalize_and_control_kernel(
     enable_numerical_time_window_step_cap: bool = False,
 ) -> None:
     r"""
-    Global kernel for RKF45 finalization and error control.
+    Generate the CUDA or OpenMP function for RKF45 finalization and error control.
 
     The kernel computes the 4th and 5th order solutions, calculates the error
     norm, and updates the photon's status (ACTIVE/REJECTED) and step size $h$
-    in global memory.
+    in the state, status, and step-size arrays.
 
     :param enable_numerical_time_window_step_cap: Whether to cap accepted RKF45
         step sizes so numerical-spacetime interpolation remains inside the
         currently mapped time window. When enabled, this registration also
-        ensures the numerical time-window helper owns and registers the shared
+        ensures the numerical time-window helper registers the shared
         slot-lattice and lookahead CodeParameters first.
 
     Doctests:
@@ -103,9 +103,9 @@ def rkf45_finalize_and_control_kernel(
     ]
     real_param_defaults: List[Union[str, int, float]] = [1e-8, 1e-8, 1e-10, 10.0]
     # The accepted-step cap is emitted only for numerical-spacetime builds.
-    # The companion time_window_manager_numerical() helper owns and registers
+    # The companion time_window_manager_numerical() helper registers
     # the shared lookahead and slot-lattice CodeParameters before this kernel
-    # consumes them.
+    # uses them.
     real_param_names.extend(["rkf45_safety_factor", "numerical_initial_h"])
     real_param_defaults.extend([0.9, 1.0])
     par.register_CodeParameters(
@@ -165,7 +165,7 @@ def rkf45_finalize_and_control_kernel(
     else:
         loop_preamble = """
     //==========================================
-    // OPENMP LOOP ARCHITECTURE
+    // OPENMP PARALLEL LOOP
     //==========================================
     // Distribute photon rays across available CPU threads for parallel evaluation.
     #pragma omp parallel for
@@ -198,7 +198,7 @@ static inline int rkf45_checked_floor_to_long(
         // current slot plus rkf45_max_delta_t of extra lookahead. Convert that
         // allowed coordinate-time motion into an affine-parameter cap using
         // the accepted fifth-order estimate of p^0 = dt/dlambda.
-        // For the full cross-file contract, see
+        // For the full cross-file requirement, see
         // time_window_manager_numerical_required_grid_range() and
         // time_window_manager_numerical_stencil_for_time() in the companion
         // time_window_manager_numerical helper.
@@ -255,17 +255,17 @@ static inline int rkf45_checked_floor_to_long(
 
     core_math = rf"""
     //==========================================
-    // MACRO DEFINITIONS FOR BUNDLE ACCESS
+    // MACRO DEFINITIONS FOR ARRAY ACCESS
     //==========================================
-    // IDX_F maps a component to the flattened state bundle using SoA layout.
+    // IDX_F maps a component to the flattened state array using SoA layout.
     #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
-    // IDX_K maps a component to the flattened derivative bundle.
+    // IDX_K maps a component to the flattened derivative array.
     #define IDX_K(s, c, ray_id) ((s) * 9 * BUNDLE_CAPACITY + (c) * BUNDLE_CAPACITY + (ray_id))
 
     //==========================================
     // PARAMETER LOAD
     //==========================================
-    // Load tolerances and state variables from global memory and constant memory structs.
+    // Load tolerances from the parameter structure and current values from state arrays.
     const double rtol = {cd_access}rkf45_error_tolerance; // Relative tolerance bounds.
     const double atol = {cd_access}rkf45_absolute_error_tolerance; // Absolute tolerance bounds.
     double h_local = ReadCUDA(&d_h[i]); // Local step size $h$.
@@ -274,8 +274,8 @@ static inline int rkf45_checked_floor_to_long(
     //==========================================
     // COMPUTE & CACHE LOOP
     //==========================================
-    // We compute the 5th order candidate and error component-by-component to bound register usage.
-    double f_5th_cache[9]; // Thread-local register cache for the evaluated 5th-order state $f^{{\mu}}$.
+    // Compute the fifth-order candidate and error one component at a time.
+    double f_5th_cache[9]; // Local array for the evaluated fifth-order state $f^{{\mu}}$.
     double err_norm = 0.0; // Accumulator for the maximum normalized truncation error norm $L_\infty$.
 
     //==========================================
@@ -294,8 +294,8 @@ static inline int rkf45_checked_floor_to_long(
         //==========================================
         // BASE STATE AND DERIVATIVE COMPONENT LOAD
         //==========================================
-        // Scalar loads mapped directly to registers for the current tensor component.
-        const double f_n = ReadCUDA(&d_f_start[IDX_F(comp, i)]);     // Base state tensor component $f_n$.
+        // Load the current state component and its RKF45 derivatives.
+        const double f_n = ReadCUDA(&d_f_start[IDX_F(comp, i)]);     // Base state component $f_n$.
         const double k0  = ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]); // Stage 0 derivative vector $k_0$.
         // Stage 1 (k1) is mathematically zeroed out in RKF45, so it is skipped.
         const double k2  = ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]); // Stage 2 derivative vector $k_2$.
@@ -306,7 +306,7 @@ static inline int rkf45_checked_floor_to_long(
         //==========================================
         // 5TH ORDER CANDIDATE EVALUATION & STATE CORRUPTION SAFEGUARD
         //==========================================
-        // Evaluates the physical state update $f^\mu_{{n+1}}$ utilizing exact double-precision Runge-Kutta coefficients to catch non-linear tensor interactions near event horizons before memory persistence.
+        // Evaluate the fifth-order candidate state $f^\mu_{{n+1}}$ from the RKF45 coefficients.
         double update = MulCUDA(16.0 / 135.0, k0); // Intermediate accumulator for the 5th order step update.
         update = FusedMulAddCUDA(6656.0 / 12825.0, k2, update); // Accumulates the stage 2 derivative vector $k_2$.
         update = FusedMulAddCUDA(28561.0 / 56430.0, k3, update); // Accumulates the stage 3 derivative vector $k_3$.
@@ -314,7 +314,7 @@ static inline int rkf45_checked_floor_to_long(
         update = FusedMulAddCUDA(2.0 / 55.0, k5, update); // Accumulates the stage 5 derivative vector $k_5$.
 
         const double f_5th_val = FusedMulAddCUDA(h_local, update, f_n); // The 5th order candidate state $f^\mu_{{n+1}}$.
-        f_5th_cache[comp] = f_5th_val; // Caches the evaluated component to thread-local registers.
+        f_5th_cache[comp] = f_5th_val; // Store the evaluated component in the local candidate array.
 
         // Evaluates the physical state for numerical singularities to guarantee the rejection of corrupted trajectory steps.
         if (isnan(f_5th_val) || isinf(f_5th_val)) {{
@@ -380,7 +380,7 @@ static inline int rkf45_checked_floor_to_long(
         //==========================================
         // ACCEPTED STEP MEMORY COMMIT
         //==========================================
-        // Commits the local register cache to persistent global memory.
+        // Copy the accepted local candidate into the persistent state array.
         {pragma_unroll}
         for (int comp = 0; comp < 9; ++comp) {{
             WriteCUDA(&d_f_persistent[IDX_F(comp, i)], f_5th_cache[comp]); // Commits the cached state component to persistent memory.
@@ -450,6 +450,7 @@ static inline int rkf45_checked_floor_to_long(
 
     desc = r""" Finalizes the RKF45 step, checks errors, and updates state/stepsize.
 
+    @param commondata Pointer to numerical tolerances shared by all rays.
     @param d_f_persistent Pointer to the persistent state $f^{\mu}$ (updated on acceptance).
     @param d_f_start Pointer to the base state $f^{\mu}$ (read-only).
     @param d_k_bundle Pointer to all 6 derivative vectors $k_n$.
@@ -457,7 +458,8 @@ static inline int rkf45_checked_floor_to_long(
     @param d_status Pointer to the ray status flag.
     @param d_affine Pointer to the affine parameter $\lambda$.
     @param d_retries Pointer to the retry counter.
-    @param chunk_size The number of rays in the current bundle.
+    @param chunk_size The number of rays in the current chunk.
+    @param stream_idx Work-array index; CUDA uses the corresponding stream.
 
     @note When numerical-spacetime support requests the optional accepted-step
     cap, this routine becomes the runtime enforcement layer for the

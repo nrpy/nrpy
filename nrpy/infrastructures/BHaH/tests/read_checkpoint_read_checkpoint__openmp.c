@@ -35,7 +35,7 @@
  *
  * If griddata == NULL, read only commondata metadata and return 1 when the
  * checkpoint exists. This supports rebuilding grids from restart state before
- * loading the full checkpoint payload.
+ * loading the full checkpoint data.
  *
  * Serialized grid-point indices must be strictly increasing, as emitted by the
  * current writer. Noncanonical indices are treated as fatal checkpoint

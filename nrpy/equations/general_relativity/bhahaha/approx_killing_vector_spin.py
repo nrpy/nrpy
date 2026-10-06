@@ -64,7 +64,7 @@ class ApproxKillingSpinClass:
         self.Nmn_integrand: List[List[sp.Expr]]
         self.Jm_integrand: List[sp.Expr]
 
-        # Build pipeline
+        # Evaluate spin from the approximate Killing vector.
         self._build_3metric_and_derivs_()
         self._build_surface_geometry_()
         self._build_l1_basis_and_forms_()

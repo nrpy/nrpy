@@ -1,11 +1,11 @@
 # Geodesic Raytracing
 
-> Explain standalone massive and photon geodesic examples plus batch photon raytracing visualization artifacts. · Status: confirmed · Last reconciled: 07-12-2026
+> Explain standalone massive and photon geodesic examples plus batch photon raytracing visualization artifacts. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
 
-NRPy has three checked-in geodesic example generators. `mass_geodesic_integrator`
+NRPy has checked-in geodesic example generators. `mass_geodesic_integrator`
 builds a single massive-particle Kerr-Schild Cartesian trajectory and uses GSL's
 RKF45 ODE path. `photon_geodesic_integrator` builds a single photon trajectory
 with the same analytic spacetime target but uses the split-pipeline photon RKF45
@@ -16,8 +16,8 @@ lensed-image renderer and diagnostic scripts.
 
 All generation, build, executable, trajectory, and rendering commands on this
 page are manual/source-supported. Neither GitHub workflow nor the local full-CI
-helper invokes these three generators. No runtime or numerical result was
-reproduced during this KB audit.
+helper invokes these generators, so configured validation does not cover their
+runtime or numerical results.
 
 ## Detail
 

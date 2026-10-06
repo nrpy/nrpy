@@ -1,9 +1,9 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/handle_window_plane_intersection.py
 """
-Defines the C engine that handles a window plane intersection.
+Registers the C function that handles a window-plane intersection.
 
-This module provides the metaprogramming orchestration that defines the C function
-responsible for calculating the local 2D coordinates on the observer's camera window
+This module generates the C function that calculates local 2D coordinates on the
+observer's camera window
 when a photon crosses the window plane. It maps global Cartesian intersections to a
 reconstructed orthonormal camera basis by projecting the relative 3D position onto
 the horizontal and vertical basis vectors. Upon a valid bounds check, it permanently
@@ -29,7 +29,7 @@ import nrpy.params as par
 
 
 def handle_window_plane_intersection() -> None:
-    """Generate and register the C engine for processing window plane intersections."""
+    """Generate and register the C function for window-plane intersections."""
     parallelization = par.parval_from_str("parallelization")
 
     # Add the access variable

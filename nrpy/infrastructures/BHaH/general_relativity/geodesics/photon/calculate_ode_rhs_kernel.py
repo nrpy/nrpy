@@ -2,14 +2,11 @@
 r"""
 Provides the kernel generation logic for computing photon geodesic derivatives.
 
-This module defines the Python function that constructs and registers the host-side
-orchestrator and global kernel required during the RKF45 integration step for photon
-geodesics. It translates SymPy expressions for spatial and temporal derivatives into
-C code and incorporates parallelism macros. The generated kernel maps global memory
-bundle data into thread-local registers to evaluate the right-hand sides of the
-geodesic equations. A boundary guard prevents out-of-bounds memory access for
-threads exceeding the active chunk. The stage index dictates the offset for memory
-alignment.
+This module constructs and registers the CUDA or OpenMP function used during each
+RKF45 stage of photon-geodesic integration. It translates the SymPy expressions for
+the coordinate and momentum derivatives into C code. For every photon, the generated
+function reads the state, metric, and Christoffel-symbol arrays, evaluates the nine
+geodesic right-hand sides, and writes them to the selected RKF45 stage.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -29,14 +26,11 @@ def calculate_ode_rhs_kernel(
     geodesic_rhs_expressions: List[sp.Expr], coordinate_symbols: List[sp.Symbol]
 ) -> None:
     r"""
-    Provide the global kernel registration for computing the ODE right-hand side.
+    Register the CUDA or OpenMP function for computing the geodesic ODE right-hand sides.
 
-    The generated kernel maps memory tensor data into thread-local registers matching
-    the symbols expected by the generated geodesic equations. It computes the nine
-    derivative components and writes them to the stage offset in the RKF45 derivative
-    bundle. A boundary guard prevents out-of-bounds memory access for threads
-    exceeding the active chunk. The stage index dictates the offset for memory
-    alignment.
+    The generated function assigns array components to the local scalar names used by
+    the geodesic equations. It computes the nine derivative components and writes them
+    to the selected stage in the RKF45 derivative array.
 
     :param geodesic_rhs_expressions: The mathematical right-hand side evaluations
         representing the geodesic equations.
@@ -55,7 +49,7 @@ def calculate_ode_rhs_kernel(
         str(sym) for expr in geodesic_rhs_expressions for sym in expr.free_symbols
     }
 
-    # Define the argument dictionary for the hardware kernel generation.
+    # Define arguments for the CUDA and OpenMP functions.
     arg_dict_cuda = {
         "d_f_temp_bundle": "const double *restrict",
         "d_metric_bundle": "const double *restrict",
@@ -74,37 +68,36 @@ def calculate_ode_rhs_kernel(
         "chunk_size": "const long int",
     }
 
-    # Build the memory data unpacking block.
-    # This maps global memory directly to the local scalar registers expected by ccg.c_codegen.
+    # Assign array components to the local scalar names expected by ccg.c_codegen.
     preamble_lines = [
         "//==========================================",
         "// STATE VECTOR & COORDINATE UNPACKING",
         "//==========================================",
-        "// Load spacetime coordinates $x^{\\mu}$ from the global state bundle.",
+        "// Load spacetime coordinates $x^{\\mu}$ from the state array.",
     ]
 
     for j, sym in enumerate(coordinate_symbols):
         if str(sym) in used_symbol_names:
             preamble_lines.append(
-                f"const double {str(sym)} = d_f_temp_bundle[IDX_F({j}, i)]; // Maps the coordinate ${str(sym)}$ from global memory to a thread-local register."
+                f"const double {str(sym)} = d_f_temp_bundle[IDX_F({j}, i)]; // Coordinate ${str(sym)}$ for this photon."
             )
 
     preamble_lines.extend(
         [
             "\n    //==========================================\n    // MOMENTUM UNPACKING\n    //==========================================",
-            "// Load contravariant four-momenta $p^{\\mu}$ from the global state bundle.",
+            "// Load contravariant four-momenta $p^{\\mu}$ from the state array.",
         ]
     )
     for j in range(4):
         if f"pU{j}" in used_symbol_names:
             preamble_lines.append(
-                f"const double pU{j} = d_f_temp_bundle[IDX_F({j+4}, i)]; // Maps the momentum component $p^{{{j}}}$ from global memory to a thread-local register."
+                f"const double pU{j} = d_f_temp_bundle[IDX_F({j+4}, i)]; // Momentum component $p^{{{j}}}$ for this photon."
             )
 
     preamble_lines.extend(
         [
             "\n    //==========================================\n    // METRIC TENSOR UNPACKING\n    //==========================================",
-            "// Load the symmetric covariant metric $g_{\\mu\\nu}$ from the pre-calculated memory bundle.",
+            "// Load the symmetric covariant metric $g_{\\mu\\nu}$ from the pre-calculated memory array.",
         ]
     )
     curr_idx = 0
@@ -113,14 +106,14 @@ def calculate_ode_rhs_kernel(
             comp_name = f"metric_g4DD{m}{n}"
             if comp_name in used_symbol_names:
                 preamble_lines.append(
-                    f"const double {comp_name} = d_metric_bundle[IDX_METRIC({curr_idx}, i)]; // Maps the metric component $g_{{{m}{n}}}$ from global memory to a thread-local register."
+                    f"const double {comp_name} = d_metric_bundle[IDX_METRIC({curr_idx}, i)]; // Metric component $g_{{{m}{n}}}$ for this photon."
                 )
             curr_idx += 1
 
     preamble_lines.extend(
         [
             "\n    //==========================================\n    // CHRISTOFFEL CONNECTION UNPACKING\n    //==========================================",
-            "// Load Christoffel symbols $\\Gamma^{\\alpha}_{\\mu\\nu}$ from the pre-calculated memory bundle.",
+            "// Load Christoffel symbols $\\Gamma^{\\alpha}_{\\mu\\nu}$ from the pre-calculated memory array.",
         ]
     )
     curr_idx = 0
@@ -130,14 +123,14 @@ def calculate_ode_rhs_kernel(
                 comp_name = f"conn_Gamma4UDD{a}{m}{n}"
                 if comp_name in used_symbol_names:
                     preamble_lines.append(
-                        f"const double {comp_name} = d_connection_bundle[IDX_CONN({curr_idx}, i)]; // Maps the connection component $\\Gamma^{{{a}}}_{{{m}{n}}}$ from global memory to a thread-local register."
+                        f"const double {comp_name} = d_connection_bundle[IDX_CONN({curr_idx}, i)]; // Christoffel symbol $\\Gamma^{{{a}}}_{{{m}{n}}}$ for this photon."
                     )
                 curr_idx += 1
 
     preamble_unpacking_str = "\n    ".join(preamble_lines)
 
     # Generate the raw C math string from the SymPy expressions.
-    # Output targets are local scalar registers k_out_0 through k_out_8.
+    # Output targets are local scalars k_out_0 through k_out_8.
     k_array_outputs = [f"k_out_{j}" for j in range(9)]
 
     enable_simd = parallelization == "cuda"
@@ -167,7 +160,7 @@ def calculate_ode_rhs_kernel(
     else:
         loop_preamble = """
     //==========================================
-    // OPENMP LOOP ARCHITECTURE
+    // OPENMP PARALLEL LOOP
     //==========================================
     // Distribute photon rays across available CPU threads for parallel evaluation.
     #pragma omp parallel for
@@ -178,32 +171,32 @@ def calculate_ode_rhs_kernel(
 
     core_math = rf"""
     //==========================================
-    // MACRO DEFINITIONS FOR BUNDLE ACCESS
+    // MACRO DEFINITIONS FOR ARRAY ACCESS
     //==========================================
-    // IDX_F maps a component to the flattened state bundle using SoA layout.
-    #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the state bundle.
-    // IDX_METRIC maps a component to the flattened symmetric metric bundle.
-    #define IDX_METRIC(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the metric bundle.
-    // IDX_CONN maps a component to the flattened Christoffel connection bundle.
-    #define IDX_CONN(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the connection bundle.
-    // IDX_K maps a stage and component triplet to the flattened derivative bundle.
-    #define IDX_K(s, c, ray_id) (((s) - 1) * 9 * BUNDLE_CAPACITY + (c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the RKF45 derivative bundle.
+    // IDX_F maps a component to the flattened state array using SoA layout.
+    #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the state array.
+    // IDX_METRIC maps a component to the flattened symmetric metric array.
+    #define IDX_METRIC(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the metric array.
+    // IDX_CONN maps a component to the flattened Christoffel connection array.
+    #define IDX_CONN(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the connection array.
+    // IDX_K maps a stage and component triplet to the flattened derivative array.
+    #define IDX_K(s, c, ray_id) (((s) - 1) * 9 * BUNDLE_CAPACITY + (c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the RKF45 derivative array.
 
     {preamble_unpacking_str}
 
     //==========================================
     // GEODESIC RHS EVALUATION
     //==========================================
-    // Local register declarations to capture the evaluated derivatives $\dot{{f}}$.
-    double k_out_0, k_out_1, k_out_2, k_out_3, k_out_4, k_out_5, k_out_6, k_out_7, k_out_8; // Thread-local registers allocate memory for the $9$ derivative outputs.
+    // Local scalars for the evaluated derivatives $\dot{{f}}$.
+    double k_out_0, k_out_1, k_out_2, k_out_3, k_out_4, k_out_5, k_out_6, k_out_7, k_out_8; // Nine geodesic right-hand sides for this photon.
 
-    // Evaluate the derivatives $dx^{{\mu}}/d\lambda$ and $dp^{{\mu}}/d\lambda$ using hardware FMA instructions.
+    // Evaluate the derivatives $dx^{{\mu}}/d\lambda$ and $dp^{{\mu}}/d\lambda$.
     {body_math}
 
     //==========================================
-    // GLOBAL MEMORY WRITE
+    // RKF45 DERIVATIVE ARRAY WRITE
     //==========================================
-    // Write the computed derivatives to the correct RKF45 stage offset within the massive derivative bundle.
+    // Write the computed derivatives to the correct RKF45 stage offset within the RKF45 derivative array.
     d_k_bundle[IDX_K(stage, 0, i)] = k_out_0; // Write derivative component $0$ to memory.
     d_k_bundle[IDX_K(stage, 1, i)] = k_out_1; // Write derivative component $1$ to memory.
     d_k_bundle[IDX_K(stage, 2, i)] = k_out_2; // Write derivative component $2$ to memory.
@@ -250,14 +243,15 @@ def calculate_ode_rhs_kernel(
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
 
-    desc = r""" Orchestrates the memory kernel for computing the photon geodesic ODE right-hand sides.
+    desc = r""" Runs the CUDA or OpenMP function for the photon geodesic ODE right-hand sides.
 
-    @param d_f_temp_bundle Pointer to the intermediate state bundle $f^{\mu}$ in memory.
-    @param d_metric_bundle Pointer to the pre-calculated metric bundle $g_{\mu\nu}$ in memory.
-    @param d_connection_bundle Pointer to the pre-calculated connection bundle $\Gamma^{\alpha}_{\beta\gamma}$ in memory.
-    @param d_k_bundle Pointer to the massive derivative bundle array in memory.
+    @param d_f_temp_bundle Pointer to the intermediate state array $f^{\mu}$ in memory.
+    @param d_metric_bundle Pointer to the pre-calculated metric array $g_{\mu\nu}$ in memory.
+    @param d_connection_bundle Pointer to the pre-calculated connection array $\Gamma^{\alpha}_{\beta\gamma}$ in memory.
+    @param d_k_bundle Pointer to the RKF45 derivative array in memory.
     @param stage The current RKF45 stage index used to offset the write location.
-    @param chunk_size The number of active rays in the current bundle batch.
+    @param chunk_size The number of active rays in the current ray chunk.
+    @param stream_idx Work-array index; CUDA uses the corresponding stream.
     """
 
     cfunc_type = "void"

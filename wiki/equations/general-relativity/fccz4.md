@@ -1,26 +1,31 @@
 # Fully Covariant Conformal Z4
 
-> Define the three-dimensional reference-metric fCCZ4 equations implemented by NRPy, including algebraic constraints, gauge, and validation boundaries. · Status: confirmed · Last reconciled: 08-26-2026
+> Define the three-dimensional reference-metric fCCZ4 equations implemented by NRPy, including algebraic constraints, gauge, and validation boundaries. · Status: confirmed
 > Up: [General Relativity](index.md)
 
 ## Summary
 
 NRPy's fCCZ4 implementation expresses the fully covariant conformal Z4
 system as corrections to option-matched cached reference-metric BSSN
-expressions, read without mutation. A canonical constraint module owns the
+expressions, read without mutation. A canonical constraint module defines the
 connection constraint, spatial Z4 vectors, Z4 Ricci tensor, and Hamiltonian
-expression; the evolution module consumes that cache and exposes 18 RHS
+expression; the evolution module reads that cache and exposes the baseline RHS
 components while evolving the normal Z4 projection in storage named
-`Theta_fCCZ4`. Existing conformal
-connection storage represents `LambdatildeU`. A separate gauge module reuses
-the BSSN gauge implementation and adds only the fCCZ4 lapse and Gamma-driver
-corrections.
+`Theta_fCCZ4`. YBS-MOM changes the existing conformal-extrinsic-curvature
+outputs without adding state. Existing conformal
+connection storage represents `LambdatildeU`. The gauge module passes the
+complete fCCZ4 connection RHS to the shared BSSN gauge implementation and
+adds only the fCCZ4 lapse correction.
 
-The scientific contract follows the three-dimensional formulation in Mewes et
-al. Eqs. (3)-(41), including the unnumbered evolution system after Eq. (32). Sanchis-Gual et
-al. corroborate the variable, constraint, gauge, and BSSN-limit structure;
-Alic et al. corroborate covariance, but their shift sector is not substituted
-off the connection-constraint surface. Brown supplies the covariant BSSN
+The scientific equations follow the three-dimensional formulation in Mewes et
+al. Eqs. (3)-(41), except for an apparent convention error in the printed
+connection shift sector. Mewes et al. define their time operator using the full
+vector Lie derivative, which already stretches the evolved connection, and
+then print the constraint-vector stretch a second time. NRPy uses the
+first-principles one-stretch composition derived below. Alic et al. corroborate
+the full corrected Cartesian coefficient; Sanchis-Gual et al. corroborate the
+one-stretch structure, with their differing off-constraint divergence
+presentations qualified below. Brown supplies the covariant BSSN
 reference-connection construction. Spatial dimension is
 three, spacetime signature is `(-,+,+,+)`, exact rational coefficients are
 preserved, and full covariance fixes `kappa3=1` rather than exposing it as a
@@ -62,9 +67,7 @@ Claim evidence:
 - Claim: `FCCZ4RHSs` fixes full covariance instead of registering `kappa3`, registers inverse-length `kappa1` with default `0.1` and dimensionless `kappa2` with default zero, and constructs `kappa1` damping terms with no additional lapse factor.
 - Role: descriptive behavior
 - Deciding authority: [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__`
-- Corroboration: [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_RHSs_Cartesian_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian_RbarDD_gridfunctions.py), `trusted_dict`; [fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py), `trusted_dict`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=30-significant-digit deterministic trusted sampling of evolution and residual expressions; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=five evolution trusted variants across Cartesian and SinhSpherical coordinates; date=08-26-2026`
+- Corroboration: [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py), `trusted_dict`; [fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py), `trusted_dict`
 
 ### Conformal and reference-metric variables
 
@@ -115,8 +118,6 @@ Claim evidence:
 - Role: public/scientific contract
 - Deciding authority: backend `register_CFunction_enforce_detgbar_equals_detghat_trAzero` implementations listed in [BSSN Family](bssn-family.md); [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), constrained metric RHS
 - Corroboration: [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), Eqs. (8)-(10)
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=BHaH, ETLegacy, CarpetX generated C; precision=exact symbolic off-diagonal determinant/trace identities and generated-source structure; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=Cartesian and SinhSpherical reference-metric precompute in all three backends, end-to-end fCCZ4 application wiring not established by inspected paths; date=08-26-2026`
 
 NRPy supports evolving `phi`, `W=exp(-2 phi)`, or `chi=exp(-4 phi)`.
 
@@ -125,8 +126,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities.__init__`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__`
 - Corroboration: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), module `__main__`, exercises `W`, `phi`, and `chi` in both Cartesian and SinhSpherical coordinates
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=30-significant-digit deterministic trusted sampling, including an exact pre-sampling conformal-factor cache predicate; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=W, phi, and chi constraints in Cartesian and SinhSpherical coordinates; unsupported conformal-factor execution not-run; date=08-26-2026`
 
 For time-independent reference metric `gammahat_ij`, let `Dhat_i` and
 `Gammahat^i_jk` denote its derivative and connection. Barred quantities belong
@@ -199,7 +198,7 @@ omitting it changes both the `K` and `Theta` equations.
 Claim evidence:
 - Claim: In three-dimensional, Lagrangian reference-metric fCCZ4 with `kappa3=1`, the evolved connection, spatial Z4 vector, and absorbed Ricci tensor obey the definitions and `deltaR_ij` expansion displayed above.
 - Role: public/scientific contract
-- Deciding authority: [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), Eqs. (25), (26), (29), (30), and (32); targeted validation: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), module `__main__` reconstructed vector and Ricci residuals, and [fCCZ4_constraints_SinhSpherical_phi.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_constraints_SinhSpherical_phi.py), `trusted_dict`
+- Deciding authority: [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), Eqs. (25), (26), (29), (30), and (32), and [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints.__init__`
 - Corroboration: [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1), Eqs. (2.1)-(2.29); [Alic et al., arXiv:1106.2254v2](https://arxiv.org/pdf/1106.2254v2), Sec. II, Eq. (19) and the covariance discussion following Eq. (23); [Brown, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2), Eqs. (12a), (12b), and (15)
 
 NRPy stores `Lambdatilde^i` in the existing `LambdabarU`/`lambdaU` fields.
@@ -212,9 +211,7 @@ Claim evidence:
 - Claim: NRPy maps `Lambdatilde^i` to existing `LambdabarU`/`lambdaU` storage, completes `C^i` before full-metric lowering, and uses the evolved-linear/geometric-nonlinear Ricci split.
 - Role: descriptive behavior
 - Deciding authority: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints.__init__`; [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities.__init__`
-- Corroboration: [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_RHSs_Cartesian_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian_RbarDD_gridfunctions.py), `trusted_dict`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=30-significant-digit deterministic trusted sampling of separately rebuilt vector and Ricci residual expressions within the same owner module; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=nine constraint variants, including Cartesian and SinhSpherical external-Ricci consumers; external producer and independent scientific implementation not verified; date=08-26-2026`
+- Corroboration: [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py), `trusted_dict`
 
 ### Constraints
 
@@ -237,7 +234,7 @@ constraint `M^i=0` and `det(gammabar)=det(gammahat)`.
 Claim evidence:
 - Claim: `H_Z4` is the displayed matter-inclusive fCCZ4 Hamiltonian expression and excludes `-2 Theta K`; the implemented fCCZ4 corrections reduce to their BSSN base equations when `Theta=C^i=H_Z4=Abar^i_i=0` and derivatives of the identically zero fields vanish, while a complete physical constraint surface also requires `M^i=0` and `det(gammabar)=det(gammahat)`.
 - Role: public/scientific contract
-- Deciding authority: [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), Eqs. (24)-(32) and the evolution system following Eq. (32); targeted validation: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), module `__main__` Hamiltonian residuals, and [fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py), `trusted_dict`
+- Deciding authority: [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), Eqs. (24)-(32) and the evolution system following Eq. (32); [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints.__init__`
 - Corroboration: [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1), constraints and BSSN reduction in Eqs. (2.1)-(2.29)
 
 `FCCZ4Constraints` owns this expression and the option-matched
@@ -249,8 +246,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints.__init__`, `FCCZ4ConstraintsDict`, and `fCCZ4_constraints`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__`
 - Corroboration: [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py), `trusted_dict`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=30-significant-digit deterministic trusted sampling of Hamiltonian, trace, and vector residual expressions, plus exact pre-sampling cache and matter-registration predicates; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=nine constraint variants across W, phi, chi, external Ricci, and SinhSpherical precompute with matter; date=08-26-2026`
 
 `BSSNconstraints.MU` constructs the standard conformal momentum expression:
 
@@ -261,17 +256,17 @@ M^i = exp(-4 phi)
       - 8 pi S^i = 0.
 ```
 
-`FCCZ4RHSs` does not expose a momentum diagnostic or instantiate
-`BSSNconstraints`. Consumers needing the diagnostic can construct that object
-and read its unchanged `MU` expression.
+`FCCZ4RHSs` does not expose a momentum diagnostic. Its YBS-MOM-enabled shared
+BSSN base constructs the equivalent lower-index, matter-complete residual and
+its derivative directly for the RHS addition, without publishing `MU` or
+adding an evolved cleaner field. Other consumers can construct
+`BSSNconstraints` and read its unchanged `MU` expression.
 
 Claim evidence:
-- Claim: `BSSNconstraints.MU` constructs the displayed standard conformal momentum expression; `FCCZ4RHSs` neither exposes it nor instantiates `BSSNconstraints`, while consumers can obtain the diagnostic by constructing `BSSNconstraints` and reading `MU`.
+- Claim: `BSSNconstraints.MU` constructs the displayed standard conformal momentum expression; `FCCZ4RHSs` does not expose it, while its YBS-MOM-enabled shared BSSN base constructs the equivalent lower-index residual directly for the RHS addition without new evolved state.
 - Role: descriptive behavior
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__`
 - Corroboration: [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1), constraint system in Eqs. (2.1)-(2.29)
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=exact source inspection; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=vacuum and matter branches inspected; date=08-26-2026`
 
 ### Evolution equations
 
@@ -345,19 +340,31 @@ plus the fCCZ4 correction
 deltaLambda^i = 2 gammabar^ij
                 (alpha partial_j Theta - Theta partial_j alpha)
                 - 2 alpha K C^i / 3 - kappa1 C^i
-                + 2 C^i Dhat_k beta^k / 3
-                - C^k Dhat_k beta^i,
+                + 2 C^i Dhat_k beta^k / 3,
 
 partial_t Lambdatilde^i = LambdaBase^i + deltaLambda^i.
 ```
 
-The last two terms are the `kappa3=1` covariant completion.
+fCCZ4 reuses `Lambdabar_rhsU_without_Brown_constraint_term` and therefore
+retains the full evolved-connection stretch
+
+```text
+beta^k Dhat_k Lambdatilde^i - Lambdatilde^k Dhat_k beta^i.
+```
+
+This gives exactly one vector stretch. The retained divergence term promotes
+the BSSN base coefficient from `DeltaGamma^i` to
+`Lambdatilde^i`. For Cartesian `partial_b beta^a`, the coefficient is
+
+```text
+-Lambdatilde^b delta^i_a + (2/3) Lambdatilde^i delta^a_b.
+```
 
 Claim evidence:
-- Claim: The displayed `gammabar_ij`, `phi`, `Abar_ij`, `K`, `Theta`, and `Lambdatilde^i` equations define the adopted three-dimensional fCCZ4 evolution system, with `H_Z4` excluding `-2 Theta K`, lapse-unscaled `kappa1` damping, and exact chain rules for `W` and `chi`.
+- Claim: The displayed `gammabar_ij`, `phi`, `Abar_ij`, `K`, `Theta`, and `Lambdatilde^i` equations define the adopted three-dimensional fCCZ4 evolution system; the connection equation contains exactly one evolved-vector stretch and retains the constraint-vector divergence promotion, while `H_Z4` excludes `-2 Theta K`, `kappa1` damping is lapse-unscaled, and the `W` and `chi` chain rules are exact.
 - Role: public/scientific contract
-- Deciding authority: [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), unnumbered evolution system after Eq. (32) and Eqs. (33)-(34), subject to the documented convention decisions below; targeted validation: [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), module `__main__`, [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`, and [fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py), `trusted_dict`
-- Corroboration: [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1), Eqs. (2.1)-(2.29); [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__`
+- Deciding authority: the definition `Lambdatilde^i=DeltaGamma^i+C^i` and full-vector-Lie time operator in [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), Eqs. (29) and the evolution system after Eq. (32), composed with [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__`, and [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` and module `__main__`
+- Corroboration: [Alic et al., arXiv:1106.2254v2](https://arxiv.org/pdf/1106.2254v2), Eq. (19), corroborates the full corrected Cartesian coefficient; [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1), Eqs. (2.11) and (2.17), corroborates one stretch but not the promoted-divergence coefficient; [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py), `trusted_dict`
 
 ### Reuse of BSSN expressions
 
@@ -390,24 +397,61 @@ The connection RHS adds `deltaLambda^i` before vector rescaling.
 When matter is enabled, the base BSSN source terms and the canonical `H_Z4`
 matter term use the established `T4munu` source helpers.
 
+With `enable_YBS_Gamma_constraint_adjustment=True`, `FCCZ4RHSs` requests the
+already adjusted BSSN base instead of defining another symbolic term. Because
+the reused connection slot stores `LambdatildeU`, the shared addition becomes
+
+```text
+-YBS_chi * (LambdatildeU[i] - DGammaU[i]) * Dbar_j beta^j,
+```
+
+which is `-YBS_chi*C^i*Dbar_j beta^j` for the fCCZ4 connection constraint;
+`Dbar_j beta^j = Dhat_j beta^j` under the determinant constraint used here.
+The fCCZ4 correction does not repeat it. The Boolean selects a separate
+internal fCCZ4 cache while leaving the coordinate/options string unchanged.
+
+Claim evidence:
+- Claim: enabling the YBS option selects the adjusted shared BSSN connection base exactly once for fCCZ4, where the evolved connection slot turns the addition into `-YBS_chi*C^i*Dbar_j beta^j`; the option does not alter coordinate/options strings.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` and `BSSNRHSs_dict.get_rhs`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` and `FCCZ4RHSsDict.get_rhs`
+- Corroboration: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints.__init__`; [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), representative jointly enabled `trusted_dict`
+
+The fCCZ4 connection RHS already contains `+(2/3) C^i Dbar_j beta^j`, so the
+net coefficient of `C^i Dbar_j beta^j` in the constraint propagation is
+`2/3 - YBS_chi`. It vanishes at `YBS_chi = 2/3`. The BSSN `xi=1` coefficient
+`-2/3` therefore needs `YBS_chi = 4/3` in fCCZ4, which is the recommended
+maximum. It is set by matching the BSSN `xi=1` coefficient, not by a stability
+bound. The runtime default `YBS_chi = 0` removes the term. Larger
+values have no supporting derivation or source here.
+
+Claim evidence:
+- Claim: the fCCZ4 net coefficient of `C^i*Dbar_j beta^j` in the constraint propagation is `2/3 - YBS_chi`, so `YBS_chi = 4/3` reproduces the BSSN `xi=1` coefficient by matching, not by a derived stability bound, and the default `YBS_chi = 0` removes the term.
+- Role: descriptive behavior
+- Deciding authority: [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` connection composition; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS Gamma branch
+- Corroboration: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` parameter registration; [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (47)
+
 Claim evidence:
 - Claim: `FCCZ4Constraints` constructs the fCCZ4-only connection, Z4 Ricci, and `H_Z4` aggregates; `FCCZ4ConstraintsDict` and `fCCZ4_constraints` cache them; `FCCZ4RHSs` retrieves option-matched cached BSSN and fCCZ4 constraint objects, copies mutable aggregates without mutation, applies the displayed corrections at reference-rescaled output boundaries, and delegates enabled matter sources to the established `T4munu` helpers.
 - Role: descriptive behavior
 - Deciding authority: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints.__init__` and `FCCZ4ConstraintsDict`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__`
 - Corroboration: [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`; [T4munu.py](../../../nrpy/equations/general_relativity/T4munu.py), `BSSN_RHSs_T4UU_source_terms` and `BSSN_constraints_T4UU_source_terms`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=30-significant-digit deterministic trusted sampling of canonical-copy, rescaling, trace, and vector residual expressions; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=five evolution variants, with three SinhSpherical and two Cartesian cases; date=08-26-2026`
 
 ### Gauge equations
 
-Supported lapse options are frozen lapse and advective 1+log:
+The wrapper accepts the four lapse names supported by BSSN:
+`OnePlusLog`, `BHSHarmonicSlicing`, `Frozen`, and `OnePlusLogAlt`. For
+`OnePlusLog`, fCCZ4 changes the delegated lapse equation to
 
 ```text
 partial_t alpha = beta^i partial_i alpha - 2 alpha(K - 2 Theta).
 ```
 
-Supported shifts are frozen shift, the hatted covariant second-order Gamma
-driver,
+It accepts seven shift names: `Frozen`,
+`GammaDriving2ndOrder_NoCovariant`, `GammaDriving2ndOrder_Covariant`,
+`GammaDriving2ndOrder_Covariant__Hatted`,
+`GammaDriving1stOrder_Covariant`,
+`GammaDriving1stOrder_Covariant__Hatted`, and
+`NonAdvectingGammaDriving`. The hatted covariant second-order Gamma driver is
 
 ```text
 partial_t beta^i = B^i + beta^j Dhat_j beta^i,
@@ -424,18 +468,27 @@ partial_t beta^i = B^i,
 partial_t B^i    = 3 partial_t Lambdatilde^i / 4 - eta B^i.
 ```
 
-The default is the hatted covariant driver, and `eta=2` is reused from BSSN.
-The gauge wrapper delegates to `BSSN_gauge_RHSs`; its only changes are
-`4 alpha Theta` in the 1+log lapse RHS and `3 deltaLambda^i/4` in a supported
-Gamma-driver `B^i` RHS before standard vector rescaling.
+The default is the hatted covariant second-order driver, and `eta=2` is reused
+from BSSN. The wrapper passes the complete fCCZ4 connection RHS to
+`BSSN_gauge_RHSs`, so Brown's BSSN-only term never enters the driver. It adds
+`4 alpha Theta` for `OnePlusLog`; other lapse choices need no local change.
+
+The YBS Boolean is forwarded through both the BSSN gauge base and the matching
+fCCZ4 RHS cache. The three second-order drivers plus the nonadvecting driver
+therefore consume the adjusted full fCCZ4 connection RHS exactly once;
+`Frozen` and both first-order drivers remain unchanged.
 
 Claim evidence:
-- Claim: `fCCZ4_gauge_RHSs` supports only `Frozen` or `OnePlusLog` lapse and `Frozen`, `GammaDriving2ndOrder_Covariant__Hatted`, or `NonAdvectingGammaDriving` shift; it defaults to the hatted covariant driver, reuses the BSSN default `eta=2`, and adds exactly the displayed fCCZ4 lapse and Gamma-driver corrections.
+- Claim: fCCZ4 gauge forwarding gives the YBS connection addition exactly once to the three second-order and nonadvecting shift drivers, while `Frozen` and both first-order drivers receive none.
 - Role: descriptive behavior
 - Deciding authority: [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), `fCCZ4_gauge_RHSs`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`
-- Corroboration: [fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_SinhSpherical_rfm_precompute_T4munu.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_SinhSpherical_rfm_precompute_T4munu.py), `trusted_dict`; [fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py), `trusted_dict`; [fCCZ4_gauge_RHSs_OnePlusLog_NonAdvectingGammaDriving_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_NonAdvectingGammaDriving_Cartesian.py), `trusted_dict`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=30-significant-digit deterministic trusted sampling of BSSN-delegation and fCCZ4-correction residual expressions, plus exact pre-sampling error-message predicates; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass for exact unsupported lapse and shift messages; options=complete 2-lapse by 3-shift matrix in both Cartesian and SinhSpherical coordinates; date=08-26-2026`
+- Corroboration: [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` and `FCCZ4RHSsDict.get_rhs`
+
+Claim evidence:
+- Claim: `fCCZ4_gauge_RHSs` accepts the listed lapse and shift names, defaults to `OnePlusLog` with the hatted second-order driver, passes the complete fCCZ4 connection RHS to derivative-based drivers, and adds `4 alpha Theta` only to `OnePlusLog`.
+- Role: descriptive behavior
+- Deciding authority: [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), `fCCZ4_gauge_RHSs`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`
+- Corroboration: [fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_SinhSpherical_rfm_precompute_T4munu.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_SinhSpherical_rfm_precompute_T4munu.py), `trusted_dict`; [fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py), `trusted_dict`; [fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py), `trusted_dict`
 
 ### NRPy mapping and public outputs
 
@@ -454,47 +507,47 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities.__init__`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__`; [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), `fCCZ4_gauge_RHSs`
 - Corroboration: none available; the mappings are established directly by the owner evolution and gauge code
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=30-significant-digit deterministic trusted sampling of rescaling residual expressions; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=five evolution and twelve gauge variants split across Cartesian and SinhSpherical coordinates; date=08-26-2026`
 
 `FCCZ4RHSs` exposes conceptual attribute `Theta`, `Z4constraintU`, `ZbarU`, `ZU`, `ZD`,
 `LambdatildeU`, `RbarZ4DD`, `RbarZ4`, `H_Z4`, rescaled metric and
 extrinsic-curvature RHS arrays, and unrescaled and rescaled
 conformal-connection RHS arrays. `Theta_dD` is centered; `Theta_dupD` is the upwinded advection
-derivative. `fCCZ4_RHSs_varname_to_expr_dict` has 18 sorted entries: six each
-for symmetric `hDD` and `aDD`, three for `lambdaU`, and one each for the
-conformal factor, `K`, and `Theta_fCCZ4`. `FCCZ4RHSsDict` provides
+derivative. `fCCZ4_RHSs_varname_to_expr_dict` has 18 sorted entries with
+YBS-MOM either disabled or enabled: six each for
+symmetric `hDD` and `aDD`, three for `lambdaU`, and one each for the conformal
+factor, `K`, and `Theta_fCCZ4`. Enabling YBS-MOM changes existing `a_rhsDD`
+expressions only. `FCCZ4RHSsDict` provides
 coordinate-option caching through the module-level `fCCZ4_RHSs` object.
 Storage, derivative basenames, and dictionary keys use the formulation-specific
 names `Theta_fCCZ4`, `Theta_fCCZ4_dD`, `Theta_fCCZ4_dupD`, and
 `Theta_fCCZ4_rhs`. The conceptual Python attributes remain `Theta`,
-`Theta_dD`, `Theta_dupD`, and `Theta_rhs`. This hard namespace boundary avoids
-collision with unrelated AUX gridfunctions named `Theta`, independent of
-registration order; no compatibility alias is retained.
+`Theta_dD`, `Theta_dupD`, and `Theta_rhs`; no generic storage alias is retained.
 
 Claim evidence:
-- Claim: `FCCZ4RHSs` exposes the listed scientific intermediates and RHS arrays, uses centered and upwinded formulation-specific Theta derivatives, provides a sorted 18-entry evolution dictionary with `Theta_fCCZ4_rhs`, caches parameter-aware constructions by coordinate/options, and avoids generic-`Theta` registry collisions in either registration order.
+- Claim: `FCCZ4RHSs` uses centered and upwinded formulation-specific Theta derivatives and provides a sorted 18-entry baseline evolution dictionary containing `Theta_fCCZ4_rhs`, with no generic Theta storage alias.
 - Role: descriptive behavior
 - Deciding authority: [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs`, `FCCZ4RHSsDict`, and `fCCZ4_RHSs`
+- Corroboration: [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py), `trusted_dict`; disabled-branch count, ordering, and namespace behavior are established by owner-source inspection
+
+Claim evidence:
+- Claim: enabling YBS-MOM changes existing fCCZ4 `a_rhsDD` expressions without changing the 18-entry evolution dictionary; all existing fCCZ4 RHS trusted-output comparisons exercise this branch jointly with YBS Gamma.
+- Role: descriptive behavior
+- Deciding authority: [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` and `FCCZ4RHSsDict.get_rhs`
 - Corroboration: [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py), `trusted_dict`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=30-significant-digit deterministic trusted sampling of public aggregates and mapping residual expressions, plus exact pre-sampling output-count, ordering, generic-Theta registration-order, and malformed-storage predicates; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass for malformed `Theta_fCCZ4` storage; options=Cartesian and SinhSpherical baseline/external-Ricci cases plus SinhSpherical precompute with matter; date=08-26-2026`
 
 `FCCZ4Constraints` independently exposes the shared connection, spatial-Z4,
 Ricci, and Hamiltonian aggregates through the parameter-aware module cache
 `fCCZ4_constraints`. Beyond reused base BSSN gridfunctions, enabling matter
 incrementally registers the required symmetric `T4UU` AUXEVOL inputs as its
-only additional gridfunctions; it does not register `H`, `MSQUARED`, `Theta`,
-or other diagnostic outputs. The reused matter helper also registers or reuses
-the `PI` CodeParameter.
+only additional gridfunctions; it does not register `H`, `M`,
+`LAMBDA_CONSTRAINT`, `Theta`, or other diagnostic outputs. The reused matter
+helper also registers or reuses the `PI` CodeParameter.
 
 Claim evidence:
 - Claim: `FCCZ4Constraints` exposes the connection constraint, spatial Z4 vectors, Z4 Ricci tensor/scalar, and `H_Z4` through the parameter-aware `fCCZ4_constraints` cache; beyond reused base BSSN gridfunctions, enabling matter incrementally registers required symmetric `T4UU` AUXEVOL inputs as its only additional gridfunctions and no diagnostic outputs, while the reused matter helper registers or reuses the `PI` CodeParameter.
 - Role: descriptive behavior
 - Deciding authority: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints`, `FCCZ4ConstraintsDict`, and `fCCZ4_constraints`; [T4munu.py](../../../nrpy/equations/general_relativity/T4munu.py), `BSSN_constraints_T4UU_source_terms`
 - Corroboration: [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` canonical-cache consumption
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=exact registry-delta and metadata residuals plus CodeParameter source inspection; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=eight vacuum constraint cases and one SinhSpherical precompute matter case, plus conformal-factor cache invalidation; date=08-26-2026`
 
 When `enable_RbarDD_gridfunctions=True`, `FCCZ4RHSs` interprets supplied
 `RbarDD` auxiliaries under the `RbarNRPy_ij(Lambdatilde)` hybrid convention:
@@ -508,13 +561,11 @@ Claim evidence:
 - Claim: When `enable_RbarDD_gridfunctions=True`, `FCCZ4RHSs` interprets supplied `RbarDD` values under the evolved-linear/geometric-nonlinear hybrid Ricci convention, consumes those auxiliary symbols, and adds `deltaR_ij`; `BSSNQuantities_dict` conditionally registers six symmetric `RbarDD` components in `AUXEVOL`/`auxevol_gfs`, but neither that storage registration nor the trusted gridfunction variant constructs or verifies the external producer.
 - Role: descriptive behavior
 - Deciding authority: [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities.__init__` Ricci construction and gridfunction branch, and `BSSNQuantities_dict.__getitem__`/`BSSN_quantities` storage registration; [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints.__init__` Z4 Ricci correction; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` parameter contract and Ricci consumption
-- Corroboration: [fCCZ4_RHSs_Cartesian_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian_RbarDD_gridfunctions.py), `trusted_dict`; [fCCZ4_RHSs_SinhSpherical_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_RbarDD_gridfunctions.py), `trusted_dict`; neither constructs the external producer
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=30-significant-digit deterministic trusted sampling of the consumer path; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian and SinhSpherical with RbarDD gridfunctions; date=08-26-2026`
+- Corroboration: [fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py), `trusted_dict`; [fCCZ4_RHSs_SinhSpherical_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_RbarDD_gridfunctions.py), `trusted_dict`; neither constructs the external producer
 
 ### Explicit conventions and resolved source discrepancies
 
-Five choices are explicit:
+The source-resolution statements are explicit:
 
 1. NRPy uses `W=exp(-2 phi)` and `chi=exp(-4 phi)`, matching its BSSN
    variables. Sign-reversed conformal-factor prose in Mewes et al. is not
@@ -527,24 +578,25 @@ Five choices are explicit:
    Mewes et al. evolution system, so `kappa1` terms have no extra `alpha`.
 4. NRPy's `H_Z4` bookkeeping excludes `-2 Theta K`; evolution equations append
    it explicitly, preventing double counting.
-5. Mewes et al. decide the covariant connection shift sector. Against the
-   Alic Cartesian sector at the same covariant choice `kappa3=1`, the exact
-   off-constraint residual is
-   `S_Mewes^i-S_Alic^i=-C^k partial_k beta^i`. The sectors agree when `C^i=0`,
-   but not generally when `C^k partial_k beta^i` is nonzero. Sanchis-Gual et
-   al.'s general and spherical displayed shift sectors likewise serve only as
-   on-constraint corroboration where their off-constraint terms differ.
+5. NRPy corrects an apparent convention error in Mewes et al.'s printed
+   connection shift sector. Their definition
+   `partial_0=partial_t-L_beta` uses the full vector Lie derivative, so the
+   base advection-stretch pair may equivalently be written with `Dhat` and
+   already contains `-C^k Dhat_k beta^i`; the printed `kappa3=1` bracket adds
+   that part again. NRPy omits the duplicate and retains
+   `+2 C^i Dhat_k beta^k/3`, yielding exactly one evolved-vector stretch. Alic
+   et al. corroborate the full corrected Cartesian coefficient. Sanchis-Gual
+   et al. corroborate one stretch, but their general and spherical displayed
+   divergence terms differ off the connection-constraint surface.
 
-These statements describe the choices made by the current implementation; they
-do not claim that the papers use identical conventions.
+These statements describe the source resolutions made by the current
+implementation; they do not claim that the papers use identical conventions.
 
 Claim evidence:
-- Claim: The current NRPy implementation makes the five listed fCCZ4 choices where the cited sources differ or contain inconsistent prose; its `kappa1` damping terms contain no additional lapse factor, equal-`kappa3=1` Cartesian expansion gives `S_Mewes^i-S_Alic^i=-C^k partial_k beta^i`, and owner validation checks both that crosswalk and the selected Mewes shift-gradient coefficients.
+- Claim: The current NRPy implementation applies the listed fCCZ4 source resolutions where the cited sources differ or contain inconsistent equations or prose; its connection RHS corrects the duplicated Mewes constraint-vector stretch, retains the required divergence promotion, and has the exact aggregate Cartesian coefficient `-Lambdatilde^b delta^i_a+(2/3)Lambdatilde^i delta^a_b`.
 - Role: public/scientific contract
-- Deciding authority: [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), evolution system following Eq. (32) and Eqs. (33)-(37); [Alic et al., arXiv:1106.2254v2](https://arxiv.org/pdf/1106.2254v2), Eqs. (19)-(20); [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1), Eqs. (2.1)-(2.29), with Eq. (2.25) used only for the lapse factor; [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities.__init__`; [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints.__init__`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__`; [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), `fCCZ4_gauge_RHSs`
-- Corroboration: none available; no separate source covers all five bundled implementation and source-authority choices
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=30-significant-digit deterministic trusted sampling of residual expressions, plus exact pre-sampling registry, cache, count, ordering, identity, Cartesian equal-kappa3 Mewes/Alic crosswalk coefficient, selected Mewes shift-gradient coefficient, and gauge-error predicates; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass for exact unsupported gauge messages; unsupported conformal-factor execution not-run; options=W/phi/chi constraints in both coordinates, Cartesian and SinhSpherical external Ricci, SinhSpherical precompute with matter, and the full 2-by-3 gauge matrix in both coordinates; date=08-26-2026`
+- Deciding authority: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__`; [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints.__init__`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` and module `__main__`; [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), `fCCZ4_gauge_RHSs`; source crosswalks in [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), [Alic et al., arXiv:1106.2254v2](https://arxiv.org/pdf/1106.2254v2), and [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1)
+- Corroboration: [Alic et al., arXiv:1106.2254v2](https://arxiv.org/pdf/1106.2254v2), Eq. (19), corroborates the full corrected Cartesian coefficient; [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1), Eqs. (2.11) and (2.17), corroborates one stretch but not the complete promoted-divergence coefficient; no paper is used as an oracle for the exact local coefficient identity
 
 ### Source crosswalk
 
@@ -554,70 +606,81 @@ Eq. (32). The evolution system immediately after Eq. (32) is unnumbered.
 Conformal-factor alternatives are Eqs. (33)-(34), gauge equations are
 Eqs. (35)-(37), and matter projections are Eqs. (38)-(41). Sanchis-Gual et
 al. Eqs. (2.1)-(2.29) supply variable, constraint, gauge, covariance, and
-BSSN-limit cross-checks, subject to the documented off-constraint shift-sector
-difference. Alic et al. supplies the exact advective 1+log form in Eq. (20) and
-the Cartesian `kappa3=1` covariance check through Sec. II, Eq. (19), and the
-discussion following Eq. (23), but Mewes remains authoritative for the
-off-constraint shift terms. Brown Eqs. (12a),
-(12b), and (15) supply the tensorial
-reference-connection viewpoint used by both NRPy BSSN and fCCZ4.
+BSSN-limit cross-checks. Their Eqs. (2.11) and (2.17) corroborate one full-Lie
+stretch but leave the general divergence coefficient geometric; spherical
+Eq. (3.14) contains the compatible Z4 divergence promotion. The two displayed
+divergence sectors therefore are not an unqualified off-constraint cross-check
+of each other. Alic et al. supplies the exact advective 1+log form in
+Eq. (20) and corroborates the one-stretch Cartesian `kappa3=1` connection
+composition through Sec. II, Eq. (19), and the discussion following Eq. (23).
+Mewes et al.'s printed off-constraint shift bracket is not authoritative where
+it conflicts with the result obtained from its own full-Lie time-operator
+definition: it contains the duplicate constraint-vector stretch documented
+above. Brown Eqs. (12a), (12b), and (15) define the connection constraint;
+Eqs. (21e) and (22e) supply the BSSN-only RHS term excluded from fCCZ4.
+
+### BHaH spectroscopy application boundary
+
+`blackhole_spectroscopy.py` keeps BSSN as its default and accepts `--fccz4`
+as an opt-in formulation selector. That Boolean selects the RHS/gauge owners
+used by `register_CFunction_rhs_eval` and asks the ADM converter to initialize
+`Theta_fCCZ4=0` while constructing fresh data. `initial_data()` attempts
+checkpoint loading before that fresh conversion and returns from the checkpoint
+branch, so restored Theta storage is not overwritten by fresh-data zeroing.
+Both formulations use the same combined determinant/trace projector after
+initial-data boundary handling and through the spectroscopy Method of Lines
+post-RHS hook.
+
+This wiring establishes source-selected registration and initialization order.
+It does not prove checkpoint round trips, restart correctness, long-time
+stability, convergence, waveform validity, or scientific accuracy. A bounded
+generated-project build and short fCCZ4 startup run, when recorded below, prove
+only generation, compilation, and at least one Method of Lines step for that
+specific configuration.
+
+Claim evidence:
+- Claim: BHaH spectroscopy defaults to BSSN and exposes opt-in `--fccz4`; the selected formulation controls RHS/gauge registration, fresh fCCZ4 data initializes `Theta_fCCZ4` to zero only after the checkpoint branch has declined to return, and both formulations share initial-data and post-RHS determinant/trace projection; no restart or scientific-result guarantee follows.
+- Role: public/scientific contract
+- Deciding authority: [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), `parser`, `enable_fCCZ4`, initial-data/RHS/Method of Lines registrations; [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [initial_data.py](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [ADM_Initial_Data_Reader__BSSN_Converter.py](../../../nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py), `register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`
+- Corroboration: [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 
 ### Validation boundary
 
-The three owner modules contain no doctests. Their `__main__` paths compare
-26 trusted-expression variants: nine constraint, five evolution, and twelve
-gauge cases. Constraint validation separately rebuilds connection and
-spatial-Z4 vectors, the Ricci correction/tensor/trace, and `H_Z4`; it also
-checks conformal-factor cache invalidation, exact matter-gridfunction
-registration, metadata, and the absence of `Theta` from `H_Z4`. Evolution
-validation covers all 18 mapped outputs, every public aggregate, canonical
-constraint copying, reference rescaling, Ricci trace, vector definitions,
-cache reuse, count, ordering, both generic-`Theta` collision registration
-orders, and exact shift-gradient coefficients of the selected Mewes sector.
-These same-owner reconstructions are regression checks, not independent
-scientific implementations. For Cartesian cases, the owner independently
-rebuilds the Mewes and Alic `kappa3=1` shift deltas relative to the same BSSN
-base and verifies their residual and exact shift-gradient coefficient. Curved
-cases validate the reference-metric Mewes construction but do not present a
-literal Alic Eq. (19) crosswalk. The Cartesian crosswalk also passes
-deterministic sampling with unconstrained symbolic `C^i`; this is not an
-independent scientific implementation, an explicit field-data fixture, or an
-evolution sample.
-Gauge validation exercises the complete
-two-lapse by three-shift matrix in both Cartesian and SinhSpherical
-coordinates, with exact rejected-option messages stored once.
+The equation owners contain no doctest examples but run the canonical
+`doctest.testmod()` gate before trusted comparisons. Their `__main__` paths
+cover evolution with both YBS options enabled jointly, constraint outputs,
+and lapse/shift gauge outputs with the YBS options disabled.
 
-Curved reference-metric validation is not secondary: five of nine constraint
-cases and three of five evolution cases are SinhSpherical, while the gauge
-matrix is evenly split six and six. The hatted 1+log SinhSpherical gauge case
-also enables reference-metric precompute and matter.
+Evolution covers SinhCartesian baseline and external-Ricci cases,
+SinhSpherical baseline, external-Ricci, and precompute-with-matter cases, plus
+a lower-priority Cartesian representative. Constraints cover `W`, `phi`, and
+`chi` in both curved coordinate families, external Ricci in both, a
+SinhSpherical precompute-with-matter case, and a Cartesian representative.
+Gauge coverage prioritizes complete 4-by-7 lapse/shift matrices in both
+SinhCartesian and SinhSpherical, then adds a Cartesian default representative
+and a SinhSpherical precompute-with-matter representative. Each trusted
+dictionary contains only the stated final outputs. The gauge-only APIs do not
+own a YBS-MOM output, so those dictionaries remain default-YBS rather than
+testing YBS Gamma alone; the jointly enabled BHaH `rhs_eval` dictionaries
+cover the resulting shift-driver and momentum-adjusted `a_rhsDD` changes together.
 
-Each owner first runs the canonical `doctest.testmod()` gate, even though no
-trivial doctest prompts are embedded. Separate backend owner checks construct
-an off-diagonal conformal metric and curvature tensor, verify the determinant
-and post-metric trace identities, and inspect generated Cartesian and
-SinhSpherical-precompute source for one twelve-output block, one all-points
-loop, all twelve loads before the first store, and exactly twelve stores.
-
-This evidence establishes symbolic construction and sampled trusted-expression
-stability for the exercised options. It does not establish generated C/CUDA
-compilation, long-time evolution stability, convergence order, or physical
-accuracy of a numerical simulation.
+These deterministic samples are regression evidence for symbolic construction
+under the exercised options. They are not an independent scientific
+implementation and do not establish generated C/CUDA compilation, long-time
+stability, convergence order, waveform validity, or scientific accuracy.
 
 Claim evidence:
-- Claim: The three owner modules contain no doctests and compare 26 trusted-expression variants—nine constraint, five evolution, and twelve gauge cases—with curved coverage equal to or greater than Cartesian in every family; this validation does not establish generated backend builds, numerical stability, convergence, or physical accuracy.
+- Claim: The equation owners configure trusted final-output comparisons for evolution with both YBS options enabled jointly, constraints, and default-YBS gauge expressions, while BHaH `rhs_eval` dictionaries jointly cover the YBS-driven downstream expressions; this validation does not establish generated backend builds, numerical stability, convergence, waveform validity, or scientific accuracy.
 - Role: descriptive behavior
 - Deciding authority: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), module `__main__`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), module `__main__`; [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), module `__main__`; [validate_expressions.py](../../../nrpy/validate_expressions/validate_expressions.py), `process_dictionary_of_expressions` and `compare_or_generate_trusted_results`
-- Corroboration: [fCCZ4_constraints_SinhSpherical_phi.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_constraints_SinhSpherical_phi.py), `trusted_dict`; [fCCZ4_RHSs_SinhSpherical_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_RbarDD_gridfunctions.py), `trusted_dict`; [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py), `trusted_dict`; [fCCZ4_gauge_RHSs_OnePlusLog_NonAdvectingGammaDriving_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_NonAdvectingGammaDriving_Cartesian.py), `trusted_dict`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=30-significant-digit deterministic trusted sampling of residual expressions, plus exact pre-sampling structural, registry-order, Cartesian equal-kappa3 Mewes/Alic crosswalk coefficient, selected Mewes shift-gradient, and error predicates; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass for exact unsupported lapse and shift messages; unsupported conformal-factor execution not-run; options=9 constraint + 5 evolution + 12 gauge variants, including W/phi/chi, external Ricci, precompute/matter, and Cartesian/SinhSpherical coverage; date=08-26-2026`
+- Corroboration: [fCCZ4_constraints_SinhSpherical_phi.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_constraints_SinhSpherical_phi.py), `trusted_dict`; [fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py), `trusted_dict`; [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py), `trusted_dict`; [fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py), `trusted_dict`
 
 ## Sources
 
-- [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2) - Eqs. (3)-(41), including the unnumbered evolution system after Eq. (32), principal reference-metric fCCZ4 source
+- [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2) - Eqs. (3)-(41), including the unnumbered evolution system after Eq. (32); principal reference-metric fCCZ4 source, with the documented apparent connection-sector convention error corrected locally
 - [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1) - Eqs. (2.1)-(2.29), reference-metric covariance, constraints, nonadvective lapse-factor corroboration, and BSSN limit
 - [Alic et al., arXiv:1106.2254v2](https://arxiv.org/pdf/1106.2254v2) - Sec. II, Eqs. (19)-(20) and the covariance discussion following Eq. (23)
-- [Brown, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2) - Eqs. (12a), (12b), and (15), covariant BSSN reference-connection construction
+- [Brown, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2) - Eqs. (12a), (12b), (15), (21e), and (22e), covariant BSSN connection and RHS adjustment
 - [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py) - `BSSNconstraints.MU`, unchanged momentum-constraint diagnostic
 - [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py) - `BSSNQuantities`, inherited conformal variables and reference-metric quantities
 - [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py) - `BSSNRHSs`, inherited BSSN evolution expressions
@@ -626,11 +689,16 @@ Claim evidence:
 - [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py) - `FCCZ4Constraints`, `FCCZ4ConstraintsDict`, `fCCZ4_constraints`
 - [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py) - `FCCZ4RHSs`, `FCCZ4RHSsDict`, `fCCZ4_RHSs`
 - [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py) - `fCCZ4_gauge_RHSs`
+- [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py) - `--fccz4`, formulation-selecting registrations, projection hooks
+- [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py) - `register_CFunction_rhs_eval`
+- [initial_data.py](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py) - checkpoint-first `register_CFunction_initial_data`
+- [ADM_Initial_Data_Reader__BSSN_Converter.py](../../../nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py) - fresh-data `Theta_fCCZ4` initialization
+- [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - shared determinant/trace projector
 - [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py) - `trusted_dict`
-- [fCCZ4_RHSs_Cartesian_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian_RbarDD_gridfunctions.py) - `trusted_dict`
+- [fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py) - `trusted_dict`
 - [fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py) - `trusted_dict`
 - [fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_SinhSpherical_rfm_precompute_T4munu.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_SinhSpherical_rfm_precompute_T4munu.py) - `trusted_dict`
-- [fCCZ4_gauge_RHSs_OnePlusLog_NonAdvectingGammaDriving_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_NonAdvectingGammaDriving_Cartesian.py) - `trusted_dict`
+- [fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py) - `trusted_dict`
 - [fCCZ4_constraints_SinhSpherical_phi.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_constraints_SinhSpherical_phi.py) - representative curved alternate-conformal-factor `trusted_dict`
 - [fCCZ4_RHSs_SinhSpherical_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_RbarDD_gridfunctions.py) - curved external-Ricci consumer `trusted_dict`
 - [fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py) - representative curved frozen-gauge `trusted_dict`
@@ -640,6 +708,7 @@ Claim evidence:
 
 - Parent: [General Relativity](index.md)
 - Depends on: [BSSN Family](bssn-family.md)
+- Depends on: [YBS-MOM Timestep-Scaled Momentum Adjustment](ybs-momentum-damping.md)
 - Depends on: [Reference Metrics](../../core/reference-metrics.md)
 - Validated by: [Trusted Expression Pipeline](../trusted-expression-pipeline.md)
 - See also: [Metric Conversions And Matter](metric-conversions-and-matter.md)

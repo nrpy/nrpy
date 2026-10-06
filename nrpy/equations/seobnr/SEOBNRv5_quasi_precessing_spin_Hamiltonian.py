@@ -587,11 +587,9 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
         Hreal_circ = self.Hreal.subs(self.prstar, 0)
         self.dHreal_dr_circ = sp.diff(Hreal_circ, self.r) / self.nu
         self.dHreal_dpphi_circ = sp.diff(Hreal_circ, self.pphi) / self.nu
-        self.dHreal_dr_dr_circ = sp.diff(self.dHreal_dr_circ, self.r) / self.nu
-        self.dHreal_dr_dpphi_circ = sp.diff(self.dHreal_dr_circ, self.pphi) / self.nu
-        self.dHreal_dpphi_dpphi_circ = (
-            sp.diff(self.dHreal_dpphi_circ, self.pphi) / self.nu
-        )
+        self.dHreal_dr_dr_circ = sp.diff(self.dHreal_dr_circ, self.r)
+        self.dHreal_dr_dpphi_circ = sp.diff(self.dHreal_dr_circ, self.pphi)
+        self.dHreal_dpphi_dpphi_circ = sp.diff(self.dHreal_dpphi_circ, self.pphi)
 
 
 if __name__ == "__main__":

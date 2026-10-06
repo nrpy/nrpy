@@ -2,9 +2,7 @@
 """
 Provide classes and functions for managing and registering JAX-compatible Python functions.
 
-Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
-         Ken Sible; ksible **at** outlook **dot* com
-         Siddharth Mahesh; sidmahesh **at** gmail **dot* com
+Author: Siddharth Mahesh; sidmahesh **at** gmail **dot* com
 """
 
 import os

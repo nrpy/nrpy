@@ -1,6 +1,6 @@
 # Lifecycle And Project Assembly
 
-> Explain how superB generators assemble Charm++ projects, emitted assets, build/run guidance, and top-level header/PUP registration. · Status: confirmed · Last reconciled: 07-12-2026
+> Explain how superB generators assemble Charm++ projects, emitted assets, build/run guidance, and top-level header/PUP registration. · Status: confirmed
 > Up: [superB](index.md)
 
 ## Summary
@@ -23,7 +23,7 @@ build/link fact here; CkIO sessions and callbacks are owned by
 ## Detail
 
 The public README classifies superB as NRPy's Charm++-based infrastructure for
-distributed-memory workflows and lists three entry examples:
+distributed-memory workflows and lists entry examples:
 `superB_two_blackholes_collide`, `superB_blackhole_spectroscopy`, and
 `superB_nrpyelliptic_conformally_flat`. It also distinguishes superB output
 from standalone BHaH executables: superB generators produce Charm++ projects,
@@ -76,10 +76,14 @@ registered `CFunction` from `CFunction_dict` as `.cpp`, writes
 `BHaH_function_prototypes.h`, and creates a project Makefile. For superB, the
 examples call it with `CC="charmc"` and link `-module CkIO`; optional settings
 add GSL flags and BHaHAHA link inputs. The generated Makefile encodes expected
-`.ci` outputs directly rather than relying on generated dependency output: it
-has explicit rules such as `timestepping.decl.h timestepping.def.h:
-timestepping.ci`, `main.decl.h main.def.h: main.ci`, and, when BHaHAHA is
-enabled, matching rules for `interpolator3d.ci` and `horizon_finder.ci`. The
+`.ci` outputs directly rather than relying on generated dependency output: one
+pattern rule, `%.decl.h %.def.h: %.ci`, translates each `.ci` file, and when
+BHaHAHA is enabled a prerequisite line orders `horizon_finder.decl.h` after
+`interpolator3d.decl.h`. GNU make runs a multi-target pattern rule's recipe,
+here one `charmc` translation, once to produce both headers; an explicit
+two-target rule would be two independent rules, so a parallel `make -j` could
+translate the same `.ci` file twice and rewrite `timestepping.decl.h` while
+`main.cpp` includes it. The
 same Makefile handles C++ object compilation, the final `$(CC) -language
 charm++` link step, optional service chares, and a `clean` target that removes
 object files, generated `.decl.h`/`.def.h` headers, `charmrun`, and checkpoint
@@ -111,8 +115,7 @@ the NRPyElliptic, spectroscopy, and collision projects, but runs only
 `superB_two_blackholes_collide` with `+p2`. The workflow does not run the other
 two executables or assert restart, Psi4 output, diagnostic-file contents, GPU
 behavior, or performance/scaling. Workflow configuration proves this job shape,
-not a latest successful run. No generator, Charm++ build, or distributed runtime
-was executed during this KB audit.
+not execution outcomes.
 
 Top-level PUP support is registered before the final Makefile is emitted.
 `register_CFunction_superB_pup_routines` registers
@@ -140,9 +143,9 @@ struct declarations consumed by generated code.
 - [superB.h](../../../nrpy/infrastructures/superB/superB/superB.h) - `__SUPERB_H__`, `ckio.h`, `pup.h`
 - [superB_pup_function_prototypes.h](../../../nrpy/infrastructures/superB/superB/superB_pup_function_prototypes.h) - `pup_commondata_struct`, `pup_griddata_chare`
 - [.github/workflows/main.yml](../../../.github/workflows/main.yml) - `charmpp-validation`
-- [Charm++ 8.0.0 Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html) - `Parallel "Hello World" with Charm++`, `Compiling the Example`, `Running the Example`; accessed 07-12-2026
-- [Charm++ 8.0.0 Manual](https://charm.readthedocs.io/en/v8.0.0/charm%2B%2B/manual.html) - `Charm++ Interface (.ci) Files`, `Generated Files`; accessed 07-12-2026
-- [Charm++ 8.0.0 charmc](https://github.com/charmplusplus/charm/blob/v8.0.0/src/scripts/charmc) - compiler-driver `charmxi` dispatch context; accessed 07-12-2026
+- [Charm++ 8.0.0 Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html) - `Parallel "Hello World" with Charm++`, `Compiling the Example`, `Running the Example`
+- [Charm++ 8.0.0 Manual](https://charm.readthedocs.io/en/v8.0.0/charm%2B%2B/manual.html) - `Charm++ Interface (.ci) Files`, `Generated Files`
+- [Charm++ 8.0.0 charmc](https://github.com/charmplusplus/charm/blob/v8.0.0/src/scripts/charmc) - compiler-driver `charmxi` dispatch context
 
 ## See Also
 

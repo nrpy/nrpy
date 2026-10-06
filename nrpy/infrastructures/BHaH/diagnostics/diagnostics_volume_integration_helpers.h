@@ -227,7 +227,7 @@ static inline void diags_integration_write_header(FILE *file_ptr, int recipe_ind
   } // END ELSE for num_rules > 0
 
   // ---------------------------------------------------------------------------
-  // Section C: Column schema (1-based indices; contiguous integrand batches)
+  // Section C: Output columns (1-based indices; contiguous integrand batches)
   // ---------------------------------------------------------------------------
   int col = 1;
   fprintf(file_ptr, "#   %3d: time                    (current simulation time; commondata->time)\n", col++);

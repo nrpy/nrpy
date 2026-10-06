@@ -1,14 +1,14 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/main.py
 """
-Defines the main() C function for the geodesic integration pipeline.
+Defines the main() C function for geodesic integration.
 
-This module acts as the master orchestrator, handling the explicit population of
+This module provides the top-level driver, handling the explicit population of
 RKF45 integrator configurations, simulation defaults, memory allocation for the
 trajectory results, and the final serialization of the light blueprint.
 
-The architecture implements spatial domain decomposition via tiling. Master parameters
-define the full global frame, referencing an immutable original center, while the tile
-orchestrator modifies the window center dynamically per tile. During the basis vector
+The generated program divides the image plane into tiles. Common simulation parameters define
+the full global frame, referencing an immutable original center, while the tile
+driver modifies the window center dynamically per tile. During the basis vector
 calculations, the system evaluates fallback logic for near-nadir camera angles to
 prevent coordinate degeneration. Finally, local 2D tile-space hits are translated back
 into the global window coordinate system by their spatial offsets before native binary
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 def main(spacetime_name: str) -> None:
     """
-    Register the master orchestrator C function for the geodesic integrator.
+    Register the top-level driver C function for the geodesic integrator.
 
     This version implements Spatial Domain Decomposition (Tiling).
 
@@ -84,7 +84,7 @@ def main(spacetime_name: str) -> None:
     //==========================================
     // INITIALIZE DYNAMIC WINDOW CENTER
     //==========================================
-    // The tile orchestrator modifies the window center dynamically per tile.
+    // The tile driver modifies the window center dynamically per tile.
     // We seed the active window center with the original master center provided by the configuration.
     commondata.window_center_x = commondata.original_window_center_x;
     commondata.window_center_y = commondata.original_window_center_y;
@@ -215,7 +215,7 @@ def main(spacetime_name: str) -> None:
             printf("[Tile %02d,%02d] Processing at Center (%.3f, %.3f, %.3f)...\\n",
                     tx, ty, commondata.window_center_x, commondata.window_center_y, commondata.window_center_z);
 
-            // 3. Execute Numerical Integration Pipeline
+            // 3. Integrate photon trajectories
             batch_integrator_numerical(&commondata, num_rays, results_buffer);
 
             // 3.5. Coordinate Global Shift

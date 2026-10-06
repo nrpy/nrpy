@@ -1,6 +1,6 @@
 # Expression Validation Helpers
 
-> Numerical SymPy-expression validation helpers for equality, zero checks, and trusted dictionaries. · Status: confirmed · Last reconciled: 07-20-2026
+> Numerical SymPy-expression validation helpers for equality, zero checks, and trusted dictionaries. · Status: confirmed
 > Up: [Validation](index.md)
 
 ## Summary
@@ -55,8 +55,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `assert_equal` and `_nonfinite_values_match`
 - Corroboration: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`, exercises direct dictionary comparison across scalar, vector, and matrix expression values; filter and error-path tests remain colocated with the deciding helper
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0 and 1.15.0.dev, mpmath 1.3.0, mypy 2.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=68 validator doctests, strict BSSN type checks, explicit funcform collision and leaf-type probes, and BSSN cross-representation runs; date=07-13-2026`
 
 `check_zero()` sends one expression through `convert_one_expression_to_mpfmpc()`
 and returns whether the final numerical result is exactly `mp.mpf("0.0")`.
@@ -85,17 +83,16 @@ expression is converted to `mpf` first. If that raises `TypeError`, an
 `sp.nan` result takes the diagnostic print path, positive and negative SymPy
 infinities convert explicitly to their `mpmath` counterparts, and other
 non-real results are split into real and imaginary components before each
-finite, NaN, or infinity component is converted and combined as `mpc`. On the
-recorded SymPy 1.14.0/mpmath 1.3.0 stack, both signed SymPy infinities raise
-`TypeError` in the initial `mpf` conversion and exercise the explicit fallback.
+finite, NaN, or infinity component is converted and combined as `mpc`. The
+colocated doctests check that both signed SymPy infinities return `mpf('+inf')`
+and `mpf('-inf')`; the explicit fallback supplies those values whenever the
+initial `mpf` conversion raises `TypeError`.
 
 Claim evidence:
-- Claim: `inject_mpfs_into_cse_expression()` first attempts `mpf` conversion; SymPy NaN uses the diagnostic fallback, on the recorded SymPy 1.14.0/mpmath 1.3.0 stack signed SymPy infinities raise `TypeError` and use the explicit signed-infinity fallback, and other non-real fallback values are converted component by component before constructing an `mpc` value.
+- Claim: `inject_mpfs_into_cse_expression()` first attempts `mpf` conversion; when that raises `TypeError`, SymPy NaN uses the diagnostic fallback, signed SymPy infinities use the explicit signed-infinity fallback, and other non-real fallback values are converted component by component before constructing an `mpc` value.
 - Role: descriptive behavior
 - Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `inject_mpfs_into_cse_expression`
 - Corroboration: none available; direct signed-infinity and `assert_equal()` doctests are colocated with the deciding helper, and no separate source exercises every conversion branch
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=direct signed-infinity fallback doctests plus aggregate NaN and complex-fallback cases in 68 total validator doctests; date=07-13-2026`
 
 Near-zero handling is a retry, not symbolic simplification. If a nonzero result
 has magnitude below `10 ** (-4.0 / 5.0 * mp.dps)`, the helper reruns the same
@@ -141,8 +138,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `compare_against_trusted` and `_nonfinite_values_match`
 - Corroboration: [reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py), `trusted_dict`, supplies three intentional trusted NaN sentinels exercised by the reference-metric owner run
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=full reference_metric validation plus both trusted-NaN mismatch doctests; date=07-13-2026`
 
 All expression checks sample numerical substitutions rather than proving an
 identity over a domain. A sampled point can miss a discrepancy or encounter a

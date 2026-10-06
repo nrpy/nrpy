@@ -1,12 +1,12 @@
 # Matter TOV Workflows
 
-> Route neutron-star, static-fluid, GRoovy, and MANGA-adjacent TOV workflows. · Status: confirmed · Last reconciled: 08-25-2026
+> Route neutron-star, static-fluid, GRoovy, and MANGA-adjacent TOV workflows. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
 
-The matter-facing TOV examples split into three runnable standalone BHaH
-projects and one library generator. `tovola_neutron_star` solves TOV initial
+The matter-facing TOV examples split into runnable standalone BHaH
+projects and a library generator. `tovola_neutron_star` solves TOV initial
 data with TOVola, interpolates it through `TOVola_interp`, and validates
 constraints without time evolution. `hydro_without_hydro` keeps the fluid
 static while evolving BSSN spacetime variables with matter coupling.

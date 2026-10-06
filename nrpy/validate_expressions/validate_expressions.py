@@ -95,7 +95,7 @@ def _nonfinite_values_match(
     False
     """
     # Normalize real and complex inputs so component placement remains part of
-    # the sentinel contract.
+    # the nonfinite-value comparison rule.
     value_1_mpc = mpc(value_1)
     value_2_mpc = mpc(value_2)
     # None tells callers to retain their existing finite tolerance comparison.

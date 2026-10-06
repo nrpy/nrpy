@@ -2,7 +2,8 @@
 """
 Mechanical lint checks for the markdown knowledge base.
 
-Author: NRPy contributors
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
 """
 
 import argparse
@@ -13,7 +14,6 @@ import re
 import sys
 from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
-from datetime import date as calendar_date
 from pathlib import Path
 from typing import Deque, Dict, List, Match, Optional, Set, Tuple
 from urllib.parse import unquote, urlparse
@@ -38,7 +38,6 @@ SOURCE_MAP_COLUMNS = [
     "Dependent pages",
     "Covered subpaths",
     "Known gaps",
-    "Last checked",
     "Next action",
 ]
 SOURCE_AUTHORITY_TIERS = {
@@ -52,6 +51,7 @@ SOURCE_AUTHORITY_TIERS = {
 ROUTER_NAMES = {"index.md"}
 SUPPORT_PAGES = {
     WIKI / "SCHEMA.md",
+    WIKI / "computational-physics-language.md",
     WIKI / "workflows.md",
     WIKI / "glossary.md",
     WIKI / "catalog.md",
@@ -66,6 +66,7 @@ SOURCE_STATUSES = {"frozen", "living"}
 INGEST_STATES = {"registered", "partial", "ingested", "exact seed"}
 GLOBAL_HUB_NAMES = {
     "SCHEMA.md",
+    "computational-physics-language.md",
     "workflows.md",
     "glossary.md",
     "catalog.md",
@@ -80,16 +81,121 @@ ROOT_PROHIBITED_ARTIFACT_SEGMENT_RE = re.compile(
     r"(?:$|[._-])",
     re.IGNORECASE,
 )
-# Removed source-tracking metadata bans: no hash digest values of any
-# algorithm, no Mtime/Hash manifest columns, no Mtime values, and no
-# YYYY-MM-DD date literals in governed KB files. Prohibition/supersession
-# statements may still name the removed metadata.
+# Volatile facts do not belong in the authored KB. Stable scientific
+# cardinalities and identifier names remain valid; inventory counts and
+# source-tracking values do not. Prohibition statements may name a removed
+# maintenance-field category.
 HASH_DIGEST_VALUE_RE = re.compile(
-    r"`?\b(?:sha-?\d+|md-?5|blake-?\d\w*|xxh\d*|crc-?\d+)\b`?"
-    r"(?:\s*[:=]\s*|\s+)`?[0-9a-f]{8,}\b`?",
+    r"`?\b(?:sha(?:-?3)?-?\d+|md-?5|blake-?\d\w*|xxh\d*|crc-?\d+)\b`?"
+    r"(?:\s*[:=]\s*|\s+)`?[0-9a-f]{8,}\b`?"
+    r"|\b(?:checksum|hash|digest)(?:\s+value)?\s*[:=]\s*`?\S+",
     re.IGNORECASE,
 )
-MTIME_HASH_COLUMN_RE = re.compile(r"\|\s*(Mtime|Hash)\s*\|")
+STORED_HEX_IDENTIFIER_RE = re.compile(
+    r"(?<![0-9a-f])(?:[0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{56}|"
+    r"[0-9a-f]{64}|[0-9a-f]{96}|[0-9a-f]{128})(?![0-9a-f])",
+    re.IGNORECASE,
+)
+STABLE_HEX_IDENTIFIER_PREFIX_RE = re.compile(
+    r"\b(?:(?:api|interface|publication|release|source|format|schema)\s+)?"
+    r"(?:identifier|id|version|label)\s*[:=]?\s*$",
+    re.IGNORECASE,
+)
+VCS_HASH_VALUE_RE = re.compile(
+    r"\b(?:commit|revision)\s+`?[0-9a-f]{7,40}\b`?|"
+    r"https?://[^\s)]+/(?:commit|blob)/[0-9a-f]{7,40}(?:/|\b)",
+    re.IGNORECASE,
+)
+URL_RE = re.compile(r"https?://[^\s)>`]+")
+VOLATILE_DATE_RE = re.compile(
+    r"(?<![\w./-])(?:\d{4}(?P<ymd_sep>[-/.])\d{2}(?P=ymd_sep)\d{2}|"
+    r"\d{2}(?P<mdy_sep>[-/.])\d{2}(?P=mdy_sep)\d{4})(?![\w./-])|"
+    r"(?<![\w-])(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|"
+    r"Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|"
+    r"Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?[,]?\s+"
+    r"\d{4}(?!\w)|"
+    r"(?<![\w-])\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|"
+    r"Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|"
+    r"Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?[,]?\s+"
+    r"\d{4}(?!\w)",
+    re.IGNORECASE,
+)
+STABLE_DATE_IDENTIFIER_RE = re.compile(
+    r"\b(?:api|interface|publication|release|source|format|schema)\s+"
+    r"(?:identifier|id|version|label)\s*[:=]?\s*$",
+    re.IGNORECASE,
+)
+VOLATILE_TIME_RE = re.compile(
+    r"\b(?:[01]?\d|2[0-3]):[0-5]\d"
+    + r"(?::[0-5]\d(?:[.]\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?\b",
+    re.IGNORECASE,
+)
+COUNT_VALUE_PATTERN = (
+    r"(?:\d[\d,]*|zero|one|two|three|four|five|six|seven|eight|nine|ten|"
+    r"eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|"
+    r"nineteen|twenty)"
+)
+VOLATILE_INVENTORY_COUNT_RE = re.compile(
+    r"(?<![\w.-])\d[\d,]*\s+(?:source\s+)?" + r"(?:files?|pages?|sources?|jobs?)\b",
+    re.IGNORECASE,
+)
+VOLATILE_EXISTENTIAL_INVENTORY_RE = re.compile(
+    rf"\bthere\s+(?:are|is)\s+{COUNT_VALUE_PATTERN}\s+(?:source\s+)?"
+    r"(?:files?|pages?|sources?|jobs?)\b",
+    re.IGNORECASE,
+)
+VOLATILE_CATALOG_COUNT_RE = re.compile(
+    r"\b(?:inventory|catalog|aggregate)\b[^.!?\n|]{0,80}"
+    rf"\b{COUNT_VALUE_PATTERN}(?:\s+[A-Za-z][\w-]*){{0,3}}\s+"
+    r"(?:files?|pages?|sources?|generators?|jobs?|cases?|"
+    r"projects?|applications?|builders?|dictionaries?|baselines?|comparisons?|"
+    r"scripts?|modules?)\b",
+    re.IGNORECASE,
+)
+VOLATILE_FIELD_RE = re.compile(
+    r"(?:(?i:\bLast\s+(?:reconciled|checked|audited|reviewed|verified|"
+    r"validated|updated|modified)\s*[:=])|"
+    r"(?i:\b(?:Timestamp|Datestamp|Date stamp|Datetime|Date|Accessed|Created|"
+    r"Updated|Modified|Opened|Resolved|Resolution|Reviewed|Checked|Audited|"
+    r"Audit|Reconciliation|Run date|Validation date|Mtime|Hash|Checksum|Digest|"
+    r"Source count|File count|Page count|Job count|Environment|Run result)"
+    r"(?:\s+(?:at|on|date))?\s*[:=])|"
+    r"(?i:\|\s*(?:Timestamp|Datestamp|Date stamp|Datetime|Date|Mtime|Hash|"
+    r"Checksum|Digest|Accessed|Created|Updated|Modified|Reviewed|Checked|"
+    r"Audited|Audit|Reconciliation|Environment|"
+    r"Run result|Run date|Validation date|Source count|File count|Page count|"
+    r"Job count|Last reconciled|Last checked|Last audited|Last reviewed|"
+    r"Last verified|Last validated|Last updated|Last modified)\s*\|)|"
+    r"\|\s*(?:Opened|Resolved|Resolution)\s*\|)",
+)
+VOLATILE_RESULT_TUPLE_RE = re.compile(
+    r"\b(?:inspected|generated|built|run|result_checked)\s*=\s*"
+    r"(?:pass|fail|not-run|not-applicable)\b",
+    re.IGNORECASE,
+)
+ENVIRONMENT_ASSIGNMENT_RE = re.compile(
+    r"\b(?:environment|platform|compiler|runtime|python|os|host)\s*[:=]\s*"
+    + r"[^;|,]+",
+    re.IGNORECASE,
+)
+VOLATILE_RUN_PROSE_RE = re.compile(
+    r"(?:\b(?:was|were|remained)\s+(?:not\s+)?"
+    r"(?:done|run|rerun|re-run|executed|exercised|inspected|built|generated|"
+    r"validated)\b|"
+    r"\b(?:has|have)\s+(?:not\s+)?been\s+"
+    r"(?:audited|checked|reviewed|re-reviewed|run|rerun|re-run|executed|"
+    r"exercised|inspected|built|generated|validated)\b|"
+    r"\bnot\s+(?:yet\s+)?(?:audited|checked|reviewed|re-reviewed|reconciled|"
+    r"validated)\b|\bunexecuted\b|"
+    r"\bisolated\s+local\s+(?:[\w/-]+\s+){0,3}(?:builds?|runs?|results?)\b|"
+    r"\bvalidation\s+artifacts?\s+(?:was|were)\s+temporary\b|"
+    r"^\s*(?:[-*]\s+)?(?:the\s+)?(?:tests?|checks?|audits?|builds?|runs?|"
+    r"validations?)\s+(?:passed|failed|succeeded|completed)"
+    r"(?:\s+(?:on\s+(?:Linux|macOS|Ubuntu|Windows)"
+    r"(?:\s+[0-9][\w.+-]*)*|in\s+(?:CI|continuous\s+integration)))?"
+    r"\s*[.!?]?\s*$)",
+    re.IGNORECASE,
+)
 MTIME_WORD_RE = re.compile(r"\bmtimes?\b", re.IGNORECASE)
 # A mention is only allowed when a prohibition/supersession keyword precedes
 # it with no sentence boundary in between (e.g. "no `mtime` columns",
@@ -100,13 +206,12 @@ METADATA_PROHIBITION_RE = re.compile(
     r"[^.!?]*\bmtimes?\b",
     re.IGNORECASE,
 )
-ISO_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 ROOT_KB_ARTIFACT_RE = re.compile(r"^kb_audit_.*[.]md$")
 
 
 @dataclass(frozen=True)
 class _Link:
-    """Markdown link with resolved local target metadata."""
+    """Markdown link with its source location, local path, anchor, and section flag."""
 
     source: Path
     line: int
@@ -390,7 +495,7 @@ def _extract_links(path: Path) -> List[_Link]:
     Extract Markdown links outside fenced code blocks and HTML comments.
 
     :param path: Markdown file to scan.
-    :return: Links with local resolution metadata.
+    :return: Links with source locations, resolved paths, anchors, and section flags.
     """
     text = _read(path)
     search_text = _mask_inline_code(_mask_nonprose(text))
@@ -521,7 +626,7 @@ def _check_router_detail(files: List[Path], failures: List[str]) -> None:
 
 def _check_leaf_contract(pages: List[Path], failures: List[str]) -> None:
     """
-    Check normal leaves satisfy the page contract.
+    Check normal leaves satisfy the required page layout.
 
     :param pages: Wiki pages to scan.
     :param failures: Mutable failure list.
@@ -689,7 +794,7 @@ def _check_source_registration(pages: List[Path], failures: List[str]) -> None:
 
 def _check_catalog(failures: List[str]) -> None:
     """
-    Check catalog target equality and page status/date agreement.
+    Check catalog target equality and page status agreement.
 
     :param failures: Mutable failure list.
     """
@@ -700,18 +805,17 @@ def _check_catalog(failures: List[str]) -> None:
         page_i = header.index("Page")
         type_i = header.index("Type")
         status_i = header.index("Status")
-        date_i = header.index("Last reconciled")
     except ValueError:
         _fail(
             failures,
             CATALOG,
             None,
-            "catalog lacks Page/Type/Status/Last reconciled columns",
+            "catalog lacks Page/Type/Status columns",
         )
         return
     links: List[Tuple[Path, int, List[str]]] = []
     for line, row in located_rows:
-        if len(row) <= max(page_i, type_i, status_i, date_i):
+        if len(row) <= max(page_i, type_i, status_i):
             _fail(failures, CATALOG, line, "catalog row has too few columns")
             continue
         page_links = list(
@@ -744,15 +848,13 @@ def _check_catalog(failures: List[str]) -> None:
             )
             continue
         expected_status: Optional[str]
-        expected_date: Optional[str]
         if _is_router(target):
-            expected_status, expected_date = "router", "n/a"
+            expected_status = "router"
             if row[type_i].strip().lower() != "router":
                 _fail(failures, CATALOG, line, "router catalog Type must be router")
         else:
-            expected_status, expected_date = _page_header_metadata(target)
+            expected_status = _page_header_status(target)
         catalog_status = row[status_i].strip().lower()
-        catalog_date = row[date_i].strip()
         if expected_status is None:
             _fail(failures, target, 2, "page header lacks allowed Status")
         elif catalog_status != expected_status:
@@ -762,16 +864,6 @@ def _check_catalog(failures: List[str]) -> None:
                 line,
                 f"catalog status {catalog_status!r} disagrees with "
                 f"{_rel(target)} status {expected_status!r}",
-            )
-        if expected_date is None:
-            _fail(failures, target, 2, "page header lacks Last reconciled/checked date")
-        elif catalog_date.lower() != expected_date.lower():
-            _fail(
-                failures,
-                CATALOG,
-                line,
-                f"catalog date {catalog_date!r} disagrees with "
-                f"{_rel(target)} date {expected_date!r}",
             )
 
 
@@ -897,7 +989,7 @@ def _source_registered(literal: str, registered: Set[str]) -> bool:
     """
     Return whether a source path is exact-registered or aggregate-covered.
 
-    Aggregate coverage follows the finite path contracts named in the source
+    Aggregate coverage follows the explicit path rules named in the source
     manifest. It does not infer coverage from prose or arbitrary prefixes.
 
     :param literal: Repository-relative source path.
@@ -956,36 +1048,12 @@ def _source_registered(literal: str, registered: Set[str]) -> bool:
     return any(name in registered and matches for name, matches in rules)
 
 
-def _valid_date(value: str, allow_na: bool = False) -> bool:
+def _page_header_status(path: Path) -> Optional[str]:
     """
-    Validate retained KB date syntax.
-
-    Calendar-range validation is deterministic and does not consult the clock.
-
-    :param value: Candidate date.
-    :param allow_na: Whether ``n/a`` or ``-`` is accepted.
-    :return: Whether the value is syntactically valid.
-    """
-    value = value.strip()
-    if allow_na and value.lower() in {"n/a", "-"}:
-        return True
-    match = re.fullmatch(r"(\d{2})-(\d{2})-(\d{4})", value)
-    if not match:
-        return False
-    month, day, year = (int(part) for part in match.groups())
-    try:
-        calendar_date(year, month, day)
-    except ValueError:
-        return False
-    return True
-
-
-def _page_header_metadata(path: Path) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Extract status and reconciliation/check date from page header.
+    Extract status from a page header.
 
     :param path: Wiki page.
-    :return: Lowercase status and date, when present.
+    :return: Lowercase status, when present.
     """
     header = "\n".join(_read(path).splitlines()[:5])
     status_match = re.search(
@@ -993,19 +1061,12 @@ def _page_header_metadata(path: Path) -> Tuple[Optional[str], Optional[str]]:
         header,
         re.IGNORECASE,
     )
-    date_match = re.search(
-        r"\bLast (?:reconciled|checked|audited):\s*(\d{2}-\d{2}-\d{4}|n/a|-)\b",
-        header,
-        re.IGNORECASE,
-    )
-    status = status_match.group(1).lower() if status_match else None
-    date = date_match.group(1) if date_match else None
-    return status, date
+    return status_match.group(1).lower() if status_match else None
 
 
 def _check_glossary_catalog_signal(failures: List[str]) -> None:
     """
-    Check glossary terms have owner or concept-candidate signals.
+    Check glossary terms link a defining page, name external background, or have a catalog candidate.
 
     :param failures: Mutable failure list.
     """
@@ -1048,7 +1109,7 @@ def _check_glossary_catalog_signal(failures: List[str]) -> None:
                 failures,
                 GLOSSARY,
                 None,
-                f"glossary term lacks owner/external/catalog candidate signal: {term}",
+                f"glossary term lacks a defining-page link, external/background designation, or catalog candidate: {term}",
             )
 
 
@@ -1070,76 +1131,144 @@ def _check_retired_operation_output(failures: List[str]) -> None:
 
 def _governed_kb_files() -> List[Path]:
     """
-    Return KB files governed by source-tracking metadata and date checks.
+    Return authored KB files governed by volatile-data checks.
 
-    :return: Governed markdown files, including ``raw/source-docs/**/*.md``.
+    Frozen source snapshots preserve imported evidence verbatim and are not
+    authored KB claims. Their registration in ``raw/SOURCES.md`` is governed.
+
+    :return: Authored Markdown files in the compiled KB and source manifest.
     """
-    files = set(_iter_md_files())
-    source_docs = RAW / "source-docs"
-    if source_docs.exists():
-        files.update(p.resolve() for p in source_docs.rglob("*.md"))
-    return sorted(files)
+    return _iter_md_files()
 
 
 def _metadata_mention_allowed(lines: List[str], line_index: int) -> bool:
     """
-    Return whether a removed-metadata mention is prohibition/supersession text.
+    Return whether a removed maintenance-field mention is prohibition/supersession text.
+
+    Doctests:
+    >>> lines = ["Never store mtime values.", "Record mtime values."]
+    >>> [_metadata_mention_allowed(lines, index) for index in range(2)]
+    [True, False]
 
     :param lines: File lines being checked.
     :param line_index: Zero-based index of the line with the mention.
-    :return: Whether nearby context permits the mention.
+    :return: Whether same-line context permits the mention.
     """
-    context = " ".join(lines[max(0, line_index - 2) : line_index + 1])
-    return METADATA_PROHIBITION_RE.search(context) is not None
+    return METADATA_PROHIBITION_RE.search(lines[line_index]) is not None
+
+
+def _volatile_metadata_issues(line: str) -> List[str]:
+    """
+    Return volatile-data policy violations found in one line.
+
+    Doctests:
+    >>> rejected = (
+    ...     "Last reconciled: 09-12-2026",
+    ...     "checked at 2026-09-12T14:03:22Z",
+    ...     "Checked at 12:34.",
+    ...     "commit 246043709e806021fcfc011fe657b8bf964cae4c",
+    ...     "revision deadbee",
+    ...     "sha256: 0123456789abcdef",
+    ...     "inventory contains 390 files",
+    ...     "The inventory covers 29 generators",
+    ...     "The inventory configures 74 trusted comparisons.",
+    ...     "| Source count | Last checked |",
+    ...     "inspected=pass; generated=not-run",
+    ...     "platform=linux; compiler=gcc-12",
+    ...     "| Audit | Resolution |",
+    ...     "No generated thorn build or restart validation was done.",
+    ...     "Isolated local OpenMP builds and one-step startup were performed.",
+    ...     "Validation artifacts were temporary and were not registered.",
+    ... )
+    >>> all(_volatile_metadata_issues(value) for value in rejected)
+    True
+    >>> allowed = (
+    ...     "The state vector has 24 evolved components.",
+    ...     "Finite-difference order 4 needs two centered halo points.",
+    ...     "Compare CoordSystem_hash before restoring a checkpoint.",
+    ...     "Brown, arXiv:0902.3652v2.",
+    ...     (
+    ...         "https://gist.githubusercontent.com/karpathy/"
+    ...         "442a6bf555914893e9891c11519de94f/raw/"
+    ...         "ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md"
+    ...     ),
+    ...     "https://example.org/archive/2026-09-12/report",
+    ...     "Never store dates, timestamps, hashes, or file counts in KB prose.",
+    ... )
+    >>> [_volatile_metadata_issues(value) for value in allowed]
+    [[], [], [], [], [], [], []]
+
+    :param line: Authored KB line to inspect.
+    :return: Violation messages for the line.
+    """
+    issues: List[str] = []
+    # Complete locators are source identifiers. Opaque path components are not
+    # maintenance snapshots even when they resemble dates or digests.
+    snapshot_line = URL_RE.sub("", line)
+    checks = (
+        (HASH_DIGEST_VALUE_RE, snapshot_line, "hash digest value found"),
+        (VCS_HASH_VALUE_RE, snapshot_line, "VCS revision value found"),
+        (VOLATILE_TIME_RE, snapshot_line, "timestamp literal found"),
+        (VOLATILE_INVENTORY_COUNT_RE, snapshot_line, "inventory count found"),
+        (
+            VOLATILE_EXISTENTIAL_INVENTORY_RE,
+            snapshot_line,
+            "inventory count found",
+        ),
+        (VOLATILE_CATALOG_COUNT_RE, snapshot_line, "catalog count found"),
+        (VOLATILE_FIELD_RE, snapshot_line, "volatile maintenance field found"),
+        (VOLATILE_RESULT_TUPLE_RE, snapshot_line, "recorded result tuple found"),
+        (VOLATILE_RUN_PROSE_RE, snapshot_line, "recorded run/audit prose found"),
+    )
+    for pattern, subject, message in checks:
+        if pattern.search(subject):
+            issues.append(message)
+
+    hex_match = STORED_HEX_IDENTIFIER_RE.search(snapshot_line)
+    if hex_match and not STABLE_HEX_IDENTIFIER_PREFIX_RE.search(
+        snapshot_line[: hex_match.start()]
+    ):
+        issues.append("hash-like value found")
+
+    date_match = VOLATILE_DATE_RE.search(snapshot_line)
+    if date_match and not STABLE_DATE_IDENTIFIER_RE.search(
+        snapshot_line[: date_match.start()]
+    ):
+        issues.append("date literal found")
+    if len(ENVIRONMENT_ASSIGNMENT_RE.findall(snapshot_line)) >= 2:
+        issues.append("recorded environment tuple found")
+    return issues
 
 
 def _check_source_tracking_metadata(failures: List[str]) -> None:
     """
-    Check governed KB files for removed source-tracking metadata and dates.
+    Check governed KB files for forbidden maintenance fields and snapshot values.
 
     :param failures: Mutable failure list.
     """
     for path in _governed_kb_files():
         lines = _read(path).splitlines()
         for idx, line in enumerate(lines, start=1):
-            if HASH_DIGEST_VALUE_RE.search(line):
-                _fail(failures, path, idx, "hash digest value found")
-            if MTIME_HASH_COLUMN_RE.search(line):
-                _fail(
-                    failures, path, idx, "source-tracking Mtime/Hash table column found"
-                )
+            for issue in _volatile_metadata_issues(line):
+                _fail(failures, path, idx, issue)
             if MTIME_WORD_RE.search(line) and not _metadata_mention_allowed(
                 lines, idx - 1
             ):
-                _fail(failures, path, idx, "source-tracking Mtime metadata found")
-            if ISO_DATE_RE.search(line):
-                _fail(
-                    failures,
-                    path,
-                    idx,
-                    "YYYY-MM-DD date literal found; KB dates use MM-DD-YYYY",
-                )
+                _fail(failures, path, idx, "source-tracking Mtime value found")
 
 
 def _check_status_vocabularies(failures: List[str]) -> None:
     """
-    Check page, manifest, and source-map status/date vocabularies.
+    Check page, manifest, and source-map status vocabularies.
 
     :param failures: Mutable failure list.
     """
     for page in _wiki_pages():
         if _is_router(page):
             continue
-        status, date = _page_header_metadata(page)
+        status = _page_header_status(page)
         if status not in PAGE_STATUSES:
             _fail(failures, page, 2, "page header has missing or invalid Status")
-        if date is None or not _valid_date(date):
-            _fail(
-                failures,
-                page,
-                2,
-                "page header has missing or invalid MM-DD-YYYY date",
-            )
 
     for path in (SOURCES, SOURCE_MAP):
         for header, rows in _parse_tables_with_lines(path):
@@ -1147,8 +1276,6 @@ def _check_status_vocabularies(failures: List[str]) -> None:
                 continue
             status_i = header.index("Status")
             ingest_i = header.index("Ingest") if "Ingest" in header else None
-            date_header = "Accessed" if "Accessed" in header else "Last checked"
-            date_i = header.index(date_header) if date_header in header else None
             for line, row in rows:
                 if len(row) <= status_i:
                     _fail(failures, path, line, "source row lacks Status value")
@@ -1167,15 +1294,6 @@ def _check_status_vocabularies(failures: List[str]) -> None:
                     ):
                         value = row[ingest_i] if len(row) > ingest_i else ""
                         _fail(failures, path, line, f"invalid Ingest state: {value!r}")
-                if date_i is not None:
-                    if len(row) <= date_i or not _valid_date(row[date_i]):
-                        value = row[date_i] if len(row) > date_i else ""
-                        _fail(
-                            failures,
-                            path,
-                            line,
-                            f"invalid {date_header} date: {value!r}",
-                        )
 
 
 def _check_source_map_targets(failures: List[str]) -> None:
@@ -1195,7 +1313,12 @@ def _check_source_map_targets(failures: List[str]) -> None:
     registered = _manifest_literals()
     for header, rows in source_tables:
         if header != SOURCE_MAP_COLUMNS:
-            _fail(failures, SOURCE_MAP, None, "source-map columns do not match schema")
+            _fail(
+                failures,
+                SOURCE_MAP,
+                None,
+                "source-map column headings differ from SOURCE_MAP_COLUMNS",
+            )
             continue
         source_i = header.index("Source or aggregate")
         authority_i = header.index("Authority tier")
@@ -1272,8 +1395,6 @@ def _check_contradictions(failures: List[str]) -> None:
         "Page-status rationale",
         "Owner/trigger",
         "Resolution test",
-        "Opened",
-        "Resolved",
         "Notes",
     ]
     header, rows = _table_with_header(CONTRADICTIONS, "ID")
@@ -1282,7 +1403,7 @@ def _check_contradictions(failures: List[str]) -> None:
             failures,
             CONTRADICTIONS,
             None,
-            "contradiction table columns do not match schema",
+            "contradiction table headings differ from the required headings",
         )
         return
     indexes = {name: header.index(name) for name in required}
@@ -1315,8 +1436,6 @@ def _check_contradictions(failures: List[str]) -> None:
             )
         seen.add(identifier)
         for field in required:
-            if field == "Resolved":
-                continue
             if not row[indexes[field]].strip():
                 _fail(
                     failures,
@@ -1327,22 +1446,6 @@ def _check_contradictions(failures: List[str]) -> None:
         status = row[indexes["Claim status"]].strip().lower()
         if status not in {"contested", "stale", "resolved"}:
             _fail(failures, CONTRADICTIONS, line, f"invalid Claim status: {status!r}")
-        opened = row[indexes["Opened"]].strip()
-        resolved = row[indexes["Resolved"]].strip()
-        if not _valid_date(opened):
-            _fail(failures, CONTRADICTIONS, line, f"invalid Opened date: {opened!r}")
-        if status == "resolved":
-            if not _valid_date(resolved):
-                _fail(
-                    failures, CONTRADICTIONS, line, "resolved row needs resolution date"
-                )
-        elif resolved not in {"-", "n/a"}:
-            _fail(
-                failures,
-                CONTRADICTIONS,
-                line,
-                "active row Resolved must be '-' or 'n/a'",
-            )
         affected = set(_affected_page_links(row[indexes["Affected pages"]]))
         if not affected:
             _fail(failures, CONTRADICTIONS, line, "Affected pages has no wiki links")
@@ -1407,7 +1510,7 @@ def _check_contradictions(failures: List[str]) -> None:
 
 def _check_excluded_artifacts(failures: List[str]) -> None:
     """
-    Check KB trees contain Markdown prose only and no retired artifacts.
+    Check KB trees contain Markdown prose only and no retired maintenance files.
 
     :param failures: Mutable failure list.
     """
@@ -1416,18 +1519,18 @@ def _check_excluded_artifacts(failures: List[str]) -> None:
             continue
         for path in sorted(base.rglob("*")):
             if path.is_file() and path.suffix.lower() != ".md":
-                _fail(failures, path, None, "non-Markdown artifact in KB tree")
+                _fail(failures, path, None, "non-Markdown file in KB tree")
             if path.is_file() and re.search(
                 r"(?:^|[-_])(audit|scan|report|latest|token|plan|rank|log)(?:[-_.]|$)",
                 path.name,
                 re.IGNORECASE,
             ):
-                _fail(failures, path, None, "excluded maintenance/planning artifact")
+                _fail(failures, path, None, "excluded maintenance/planning file")
 
 
 def _check_root_artifacts(failures: List[str]) -> None:
     """
-    Check root maintenance artifacts.
+    Check for prohibited root-level maintenance files.
 
     :param failures: Mutable failure list.
     """
@@ -1436,7 +1539,7 @@ def _check_root_artifacts(failures: List[str]) -> None:
         if path.name in allowed_root_docs:
             continue
         if ROOT_PROHIBITED_ARTIFACT_SEGMENT_RE.search(path.name):
-            _fail(failures, path, None, "root-level KB maintenance artifact")
+            _fail(failures, path, None, "root-level prohibited maintenance file")
             continue
         if ROOT_COORDINATION_RE.fullmatch(path.name):
             continue
@@ -1449,7 +1552,7 @@ def _check_root_artifacts(failures: List[str]) -> None:
                 re.IGNORECASE,
             )
         ):
-            _fail(failures, path, None, "root-level KB maintenance artifact")
+            _fail(failures, path, None, "root-level prohibited maintenance file")
 
 
 def _main() -> int:
@@ -1499,4 +1602,8 @@ def _main() -> int:
 
 
 if __name__ == "__main__":
+    import doctest
+
+    if doctest.testmod().failed:
+        sys.exit(1)
     sys.exit(_main())

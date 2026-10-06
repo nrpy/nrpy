@@ -1,6 +1,6 @@
 # Build And Run
 
-> Compile the supported install paths, command entry points, prerequisites, and first runnable workflow. · Status: confirmed · Last reconciled: 07-12-2026
+> Compile the supported install paths, command entry points, prerequisites, and first runnable workflow. · Status: confirmed
 > Up: [Architecture](index.md)
 
 ## Summary
@@ -59,7 +59,7 @@ Do not substitute `python bin/nrpyinline.py <file>` for the installed command. I
 - [bin/nrpyinline.py](../../bin/nrpyinline.py) - `strip_comment_markers`, `run_script_from_file`, `main`, `if __name__ == "__main__"`
 - [raw/source-docs/original-agents.md](../../raw/source-docs/original-agents.md) - `## Required Checks`
 - [.github/workflows/main.yml](../../.github/workflows/main.yml) - `static-analysis`, `codegen-ubuntu`, `codegen-mac`
-- [Black 26.5.1 package metadata](https://pypi.org/pypi/black/26.5.1/json) - `requires_python` and installation requirement; accessed 07-12-2026
+- [Black 26.5.1 package metadata](https://pypi.org/pypi/black/26.5.1/json) - `requires_python` and installation requirement
 
 ## See Also
 

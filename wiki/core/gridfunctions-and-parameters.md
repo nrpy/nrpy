@@ -1,6 +1,6 @@
 # Gridfunctions And Parameters
 
-> Core route for symbolic gridfunctions, NRPy parameters, code parameters, and generated data structs. · Status: confirmed · Last reconciled: 07-12-2026
+> Core route for symbolic gridfunctions, NRPy parameters, code parameters, and generated data structs. · Status: confirmed
 > Up: [Core APIs](index.md)
 
 ## Summary
@@ -39,7 +39,7 @@ Array `CodeParameter` types are parsed only for C-style `REAL[N]` and `int[N]` s
 
 ### Registration Behavior
 
-`register_gridfunctions()` normalizes one name or a list of names, reads `Infrastructure`, selects the subclass from `GF_CLASS_MAP`, stores new gridfunctions in `glb_gridfcs_dict`, and returns real SymPy symbols. Supported infrastructure keys are `BHaH`, `ETLegacy`, and `CarpetX`; an unknown key raises `ValueError`. Duplicate registration prints `Warning: Gridfunction <name> is already registered.`, leaves the existing registry object unchanged, and still returns a real SymPy symbol for the requested name. Per-gridfunction list-valued `f_infinity` and `wavespeed` inputs are indexed by position during registration; the helper does not prevalidate those list lengths.
+`register_gridfunctions()` normalizes one name or a list of names, reads `Infrastructure`, selects the subclass from `GF_CLASS_MAP`, stores new gridfunctions in `glb_gridfcs_dict`, and returns real SymPy symbols. Supported infrastructure keys are `BHaH`, `ETLegacy`, `CarpetX`, and `Dendro`; an unknown key raises `ValueError`. Duplicate registration prints `Warning: Gridfunction <name> is already registered.`, leaves the existing registry object unchanged, and still returns a real SymPy symbol for the requested name. Per-gridfunction list-valued `f_infinity` and `wavespeed` inputs are indexed by position during registration; the helper does not prevalidate those list lengths.
 
 ### Parity
 
@@ -47,7 +47,7 @@ Array `CodeParameter` types are parsed only for C-style `REAL[N]` and `int[N]` s
 
 ### BHaH Access
 
-`BHaHGridFunction` accepts groups `EVOL`, `AUXEVOL`, `DIAG`, and `AUX`, uses C type `REAL`, and maps default arrays by group: `EVOL` to `in_gfs`, `AUXEVOL` to `auxevol_gfs`, `DIAG` to `diagnostic_gfs`, and `AUX` to `aux_gfs`. Memory access has spelling `array[IDX4(<NAME>GF, i0+offset, i1+offset, i2+offset)]`, for example `in_gfs[IDX4(ABCGF, i0+1, i1+2, i2+3)]`; `enable_simd=True` wraps it as `ReadSIMD(&...)`. If `sync_gf_in_superB` is not supplied, it defaults to `True` for `EVOL` and `AUX`. `gridfunction_defines()` emits group `#define` blocks and, for evolved gridfunctions, `gridfunctions_f_infinity` and `gridfunctions_wavespeed` arrays.
+`BHaHGridFunction` accepts groups `EVOL`, `AUXEVOL`, `DIAG`, `AUX`, and `SCRATCH`, uses C type `REAL`, and maps default arrays by group: `EVOL` to `in_gfs`, `AUXEVOL` to `auxevol_gfs`, `DIAG` to `diagnostic_gfs`, `AUX` to `aux_gfs`, and `SCRATCH` to `scratch_gfs`. `SCRATCH` gridfunctions are intermediates produced and consumed within one right-hand-side evaluation: they receive `NUM_SCRATCH_GFS` and `<NAME>GF` indices like the other groups but no allocation, and the caller supplies storage that is dead across that window; only that caller can check capacity, so it guards it itself (the BSSN example stores them in the Method of Lines buffer that `rhs_eval` overwrites later in the same substep and emits `#if NUM_SCRATCH_GFS > NUM_EVOL_GFS #error`). Memory access has spelling `array[IDX4(<NAME>GF, i0+offset, i1+offset, i2+offset)]`, for example `in_gfs[IDX4(ABCGF, i0+1, i1+2, i2+3)]`; `enable_simd=True` wraps it as `ReadSIMD(&...)`. If `sync_gf_in_superB` is not supplied, it defaults to `True` for `EVOL` and `AUX`. `gridfunction_defines()` emits group `#define` blocks and, for evolved gridfunctions, `gridfunctions_f_infinity` and `gridfunctions_wavespeed` arrays.
 
 ### ETLegacy Access
 
@@ -56,6 +56,13 @@ Array `CodeParameter` types are parsed only for C-style `REAL[N]` and `int[N]` s
 ### CarpetX Access
 
 `CarpetXGridFunction` accepts groups `EVOL`, `AUX`, `AUXEVOL`, `EXTERNAL`, `CORE`, `TILE_TMP`, and `SCALAR_TMP`, uses C type `CCTK_REAL`, and validates centering as a three-character string containing only `C` or `V`. During construction it appends `_ext` for `EXTERNAL`, `_core` for `CORE`, and `_tile_tmp` for `TILE_TMP`; other groups keep the original name. Memory access calls the gridfunction with an index expression based on `p.I + offset*p.DI[...]`, for example `aaGF(p.I + 1*p.DI[0] + 2*p.DI[1] + 3*p.DI[2])` or `defgGF(p.I - 1*p.DI[1])`. `reuse_index=True` uses the provided `index_name` instead of recomputing the `p.I` expression, `use_GF_suffix=False` removes the `GF` suffix, and `enable_simd=True` wraps the access as `ReadSIMD(&...)`.
+
+### Dendro Access
+
+`DendroGridFunction` uses C type `DendroScalar` and role-prefixed pointers named
+after the exact NRPy gridfunction, such as `in_abc[pp - nx]`, within padded
+blocks. SIMD mode wraps each point read as `ReadSIMD(&in_abc[pp - nx])`; the
+Dendro kernel loops own the vector placement.
 
 ### Rank-N Registration
 
@@ -70,7 +77,8 @@ Split into separate parameter and gridfunction leaves is deferred unless this le
 ## Sources
 
 - [nrpy/params.py](../../nrpy/params.py) - `NRPyParameter`, `CodeParameter`, `_parse_array_spec`, `register_param`, `parval_from_str`, `set_parval_from_str`, `register_CodeParameters`, `register_CodeParameter`, `adjust_CodeParam_default`, `glb_params_dict`, `glb_code_params_dict`, `glb_extras_dict`
-- [nrpy/grid.py](../../nrpy/grid.py) - `GridFunction`, `BHaHGridFunction`, `ETLegacyGridFunction`, `CarpetXGridFunction`, `gridfunction_lists`, `get_parity_type`, `set_parity_types`, `define_gfs_group`, `gridfunction_defines`, `register_gridfunctions`, `register_gridfunctions_for_single_rankN`, `glb_gridfcs_dict`, `GF_CLASS_MAP`
+- [nrpy/params.py](../../nrpy/params.py) - `parse_cparam_type`, the public parser BHaH and superB both call
+- [nrpy/grid.py](../../nrpy/grid.py) - `GridFunction`, `BHaHGridFunction`, `ETLegacyGridFunction`, `CarpetXGridFunction`, `DendroGridFunction`, `gridfunction_lists`, `get_parity_type`, `set_parity_types`, `define_gfs_group`, `gridfunction_defines`, `register_gridfunctions`, `register_gridfunctions_for_single_rankN`, `glb_gridfcs_dict`, `GF_CLASS_MAP`
 - [nrpy/infrastructures/BHaH/griddata_commondata.py](../../nrpy/infrastructures/BHaH/griddata_commondata.py) - `GridCommonData`, `register_griddata_commondata`
 
 ## See Also

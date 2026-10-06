@@ -1,6 +1,6 @@
 # Commondata And PyFunction Registry
 
-> Consumer view of JAX shared-data and generated-function registries. · Status: confirmed · Last reconciled: 07-13-2026
+> Consumer view of JAX shared-data and generated-function registries. · Status: confirmed
 > Up: [JAX](index.md)
 
 ## Summary
@@ -23,29 +23,27 @@ field. `register_commondata_param()` rejects duplicate names before inserting a
 new entry, so direct single-field registration is duplicate-checked at the
 registry boundary.
 
-`register_commondata_params()` is a batch convenience wrapper. It iterates over
-`zip(names, dtypes, defaults, descriptions)` and calls
-`register_commondata_param()` for each tuple. The current implementation does
-not check that the four input lists have equal lengths; ordinary Python `zip()`
-truncation therefore defines how many entries are registered. In
-`nrpy.examples.sebobv1_jax`, the observed call supplies fourteen names and
-descriptions but thirteen dtypes and defaults, so the final listed `a_f` field
-is not passed to `register_commondata_param()` by that batch call. The emitted
-coefficient function nevertheless passes `a_f` into `Commondata(...)`; project
-generation therefore does not guarantee that this generated function can
-construct the generated dataclass.
+`register_commondata_params()` is a batch convenience wrapper. It first checks
+that `names`, `dtypes`, `defaults`, and `descriptions` have the same length and
+raises `ValueError` before registering any field if they do not. It then
+iterates over `zip(names, dtypes, defaults, descriptions)` and calls
+`register_commondata_param()` for each tuple, so no listed field is silently
+dropped. `nrpy.examples.sebobv1_jax` supplies fourteen entries in each list,
+including the final-spin field `a_f` that its emitted coefficient function
+passes to `Commondata(...)`.
 
-Claim status: contested; contradiction: CONTR-0002.
-See [CONTR-0002](../../contradictions.md#contr-0002) for authority, affected
-pages, validation limits, and the executable resolution test. This is a
-descriptive contradiction record; it is not yet a migrated claim-evidence
-block.
+Claim evidence:
+- Claim: `register_commondata_params()` raises `ValueError` and registers no field when its four input lists differ in length; otherwise it registers every listed field. This says nothing about duplicate names beyond the per-field check in `register_commondata_param()`.
+- Role: descriptive behavior
+- Deciding authority: [nrpy/infrastructures/JAX/commondata.py](../../../nrpy/infrastructures/JAX/commondata.py), `register_commondata_params`
+- Corroboration: `none available`; the only targeted check is the `register_commondata_params` doctest in the deciding module, which exercises a length mismatch but is not a separate source.
 
 `generate_commondata_dataclass()` turns the current registry contents into the
 generated `Commondata.py` module text. It emits `from dataclasses import
 dataclass`, an `@dataclass class Commondata`, and one field line per registered
-entry using the stored name, dtype, default, and optional description comment.
-When no fields are registered, the generated class body is `pass`.
+entry using the stored name, dtype, default, and optional description comment,
+ending the module with a newline. When no fields are registered, the generated
+class body is `pass`.
 
 `nrpy.py_function` owns generated Python function registration. A `PyFunction`
 stores the generated function's registered name, import lines, optional

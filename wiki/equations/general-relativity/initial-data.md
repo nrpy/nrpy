@@ -1,6 +1,6 @@
 # Initial Data
 
-> Map Cartesian and spherical ADM initial-data providers used by GR equation consumers. · Status: confirmed · Last reconciled: 08-25-2026
+> Map Cartesian and spherical ADM initial-data providers used by GR equation consumers. · Status: confirmed
 > Up: [General Relativity](index.md)
 
 ## Summary

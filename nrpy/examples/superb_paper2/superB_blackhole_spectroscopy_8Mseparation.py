@@ -30,7 +30,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH, superB
-from nrpy.infrastructures.BHaH import checkpointing, xx_tofrom_Cart
+from nrpy.infrastructures.BHaH import xx_tofrom_Cart
 from nrpy.infrastructures.BHaH.fisheye import phys_params_to_fisheye
 from nrpy.infrastructures.BHaH.general_relativity import NRPyPN_quasicircular_momenta
 from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import (
@@ -271,7 +271,7 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     OMP_collapse=OMP_collapse,
 )
 if enable_CAHD:
-    BHaH.general_relativity.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
+    BHaH.general_relativity.dsmin_gf.register_CFunction_dsmin_auxevol_gridfunction(
         {CoordSystem}
     )
 if separate_Ricci_and_BSSN_RHS:
@@ -370,7 +370,10 @@ superB.MoL.register_CFunctions(
 )
 register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 register_CFunction_xx_to_Cart(CoordSystem)
-checkpointing.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
+BHaH.read_checkpoint.register_CFunction_read_checkpoint()
+BHaH.write_checkpoint.register_CFunction_write_checkpoint(
+    default_checkpoint_every=default_checkpoint_every
+)
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
@@ -474,8 +477,8 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 post_non_y_n_auxevol_mallocs = ""
 if enable_CAHD:
     post_non_y_n_auxevol_mallocs = r"""for (int grid = 0; grid < commondata.NUMGRIDS; grid++)
-  cahdprefactor_auxevol_gridfunction(
-      &commondata, &griddata_chare[grid].params, griddata_chare[grid].xx,
+  dsmin_auxevol_gridfunction(
+      &griddata_chare[grid].params, griddata_chare[grid].xx,
       griddata_chare[grid].gridfuncs.auxevol_gfs);
 """
 

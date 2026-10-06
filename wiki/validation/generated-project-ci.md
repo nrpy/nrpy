@@ -1,29 +1,59 @@
 # Generated Project CI
 
-> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed · Last reconciled: 07-13-2026
+> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed
 > Up: [Validation](index.md)
 
 ## Summary
 
-Workflow YAML configures seven jobs. Two generate/build standalone projects on
-Ubuntu and macOS; one builds and regression-tests ETLegacy thorns; one builds
-three Charm++/superB projects and runs one; two build/run trusted/current
-waveforms and compare output; one performs Python static analysis. These are
-configured cells, not latest-pass claims.
+Workflow YAML separates static analysis, Ubuntu/macOS code generation, ETLegacy
+regression, Dendro application validation plus a weekly run of the same checks
+against the head of Dendrolib's master branch, Charm++/superB, and
+trusted/current waveform consistency routes. These are configured routes, not
+execution-result snapshots.
 
 ## Detail
 
 Configured GitHub job map:
 
-| Job | Matrix/environment | Generate/build scope | Run/result-check scope |
+| Job | Configured context | Generate/build scope | Run/result-check scope |
 | --- | --- | --- | --- |
-| `static-analysis` | Ubuntu 22.04/24.04 and selected Python 3.7.13, 3.8.12, 3.9.19, `3.x` cells | No generated project coverage | Python file execution plus version-dependent static checks; see [Static Analysis](static-analysis.md) |
-| `codegen-ubuntu` | Ubuntu 22.04/24.04; three matrix cells after one exclusion | Installs NRPy, generates in `tmp/`, and builds 21 default C/library projects: standalone elliptic; three wave projects; collision, spectroscopy, and spinning BH; PN momenta; all nine SEOBNRv5 approximant/calibration variants; TOVola; hydro-without-hydro; BHaHAHA; `sebobv2`. It generates `sebobv1_jax` without package install/build. | No generated executable, test, or numerical result is run; `make clean` follows each C/library build. MANGA commands are commented out. |
-| `codegen-mac` | macOS 14/26 with Python 3.9, 3.10, 3.11, `3.x` | Same 21 default C/library builds and JAX generation as Ubuntu; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
-| `einsteintoolkit-validation` | Ubuntu 24.04, Apptainer 1.3.2, ET 2024-06 beta image | Generates only `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs `Baikal`, `BaikalVacuum`, and `WaveToyNRPy` Cactus testsuites and fails on nonzero reported failures. No `carpetx_*` generation/build/run. |
-| `charmpp-validation` | Ubuntu 24.04, Apptainer image, paths pinned to Charm++ 8.0.0 | Generates and builds `superB_nrpyelliptic_conformally_flat`, `superB_blackhole_spectroscopy`, and `superB_two_blackholes_collide` with `make -j2` | Runs only `./charmrun +p2 ./superB_two_blackholes_collide`; no explicit scientific-output assertion beyond process success. |
-| `sebob-consistency-test` | Ubuntu 22.04/24.04; three matrix cells after one exclusion | Checks out trusted commit `785467615d63669a98fe85c6686c2388a324139e`; generates/builds trusted and current copies of all nine SEOBNRv5 variants | Runs nine helper invocations. Each rebuilds both executables, runs ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed its perturbation-derived baseline. |
-| `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the same trusted commit | Runs one helper invocation with ten deterministic inputs and the same median-error criterion. |
+| `static-analysis` | Configured Linux/Python matrix | No generated project coverage | Python file execution plus version-dependent static checks; see [Static Analysis](static-analysis.md) |
+| `codegen-ubuntu` | Configured Ubuntu/Python matrix | Installs NRPy, generates in `tmp/`, and builds the selected default C/library projects with `make`, spanning elliptic, wave, black-hole, PN, SEOBNR, TOV, hydro, BHaHAHA, and `sebobv2` routes. It generates and installs `sebobv1_jax`, then calls `SEOBNRv5_aligned_spin_coefficients` once with Python-scalar inputs and prints the result. | The `make` builds run no generated executable, and `make clean` follows each; the JAX call checks no returned value; MANGA commands are commented out. |
+| `codegen-mac` | Configured macOS/Python matrix | Same selected default C/library builds and JAX generation, install, and call as Ubuntu; no Dendro generation or build; GSL installed with Homebrew | No generated C executable or test is run; the JAX call checks no returned value. |
+| `einsteintoolkit-validation` | Configured Ubuntu/Apptainer Einstein Toolkit image | Generates `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs the configured Baikal, BaikalVacuum, and WaveToyNRPy Cactus testsuites and fails on reported failures. No `carpetx_*` generation/build/run. |
+| `dendro-validation` | Ubuntu 24.04 runner with apt-installed Open MPI, GSL, BLAS/LAPACK, and gfortran; matrix `formulation: [bssn, fccz4]`; 75-minute job timeout | Each leg runs `nrpy/examples/tests/dendro_application_check.py`, which generates the W and chi projects twice, configures and builds them against Dendrolib master, solves TwoPunctures once per variant, and runs short MPI evolutions with a scheduled remesh test, horizon finds, wave extraction, checkpoint and restore, 1/3/4-rank repeats, FD4/6/8 initialization, a stored-reference comparison of the evolved diagnostics, and process-boundary rejections. | Proves only the named layers for the helper's CI profiles: generation determinism, compile/link compatibility, closed-form TwoPunctures ADM and horizon-mass agreement, symmetry properties, restart identity, rank-count agreement, agreement with the stored reference for the evolved diagnostics (a regression check, not a correctness proof), ordering of the initial Hamiltonian-constraint norm with FD order (not a convergence test), and the listed rejections. It is not long-time, merger, or production-resolution evidence. |
+| `dendro-validation-dendrolib-master` (`dendrolib-canary.yml`) | Weekly schedule and manual dispatch only; same runner, packages, matrix, and timeout as `dendro-validation`. | Runs the same helper with `--dendrolib-ref master`: Dendrolib is cloned at the head of its master branch through an explicit shallow clone, and the resolved commit is printed. | Same checks as `dendro-validation`; a pass or failure is evidence only for the printed Dendrolib commit, and pull requests also use master through the generated CMake project. |
+| `charmpp-validation` | Configured Ubuntu/Apptainer Charm++ context | Generates and builds the configured superB elliptic, spectroscopy, and collision projects | Runs the configured collision executable through `charmrun`; no explicit scientific-output assertion beyond process success. |
+| `sebob-consistency-test` | Configured Ubuntu matrix | Checks out the workflow-selected trusted revision; generates/builds trusted and current SEOBNRv5 variants | Each helper invocation rebuilds both executables, uses exactly ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed the perturbation-derived baseline. |
+| `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the workflow-selected trusted revision | Uses the same ten-input and median-error criterion. |
+
+Claim evidence:
+- Claim: Both `codegen-ubuntu` and `codegen-mac` generate `sebobv1_jax`, run `pip install .` in the generated project, import `SEOBNRv5_aligned_spin_coefficients`, call it once without a JAX transformation such as `jax.jit`, with the Python-scalar inputs `(1.5, 0.3, -0.2, 0.02, 2.4627455127717882e-05, 50.0)`, and print the returned `Commondata`. The step fails only if generation, installation, import, or the call raises; it asserts no returned field or value and does not run the generated pytest, a float32 input, a traced function, or an accelerator.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), jobs `codegen-ubuntu` and `codegen-mac`
+- Corroboration: `none available`; no other configured file restates these job commands
+
+Claim evidence:
+- Claim: Each `sebob-consistency-test` helper invocation uses exactly ten deterministic input sets.
+- Role: CI behavior
+- Deciding authority: [`sebob_consistency_check.py`](../../nrpy/examples/tests/sebob_consistency_check.py), module `__main__` entry point, `num_sets`
+- Corroboration: `none available`; the workflow invokes the helper but does not independently restate its input count
+
+Claim evidence:
+- Claim: The `sebobv2-consistency-test` helper invocation uses exactly ten deterministic input sets.
+- Role: CI behavior
+- Deciding authority: [`sebobv2_consistency_check.py`](../../nrpy/examples/tests/sebobv2_consistency_check.py), module `__main__` entry point, `num_sets`
+- Corroboration: `none available`; the workflow invokes the helper but does not independently restate its input count
+
+The `codegen-ubuntu` and `codegen-mac` rows' generate/build-scope cells state
+that both jobs build all SEOBNRv5 approximant/calibration variants (each
+approximant × {production, `-calibration_no_spin`, `-calibration_spin`,
+`-nrpy_calibrated`}) alongside the other named default projects.
+
+Claim evidence:
+- Claim: `codegen-ubuntu` and `codegen-mac` each generate and build the default C/library projects, including all SEOBNRv5 approximant/calibration variants (each approximant × {production, `-calibration_no_spin`, `-calibration_spin`, `-nrpy_calibrated`}), with no generated executable, test, or numerical result run for any of them.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), jobs `codegen-ubuntu`, `codegen-mac`
 
 A successful named build can establish only named generation plus toolchain
 compile/link compatibility. Generation completion or file existence is not a
@@ -50,38 +80,201 @@ route instead delegates numerical comparison to its fixture and tolerance
 configuration; the checked-in `WaveToyNRPy` test sets `RELTOL 1e-11`. NRPy's
 workflow parses the testsuite summary and fails on a nonzero failure count.
 Neither regression route proves physical accuracy beyond its stated fixtures or
-inputs, and workflow configuration does not prove the jobs most recently passed.
+inputs, and workflow configuration does not establish execution outcomes.
 The Charm++ process-success cell is retained descriptive legacy, not precedent
 for adding another generic status-only build or runtime cell.
 
 The local `.github/full_nrpy_local_ci.sh` helper is separate from GitHub job
-coverage. It installs dependencies, performs broad static analysis, invokes 28
-configured generator commands, and builds 21 non-Carpet/non-superB C/library
-projects. It generates two superB projects without building them and all four
-Carpet/CarpetX families without ET compilation; it omits the superB elliptic,
-Kasner, GRoovy, MANGA, and all geodesic generators. It then configures builds
-with `--cuda` for curvilinear wave, multicoordinate wave, standalone elliptic,
-three black-hole examples, hydro-without-hydro, and TOVola. TOVola has no
+coverage. It installs dependencies, performs broad static analysis, invokes
+its configured generators, and builds selected non-Carpet/non-superB C/library
+projects. It generates superB and Carpet/CarpetX families without their
+external-host builds; it omits other example families documented in the
+helper's source. It then configures selected builds with `--cuda`, including
+curvilinear and multicoordinate wave, standalone elliptic, black-hole,
+hydro-without-hydro, and TOVola routes. TOVola has no
 argument parser or CUDA branch, so its extra `--cuda` token is ignored and that
 cell is an ordinary C build. The helper installs no CUDA toolkit, declares no
 GPU runner, runs no generated executable, and checks no GPU result. Treat it as
 a local command recipe requiring a prepared environment, not CI pass evidence.
 
+Dendro's job runs one helper per formulation. The helper generates the W and chi
+applications twice with separate caches and requires byte-identical
+trees, then configures and builds each with `CPU_ARCH=x86-64-v3` against the
+Dendrolib master and the toml11 release selected by the generated `CMakeLists.txt`. One
+TwoPunctures solve is shared by all runs of each conformal-factor variant, and
+each check made for both variants is reported as one W-and-chi result. Profile P
+(maximum depth 13, FD6, eight steps, remesh, horizon, wave, and checkpoint
+cadence 4) checks the solved ADM energy and angular momentum against the closed
+forms for the conformal-factor rescaling, horizon irreducible masses against the
+puncture ADM masses, equal-mass reflection symmetry of the horizons, vanishing
+ADM momentum and in-plane angular momentum, vanishing odd-m wave modes and the
+reflection relation C(l,-m) = (-1)^l conj C(l,m) over all 21 modes with l = 2-4
+at two radii, point reflection of the checkpointed puncture centers at step 4
+and their motion along the puncture momenta, byte-identical diagnostic outputs
+in `dat/`, `bah/`, and `vtu/` after a stop at step 4 and restore, and agreement
+of a 3-rank run, which writes a horizon checkpoint, with the diagnostics of the main runs
+within a fixed relative and absolute tolerance, with equal unexcised node counts (horizon observables through the irreducible mass;
+the finder's convergence residuals are not compared). The restore comparison
+normalizes the GridInfo wall-time column and excludes the per-launch
+`dgr__PARAM_DUMP__*.toml` files; it compares every other file under `dat/`, `bah/`, and `vtu/`.
+Run A's constraint and ADM
+rows and horizon observables at steps 0, 4, and 8 must also match a stored
+reference, `nrpy/examples/tests/dendro_application_check_reference.py`, within a
+fixed relative and absolute tolerance; because it covers the evolved state after
+the remesh tests that `BSSN_REMESH_TEST_FREQ = 4` schedules at steps 4 and 8, including node counts (the only evidence that a remesh occurred), it is the job's regression check on
+the evolution equations, gauge, and grid transfer. Profile O (maximum depth 10,
+four steps) checks that the initial Hamiltonian-constraint norm falls by at
+least half per order increase from FD4 to FD8 on one shared mesh, an ordering
+check rather than a convergence test, plus a 1-rank repeat. The W and chi
+variants must agree at step 0 in node count, `E`, `J_z`, and the Psi4 modes. Every evolution run the
+helper checks (runs A, B, B restored, C, and the profile-O runs) must pass
+one sanity check: finite output, constraint rows at the configured cadence, a
+node ceiling, and no unread-parameter warning. Negative cases require exit
+status 1-123 and a named diagnostic for a W/chi cross-restore, `--tpid` on more
+than one rank, a TwoPunctures parameter mismatch, a missing TwoPunctures file,
+an unsupported element order, an unsupported refinement mode, an excessive CFL
+factor that blows up the evolution, a nonfinite `BSSN_CFL_FACTOR`,
+`BSSN_SSL_SIGMA`, or `ETA_CONST`, an unwritable ADM file (a directory in its
+place), `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = false`, an integer given for a
+real-valued parameter, and a lapse blow-up with constraint output off; a run
+given an unread key must warn about it and still succeed, and a run with
+`BSSN_RESTORE_SOLVER = 1` and no checkpoint metadata must warn that no
+metadata was found, start from the initial data, and write its first
+constraint row at step 0.
+
+To run the helper, execute `python nrpy/examples/tests/dendro_application_check.py
+--formulation bssn --work-dir DIR` from the repository root; `--formulation fccz4`
+selects the other formulation. Both options
+are required, and `DIR` must not exist; the helper removes it on exit.
+`--launcher` defaults to `mpiexec --oversubscribe --bind-to none`, `--ranks` to 4
+(at least 4, above the 3-rank comparison run), and `--build-jobs` to 4; the
+1-, 3-, and 4-rank description above holds at the default `--ranks`. Run without
+arguments, the helper runs only its doctests, which is the job's first Dendro
+step. Configuring each generated project downloads Dendrolib and toml11, so the
+run needs network access. `--update-reference` imports `black` and merges the
+candidate into the stored reference file, so run the two formulations' update legs
+one after the other. The helper always configures with `-DCPU_ARCH=x86-64-v3`, so
+CI never configures the `native` default, and it creates `dat/`, `vtu/`, `cp/`,
+and `bah/` in each run directory, so the solver's own directory creation is not
+exercised. Both Dendro workflows set `OMP_NUM_THREADS: 1`. `main.yml` runs the
+job on pushes and pull requests to `main` and on its twice-monthly schedule, and
+the helper prints the resolved Dendrolib commit for each variant. The job installs
+`liblapack-dev`, which is not among the packages whose versions the helper prints.
+
+Claim evidence:
+- Claim: The Dendro helper requires `--formulation` and a nonexistent `--work-dir`, defaults to `mpiexec --oversubscribe --bind-to none`, 4 ranks (at least 4), and 4 build jobs, runs only its doctests without arguments, needs network access, always configures with `-DCPU_ARCH=x86-64-v3`, pre-creates `dat/`, `vtu/`, `cp/`, and `bah/` in each run directory, merges `--update-reference` candidates through `black`, and prints the resolved Dendrolib commit per variant; both Dendro workflows set `OMP_NUM_THREADS: 1`, and `main.yml` runs on pushes and pull requests to `main` and on a twice-monthly schedule.
+- Role: CI behavior
+- Deciding authority: [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `main`, `Leg.run`, `Leg.generate_and_build`, `Leg.prepare`, `Leg.record_versions`; [main.yml](../../.github/workflows/main.yml), `on` and `dendro-validation`; [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml), `env`
+- Corroboration: none available; the configuration shows the job shape, not any run outcome
+
+The stored reference is a generated `trusted_dict` keyed by formulation and
+conformal factor. It changes only through the helper's `--update-reference`
+mode, which writes run A's values as a candidate instead of comparing; the
+candidate is reviewed as a diff and then compared in a second run without the
+flag. An intentional change to the evolution, gauge, remesh, or Dendrolib
+that changes these numerical values requires regenerating the reference in
+the same change, and the weekly run against Dendrolib master fails when an upstream
+change alters these values beyond the tolerance. The constraint and ADM rows are
+printed with up to ten significant digits; the horizon radii and circumferences
+with ten, area and irreducible mass with sixteen, and time and centroid in fixed
+point. The last printed digits can vary between math-library paths and rank
+counts; a one-unit difference in the tenth digit lies within the tolerance for the
+ten-digit columns, but the time and centroid columns, printed with three and six
+decimals, have no such margin, so a rounding-boundary change in their last printed
+digit exceeds it. The ADM linear-momentum components and the angular-momentum components J_x and J_y
+vanish for this configuration, so their printed digits are round-off and the
+absolute tolerance, not the stored value, bounds them. The check reports the
+worst entry.
+
+Claim evidence:
+- Claim: the Dendro helper compares run A's constraint and ADM rows and horizon observables at steps 0, 4, and 8 with the stored `trusted_dict` reference within a fixed relative and absolute tolerance, so the weekly Dendrolib-master run fails when an upstream change alters those values beyond the tolerance; the reference changes only through `--update-reference`, which writes a candidate instead of comparing and refuses to write when any check failed or when `--dendrolib-ref` selects an explicit branch or tag.
+- Role: CI behavior
+- Deciding authority: [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `REFERENCE_STEPS`, `REFERENCE_RTOL`, `REFERENCE_ATOL`, `read_reference`, `Leg.check_reference`, `Leg.run`, `main`; [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml), `dendro-validation-dendrolib-master`
+- Corroboration: [dendro_application_check_reference.py](../../nrpy/examples/tests/dendro_application_check_reference.py), `trusted_dict`; [Test Oracles And Safe Updates](test-oracles-and-safe-updates.md), `Two-Process Oracle Update`
+
+A separate workflow, `dendrolib-canary.yml`, runs the same helper legs
+weekly and on manual dispatch with `--dendrolib-ref master`. The helper then
+shallow-clones that Dendrolib branch from the repository declared in the
+generated `CMakeLists.txt`, configures both variants with
+`FETCHCONTENT_SOURCE_DIR_DENDROLIB` pointing at the clone, and prints the
+resolved commit. Pull requests and pushes also build against master through
+the generated CMake project. The weekly run checks upstream changes even when
+no NRPy change triggers the main workflow. An upstream change that breaks the
+applications or moves their stored-reference values beyond tolerance can fail
+either workflow. Results are evidence only for the resolved revision; reference
+changes require the same review and independent comparison as before.
+
+Claim evidence:
+- Claim: `dendrolib-canary.yml` runs the Dendro helper legs weekly and on manual dispatch against the head of Dendrolib's master branch, printing the resolved commit, while `dendro-validation` in `main.yml` also uses master through the generated CMake project; a pass or failure is evidence only for the printed Dendrolib commit, and the configuration does not establish any run outcome.
+- Role: CI behavior
+- Deciding authority: [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml), `on`, `dendro-validation-dendrolib-master`; [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `Leg.generate_and_build`, `--dendrolib-ref`
+- Corroboration: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), the emitted Dendrolib `FetchContent_Declare`
+
+The helper's profile limits, among them Kreiss-Oliger dissipation enabled,
+`--fd-order 6`, no Yo et al. option, and the packaged q1 file never read, are
+stated in [Production Validation And Deferred
+Checks](../infrastructures/dendro/production-validation-and-deferred-checks.md).
+The apt packages, compilers, and `requirements.txt` packages are not pinned; the helper
+prints their resolved versions, and a pass is evidence only for those versions.
+Every subprocess has an argument vector, a timeout, and a bounded log tail on
+failure, and the work directory is removed unconditionally.
+
+Claim evidence:
+- Claim: the `dendro-validation` job generates, builds, runs, and checks both complete, standalone Dendro applications in W and chi variants through `dendro_application_check.py`, with the checks and rejections listed in this section.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `Leg.run`, `Leg.run_variant`, `Leg.check_run_a`, `Leg.check_reference`, `Leg.compare_runs`, `Leg.run_negatives`
+- Corroboration: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py), current command-line interface; [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), Dendrolib master and the selected toml11 release
+
+Claim evidence:
+- Claim: the helper's pass results cover only its CI profiles, eight-step or shorter evolutions, and Kreiss-Oliger-enabled generation; they are not evidence for long-time, merger, production-resolution, or Dendro generation with `enable_KreissOliger_dissipation = False`, with `--fd-order` 4 or 8, or with `--ybs-gamma` or `--ybs-momentum`, or for the packaged q1 parameter file and the printed run commands.
+- Role: CI behavior
+- Deciding authority: [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `PROFILE_P`, `PROFILE_O`, `COMMON_OVERRIDES`, `Leg.generate_and_build`
+- Corroboration: [Production Validation And Deferred Checks](../infrastructures/dendro/production-validation-and-deferred-checks.md), `Detail`
+
 Explicitly unsupported or unverified by these configurations: CarpetX build or
-runtime; JAX generated-package install/import/basic test or accelerator runtime;
-any CUDA executable/GPU result; standalone evolution runtime; restart behavior;
-geodesic/raytracing projects; GRoovy; active MANGA build; Kasner; and scientific
-correctness beyond stated ET regression and waveform-comparison assertions.
+runtime; JAX generated basic test, returned-value checks, float32 inputs, or accelerator runtime;
+any CUDA executable/GPU result; Dendro general boundaries, local time stepping,
+GPU execution, threaded kernels, three-rank horizon-checkpoint contents and
+restore, generation and build with `enable_KreissOliger_dissipation = False`,
+`--fd-order` 4 or 8, or either Yo et al. option, or the packaged q1 parameter file
+and the printed run commands;
+Dendro builds under AddressSanitizer or UndefinedBehaviorSanitizer, generated
+C++ self-tests under CTest, faults injected into the generated C++ at run time
+(invalid block offsets, halos, element orders, nonfinite values, and null or
+out-of-range block, field, and projection arguments), or builds against a
+pinned Dendro-GR commit; long-time, merger, or
+production-resolution Dendro evolution; geodesic/raytracing projects; GRoovy;
+active MANGA build; Kasner; and scientific correctness beyond the stated
+regression, property, and waveform assertions.
+
+Claim evidence:
+- Claim: the `dendro-validation` job builds each generated Dendro application with the generated CMake project against Dendrolib `master` and runs the helper's checks, including the invalid-input and output-failure cases of `Leg.run_negatives`; it runs no AddressSanitizer or UndefinedBehaviorSanitizer build, no generated C++ self-test under CTest, no fault injected into the generated C++ at run time, and no build against a pinned Dendro-GR commit, so a pass is not evidence for any of these.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `Leg.generate_and_build`, `Leg.run_negatives`
+- Corroboration: [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), `output_CFunctions_function_prototypes_and_construct_CMakeLists`, Dendrolib `GIT_TAG "master"` and no test targets
 
 These jobs intentionally create generated `project/` outputs. Treat those as CI
 products, not committed documentation or hand-authored source, unless a selected
 generated file has been deliberately registered as frozen evidence.
+
+The helper's fixed output frequencies and its restart and rank comparison rules
+are stated in [Production Validation And Deferred
+Checks](../infrastructures/dendro/production-validation-and-deferred-checks.md).
 
 ## Sources
 
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`; [.github/full_nrpy_local_ci.sh](../../.github/full_nrpy_local_ci.sh) - `example_scripts`, `cuda_example_scripts`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-mac`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `einsteintoolkit-validation`; official Einstein Toolkit [Adding a test case](https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case) - `A test case is...`
+- [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `dendro-validation`
+- [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py) - `Leg.run`, profiles, checks, and negative cases
+- [dendro_application_check_reference.py](../../nrpy/examples/tests/dendro_application_check_reference.py) - stored run-A reference values
+- [solver_context.py](../../nrpy/infrastructures/Dendro/solver_context.py) - `Ctx::diagnostic_output`, `Ctx::adm_output` output precision
+- [diagnostics_file_output.py](../../nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_file_output.py) - horizon diagnostics column formats
+- [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml) - weekly `dendro-validation-dendrolib-master`
+- [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) - current BSSN generation interface
+- [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - current fCCZ4 generation interface
+- [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py) - current generated source and target emission
 - [test.ccl](../../nrpy/examples/et_WaveToyfiles/test/test.ccl) - `TEST WaveToyNRPy_test`, `RELTOL 1e-11`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `charmpp-validation`; official Charm++ [Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html) - `Compiling the Example`, `Running the Example`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `sebob-consistency-test`
@@ -90,8 +283,10 @@ generated file has been deliberately registered as frozen evidence.
 - [../../README.md](../../README.md) - `## What Gets Generated?`
 - [../../nrpy/examples/tests/sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py) - `calculate_rmse`
 - [../../nrpy/examples/tests/sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py) - `process_input_set`
+- [../../nrpy/examples/tests/sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py) - module `__main__` entry point, `num_sets`
 - [../../nrpy/examples/tests/sebobv2_consistency_check.py](../../nrpy/examples/tests/sebobv2_consistency_check.py) - `calculate_rmse`
 - [../../nrpy/examples/tests/sebobv2_consistency_check.py](../../nrpy/examples/tests/sebobv2_consistency_check.py) - `process_input_set`
+- [../../nrpy/examples/tests/sebobv2_consistency_check.py](../../nrpy/examples/tests/sebobv2_consistency_check.py) - module `__main__` entry point, `num_sets`
 
 ## See Also
 

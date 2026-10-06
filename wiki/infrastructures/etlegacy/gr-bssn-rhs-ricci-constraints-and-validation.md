@@ -1,6 +1,6 @@
 # ETLegacy GR BSSN RHS, Ricci, Constraints, And Validation
 
-> ETLegacy registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 08-18-2026
+> ETLegacy registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed
 > Up: [ETLegacy](index.md)
 
 ## Summary
@@ -15,7 +15,8 @@ trusted-value mechanics stay with
 schedules it before the BSSN RHS kernel. `register_CFunction_rhs_eval()` emits
 the evolved RHS kernel, including gauge RHSs and optional improvement terms.
 `register_CFunction_BSSN_constraints()` emits Hamiltonian, momentum, and
-`MSQUARED` diagnostic output in `MoL_PseudoEvolution`.
+conformal connection diagnostics in `MoL_PseudoEvolution`, including scalar
+momentum and Lambda-constraint magnitudes.
 
 ## Detail
 
@@ -58,8 +59,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
 - Corroboration: [expression_utils.py](../../../nrpy/helpers/expression_utils.py), `get_params_commondata_symbols_from_expr_list`; [CodeParameters.py](../../../nrpy/infrastructures/ETLegacy/CodeParameters.py), `read_CodeParameters`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=ETLegacy; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian, fd_order 4, RHS KO enabled, reference-metric precompute disabled, T4munu False/True, SIMD False/True; date=08-18-2026`
 
 Reference-metric precompute is threaded through the BSSN and reference-metric
 lookup keys. Kreiss-Oliger
@@ -91,18 +90,25 @@ above are appended to that manual metadata list.
 
 `register_CFunction_BSSN_constraints()` emits the diagnostic constraints
 kernel. It selects `BSSN_constraints` with optional reference-metric precompute
-and T4munu suffixes, outputs `H`, `MU0`, `MU1`, `MU2`, and `MSQUARED`, and runs
-finite-difference codegen with finite-difference helper functions and Golden
-Kernels in an interior `simple_loop`. Its schedule is guarded by the requested
+and T4munu suffixes, outputs `H`, `MU0`, `MU1`, `MU2`,
+`M = sqrt(gamma_ij M^i M^j)`, and
+`LAMBDA_CONSTRAINT = sqrt(gammabar_ij C^i C^j)`, and runs finite-difference
+codegen with finite-difference helper functions and Golden Kernels in an
+interior `simple_loop`. Its schedule is guarded by the requested
 finite-difference order and places `<thorn>_BSSN_constraints` in
 `MoL_PseudoEvolution`, reading BSSN state and optional T4munu gridfunctions and
 writing `aux_variables`.
 
-All three generated kernels replace the finite-difference helper prefunc text
-`NO_INLINE` with `CCTK_ATTRIBUTE_NOINLINE` before registration. The local
-comment says this avoids a higher-order finite-difference compile hang with
-some GCC versions without changing the shared finite-difference helper for
-other infrastructures.
+Claim evidence:
+- Claim: ETLegacy `register_CFunction_BSSN_constraints` writes `H`, `MU0` through `MU2`, `M = sqrt(BSSNconstraints.Msquared)`, and `LAMBDA_CONSTRAINT = BSSNconstraints.LambdaConstraintMagnitude` to auxiliary gridfunctions.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
+- Corroboration: [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [interface_ccl.py](../../../nrpy/infrastructures/ETLegacy/interface_ccl.py), `construct_interface_ccl`
+
+The Ricci, RHS, and constraints kernels register `construct_FD_functions_prefunc()` unchanged;
+the finite-difference helpers carry no inlining attribute (the former `NO_INLINE`
+rewrite to `CCTK_ATTRIBUTE_NOINLINE`, a workaround for a GCC 10 compile hang, was
+removed together with the macro).
 
 RHS validation remains part of this page because `rhs_eval.py` validates the
 ETLegacy-specific assembled RHS dictionary after ETLegacy option handling and
@@ -120,8 +126,8 @@ then calls `compare_or_generate_trusted_results()` itself, its generated
 basenames omit the `KO...` segment and use the local `enable_improvements`
 loop variable.
 
-ETLegacy has six backend-local RHS trusted baselines: four covariant cases span
-both `T4munu` states and both improvements states, while two noncovariant
+ETLegacy has backend-local RHS trusted baselines: the covariant cases span
+both `T4munu` states and both improvements states, while the noncovariant
 KO-enabled cases span both `T4munu` states with improvements disabled.
 
 ## Sources

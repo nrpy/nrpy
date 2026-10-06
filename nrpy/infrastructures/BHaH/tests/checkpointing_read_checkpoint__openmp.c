@@ -22,7 +22,7 @@
  *
  * If griddata == NULL, read only commondata metadata and return 1 when the
  * checkpoint exists. This supports rebuilding grids from restart state before
- * loading the full checkpoint payload.
+ * loading the full checkpoint data.
  */
 int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *restrict griddata) {
   char filename[256];

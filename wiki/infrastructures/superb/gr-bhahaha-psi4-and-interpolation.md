@@ -1,6 +1,6 @@
 # GR, BHaHAHA, Psi4, And Interpolation
 
-> Explain superB GR service wiring for BHaHAHA horizons, Psi4 shell extraction, and distributed interpolation. · Status: confirmed · Last reconciled: 07-19-2026
+> Explain superB GR service wiring for BHaHAHA horizons, Psi4 shell extraction, and distributed interpolation. · Status: confirmed
 > Up: [superB](index.md)
 
 ## Summary
@@ -132,8 +132,8 @@ Validation is asymmetric. Configured CI runs the default collision project,
 which exercises a distributed superB/BHaHAHA program path, but does not assert
 horizon files or interpolation payload values. It builds but does not run the
 spectroscopy project, so Psi4 shell interpolation and decomposition are not
-runtime-proven there. No distributed run or result check was performed during
-this KB audit, and workflow configuration does not prove latest success.
+runtime-proven there. Workflow configuration defines coverage but does not
+establish execution outcomes.
 
 ## Sources
 

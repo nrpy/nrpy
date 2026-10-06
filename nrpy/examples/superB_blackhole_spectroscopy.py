@@ -67,6 +67,7 @@ enable_KreissOliger_dissipation = True
 enable_CAKO = True
 enable_CAHD = False
 enable_SSL = True
+enable_YBS_Gamma_constraint_adjustment = False
 enable_BHaHAHA = True
 KreissOliger_strength_gauge = 0.99
 KreissOliger_strength_nongauge = 0.3
@@ -230,6 +231,8 @@ superB.initial_data.register_CFunction_initial_data(
     ID_persist_struct_str=BHaH.general_relativity.TwoPunctures.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
+// SSL requires alpha=W=(psi+u)^-2 initially; see arXiv:2404.01137.
+snprintf(ID_persist.initial_lapse, 100, "W");
 TP_solve(&ID_persist);
 """,
     free_ID_persist_struct_str=r"""
@@ -281,10 +284,11 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     enable_CAKO=enable_CAKO,
     enable_CAHD=enable_CAHD,
     enable_SSL=enable_SSL,
+    enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
     OMP_collapse=OMP_collapse,
 )
 if enable_CAHD:
-    BHaH.general_relativity.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
+    BHaH.general_relativity.dsmin_gf.register_CFunction_dsmin_auxevol_gridfunction(
         {CoordSystem}
     )
 if separate_Ricci_and_BSSN_RHS:
@@ -487,7 +491,7 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 post_non_y_n_auxevol_mallocs = ""
 if enable_CAHD:
     post_non_y_n_auxevol_mallocs = """for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-    cahdprefactor_auxevol_gridfunction(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx,  griddata_chare[grid].gridfuncs.auxevol_gfs);
+    dsmin_auxevol_gridfunction(&griddata_chare[grid].params, griddata_chare[grid].xx, griddata_chare[grid].gridfuncs.auxevol_gfs);
 }\n"""
 
 superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(

@@ -127,9 +127,25 @@ else{
   const REAL dt_ISCO = 0.001;
   const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);
   REAL *restrict t_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
+  if (t_zoom == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed for t_zoom\\n");
+  exit(1);
+}  // END IF: t_zoom allocation failed
   REAL *restrict minus_r_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
+  if (minus_r_zoom == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed for minus_r_zoom\\n");
+  exit(1);
+}  // END IF: minus_r_zoom allocation failed
   gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
+  if (acc_r == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed for acc_r\\n");
+  exit(1);
+}  // END IF: acc_r allocation failed
   gsl_spline *restrict spline_r = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
+  if (spline_r == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed for spline_r\\n");
+  exit(1);
+}  // END IF: spline_r allocation failed
   gsl_spline_init(spline_r,times,r,commondata->nsteps_fine);
   for (i = 0; i < N_zoom; i++){
     t_zoom[i] = times[0] + i * dt_ISCO;
@@ -337,7 +353,13 @@ free(phase_unwrapped);
 
 // Step 10: Apply the NQC correction to low and fine waveform samples.
 commondata->nsteps_inspiral = commondata->nsteps_low + commondata->nsteps_fine;
-commondata->waveform_inspiral = (double complex *)malloc(commondata->nsteps_inspiral*NUMMODES*sizeof(double complex));
+// Zero-initialized: only the TIME and (2,2)-strain slots are filled below,
+// and higher-mode slots must read back as zero, not indeterminate memory.
+commondata->waveform_inspiral = (double complex *)calloc(commondata->nsteps_inspiral*NUMMODES,sizeof(double complex));
+if (commondata->waveform_inspiral == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), calloc() failed for waveform_inspiral\\n");
+  exit(1);
+}  // END IF: waveform_inspiral allocation failed
 REAL nqc_amp, nqc_phase, q1, q2, q3,p1, p2;
 for (i = 0; i < commondata->nsteps_low; i++){
   prstar = commondata->dynamics_low[IDX(i,PRSTAR)];

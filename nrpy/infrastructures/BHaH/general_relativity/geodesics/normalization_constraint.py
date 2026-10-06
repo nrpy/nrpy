@@ -6,8 +6,8 @@ This module implements an execution kernel to compute the scalar invariant
 $C = g_{\mu\nu} v^\mu v^\nu$ for massive particles or photons. It defines unpacking
 logic for the spatial velocity components and the symmetric metric tensor. A Structure
 of Arrays (SoA) definition ensures uniform memory mapping. The module registers a C
-function that maps SymPy expressions to a bounded kernel architecture, utilizing the
-configured parallelization strategy.
+function that maps SymPy expressions to a kernel with bounded per-thread memory,
+using the selected CUDA or OpenMP parallelization.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -39,7 +39,7 @@ def normalization_constraint(norm_expr: sp.Expr, PARTICLE: str) -> None:
     else:
         raise ValueError(f"Unsupported PARTICLE: {PARTICLE}")
 
-    # Step 1: Architecture detection
+    # Step 1: Select CUDA or OpenMP.
     parallelization = par.parval_from_str("parallelization")
 
     norm_struct_def = r"""
@@ -52,7 +52,7 @@ def normalization_constraint(norm_expr: sp.Expr, PARTICLE: str) -> None:
     } normalization_constraint_t; // END STRUCT: normalization_constraint_t
     """
 
-    # Register the struct definition to the global header generation pipeline.
+    # Register the struct definition for inclusion in the generated global header.
     Bdefines_h.register_BHaH_defines("normalization_constraint", norm_struct_def)
 
     # Define the highly optimized math evaluation block.
@@ -79,7 +79,7 @@ def normalization_constraint(norm_expr: sp.Expr, PARTICLE: str) -> None:
     # Dynamically generate the unpacking logic based on the specific vector coordinates.
     preamble_lines = [
         "    //==========================================",
-        "    // COMPONENT HYDRATION",
+        "    // LOAD STATE-VECTOR COMPONENTS",
         "    //==========================================",
     ]
 
@@ -121,7 +121,7 @@ def normalization_constraint(norm_expr: sp.Expr, PARTICLE: str) -> None:
     else:
         loop_preamble = """
     //==========================================
-    // OPENMP LOOP ARCHITECTURE
+    // OPENMP PARALLEL LOOP
     //==========================================
     // Distribute particle trajectories across available CPU threads for parallel evaluation.
     #pragma omp parallel for
@@ -133,7 +133,7 @@ def normalization_constraint(norm_expr: sp.Expr, PARTICLE: str) -> None:
     //==========================================
     // MACRO DEFINITIONS
     //==========================================
-    // IDX_LOCAL maps a component to the flattened state bundle using SoA layout.
+    // IDX_LOCAL maps a component to the flattened state array using SoA layout.
     // Layout: [Component][RayID]
     #ifndef IDX_LOCAL
     #define IDX_LOCAL(comp, ray_id, N) ((comp) * (N) + (ray_id))
@@ -183,7 +183,7 @@ def normalization_constraint(norm_expr: sp.Expr, PARTICLE: str) -> None:
     @param d_f_bundle The device pointer array containing the state vectors $f^\mu$.
     @param d_metric_bundle The device pointer array containing the symmetric metric tensor $g_{{\mu\nu}}$.
     @param d_norm_bundle The device array of diagnostic constraint structures to be populated.
-    @param current_chunk_size The dynamically sized operational boundary for the active chunk.
+    @param current_chunk_size Number of active trajectories in this ray chunk.
 
     Expected Value: {expected_val} for {vec_desc}."""
 

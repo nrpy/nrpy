@@ -1,6 +1,6 @@
 # C Function Registry
 
-> Core route for generated C function objects and registration. · Status: confirmed · Last reconciled: 07-20-2026
+> Core route for generated C function objects and registration. · Status: confirmed
 > Up: [Core APIs](index.md)
 
 ## Summary

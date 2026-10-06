@@ -163,7 +163,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const REAL dtheta, const REA
     desc = """
  * @brief Manages the extraction and decomposition of the Weyl scalar psi4 at multiple radii.
  *
- * @details This function orchestrates the process of computing the spin-weight -2 spherical harmonic modes of psi4.
+ * @details This function interpolates psi4 on extraction spheres and computes its spin-weight -2 spherical harmonic modes.
  *          It iterates through a list of specified extraction radii. For each radius, it constructs a spherical
  *          shell of interpolation points.
  *

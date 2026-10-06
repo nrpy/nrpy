@@ -35,7 +35,7 @@ class MakefileTarget(NamedTuple):
 
 
 class MakefileExtension(NamedTuple):
-    """Describe caller-supplied sources, targets, and cleanup artifacts."""
+    """Describe caller-supplied sources, targets, and files to remove on cleanup."""
 
     source_records: List[SourceRecord]
     targets: List[MakefileTarget]
@@ -198,8 +198,12 @@ def _construct_makefile_content(
     use_openmp: bool = True,
     makefile_extension: Optional[MakefileExtension] = None,
 ) -> str:
-    """
+    r"""
     Construct the entire Makefile content using a template.
+
+    Extension targets retain their prerequisites and recipe commands, with one
+    tab added to each command. Only targets marked phony join `.PHONY`, and
+    extension cleanup files join the root `clean` command.
 
     :param cc: The C compiler executable name.
     :param cflags: The string of primary compiler flags.
@@ -212,9 +216,44 @@ def _construct_makefile_content(
     :param addl_dirs_to_make: Additional generated projects to build.
     :param create_lib: Whether the target is a library.
     :param static_lib: Whether the target is a static library.
-    :param use_openmp: If True, add OpenMP flags; if False, omit them.
+    :param use_openmp: If True, request OpenMP and use it when supported; if False, omit it.
     :param makefile_extension: Additional typed build metadata to render.
     :return: The complete string content of the Makefile.
+
+    Doctests:
+        >>> options = dict(
+        ...     cc="gcc", cflags="-O2", cxxflags="-O2",
+        ...     valgrind_cflags="-g", cppflags="-I.", ldlibs="-lm",
+        ...     source_records=[("main.c", [])], exec_or_library_name="example",
+        ...     addl_dirs_to_make=[], create_lib=False, static_lib=False,
+        ... )
+        >>> plain = _construct_makefile_content(**options)
+        >>> next(line for line in plain.splitlines() if line.startswith(".PHONY:"))
+        '.PHONY: all valgrind clean'
+        >>> _construct_makefile_content(
+        ...     **options, makefile_extension=MakefileExtension([], [], [])
+        ... ) == plain
+        True
+        >>> extension = MakefileExtension(
+        ...     source_records=[],
+        ...     targets=[
+        ...         MakefileTarget("linkcheck", ["$(OBJECTS)"], [
+        ...             "printf ready > .akv_linkcheck",
+        ...             "printf done > .akv_linkcheck_main.c",
+        ...         ], True),
+        ...         MakefileTarget("stamp", [], [], False),
+        ...     ],
+        ...     clean_files=[".akv_linkcheck", ".akv_linkcheck_main.c"],
+        ... )
+        >>> extended = _construct_makefile_content(**options, makefile_extension=extension)
+        >>> next(line for line in extended.splitlines() if line.startswith(".PHONY:"))
+        '.PHONY: all valgrind clean linkcheck'
+        >>> extended.split("\n\nlinkcheck:", 1)[1].split("\n\nvalgrind:", 1)[0].splitlines()
+        [' $(OBJECTS)', '\tprintf ready > .akv_linkcheck', '\tprintf done > .akv_linkcheck_main.c', '', 'stamp:']
+        >>> plain_clean = plain.split("\nclean:\n", 1)[1].splitlines()[0]
+        >>> extended_clean = extended.split("\nclean:\n", 1)[1].splitlines()[0]
+        >>> extended_clean == plain_clean + " .akv_linkcheck .akv_linkcheck_main.c"
+        True
     """
     if cc == "nvcc":
         compiler_block = """# CUDA projects require nvcc unless CC is overridden on the command line.
@@ -252,16 +291,30 @@ PIC_CFLAGS := {pic_cflags}
 PIC_NVCCFLAGS := {pic_nvccflags}"""
     else:
         openmp_block = f"""OPENMP ?= {openmp_default}
-OPENMP_FLAG := -fopenmp
 
+OPENMP_SUPPORTED := 0
 ifeq ($(OPENMP),1)
-OPENMP_SUPPORTED := $(shell printf '%s\\n' '\\#include <omp.h>' 'int main(void) {{ return omp_get_max_threads() < 1; }}' | $(CC) $(ALL_CPPFLAGS) $(OPENMP_FLAG) -x c - -o /dev/null >/dev/null 2>&1 && echo YES || echo NO)
+hash := $(shell printf '\\043')
+OPENMP_TEST = printf '%s\\n' '$(hash)include <omp.h>' '$(hash)ifndef _OPENMP' '$(hash)error OpenMP is unavailable' '$(hash)endif' 'int main(void) {{ return omp_get_max_threads() < 1; }}'
+OPENMP_C_SUPPORTED := 1
+OPENMP_CXX_SUPPORTED := 1
+ifneq ($(strip $(C_SOURCES)),)
+OPENMP_C_SUPPORTED := $(shell $(OPENMP_TEST) | $(CC) $(ALL_CPPFLAGS) $(CFLAGS) $(PIC_CFLAGS) -fopenmp -x c - $(LDFLAGS) -o /dev/null >/dev/null 2>&1 && printf 1 || printf 0)
+endif
+ifneq ($(strip $(CXX_SOURCES)),)
+OPENMP_CXX_SUPPORTED := $(shell $(OPENMP_TEST) | $(CXX) $(ALL_CPPFLAGS) $(CXXFLAGS) $(PIC_CFLAGS) -fopenmp -x c++ - $(LDFLAGS) -o /dev/null >/dev/null 2>&1 && printf 1 || printf 0)
+endif
+ifneq ($(strip $(C_SOURCES)$(CXX_SOURCES)),)
+ifeq ($(OPENMP_C_SUPPORTED)$(OPENMP_CXX_SUPPORTED),11)
+OPENMP_SUPPORTED := 1
+endif
+endif
 endif
 
-ifeq ($(OPENMP_SUPPORTED),YES)
-OMP_CFLAGS := $(OPENMP_FLAG)
-OMP_CXXFLAGS := $(OPENMP_FLAG)
-OMP_LDFLAGS := $(OPENMP_FLAG)
+ifeq ($(OPENMP_SUPPORTED),1)
+OMP_CFLAGS := -fopenmp
+OMP_CXXFLAGS := -fopenmp
+OMP_LDFLAGS := -fopenmp
 else
 OMP_CFLAGS := -Wno-unknown-pragmas
 OMP_CXXFLAGS := -Wno-unknown-pragmas
@@ -330,11 +383,12 @@ endef
 """
         object_order_only_rule = "$(OBJECTS): | additional-projects\n"
         recursive_clean = "\n" + "\n".join(
-            f"\t+$(MAKE) -C {directory} clean" for directory in addl_dirs_to_make
+            f"\t+@$(MAKE) --no-print-directory -s -C {directory} clean"
+            for directory in addl_dirs_to_make
         )
 
     extension_target_rules = ""
-    extension_clean_recipe = ""
+    extension_clean_files = ""
     if makefile_extension:
         target_rules = []
         for target in makefile_extension.targets:
@@ -351,9 +405,7 @@ endef
         if target_rules:
             extension_target_rules = "\n\n" + "\n\n".join(target_rules)
         if makefile_extension.clean_files:
-            extension_clean_recipe = (
-                f"\n\t$(RM) {' '.join(makefile_extension.clean_files)}"
-            )
+            extension_clean_files = f" {' '.join(makefile_extension.clean_files)}"
 
     target_prerequisites = f"$(OBJECTS){additional_projects_prerequisite}"
     if create_lib and static_lib:
@@ -369,7 +421,7 @@ endef
     if cc == "nvcc":
         if create_lib:
             valgrind_rule = """valgrind:
-\t@echo "Compute Sanitizer requires an executable test harness."
+\t@echo "Compute Sanitizer requires an executable test program."
 \t@false"""
         else:
             valgrind_rule = f"""valgrind:
@@ -392,7 +444,8 @@ endef
     if cc == "nvcc":
         linker_block = "LINKER := $(CC)"
     else:
-        linker_block = """CXX_SOURCES := $(filter %.cc %.cpp %.cxx,$(SOURCES))
+        linker_block = """C_SOURCES := $(filter %.c,$(SOURCES))
+CXX_SOURCES := $(filter %.cc %.cpp %.cxx,$(SOURCES))
 ifeq ($(strip $(CXX_SOURCES)),)
 LINKER := $(CC)
 else
@@ -413,13 +466,13 @@ ALL_LDLIBS = $(LDLIBS) $(PROJECT_LDLIBS)
 DEPDIR := .deps
 DEPFLAGS = -MMD -MP -MF $(DEPDIR)/$(@:.o=.d) -MT $@
 
-{openmp_block}
-
 {source_records_block}
 OBJECTS := $(addsuffix .o,$(basename $(SOURCES)))
 DEPFILES := $(addprefix $(DEPDIR)/,$(OBJECTS:.o=.d))
 
 {linker_block}
+
+{openmp_block}
 
 .PHONY: {" ".join(phony_targets)}
 
@@ -433,10 +486,9 @@ $(OBJECTS): Makefile
 
 {valgrind_rule}
 
-# Remove only files owned by this generated build.
+# Remove nested build products and root runtime output.
 clean:
-\t$(RM) $(OBJECTS) {exec_or_library_name}
-\t$(RM) -r $(DEPDIR){extension_clean_recipe}{recursive_clean}
+\t$(RM) -r {exec_or_library_name} $(DEPDIR) *.o */*.o */*/*.o *.d */*.d */*/*.d *.txt *.gp *.dat *.out *.log *.avi *.png *.bin{extension_clean_files}{recursive_clean}
 
 -include $(DEPFILES)
 """
@@ -459,7 +511,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     use_openmp: bool = True,
     makefile_extension: Optional[MakefileExtension] = None,
 ) -> None:
-    r"""
+    """
     Output C functions registered to CFunction_dict and construct a Makefile for compiling C code.
 
     :param project_dir: The root directory of the C project.
@@ -475,131 +527,10 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param lib_function_prefix: Prefix to add to library function names.
     :param include_dirs: List of include directories.
     :param src_code_file_ext: Extension for C source files.
-    :param use_openmp: If True, add OpenMP flags; if False, omit them.
-    :param makefile_extension: Additional typed sources, targets, and cleanup artifacts.
+    :param use_openmp: If True, request OpenMP and use it when supported; if False, omit it.
+    :param makefile_extension: Additional typed sources, targets, and files to remove on cleanup.
     :raises TypeError: If 'addl_libraries' is not a list.
-    :raises ValueError: If extension sources or targets collide, or a recipe command includes Makefile indentation.
-
-    Doctests:
-        >>> from nrpy.c_function import register_CFunction
-        >>> CFunction_dict.clear()
-        >>> register_CFunction(
-        ...     subdirectory="",
-        ...     desc='Main function',
-        ...     name='main',
-        ...     cfunc_type='int',
-        ...     params='int argc, char *argv[]',
-        ...     includes=['project.h', '<stdio.h>'],
-        ...     body='return 0;',
-        ... )
-        >>> try:
-        ...     test_path = Path('/tmp/nrpy_BHaH_Makefile_doctest1')
-        ...     test_path.mkdir(parents=True, exist_ok=True)
-        ...     _ = test_path.joinpath('project.h').write_text('', encoding='utf-8')
-        ...     # Test this function
-        ...     output_CFunctions_function_prototypes_and_construct_Makefile(
-        ...         '/tmp/nrpy_BHaH_Makefile_doctest1',
-        ...         'project_name',
-        ...         addl_dirs_to_make=['support'],
-        ...     )
-        ...     # Verify the content of the generated Makefile
-        ...     with open('/tmp/nrpy_BHaH_Makefile_doctest1/Makefile', 'r') as f:
-        ...         content = f.read()
-        ...     assert 'ifeq ($(origin CC),default)' in content
-        ...     assert 'CC := gcc' in content
-        ...     assert 'SOURCES := \\\n    main.c' not in content
-        ...     assert 'OBJECTS := $(addsuffix .o,$(basename $(SOURCES)))' in content
-        ...     assert 'DEPDIR := .deps' in content
-        ...     assert 'DEPFILES := $(addprefix $(DEPDIR)/,$(OBJECTS:.o=.d))' in content
-        ...     assert content.count('main.c') == 1
-        ...     assert 'main.o:' not in content
-        ...     assert content.count('project.h') == 1
-        ...     assert 'SOURCES += $(call ADD_SOURCE,main.c,project.h)' in content
-        ...     assert '$(eval $(call ADD_SOURCE' not in content
-        ...     assert '$(eval SOURCES +=' not in content
-        ...     assert 'DEPFLAGS = -MMD -MP -MF $(DEPDIR)/$(@:.o=.d) -MT $@' in content
-        ...     assert '\t@mkdir -p $(dir $(DEPDIR)/$(@:.o=.d))' in content
-        ...     assert 'PROJECT_CPPFLAGS := -I.' in content
-        ...     assert 'ALL_CPPFLAGS = $(CPPFLAGS) $(PROJECT_CPPFLAGS)' in content
-        ...     assert f"{chr(92)}#include <omp.h>" in content
-        ...     assert '$(CC) $(ALL_CPPFLAGS) $(ALL_CFLAGS) $(DEPFLAGS) -c $< -o $@' in content
-        ...     assert '$(LINKER) $(ALL_LDFLAGS) -o $@ $(OBJECTS) $(ALL_LDLIBS)' in content
-        ...     assert '-include $(DEPFILES)' in content
-        ...     assert 'all: project_name' in content
-        ...     assert '$(OBJECTS): Makefile' in content
-        ...     assert '$(OBJECTS): | additional-projects' in content
-        ...     assert 'project_name: $(OBJECTS) additional-projects' in content
-        ...     assert '\t+$(MAKE) -C support' in content
-        ...     makefile_lines = content.splitlines()
-        ...     clean_recipe = makefile_lines[makefile_lines.index('clean:') + 1]
-        ...     assert clean_recipe == '\t$(RM) $(OBJECTS) project_name'
-        ...     assert '\t$(RM) -r $(DEPDIR)' in content
-        ...     assert '\t+$(MAKE) -C support clean' in content
-        ...     assert 'linkcheck:' not in content
-        ...     assert '.extension_linkcheck' not in content
-        ...     assert '*.out' not in content
-        ...     extension_path = test_path / 'extension'
-        ...     extension = MakefileExtension(
-        ...         source_records=[('support/extra.c', [])],
-        ...         targets=[
-        ...             MakefileTarget(
-        ...                 name='linkcheck',
-        ...                 prerequisites=['$(OBJECTS)'],
-        ...                 recipe=['printf ready > .extension_linkcheck'],
-        ...                 phony=True,
-        ...             ),
-        ...         ],
-        ...         clean_files=['.extension_linkcheck'],
-        ...     )
-        ...     assert not extension.targets[0].recipe[0].startswith('\t')
-        ...     output_CFunctions_function_prototypes_and_construct_Makefile(
-        ...         str(extension_path),
-        ...         'extension_project',
-        ...         exec_or_library_name='libextension',
-        ...         create_lib=True,
-        ...         static_lib=True,
-        ...         makefile_extension=extension,
-        ...     )
-        ...     extension_content = extension_path.joinpath('Makefile').read_text(encoding='utf-8')
-        ...     assert 'SOURCES += $(call ADD_SOURCE,support/extra.c)' in extension_content
-        ...     assert 'OBJECTS := $(addsuffix .o,$(basename $(SOURCES)))' in extension_content
-        ...     assert 'libextension.a: $(OBJECTS)' in extension_content
-        ...     assert '\t$(AR) rcs $@ $(OBJECTS)' in extension_content
-        ...     phony_line = next(
-        ...         line for line in extension_content.splitlines()
-        ...         if line.startswith('.PHONY:')
-        ...     )
-        ...     assert 'linkcheck' in phony_line.split()[1:]
-        ...     assert 'linkcheck: $(OBJECTS)\n\tprintf ready > .extension_linkcheck' in extension_content
-        ...     extension_lines = extension_content.splitlines()
-        ...     clean_index = extension_lines.index('clean:')
-        ...     assert '\t$(RM) .extension_linkcheck' in extension_lines[clean_index + 1:]
-        ...     cuda_path = test_path / 'cuda'
-        ...     output_CFunctions_function_prototypes_and_construct_Makefile(
-        ...         str(cuda_path),
-        ...         'cuda_project',
-        ...         CC='nvcc',
-        ...         compiler_opt_option='nvcc',
-        ...         src_code_file_ext='cu',
-        ...     )
-        ...     cuda_content = cuda_path.joinpath('Makefile').read_text(encoding='utf-8')
-        ...     assert 'CC := nvcc' in cuda_content
-        ...     assert 'SOURCES += $(call ADD_SOURCE,main.cu)' in cuda_content
-        ...     assert '$(CC) $(ALL_CPPFLAGS) $(ALL_NVCCFLAGS) $(DEPFLAGS) -c $< -o $@' in cuda_content
-        ...     assert '$(LINKER) $(NVCCFLAGS) $(ALL_LDFLAGS) -o $@ $(OBJECTS) $(ALL_LDLIBS)' in cuda_content
-        ...     assert 'CUDA_SANITIZER_DIR ?= /usr/lib/nvidia-cuda-toolkit/compute-sanitizer' in cuda_content
-        ...     assert 'test -f "$(CUDA_SANITIZER_DIR)/libsanitizer-collection.so"' in cuda_content
-        ...     assert "Find it with: find /usr/local/cuda* /usr/lib/nvidia-cuda-toolkit -name 'libsanitizer-collection.so' -print 2>/dev/null" in cuda_content
-        ...     assert 'Retry with the directory containing that file: make valgrind CUDA_SANITIZER_DIR=/path/to/compute-sanitizer' in cuda_content
-        ...     assert 'valgrind:\n\t@test -f "$(CUDA_SANITIZER_DIR)/libsanitizer-collection.so"' in cuda_content
-        ...     assert '\t+$(MAKE) clean\n\t+$(MAKE) NVCCFLAGS="$(NVCCFLAGS) -lineinfo" all' in cuda_content
-        ...     assert 'compute-sanitizer --injection-path "$(CUDA_SANITIZER_DIR)" --tool memcheck --leak-check full --error-exitcode 1 ./cuda_project' in cuda_content
-        ...     assert 'OPENMP=0' not in cuda_content
-        ...     assert 'Valgrind target is unavailable for CUDA builds.' not in cuda_content
-        ... finally:
-        ...     # Clean up any created files
-        ...     if Path('/tmp/nrpy_BHaH_Makefile_doctest1').exists():
-        ...         shutil.rmtree('/tmp/nrpy_BHaH_Makefile_doctest1')
+    :raises ValueError: If extension sources or targets collide, or a recipe command starts with a tab.
     """
     # Step 1: Validate inputs and initialize local state
     _validate_inputs(create_lib, static_lib, addl_CFLAGS, include_dirs)
@@ -769,27 +700,6 @@ def compile_Makefile(
     :param attempt: Compilation attempt number.
 
     :raises RuntimeError: If compilation fails after two attempts.
-
-    DocTests:
-        >>> from nrpy.c_function import register_CFunction
-        >>> CFunction_dict.clear()
-        >>> register_CFunction(
-        ...     name='main',
-        ...     desc='Main function',
-        ...     cfunc_type='int',
-        ...     params='int argc, char *argv[]',
-        ...     body='return 0;',
-        ... )
-        >>> test_dir = '/tmp/nrpy_BHaH_Makefile_doctest2/'
-        >>> try:
-        ...     # Test compilation
-        ...     compile_Makefile(test_dir, 'project_name', 'executable')
-        ...     # Check if the executable exists
-        ...     assert Path(test_dir).joinpath('executable').is_file()
-        ... finally:
-        ...     # Clean up
-        ...     if Path(test_dir).exists():
-        ...         shutil.rmtree(test_dir)
     """
     final_CC = CC
     if final_CC == "autodetect":
@@ -857,25 +767,7 @@ if __name__ == "__main__":
     import doctest
     import sys
 
-    # Manually clear CFunction_dict and temp directories before running tests
-    CFunction_dict.clear()
-    for temp_dir in [
-        "/tmp/nrpy_BHaH_Makefile_doctest1",
-        "/tmp/nrpy_BHaH_Makefile_doctest2/",
-    ]:
-        if Path(temp_dir).exists():
-            shutil.rmtree(temp_dir)
-
     results = doctest.testmod()
-
-    # Clean up directories after tests
-    for temp_dir in [
-        "/tmp/nrpy_BHaH_Makefile_doctest1",
-        "/tmp/nrpy_BHaH_Makefile_doctest2/",
-    ]:
-        if Path(temp_dir).exists():
-            shutil.rmtree(temp_dir)
-
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)

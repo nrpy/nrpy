@@ -1,22 +1,16 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/set_initial_conditions_kernel.py
 """
-Defines the C kernel and orchestrator for photon initialization.
+Defines the C kernel and driver for photon initialization.
 
 This module provides a C function that initializes photon trajectories in Cartesian
-coordinates. It allocates a staging buffer to process rays in batches, initializing
+coordinates. It allocates temporary arrays to process rays in batches, initializing
 the spatial positions, spatial momenta, and adaptive step sizes. It sets the temporal
-momentum to zero for downstream constraint solving. The implementation orchestrates
-asynchronous data transfers and hardware synchronization.
-
-Single coalesced memory writes prevent thread serialization and ensure aligned cache
-access. An explicit hardware error synchronization trap prevents silent link-time
-symbol failures caused by compiling with -rdc=true. Hydrating pinned memory via data
-bus seeds the Time Slot Manager. Evaluating the initial side of the observer and
-source planes natively prevents redundant device memory allocation and data transfers.
-Thread identification boundaries prevent out-of-bounds access for threads exceeding
-the active chunk. Parallelized batch processing distributes execution across threads.
-Processing memory in static bundles protects hardware limits. A synchronization
-transfer updates the master Structure of Arrays state.
+momentum to zero for the subsequent normalization-constraint solve. CUDA launches on
+the selected stream, then uses synchronous device-to-host ``cudaMemcpy`` calls; DEBUG
+builds also synchronize explicitly and check for launch errors. OpenMP builds use host
+arrays and parallel loops. Each ray is inserted into the coordinate-time slot selected
+from its initialized time, and each completed chunk is copied into the persistent
+Structure-of-Arrays photon state.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -28,11 +22,11 @@ import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.params as par
 from nrpy.helpers.loop import loop
 
-# Define the C-structs required for the simulation pipeline.
+# Define the C structs required for photon initialization and integration.
 # These are registered here to ensure they appear in BHaH_defines.h before
 # the initialization kernel is compiled.
 batch_structs_c_code = r"""
-    // Maximum number of photons processed per batch to fit within L1/L2 cache.
+    // Maximum number of photons processed in one ray chunk.
     #define BUNDLE_CAPACITY 524288
 
     // Defines the physical planes where a photon trajectory might terminate.
@@ -70,7 +64,7 @@ batch_structs_c_code = r"""
     } __attribute__((packed)) blueprint_data_t; // END STRUCT: blueprint_data_t
 
     // ==========================================
-    // Flattened SoA Struct (Master Storage)
+    // Structure-Of-Arrays Photon State
     // ==========================================
     typedef struct {
         double *f; // Flattened state vector mapping 9 components $t, x, y, z, p_t, p_x, p_y, p_z, \text{aux}$.
@@ -83,7 +77,7 @@ batch_structs_c_code = r"""
         termination_type_t *status; // Current physical/numerical status of the photon.
         int *rejection_retries; // Counter for consecutive RKF45 error tolerance rejections.
 
-        // Event Detection State Flags (Persistence Layer for Batch C)
+        // Event-detection history flags.
         bool *on_positive_side_of_window_prev; // True if photon was previously 'above' the window plane.
         bool *on_positive_side_of_source_prev; // True if photon was previously 'above' the source plane.
 
@@ -100,7 +94,7 @@ batch_structs_c_code = r"""
 
 def set_initial_conditions_kernel(spacetime_name: str) -> None:
     """
-    Register the C function and device kernel for Cartesian photon initialization.
+    Register the CUDA/OpenMP function for Cartesian photon initialization.
 
     :param spacetime_name: The specific metric or spacetime identifier (e.g., 'KerrSchild').
     """
@@ -145,11 +139,11 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         add_to_parfile=True,
     )
 
-    # Dynamic architecture detection.
+    # Select CUDA or OpenMP.
     parallelization = par.parval_from_str("parallelization")
     cd_access = parallel_utils.get_commondata_access(parallelization)
 
-    # Dictionary mapping for GPU/CPU kernel arguments.
+    # Arguments for CUDA kernels and OpenMP functions.
     arg_dict = {
         "num_rays": "const long int",
         "d_f_bundle": "double *restrict",
@@ -163,19 +157,19 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         "start_idx": "const long int",
         "chunk_size": "const long int",
     }
-    # Pass commondata explicitly when not using CUDA's global memory
+    # Pass commondata explicitly to the OpenMP function.
     if parallelization != "cuda":
         arg_dict["commondata"] = "const commondata_struct *restrict"
 
     # ==========================================
-    # ARCHITECTURE-SPECIFIC KERNEL PREAMBLE/POSTAMBLE
+    # CUDA/OPENMP KERNEL PREAMBLE AND POSTAMBLE
     # ==========================================
     if parallelization == "cuda":
         loop_preamble = r"""
     //==========================================
     // THREAD IDENTIFICATION & BOUNDARY CHECKS
     //==========================================
-    // Thread ID maps to a unique photon index within the current bundle batch via the identifier $c$.
+    // Thread ID maps to a unique photon index within the current ray chunk via the identifier $c$.
     const long int c = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (c >= chunk_size) return;
@@ -184,7 +178,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     else:
         loop_preamble = r"""
     //==========================================
-    // OPENMP LOOP ARCHITECTURE
+    // OPENMP PARALLEL LOOP
     //==========================================
     #pragma omp parallel for
     for (long int c = 0; c < chunk_size; c++) {
@@ -192,18 +186,18 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         loop_postamble = "} // END LOOP: for c over chunk_size"
 
     # ==========================================
-    # CORE MATH (Hardware Agnostic)
+    # CORE CALCULATION
     # ==========================================
     core_math = r"""
     // The identifier $i$ represents the global ray index within the master $num\_rays$ SoA.
     const long int i = start_idx + c;
 
     //==========================================
-    // MACRO DEFINITIONS FOR BUNDLE ACCESS
+    // MACRO DEFINITIONS FOR ARRAY ACCESS
     //==========================================
-    // IDX_F maps a component to the flattened state bundle using SoA layout aligned to the active BUNDLE_CAPACITY.
+    // IDX_F maps a component to the flattened state array using SoA layout aligned to the active BUNDLE_CAPACITY.
     #define IDX_F(comp, ray_id) ((comp) * BUNDLE_CAPACITY + (ray_id))
-    // IDX_H maps to the 1D adaptive step size bundle.
+    // IDX_H maps to the 1D adaptive step size array.
     #define IDX_H(ray_id) (ray_id)
 
     //==========================================
@@ -229,7 +223,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     //==========================================
     // INITIAL STATE POPULATION
     //==========================================
-    // Write the starting position and spatial momentum explicitly to the VRAM bundle.
+    // Write starting position and spatial momentum to the work array.
     d_f_bundle[IDX_F(0, c)] = {cd_access}t_start; // Coordinate time $t$
     d_f_bundle[IDX_F(1, c)] = {cd_access}camera_pos_x; // Spatial position $x$
     d_f_bundle[IDX_F(2, c)] = {cd_access}camera_pos_y; // Spatial position $y$
@@ -245,7 +239,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     // Normalization ensures initial 4-momentum $p^\mu$ satisfies null trajectory constraints.
     const double inv_mag_V = 1.0 / sqrt(V_x*V_x + V_y*V_y + V_z*V_z);
 
-    // Explicitly set the temporal momentum $p^t = 0$ for downstream Hamiltonian constraint solving.
+    // Set temporal momentum $p^t = 0$ before solving the Hamiltonian constraint.
     d_f_bundle[IDX_F(4, c)] = 0.0;
 
     d_f_bundle[IDX_F(5, c)] = V_x * inv_mag_V; // Initial momentum component $p^x$
@@ -292,27 +286,27 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     )
 
     # ==========================================
-    # MEMORY BRIDGE ARCHITECTURE
+    # RESULT COPIES
     # ==========================================
     if parallelization == "cuda":
         sync_and_transfer_code = r"""
         //==========================================
-        // EXPLICIT HARDWARE ERROR SYNCHRONIZATION
+        // CUDA ERROR CHECK
         //==========================================
         #ifdef DEBUG
         cudaDeviceSynchronize();
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
-            // Fatal unrecoverable error during kernel synchronization.
+            // Report a CUDA kernel error and stop.
             printf("Init Kernel Failed on Batch starting at %ld: %s\\n", (long int)start_idx, cudaGetErrorString(err));
             exit(1);
         } // END IF: check for kernel launch errors
         #endif
 
         //==========================================
-        // 9-STRIDED BRIDGE TRANSFER (DEVICE-TO-HOST)
+        // 9-STRIDED DEVICE-TO-HOST TRANSFER
         //==========================================
-        // Transfer initialized state vectors $f^\mu$ from VRAM back to host RAM.
+        // Copy initialized state vectors $f^\mu$ from device memory to host memory.
         for(int m=0; m<9; m++) {
             cudaMemcpy(all_photons->f + (m * num_rays) + start_idx,
                     d_f_bundle + (m * BUNDLE_CAPACITY),
@@ -321,9 +315,9 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         } // END LOOP: for m over 9-strided tensor transfer
 
         //==========================================
-        // 1-STRIDED BRIDGE TRANSFER (DEVICE-TO-HOST)
+        // 1-STRIDED DEVICE-TO-HOST TRANSFER
         //==========================================
-        // Transfer initialized adaptive step sizes $h$ from VRAM back to host RAM.
+        // Copy initialized adaptive step sizes $h$ from device memory to host memory.
         cudaMemcpy(all_photons->h + start_idx,
                    d_h_bundle,
                    sizeof(double) * chunk_size,
@@ -332,9 +326,9 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     else:
         sync_and_transfer_code = r"""
         //==========================================
-        // 9-STRIDED BRIDGE TRANSFER (HOST-TO-HOST)
+        // 9-STRIDED HOST COPY
         //==========================================
-        // Transfer initialized state vectors $f^\mu$ from staging buffer to master SoA.
+        // Transfer initialized state vectors $f^\mu$ from the temporary array to the persistent photon SoA.
         for(int m=0; m<9; m++) {
             memcpy(all_photons->f + (m * num_rays) + start_idx,
                    d_f_bundle + (m * BUNDLE_CAPACITY),
@@ -342,17 +336,17 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         } // END LOOP: for m over 9-strided tensor transfer
 
         //==========================================
-        // 1-STRIDED BRIDGE TRANSFER (HOST-TO-HOST)
+        // 1-STRIDED HOST COPY
         //==========================================
-        // Transfer initialized adaptive step sizes $h$ from staging buffer to master SoA.
+        // Transfer initialized adaptive step sizes $h$ from the temporary array to the persistent photon SoA.
         memcpy(all_photons->h + start_idx,
                d_h_bundle,
                sizeof(double) * chunk_size);
         """
 
-    # Generate the host-side loop string to iterate over the dataset in bundles.
+    # Generate the host-side loop over rays in BUNDLE_CAPACITY-sized chunks.
     loop_body = f"""
-        // Variable chunk_size defines the active range for the current streaming bundle.
+        // Variable chunk_size defines the active range for the current ray chunk.
         const long int chunk_size = NRPYMIN(num_rays - start_idx, BUNDLE_CAPACITY);
 
         {launch_code}
@@ -373,7 +367,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     //==========================================
     // HOST-SIDE GEOMETRY SETUP
     //==========================================
-    // Pre-calculate the projection plane basis vectors to save device registers.
+    // Calculate projection-plane basis vectors once before processing ray chunks.
     // Calculations use the static original window center to maintain consistent projection framing across all local tiles.
     const double cam_x = commondata->camera_pos_x; // The $x$-coordinate of the camera.
     const double cam_y = commondata->camera_pos_y; // The $y$-coordinate of the camera.
@@ -441,7 +435,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     //==========================================
     // DYNAMIC GEOMETRIC PLANE INITIALIZATION
     //==========================================
-    // Evaluate the initial side of the observer and source planes natively on the CPU.
+    // Evaluate the camera position relative to the observer and source planes.
     // Evaluates against the original global window to correctly flag observer window crossings regardless of tile offset.
     const double val_window = n_z[0] * (cam_x - owc_x) +
                               n_z[1] * (cam_y - owc_y) +
@@ -458,36 +452,36 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     // Evaluates true if exactly zero per physical emission constraints.
     const bool init_source_side = (val_source >= 0.0);
 
-    // Loop iterator traversing the entire global ray count to hydrate initial plane boundaries.
+    // Set initial plane-side flags for every ray.
     for (long int plane_i = 0; plane_i < num_rays; ++plane_i) {
         all_photons->on_positive_side_of_window_prev[plane_i] = init_window_side;
         all_photons->on_positive_side_of_source_prev[plane_i] = init_source_side;
     } // END LOOP: for plane_i over initial plane boundaries
 
     //==========================================
-    // VRAM STAGING ALLOCATION
+    // TEMPORARY WORK ARRAYS
     //==========================================
-    // Device pointer for the chunked VRAM state staging buffer d_f_bundle.
+    // Temporary state array for one ray chunk.
     double *d_f_bundle;
-    // Device pointer for the chunked VRAM step size staging buffer d_h_bundle.
+    // Temporary step-size array for one ray chunk.
     double *d_h_bundle;
 
     BHAH_MALLOC_DEVICE(d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY);
     BHAH_MALLOC_DEVICE(d_h_bundle, sizeof(double) * BUNDLE_CAPACITY);
 
     //==========================================
-    // HOST-SIDE PAGINATION LOOP
+    // RAY-CHUNK LOOP
     //==========================================
     {host_loop_code}
 
     //==========================================
-    // VRAM DEALLOCATION
+    // WORK-ARRAY DEALLOCATION
     //==========================================
     BHAH_FREE_DEVICE(d_f_bundle);
     BHAH_FREE_DEVICE(d_h_bundle);
     """.replace("{host_loop_code}", str(host_loop_code))
 
-    # Establish the final strings to satisfy the Translation Unit Inlining Mandate.
+    # Place the generated parallel function before its host wrapper.
     prefunc = f"{kernel_prefunc}"
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -496,9 +490,9 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
 
     desc = r""" Initializes Cartesian starting conditions for photons.
 
-    Detailed algorithm: Maps global thread IDs to pixel coordinates to calculate initial
+    Maps parallel-loop indices to pixel coordinates to calculate initial
     spatial coordinates $x, y, z$ and unnormalized momenta $p^x, p^y, p^z$. Explicitly enforces
-    temporal momentum $p^t = 0$ and affine parameter $\lambda = 0$ for downstream constraint solvers.
+    temporal momentum $p^t = 0$ and affine parameter $\lambda = 0$ before constraint solving.
 
     @param commondata Master configuration struct containing global parameters.
     @param num_rays Total number of photon trajectories in the simulation.
@@ -507,6 +501,9 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     @param n_x_out Output buffer for the $x$-axis basis vector $n_x^i$.
     @param n_y_out Output buffer for the $y$-axis basis vector $n_y^i$.
     @param n_z_out Output buffer for the $z$-axis basis vector $n_z^i$."""
+
+    if parallelization == "cuda":
+        desc += "\n    @param stream_idx CUDA stream index."
 
     cfunc_type = "void"
     name = f"set_initial_conditions_kernel_{spacetime_name}"

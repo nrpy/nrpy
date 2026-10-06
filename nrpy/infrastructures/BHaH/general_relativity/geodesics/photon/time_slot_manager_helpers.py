@@ -2,15 +2,13 @@
 """
 Defines the C data structures and helpers for the Time Slot Manager.
 
-This module sets up a lock-free arena allocator for the orchestration of batched
-photon trajectories based on their physical coordinate time. Binning photons
-temporally enforces the split-pipeline architecture required for relativistic ray
-tracing. Atomic operations and speculative memory writes guarantee thread safety and
-mathematical consistency during concurrent orchestration.
+This module defines arrays that group photon indices by physical coordinate-time
+slot for batched integration. Lock-free linked-list insertion uses atomic
+compare-and-swap while threads add photons to slots.
 
-This helper also owns the shared slot-manager CodeParameters that describe the
-physical slot lattice used by the batched photon pipeline. Other generators that
-consume `slot_manager_t_min` or `slot_manager_delta_t` should depend on this helper
+This helper also registers the shared slot-manager CodeParameters that describe the
+physical slot lattice used by batched photon integration. Other generators that
+use `slot_manager_t_min` or `slot_manager_delta_t` should depend on this helper
 instead of registering those fields independently.
 
 Author: Dalton J. Moone
@@ -25,9 +23,9 @@ def time_slot_manager_helpers() -> None:
     """
     Register TimeSlotManager helpers and shared slot-lattice CodeParameters.
 
-    This helper owns the commondata fields `slot_manager_t_min` and
+    This helper registers the commondata fields `slot_manager_t_min` and
     `slot_manager_delta_t`, plus the emitted `TimeSlotManager` struct and its
-    inline arena-management helpers. Generators that need either the runtime
+    inline slot-management helpers. Generators that need either the runtime
     slot-lattice parameters or the C helper API should call this function.
 
     >>> time_slot_manager_helpers()
@@ -42,12 +40,12 @@ def time_slot_manager_helpers() -> None:
     )
 
     portable_tsm = r"""
-    // Structure representing a discrete temporal arena for binning active photon trajectories.
+    // Structure grouping active photon indices by coordinate-time slot.
     typedef struct {
-        double t_min; // The absolute minimum physical coordinate time boundary $t_{min}$ for the temporal arena.
+        double t_min; // The minimum physical coordinate time represented by the slots.
         double t_max; // The absolute maximum physical coordinate time boundary $t_{max}$.
         double delta_t_slot; // The uniform temporal width $\Delta t_{slot}$ of each individual bin.
-        int num_slots; // The total number of discrete time slots available in the arena.
+        int num_slots; // The number of discrete coordinate-time slots.
         long int max_capacity; // The global maximum number of photons the manager can track.
         long int *photon_next_ptrs; // Linked-list pointer array tracking subsequent photons in the same slot.
         long int *slot_heads; // Array of pointers indicating the first photon index residing in each time slot.
@@ -55,9 +53,9 @@ def time_slot_manager_helpers() -> None:
     } TimeSlotManager; // END STRUCT: TimeSlotManager
 
     //==========================================
-    // ARENA ALLOCATION & INITIALIZATION
+    // TIME-SLOT ALLOCATION & INITIALIZATION
     //==========================================
-    //  Initializes the temporal arena structures for photon binning.
+    // Initialize arrays used to bin photon indices by coordinate time.
     static inline void slot_manager_init(TimeSlotManager *tsm, double t_min, double t_max, double delta_t_slot, long int num_rays) {
         tsm->t_min = t_min;
         tsm->t_max = t_max;
@@ -85,9 +83,9 @@ def time_slot_manager_helpers() -> None:
     } // END FUNCTION: slot_manager_init
 
     //==========================================
-    // ARENA DEALLOCATION
+    // TIME-SLOT DEALLOCATION
     //==========================================
-    //  Frees all dynamically allocated host-side memory tied to the temporal arena.
+    // Free host memory used by coordinate-time slots.
     static inline void slot_manager_free(TimeSlotManager *tsm) {
         if (!tsm) return;
         free(tsm->photon_next_ptrs);

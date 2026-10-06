@@ -348,46 +348,6 @@ IO::recover     = "autoprobe"
 IO::recover_dir = $parfile
 
 
-# ActiveThorns = "VolumeIntegrals_vacuum"
-# VolumeIntegrals_vacuum::HamiltonianVarString = "BaikalVacuum::HGF"
-# VolumeIntegrals_vacuum::Momentum0VarString = "BaikalVacuum::MU0GF"
-# VolumeIntegrals_vacuum::Momentum1VarString = "BaikalVacuum::MU1GF"
-# VolumeIntegrals_vacuum::Momentum2VarString = "BaikalVacuum::MU2GF"
-# VolumeIntegrals_vacuum::MomentumSquaredVarString = "BaikalVacuum::MSQUAREDGF"
-# VolumeIntegrals_vacuum::NumIntegrals = 7
-# VolumeIntegrals_vacuum::VolIntegral_out_every = 32
-# VolumeIntegrals_vacuum::enable_file_output = 1
-# #VolumeIntegrals_vacuum::outVolIntegral_dir = "volume_integration"
-# VolumeIntegrals_vacuum::verbose = 1
-
-# # The AMR centre will only track the first referenced integration quantities that track said centre.
-# #   Thus, centeroflapse output will not feed back into the AMR centre positions.
-# VolumeIntegrals_vacuum::Integration_quantity_keyword[1] = "H_M2_CnstraintsL2"
-# VolumeIntegrals_vacuum::Integration_quantity_keyword[2] = "usepreviousintegrands"
-# VolumeIntegrals_vacuum::Integration_quantity_keyword[3] = "usepreviousintegrands"
-# VolumeIntegrals_vacuum::Integration_quantity_keyword[4] = "H_M2_CnstraintsL2"
-# VolumeIntegrals_vacuum::Integration_quantity_keyword[5] = "H_M2_CnstraintsL2"
-# VolumeIntegrals_vacuum::Integration_quantity_keyword[6] = "H_M2_CnstraintsL2"
-# VolumeIntegrals_vacuum::Integration_quantity_keyword[7] = "H_M2_CnstraintsL2"
-
-# # Second integral takes the first integral integrand, then excises the region around the first BH
-# VolumeIntegrals_vacuum::volintegral_sphere__center_x_initial            [2] =  4.46153846154
-# VolumeIntegrals_vacuum::volintegral_outside_sphere__radius              [2] =  1.0
-# VolumeIntegrals_vacuum::volintegral_sphere__tracks__amr_centre          [2] =  0
-# VolumeIntegrals_vacuum::volintegral_usepreviousintegrands_num_integrands[2] =  2
-
-# # Third integral takes the second integral integrand, then excises the region around the second BH
-# VolumeIntegrals_vacuum::volintegral_sphere__center_x_initial            [3] = -5.53846153846
-# VolumeIntegrals_vacuum::volintegral_outside_sphere__radius              [3] =  1.0
-# VolumeIntegrals_vacuum::volintegral_sphere__tracks__amr_centre          [3] =  1
-# VolumeIntegrals_vacuum::volintegral_usepreviousintegrands_num_integrands[3] =  2
-
-# # Just an outer region
-# VolumeIntegrals_vacuum::volintegral_outside_sphere__radius[4] =10.0
-# VolumeIntegrals_vacuum::volintegral_outside_sphere__radius[5] =20.0
-# VolumeIntegrals_vacuum::volintegral_outside_sphere__radius[6] =100.0
-# VolumeIntegrals_vacuum::volintegral_outside_sphere__radius[7] =500.0
-
 ActiveThorns = "TimerReport"
 
 TimerReport::out_every                  = 512

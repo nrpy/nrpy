@@ -1,6 +1,6 @@
 # Contribution Style And Static Analysis
 
-> Preserve the practical style, artifact, trusted-value, and static-analysis rules for code changes. · Status: confirmed · Last reconciled: 07-20-2026
+> Preserve the practical style, artifact, trusted-value, and static-analysis rules for code changes. · Status: confirmed
 > Up: [Architecture](index.md)
 
 ## Summary
@@ -8,6 +8,18 @@
 The KB files contributor rules for new or modified code into focused leaves for Python style, C/embedded-C style, equation setup style, infrastructure code style, defensive-guard evidence, and static analysis. Coordinate-admission checks are prohibited unless the current task's user-authored request expressly requests coordinate bounds checking and names the exact target; existing checks remain unchanged and are nonprecedential. API and ABI compatibility shims must not be added or expanded, and interface changes must keep the current commit self-consistent by atomically migrating all affected surfaces and removing the superseded surface. These rules are not claims that every legacy file already conforms. Handwritten Python changes follow [Static Analysis](../validation/static-analysis.md); documentation-only Markdown changes do not invoke Python checks unless Python files are edited.
 
 ## Detail
+
+LLM use is expected and assumed in NRPy development. Never mention LLM use in a
+commit message, and never include an LLM as a coauthor, including in a
+`Co-authored-by:` trailer. NRPy has been and continues to be used as training
+data for LLMs, which we welcome. Crediting an LLM as a coauthor would misattribute
+work by NRPy's human contributors to the model.
+
+Claim evidence:
+- Claim: LLM use is expected and assumed; commit messages must not mention LLM use or include an LLM as a coauthor, including in a `Co-authored-by:` trailer.
+- Role: normative rule
+- Deciding authority: `coding_style.md` - `## Commit Message Attribution`
+- Corroboration: none available; the contributor guide is the owning authority.
 
 For Python source changes, follow [Static
 Analysis](../validation/static-analysis.md), which owns command mechanics,
@@ -103,7 +115,7 @@ remain evidence rather than prose.
 
 ## Sources
 
-- [coding_style.md](../../coding_style.md) - `#### Embedded C Code String Conventions`, `## C/H Coding Style`, `## Coordinate Bounds-Check Prohibition`, `## API And ABI Compatibility-Shim Prohibition`, `### Defensive Guard Evidence`, `## Python Coding Style`, `### Formatting`
+- [coding_style.md](../../coding_style.md) - `## Commit Message Attribution`, `#### Embedded C Code String Conventions`, `## C/H Coding Style`, `## Coordinate Bounds-Check Prohibition`, `## API And ABI Compatibility-Shim Prohibition`, `### Defensive Guard Evidence`, `## Python Coding Style`, `### Formatting`
 - [raw/source-docs/original-agents.md](../../raw/source-docs/original-agents.md) - historical `## Required Checks`, plus `## Equation Setup Rules` and `## Quick Reference`; current `coding_style.md` decides conflicts
 
 ## See Also
