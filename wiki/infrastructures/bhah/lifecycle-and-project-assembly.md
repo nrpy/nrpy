@@ -101,26 +101,37 @@ Claim evidence:
 - Claim: Generated BHaH Makefiles use one explicit `ADD_SOURCE` record per registered C-function source, derive object and dependency inventories without source-discovery commands, make resolved registered project-local headers immediate prerequisites, and use compiler dependency files under `.deps/`; generated `clean` prints one root `rm` command while removing the exact target, root dependency directory, `.o`/`.d` files only through depth two, and seven runtime suffix families only at the project root, delegates silent cleanup to registered subprojects, and preserves `.par`, unrelated suffixes, nested runtime files, and depth-three-or-deeper `.o`/`.d` files.
 - Role: descriptive behavior
 - Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_generate_c_files_and_header`, `_construct_makefile_content`, and `output_CFunctions_function_prototypes_and_construct_Makefile`
-- Corroboration: emitted-Makefile assertions in the same owner module
+- Corroboration: none available; no test asserts the emitted Makefile text
 
 Compiler selection replaces GNU Make's built-in `cc` only when that default is
 active, preserving environment and command-line choices; CUDA Makefiles select
 NVCC unless the command line overrides `CC`. Preprocessor, C, C++, CUDA,
 link-driver, and library options remain in separate composed variables. On CPU,
-`OPENMP=1` directly adds `-fopenmp` to C, C++, and link flags; an unsupported
-compiler or linker fails normally. `OPENMP=0` explicitly omits the link flag and
-uses unknown-pragma warning suppression for C and C++. No capability probe or
-fallback is emitted. The linker is selected from live source records: host C++ sources
+`OPENMP=1` makes Make test the compiler before adding any flag. For each source
+language present, Make pipes a short program that includes `omp.h`, requires
+`_OPENMP`, and calls `omp_get_max_threads()` into `$(CC)` for C sources or
+`$(CXX)` for C++ sources, with `-fopenmp` and the project preprocessor, compile,
+position-independent-code, and link flags, then compiles and links it to
+`/dev/null` without running it. Make adds `-fopenmp` to C, C++, and link flags
+only if every required test passes. If any test fails, the whole project builds
+serially with `-Wno-unknown-pragmas`, no `-fopenmp`, and no warning. `OPENMP=0`
+skips the tests and builds serially the same way. The `#` characters of the test
+program come from `printf '\043'` rather than a backslash-escaped `#`, because
+GNU Make 4.3 passes `\#` inside `$(shell ...)` to the shell unchanged; the
+compiler then rejects the program and the project silently builds serially.
+CUDA Makefiles add `-Xcompiler -fopenmp` to the NVCC and link flags and
+`-fopenmp` to the host C++ flags directly when `OPENMP=1`, with no test. The
+linker is selected from live source records: host C++ sources
 select `CXX`, ordinary CPU C sources select `CC`, and CUDA projects select
 NVCC. Additional generated projects are rechecked before dependent object
 builds and the final link. Static archives are removed before recreation so
 deleted object members cannot survive.
 
 Claim evidence:
-- Claim: Generated BHaH Makefiles preserve CPU origin-aware compiler selection and CUDA command-line `CC` overrides, separate build-flag roles, apply direct CPU `-fopenmp` compile/link flags for `OPENMP=1` with no probe or fallback, retain explicit `OPENMP=0` opt-out behavior, choose the linker from live source records, recheck additional projects before dependent builds, and recreate static archives without stale members.
+- Claim: Generated BHaH Makefiles preserve CPU origin-aware compiler selection and CUDA command-line `CC` overrides, separate build-flag roles; for CPU `OPENMP=1`, compile and link a test program with `-fopenmp` for each C or C++ source language present, add `-fopenmp` to C, C++, and link flags only if every test passes, and otherwise build serially with `-Wno-unknown-pragmas` and no warning, where the test does not run the program and so does not show multithreaded execution; for CUDA `OPENMP=1`, add `-Xcompiler -fopenmp` to the NVCC and link flags and `-fopenmp` to the host C++ flags without a test; retain explicit `OPENMP=0` opt-out behavior with no tests and serial flags, choose the linker from live source records, recheck additional projects before dependent builds, and recreate static archives without stale members.
 - Role: descriptive behavior
 - Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_generate_c_files_and_header`, `_construct_makefile_content`, and `output_CFunctions_function_prototypes_and_construct_Makefile`
-- Corroboration: none available; emitted-Makefile assertions live in the same owner module
+- Corroboration: none available; no test asserts the emitted Makefile text or the OpenMP test result, and no configured CI job checks which OpenMP flags were selected
 
 The generated `make valgrind` target is executable-oriented. For a CPU
 executable it cleans, rebuilds with the debug C flags and `OPENMP=0`, then runs
@@ -144,7 +155,7 @@ Claim evidence:
 - Claim: Generated CPU executable `make valgrind` rebuilds without OpenMP and runs Valgrind, while generated CUDA executable `make valgrind` checks only the configurable injection-library directory before cleaning, adds `-lineinfo` to NVCC `.cu` compilation and final linking, and runs Compute Sanitizer; CUDA libraries reject the target for lack of an executable harness, and CPU libraries rebuild without running Valgrind.
 - Role: descriptive behavior
 - Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_construct_makefile_content`
-- Corroboration: none available; emitted-Makefile assertions live in the same owner module
+- Corroboration: none available; no test asserts the emitted Makefile text
 
 `compile_Makefile` is the programmatic build wrapper. It autodetects a compiler
 when requested, regenerates the prototype/header/Makefile assets through

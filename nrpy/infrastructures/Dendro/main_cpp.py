@@ -831,18 +831,36 @@ int main(int argc, char** argv) {
     int checkpoint_index = -1;
     std::filesystem::file_time_type newest_checkpoint_time{};
     if (restore_solver && !generate_tpid) {
-      for (unsigned index = 0; index < 2; ++index) {
-        const std::filesystem::path metadata =
-            checkpoint_prefix + "_" + std::to_string(index) + "_step.cp";
-        if (!std::filesystem::exists(metadata)) continue;
-        const auto write_time = std::filesystem::last_write_time(metadata);
-        if (checkpoint_index < 0 || write_time > newest_checkpoint_time) {
-          checkpoint_index = static_cast<int>(index);
-          newest_checkpoint_time = write_time;
-        }  // END IF: newer checkpoint metadata found
-      }  // END LOOP: for index over checkpoint slots
-      if (checkpoint_index < 0)
-        throw std::runtime_error("checkpoint restore requested but no checkpoint metadata found: " + checkpoint_prefix);
+      // Rank 0 alone inspects the filesystem and broadcasts the slot, so every
+      // rank takes the same collective path even when a shared filesystem
+      // briefly differs between nodes.
+      if (rank == 0) {
+        for (unsigned index = 0; index < 2; ++index) {
+          const std::filesystem::path metadata =
+              checkpoint_prefix + "_" + std::to_string(index) + "_step.cp";
+          if (!std::filesystem::exists(metadata)) continue;
+          const auto write_time = std::filesystem::last_write_time(metadata);
+          if (checkpoint_index < 0 || write_time > newest_checkpoint_time) {
+            checkpoint_index = static_cast<int>(index);
+            newest_checkpoint_time = write_time;
+          }  // END IF: newer checkpoint metadata found
+        }  // END LOOP: for index over checkpoint slots
+      }  // END IF: rank 0 inspects checkpoint metadata
+      MPI_Bcast(&checkpoint_index, 1, MPI_INT, 0, MPI_COMM_WORLD);
+      // Metadata is published after the octree and state files, so existing
+      // metadata names a complete octree and state checkpoint, and a failure
+      // to read it stays fatal. Without metadata, as on the first submission
+      // of a job that always sets BSSN_RESTORE_SOLVER = 1, evolution starts
+      // from the initial data exactly as for BSSN_RESTORE_SOLVER = 0 and
+      // appends to any existing diagnostic files.
+      if (checkpoint_index < 0 && rank == 0)
+        std::cerr << """
+        + f'"{executable_name}: warning: BSSN_RESTORE_SOLVER = 1, but "'
+        + r"""
+                     "no checkpoint metadata was found for "
+                  << checkpoint_prefix
+                  << "; starting from the initial data\n"
+                  << std::flush;
     }  // END IF: checkpoint restore requested
     const DendroScalar grid_min_x =
         parameters.get<DendroScalar>("BSSN_GRID_MIN_X", -400.0);
@@ -924,6 +942,11 @@ int main(int argc, char** argv) {
     const std::array<DendroScalar, 2> excision_radii{{
         parameters.get<DendroScalar>("BSSN_BH1_CONSTRAINT_R", 1.0),
         parameters.get<DendroScalar>("BSSN_BH2_CONSTRAINT_R", 1.0)}};
+    for (const DendroScalar radius : excision_radii)
+      if (!(radius >= 0.0) || !std::isfinite(radius))
+        throw std::runtime_error(
+            "BSSN_BH1_CONSTRAINT_R and BSSN_BH2_CONSTRAINT_R must be finite "
+            "and nonnegative");
     commondata.mass_ratio = std::max(mass_1, mass_2) / std::min(mass_1, mass_2);
     commondata.initial_sep =
         2.0 * parameters.get<DendroScalar>("TPID_PAR_B", 4.0);

@@ -104,5 +104,5 @@ proves configured job shape, never latest successful execution.
 - Depends on: [JAX Commondata And PyFunction Registry](../infrastructures/jax/commondata-and-pyfunction-registry.md) - generation-time registries consumed by JAX project generation.
 - Depends on: [SEBOBv1 JAX Workflow](../infrastructures/jax/sebobv1-jax-workflow.md) - current JAX example functions, CI generation route, and provisional runtime caveat.
 - Depends on: [Dendro](../infrastructures/dendro/index.md) - Dendro branch router.
-- Depends on: [Project Assembly And Generating Functions](../infrastructures/dendro/project-assembly-and-emitters.md) - one generating function per output file, reading the registries directly.
-- Depends on: [Production Validation And Deferred Checks](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md) - generation, build, and MPI application checks.
+- Depends on: [Project Assembly And Generating Functions](../infrastructures/dendro/project-assembly-and-emitters.md) - the emitting function of each generated file, and the CMake emitter that reads the CFunction registry directly.
+- Depends on: [Production Validation And Deferred Checks](../infrastructures/dendro/production-validation-and-deferred-checks.md) - generation, build, and MPI application checks.

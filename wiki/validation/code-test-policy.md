@@ -275,14 +275,13 @@ the NRPyLaTeX BSSN file as a unique retained direct-execution sampled cross-
 representation harness. The JAX
 project generator emits a downstream pytest import/`__version__` scaffold that
 configured generated-project CI does not execute; it is low-signal and its
-removal or replacement needs a separate JAX decision. BHaH `compile_Makefile()`
-contains an external-compilation doctest that is unsafe under this policy.
+removal or replacement needs a separate JAX decision.
 
 Claim evidence:
-- Claim: The NRPyLaTeX BSSN file directly executes a sampled cross-representation comparison; the JAX project generator emits a downstream pytest import/`__version__` scaffold that configured generated-project CI does not execute; and BHaH `compile_Makefile()` contains an external-compilation doctest.
+- Claim: The NRPyLaTeX BSSN file directly executes a sampled cross-representation comparison, and the JAX project generator emits a downstream pytest import/`__version__` scaffold that configured generated-project CI does not execute.
 - Role: descriptive behavior
-- Deciding authority: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`; [jax_project_generator.py](../../nrpy/infrastructures/JAX/jax_project_generator.py), `_generate_project_metadata` and `output_PyFunction_files_and_construct_project`; [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `compile_Makefile`
-- Corroboration: [main.yml](../../.github/workflows/main.yml), `codegen-ubuntu` and `codegen-mac`, corroborates that JAX output is generated without executing its scaffold; no independent corroboration for the other outliers
+- Deciding authority: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`; [jax_project_generator.py](../../nrpy/infrastructures/JAX/jax_project_generator.py), `_generate_project_metadata` and `output_PyFunction_files_and_construct_project`
+- Corroboration: [main.yml](../../.github/workflows/main.yml), `codegen-ubuntu` and `codegen-mac`, corroborates that JAX output is generated without executing its scaffold; no independent corroboration for the other outlier
 
 Do not expand any of those shapes. Whether an unrelated touch must remove a
 legacy empty runner remains maintainer judgment. Meaningful doctest-only
@@ -321,7 +320,6 @@ for test count.
 - [generic.py](../../nrpy/helpers/generic.py) - `validate_strings`
 - [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py) - `test_example_BSSN`
 - [jax_project_generator.py](../../nrpy/infrastructures/JAX/jax_project_generator.py) - `_generate_project_metadata`, `output_PyFunction_files_and_construct_project`
-- [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `compile_Makefile`
 - [sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py) - `run_sebob`, `process_input_set`
 - [sebobv2_consistency_check.py](../../nrpy/examples/tests/sebobv2_consistency_check.py) - `run_sebobv2`, `process_input_set`
 - [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py) - `run_logged`, `run_checked`, `Report.check`, `Leg.run`

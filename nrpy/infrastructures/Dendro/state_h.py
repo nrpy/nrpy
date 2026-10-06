@@ -54,9 +54,9 @@ RICCI_GRIDFUNCTIONS = (
 )
 BSSN_DIAGNOSTIC_GRIDFUNCTIONS = (
     "H",
-    "MU0",
-    "MU1",
-    "MU2",
+    "MD0",
+    "MD1",
+    "MD2",
     "M_CONSTRAINT",
     "LAMBDA_CONSTRAINT",
 )
@@ -66,9 +66,9 @@ FCCZ4_DIAGNOSTIC_GRIDFUNCTIONS = (
     "Z4constraintU1",
     "Z4constraintU2",
     "H",
-    "MU0",
-    "MU1",
-    "MU2",
+    "MD0",
+    "MD1",
+    "MD2",
     "M_CONSTRAINT",
     "LAMBDA_CONSTRAINT",
 )
@@ -124,7 +124,7 @@ def register_canonical_gridfunctions(enable_fCCZ4: bool) -> None:
         gri.register_gridfunctions(
             name,
             group="DIAG",
-            rank=1 if name.startswith(("MU", "Z4constraintU")) else 0,
+            rank=1 if name.startswith(("MD", "Z4constraintU")) else 0,
             is_basename=False,
         )
     validate_registered_state(enable_fCCZ4)
