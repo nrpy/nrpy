@@ -244,6 +244,35 @@ Claim evidence:
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::get_wtol_function` and `Ctx::is_remesh` within `output_solver_context_cpp`.
 - Corroboration: `BSSN_GR/src/grUtils.cpp`, `punctureDataPhysicalCoord`; `BSSN_GR/src/dataUtils.cpp`, `calculate_relative_position_history` and `isRemeshBH`.
 
+Initial refinement runs at most `BSSN_INIT_GRID_ITER - 1` passes (the full count
+when that value is 1; q1's value of 10 gives nine). Each pass decides refinement
+from the values transferred from the previous mesh, the first pass from the
+freshly initialized data, and the loop stops when no refinement is due or a pass
+leaves the global element and node counts unchanged. No lapse and chi floor or
+algebraic projection runs between these transfers; after the loop, if any pass
+remeshed, the solver rebuilds the initial data once on the final mesh. Evolution
+remeshing instead applies the floors and projection right after each transfer.
+
+Claim evidence:
+- Claim: Initial refinement runs at most `BSSN_INIT_GRID_ITER - 1` passes (the full count when it is 1), each deciding refinement from the transferred values, and stops when no refinement is due or the global element and node counts are unchanged; no floor or projection runs between the initial transfers, the initial data are rebuilt once on the final mesh after any remesh, and evolution remeshing applies `post_timestep` right after each transfer.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp` (initial-grid loop and evolution loop).
+- Corroboration: none available; no CI case checks the pass count or the floors between passes.
+
+The generated solver moves each tracked puncture center once per step, after any
+remesh of that step, by `-dt beta^i`, where `dt` is the time since the previous
+update and `beta^i` is the shift interpolated from the evolved state at the
+center's previous position. It uses no predictor and no stored velocity, and a
+nonfinite interpolated shift stops the run. The centers set the excision regions
+of the constraint norms, the puncture-centered refinement floors, the merged
+test, and the puncture-center history that the Nyquist path uses.
+
+Claim evidence:
+- Claim: After each step and any remesh, the generated solver displaces each tracked puncture center once by `-dt beta^i`, with `dt` the time since the previous center update and `beta^i` interpolated from the evolved state at the previous center; there is no predictor or stored velocity, and a nonfinite shift stops the run. The centers feed the excision regions, the puncture-centered refinement floors, the merged test, and the center history.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::evolve_excision_centers` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp` (the evolution loop order).
+- Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.run_variant`, the point reflection of the checkpointed centers and their motion along the puncture momenta; it does not check the displacement formula.
+
 The generated refinement applies the following fixed constants and switching
 rules in addition to the keys in [Runtime Parameter Keys](runtime-parameters.md).
 

@@ -47,16 +47,21 @@ by the RHS adjustment and now also reported separately; it is not the distinct
 its formulation's Lambda RHS rather than adding Brown's BSSN adjustment. Order-specific
 constraint kernels are named `fCCZ4_constraints_order_N`.
 
-The slow-start lapse is the relaxation described in [BSSN Application
+With the default `OnePlusLog` lapse option the fCCZ4 lapse equation is
+`d_t alpha = beta^i d_i alpha - 2 alpha (K - 2 Theta)`. The slow-start lapse
+adds the relaxation described in [BSSN Application
 Wiring](bssn-application-wiring.md), with the same keys `BSSN_SSL_H` and
 `BSSN_SSL_SIGMA`. The Z4 damping coefficients `kappa1` (default 0.1) and `kappa2`
 (default 0) are read from keys of the same names; the packaged q1 file does not
-set them.
+set them. The `kappa1` damping terms carry no additional lapse factor, and the
+literal 1 stands for `kappa3`. The spatial Z4 diagnostic `Z4constraintU^i` is
+`Lambdatilde^i - DeltaGamma^i`, twice the conformal Z4 vector `Zbar^i`, and the
+diagnostic files carry no `Theta` column.
 
 Claim evidence:
-- Claim: fCCZ4's W and chi CAHD terms use the BSSN-shaped Hamiltonian expression with a runtime coefficient read from the key `BSSN_CAHD_C` (generated default 0.15; the packaged q1 file sets 0.06), not `H_Z4`; changing the generated conformal factor changes the coefficient from 2 to 4. The Z4 damping coefficients `kappa1` and `kappa2` are read from keys of the same names with defaults 0.1 and 0.
+- Claim: fCCZ4's W and chi CAHD terms use the BSSN-shaped Hamiltonian expression with a runtime coefficient read from the key `BSSN_CAHD_C` (generated default 0.15; the packaged q1 file sets 0.06), not `H_Z4`; changing the generated conformal factor changes the coefficient from 2 to 4. The Z4 damping coefficients `kappa1` and `kappa2` are read from keys of the same names with defaults 0.1 and 0. With the `OnePlusLog` lapse option `d_t alpha = beta^i d_i alpha - 2 alpha (K - 2 Theta)` plus the slow-start term; the `kappa1` terms have no additional lapse factor and `kappa3` is 1; `Z4constraintU^i = Lambdatilde^i - DeltaGamma^i` is twice `Zbar^i`; the diagnostic files carry no `Theta` column.
 - Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py`, `register_CFunction_rhs_eval`; `nrpy/equations/general_relativity/fCCZ4_RHSs.py` (`kappa1`, `kappa2` registration); `nrpy/infrastructures/Dendro/CodeParameters.py`, `Q1_TOML_PARAMETER_NAMES`.
+- Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py`, `register_CFunction_rhs_eval`; `nrpy/equations/general_relativity/fCCZ4_RHSs.py` (`kappa1`, `kappa2` registration); `nrpy/equations/general_relativity/fCCZ4_constraints.py` (`Z4constraintU`, `ZbarU`); `nrpy/infrastructures/Dendro/CodeParameters.py`, `Q1_TOML_PARAMETER_NAMES`.
 - Corroboration: `nrpy/infrastructures/Dendro/general_relativity/fCCZ4_constraints.py`, `register_CFunction_fCCZ4_constraints`, emits both `H` and formulation-specific `H_Z4` diagnostics.
 
 The initial octree uses the same analytic Dendro-GR puncture seed as BSSN.
@@ -64,14 +69,13 @@ Fresh evolution loads the same precomputed TwoPunctures coefficients as BSSN.
 Evolved initial data uses the resulting ADM data and full
 `psi=psi_background+u`, `alpha=W=psi^(-2)`, ADM conversion, halo exchange,
 physical-boundary fill, separate `initial_data_lambdaU`, and algebraic
-projection sequence as BSSN. `Theta_fCCZ4` receives its formulation-defined
-initial value. W and chi builds have distinct checkpoint formulation IDs and
+projection sequence as BSSN. `Theta_fCCZ4` starts at zero. W and chi builds have distinct checkpoint formulation IDs and
 reject cross-formulation restores.
 
 Claim evidence:
-- Claim: Fresh fCCZ4 evolution can load the same precomputed TwoPunctures solution as generated BSSN, then converts ADM fields and initializes the fCCZ4 state; checkpoint formulation IDs remain distinct.
+- Claim: Fresh fCCZ4 evolution can load the same precomputed TwoPunctures solution as generated BSSN, then converts ADM fields and initializes the fCCZ4 state with `Theta_fCCZ4 = 0`; checkpoint formulation IDs remain distinct.
 - Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::initialize` within `output_solver_context_cpp`.
+- Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::initialize` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/general_relativity/ADM_to_BSSN.py` (the zero `Theta_fCCZ4`).
 - Corroboration: `nrpy/examples/dendro_fccz4.py` and `nrpy/examples/dendro_bssn.py`, use the same entry-point generator and TwoPunctures registration.
 
 After initialization, every RK stage, and AMR transfer, `alpha` is floored at

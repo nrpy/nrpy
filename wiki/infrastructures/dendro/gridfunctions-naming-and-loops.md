@@ -33,7 +33,7 @@ scratch list: `RbarDD00`, `RbarDD01`, `RbarDD02`, `RbarDD11`, `RbarDD12`, and
 metadata use these same lists. Alphabetical registry sorting never defines
 runtime storage.
 
-Each registrar emits its pointer declarations once in registry order. It does
+Each registrar emits its pointer declarations once, in canonical component order. It does
 not infer inputs by scanning expressions or rewrite identifiers with strings or
 regular expressions. `simple_loop.py` emits x-fastest padded-block loops without
 a nested OpenMP region. Stencil kernels receive `ot::Block` directly and

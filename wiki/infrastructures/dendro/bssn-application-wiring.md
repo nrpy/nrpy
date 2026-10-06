@@ -98,7 +98,7 @@ directly from the selected BSSN fields. Generated runtime services also provide
 physical boundaries, conformal-factor volume-weighted and unique-node constraint
 diagnostics, checkpoint and restart, and scheduled output. ADM surface
 quantities are written to `*_ADM.dat`: at the effective gravitational-wave output cadence,
-when `BSSN_GW_RADAII` is non-empty, one row with the step, time, the last listed
+unless that frequency is 0, one row with the step, time, the last listed
 extraction radius, and the ADM energy `E`, linear momentum `P_i`, and angular
 momentum `J_i`, printed with up to ten significant digits (default notation,
 trailing zeros dropped).
@@ -136,7 +136,7 @@ uncommented header lines for its corresponding waveform-norm and puncture
 location files. A restart appends below the existing local labels.
 
 Claim evidence:
-- Claim: At the effective gravitational-wave output cadence, when `BSSN_GW_RADAII` is non-empty, rank 0 appends one row to `<BSSN_PROFILE_FILE_PREFIX>_ADM.dat` with the step, time, the last listed extraction radius `r`, and the seven ADM surface quantities (energy, three linear-momentum and three angular-momentum components). Each is a Lebedev-quadrature integral over the coordinate sphere of radius `r` about the coordinate origin with the coordinate unit normal and area weights `4 pi r^2 w`: a finite-radius value, not an asymptotic invariant. Values are printed with up to ten significant digits in default notation. This applies to the fCCZ4 application as well.
+- Claim: At the effective gravitational-wave output cadence, unless that frequency is 0, rank 0 appends one row to `<BSSN_PROFILE_FILE_PREFIX>_ADM.dat` with the step, time, the last listed extraction radius `r`, and the seven ADM surface quantities (energy, three linear-momentum and three angular-momentum components). Each is a Lebedev-quadrature integral over the coordinate sphere of radius `r` about the coordinate origin with the coordinate unit normal and area weights `4 pi r^2 w`: a finite-radius value, not an asymptotic invariant. Values are printed with up to ten significant digits in default notation. An empty `BSSN_GW_RADAII` is rejected at startup, so the list always has a last entry. This applies to the fCCZ4 application as well.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::adm_output` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/general_relativity/adm_quantities.py`, `register_CFunction_adm_quantities`, and `adm_quantities_surface_data.py`, `register_CFunction_adm_quantities_surface_data` (the mass-flux and `K_ij - gamma_ij K` inputs); `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`, the `BSSN_GW_EXTRACT_FREQ` and `BSSN_GW_RADAII` reads; `Ctx::update_output_frequencies`.
 - Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.check_run_a`, the closed-form comparison of the solved energy and angular momentum and the column use.
@@ -146,6 +146,18 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `open_labeled_output` and its output paths within `output_solver_context_cpp`, and `diagnostic_meanings`.
 - Corroboration: `nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_file_output.py`, the horizon diagnostics header this format follows; `nrpy/examples/tests/dendro_application_check.py`, `parse_table` and `parse_modes`, which read the labels.
+
+Each mode entry is `4 pi sum_i w_i Psi4(theta_i, phi_i) conj(sY_lm(theta_i, phi_i))`,
+the projection of Psi4 onto the spin-weight -2 spherical harmonic `sY_lm`. The
+sum runs over the valid points of the 25th-order Lebedev rule `LEBEDEV_025`, with
+weights `w_i`, on a coordinate sphere of each extraction radius about the
+coordinate origin; no key moves that center. The entry carries no factor of the
+extraction radius. Psi4 uses the Baker-Campanelli-Lousto tetrad (see [Psi4 And
+Tetrads](../../equations/general-relativity/psi4-and-tetrads.md)) seeded with
+`v1 = (-y, x, 0)` and `v2 = (x, y, z)`, and `v1 = (1, 0, 0)` on the z axis. The
+title line of each mode file states the projection. Native Dendro-GR extracts
+the same way, on origin-centered spheres with the factor `4 pi` and no radius
+factor.
 
 Each Psi4 mode goes to its own `*_GW_l<l>_m<m>.dat` file, with Dendro-GR
 `BSSN_GR`'s name and row layout: the step, time and one complex `(Re,Im)` pair
@@ -158,9 +170,9 @@ skip `#` lines and name the columns from the labels. Files are written for every
 only the listed `l` values, which is the same set for the default list.
 
 Claim evidence:
-- Claim: Rank 0 appends each (l, m) mode, for l = 2..max(`BSSN_GW_L_MODES`) and m = -l..l, to `<BSSN_PROFILE_FILE_PREFIX>_GW_l<l>_m<m>.dat`: column labels, then one row per extraction step with the step, time and one `(Re,Im)` pair per extraction radius, in scientific notation with 10 digits after the decimal point. Native `BSSN_GR` uses the same name and row layout, with an uncommented step-0 header line instead of the labels, and writes only the listed l values. This applies to the fCCZ4 application as well.
+- Claim: Rank 0 appends each (l, m) mode, for l = 2..max(`BSSN_GW_L_MODES`) and m = -l..l, to `<BSSN_PROFILE_FILE_PREFIX>_GW_l<l>_m<m>.dat`: column labels, then one row per extraction step with the step, time and one `(Re,Im)` pair per extraction radius, in scientific notation with 10 digits after the decimal point. Each entry is `4 pi` times the Lebedev-weighted sum of Psi4 times the conjugate spin-weight -2 harmonic on coordinate spheres about the origin, with no radius factor; native `BSSN_GR` extracts the same way. Native `BSSN_GR` uses the same name and row layout, with an uncommented step-0 header line instead of the labels, and writes only the listed l values. This applies to the fCCZ4 application as well.
 - Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::gravitational_wave_output` within `output_solver_context_cpp`.
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::gravitational_wave_output` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/general_relativity/gravitational_waves.py`, `register_CFunction_gravitational_waves`; `nrpy/infrastructures/Dendro/general_relativity/psi4_eval.py`, the tetrad seeds.
 - Corroboration: Dendro-GR `BSSN_GR/include/gwExtract.h`, `GW::extractFarFieldPsi4`, per-mode file writer.
 
 At the effective gravitational-wave extraction cadence, rank 0 also appends
@@ -264,7 +276,7 @@ evolutions equivalent:
 | Evolved conformal factor | W by default; `--conformal-factor chi` selects chi at generation | chi |
 | TwoPunctures initial lapse | Always `alpha=(psi_background+u)^(-2)=W`; startup rejects `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = false`, and `INITIAL_LAPSE` and `TPID_INITIAL_LAPSE_PSI_EXPONENT` are reported as having no effect | `TPID_REPLACE_LAPSE_WITH_SQRT_CHI=true` is needed to replace the ordinary `INITIAL_LAPSE=2` result with full-psi W |
 | Shift-driver damping in the SSL/CAHD path | Spatially constant `eta`; default 1 in the generated file, overridden by `ETA_CONST` in an input file (the packaged q1 file sets 2.0) | Radial RIT profile in the CPU RHS, `eta = (RIT_ETA_CENTRAL - RIT_ETA_OUTER) exp(-(r / RIT_ETA_WIDTH)^4) + RIT_ETA_OUTER` with defaults 2.0, 0.25, and 40.0, constant only when `RIT_ETA_CENTRAL` equals `RIT_ETA_OUTER`; the CPU RHS does not read `ETA_CONST`, so the packaged q1 file, which sets `ETA_CONST = 2.0` and no `RIT_ETA_*` key, runs natively with the falling profile |
-| Gamma-driver auxiliary `B^i` | `d_t beta^i = B^i + advection`, `d_t B^i = (3/4) d_t Lambdabar^i - eta B^i + advection`; the wavelet refinement test scales `betU` by 4/3 (see [Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md)) | `d_t beta^i = (3/4) B^i + advection` with `BSSN_LAMBDA_F = (1, 0)`, `d_t B^i = d_t Gt^i - eta B^i + advection`; with `BSSN_LAMBDA = (1, 1, 1, 1)` and the same `eta`, `B` is 4/3 of the generated `betU`; where the RIT profile differs from the generated constant `eta`, the relation does not hold |
+| Gamma-driver auxiliary `B^i` | `d_t beta^i = B^i + advection`, `d_t B^i = beta^j Dbar_j B^i + (3/4)(d_t Lambdabar^i - beta^j Dbar_j Lambdabar^i) - eta B^i`, the `GammaDriving2ndOrder_Covariant__Hatted` option, where `d_t Lambdabar^i` includes its own advection; the wavelet refinement test scales `betU` by 4/3 (see [Grid, AMR, And Time Stepping](grid-amr-and-time-stepping.md)) | `d_t beta^i = (3/4) B^i + advection` with `BSSN_LAMBDA_F = (1, 0)`, `d_t B^i = d_t Gt^i - eta B^i + lambda[2] beta^j d_j B^i - lambda[3] beta^j d_j Gt^i` with `lambda = BSSN_LAMBDA`; with `BSSN_LAMBDA = (1, 1, 1, 1)` and the same `eta`, `B` is 4/3 of the generated `betU`; where the RIT profile differs from the generated constant `eta`, the relation does not hold |
 | KO strength | Both generated strengths read `KO_DISS_SIGMA`; the emitted sample sets 0.4 when KO is enabled | Reads `KO_DISS_SIGMA` with CAKO off; when CAKO is enabled, uses `sqrt(chi)` times separate gauge and other CAKO coefficients |
 | Puncture tracker | After each step and any remesh, each center moves by `-dt beta^i`, with `beta^i` interpolated from the evolved state at the center's previous position and `dt` the time since the previous update: one explicit displacement, no predictor, no stored velocity | Heun predictor and corrector on `dx/dt = -beta(x)` using the velocity stored from the previous step, with a single Euler displacement when none is stored |
 | Time integrator and step | RK4 only; `BSSN_RK_TYPE` is not read; the spacing in the CFL step is the smallest axis spacing | `BSSN_RK_TYPE` selects among RK3, RK4, RK5, and three multistep types; the CFL spacing comes from the X-domain width |
