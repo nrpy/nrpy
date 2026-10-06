@@ -608,9 +608,10 @@ class GeneralRFMSpheroidalFisheye:
         self.ghatDD = ixp.zerorank2(dimension=3)
         for i in range(3):
             for j in range(3):
-                self.ghatDD[i][j] = sum(
-                    self.dCart_dxxUD[mu][i] * self.dCart_dxxUD[mu][j] for mu in range(3)
-                )
+                for mu in range(3):
+                    self.ghatDD[i][j] += (
+                        self.dCart_dxxUD[mu][i] * self.dCart_dxxUD[mu][j]
+                    )
 
         d2Cart_dxxdxxUDD = ixp.zerorank3(dimension=3)
         for mu in range(3):
@@ -629,11 +630,11 @@ class GeneralRFMSpheroidalFisheye:
         for i in range(3):
             for j in range(3):
                 for k in range(3):
-                    self.ghatDDdD[i][j][k] = sum(
-                        d2Cart_dxxdxxUDD[mu][i][k] * self.dCart_dxxUD[mu][j]
-                        + self.dCart_dxxUD[mu][i] * d2Cart_dxxdxxUDD[mu][j][k]
-                        for mu in range(3)
-                    )
+                    for mu in range(3):
+                        self.ghatDDdD[i][j][k] += (
+                            d2Cart_dxxdxxUDD[mu][i][k] * self.dCart_dxxUD[mu][j]
+                            + self.dCart_dxxUD[mu][i] * d2Cart_dxxdxxUDD[mu][j][k]
+                        )
 
         d3Cart_dxxdxxdxxUDDD = ixp.zerorank4(dimension=3)
         for mu in range(3):
@@ -689,14 +690,17 @@ class GeneralRFMSpheroidalFisheye:
             for j in range(3):
                 for k in range(3):
                     for l in range(3):
-                        self.ghatDDdDD[i][j][k][l] = sum(
-                            d3Cart_dxxdxxdxxUDDD[mu][i][k][l] * self.dCart_dxxUD[mu][j]
-                            + d2Cart_dxxdxxUDD[mu][i][k] * d2Cart_dxxdxxUDD[mu][j][l]
-                            + d2Cart_dxxdxxUDD[mu][i][l] * d2Cart_dxxdxxUDD[mu][j][k]
-                            + self.dCart_dxxUD[mu][i]
-                            * d3Cart_dxxdxxdxxUDDD[mu][j][k][l]
-                            for mu in range(3)
-                        )
+                        for mu in range(3):
+                            self.ghatDDdDD[i][j][k][l] += (
+                                d3Cart_dxxdxxdxxUDDD[mu][i][k][l]
+                                * self.dCart_dxxUD[mu][j]
+                                + d2Cart_dxxdxxUDD[mu][i][k]
+                                * d2Cart_dxxdxxUDD[mu][j][l]
+                                + d2Cart_dxxdxxUDD[mu][i][l]
+                                * d2Cart_dxxdxxUDD[mu][j][k]
+                                + self.dCart_dxxUD[mu][i]
+                                * d3Cart_dxxdxxdxxUDDD[mu][j][k][l]
+                            )
 
     def axis_maps_for_inverse(
         self, r: sp.Expr
