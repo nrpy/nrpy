@@ -210,8 +210,8 @@ only when every host fallback and mapped CodeParameter default for a missing
 key agrees. A key with differing call-site fallbacks or a host fallback that
 differs from its CodeParameter default remains absent so rerunning the file
 preserves each call site's current behavior. In particular, omitted
-`BSSN_BH1.V_X` and `BSSN_BH1.V_Y` retain their distinct defaults for puncture
-tracking and TwoPunctures momentum; omitted `CHI_FLOOR` retains its
+`BSSN_BH1.V_X` and `BSSN_BH1.V_Y` retain their distinct defaults for the initial
+octree seed and Nyquist wavelength and for TwoPunctures momentum; omitted `CHI_FLOOR` retains its
 `0.1` initial-mesh puncture-seed floor and its `1e-4` evolved-field floor. The
 dump writes every inserted floating-point default with enough digits to
 recover its original double value, including values inside TOML arrays. A
@@ -366,7 +366,7 @@ Claim evidence:
 ### TwoPunctures inputs
 
 The TwoPunctures solve takes only some of the black-hole keys. The others feed the
-initial octree seed, the puncture tracking, or the Nyquist history, and a value
+initial octree seed, the puncture tracking, or the initial Nyquist wavelength, and a value
 that the solve ignores is still read, so no unread-key warning appears.
 
 - Positions: the solve uses the separation `2 TPID_PAR_B` along x and the mass
@@ -379,7 +379,7 @@ that the solve ignores is still read, so no unread-key warning appears.
   take the fallbacks 0.11284523509709575 and -0.002284343811437988), the solve
   uses `P_plus = (-p_r, +p_t, 0)` and `P_minus = -P_plus`. The signs, `V_Z`, and
   every `BSSN_BH2.V_*` value are not used by the solve; they feed the seed and
-  the Nyquist history.
+  the initial Nyquist wavelength.
 - Spins: the solve sets both spins to zero, so the data are nonspinning.
   `BSSN_BH{1,2}.SPIN`, `.SPIN_THETA`, and `.SPIN_PHI` feed only the seed octree.
 - Masses: `BSSN_BH{1,2}.MASS` give the mass ratio `q = max(M1, M2) / min(M1, M2)`

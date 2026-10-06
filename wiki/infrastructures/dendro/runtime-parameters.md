@@ -80,7 +80,7 @@ Claim evidence:
 
 The tables `[BSSN_BH1]` and `[BSSN_BH2]` hold per-puncture values. Which of them
 feed the TwoPunctures solve and which feed only the initial octree seed, the
-tracking, and the Nyquist history is stated in [BSSN Application
+tracking, and the initial Nyquist wavelength is stated in [BSSN Application
 Wiring](bssn-application-wiring.md#twopunctures-inputs).
 
 | Key | Fallback | generated | q1 | Meaning and accepted values |
@@ -88,7 +88,7 @@ Wiring](bssn-application-wiring.md#twopunctures-inputs).
 | `BSSN_BH1.MASS`, `BSSN_BH2.MASS` | 0.5, 0.5 | none | 0.5, 0.5 | Puncture masses used for the mass ratio, the excision and refinement geometry, and the post-merger level floors. |
 | `BSSN_BH1.X`, `.Y`, `.Z` | 4.0, 0.0, 0.0 | none | 4.0, 0.0, 0.0 | Initial puncture center for excision, seeding, and tracking. |
 | `BSSN_BH2.X`, `.Y`, `.Z` | -4.0, 0.0, 0.0 | none | -4.0, 0.0, 0.0 | Same for the second puncture. |
-| `BSSN_BH{1,2}.V_X`, `.V_Y`, `.V_Z` | 0.0 for the initial octree seed and the Nyquist history; for the TwoPunctures momentum `BSSN_BH1.V_X` falls back to -0.002284343811437988 and `BSSN_BH1.V_Y` to 0.11284523509709575 | none | `BSSN_BH1`: -0.002284343811437988, 0.11284523509709575, 0.0; `BSSN_BH2`: the negatives of those values | Initial coordinate velocities. The tracked puncture centers move with the evolved shift, not with these values. |
+| `BSSN_BH{1,2}.V_X`, `.V_Y`, `.V_Z` | 0.0 for the initial octree seed and the initial Nyquist wavelength; for the TwoPunctures momentum `BSSN_BH1.V_X` falls back to -0.002284343811437988 and `BSSN_BH1.V_Y` to 0.11284523509709575 | none | `BSSN_BH1`: -0.002284343811437988, 0.11284523509709575, 0.0; `BSSN_BH2`: the negatives of those values | Puncture momenta in the initial data, despite the key names. The TwoPunctures solve uses only `abs(BSSN_BH1.V_X)` as the radial and `abs(BSSN_BH1.V_Y)` as the tangential momentum, with no division by the puncture mass; the initial octree seed uses all six components as Bowen-York momenta; when `BSSN_NYQUIST_M` is positive, the initial Nyquist wavelength reads all six as velocities. The tracked puncture centers move with the evolved shift, not with these values. |
 | `BSSN_BH{1,2}.SPIN`, `.SPIN_THETA`, `.SPIN_PHI` | 0.0 | none | 0.0 | Read, but they feed only the initial octree seed; the TwoPunctures data are nonspinning. |
 | `BSSN_BH1_CONSTRAINT_R`, `BSSN_BH2_CONSTRAINT_R` | 1.0 | none | 1.0 | Excision radius of the constraint norms around each tracked puncture; points whose coordinate distance from the center is below the radius are excluded (strict inequality, so 0 excludes nothing). The value must be finite and nonnegative. |
 | `TPID_PAR_B` | 4.0 | none | 4.0 | Half of the coordinate separation used by the TwoPunctures solve. |
