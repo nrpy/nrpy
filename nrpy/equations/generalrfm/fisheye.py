@@ -214,16 +214,6 @@ class FisheyeRadialMap:
         return self.c * rb0, self.c * rb1, self.c * rb2, self.c * rb3
 
 
-def _register_shared_fisheye_a(num_transitions: int) -> List[sp.Expr]:
-    return par.register_CodeParameters(
-        "REAL",
-        __name__,
-        [f"fisheye_a{i}" for i in range(num_transitions + 1)],
-        [1.0] * (num_transitions + 1),
-        commondata=False,
-    )
-
-
 class GeneralRFMFisheye:
     """
     Construct and store an N transition fisheye map and induced reference metric.
@@ -547,13 +537,11 @@ class GeneralRFMSpheroidalFisheye:
         self.r = sp.sqrt(r2)
         r_sym = sp.Symbol("r_fisheye", real=True, positive=True)
 
-        a_list = _register_shared_fisheye_a(num_transitions)
-        self.a_list = a_list
-        self.xy_map = FisheyeRadialMap(
-            num_transitions, prefix="fisheye_xy", a_list=a_list
-        )
+        xy_map = FisheyeRadialMap(num_transitions, prefix="fisheye_xy")
+        self.a_list = xy_map.a_list
+        self.xy_map = xy_map
         self.z_map = FisheyeRadialMap(
-            num_transitions, prefix="fisheye_z", a_list=a_list
+            num_transitions, prefix="fisheye_z", a_list=self.a_list
         )
         self.xy_R_list = self.xy_map.R_list
         self.xy_s_list = self.xy_map.s_list
