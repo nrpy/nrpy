@@ -44,7 +44,8 @@ dispatch or block indexing.
 The example option `--fd-order` (4, 6, or 8; default 6) selects only the defaults
 of the generated application: the constants `FD_ORDER`, `KO_FD_ORDER`, and
 `REQUIRED_PADDING`, the `BSSN_ELE_ORDER` line of the generated `pars/<stem>.toml`,
-and the fallback of `BSSN_ELE_ORDER` in the executable. All three orders are
+the fallback of `BSSN_ELE_ORDER` in the executable, and the `NGHOSTS` macro of the
+packaged `BHaH_defines.h`, which no Dendro source uses. All three orders are
 emitted whatever the option. On a fresh start the order used at run time is the
 `BSSN_ELE_ORDER` value of the parameter file, so a file that sets the key
 overrides the option: the packaged `pars/q1.par.lowres.toml` sets
@@ -53,10 +54,10 @@ was. A restore requires `BSSN_ELE_ORDER` to equal the order stored in the
 checkpoint and is rejected otherwise.
 
 Claim evidence:
-- Claim: `--fd-order` sets only the default order (the constants `FD_ORDER`, `KO_FD_ORDER`, `REQUIRED_PADDING`, the `BSSN_ELE_ORDER` line of the generated parameter file, and the fallback of the `BSSN_ELE_ORDER` read); all orders 4, 6, and 8 are emitted, and the order of a run is the `BSSN_ELE_ORDER` value in its parameter file, which the packaged q1 file sets to 6; a restore is rejected unless that value equals the element order stored in the checkpoint.
+- Claim: `--fd-order` sets only the default order (the constants `FD_ORDER`, `KO_FD_ORDER`, `REQUIRED_PADDING`, the `BSSN_ELE_ORDER` line of the generated parameter file, the fallback of the `BSSN_ELE_ORDER` read, and the unused `NGHOSTS` macro of the packaged `BHaH_defines.h`); all orders 4, 6, and 8 are emitted, and the order of a run is the `BSSN_ELE_ORDER` value in its parameter file, which the packaged q1 file sets to 6; a restore is rejected unless that value equals the element order stored in the checkpoint.
 - Role: descriptive behavior
-- Deciding authority: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `parse_args` and `main`; `nrpy/infrastructures/Dendro/param_toml.py`, `generate_default_parfile`; `nrpy/infrastructures/Dendro/constants_h.py`, `output_constants_h`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp` (the `BSSN_ELE_ORDER` read); `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::restore_checkpt` within `output_solver_context_cpp`, and `nrpy/infrastructures/Dendro/checkpoint.py`, `output_checkpoint_cpp` (the stored element order and the comparison with the running order).
-- Corroboration: `nrpy/examples/q1.par.lowres.toml`, the `BSSN_ELE_ORDER` line; `nrpy/examples/tests/dendro_application_check.py`, `Leg.generate_and_build` and `Leg.run_variant`, which generate at FD6 and select other orders through `BSSN_ELE_ORDER`; no CI case restores a checkpoint at a different `BSSN_ELE_ORDER`.
+- Deciding authority: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `parse_args` and `main`; `nrpy/infrastructures/Dendro/param_toml.py`, `generate_default_parfile`; `nrpy/infrastructures/Dendro/constants_h.py`, `output_constants_h`; `nrpy/infrastructures/BHaH/BHaH_defines_h.py`, `_register_finite_difference_defines` (the `NGHOSTS` macro); `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp` (the `BSSN_ELE_ORDER` read); `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::restore_checkpt` within `output_solver_context_cpp`, and `nrpy/infrastructures/Dendro/checkpoint.py`, `output_checkpoint_cpp` (the stored element order and the comparison with the running order).
+- Corroboration: `nrpy/examples/q1.par.lowres.toml`, the `BSSN_ELE_ORDER` line; `nrpy/examples/tests/dendro_application_check.py`, `Leg.generate_and_build` and `Leg.run_variant`, which generate at FD6 and select other orders through `BSSN_ELE_ORDER`; no CI case restores a checkpoint at a different `BSSN_ELE_ORDER`, and no source of the generated application uses `NGHOSTS`.
 
 Every generated right-hand side is centered. `register_CFunction_rhs_eval`
 replaces each directional derivative symbol of the equation modules (the `dupD`
@@ -82,6 +83,7 @@ Claim evidence:
 - [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - runtime order dispatch and padding checks.
 - [Dendrolib block.h](https://github.com/paralab/Dendro-5.01/blob/master/include/block.h) - regular block geometry.
 - [checkpoint.py](../../../nrpy/infrastructures/Dendro/checkpoint.py) - the stored element order and its comparison at restore.
+- [BHaH_defines_h.py](../../../nrpy/infrastructures/BHaH/BHaH_defines_h.py) - the `NGHOSTS` macro of the packaged `BHaH_defines.h`.
 - [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - `--fd-order` handling.
 - [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py) - the profiles that generate at FD6 and select other orders at run time.
 
