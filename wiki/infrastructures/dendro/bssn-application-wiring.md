@@ -19,7 +19,7 @@ runtime defaults and `pars/q1.par.lowres.toml` with the supplied equal-mass
 TwoPunctures BBH parameters. The printed single-rank `--tpid` command and the
 MPI evolution command both name the q1 file, and its values differ from the
 generated defaults ([q1 versus generated defaults](#q1-versus-generated-defaults)).
-[Production Validation And Deferred Checks](validation-standalone-host-and-deferral-gates.md)
+[Production Validation And Deferred Checks](production-validation-and-deferred-checks.md)
 states which of these files and commands CI exercises. The packaged
 q1 file starts a fresh run, sets a large end time of 1000000 (as does the
 generated file), omits an explicit iteration cap, and uses native scaling with

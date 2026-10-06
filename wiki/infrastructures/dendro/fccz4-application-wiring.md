@@ -20,7 +20,7 @@ MPI evolution command both name the q1 file, and its values differ from the
 generated defaults, among them `BSSN_CAHD_C` (0.06 in q1, 0.15 in the generated
 fCCZ4 file); see [q1 versus generated
 defaults](bssn-application-wiring.md#q1-versus-generated-defaults).
-[Production Validation And Deferred Checks](validation-standalone-host-and-deferral-gates.md)
+[Production Validation And Deferred Checks](production-validation-and-deferred-checks.md)
 states which of these files and commands CI exercises. The packaged q1 file
 starts a fresh run, sets a large end time of 1000000, omits an explicit
 iteration cap, and uses native scaling with base output frequencies of 80. The

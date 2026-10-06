@@ -200,7 +200,7 @@ Claim evidence:
 - Claim: the helper's pass results cover only its CI profiles, eight-step or shorter evolutions, and Kreiss-Oliger-enabled generation; they are not evidence for long-time, merger, production-resolution, or Dendro generation with `enable_KreissOliger_dissipation = False`, with `--fd-order` 4 or 8, or with `--ybs-gamma` or `--ybs-momentum`, or for the packaged q1 parameter file and the printed run commands.
 - Role: CI behavior
 - Deciding authority: [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `PROFILE_P`, `PROFILE_O`, `COMMON_OVERRIDES`, `Leg.generate_and_build`
-- Corroboration: [Production Validation And Deferred Checks](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md), `Required application checks`
+- Corroboration: [Production Validation And Deferred Checks](../infrastructures/dendro/production-validation-and-deferred-checks.md), `Required application checks`
 
 Explicitly unsupported or unverified by these configurations: CarpetX build or
 runtime; JAX generated basic test, returned-value checks, float32 inputs, or accelerator runtime;

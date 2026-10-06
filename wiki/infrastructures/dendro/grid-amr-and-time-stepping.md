@@ -321,4 +321,4 @@ for the columns, count reduction, scaling, and restart behavior.
 - Parent: [Dendro](index.md)
 - Depends on: [Gridfunctions, Naming, And Loops](gridfunctions-naming-and-loops.md)
 - See also: [Constraints And Diagnostic Norms](constraints-and-diagnostic-norms.md)
-- Validated by: [Production Validation And Deferred Checks](validation-standalone-host-and-deferral-gates.md)
+- Validated by: [Production Validation And Deferred Checks](production-validation-and-deferred-checks.md)
