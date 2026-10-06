@@ -110,6 +110,9 @@ def register_CFunction_diagnostics_proper_circumferences_general(
  * @pre The internal weight generator expects the sample count to be compatible
  *      with the 8th-order periodic stencil (here fixed to 128).
  */
+#ifdef __CUDACC__
+__device__
+#endif
 static void elliptic_E_and_K_integrals(const REAL k, REAL *restrict E, REAL *restrict K) {
   static const int N_sample_pts = 128; // Number of sample points for integration. Chosen for high precision.
   const REAL *restrict weights;        // Precomputed integration weights for accuracy in the midpoint method.
@@ -157,6 +160,9 @@ static void elliptic_E_and_K_integrals(const REAL k, REAL *restrict E, REAL *res
  * @return    The estimated spin parameter. Returns -10.0 if C_r is out of valid bounds or if convergence fails.
  *
  */
+#ifdef __CUDACC__
+__device__
+#endif
 static REAL compute_spin(const REAL C_r) {
   // Validate the input parameter. Return an error code if C_r exceeds the valid range.
   if (C_r > 1)
@@ -216,6 +222,9 @@ static REAL compute_spin(const REAL C_r) {
 
 // Apply inner BCs for a selection of gridfunctions
 // Note: Nxx_plus_2NGHOSTS2 is needed for IDX4pt()
+#ifdef __CUDACC__
+__device__
+#endif
 static void apply_inner_bc_for_selected_gfs(bc_struct *restrict bcstruct, REAL *restrict metric_data_gfs, const int Nxx_plus_2NGHOSTS0,
                                             const int Nxx_plus_2NGHOSTS1, const int Nxx_plus_2NGHOSTS2, const int *which_gfs, const int num_gfs) {
 
@@ -223,9 +232,13 @@ static void apply_inner_bc_for_selected_gfs(bc_struct *restrict bcstruct, REAL *
   const int NUM_THETA = Nxx_plus_2NGHOSTS1; // Needed for IDX2
 
   // Apply boundary conditions at inner boundary points for the selected gridfunctions.
+#ifdef __CUDACC__
+  PARALLEL_2D_LOOP(pt, 0, bc_info->num_inner_boundary_points, gf_idx, 0, num_gfs) {
+#else
 #pragma omp parallel for collapse(2)
   for (int gf_idx = 0; gf_idx < num_gfs; gf_idx++) {
     for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {
+#endif
       const int which_gf = which_gfs[gf_idx];
       const int dstpt = bcstruct->inner_bc_array[pt].dstpt; // Destination point index.
       const int srcpt = bcstruct->inner_bc_array[pt].srcpt; // Source point index for copying.
@@ -249,22 +262,41 @@ static void apply_inner_bc_for_selected_gfs(bc_struct *restrict bcstruct, REAL *
       if (dst_i0 == NGHOSTS) {
         metric_data_gfs[IDX4pt(which_gf, 0) + IDX2(dst_i1, dst_i2)] = metric_data_gfs[IDX4pt(which_gf, 0) + IDX2(src_i1, src_i2)];
       }
+#ifndef __CUDACC__
     } // END LOOP: for pt over inner boundary points
   } // END LOOP: for which_gf over gridfunctions
+#else
+  } END_PARALLEL_2D_LOOP; // END LOOP: which_gf over gridfunctions and pt over boundary points
+#endif
 } // END FUNCTION: apply_inner_bc_for_selected_gfs
 
 // ---------- small vector & math helpers (pure C) ----------
 // These are intentionally tiny & inlined: they live in tight OpenMP loops,
 // and we want predictable codegen and good autovectorization.
+#ifdef __CUDACC__
+__device__
+#endif
 static inline REAL dot3(const REAL a[3], const REAL b[3]) { return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; }
+#ifdef __CUDACC__
+__device__
+#endif
 static inline void cross3(const REAL a[3], const REAL b[3], REAL c[3]) {
   c[0] = a[1]*b[2] - a[2]*b[1];
   c[1] = a[2]*b[0] - a[0]*b[2];
   c[2] = a[0]*b[1] - a[1]*b[0];
 } // END FUNCTION: cross3
+#ifdef __CUDACC__
+__device__
+#endif
 static inline REAL norm3(const REAL a[3]) { return sqrt(dot3(a,a)); }
+#ifdef __CUDACC__
+__device__
+#endif
 static inline void normalize3(REAL a[3]) { const REAL n = norm3(a); if (n > 0.0) { a[0]/=n; a[1]/=n; a[2]/=n; } }
 // Build an orthonormal basis {e1, e2} orthogonal to s; avoid near-collinearity for numerical stability.
+#ifdef __CUDACC__
+__device__
+#endif
 static inline void build_basis_from_s(const REAL s[3], REAL e1[3], REAL e2[3]) {
   REAL a[3] = {1.0, 0.0, 0.0};
   if (fabs(dot3(a,s)) > 0.9) { a[0]=0.0; a[1]=1.0; a[2]=0.0; }
@@ -272,6 +304,9 @@ static inline void build_basis_from_s(const REAL s[3], REAL e1[3], REAL e2[3]) {
   cross3(s, e1, e2); normalize3(e2);
 } // END FUNCTION: build_basis_from_s
 // Cartesian unit vector -> spherical angles (theta, phi); inputs here are unit by construction.
+#ifdef __CUDACC__
+__device__
+#endif
 static inline void cart_to_sph(const REAL r[3], REAL *theta, REAL *phi) {
   const REAL x=r[0], y=r[1], z=r[2];
   REAL zz = z; if (zz < -1.0) zz = -1.0; if (zz > 1.0) zz = 1.0;
@@ -280,6 +315,9 @@ static inline void cart_to_sph(const REAL r[3], REAL *theta, REAL *phi) {
 } // END FUNCTION: cart_to_sph
 
 // Midpoint integrate over alpha with precomputed 8th-order weights (N_angle == Nxx2 is typically divisible by 8 -> 8th order).
+#ifdef __CUDACC__
+__device__
+#endif
 static inline REAL integrate_over_alpha(const REAL *vals, int N_angle, REAL d_alpha) {
   const REAL *restrict weights;
   int weight_stencil_size;
@@ -318,10 +356,20 @@ Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     body = r"""
-  // which_gf in {0: sqrt(q_tt), 1: sqrt(q_pp), 2: q_tp, 3: f_eq(θ,φ), 4: f_pol(θ,φ)};
+#ifdef __CUDACC__
+  // Set up cooperative group
+  namespace cg = cooperative_groups;
+  cg::grid_group gpu_grid = cg::this_grid();
+#endif
+// which_gf in {0: sqrt(q_tt), 1: sqrt(q_pp), 2: q_tp, 3: f_eq(θ,φ), 4: f_pol(θ,φ)};
   // diagonals as sqrt for stability; f_eq/f_pol are scalar line-element integrands.
-  const int NUM_DIAG_GFS = 5;
+  //const int NUM_DIAG_GFS = 5;
   const int grid = 0;
   // Extract grid dimensions, including ghost zones, for each coordinate direction. Needed for IDX4() macro.
   const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
@@ -329,9 +377,14 @@ Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
   const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
   const int NUM_THETA = Nxx_plus_2NGHOSTS1; // Needed for IDX2() macro.
 
+  // Must be allocated before function is called.
+  REAL *restrict metric_data_gfs = commondata->diagnostics_arrays.metric_data_gfs;
+
+  /*
   REAL *restrict metric_data_gfs;
   // Single heap allocation sized for a 2D (theta,phi) slab at i0 = NGHOSTS.
   BHAH_MALLOC(metric_data_gfs, Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_DIAG_GFS * sizeof(REAL));
+  */
 
   // Compute sqrt(q_{theta theta}), sqrt(q_{phi phi}), and q_{theta phi} across the entire (theta,phi) grid at i0=NGHOSTS.
   {
@@ -349,11 +402,17 @@ Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
     // 2. sqrt(q_{phi phi}),    stored to metric_data_gfs[IDX4(1,...)] at each point (theta, phi).
     // 3. q_{theta phi},       stored to metric_data_gfs[IDX4(2,...)]. Keep sign; no sqrt.
     // Clever IDX math ensures this 2D computation stays within the memory bounds of the 3D allocation.
+#ifdef __CUDACC__
+    PARALLEL_2D_LOOP(i1, NGHOSTS, Nxx_plus_2NGHOSTS1 - NGHOSTS, i2, NGHOSTS, Nxx_plus_2NGHOSTS2 - NGHOSTS) {
+      MAYBE_UNUSED const REAL xx2 = xx[2][i2]; // Phi coordinate at index i2.
+      MAYBE_UNUSED const REAL xx1 = xx[1][i1]; // Theta coordinate at index i1.
+#else
 #pragma omp parallel for
     for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
       const MAYBE_UNUSED REAL xx2 = xx[2][i2]; // Phi coordinate at index i2.
       for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {
         const MAYBE_UNUSED REAL xx1 = xx[1][i1]; // Theta coordinate at index i1.
+#endif
 """
     # Generate the three outputs from the induced 2-metric roots:
     body += ccg.c_codegen(
@@ -367,8 +426,12 @@ Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
         enable_fd_functions=enable_fd_functions,
     )
     body += r"""
+#ifndef __CUDACC__
       } // END LOOP: for i1 over theta points on the horizon surface
     } // END LOOP: for i2 over phi points on the horizon surface
+#else
+    } END_PARALLEL_2D_LOOP; // END LOOP: loop i1, i2, over theta and phi points on horizon surface
+#endif
 
     // Apply inner boundary conditions to q-metric gridfunctions sqrt(qtt), sqrt(qpp), and qtp:
     {
@@ -383,10 +446,17 @@ Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
   // Uniform alpha step for midpoint samples in [-pi, pi).
   const REAL d_alpha = (M_PI - (-M_PI)) / ((REAL)N_angle);
 
+  REAL(*dst_pts)[2] = commondata->diagnostics_arrays.dst_pts;
+  REAL *theta = commondata->diagnostics_arrays.theta;
+  REAL *phi = commondata->diagnostics_arrays.phi;
+  REAL *integrand = commondata->diagnostics_arrays.integrand;
+
+  /*
   REAL dst_pts[N_angle][2];
   REAL theta[N_angle];
   REAL phi[N_angle];
   REAL integrand[N_angle];
+  */
 
   // Normalize spin axis; if zero-length is provided, fall back to z-axis for determinism.
   REAL s[3] = {
@@ -422,11 +492,17 @@ Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
   // and the spherical basis (θ̂, φ̂) to build dθ/dalpha = t·θ̂, dφ/dalpha = (t·φ̂)/sinθ.
   // This avoids any finite differencing of angles and eliminates branch cuts.
   // ================================================================
+#ifdef __CUDACC__
+  PARALLEL_2D_LOOP(i1, NGHOSTS, Nxx_plus_2NGHOSTS1 - NGHOSTS, i2, NGHOSTS, Nxx_plus_2NGHOSTS2 - NGHOSTS) {
+    const REAL phi_c = griddata[grid].xx[2][i2];
+    const REAL sinph = sin(phi_c), cosph = cos(phi_c);
+#else
 #pragma omp parallel for
   for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
     const REAL phi_c = griddata[grid].xx[2][i2];
     const REAL sinph = sin(phi_c), cosph = cos(phi_c);
     for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {
+#endif
       const REAL theta_c = griddata[grid].xx[1][i1];
       const REAL sinth = sin(theta_c), costh = cos(theta_c);
       // unit position and spherical basis
@@ -474,8 +550,12 @@ Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
       const REAL dph_pol = (tpx * phx + tpy * phy + tpz * phz) / fmax(1e-14, sinth);
       const REAL fpol = sqrt(qtt * dth_pol * dth_pol + 2.0 * qtp * dth_pol * dph_pol + qpp * dph_pol * dph_pol);
       metric_data_gfs[IDX4pt(4, 0) + IDX2(i1, i2)] = fpol;
+#ifndef __CUDACC__
     } // END LOOP: for i1 over theta
   } // END LOOP: for i2 over phi
+#else
+  } END_PARALLEL_2D_LOOP; // END LOOP: loop i1, i2 over theta, phi
+#endif
 
   // Apply inner boundary conditions to the newly computed scalar integrands f_eq (which_gf=3)
   // and f_pol (which_gf=4), so their ghost zones are valid prior to interpolation.
@@ -498,22 +578,29 @@ Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
   //   Convert to (theta, phi), interpolate precomputed scalar integrand, and integrate.
   // ================================================================
   // #pragma omp parallel for // <- N_angle ~64 => thread creation/destruction makes OMP SLOWER
-  for (int i = 0; i < N_angle; i++) {
+#ifdef __CUDACC__
+  PARALLEL_1D_LOOP(i, 0, N_angle)
+#else
+  for (int i = 0; i < N_angle; i++)
+#endif
+  {
     const REAL alpha = -M_PI + ((REAL)i + 0.5) * d_alpha;
     REAL rvec[3] = {cos(alpha) * e1[0] + sin(alpha) * e2[0], cos(alpha) * e1[1] + sin(alpha) * e2[1], cos(alpha) * e1[2] + sin(alpha) * e2[2]};
     cart_to_sph(rvec, &theta[i], &phi[i]);
     dst_pts[i][0] = theta[i];
     dst_pts[i][1] = phi[i];
   } // END LOOP: for i over alpha: cell-centered sampling 2 pi across N_angle points
+#ifdef __CUDACC__
+  END_PARALLEL_1D_LOOP;
+#endif
 
   {
     // Interpolate precomputed equator integrand f_eq onto the alpha-midpoints.
-    int err =
-        bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, griddata[grid].params.dxx1, griddata[grid].params.dxx2, Nxx_plus_2NGHOSTS1,
-                                                       Nxx_plus_2NGHOSTS2, (REAL *restrict *)(*coords), src_feq, N_angle, dst_pts, integrand);
-    if (err != BHAHAHA_SUCCESS) {
+    bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, griddata[grid].params.dxx1, griddata[grid].params.dxx2, Nxx_plus_2NGHOSTS1,
+                                                       Nxx_plus_2NGHOSTS2, (REAL *restrict *)(*coords), src_feq, N_angle, dst_pts, integrand, &commondata->error_flag);
+    if (commondata->error_flag != BHAHAHA_SUCCESS) {
       free(metric_data_gfs);
-      return err;
+      return commondata->error_flag;
     } // END IF: equatorial-integrand interpolation failed
   } // END BLOCK: interpolate equatorial integrand onto great-circle samples
 
@@ -525,22 +612,29 @@ Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
   //   Proceed as above.
   // ================================================================
   // #pragma omp parallel for reduction(+ : sum) // <- N_angle ~64 => thread creation/destruction makes OMP SLOWER
-  for (int i = 0; i < N_angle; i++) {
+#ifdef __CUDACC__
+  PARALLEL_1D_LOOP(i, 0, N_angle)
+#else
+  for (int i = 0; i < N_angle; i++)
+#endif
+  {
     const REAL alpha = -M_PI + ((REAL)i + 0.5) * d_alpha;
     REAL rvec[3] = {cos(alpha) * s[0] + sin(alpha) * e1[0], cos(alpha) * s[1] + sin(alpha) * e1[1], cos(alpha) * s[2] + sin(alpha) * e1[2]};
     cart_to_sph(rvec, &theta[i], &phi[i]);
     dst_pts[i][0] = theta[i];
     dst_pts[i][1] = phi[i];
   } // END LOOP: for i over alpha: cell-centered sampling 2 pi across N_angle points
+#ifdef __CUDACC__
+  END_PARALLEL_LOOP;
+#endif
 
   {
     // Interpolate precomputed polar integrand f_pol onto the alpha-midpoints.
-    int err =
-        bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, griddata[grid].params.dxx1, griddata[grid].params.dxx2, Nxx_plus_2NGHOSTS1,
-                                                       Nxx_plus_2NGHOSTS2, (REAL *restrict *)(*coords), src_fpol, N_angle, dst_pts, integrand);
-    if (err != BHAHAHA_SUCCESS) {
+    bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, griddata[grid].params.dxx1, griddata[grid].params.dxx2, Nxx_plus_2NGHOSTS1,
+                                                       Nxx_plus_2NGHOSTS2, (REAL *restrict *)(*coords), src_fpol, N_angle, dst_pts, integrand, &commondata->error_flag);
+    if (commondata->error_flag != BHAHAHA_SUCCESS) {
       free(metric_data_gfs);
-      return err;
+      return commondata->error_flag;
     } // END IF: polar-integrand interpolation failed
   } // END BLOCK: interpolate polar integrand onto great-circle samples
 
@@ -568,6 +662,7 @@ Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )
     return pcg.NRPyEnv()

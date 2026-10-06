@@ -6,7 +6,9 @@
 #ifndef INTERPOLATION_LAGRANGE_UNIFORM_H_
 #define INTERPOLATION_LAGRANGE_UNIFORM_H_
 
+#ifndef __CUDACC__
 #include "intrinsics/simd_intrinsics.h"
+#endif
 
 /**
  * @brief Define REAL data type. Defaults to double.
@@ -37,6 +39,9 @@
  * @param INTERP_ORDER The order of the interpolation.
  * @param inv_denom Array to store the precomputed inverse denominators.  Must be of size INTERP_ORDER.
  */
+#ifdef __CUDACC__
+__device__ __host__
+#endif
 static inline void compute_inv_denom(const int INTERP_ORDER, REAL *RESTRICT inv_denom) {
   for (int i = 0; i < INTERP_ORDER; i++) {
     REAL denom = 1.0;
@@ -59,6 +64,9 @@ static inline void compute_inv_denom(const int INTERP_ORDER, REAL *RESTRICT inv_
  * @param src_xi_stencil Pointer to the array of source stencil coordinates.
  * @param diffs Array to store the computed differences. Must be of size INTERP_ORDER.
  */
+#ifdef __CUDACC__
+__device__  __host__
+#endif
 static inline void compute_diffs_xi(const int INTERP_ORDER, const REAL dst_xi, const REAL *RESTRICT src_xi_stencil, REAL *RESTRICT diffs) {
 #pragma omp simd
   for (int j = 0; j < INTERP_ORDER; j++) {
@@ -77,6 +85,9 @@ static inline void compute_diffs_xi(const int INTERP_ORDER, const REAL dst_xi, c
  * @param diffs Array of differences between destination and source stencil coordinates.
  * @param lagrange_basis_coeffs_xi Array to store the computed Lagrange basis coefficients. Must be of size INTERP_ORDER.
  */
+#ifdef __CUDACC__
+__device__  __host__
+#endif
 static inline void compute_lagrange_basis_coeffs_xi(const int INTERP_ORDER, const REAL *RESTRICT inv_denom, const REAL *RESTRICT diffs,
                                                     REAL *RESTRICT lagrange_basis_coeffs_xi) {
 #pragma omp simd
@@ -106,18 +117,23 @@ static inline void compute_lagrange_basis_coeffs_xi(const int INTERP_ORDER, cons
  * @param lagrange_basis_coeffs_x0_base_idx Pointer to the array of Lagrange basis coefficients.
  * @return The weighted sum of the Lagrange interpolation.
  */
+#ifdef __CUDACC__
+__device__ __host__
+#endif
 static inline REAL sum_lagrange_x0_simd(const int INTERP_ORDER, const REAL *RESTRICT src_gf_base_idx,
                                         const REAL *RESTRICT lagrange_basis_coeffs_x0_base_idx) {
   REAL sum = 0;
 
   // Vectorized loop over ix0 using SIMD with FMA, if available
   int ix0 = 0;
+  #ifndef __CUDACC__
   REAL_SIMD_ARRAY vec_sum = SetZeroSIMD;
   for (; ix0 <= INTERP_ORDER - SIMD_WIDTH; ix0 += SIMD_WIDTH) {
     vec_sum = FusedMulAddSIMD(ReadSIMD(&src_gf_base_idx[ix0]), ReadSIMD(&lagrange_basis_coeffs_x0_base_idx[ix0]), vec_sum);
   } // END LOOP x0 direction up to integer number of SIMD widths
   // Accumulate SIMD result
   sum += HorizAddSIMD(vec_sum);
+  #endif
 
   // Handle remaining elements that don't fit into a full SIMD register
   for (; ix0 < INTERP_ORDER; ix0++) {

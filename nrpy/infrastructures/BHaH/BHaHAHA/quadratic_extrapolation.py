@@ -26,6 +26,11 @@ time point if insufficient data is provided.
     cfunc_type = "REAL"
     name = "quadratic_extrapolation"
     params = "const REAL times[3], const REAL y_tm1, const REAL y_tm2, const REAL y_tm3, const REAL dst_time"
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__host__ __device__
+#endif
+"""
     body = r"""
   const REAL tm1 = times[0];
   const REAL tm2 = times[1];
@@ -55,5 +60,6 @@ time point if insufficient data is provided.
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )

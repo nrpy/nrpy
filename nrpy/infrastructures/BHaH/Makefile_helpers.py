@@ -170,6 +170,7 @@ def _construct_makefile_content(
     cxxflags: str,
     valgrind_cflags: str,
     cppflags: str,
+    nvccflags: str,
     ldlibs: str,
     source_records: List[Tuple[str, List[str]]],
     exec_or_library_name: str,
@@ -177,6 +178,8 @@ def _construct_makefile_content(
     create_lib: bool,
     static_lib: bool,
     use_openmp: bool = True,
+    bhahaha: bool = False,
+    dual_compile: bool = False,
 ) -> str:
     """
     Construct the entire Makefile content using a template.
@@ -186,6 +189,7 @@ def _construct_makefile_content(
     :param cxxflags: The string of C++ compiler flags.
     :param valgrind_cflags: The string of compiler flags for Valgrind builds.
     :param cppflags: Project preprocessor flags.
+    :param nvccflags: The string for nvcc compiler flags.
     :param ldlibs: Libraries and opaque caller-provided link flags.
     :param source_records: Generated sources paired with direct project headers.
     :param exec_or_library_name: The name of the final target executable or library.
@@ -264,7 +268,20 @@ endif
 ALL_CFLAGS = $(CFLAGS) $(OMP_CFLAGS) $(PIC_CFLAGS)
 ALL_CXXFLAGS = $(CXXFLAGS) $(OMP_CXXFLAGS) $(PIC_CFLAGS)
 ALL_LDFLAGS = $(LDFLAGS) $(OMP_LDFLAGS)"""
-        flags_block = f"""CFLAGS = {cflags}
+        if bhahaha:
+          flags_block = f"""CFLAGS = {cflags}
+CXXFLAGS = {cxxflags}
+NVCCFLAGS = 
+VALGRIND_CFLAGS = {valgrind_cflags}
+PIC_CFLAGS := {pic_cflags}
+
+ifeq ($(CC), nvcc)
+  NVCCFLAGS = {nvccflags} -Xcompiler
+  CFLAGS = $(NVCCFLAGS)
+  FORCECUDA = -x cu
+endif"""
+        else: 
+          flags_block = f"""CFLAGS = {cflags}
 CXXFLAGS = {cxxflags}
 VALGRIND_CFLAGS = {valgrind_cflags}
 PIC_CFLAGS := {pic_cflags}"""
@@ -302,7 +319,12 @@ endef
                 else "$(CC) $(ALL_CPPFLAGS) $(ALL_CFLAGS)"
             )
         )
-        compile_rules_list.append(f"""%.o: %.{source_extension}
+        if (dual_compile and source_extension == "c"):
+            compile_rules_list.append(f"""%.o: %.{source_extension}
+\t@mkdir -p $(dir $(DEPDIR)/$(@:.o=.d))
+\t{compiler_command} $(DEPFLAGS) $(FORCECUDA) -c $< -o $@""")
+        else: 
+            compile_rules_list.append(f"""%.o: %.{source_extension}
 \t@mkdir -p $(dir $(DEPDIR)/$(@:.o=.d))
 \t{compiler_command} $(DEPFLAGS) -c $< -o $@""")
     compile_rules = "\n\n".join(compile_rules_list)
@@ -332,7 +354,7 @@ endef
         target_recipe = "\t$(RM) $@\n\t$(AR) rcs $@ $(OBJECTS)"
     else:
         shared_flag = " -shared" if create_lib else ""
-        nvcc_link_flags = " $(NVCCFLAGS)" if cc == "nvcc" else ""
+        nvcc_link_flags = " $(NVCCFLAGS)" if cc == "nvcc" or bhahaha else ""
         target_recipe = (
             f"\t$(LINKER){nvcc_link_flags} $(ALL_LDFLAGS){shared_flag} "
             "-o $@ $(OBJECTS) $(ALL_LDLIBS)"
@@ -429,6 +451,8 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     include_dirs: Optional[List[str]] = None,
     src_code_file_ext: str = "c",
     use_openmp: bool = True,
+    bhahaha: bool = False,
+    dual_compile: bool = False,
 ) -> None:
     """
     Output C functions registered to CFunction_dict and construct a Makefile for compiling C code.
@@ -546,6 +570,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         cflags=cflags_dict[compiler_opt_option],
         cxxflags=cxxflags,
         valgrind_cflags=cflags_dict["debug"],
+        nvccflags=cflags_dict["nvcc"],
         cppflags=cppflags,
         ldlibs=ldlibs,
         source_records=source_records,
@@ -554,6 +579,8 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         create_lib=create_lib,
         static_lib=static_lib,
         use_openmp=use_openmp,
+        bhahaha=bhahaha,
+        dual_compile=dual_compile,
     )
 
     (project_path / _MAKEFILE).write_text(makefile_content, encoding="utf-8")
