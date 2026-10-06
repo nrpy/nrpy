@@ -181,7 +181,10 @@ Claim evidence:
 - Deciding authority: [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml), `on`, `dendro-validation-dendrolib-master`; [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `Leg.generate_and_build`, `--dendrolib-ref`
 - Corroboration: [main.yml](../../.github/workflows/main.yml), `dendro-validation`; [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), the emitted Dendrolib `FetchContent_Declare`
 
-The helper generates only with Kreiss-Oliger dissipation enabled. The apt
+The helper generates only with Kreiss-Oliger dissipation enabled, with
+`--fd-order 6`, and with neither `--ybs-gamma` nor `--ybs-momentum`; it evolves the
+generated `pars/<stem>.toml` with profile overrides and never reads the packaged
+`pars/q1.par.lowres.toml`. The apt
 packages, compilers, and `requirements.txt` packages are not pinned; the helper
 prints their resolved versions, and a pass is evidence only for those versions.
 Every subprocess has an argument vector, a timeout, and a bounded log tail on
@@ -194,7 +197,7 @@ Claim evidence:
 - Corroboration: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py), current command-line interface; [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), Dendrolib master and the selected toml11 release
 
 Claim evidence:
-- Claim: the helper's pass results cover only its CI profiles, eight-step or shorter evolutions, and Kreiss-Oliger-enabled generation; they are not evidence for long-time, merger, production-resolution, or Dendro generation with `enable_KreissOliger_dissipation = False`.
+- Claim: the helper's pass results cover only its CI profiles, eight-step or shorter evolutions, and Kreiss-Oliger-enabled generation; they are not evidence for long-time, merger, production-resolution, or Dendro generation with `enable_KreissOliger_dissipation = False`, with `--fd-order` 4 or 8, or with `--ybs-gamma` or `--ybs-momentum`, or for the packaged q1 parameter file and the printed run commands.
 - Role: CI behavior
 - Deciding authority: [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `PROFILE_P`, `PROFILE_O`, `COMMON_OVERRIDES`, `Leg.generate_and_build`
 - Corroboration: [Production Validation And Deferred Checks](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md), `Required application checks`
@@ -203,7 +206,9 @@ Explicitly unsupported or unverified by these configurations: CarpetX build or
 runtime; JAX generated basic test, returned-value checks, float32 inputs, or accelerator runtime;
 any CUDA executable/GPU result; Dendro general boundaries, local time stepping,
 GPU execution, threaded kernels, three-rank horizon-checkpoint contents and
-restore, or generation and build with `enable_KreissOliger_dissipation = False`;
+restore, generation and build with `enable_KreissOliger_dissipation = False`,
+`--fd-order` 4 or 8, or either Yo et al. option, or the packaged q1 parameter file
+and the printed run commands;
 Dendro builds under AddressSanitizer or UndefinedBehaviorSanitizer, generated
 C++ self-tests under CTest, faults injected into the generated C++ at run time
 (invalid block offsets, halos, element orders, nonfinite values, and null or

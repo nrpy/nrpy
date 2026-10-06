@@ -45,7 +45,9 @@ and toml11 with `FetchContent`, and it is
 not meant to be added to another CMake tree. `CPU_ARCH` defaults to `native` and
 applies to the solver and the fetched libraries; `generic_avx2` selects `-mavx2
 -mfma`. The examples emit intrinsic-based Ricci and RHS kernels and package
-NRPy's `simd_intrinsics.h` under `generated/include`.
+NRPy's `simd_intrinsics.h` under `generated/include`. The option `--fd-order`
+sets only the default run-time order; see [Finite-Difference Profiles And Dendro
+Conformance](finite-difference-profiles-and-dendro-conformance.md).
 
 `register_CFunction_Ricci_eval` and `register_CFunction_rhs_eval` take a
 required `enable_intrinsics` argument. `True` generates SIMD-intrinsic kernels
@@ -60,7 +62,7 @@ Claim evidence:
 
 The slow-start
 lapse exponential is evaluated once per block kernel call in either mode, while
-its runtime `SSL_sigma` parameter remains available to the solver. `Ctx::rhs`
+its runtime coefficient `SSL_sigma` (key `BSSN_SSL_SIGMA`) remains available to the solver. `Ctx::rhs`
 does not clear the unzipped RHS or Ricci buffers: both kernels write every
 interior value, the RHS kernel reads Ricci only at points that the Ricci kernel
 wrote with the same loop, and `Mesh::zip` reads only interior values.
@@ -95,7 +97,8 @@ have no effect and are reported as such. Each step checks the
 maximum absolute lapse with a NaN counted as infinity, and the solver stops with
 `the lapse became nonfinite` when the reduced value is not finite.
 `BSSN_TIME_STEP_OUTPUT_FREQ` controls terminal printing; disabling printing
-does not disable this check.
+does not disable this check. [Runtime Parameter Keys](runtime-parameters.md)
+lists every key with its fallback and the values the solver rejects.
 
 Claim evidence:
 - Claim: The generated solver reads every host parameter before the TwoPunctures data are loaded, stops on a present parameter of the wrong TOML type, warns on rank 0 about every parameter-file key or table member it never read, requires `BSSN_ID_TYPE = 0` and `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = true`, and stops when the per-step maximum absolute lapse, with NaN counted as infinity, is not finite.
@@ -118,7 +121,8 @@ application directory, configure with `cmake -S . -B build
 the TwoPunctures data with `mpiexec -n 1 build/<executable> --tpid
 pars/q1.par.lowres.toml`, and evolve with `mpiexec -n 4 build/<executable>
 pars/q1.par.lowres.toml`, noting that the default parameter file is a production binary-black-hole
-run. Add `BSSN_MAX_ITERATIONS = 100` to the parameter file for a short test.
+run whose values differ from the generated defaults (see [BSSN Application
+Wiring](bssn-application-wiring.md#q1-versus-generated-defaults)). Add `BSSN_MAX_ITERATIONS = 100` to the parameter file for a short test.
 The solver's default output prefixes are relative, so a run from the application
 directory writes `dat/` diagnostics, the TwoPunctures file, `vtu/`, and `cp/`
 there, and `bah/` when `AEH_SOLVER_FREQ` is positive.

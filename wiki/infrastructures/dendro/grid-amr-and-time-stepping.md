@@ -15,13 +15,16 @@ construction, followed by TwoPunctures data for the evolved state.
 ## Detail
 
 Zipped vectors follow octree degrees of freedom. Unzipped vectors provide
-regular padded block storage. Before a Ricci/RHS traversal, solver context zips
-stage state as needed, exchanges ghosts, unzips data, and fills physical
-boundaries. It then visits each local block once and calls Ricci followed by
-RHS. Ricci scratch requires no exchange because RHS consumes it immediately
-within the same block. The generated `physical_boundary_ghosts` pass
-extrapolates only exterior physical padding, after inter-block exchange and
-unzip and before centered derivatives. It uses five interior points for FD4
+regular padded block storage. Before a Ricci/RHS traversal, solver context
+exchanges ghosts and unzips the evolved state once. It then visits each local
+block once. For each block it fills the exterior physical padding, calls Ricci
+followed by RHS, and finally calls `physical_boundary`, which replaces the
+right-hand sides on the physical-face nodes (described below). `Ctx::rhs_blkwise`,
+the entry for a requested list of blocks, repeats the same per-block sequence.
+Ricci scratch requires no exchange because RHS consumes it immediately within
+the same block. The generated `physical_boundary_ghosts` pass extrapolates only
+exterior physical padding, after inter-block exchange and unzip and before
+centered derivatives. It uses five interior points for FD4
 and six for FD6/FD8, then fills faces, edges, and corners successively; this
 avoids using stale exterior ghosts in Ricci, RHS, constraints, and wave
 extraction.
@@ -31,6 +34,30 @@ Claim evidence:
 - Role: public/numerical contract
 - Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/physical_boundary_ghosts.py`, `register_CFunction_physical_boundary_ghosts`.
 - Corroboration: `nrpy/infrastructures/Dendro/solver_context.py`, `output_solver_context_cpp`, calls the generated ghost fill before derivative kernels.
+
+After each block's Ricci and RHS evaluation, `physical_boundary` replaces the
+right-hand side of every evolved field at the nodes on the physical faces of the
+domain by an outgoing-radiation condition:
+
+```text
+d_t f = -(x^i d_i f + n_f (f - f_inf)) / r,    r = sqrt(x^2 + y^2 + z^2).
+```
+
+The derivative `d_i f` is the centered finite-difference derivative of the
+current order, which reads the extrapolated exterior padding. The exponent is
+`n_f = 2` for the `lambdaU` and `aDD` components and `n_f = 1` for every other
+evolved field, and the asymptotic value is `f_inf = 1` for `alpha` and `cf` and 0
+for every other field. The condition has no field-dependent wave speed and acts
+on face nodes only; interior nodes keep the equation's right-hand side. The
+padding is a polynomial extrapolation from five (FD4) or six (FD6, FD8) interior
+nodes, and the generated code states that six points give fourth-order boundary
+second derivatives at FD6 and FD8.
+
+Claim evidence:
+- Claim: After each block's Ricci and RHS evaluation `Ctx::rhs` (and `Ctx::rhs_blkwise`) calls `physical_boundary`, which sets the right-hand side of every evolved field on physical-face nodes to `-(x^i d_i f + n_f (f - f_inf)) / r` with `r` the coordinate radius, `n_f = 2` for `lambdaU` and `aDD` and 1 otherwise, `f_inf = 1` for `alpha` and `cf` and 0 otherwise, and the centered finite-difference derivative of the current order; the kernel contains no field-dependent wave speed.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/physical_boundary.py`, `register_CFunction_physical_boundary`; `nrpy/infrastructures/Dendro/state_h.py`, `register_canonical_gridfunctions` (the `f_infinity` values); `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::rhs` and `Ctx::rhs_blkwise` within `output_solver_context_cpp`.
+- Corroboration: `nrpy/infrastructures/Dendro/general_relativity/physical_boundary_ghosts.py`, `register_CFunction_physical_boundary_ghosts`, the extrapolation point counts and the stated boundary accuracy.
 
 `Ctx::zip()` writes the locally owned continuous-Galerkin nodes; it does not
 populate ghost nodes. Any newly zipped diagnostic field used by an element
@@ -59,9 +86,42 @@ Checkpoints record formulation, field names and order, emitted `CodeParameter`
 values, iteration, time, puncture-center history, merger time, and whether
 a checkpoint has been written after merger. Restore retains that state so
 post-merger AMR uses the same coarsening factor as uninterrupted evolution when
-AMR controls in the restart TOML are unchanged. Restore rejects an incompatible
-formulation or field layout and preserves stored projected values. Keeping
-puncture history across restart supports history-dependent AMR decisions.
+AMR controls in the restart TOML are unchanged. Restore preserves stored
+projected values; the tests it applies are listed below. Keeping puncture
+history across restart supports history-dependent AMR decisions.
+
+A restore is accepted only when the checkpoint metadata passes every one of
+these tests. A rejected checkpoint prints `Checkpoint metadata does not match
+<formulation>`, whichever metadata test failed, and the run then aborts with the
+generic `checkpoint restore failed` message:
+
+- The stored formulation, field count and names, and parameter-name list equal
+  the generated solver's.
+- Every emitted `CodeParameter` equals its stored value exactly. For BSSN these
+  are `C_CAHD`, both Kreiss-Oliger strengths (file key `KO_DISS_SIGMA`), `SSL_h`,
+  `SSL_sigma`, `chi_floor`, and `eta`, plus `CFL_FACTOR`, `YBS_chi`, and
+  `C_YBS_mom` when generated, and `kappa1` and `kappa2` for fCCZ4. Changing
+  `ETA_CONST`, `KO_DISS_SIGMA`, `BSSN_CAHD_C`, `BSSN_SSL_H`, `BSSN_SSL_SIGMA`, or
+  `CHI_FLOOR` in the restart file is therefore rejected.
+- The stored domain bounds equal the current bounds.
+- The stored time and time step are finite and the time step is positive, the
+  stored projected algebraic residual is finite and at most 1e-10, and the
+  puncture history is finite, strictly increasing in time, and ends at the stored
+  time and centers.
+- The stored element order is 4, 6, or 8.
+
+After the metadata passes, the residual of the restored state must again be at
+most 1e-10, and the launch must provide at least as many MPI ranks as the stored
+active communicator, because the mesh is rebuilt on that many ranks with the
+stored element order. Host keys that are not emitted `CodeParameter` values, other
+than the domain bounds, are not compared (for example the mesh, output, and
+extraction keys).
+
+Claim evidence:
+- Claim: A restore is accepted only when the stored formulation, field list, parameter names, every emitted `CodeParameter` value, domain bounds, time data, puncture history, element order (4, 6, or 8), and projected algebraic residual (at most 1e-10, rechecked on the restored state) pass, and when the launch has at least the stored number of active MPI ranks; a metadata failure prints `Checkpoint metadata does not match <formulation>` and the run aborts with `checkpoint restore failed`.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/checkpoint.py`, `output_checkpoint_cpp` (the metadata tests and the rank-count test); `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::restore_checkpt` within `output_solver_context_cpp` (the residual recheck).
+- Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.run_negatives`, the W/chi cross-restore rejection, and `Leg.run_variant`, the restore of an unchanged run.
 
 Claim evidence:
 - Claim: Restart preserves the checkpoint-written-after-merger state used to select the post-merger AMR coarsening factor.
@@ -150,6 +210,44 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`; `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::get_wtol_function` and `Ctx::is_remesh` within `output_solver_context_cpp`.
 - Corroboration: `BSSN_GR/src/grUtils.cpp`, `punctureDataPhysicalCoord`; `BSSN_GR/src/dataUtils.cpp`, `calculate_relative_position_history` and `isRemeshBH`.
+
+The generated refinement applies the following fixed constants and switching
+rules in addition to the keys in [Runtime Parameter Keys](runtime-parameters.md).
+
+- The punctures count as merged when the coordinate distance between the two
+  tracked centers is below 0.1. The remesh cadence and the level-floor rule use
+  the current separation. The coarsening factor switches to
+  `BSSN_DENDRO_AMR_FAC_POST_MERGER` (when positive) only after a checkpoint has
+  been written while the punctures are merged.
+- Inside `BSSN_BH{1,2}_AMR_R` of a puncture the wavelet tolerance is multiplied
+  by 1e12.
+- Level floors apply to an element whose nearest corner lies within
+  `orbital_radius = max(M1, M2) / (M1 + M2) * separation + 8` of the origin: the
+  element is refined to at least level 9. Elements farther than `orbital_radius`
+  from a puncture receive no floor from that puncture.
+- While the punctures are separate, the floor around each puncture is
+  `BSSN_BH{1,2}_MAX_LEV - 2` inside `BSSN_BH{1,2}_AMR_R`, and each coarser level down
+  to 10 applies inside a radius larger by `BSSN_AMR_R_RATIO` than the one before
+  (the loop stops when the level reaches 9).
+- After the merger the floor is `ceil(2 + log2(25 Lx / (order r_lim))) - 2` inside
+  `r_lim = max(BSSN_BH1_AMR_R, BSSN_BH2_AMR_R, 1.55 (M1 + M2))`, where `Lx` is the
+  x-width of the domain and `order` the element order, and each coarser level
+  down to 10 applies inside a radius twice as large (the loop stops when the level
+  reaches 9). The puncture-radius loops never apply level 9; the origin rule above sets the level-9 floor.
+- In wavelet mode 6 the radial tolerance is `BSSN_WAVELET_TOL` for `r <= 8`,
+  interpolates logarithmically in `r` to `BSSN_GW_REFINE_WTOL` at the first
+  extraction radius, equals `BSSN_GW_REFINE_WTOL` out to the last extraction
+  radius, and is `BSSN_WAVELET_TOL_MAX` beyond it. Before the causal time
+  `max(r, (r + 120) / sqrt(2))` the tolerance is `BSSN_WAVELET_TOL_MAX`, and over
+  the next 100 time units it interpolates logarithmically to the radial value.
+  The native keys `BSSN_WAVELET_TOL_FUNCTION_R0` and `BSSN_WAVELET_TOL_FUNCTION_R1`
+  are not read.
+
+Claim evidence:
+- Claim: The generated solver treats the punctures as merged below a separation of 0.1; multiplies the wavelet tolerance by 1e12 inside `BSSN_BH{1,2}_AMR_R`; applies level floors with the constants 9, 8, 1.55, 25, 2, the levels 10 and above of the puncture loops, and the ratio `BSSN_AMR_R_RATIO` as written above; uses the mode-6 radial and causal tolerance profile with the fixed radius 8 and the time constants 120 and 100; and does not read `BSSN_WAVELET_TOL_FUNCTION_R0` or `_R1`.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::is_remesh`, `Ctx::is_remesh_due`, and `Ctx::get_wtol_function` within `output_solver_context_cpp`; `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp` (the key reads).
+- Corroboration: none available: no test drives the merged branch or the mode-6 profile; the constants follow Dendro-GR `BSSN_GR/src/dataUtils.cpp`, `isRemeshBH`.
 
 For compatibility with Dendro-GR BSSN_GR remeshing, the wavelet refinement
 test sees the Gamma-driver auxiliary field `betU` scaled by 4/3. BSSN_GR
