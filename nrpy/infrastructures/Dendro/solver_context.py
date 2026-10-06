@@ -1992,10 +1992,11 @@ DendroScalar Ctx::algebraic_residual(ot::Mesh* mesh, DVec& state) {{
     DendroScalar determinant = 0.0;
     DendroScalar trace_a = 0.0;
 {algebraic_residual_expressions}
-    if (!(determinant > 0.0) || !std::isfinite(determinant)) {{
+    if (!(determinant > 0.0) || !std::isfinite(determinant) ||
+        !std::isfinite(trace_a)) {{
       local_residual = std::numeric_limits<DendroScalar>::infinity();
       break;
-    }}  // END IF: nonpositive or nonfinite determinant
+    }}  // END IF: nonpositive or nonfinite determinant, or nonfinite trace
     local_residual = std::max(
         local_residual, std::max(std::abs(determinant - 1.0), std::abs(trace_a)));
   }}  // END LOOP: for pp over local nodes
