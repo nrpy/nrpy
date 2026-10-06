@@ -309,7 +309,8 @@ class Ctx : public ts::Ctx<Ctx, DendroScalar, unsigned int> {{
    *
    * @param[in] mesh Dendro mesh of the fields.
    * @param[in] state Zipped evolved fields.
-   * @return Largest residual, or infinity at a nonpositive or nonfinite determinant.
+   * @return Largest residual, or infinity at a nonpositive or nonfinite determinant
+   *         or a nonfinite trace.
    */
   DendroScalar algebraic_residual(ot::Mesh* mesh, DVec& state);
   /**
@@ -426,6 +427,8 @@ int {solver_stem}_write_checkpoint(
  * @param[out] black_hole_position_history Stored puncture centers.
  * @param[out] black_hole_merge_time Stored merger time.
  * @param[out] merged_checkpoint_written Whether a checkpoint after merger existed.
+ * @param expected_element_order Element order of the running configuration; a
+ *        checkpoint stored at another order is rejected.
  * @param algebraic_residual_tolerance Largest stored algebraic residual accepted.
  * @return 0 on success, 2 if the metadata file is absent, otherwise 1.
  */
@@ -439,6 +442,7 @@ int {solver_stem}_restore_checkpoint(
     std::vector<DendroScalar>& black_hole_time_history,
     std::vector<std::array<DendroScalar, 6>>& black_hole_position_history,
     DendroScalar& black_hole_merge_time, bool& merged_checkpoint_written,
+    unsigned int expected_element_order,
     DendroScalar algebraic_residual_tolerance);
 // clang-format off
 }}  // END NAMESPACE: {solver_namespace}
@@ -1889,7 +1893,7 @@ int Ctx::restore_checkpt(unsigned int checkpoint_index) {{
       restored_mesh, restored_state, params, iteration, time, time_step,
       excision_centers_, black_hole_time_history_,
       black_hole_position_history_, black_hole_merge_time_,
-      restored_merged_checkpoint_written,
+      restored_merged_checkpoint_written, m_uiElementOrder,
       1.0e-10);
   if (status != 0) return status;
   excision_center_time_ = time;
@@ -1989,10 +1993,11 @@ DendroScalar Ctx::algebraic_residual(ot::Mesh* mesh, DVec& state) {{
     DendroScalar determinant = 0.0;
     DendroScalar trace_a = 0.0;
 {algebraic_residual_expressions}
-    if (!(determinant > 0.0) || !std::isfinite(determinant)) {{
+    if (!(determinant > 0.0) || !std::isfinite(determinant) ||
+        !std::isfinite(trace_a)) {{
       local_residual = std::numeric_limits<DendroScalar>::infinity();
       break;
-    }}  // END IF: nonpositive or nonfinite determinant
+    }}  // END IF: invalid determinant or nonfinite trace
     local_residual = std::max(
         local_residual, std::max(std::abs(determinant - 1.0), std::abs(trace_a)));
   }}  // END LOOP: for pp over local nodes

@@ -942,6 +942,11 @@ int main(int argc, char** argv) {
     const std::array<DendroScalar, 2> excision_radii{{
         parameters.get<DendroScalar>("BSSN_BH1_CONSTRAINT_R", 1.0),
         parameters.get<DendroScalar>("BSSN_BH2_CONSTRAINT_R", 1.0)}};
+    for (const DendroScalar radius : excision_radii)
+      if (!(radius >= 0.0) || !std::isfinite(radius))
+        throw std::runtime_error(
+            "BSSN_BH1_CONSTRAINT_R and BSSN_BH2_CONSTRAINT_R must be finite "
+            "and nonnegative");
     commondata.mass_ratio = std::max(mass_1, mass_2) / std::min(mass_1, mass_2);
     commondata.initial_sep =
         2.0 * parameters.get<DendroScalar>("TPID_PAR_B", 4.0);

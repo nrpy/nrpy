@@ -195,10 +195,15 @@ Claim evidence:
 
 ### CONTR-0011
 
-Resolved. Both modules now contain one public registrar. Only expression
-assembly and formulation-specific validation branch on `enable_fCCZ4`;
-lowering, wrappers, metadata, and registration share one path. The previous
-duplication had no host requirement and was removed.
+Resolved. Both modules now contain one public registrar. In `rhs_eval.py`,
+`enable_fCCZ4` selects the expression set, the CAHD parameter registration, the
+extra `Theta_fCCZ4` right-hand-side entry, the evolved-field list and its
+validation, and the formulation label in the description; lowering, wrappers,
+and registration share one path. The previous duplication had no host
+requirement and was removed. Other top-level Dendro modules use
+`enable_fCCZ4` to select state, checkpoint, kernel, and label text, as
+[New Infrastructure Conformance](infrastructures/new-infrastructure-conformance.md)
+lists.
 
 Claim evidence:
 - Claim: the unsupported per-formulation builder and registrar duplication is removed in both Dendro modules; each operation now has one public registrar, resolving CONTR-0011.
