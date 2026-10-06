@@ -112,7 +112,9 @@ Claim evidence:
 - Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`.
 - Corroboration: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, calls to `output_main_cpp`; `nrpy/infrastructures/Dendro/param_toml.py`, `generate_default_parfile`.
 
-After generating, each example prints the prerequisites (CMake 3.16 or newer;
+After generating, each example prints the prerequisites (CMake 3.18 or newer,
+because Dendrolib's default BLAS and LAPACK path links the imported targets
+`BLAS::BLAS` and `LAPACK::LAPACK`, which CMake provides from 3.18;
 GNU compilers, since the solver build passes `-fext-numeric-literals`; MPI with
 C, C++, and Fortran bindings; OpenMP; GSL; BLAS and LAPACK; git and network
 access for Dendrolib, toml11, and spdlog) and five numbered commands: `cd` into the
@@ -131,10 +133,10 @@ Both examples copy `nrpy/examples/q1.par.lowres.toml` next to their generated
 package by `setup.py`, so installed generators have the same input file.
 
 Claim evidence:
-- Claim: The generated CMake project is standalone: it declares its own project, fetches Dendrolib from `master` and toml11, and applies the selected CPU architecture to the solver and the fetched libraries.
+- Claim: The generated CMake project is standalone: it declares its own project and CMake minimum 3.18, fetches Dendrolib from `master` and toml11, and applies the selected CPU architecture to the solver and the fetched libraries. The minimum matches the imported targets `BLAS::BLAS` and `LAPACK::LAPACK` that Dendrolib's default `WITH_BLAS_LAPACK` path links; the KB records no configure on an older CMake.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/CMakeLists.py`, `output_CFunctions_function_prototypes_and_construct_CMakeLists`.
-- Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.generate_and_build`, configures and builds each generated tree on its own.
+- Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.generate_and_build`, configures and builds each generated tree on its own; Dendrolib `CMakeLists.txt` (`paralab/Dendro-5.01`), the `WITH_BLAS_LAPACK` option and its `target_link_libraries` line.
 
 Claim evidence:
 - Claim: Each Dendro example writes its application to `<project-dir>/<SOLVER_NAME>/` (default `project`) and prints the prerequisites and the copy-paste commands that configure, build, solve the TwoPunctures data, and evolve inside that directory, followed by a short-test hint to set `BSSN_MAX_ITERATIONS = 100` above the first `[table]` header of the parameter file.
