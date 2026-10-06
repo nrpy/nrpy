@@ -112,6 +112,7 @@ to identify the apparent horizon with progressively refined grid resolutions.
   // does not clobber these caller-owned pointers.
   commondata.bhahaha_diagnostics = bhahaha_diags;
   commondata.bhahaha_params_and_data = bhahaha_params_and_data;
+  bah_initialize_diagnostics_struct(commondata.bhahaha_diagnostics);
   commondata.eta_damping = bhahaha_params_and_data->eta_damping_times_M / bhahaha_params_and_data->M_scale;
   commondata.CFL_FACTOR = bhahaha_params_and_data->cfl_factor;
   commondata.KO_diss_strength = commondata.bhahaha_params_and_data->KO_strength;

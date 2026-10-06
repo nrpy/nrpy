@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import warnings
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, NamedTuple, Optional, Tuple
 
 from nrpy.c_function import CFunction_dict
 from nrpy.helpers.generic import clang_format
@@ -21,6 +21,25 @@ from nrpy.helpers.generic import clang_format
 # Define constants for filenames to avoid magic strings
 _BHAH_PROTOTYPES_H = "BHaH_function_prototypes.h"
 _MAKEFILE = "Makefile"
+
+SourceRecord = Tuple[str, List[str]]
+
+
+class MakefileTarget(NamedTuple):
+    """Describe a caller-supplied Makefile target."""
+
+    name: str
+    prerequisites: List[str]
+    recipe: List[str]
+    phony: bool
+
+
+class MakefileExtension(NamedTuple):
+    """Describe caller-supplied sources, targets, and files to remove on cleanup."""
+
+    source_records: List[SourceRecord]
+    targets: List[MakefileTarget]
+    clean_files: List[str]
 
 
 def _autodetect_cc() -> str:
@@ -70,7 +89,7 @@ def _validate_inputs(
 
 def _generate_c_files_and_header(
     project_path: Path, lib_function_prefix: str, src_code_file_ext: str
-) -> List[Tuple[str, List[str]]]:
+) -> List[SourceRecord]:
     """
     Generate C source files and the main header file.
 
@@ -79,7 +98,7 @@ def _generate_c_files_and_header(
     :param src_code_file_ext: File extension for C source files.
     :return: Generated C source paths paired with their registered includes.
     """
-    c_files_and_includes: List[Tuple[str, List[str]]] = []
+    c_files_and_includes: List[SourceRecord] = []
     # Create C code files and directory structure
     for name, cfunc in CFunction_dict.items():
         if lib_function_prefix:
@@ -171,15 +190,20 @@ def _construct_makefile_content(
     valgrind_cflags: str,
     cppflags: str,
     ldlibs: str,
-    source_records: List[Tuple[str, List[str]]],
+    source_records: List[SourceRecord],
     exec_or_library_name: str,
     addl_dirs_to_make: List[str],
     create_lib: bool,
     static_lib: bool,
     use_openmp: bool = True,
+    makefile_extension: Optional[MakefileExtension] = None,
 ) -> str:
-    """
+    r"""
     Construct the entire Makefile content using a template.
+
+    Extension targets retain their prerequisites and recipe commands, with one
+    tab added to each command. Only targets marked phony join `.PHONY`, and
+    extension cleanup files join the root `clean` command.
 
     :param cc: The C compiler executable name.
     :param cflags: The string of primary compiler flags.
@@ -193,7 +217,43 @@ def _construct_makefile_content(
     :param create_lib: Whether the target is a library.
     :param static_lib: Whether the target is a static library.
     :param use_openmp: If True, request OpenMP and use it when supported; if False, omit it.
+    :param makefile_extension: Additional typed build metadata to render.
     :return: The complete string content of the Makefile.
+
+    Doctests:
+        >>> options = dict(
+        ...     cc="gcc", cflags="-O2", cxxflags="-O2",
+        ...     valgrind_cflags="-g", cppflags="-I.", ldlibs="-lm",
+        ...     source_records=[("main.c", [])], exec_or_library_name="example",
+        ...     addl_dirs_to_make=[], create_lib=False, static_lib=False,
+        ... )
+        >>> plain = _construct_makefile_content(**options)
+        >>> next(line for line in plain.splitlines() if line.startswith(".PHONY:"))
+        '.PHONY: all valgrind clean'
+        >>> _construct_makefile_content(
+        ...     **options, makefile_extension=MakefileExtension([], [], [])
+        ... ) == plain
+        True
+        >>> extension = MakefileExtension(
+        ...     source_records=[],
+        ...     targets=[
+        ...         MakefileTarget("linkcheck", ["$(OBJECTS)"], [
+        ...             "printf ready > .akv_linkcheck",
+        ...             "printf done > .akv_linkcheck_main.c",
+        ...         ], True),
+        ...         MakefileTarget("stamp", [], [], False),
+        ...     ],
+        ...     clean_files=[".akv_linkcheck", ".akv_linkcheck_main.c"],
+        ... )
+        >>> extended = _construct_makefile_content(**options, makefile_extension=extension)
+        >>> next(line for line in extended.splitlines() if line.startswith(".PHONY:"))
+        '.PHONY: all valgrind clean linkcheck'
+        >>> extended.split("\n\nlinkcheck:", 1)[1].split("\n\nvalgrind:", 1)[0].splitlines()
+        [' $(OBJECTS)', '\tprintf ready > .akv_linkcheck', '\tprintf done > .akv_linkcheck_main.c', '', 'stamp:']
+        >>> plain_clean = plain.split("\nclean:\n", 1)[1].splitlines()[0]
+        >>> extended_clean = extended.split("\nclean:\n", 1)[1].splitlines()[0]
+        >>> extended_clean == plain_clean + " .akv_linkcheck .akv_linkcheck_main.c"
+        True
     """
     if cc == "nvcc":
         compiler_block = """# CUDA projects require nvcc unless CC is overridden on the command line.
@@ -327,6 +387,26 @@ endef
             for directory in addl_dirs_to_make
         )
 
+    extension_target_rules = ""
+    extension_clean_files = ""
+    if makefile_extension:
+        target_rules = []
+        for target in makefile_extension.targets:
+            if target.phony:
+                phony_targets.append(target.name)
+            prerequisites = (
+                f" {' '.join(target.prerequisites)}" if target.prerequisites else ""
+            )
+            recipe = "\n".join(f"\t{command}" for command in target.recipe)
+            target_rule = f"{target.name}:{prerequisites}"
+            if recipe:
+                target_rule += f"\n{recipe}"
+            target_rules.append(target_rule)
+        if target_rules:
+            extension_target_rules = "\n\n" + "\n\n".join(target_rules)
+        if makefile_extension.clean_files:
+            extension_clean_files = f" {' '.join(makefile_extension.clean_files)}"
+
     target_prerequisites = f"$(OBJECTS){additional_projects_prerequisite}"
     if create_lib and static_lib:
         target_recipe = "\t$(RM) $@\n\t$(AR) rcs $@ $(OBJECTS)"
@@ -402,13 +482,13 @@ all: {exec_or_library_name}
 
 $(OBJECTS): Makefile
 {additional_projects_rule}{object_order_only_rule}{exec_or_library_name}: {target_prerequisites}
-{target_recipe}
+{target_recipe}{extension_target_rules}
 
 {valgrind_rule}
 
 # Remove nested build products and root runtime output.
 clean:
-\t$(RM) -r {exec_or_library_name} $(DEPDIR) *.o */*.o */*/*.o *.d */*.d */*/*.d *.txt *.gp *.dat *.out *.log *.avi *.png *.bin{recursive_clean}
+\t$(RM) -r {exec_or_library_name} $(DEPDIR) *.o */*.o */*/*.o *.d */*.d */*/*.d *.txt *.gp *.dat *.out *.log *.avi *.png *.bin{extension_clean_files}{recursive_clean}
 
 -include $(DEPFILES)
 """
@@ -429,6 +509,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     include_dirs: Optional[List[str]] = None,
     src_code_file_ext: str = "c",
     use_openmp: bool = True,
+    makefile_extension: Optional[MakefileExtension] = None,
 ) -> None:
     """
     Output C functions registered to CFunction_dict and construct a Makefile for compiling C code.
@@ -447,7 +528,9 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param include_dirs: List of include directories.
     :param src_code_file_ext: Extension for C source files.
     :param use_openmp: If True, request OpenMP and use it when supported; if False, omit it.
+    :param makefile_extension: Additional typed sources, targets, and files to remove on cleanup.
     :raises TypeError: If 'addl_libraries' is not a list.
+    :raises ValueError: If extension sources or targets collide, or a recipe command starts with a tab.
     """
     # Step 1: Validate inputs and initialize local state
     _validate_inputs(create_lib, static_lib, addl_CFLAGS, include_dirs)
@@ -464,6 +547,31 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             ext = ".so" if os_name == "Linux" else ".dylib"
         if not final_exec_or_library_name.endswith(ext):
             final_exec_or_library_name += ext
+
+    if makefile_extension:
+        canonical_target_names = {
+            "all",
+            "clean",
+            "valgrind",
+            final_exec_or_library_name,
+        }
+        if local_addl_dirs_to_make:
+            canonical_target_names.add("additional-projects")
+        extension_target_names = set()
+        for target in makefile_extension.targets:
+            if target.name in canonical_target_names:
+                raise ValueError(
+                    f"Makefile extension target collides with canonical target: {target.name}"
+                )
+            if target.name in extension_target_names:
+                raise ValueError(
+                    f"Duplicate Makefile extension target name: {target.name}"
+                )
+            if any(command.startswith("\t") for command in target.recipe):
+                raise ValueError(
+                    f"Makefile extension recipe commands must not start with a tab: {target.name}"
+                )
+            extension_target_names.add(target.name)
 
     # Step 2: Generate source files and create the output directory
     project_path = Path(project_dir)
@@ -540,6 +648,15 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
         source_records.append((c_file, local_headers))
 
+    if makefile_extension:
+        source_names = {source for source, _ in source_records}
+        for source_record in makefile_extension.source_records:
+            source = source_record[0]
+            if source in source_names:
+                raise ValueError(f"Duplicate Makefile source record: {source}")
+            source_names.add(source)
+            source_records.append(source_record)
+
     # Step 5: Assemble and write the Makefile
     makefile_content = _construct_makefile_content(
         cc=cc,
@@ -554,6 +671,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         create_lib=create_lib,
         static_lib=static_lib,
         use_openmp=use_openmp,
+        makefile_extension=makefile_extension,
     )
 
     (project_path / _MAKEFILE).write_text(makefile_content, encoding="utf-8")
@@ -643,3 +761,15 @@ def compile_Makefile(
         else:
             # Second attempt also failed.
             raise RuntimeError("Compilation failed after two attempts.")
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

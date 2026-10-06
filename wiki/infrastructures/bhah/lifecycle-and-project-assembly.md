@@ -71,13 +71,21 @@ directories and libraries, and emits a Makefile whose target is either an
 executable, a shared library, or a static archive. Executable builds may recurse
 into additional generated subdirectories before the final link.
 
-The generated Makefile represents each registered C-function source exactly
-once in an explicit `ADD_SOURCE` record. That record pairs the source path with
-each registered include that resolves inside the generated project at
-generation time; `SOURCES`, `OBJECTS`, and `DEPFILES` are then derived from the
-records without `find` or wildcard source discovery. A deliberate hand edit
+The generated Makefile represents each canonical source exactly once in an
+explicit `ADD_SOURCE` record. The canonical inventory contains the sorted
+registered C-function sources followed, in caller-supplied order, by optional
+typed additional source records. Registered-source records pair the source path
+with each registered include that resolves inside the generated project at
+generation time; additional records carry their explicitly supplied direct
+headers. `SOURCES`, `OBJECTS`, and `DEPFILES` are then derived from the combined
+inventory without `find` or wildcard source discovery. A deliberate hand edit
 therefore adds or removes a source in one record, but the Makefile remains
 generated output and regeneration replaces such edits.
+
+Caller-supplied `MakefileExtension.targets` retain their prerequisites and
+recipe commands. The generator adds one tab before each recipe command and
+adds only targets marked `phony=True` to `.PHONY`. An absent or empty extension
+adds no target rules or cleanup files.
 
 Each `ADD_SOURCE` record makes its resolved local headers immediate object
 prerequisites. The C, C++, and CUDA compile rules also use `-MMD`, `-MP`,
@@ -91,17 +99,18 @@ Generated `clean` is visible and bounded. Its one root cleanup recipe is not
 silenced, so Make prints one expanded `rm` command. That command removes the
 exact final target and root `.deps/`; `.o` and `.d` files at depths zero through
 two; and root `.txt`, `.gp`, `.dat`, `.out`, `.log`, `.avi`, `.png`, and `.bin`
-files. It then invokes each registered subproject's `clean` with silent,
+files, plus any caller-supplied `MakefileExtension.clean_files` in the same
+command. It then invokes each registered subproject's `clean` with silent,
 no-directory-printing Make flags. It preserves `.par`, unrelated suffixes,
 runtime-suffix files below the root, and `.o`/`.d` files at depth three or
 deeper. Cleanup uses explicit globs rather than `find`, recursive wildcards, a
 filename manifest, or source-discovery logic.
 
 Claim evidence:
-- Claim: Generated BHaH Makefiles use one explicit `ADD_SOURCE` record per registered C-function source, derive object and dependency inventories without source-discovery commands, make resolved registered project-local headers immediate prerequisites, and use compiler dependency files under `.deps/`; generated `clean` prints one root `rm` command while removing the exact target, root dependency directory, `.o`/`.d` files only through depth two, and seven runtime suffix families only at the project root, delegates silent cleanup to registered subprojects, and preserves `.par`, unrelated suffixes, nested runtime files, and depth-three-or-deeper `.o`/`.d` files.
+- Claim: Generated BHaH Makefiles use one explicit `ADD_SOURCE` record per registered C-function source, derive object and dependency inventories without source-discovery commands, make resolved registered project-local headers immediate prerequisites, and use compiler dependency files under `.deps/`; optional extension targets retain their prerequisites and recipe commands with Makefile tab indentation, and only targets marked phony join `.PHONY`; generated `clean` prints one root `rm` command while removing the exact target, root dependency directory, `.o`/`.d` files only through depth two, seven runtime suffix families only at the project root, and explicitly supplied extension cleanup files, delegates silent cleanup to registered subprojects, and otherwise preserves `.par`, unrelated suffixes, nested runtime files, and depth-three-or-deeper `.o`/`.d` files.
 - Role: descriptive behavior
 - Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_generate_c_files_and_header`, `_construct_makefile_content`, and `output_CFunctions_function_prototypes_and_construct_Makefile`
-- Corroboration: none available; no test asserts the emitted Makefile text
+- Corroboration: `_construct_makefile_content` doctests assert extension target prerequisites and recipe indentation, `.PHONY` declarations, unchanged output for an empty extension, and extension cleanup additions. The remaining source and cleanup behavior has no owner assertions.
 
 Compiler selection replaces GNU Make's built-in `cc` only when that default is
 active, preserving environment and command-line choices; CUDA Makefiles select
@@ -178,6 +187,7 @@ frozen evidence.
 - [main_c.py](../../../nrpy/infrastructures/BHaH/main_c.py) - `register_CFunction_main_c`
 - [bhah_lib.py](../../../nrpy/infrastructures/BHaH/bhah_lib.py) - `register_CFunctions_bhah_lib`, `BHaH_struct`
 - [manga_bhah_lib.py](../../../nrpy/examples/manga_bhah_lib.py) - commented parser registration, `exec_or_library_name="libbhah_lib"`, `create_lib=True`, final build/run/parfile prints
+- [bhahaha.py](../../../nrpy/examples/bhahaha.py) - `akv_primme_c_sources`, `akv_makefile_extension`, static-library Makefile call
 - [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `output_CFunctions_function_prototypes_and_construct_Makefile`, `compile_Makefile`
 - [griddata_commondata.py](../../../nrpy/infrastructures/BHaH/griddata_commondata.py) - `GridCommonData`, `register_griddata_commondata`, `register_CFunction_griddata_free`
 
