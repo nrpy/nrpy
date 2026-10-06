@@ -188,25 +188,42 @@ if enable_BHaHAHA:
                 project_dir,
                 "--cpp",
                 "--no-openmp",
+                "--no-parallel-codegen",
             ],
             check=True,
+            timeout=300,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT,
         )
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(
+            "BHaHAHA C-code generation exceeded the 300-second limit."
+        ) from error
     except subprocess.CalledProcessError:
         # If it fails (e.g., from a pip install), try running as a module
-        subprocess.run(
-            [
-                "python",
-                "-m",
-                "nrpy.examples.bhahaha",
-                "--fdorder",
-                str(fd_order),
-                "--outrootdir",
-                project_dir,
-                "--cpp",
-                "--no-openmp",
-            ],
-            check=True,
-        )
+        try:
+            subprocess.run(
+                [
+                    "python",
+                    "-m",
+                    "nrpy.examples.bhahaha",
+                    "--fdorder",
+                    str(fd_order),
+                    "--outrootdir",
+                    project_dir,
+                    "--cpp",
+                    "--no-openmp",
+                    "--no-parallel-codegen",
+                ],
+                check=True,
+                timeout=300,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.STDOUT,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError(
+                "BHaHAHA C-code generation exceeded the 300-second limit."
+            ) from error
     from nrpy.infrastructures.superB import BHaH_implementation
 
     BHaH_implementation.register_CFunction_bhahaha_find_horizons(
