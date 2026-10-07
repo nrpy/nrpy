@@ -511,8 +511,8 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 post_non_y_n_auxevol_mallocs = ""
 if enable_CAHD:
     post_non_y_n_auxevol_mallocs = r"""for (int grid = 0; grid < commondata.NUMGRIDS; grid++)
-  cahdprefactor_auxevol_gridfunction(
-      &commondata, &griddata_chare[grid].params, griddata_chare[grid].xx,
+  dsmin_auxevol_gridfunction(
+      &griddata_chare[grid].params, griddata_chare[grid].xx,
       griddata_chare[grid].gridfuncs.auxevol_gfs);
 """
 
