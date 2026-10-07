@@ -344,19 +344,16 @@ def _generate_spheroidal_fisheye_inverse_body(
 {origin_body}
   }} // END ELSE IF: handle origin
   else {{
-    const REAL radial_scale = rCart;
     const REAL inverse_relative_tol =
         (sizeof(REAL) == sizeof(float)) ? (REAL)1.0e-5 : (REAL)1.0e-12;
     const REAL derivative_floor =
         (sizeof(REAL) == sizeof(float)) ? (REAL)1.0e-7 : (REAL)1.0e-14;
-    const REAL residual_tolerance = inverse_relative_tol * radial_scale * radial_scale;
     REAL asymptotic_scale;
 {asymptotic_scale_codegen}
     const REAL inv_asymptotic_scale =
         (fabs(asymptotic_scale) > (REAL)1.0e-15) ? (REAL)1.0 / asymptotic_scale : (REAL)1.0;
     REAL low = (REAL)0.0;
-    REAL high = NRPYMAX(rCart * inv_asymptotic_scale, radial_scale);
-    const REAL bracket_tolerance = inverse_relative_tol * NRPYMAX(high, radial_scale);
+    REAL high = NRPYMAX(rCart * inv_asymptotic_scale, rCart);
     REAL radial_seed = (REAL)0.5 * high;
     int bracket_found = 0;
     int converged = 0;
@@ -380,7 +377,8 @@ def _generate_spheroidal_fisheye_inverse_body(
       REAL trial_seed = (REAL)0.5 * (low + high);
       if (isfinite(radial_residual_prime) && fabs(radial_residual_prime) > derivative_floor) {{
         const REAL newton_seed = radial_seed - radial_residual / radial_residual_prime;
-        if (isfinite(newton_seed) && newton_seed >= low && newton_seed <= high)
+        if (isfinite(newton_seed) && newton_seed > low && newton_seed < high &&
+            newton_seed != radial_seed)
           trial_seed = newton_seed;
       }} // END IF: use Newton seed
       REAL trial_residual;
@@ -399,17 +397,17 @@ def _generate_spheroidal_fisheye_inverse_body(
       else
         low = trial_seed;
       const REAL bracket_width = fabs(high - low);
-      if (fabs(trial_residual) < residual_tolerance || bracket_width < bracket_tolerance) {{
+      const REAL raw_radius_scale = fabs(trial_seed);
+      const REAL residual_tolerance =
+          inverse_relative_tol * raw_radius_scale * raw_radius_scale;
+      const REAL bracket_tolerance = inverse_relative_tol * raw_radius_scale;
+      if (fabs(trial_residual) < residual_tolerance && bracket_width < bracket_tolerance) {{
         radial_seed = trial_seed;
         converged = 1;
         break;
       }} // END IF: inverse converged
       radial_seed = trial_seed;
     }} // END LOOP: for iter over inverse
-    if (!converged && isfinite(low) && isfinite(high) && high >= low) {{
-      radial_seed = (REAL)0.5 * (low + high);
-      converged = 1;
-    }} // END IF: use final bracket midpoint
     if (!converged || !isfinite(radial_seed) || radial_seed < (REAL)0.0) {{
 {failure_body}
     }} // END IF: inverse failed
@@ -595,6 +593,249 @@ int main(void) {{
             ) from err
 
 
+def _run_generalrfm_spheroidal_fisheye_inverse_roundtrip_check(
+    real_type: str,
+) -> None:
+    """
+    Compile and run spheroidal-fisheye inverse checks, including strong map scaling.
+
+    :param real_type: C floating-point type to use for `REAL`; must be `float` or `double`.
+    :raises ValueError: If `real_type` is unsupported.
+    :raises RuntimeError: If the generated C test program fails to compile or run.
+    """
+    if real_type not in {"float", "double"}:
+        raise ValueError("real_type must be 'float' or 'double'.")
+
+    from nrpy.infrastructures.BHaH.generalrfm_cart_to_xx import (
+        register_CFunction_generalrfm_Cart_to_xx,
+    )
+
+    coord_systems = (
+        "GeneralRFM_spheroidal_fisheyeN1",
+        "GeneralRFM_spheroidal_fisheyeN8",
+    )
+    par.set_parval_from_str("parallelization", "openmp")
+    cfc.CFunction_dict.clear()
+    with contextlib.redirect_stdout(io.StringIO()):
+        for coord_system in coord_systems:
+            _ = register_CFunction_xx_to_Cart(coord_system)
+            _ = register_CFunction_generalrfm_Cart_to_xx(coord_system)
+
+    function_names = tuple(
+        function_name
+        for coord_system in coord_systems
+        for function_name in (
+            f"xx_to_Cart__rfm__{coord_system}",
+            f"generalrfm_Cart_to_xx__{coord_system}",
+        )
+    )
+    generated_functions = "\n\n".join(
+        _remove_c_includes(cfc.CFunction_dict[name].full_function)
+        for name in function_names
+    )
+    roundtrip_tolerance = "1.0e-4" if real_type == "float" else "1.0e-10"
+    source = f"""
+#include <math.h>
+#include <stdlib.h>
+
+typedef {real_type} REAL;
+#define NRPYMAX(a, b) ((a) > (b) ? (a) : (b))
+
+typedef struct params_struct {{
+  REAL Cart_originx, Cart_originy, Cart_originz;
+  REAL fisheye_a0, fisheye_a1, fisheye_a2, fisheye_a3, fisheye_a4;
+  REAL fisheye_a5, fisheye_a6, fisheye_a7, fisheye_a8;
+  REAL fisheye_xy_R1, fisheye_xy_R2, fisheye_xy_R3, fisheye_xy_R4;
+  REAL fisheye_xy_R5, fisheye_xy_R6, fisheye_xy_R7, fisheye_xy_R8;
+  REAL fisheye_xy_s1, fisheye_xy_s2, fisheye_xy_s3, fisheye_xy_s4;
+  REAL fisheye_xy_s5, fisheye_xy_s6, fisheye_xy_s7, fisheye_xy_s8;
+  REAL fisheye_xy_c;
+  REAL fisheye_z_R1, fisheye_z_R2, fisheye_z_R3, fisheye_z_R4;
+  REAL fisheye_z_R5, fisheye_z_R6, fisheye_z_R7, fisheye_z_R8;
+  REAL fisheye_z_s1, fisheye_z_s2, fisheye_z_s3, fisheye_z_s4;
+  REAL fisheye_z_s5, fisheye_z_s6, fisheye_z_s7, fisheye_z_s8;
+  REAL fisheye_z_c;
+}} params_struct;
+
+{generated_functions}
+
+static int vectors_match(const REAL expected[3], const REAL actual[3]) {{
+  const REAL tolerance = (REAL){roundtrip_tolerance};
+  for (int i = 0; i < 3; i++) {{
+    const REAL scale = fmax((REAL)1.0, fabs(expected[i]));
+    if (fabs(expected[i] - actual[i]) > tolerance * scale)
+      return 0;
+  }}
+  return 1;
+}}
+
+static int check_n1_roundtrip(const params_struct *params, const REAL xx[3]) {{
+  REAL Cart[3];
+  REAL xx_back[3];
+  xx_to_Cart__rfm__GeneralRFM_spheroidal_fisheyeN1(params, xx, Cart);
+  if (generalrfm_Cart_to_xx__GeneralRFM_spheroidal_fisheyeN1(params, Cart, xx_back) != 0)
+    return 1;
+  return vectors_match(xx, xx_back) ? 0 : 1;
+}}
+
+static int check_n8_roundtrip(const params_struct *params, const REAL xx[3]) {{
+  REAL Cart[3];
+  REAL xx_back[3];
+  xx_to_Cart__rfm__GeneralRFM_spheroidal_fisheyeN8(params, xx, Cart);
+  if (generalrfm_Cart_to_xx__GeneralRFM_spheroidal_fisheyeN8(params, Cart, xx_back) != 0)
+    return 1;
+  return vectors_match(xx, xx_back) ? 0 : 1;
+}}
+
+int main(void) {{
+  params_struct params = {{0}};
+
+  params.fisheye_a0 = (REAL)1.0;
+  params.fisheye_a1 = (REAL)256.0;
+  params.fisheye_xy_R1 = (REAL)9.99;
+  params.fisheye_xy_s1 = (REAL)0.01;
+  params.fisheye_xy_c = (REAL)0.7866685970142996;
+  params.fisheye_z_R1 = (REAL)9.99;
+  params.fisheye_z_s1 = (REAL)0.01;
+  params.fisheye_z_c = (REAL)0.7866685970142996;
+  const REAL strongly_scaled_xx[3] = {{(REAL)9.0, (REAL)9.0, (REAL)9.0}};
+  if (check_n1_roundtrip(&params, strongly_scaled_xx) != 0)
+    return 1;
+
+  params.fisheye_a1 = (REAL)16.0;
+  params.fisheye_xy_R1 = (REAL)4.0;
+  params.fisheye_xy_s1 = (REAL)0.5;
+  params.fisheye_xy_c = (REAL)0.8;
+  params.fisheye_z_R1 = (REAL)8.0;
+  params.fisheye_z_s1 = (REAL)1.2;
+  params.fisheye_z_c = (REAL)1.1;
+  const REAL anisotropic_xx[3] = {{(REAL)3.0, (REAL)-5.0, (REAL)7.0}};
+  if (check_n1_roundtrip(&params, anisotropic_xx) != 0)
+    return 2;
+
+  if (sizeof(REAL) == sizeof(double)) {{
+    params.fisheye_a0 = (REAL)1.0e10;
+    params.fisheye_a1 = (REAL)1.0;
+    params.fisheye_xy_R1 = params.fisheye_z_R1 = (REAL)1.0;
+    params.fisheye_xy_s1 = params.fisheye_z_s1 = (REAL)0.1;
+    params.fisheye_xy_c = params.fisheye_z_c = (REAL)1.0;
+    const REAL poorly_conditioned_xx[3] = {{(REAL)100.0, (REAL)0.0, (REAL)0.0}};
+    REAL Cart[3];
+    REAL xx_back[3];
+    xx_to_Cart__rfm__GeneralRFM_spheroidal_fisheyeN1(
+        &params, poorly_conditioned_xx, Cart);
+    const int status = generalrfm_Cart_to_xx__GeneralRFM_spheroidal_fisheyeN1(
+        &params, Cart, xx_back);
+    if (status == 0 && !vectors_match(poorly_conditioned_xx, xx_back))
+      return 3;
+  }}
+
+  params.fisheye_a0 = (REAL)1.0;
+  params.fisheye_a1 = (REAL)2.0;
+  params.fisheye_a2 = (REAL)4.0;
+  params.fisheye_a3 = (REAL)8.0;
+  params.fisheye_a4 = (REAL)16.0;
+  params.fisheye_a5 = (REAL)32.0;
+  params.fisheye_a6 = (REAL)64.0;
+  params.fisheye_a7 = (REAL)128.0;
+  params.fisheye_a8 = (REAL)256.0;
+  params.fisheye_xy_R1 = (REAL)171.06625518081691;
+  params.fisheye_xy_R2 = (REAL)184.44748588094367;
+  params.fisheye_xy_R3 = (REAL)215.80453713804999;
+  params.fisheye_xy_R4 = (REAL)246.99533671450504;
+  params.fisheye_xy_R5 = (REAL)286.33984889444974;
+  params.fisheye_xy_R6 = (REAL)315.21952800621472;
+  params.fisheye_xy_R7 = (REAL)345.56945122994739;
+  params.fisheye_xy_R8 = (REAL)371.01972035005042;
+  params.fisheye_xy_s1 = (REAL)11.383190952826789;
+  params.fisheye_xy_s2 = (REAL)6.3566576581017591;
+  params.fisheye_xy_s3 = (REAL)6.144116855070628;
+  params.fisheye_xy_s4 = (REAL)6.1420873714876416;
+  params.fisheye_xy_s5 = (REAL)9.2010079885841947;
+  params.fisheye_xy_s6 = (REAL)7.6806497869980452;
+  params.fisheye_xy_s7 = (REAL)7.657345408705031;
+  params.fisheye_xy_s8 = (REAL)7.6860700359661864;
+  params.fisheye_xy_c = (REAL)0.027126574950438669;
+  params.fisheye_z_R1 = (REAL)205.49362806002722;
+  params.fisheye_z_R2 = (REAL)220.78389866486555;
+  params.fisheye_z_R3 = (REAL)223.95116266565509;
+  params.fisheye_z_R4 = (REAL)248.54941568121561;
+  params.fisheye_z_R5 = (REAL)279.15394051173627;
+  params.fisheye_z_R6 = (REAL)307.36671974291738;
+  params.fisheye_z_R7 = (REAL)333.5953870005842;
+  params.fisheye_z_R8 = (REAL)355.59171204875031;
+  params.fisheye_z_s1 = (REAL)13.477846089992086;
+  params.fisheye_z_s2 = (REAL)5.4664273952348825;
+  params.fisheye_z_s3 = (REAL)5.3509689956296613;
+  params.fisheye_z_s4 = (REAL)4.778580730986703;
+  params.fisheye_z_s5 = (REAL)7.1649852613864402;
+  params.fisheye_z_s6 = (REAL)6.633355484239388;
+  params.fisheye_z_s7 = (REAL)6.6181317532559625;
+  params.fisheye_z_s8 = (REAL)6.6429682390042704;
+  params.fisheye_z_c = (REAL)0.022597979833417235;
+  const REAL shipped_n8_xx[3] = {{
+      (REAL)-192.3581085205078,
+      (REAL)-94.86515808105469,
+      (REAL)127.530517578125,
+  }};
+  if (check_n8_roundtrip(&params, shipped_n8_xx) != 0)
+    return 4;
+
+  REAL bad_Cart[3] = {{NAN, (REAL)0.0, (REAL)0.0}};
+  REAL xx_bad[3];
+  if (generalrfm_Cart_to_xx__GeneralRFM_spheroidal_fisheyeN8(
+          &params, bad_Cart, xx_bad) == 0)
+    return 5;
+  return 0;
+}}
+"""
+
+    with TemporaryDirectory() as temporary_directory:
+        directory = Path(temporary_directory)
+        source_path = directory / "generalrfm_spheroidal_fisheye_roundtrip.c"
+        executable_path = directory / "generalrfm_spheroidal_fisheye_roundtrip"
+        source_path.write_text(source)
+        compile_command = [
+            "gcc",
+            "-std=c99",
+            "-Wall",
+            "-Wextra",
+            "-pedantic",
+            str(source_path),
+            "-lm",
+            "-o",
+            str(executable_path),
+        ]
+        try:
+            subprocess.run(
+                compile_command,
+                check=True,
+                cwd=str(directory),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+            )
+            subprocess.run(
+                [str(executable_path)],
+                check=True,
+                cwd=str(directory),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired as err:
+            raise RuntimeError(
+                "GeneralRFM spheroidal fisheye round-trip test timed out.\n"
+                f"Command: {err.cmd}"
+            ) from err
+        except subprocess.CalledProcessError as err:
+            raise RuntimeError(
+                "GeneralRFM spheroidal fisheye round-trip test failed.\n"
+                f"Command: {err.cmd}\n"
+                f"Exit status: {err.returncode}"
+            ) from err
+
+
 def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     CoordSystem: str,
     relative_to: str = "local_grid_center",
@@ -650,6 +891,8 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     Setting up reference_metric[HoleySinhSpherical]...
     >>> _run_generalrfm_fisheye_inverse_roundtrip_check("float")
     >>> _run_generalrfm_fisheye_inverse_roundtrip_check("double")
+    >>> _run_generalrfm_spheroidal_fisheye_inverse_roundtrip_check("float")
+    >>> _run_generalrfm_spheroidal_fisheye_inverse_roundtrip_check("double")
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    cfc.CFunction_dict.clear()
