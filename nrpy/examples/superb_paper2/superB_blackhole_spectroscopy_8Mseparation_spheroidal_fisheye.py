@@ -48,8 +48,8 @@ register_CFunction_xx_to_Cart = xx_tofrom_Cart.register_CFunction_xx_to_Cart
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
-project_name = "superB_blackhole_spectroscopy_8Mseparation"
-CoordSystem = "GeneralRFM_fisheyeN8"
+project_name = "superB_blackhole_spectroscopy_8Mseparation_spheroidal_fisheye"
+CoordSystem = "GeneralRFM_spheroidal_fisheyeN8"
 set_of_CoordSystems = {CoordSystem}
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
@@ -88,7 +88,7 @@ if enable_psi4:
     list_of_psi4_extraction_radii = [60.0, 90.0, 120.0, 150.0]
     num_psi4_extraction_radii = len(list_of_psi4_extraction_radii)
 Nxx_dict = {
-    "GeneralRFM_fisheyeN8": [1392, 1392, 1392],
+    "GeneralRFM_spheroidal_fisheyeN8": [1392, 1392, 1152],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_x_posn = +4.0
@@ -106,22 +106,38 @@ fisheye_param_defaults = {
     "fisheye_phys_a7": 128.0,
     "fisheye_phys_a8": 256.0,
     "fisheye_phys_L": grid_physical_size,
-    "fisheye_phys_r_trans1": 4.75,
-    "fisheye_phys_w_trans1": 1.0,
-    "fisheye_phys_r_trans2": 5.5,
-    "fisheye_phys_w_trans2": 1.0,
-    "fisheye_phys_r_trans3": 9.0,
-    "fisheye_phys_w_trans3": 2.0,
-    "fisheye_phys_r_trans4": 16.0,
-    "fisheye_phys_w_trans4": 4.0,
-    "fisheye_phys_r_trans5": 34.0,
-    "fisheye_phys_w_trans5": 12.0,
-    "fisheye_phys_r_trans6": 60.0,
-    "fisheye_phys_w_trans6": 20.0,
-    "fisheye_phys_r_trans7": 115.0,
-    "fisheye_phys_w_trans7": 40.0,
-    "fisheye_phys_r_trans8": 208.0,
-    "fisheye_phys_w_trans8": 80.0,
+    "fisheye_phys_xy_r_trans1": 4.75,
+    "fisheye_phys_xy_w_trans1": 1.0,
+    "fisheye_phys_xy_r_trans2": 5.5,
+    "fisheye_phys_xy_w_trans2": 1.0,
+    "fisheye_phys_xy_r_trans3": 9.0,
+    "fisheye_phys_xy_w_trans3": 2.0,
+    "fisheye_phys_xy_r_trans4": 16.0,
+    "fisheye_phys_xy_w_trans4": 4.0,
+    "fisheye_phys_xy_r_trans5": 34.0,
+    "fisheye_phys_xy_w_trans5": 12.0,
+    "fisheye_phys_xy_r_trans6": 60.0,
+    "fisheye_phys_xy_w_trans6": 20.0,
+    "fisheye_phys_xy_r_trans7": 115.0,
+    "fisheye_phys_xy_w_trans7": 40.0,
+    "fisheye_phys_xy_r_trans8": 208.0,
+    "fisheye_phys_xy_w_trans8": 80.0,
+    "fisheye_phys_z_r_trans1": 4.75,
+    "fisheye_phys_z_w_trans1": 1.0,
+    "fisheye_phys_z_r_trans2": 5.5,
+    "fisheye_phys_z_w_trans2": 1.0,
+    "fisheye_phys_z_r_trans3": 5.832,
+    "fisheye_phys_z_w_trans3": 1.296,
+    "fisheye_phys_z_r_trans4": 10.368,
+    "fisheye_phys_z_w_trans4": 2.592,
+    "fisheye_phys_z_r_trans5": 22.032,
+    "fisheye_phys_z_w_trans5": 7.776,
+    "fisheye_phys_z_r_trans6": 43.2,
+    "fisheye_phys_z_w_trans6": 14.4,
+    "fisheye_phys_z_r_trans7": 82.8,
+    "fisheye_phys_z_w_trans7": 28.8,
+    "fisheye_phys_z_r_trans8": 149.76,
+    "fisheye_phys_z_w_trans8": 57.6,
 }
 enable_rfm_precompute = True
 MoL_method = "RK4"
@@ -172,25 +188,42 @@ if enable_BHaHAHA:
                 project_dir,
                 "--cpp",
                 "--no-openmp",
+                "--no-parallel-codegen",
             ],
             check=True,
+            timeout=300,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT,
         )
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(
+            "BHaHAHA C-code generation exceeded the 300-second limit."
+        ) from error
     except subprocess.CalledProcessError:
         # If it fails (e.g., from a pip install), try running as a module
-        subprocess.run(
-            [
-                "python",
-                "-m",
-                "nrpy.examples.bhahaha",
-                "--fdorder",
-                str(fd_order),
-                "--outrootdir",
-                project_dir,
-                "--cpp",
-                "--no-openmp",
-            ],
-            check=True,
-        )
+        try:
+            subprocess.run(
+                [
+                    "python",
+                    "-m",
+                    "nrpy.examples.bhahaha",
+                    "--fdorder",
+                    str(fd_order),
+                    "--outrootdir",
+                    project_dir,
+                    "--cpp",
+                    "--no-openmp",
+                    "--no-parallel-codegen",
+                ],
+                check=True,
+                timeout=300,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.STDOUT,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError(
+                "BHaHAHA C-code generation exceeded the 300-second limit."
+            ) from error
     from nrpy.infrastructures.superB import BHaH_implementation
 
     BHaH_implementation.register_CFunction_bhahaha_find_horizons(
@@ -306,7 +339,7 @@ if enable_psi4:
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
+phys_params_to_fisheye.register_CFunction_spheroidal_fisheye_params_from_physical_N(
     num_transitions=num_fisheye_transitions
 )
 if enable_psi4:
@@ -425,16 +458,17 @@ if enable_BHaHAHA:
         "bah_initial_grid_x_center",
         [default_BH1_x_posn, default_BH2_x_posn, 0.0],
     )
-    par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
+    par.adjust_CodeParam_default("bah_Nr_interp_max", 44)
     par.adjust_CodeParam_default(
         "bah_M_scale",
         [default_BH1_mass, default_BH2_mass, default_BH1_mass + default_BH2_mass],
     )
+    par.adjust_CodeParam_default("bah_cfl_factor", [0.80, 0.80, 0.90])
     par.adjust_CodeParam_default(
         "bah_max_search_radius",
         [
-            1.2 * default_BH1_mass,
-            1.2 * default_BH2_mass,
+            1.3 * default_BH1_mass,
+            1.3 * default_BH2_mass,
             1.3 * (default_BH1_mass + default_BH2_mass),
         ],
     )
@@ -484,11 +518,11 @@ if enable_CAHD:
 
 timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     post_params_struct_set_to_default=(
-        BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+        phys_params_to_fisheye.build_spheroidal_post_params_struct_set_to_default_hook(
             num_transitions=num_fisheye_transitions,
             compute_griddata="griddata",
         )
-        + BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+        + phys_params_to_fisheye.build_spheroidal_post_params_struct_set_to_default_hook(
             num_transitions=num_fisheye_transitions,
             compute_griddata="griddata_chare",
         )

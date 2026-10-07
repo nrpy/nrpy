@@ -33,23 +33,26 @@ sets `grid_idx`. First-time setup initializes `nn`, `nn_0`, `t_0`, and `time`.
 When CFL setup is enabled, `cfl_limited_timestep()` computes
 `commondata->dt = min(commondata->dt, ds_min * commondata->CFL_FACTOR)` across
 active grids. For ordinary coordinate systems, `ds_min_single_pt()` uses
-reference-metric scale factors; for `GeneralRFM_fisheyeN*`, it uses the fisheye
-metric diagonal. Non-fisheye `GeneralRFM` reports unsupported `ds_min`.
+reference-metric scale factors; for supported GeneralRFM fisheye providers, it
+uses the provider metric diagonal. Non-fisheye `GeneralRFM` reports unsupported
+`ds_min`.
 
 Reference-metric precompute has two paths. `rfm_precompute.py` handles ordinary
 non-`GeneralRFM` precompute by discovering coordinate-dependent expressions,
 creating `rfm_struct`, and registering `rfm_precompute_malloc`,
 `rfm_precompute_defines`, and `rfm_precompute_free`; generated host and CUDA
 paths allocate, populate, read, and free lookup arrays. `generalrfm_precompute.py`
-handles `GeneralRFM_fisheyeN*` by storing `ghatDD`, `ghatUU`, `detgammahat`,
-`ghatDDdD`, and `ghatDDdDD` into `AUXEVOL` gridfunctions. That GeneralRFM
-precompute path rejects CUDA and unsupported providers. `generalrfm_cart_to_xx.py`
-registers a coordinate-specialized `generalrfm_Cart_to_xx` Newton solve that
-inverts a supported GeneralRFM fisheye map and returns nonzero on failure.
-`phys_params_to_fisheye.py` registers physical fisheye CodeParameters in
-`commondata_struct`, computes internal `fisheye_a*`, `fisheye_R*`,
-`fisheye_s*`, and `fisheye_c`, and provides a post-params hook that runs the
-conversion after `params_struct_set_to_default()`.
+handles supported GeneralRFM fisheye providers by storing `ghatDD`, `ghatUU`,
+`detgammahat`, `ghatDDdD`, and `ghatDDdDD` into `AUXEVOL` gridfunctions. That
+GeneralRFM precompute path rejects CUDA and unsupported providers.
+`generalrfm_cart_to_xx.py` registers a coordinate-specialized
+`generalrfm_Cart_to_xx` solve that inverts supported radial and spheroidal
+GeneralRFM fisheye maps and returns nonzero on failure. `phys_params_to_fisheye.py`
+registers physical fisheye CodeParameters in `commondata_struct`, computes
+radial internal `fisheye_a*`, `fisheye_R*`, `fisheye_s*`, and `fisheye_c`, and
+also supports spheroidal xy/z physical transition inputs that populate
+`fisheye_xy_*` and `fisheye_z_*` internal parameters. Post-params hooks run the
+selected conversion after `params_struct_set_to_default()`.
 
 Coordinate wrappers live in two layers. `xx_tofrom_Cart.py` registers the Python
 registrars `register_CFunction_xx_to_Cart` and
@@ -66,12 +69,14 @@ multipatch grid with `params->grid_rotates`, inverse conversion builds the
 cumulative rotation matrix and applies `R^T` to the Cartesian vector before
 local-origin handling and native-coordinate inversion; forward `xx_to_Cart`
 applies `R` after native-to-Cartesian mapping and origin handling. GeneralRFM
-fisheye wrappers use a radial Newton solve for inverse mapping and a closed-form
-fisheye radius map for forward mapping. Each multipatch registrar also registers
-its exact SO(3) dependency closure: inverse registers the matrix builder and
-`R^T` vector helper, while forward registers the matrix builder and `R` vector
-helper. Registration remains duplicate-safe in either converter order and
-independent-grid registration adds no SO(3) helper.
+radial fisheye wrappers use a radial Newton solve for inverse mapping and a
+closed-form fisheye radius map for forward mapping. Spheroidal fisheye wrappers
+solve one scalar raw-radius equation and then recover xy and z raw coordinates
+with separate axis scale factors. Each multipatch registrar also registers its
+exact SO(3) dependency closure: inverse registers the matrix builder and `R^T`
+vector helper, while forward registers the matrix builder and `R` vector helper.
+Registration remains duplicate-safe in either converter order and independent-grid
+registration adds no SO(3) helper.
 
 Maintenance rule: coordinate-admission checks are request-gated by
 [Contribution Style And Static Analysis](../../architecture/contribution-style-and-static-analysis.md);

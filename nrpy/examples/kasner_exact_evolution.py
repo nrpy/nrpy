@@ -14,7 +14,7 @@ Author: Nishita Jadoo
 import argparse
 import os
 import shutil
-from typing import Dict
+from typing import Dict, Optional
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
@@ -54,11 +54,22 @@ project_name = "kasner_exact_evolution"
 CoordSystem = "GeneralRFM_fisheyeN1"
 IDtype = "Kasner"
 IDCoordSystem = "Cartesian"
-num_fisheye_transitions = (
-    int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
-    if CoordSystem.startswith("GeneralRFM_fisheyeN")
-    else None
-)
+fisheye_provider_kind: Optional[str]
+num_fisheye_transitions: Optional[int]
+if CoordSystem.startswith("GeneralRFM_spheroidal_fisheyeN"):
+    fisheye_provider_kind = "spheroidal_fisheye"
+    num_fisheye_transitions = int(
+        CoordSystem.replace("GeneralRFM_spheroidal_fisheyeN", "")
+    )
+else:
+    fisheye_provider_kind = (
+        "fisheye" if CoordSystem.startswith("GeneralRFM_fisheyeN") else None
+    )
+    num_fisheye_transitions = (
+        int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
+        if CoordSystem.startswith("GeneralRFM_fisheyeN")
+        else None
+    )
 LapseEvolutionOption = "Frozen"
 ShiftEvolutionOption = "Frozen"
 grid_physical_size = 12.0
@@ -132,9 +143,14 @@ if parallelization == "cuda":
     BHaH.parallelization.cuda_utilities.register_CFunction_find_global_sum()
 
 if num_fisheye_transitions is not None:
-    BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
-        num_transitions=num_fisheye_transitions
-    )
+    if fisheye_provider_kind == "spheroidal_fisheye":
+        BHaH.fisheye.phys_params_to_fisheye.register_CFunction_spheroidal_fisheye_params_from_physical_N(
+            num_transitions=num_fisheye_transitions
+        )
+    else:
+        BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
+            num_transitions=num_fisheye_transitions
+        )
     for parname, value in fisheye_param_defaults.items():
         par.adjust_CodeParam_default(parname, value)
 
@@ -319,7 +335,12 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 compute_griddata = "griddata_device" if parallelization == "cuda" else "griddata"
 post_params_struct_set_to_default = ""
 if num_fisheye_transitions is not None:
-    post_params_struct_set_to_default = BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+    fisheye_post_hook = (
+        BHaH.fisheye.phys_params_to_fisheye.build_spheroidal_post_params_struct_set_to_default_hook
+        if fisheye_provider_kind == "spheroidal_fisheye"
+        else BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook
+    )
+    post_params_struct_set_to_default = fisheye_post_hook(
         num_transitions=num_fisheye_transitions,
         compute_griddata=compute_griddata,
     )
