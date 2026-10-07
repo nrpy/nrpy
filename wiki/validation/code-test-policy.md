@@ -230,6 +230,22 @@ Claim evidence:
   `run_sebobv2`, `process_input_set`; [main.yml](../../.github/workflows/main.yml),
   `sebob-consistency-test` and `sebobv2-consistency-test`
 - Corroboration: none available; helper and workflow configuration jointly decide the distributed claim
+
+The Dendro application helper passes argument vectors with `shell=False`,
+gives every generation, configure, build, run, and rejection subprocess an
+explicit timeout, sets build jobs and MPI ranks through options with defaults of
+4, writes subprocess output to log files and prints only a bounded tail on
+failure, never changes its own cwd, passes the generator a copied environment
+with an owned cache, removes its work directory in `finally`, records the
+resolved tool and package versions, and prints each assertion with its
+validation layer and numerical bound. Its workflow job sets `timeout-minutes`.
+
+Claim evidence:
+- Claim: `dendro_application_check.py` uses `shell=False` argument vectors, explicit per-subprocess timeouts, build-job and rank counts set by options with defaults of 4, bounded failure-log tails, no helper cwd change, a copied generator environment with an owned cache, unconditional work-directory removal, recorded tool versions, and layer-named numerical assertions; its `dendro-validation` job sets `timeout-minutes`.
+- Role: descriptive behavior
+- Deciding authority: [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `run_logged`, `run_checked`, `tail`, `Report.check`, `Leg.record_versions`, `Leg.generate_and_build`, `Leg.run`, `main`; [main.yml](../../.github/workflows/main.yml), `dendro-validation`
+- Corroboration: none available; helper and workflow configuration jointly decide the distributed claim
+
 ### Static Summary
 
 Every modified handwritten Python file follows [Static
@@ -254,19 +270,18 @@ is not.
 7. No meaningful contract: add no behavioral test.
 8. Handwritten Python changed: follow [Static Analysis](static-analysis.md).
 
-Three checked-in shapes are retained facts, not templates. This policy treats
+The checked-in shapes described here are retained facts, not templates. This policy treats
 the NRPyLaTeX BSSN file as a unique retained direct-execution sampled cross-
 representation harness. The JAX
 project generator emits a downstream pytest import/`__version__` scaffold that
 configured generated-project CI does not execute; it is low-signal and its
-removal or replacement needs a separate JAX decision. BHaH `compile_Makefile()`
-contains an external-compilation doctest that is unsafe under this policy.
+removal or replacement needs a separate JAX decision.
 
 Claim evidence:
-- Claim: The NRPyLaTeX BSSN file directly executes a sampled cross-representation comparison; the JAX project generator emits a downstream pytest import/`__version__` scaffold that configured generated-project CI does not execute; and BHaH `compile_Makefile()` contains an external-compilation doctest.
+- Claim: The NRPyLaTeX BSSN file directly executes a sampled cross-representation comparison, and the JAX project generator emits a downstream pytest import/`__version__` scaffold that configured generated-project CI does not execute.
 - Role: descriptive behavior
-- Deciding authority: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`; [jax_project_generator.py](../../nrpy/infrastructures/JAX/jax_project_generator.py), `_generate_project_metadata` and `output_PyFunction_files_and_construct_project`; [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `compile_Makefile`
-- Corroboration: [main.yml](../../.github/workflows/main.yml), `codegen-ubuntu` and `codegen-mac`, corroborates that JAX output is generated without executing its scaffold; no independent corroboration for the other two outliers
+- Deciding authority: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`; [jax_project_generator.py](../../nrpy/infrastructures/JAX/jax_project_generator.py), `_generate_project_metadata` and `output_PyFunction_files_and_construct_project`
+- Corroboration: [main.yml](../../.github/workflows/main.yml), `codegen-ubuntu` and `codegen-mac`, corroborates that JAX output is generated without executing its scaffold; no independent corroboration for the other outlier
 
 Do not expand any of those shapes. Whether an unrelated touch must remove a
 legacy empty runner remains maintainer judgment. Meaningful doctest-only
@@ -299,15 +314,15 @@ for test count.
 
 - [coding_style.md](../../coding_style.md) - `### if __name__ == "__main__": Block`, `### Doctest Conventions`, `#### Doctest placeholders`, `### External-Host Test Harnesses`, `## Static Analysis Configuration`
 - [README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md) - durable scope and build/run instructions
-- [main.yml](../../.github/workflows/main.yml) - `static-analysis`, `codegen-ubuntu`, `codegen-mac`, `sebob-consistency-test`, `sebobv2-consistency-test`
+- [main.yml](../../.github/workflows/main.yml) - `static-analysis`, `codegen-ubuntu`, `codegen-mac`, `sebob-consistency-test`, `sebobv2-consistency-test`, `dendro-validation`
 - [single_file_static_analysis.sh](../../.github/single_file_static_analysis.sh) - `run_test_step`
 - [.pylintrc](../../.pylintrc) - `[MASTER]`; [.pylintrc_python36](../../.pylintrc_python36) - `[MASTER]`
 - [generic.py](../../nrpy/helpers/generic.py) - `validate_strings`
 - [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py) - `test_example_BSSN`
 - [jax_project_generator.py](../../nrpy/infrastructures/JAX/jax_project_generator.py) - `_generate_project_metadata`, `output_PyFunction_files_and_construct_project`
-- [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `compile_Makefile`
 - [sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py) - `run_sebob`, `process_input_set`
 - [sebobv2_consistency_check.py](../../nrpy/examples/tests/sebobv2_consistency_check.py) - `run_sebobv2`, `process_input_set`
+- [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py) - `run_logged`, `run_checked`, `Report.check`, `Leg.run`
 
 ## See Also
 

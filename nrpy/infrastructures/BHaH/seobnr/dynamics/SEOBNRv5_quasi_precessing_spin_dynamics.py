@@ -112,29 +112,25 @@ char rhs_name[] = "gsl_odeiv2_evolve_apply";
 // Step 2: Set the adaptive step size from the orbital frequency.
 REAL h = 2 * M_PI / commondata->initial_omega / 5;
 
-// Step 3: Allocate temporary spin-dynamics sample buffers.
-size_t bufferlength = (size_t)(tmax / h); // runs up to 0.01x maximum time (we should not ideally run that long)
-REAL *chi1_lnhat = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *chi2_lnhat = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *chi1_l = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *chi2_l = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *chi1_x = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *chi1_y = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *chi1_z = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *chi2_x = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *chi2_y = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *chi2_z = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *lnhat_x = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *lnhat_y = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *lnhat_z = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *L_x = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *L_y = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *L_z = (REAL *)malloc(bufferlength * sizeof(REAL));
-REAL *omega = (REAL *)malloc(bufferlength * sizeof(REAL));
-if (chi1_lnhat == NULL || chi2_lnhat == NULL || chi1_l == NULL || chi2_l == NULL || chi1_x == NULL || chi1_y == NULL || chi1_z == NULL || chi2_x == NULL || chi2_y == NULL || chi2_z == NULL || lnhat_x == NULL || lnhat_y == NULL || lnhat_z == NULL || L_x == NULL || L_y == NULL || L_z == NULL || omega == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_quasi_precessing_spin_dynamics(), malloc() failed for spin_dynamics\\n");
-  exit(1);
-}
+// Step 3: Allocate temporary spin-dynamics sample buffers at a modest fixed
+// capacity and grow them geometrically (Step 5.a) instead of reserving a
+// full-duration sample count for all seventeen arrays. Each array is
+// allocated through a table of its address and name so a failure partway
+// through frees exactly the arrays already allocated before this one.
+size_t bufferlength = 4096;
+REAL *chi1_lnhat, *chi2_lnhat, *chi1_l, *chi2_l, *chi1_x, *chi1_y, *chi1_z, *chi2_x, *chi2_y, *chi2_z, *lnhat_x, *lnhat_y, *lnhat_z, *L_x, *L_y, *L_z, *omega;
+REAL **restrict spin_dynamics_bufs[17] = {&chi1_lnhat, &chi2_lnhat, &chi1_l, &chi2_l, &chi1_x, &chi1_y, &chi1_z, &chi2_x, &chi2_y, &chi2_z, &lnhat_x, &lnhat_y, &lnhat_z, &L_x, &L_y, &L_z, &omega};
+const char *restrict spin_dynamics_buf_names[17] = {"chi1_lnhat", "chi2_lnhat", "chi1_l", "chi2_l", "chi1_x", "chi1_y", "chi1_z", "chi2_x", "chi2_y", "chi2_z", "lnhat_x", "lnhat_y", "lnhat_z", "L_x", "L_y", "L_z", "omega"};
+for (size_t buf_idx = 0; buf_idx < 17; buf_idx++){
+  *(spin_dynamics_bufs[buf_idx]) = (REAL *)malloc(bufferlength * sizeof(REAL));
+  if (*(spin_dynamics_bufs[buf_idx]) == NULL){
+    fprintf(stderr,"Error: in SEOBNRv5_quasi_precessing_spin_dynamics(), malloc() failed for %s\\n", spin_dynamics_buf_names[buf_idx]);
+    for (size_t freed_idx = 0; freed_idx < buf_idx; freed_idx++){
+      free(*(spin_dynamics_bufs[freed_idx]));
+    } // END LOOP: for freed_idx over allocated buffers
+    exit(1);
+  } // END IF: allocation of spin_dynamics_bufs[buf_idx] failed
+} // END LOOP: for buf_idx over spin buffers
 size_t nsteps = 0;
 
 // Step 4: Store the initial spin-dynamics sample.

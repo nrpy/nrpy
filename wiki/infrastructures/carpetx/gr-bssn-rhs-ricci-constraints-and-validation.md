@@ -22,8 +22,8 @@ magnitudes.
 
 ## Detail
 
-All three CarpetX GR registration functions use the same parallel-codegen
-entry pattern: during `pcg.pcg_registration_phase()` they record the call with
+The CarpetX Ricci, RHS, and constraints registration functions use the same
+parallel-codegen entry pattern: during `pcg.pcg_registration_phase()` they record the call with
 `parallel_codegen.register_func_call()` and return `None`; during codegen they
 temporarily replace the global `fd_order` parameter with the requested local
 order, register the CFunction, restore the old `fd_order`, and return
@@ -125,8 +125,8 @@ all-improvements states; because it performs the trusted comparison outside
 `register_CFunction_rhs_eval()`, those basenames omit the `KO...` segment and
 use the local `enable_improvements` loop variable.
 
-CarpetX has six backend-local RHS trusted baselines: four covariant cases span
-both `T4munu` states and both improvements states, while two noncovariant
+CarpetX has backend-local RHS trusted baselines: the covariant cases span
+both `T4munu` states and both improvements states, while the noncovariant
 KO-enabled cases span both `T4munu` states with improvements disabled.
 
 ## Sources

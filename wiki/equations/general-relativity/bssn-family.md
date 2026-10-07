@@ -153,15 +153,22 @@ rewritten in terms of `C^i`. The full Yo-Baumgarte-Shapiro coefficient is
 `-(YBS_chi + 2/3) C^i Dbar_j beta^j`; adding that full expression again would
 double-count the baseline. Yo-Lin-Cao write the same coefficient as
 `-(2/3)(xi + 1)`, so NRPy's incremental parameter satisfies
-`YBS_chi = 2*xi/3`. Their usual `xi=1` choice therefore maps to the
-mathematical value `YBS_chi = 2/3`; the runtime default uses the numeric
-approximation `2.0 / 3.0`.
+`YBS_chi = 2*xi/3`. Their usual `xi=1` choice therefore maps to
+`YBS_chi = 2/3`. The runtime default is `0.0`, which removes the term exactly;
+a user who enables the option sets `YBS_chi` above zero in the parameter file.
+The recommended maximum is `2/3` for BSSN. It is the `xi=1` value that Yo, Lin,
+and Cao state is usually chosen in Eq. (47), a customary choice and not a
+stability bound. No derivation bounds larger values: the term is lower order,
+so it adds no timestep restriction, and it changes the growth rate of `C^i` by
+`-YBS_chi*Dbar_j beta^j`. Larger values have no supporting derivation or source
+here, and negative values amplify `C^i` wherever `Dbar_j beta^j > 0` and should
+not be used.
 
 The equation layer uses a plain real SymPy symbol for `YBS_chi`; constructing
 enabled symbolic RHSs does not register a global `CodeParameter`. The BHaH
 `register_CFunction_rhs_eval` owner registers `YBS_chi` only when the option is
 enabled, for either formulation, as a runtime `REAL`, using the
-parser-compatible numeric default `2.0 / 3.0`, with `commondata=True` and
+default `0.0` (term disabled at run time), with `commondata=True` and
 `add_to_parfile=True`; there is no Python coefficient argument.
 `BSSNRHSs_dict.get_rhs` receives the Boolean
 separately from the unchanged coordinate/options string and keeps enabled
@@ -198,6 +205,12 @@ Claim evidence:
 - Deciding authority: [Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066v2](https://arxiv.org/pdf/gr-qc/0209066v2), Eq. (45); [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (47)
 - Corroboration: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`; [BSSN_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py), representative jointly enabled `trusted_dict`
 
+Claim evidence:
+- Claim: the runtime default `YBS_chi = 0.0` removes the term exactly, and the recommended BSSN maximum `2/3` is the usual `xi=1` value stated in the source, a customary choice and not a derived stability bound.
+- Role: descriptive behavior
+- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (47)
+- Corroboration: [Dendro rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS Gamma branch
+
 For local diagnostics, `BSSNconstraints` also stores the direct conformal-metric
 contraction `LambdaConstraintSquared` and its plain square root
 `LambdaConstraintMagnitude`.
@@ -209,7 +222,7 @@ Claim evidence:
 - Corroboration: [BSSN_constraints_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py), `trusted_dict`; [BSSN_constraints_Spherical.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Spherical.py), `trusted_dict`
 
 Representative trusted files pin the core RHS, quantity, and constraint
-dictionaries. All six BSSN RHS trusted cases jointly enable YBS Gamma and
+dictionaries. All BSSN RHS trusted cases jointly enable YBS Gamma and
 YBS-MOM, so they pin the changed `a_rhsDD` expressions and every other output
 already present in those dictionaries without separate option-combination files.
 Gauge validation is driven by the supported lapse and shift option

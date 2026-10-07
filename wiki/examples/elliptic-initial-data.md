@@ -5,7 +5,7 @@
 
 ## Summary
 
-NRPy has two conformally flat elliptic initial-data examples with the same
+NRPy has conformally flat elliptic initial-data examples with the same
 physical goal but different runtime targets. `python -m
 nrpy.examples.nrpyelliptic_conformally_flat` generates a standalone BHaH
 project under `project/nrpyelliptic_conformally_flat/`. `python -m

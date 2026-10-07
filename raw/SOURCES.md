@@ -16,7 +16,6 @@
 | `equation-modules-and-trusted-values` | Equation modules, generated trusted-value files, and BOB test metadata from `nrpy/equations`, including `nrpy/equations/seobnr/tests/BOB_v2_fit_sim_list.md`. | living | partial |
 | `infrastructure-modules-and-embedded-headers` | Python modules and embedded headers from `find nrpy/infrastructures -type f \( -name '*.py' -o -name '*.h' \)`. | living | partial |
 | `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`. | living | ingested |
-| `dendro-trusted-generated-source-baselines` | Generated-source baselines under `nrpy/infrastructures/Dendro/general_relativity/tests/`, owned by the emitting modules' direct validation entry points. Symbolic-expression baselines remain with their equation owners. | living | partial |
 | `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples` inventoried by `wiki/examples/example-generator-catalog.md`. | living | partial |
 | `ci-and-local-automation` | CI and local automation files from `.github`. | living | partial |
 
@@ -50,6 +49,7 @@ aggregate rows and `wiki/source-map.md`.
 | `.pylintrc_python36` | living |
 | `.darglint` | living |
 | `.github/workflows/main.yml` | living |
+| `.github/workflows/dendrolib-canary.yml` | living |
 | `.github/single_file_static_analysis.sh` | living |
 | `.github/full_nrpy_local_ci.sh` | living |
 | `bin/nrpyinline.py` | living |
@@ -214,11 +214,8 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/superB/superB/superB_pup.py` | living |
 | `nrpy/infrastructures/superB/superB/superB.h` | living |
 | `nrpy/infrastructures/superB/superB/superB_pup_function_prototypes.h` | living |
-| `nrpy/infrastructures/Dendro/standalone_host/dendro_standalone_host.h` | living |
 | `nrpy/infrastructures/Dendro/tests_infra/dendrolib_capability_test.cpp` | living |
 | `nrpy/infrastructures/Dendro/tests_infra/README.md` | living |
-| `nrpy/infrastructures/Dendro/tests_infra/runtime_integration_test.cpp` | living |
-| `nrpy/infrastructures/Dendro/block_geometry.h` | living |
 | `nrpy/tests/reference_metric_Cartesian.py` | living |
 | `nrpy/tests/reference_metric_Spherical.py` | living |
 | `nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py` | living |
@@ -261,6 +258,9 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/examples/geodesic_visualizations/blueprint_analysis.py` | living |
 | `nrpy/examples/tests/sebob_consistency_check.py` | living |
 | `nrpy/examples/tests/sebobv2_consistency_check.py` | living |
+| `nrpy/examples/q1.par.lowres.toml` | living |
+| `nrpy/examples/tests/dendro_application_check.py` | living |
+| `nrpy/examples/tests/dendro_application_check_reference.py` | living |
 | `nrpy/examples/dendro_fccz4.py` | living |
 | `nrpy/examples/dendro_bssn.py` | living |
 | `nrpy/equations/basis_transforms/jacobians.py` | living |
@@ -325,6 +325,18 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/equations/grhd/tests/HLL_fluxes.py` | living |
 | `nrpy/equations/grhd/tests/Min_Max_and_Piecewise_Expressions.py` | living |
 | `nrpy/equations/grhd/tests/characteristic_speeds.py` | living |
+| `nrpy/equations/grmhd/GRMHD_equations.py` | living |
+| `nrpy/equations/grmhd/HLL_fluxes.py` | living |
+| `nrpy/equations/grmhd/characteristic_speeds.py` | living |
+| `nrpy/equations/grmhd/tests/GRMHD_equations_Cartesian.py` | living |
+| `nrpy/equations/grmhd/tests/GRMHD_equations_SinhCartesian.py` | living |
+| `nrpy/equations/grmhd/tests/GRMHD_equations_SinhCylindrical.py` | living |
+| `nrpy/equations/grmhd/tests/GRMHD_equations_SinhSpherical.py` | living |
+| `nrpy/equations/grmhd/tests/GRMHD_equations_SinhSpherical_rfm_precompute.py` | living |
+| `nrpy/equations/grmhd/tests/GRMHD_equations_SinhSymTP.py` | living |
+| `nrpy/equations/grmhd/tests/GRMHD_equations_Spherical.py` | living |
+| `nrpy/equations/grmhd/tests/HLL_fluxes.py` | living |
+| `nrpy/equations/grmhd/tests/characteristic_speeds.py` | living |
 | `nrpy/equations/nrpyelliptic/ConformallyFlat_RHSs.py` | living |
 | `nrpy/equations/nrpyelliptic/ConformallyFlat_SourceTerms.py` | living |
 | `nrpy/equations/nrpyelliptic/tests/ConformallyFlat_RHSs_Cartesian.py` | living |
@@ -373,16 +385,18 @@ aggregate rows and `wiki/source-map.md`.
 | Source | Provenance | Status | Ingest | Notes |
 | --- | --- | --- | --- | --- |
 | `https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md` | Andrej Karpathy gist raw note, `LLM Wiki`; the full URL is its stable source locator. | frozen | partial | Background approach source for persistent LLM-maintained wiki governance: raw/wiki/schema layers and ingest/query/lint workflows. |
-| `https://github.com/paralab/Dendro-5.01` | Dendrolib upstream repository used by Dendro-GR as its host-library dependency. | living | partial | Deciding source for cited balanced-octree input, octant refinement flags, regular-block decomposition, DVector layouts, zip/unzip, remeshing, intergrid transfer, and UTS/NUTS interfaces. Only cited interfaces are ingested. |
-| `https://github.com/paralab/Dendro-GR` | Dendro-GR upstream application repository and its Dendrolib integration. | living | partial | Source for cited host conventions used beside generated solvers: padded-origin arithmetic, block reads, refinement modes, remesh/intergrid-transfer sequencing, constraint interfaces, derivative-order selection, high-order centered advection functions, KO selection, solver build structure, and namespace declarations. Only cited interfaces are ingested. |
+| `https://github.com/paralab/Dendro-5.01` | Dendrolib upstream repository used by Dendro-GR as its host-library dependency. | living | partial | Deciding source for cited balanced-octree input, octant refinement flags, regular-block decomposition, block axis spacings, zip/unzip, remeshing, intergrid transfer, the apparent-horizon finder checkpoint interface, and the CMake link targets of the default BLAS and LAPACK build. Only cited interfaces are ingested. |
+| `https://github.com/paralab/Dendro-GR` | Dendro-GR upstream application repository and its Dendrolib integration. | living | partial | Source for cited host conventions that the generated solvers follow: padded-origin arithmetic, block reads, refinement modes, remesh/intergrid-transfer sequencing, constraint interfaces, derivative-order selection, high-order centered advection functions, KO selection, namespace declarations, GridInfo CSV output, mesh-level output-frequency scaling, the radial RIT `eta` prescription, lapse replacement, the puncture tracker and relative-position history, integrator selection and CFL spacing, checkpoint slot selection on restore, Psi4 extraction, and parameter defaults. Only cited interfaces are ingested. |
 | `https://arxiv.org/pdf/gr-qc/0104063v3` | Version-pinned v3 PDF for Baker, Campanelli, and Lousto, arXiv:gr-qc/0104063. | frozen | ingested | Primary deciding source for the Psi4 tetrad contract in Sec. V.A: Eqs. (5.6)-(5.7), the following unnumbered Gram-Schmidt procedure, and the later Eq. (5.9) rotation. |
+| `https://arxiv.org/pdf/astro-ph/0503420v2` | Version-pinned v2 paper for Duez et al., arXiv:astro-ph/0503420. | frozen | ingested | Magnetic four-vector, stress-energy, conserved fluid variables, fluxes, sources, HLL flux, and approximate MHD dispersion in Eqs. (16), (23)-(24), (31)-(39), and (48)-(50). NRPy reference-densitizes the Cartesian fluid equations. |
+| `https://arxiv.org/pdf/2412.03659v2` | Version-pinned v2 paper for Jacques et al., arXiv:2412.03659. | frozen | ingested | Conformal metric split, reference-metric volume factor, GRHD conserved variables, fluxes, sources, and rescaling in Eqs. (2)-(5), (11), (13)-(24). Eq. (11) rewrites the divergence of a chosen current; the paper does not define or assert conservation of NRPy's entropy current. |
 | `https://arxiv.org/pdf/0902.3652v2` | Version-pinned v2 PDF for Brown, arXiv:0902.3652. | frozen | ingested | Deciding source for the conformal connection constraint in Eqs. (12a), (12b), and (15), and its RHS adjustment in Eqs. (21e) and (22e); it does not prescribe the local norm diagnostic. |
 | `https://arxiv.org/pdf/gr-qc/0209066v2` | Version-pinned v2 PDF for Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066. | frozen | ingested | Deciding source for the full Gamma-constraint adjustment coefficient in Eq. (45); current NRPy already owns the baseline `2/3` contribution and therefore adds only the incremental `chi` term. |
 | `https://arxiv.org/pdf/1205.5111v2` | Version-pinned v2 PDF for Yo, Lin, and Cao, arXiv:1205.5111. | frozen | ingested | Deciding source for the Eq. (47) `xi` parameterization and Eq. (56) direct covariant STF momentum-gradient adjustment; comparison with the earlier full Gamma coefficient gives NRPy's incremental mapping `chi=2*xi/3`. |
 | `https://doi.org/10.1103/PhysRevD.110.064045` | Published article for Etienne, Phys. Rev. D 110, 064045 (2024). | frozen | ingested | Deciding source for the CAHD level-local CFL/grid-spacing scaling pattern transferred to YBS-MOM; CAHD itself remains parabolic. |
 | `https://arxiv.org/pdf/1106.2254v2` | Version-pinned v2 PDF for Alic et al., arXiv:1106.2254. | frozen | ingested | Corroborating source for covariant CCZ4, the `kappa3=1` covariance choice, the one-stretch Cartesian connection composition, and the exact advective 1+log formula in Eq. (20). |
 | `https://arxiv.org/pdf/1403.3653v1` | Version-pinned v1 PDF for Sanchis-Gual et al., arXiv:1403.3653. | frozen | ingested | Corroborating source for reference-metric fCCZ4 variables, constraints, gauge equations, reduction to BSSN, and one connection stretch. Its general display retains a geometric divergence coefficient while spherical Eq. (3.14) contains the compatible Z4 divergence promotion, so the two are not an unqualified full off-constraint cross-check. |
-| `https://arxiv.org/pdf/2002.06225v2` | Version-pinned v2 PDF for Mewes et al., arXiv:2002.06225. | frozen | ingested | Principal scientific specification for NRPy's three-dimensional reference-metric fCCZ4 variables, Ricci tensor, evolution equations, gauge, and matter projections in Eqs. (3)-(41), including the unnumbered evolution system after Eq. (32). Its printed connection shift bracket contains an apparent convention error under its own full-Lie time-operator definition; NRPy documents and corrects the duplicated constraint-vector stretch. |
+| `https://arxiv.org/pdf/2002.06225v2` | Version-pinned v2 PDF for Mewes et al., arXiv:2002.06225. | frozen | ingested | Principal scientific specification for NRPy's three-dimensional reference-metric fCCZ4 variables, Ricci tensor, evolution equations, gauge, and matter projections in Eqs. (3)-(41), including the unnumbered evolution system after Eq. (32). Eqs. (5)-(7) and (10) also support the ADM metric and BSSN-to-ADM conversion used by GRHD/GRMHD. Its printed connection shift bracket contains an apparent convention error under its own full-Lie time-operator definition; NRPy documents and corrects the duplicated constraint-vector stretch. |
 | `https://arxiv.org/pdf/2201.08857v1` | Version-pinned v1 PDF for Baumgarte and de Oliveira, arXiv:2201.08857. | frozen | ingested | Deciding source for the general Bona-Masso lapse equation and its `f(alpha)=1` harmonic specialization. |
 | `https://arxiv.org/pdf/gr-qc/9810065v1` | Version-pinned v1 PDF for Baumgarte and Shapiro, arXiv:gr-qc/9810065. | frozen | ingested | Deciding source for the zero-shift harmonic lapse relation in Eqs. (30)-(32), including the special `C(x)=1` choice. |
 | `https://arxiv.org/pdf/gr-qc/9902024v1` | Version-pinned v1 PDF for Baumgarte, Hughes, and Shapiro, arXiv:gr-qc/9902024. | frozen | ingested | Deciding source for the zero-shift statement that their harmonic slicing reduces to `partial_t(alpha)=partial_t(exp(6*phi))`. |

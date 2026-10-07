@@ -44,7 +44,8 @@ class BSSNRHSs:
         :param enable_T4munu: Whether to enable T4munu (stress-energy terms), defaults to False.
         :param enable_YBS_Gamma_constraint_adjustment: Whether to enable the YBS Gamma-constraint adjustment.
         :param enable_YBS_momentum_constraint_adjustment: Whether to enable the
-            Yo--Lin--Cao momentum-constraint adjustment.
+            Yo--Lin--Cao momentum-constraint adjustment, whose coefficient
+            C_YBS_mom * CFL_FACTOR * dsmin is multiplied by the conformal factor W.
 
         :raises ValueError: If EvolvedConformalFactor_cf parameter is set to an unsupported value.
         """
@@ -532,7 +533,20 @@ class BSSNRHSs:
             dsmin = sp.Symbol("dsmin", real=True)
             C_YBS_mom = sp.Symbol("C_YBS_mom", real=True)
             CFL_FACTOR = sp.Symbol("CFL_FACTOR", real=True)
-            ell_M = C_YBS_mom * CFL_FACTOR * dsmin
+            # The coefficient carries the conformal factor W = e^{-2 phi}, which is 1 far
+            # from the holes and vanishes at a puncture. There the computed momentum
+            # residual is dominated by discretization error, and second derivatives
+            # of phi grow like 1/r^2. W attenuates the added term, but W times the
+            # derivative of the computed residual does not vanish in general. The
+            # adjustment still vanishes on exact solutions, since it is a multiple
+            # of the derivative of the residual.
+            if EvolvedConformalFactor_cf == "W":
+                W = cf
+            elif EvolvedConformalFactor_cf == "chi":
+                W = sp.sqrt(cf)
+            else:  # "phi"; unsupported values were rejected in Step 4.
+                W = sp.exp(-2 * cf)
+            ell_M = C_YBS_mom * CFL_FACTOR * dsmin * W
             for i in range(3):
                 for j in range(3):
                     Abar_rhsDD[i][j] += ell_M * self.DbarM_STFDD[i][j]

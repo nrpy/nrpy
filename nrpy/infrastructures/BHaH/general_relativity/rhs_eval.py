@@ -87,9 +87,11 @@ def register_CFunction_rhs_eval(
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :param validate_expressions: Whether to validate generated sympy expressions against trusted values.
     :param enable_fCCZ4: Use fCCZ4 instead of BSSN evolution equations.
-    :param enable_YBS_Gamma_constraint_adjustment: Enable the YBS connection-constraint adjustment.
-    :param enable_YBS_momentum_constraint_adjustment: Enable the timestep-scaled
-        Yo--Lin--Cao momentum-constraint adjustment.
+    :param enable_YBS_Gamma_constraint_adjustment: Enable the YBS connection-constraint
+        adjustment and register the runtime parameter YBS_chi, whose default 0 disables it.
+    :param enable_YBS_momentum_constraint_adjustment: Enable the timestep-scaled,
+        W-weighted Yo--Lin--Cao momentum-constraint adjustment and register the runtime
+        parameter C_YBS_mom, whose default 0 disables it and whose recommended value is 1.75.
     :param enable_cfdD_alphadD_vetUdD_gridfunctions: Whether to read the first derivatives of
         cf, alpha and vetU from the gridfunctions cfdD_alphadD_vetUdD_eval stores, and to
         build each mixed second derivative of them as a single first derivative of those
@@ -164,9 +166,15 @@ def register_CFunction_rhs_eval(
             "REAL",
             __name__,
             "YBS_chi",
-            2.0 / 3.0,
+            0.0,
             commondata=True,
             add_to_parfile=True,
+            description=(
+                "2/3 (BSSN) or 4/3 (fCCZ4) = recommended; the usual xi=1 choice of "
+                "Yo, Lin, and Cao, which gives the same C^i Dbar_k beta^k coefficient "
+                "in both formulations. Range: 0 (off) up to the recommended value; "
+                "no stability bound was derived, and negative values should not be used."
+            ),
         )
     if enable_CAHD or enable_YBS_momentum_constraint_adjustment:
         if "dsmin" not in gri.glb_gridfcs_dict:
@@ -180,9 +188,18 @@ def register_CFunction_rhs_eval(
             "REAL",
             __name__,
             "C_YBS_mom",
-            1.0,
+            0.0,
             commondata=True,
             add_to_parfile=True,
+            description=(
+                "1.75 = recommended; diffusive damping of momentum-constraint "
+                "violations, weighted by the conformal factor W, which vanishes at "
+                "punctures and attenuates the term there. Range: 0 (off) to about 2 "
+                "at CFL_FACTOR = 0.45 when W <= 1 everywhere. "
+                "Stability needs C_YBS_mom * CFL_FACTOR^2 * lambda_FD * W * ds_min / dsmin "
+                "below the Runge-Kutta real-axis limit (2.5 for RK3), where ds_min is "
+                "the smallest grid spacing and lambda_FD = 5.6 to 7.6 for 4th to 8th order."
+            ),
         )
     if enable_fCCZ4:
         # The shared fCCZ4 expression factory is the single fCCZ4 expression

@@ -6,7 +6,7 @@
 ## Summary
 
 The BHaH rotation package wraps equation-side `SO3Expressions` from
-`nrpy/equations/rotation/SO3_rotations.py` in eight public generated
+`nrpy/equations/rotation/SO3_rotations.py` in public generated
 CFunctions. `register_all.register_CFunctions()` registers helpers for building
 rotation matrices from cumulative hats, converting axis-angle data to a matrix,
 applying `R` or `R^T` to vectors, applying `R` to rank-2 covariant tensors,
@@ -21,7 +21,7 @@ local scalar math.
 ## Detail
 
 `register_CFunctions()` is the router for the generated helper set. It calls
-the eight helper-specific registration functions:
+the helper-specific registration functions:
 `register_CFunction_so3_build_R_from_hats`,
 `register_CFunction_so3_axis_angle_to_R`,
 `register_CFunction_so3_apply_R_to_vector`,
@@ -31,16 +31,16 @@ the eight helper-specific registration functions:
 `register_CFunction_so3_left_multiply_hats_with_R`, and
 `register_CFunction_so3_find_nU_and_dphi_from_unit_vectors`.
 
-When `parallelization` is `cuda`, exactly the three helpers used directly by
+When `parallelization` is `cuda`, exactly the helpers used directly by
 the multipatch coordinate converters--`so3_build_R_from_hats`,
 `so3_apply_R_to_vector`, and `so3_apply_RT_to_vector`--emit
 `__host__ __device__` on definitions and prototypes. Their OpenMP forms have no
-decorator. The other five SO(3) helpers remain host-only in both modes. This
+decorator. The other SO(3) helpers remain host-only in both modes. This
 narrow device closure lets the coordinate converters call the required matrix
 and vector operations from a CUDA kernel without changing unrelated helpers.
 
 Claim evidence:
-- Claim: Exactly the matrix builder and the `R`/`R^T` vector helpers emit CUDA host/device definitions and prototypes; the other five helpers remain host-only, and OpenMP forms remain undecorated.
+- Claim: Exactly the matrix builder and the `R`/`R^T` vector helpers emit CUDA host/device definitions and prototypes; the other helpers remain host-only, and OpenMP forms remain undecorated.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/BHaH/rotation/so3_build_R_from_hats.py`, `so3_apply_R_to_vector.py`, and `so3_apply_RT_to_vector.py` - their public registrars
 - Corroboration: none available; owner doctests and emitted-source inspection are not independent evidence.
@@ -75,7 +75,7 @@ Each helper registration passes `subdirectory="rotation"` to
 under the generated rotation helper directory. The individual modules validate
 their generated OpenMP strings through `validate_strings` against trusted
 `so3_*__openmp.c` files. The aggregate `register_all.py` script also clears
-`CFunction_dict`, sets `parallelization` to `openmp`, registers all eight
+`CFunction_dict`, sets `parallelization` to `openmp`, registers all
 helpers, and directly compares each generated `full_function` with its trusted
 file under `nrpy/infrastructures/BHaH/rotation/tests/`.
 
