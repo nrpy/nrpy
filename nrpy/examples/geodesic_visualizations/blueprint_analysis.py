@@ -98,7 +98,7 @@ def _has_nonterminal_diagnostic(data: npt.NDArray[np.void]) -> npt.NDArray[np.bo
     """
     Identify records containing a nonterminal-plane crossing.
 
-    The v6 blueprint record has no separate nonterminal event flag.  Its
+    The current blueprint record has no separate nonterminal event flag. Its
     ``non_terminal_plane_lambda`` field is initialized to zero and is written
     only after a successful nonterminal crossing, so a nonzero finite value is
     the serialized crossing marker.  This is independent of
@@ -118,7 +118,10 @@ def _has_nonterminal_diagnostic(data: npt.NDArray[np.void]) -> npt.NDArray[np.bo
     )
 
 
-def plot_heatmaps(data: npt.NDArray[np.void]) -> None:
+def plot_heatmaps(
+    data: npt.NDArray[np.void],
+    nonterminal_crossing_mask: Optional[npt.NDArray[np.bool_]] = None,
+) -> None:
     """
     Generate diagnostic heatmaps for the three recorded event classes.
 
@@ -129,12 +132,22 @@ def plot_heatmaps(data: npt.NDArray[np.void]) -> None:
     fractions.
 
     :param data: Structured blueprint records to plot.
+    :param nonterminal_crossing_mask: Optional mask of records with a
+        nonterminal-plane crossing.
+    :raises ValueError: If the crossing mask and blueprint records have
+        different shapes.
     """
     # pylint: disable=import-outside-toplevel, import-error
     import matplotlib.pyplot as plt
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-    nonterminal_mask = _has_nonterminal_diagnostic(data)
+    nonterminal_mask = (
+        _has_nonterminal_diagnostic(data)
+        if nonterminal_crossing_mask is None
+        else nonterminal_crossing_mask
+    )
+    if nonterminal_mask.shape != data.shape:
+        raise ValueError("Nonterminal crossing mask does not match blueprint records")
     if np.any(nonterminal_mask):
         hb0 = axes[0].hexbin(
             data["y_nt"][nonterminal_mask],
@@ -246,6 +259,7 @@ def diagnose_blueprint() -> None:
 
     blueprint_files: List[str] = []
     headers: List[blueprint_io.BlueprintHeader] = []
+    crossing_indices_by_file: Dict[str, npt.NDArray[np.uint64]] = {}
     missing_sidecars: List[str] = []
     total_expected_records = 0
     for tile_x in range(tiles_width):
@@ -277,6 +291,26 @@ def diagnose_blueprint() -> None:
                     f"Normalization sidecar '{sidecar_name}' has an invalid size"
                 )
 
+            crossing_name = cfg.NON_TERMINAL_CROSSINGS_FILENAME_TEMPLATE.format(
+                tile_x=tile_x, tile_y=tile_y
+            )
+            crossing_path = os.path.join(script_dir, crossing_name)
+            if os.path.isfile(crossing_path):
+                complete_records = (
+                    os.path.getsize(crossing_path) // cfg.PLANE_CROSSING_RECORD_SIZE
+                )
+                crossing_records = np.fromfile(
+                    crossing_path,
+                    dtype=cfg.PLANE_CROSSING_DTYPE,
+                    count=complete_records,
+                )
+                indices = crossing_records["photon_index"]
+                crossing_indices_by_file[filepath] = np.unique(
+                    indices[indices < header.record_count]
+                )
+            else:
+                crossing_indices_by_file[filepath] = np.empty(0, dtype=np.uint64)
+
     max_viz_points = 2_000_000
     subsample_rate = _calculate_subsample_rate(total_expected_records, max_viz_points)
     have_sidecars = not missing_sidecars
@@ -293,6 +327,7 @@ def diagnose_blueprint() -> None:
     first_records: List[npt.NDArray[np.void]] = []
     sampled_records: List[npt.NDArray[np.void]] = []
     sampled_norm_abs: List[npt.NDArray[np.float64]] = []
+    sampled_nonterminal_crossings: List[npt.NDArray[np.bool_]] = []
     for filepath, header in zip(blueprint_files, headers):
         sidecar_path = os.path.join(
             script_dir,
@@ -304,8 +339,11 @@ def diagnose_blueprint() -> None:
             sidecar_file: Optional[BinaryIO] = None
             if have_sidecars:
                 sidecar_file = sidecar_stack.enter_context(open(sidecar_path, "rb"))
-            for _, _, chunk_data in blueprint_io.iter_blueprint_chunks(
-                filepath, cfg.CHUNK_SIZE
+            crossing_indices = crossing_indices_by_file[filepath]
+            for _, record_start, chunk_data in blueprint_io.iter_blueprint_chunks(
+                filepath,
+                cfg.CHUNK_SIZE,
+                allow_active_termination=True,
             ):
                 norm_abs_chunk = None
                 if sidecar_file is not None:
@@ -328,11 +366,26 @@ def diagnose_blueprint() -> None:
                     enum_int = int(enum_value)
                     enum_counts[enum_int] = enum_counts.get(enum_int, 0) + int(count)
                 total_rays += len(chunk_data)
-                nonterminal_mask = _has_nonterminal_diagnostic(chunk_data)
+                crossing_start = np.searchsorted(crossing_indices, record_start)
+                crossing_end = np.searchsorted(
+                    crossing_indices, record_start + len(chunk_data)
+                )
+                local_crossings = crossing_indices[crossing_start:crossing_end]
+                nonterminal_mask = np.zeros(len(chunk_data), dtype=bool)
+                if local_crossings.size:
+                    nonterminal_mask[local_crossings.astype(np.intp) - record_start] = (
+                        True
+                    )
+                nonterminal_mask &= (
+                    np.isfinite(chunk_data["y_nt"])
+                    & np.isfinite(chunk_data["z_nt"])
+                    & np.isfinite(chunk_data["non_terminal_plane_t"])
+                )
                 in_view += int(np.sum(nonterminal_mask))
                 if len(first_records) < 9:
                     first_records.extend(chunk_data[: 9 - len(first_records)])
                 sampled_records.append(chunk_data[::subsample_rate])
+                sampled_nonterminal_crossings.append(nonterminal_mask[::subsample_rate])
                 if norm_abs_chunk is not None:
                     sampled_norm_abs.append(norm_abs_chunk[::subsample_rate])
             if sidecar_file is not None and sidecar_file.read(1):
@@ -380,7 +433,7 @@ def diagnose_blueprint() -> None:
 
     if sampled_records:
         viz_data = np.concatenate(sampled_records)
-        plot_heatmaps(viz_data)
+        plot_heatmaps(viz_data, np.concatenate(sampled_nonterminal_crossings))
         if have_sidecars:
             plot_norm_abs_log_histogram(
                 viz_data["termination_type"], np.concatenate(sampled_norm_abs)

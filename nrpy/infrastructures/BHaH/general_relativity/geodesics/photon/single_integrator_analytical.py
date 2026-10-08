@@ -476,6 +476,49 @@ connection, and right-hand-side stages of each trial in execution order.
     commondata_struct_set_to_default(&commondata);
     cmdline_input_and_parfile_parser(&commondata, argc, argv);
 
+    const bool plane_enabled[2] = {{
+        commondata.non_terminal_plane_enabled, commondata.terminal_plane_enabled
+    }};
+    const char *plane_name[2] = {{"nonterminal", "terminal"}};
+    const double plane_normal[2][3] = {{
+        {{commondata.non_terminal_plane_normal_x, commondata.non_terminal_plane_normal_y,
+          commondata.non_terminal_plane_normal_z}},
+        {{commondata.terminal_plane_normal_x, commondata.terminal_plane_normal_y,
+          commondata.terminal_plane_normal_z}}
+    }};
+    const double plane_up[2][3] = {{
+        {{commondata.non_terminal_plane_up_x, commondata.non_terminal_plane_up_y,
+          commondata.non_terminal_plane_up_z}},
+        {{commondata.terminal_plane_up_x, commondata.terminal_plane_up_y,
+          commondata.terminal_plane_up_z}}
+    }};
+    for (int plane = 0; plane < 2; ++plane) {{
+        if (!plane_enabled[plane]) continue;
+        const double nx = plane_normal[plane][0];
+        const double ny = plane_normal[plane][1];
+        const double nz = plane_normal[plane][2];
+        const double ux = plane_up[plane][0];
+        const double uy = plane_up[plane][1];
+        const double uz = plane_up[plane][2];
+        const double normal_mag = sqrt(nx * nx + ny * ny + nz * nz);
+        const double up_mag = sqrt(ux * ux + uy * uy + uz * uz);
+        if (!isfinite(normal_mag) || !isfinite(up_mag) ||
+            normal_mag < 1.0e-2 || up_mag < 1.0e-2) {{
+            fprintf(stderr,
+                "FATAL: %s plane requires finite normal and up magnitudes >= 1e-2; normal=(%.17g, %.17g, %.17g), up=(%.17g, %.17g, %.17g).\\n",
+                plane_name[plane], nx, ny, nz, ux, uy, uz);
+            return 1;
+        }} // END IF: invalid plane vector magnitude
+        const double alignment = fabs((nx * ux + ny * uy + nz * uz) /
+                                      (normal_mag * up_mag));
+        if (!isfinite(alignment) || alignment > 0.25) {{
+            fprintf(stderr,
+                "FATAL: %s plane requires |normal dot up|/(|normal||up|) <= 0.25; value=%.17g, normal=(%.17g, %.17g, %.17g), up=(%.17g, %.17g, %.17g).\\n",
+                plane_name[plane], alignment, nx, ny, nz, ux, uy, uz);
+            return 1;
+        }} // END IF: plane vectors insufficiently perpendicular
+    }} // END LOOP: enabled plane validation
+
     const long int num_rays = 1;
     const long int chunk_size = 1;
     const int stream_idx = 0;
@@ -753,7 +796,7 @@ connection, and right-hand-side stages of each trial in execution order.
                      *status == FAILURE_GENERIC) {{
             fprintf(stderr, "Plane crossing failed with status %d.\n", *status);
             exit_status = EXIT_FAILURE;
-          }} // END ELSE IF: event manager established a stop status
+          }} // END ELSE IF: event manager failure
           break;
         }} // END IF: event manager stopped the photon
 
@@ -834,10 +877,10 @@ connection, and right-hand-side stages of each trial in execution order.
         if (fclose(plane_crossings_file) != 0) {{
           fprintf(stderr, "ERROR: failed to close plane_crossings.txt.\n");
           exit_status = EXIT_FAILURE;
-        }}
+        }} // END IF: close crossing output
         plane_crossings_file = NULL;
       }} // END ELSE: crossing output file opened
-    }} // END IF: at least one physical plane is enabled
+    }} // END IF: enabled plane output
 
 {final_parameter_report}
 

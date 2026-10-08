@@ -45,13 +45,31 @@ It uses
 `OnePlusLog`/`GammaDriving2ndOrder_Covariant`, eighth-order finite differences,
 separate Ricci, outgoing radiation boundaries, checkpointing every `2.0` by
 default, Psi4 and spin-weight minus-two spherical-harmonic diagnostics, and GSL
-Makefile flags through `gsl-config`. Its source-backed generation flags are
-`--cuda`, `--fccz4`, and `--floating_point_precision`. BSSN remains the
+Makefile flags through `gsl-config`. Its generation flags include
+`--cuda`, `--fccz4`, `--floating_point_precision`, `--initial-sep`, and
+`--initial-p-r`. BSSN remains the
 default. `--fccz4` selects fCCZ4 RHS/gauge registration and zeroes
 `Theta_fCCZ4` only while fresh ADM data are converted; checkpoint loading is
 attempted first and returns without that zeroing. Both choices use the same
 combined determinant/trace projection after initial-data boundary handling and
 in the Method of Lines post-RHS hook.
+
+With `--raytracing-time [T_FINAL DIAGNOSTICS_OUTPUT_EVERY]`, spectroscopy
+also writes numerical spacetime slices through the shared BHaH diagnostics
+function. Raytracing output requires OpenMP and double precision. Its default
+separation, momentum, time, output cadence, and grid remain the spectroscopy
+defaults when the matching options are omitted. The default coordinate system
+remains `SinhCylindrical`; `--raytracing-coord-system
+SinhCylindricalv2n2` selects the five-parameter cylindrical domain instead.
+`--raytracing-domain`, `--raytracing-Nxx`, `--raytracing-data-mode`, and
+`--raytracing-static-christoffels` select the grid and metric data. The
+generated `raytracing_run_metadata.json` records TwoPunctures separation,
+radial momentum, and target ADM masses. Raytracing generation retains the
+spectroscopy Psi4 and BHaHAHA parameter defaults. Run
+`project/blackhole_spectroscopy/run_raytracing_data_pipeline.sh` from its
+project directory to build, evolve, and combine the time slices into
+`project/raytracing_data/`. The JSON records generator defaults; changing
+the generated `.par` file afterward does not update those fields.
 
 Claim evidence:
 - Claim: `blackhole_spectroscopy.py` defaults to BSSN and accepts `--fccz4`; that flag selects fCCZ4 RHS/gauge registration and fresh-data-only Theta zeroing after the checkpoint branch, while both formulations use the same initial-data and post-RHS conformal projection; this source ordering does not prove restart correctness or scientific validity.

@@ -122,7 +122,50 @@ class GeodesicEquations:
         :return: A 4x4x4 rank-3 tensor containing the Christoffel symbols.
         """
         if self.spacetime == "Minkowski_TimeDependentAxisymmetric_Cartesian":
-            return self._flat_cartesian_connections()
+            # Inertial connection vanishes. Transform the second derivatives
+            # of inertial coordinates into the computational coordinate basis.
+            metric = Analytic_Spacetimes[self.spacetime]
+            t, x, y, z = self.xx
+            a, b = metric.flat_a, metric.flat_b
+            psi, kappa = metric.flat_psi, metric.flat_kappa
+            a_rate = sp.diff(a, t) / a
+            b_rate = sp.diff(b, t) / b
+            rotation_rate = sp.diff(psi, t) - kappa * b_rate * z
+            cos_psi, sin_psi = sp.cos(psi), sp.sin(psi)
+            inverse_jacobian = [
+                [sp.sympify(1), sp.sympify(0), sp.sympify(0), sp.sympify(0)],
+                [
+                    -a_rate * x + rotation_rate * y,
+                    cos_psi / a,
+                    sin_psi / a,
+                    kappa * y / b,
+                ],
+                [
+                    -a_rate * y - rotation_rate * x,
+                    -sin_psi / a,
+                    cos_psi / a,
+                    -kappa * x / b,
+                ],
+                [-b_rate * z, sp.sympify(0), sp.sympify(0), 1 / b],
+            ]
+            inertial_jacobian = [
+                [sp.diff(coordinate, direction) for direction in self.xx]
+                for coordinate in metric.inertial_coordinates
+            ]
+            Gamma4UDD = ixp.zerorank3(dimension=4)
+            for mu in range(4):
+                for nu in range(mu, 4):
+                    second_derivatives = [
+                        sp.diff(inertial_jacobian[A][mu], self.xx[nu]) for A in range(4)
+                    ]
+                    for alpha in range(4):
+                        connection = sum(
+                            inverse_jacobian[alpha][A] * second_derivatives[A]
+                            for A in range(4)
+                        )
+                        Gamma4UDD[alpha][mu][nu] = connection
+                        Gamma4UDD[alpha][nu][mu] = connection
+            return Gamma4UDD
 
         g4UU, _ = ixp.symm_matrix_inverter4x4(self.g4DD)
         Gamma4UDD = ixp.zerorank3(dimension=4)
@@ -145,59 +188,6 @@ class GeodesicEquations:
                         )
                     Gamma4UDD[alpha][mu][nu] = term
                     Gamma4UDD[alpha][nu][mu] = term
-        return Gamma4UDD
-
-    def _flat_cartesian_connections(self) -> List[List[List[sp.Expr]]]:
-        r"""
-        Compute the flat metric's Cartesian connection from its coordinate map.
-
-        In inertial Cartesian coordinates the connection vanishes. The
-        computational connection is the inverse coordinate Jacobian multiplied
-        by the second derivatives of the inertial coordinates.
-
-        :return: Christoffel symbols with one upper and two lower indices.
-        """
-        metric = Analytic_Spacetimes[self.spacetime]
-        t, x, y, z = self.xx
-        a, b = metric.flat_a, metric.flat_b
-        psi, kappa = metric.flat_psi, metric.flat_kappa
-        a_rate = sp.diff(a, t) / a
-        b_rate = sp.diff(b, t) / b
-        rotation_rate = sp.diff(psi, t) - kappa * b_rate * z
-        cos_psi, sin_psi = sp.cos(psi), sp.sin(psi)
-        inverse_jacobian = [
-            [sp.sympify(1), sp.sympify(0), sp.sympify(0), sp.sympify(0)],
-            [
-                -a_rate * x + rotation_rate * y,
-                cos_psi / a,
-                sin_psi / a,
-                kappa * y / b,
-            ],
-            [
-                -a_rate * y - rotation_rate * x,
-                -sin_psi / a,
-                cos_psi / a,
-                -kappa * x / b,
-            ],
-            [-b_rate * z, sp.sympify(0), sp.sympify(0), 1 / b],
-        ]
-        inertial_jacobian = [
-            [sp.diff(coordinate, direction) for direction in self.xx]
-            for coordinate in metric.inertial_coordinates
-        ]
-        Gamma4UDD = ixp.zerorank3(dimension=4)
-        for mu in range(4):
-            for nu in range(mu, 4):
-                second_derivatives = [
-                    sp.diff(inertial_jacobian[A][mu], self.xx[nu]) for A in range(4)
-                ]
-                for alpha in range(4):
-                    connection = sum(
-                        inverse_jacobian[alpha][A] * second_derivatives[A]
-                        for A in range(4)
-                    )
-                    Gamma4UDD[alpha][mu][nu] = connection
-                    Gamma4UDD[alpha][nu][mu] = connection
         return Gamma4UDD
 
     def geodesic_eom_rhs_massive(self) -> List[sp.Expr]:

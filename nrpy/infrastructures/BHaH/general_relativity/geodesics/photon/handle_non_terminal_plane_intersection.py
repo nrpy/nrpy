@@ -110,7 +110,7 @@ def handle_non_terminal_plane_intersection() -> None:
         plane_normal[2] * plane_normal[2];
     if (!isfinite(normal_sq) || normal_sq <= 1.0e-28) {
         return false;
-    }
+    } // END IF: invalid nonterminal plane normal
     const double inverse_normal_norm = 1.0 / SqrtCUDA(normal_sq);
     plane_normal[0] *= inverse_normal_norm;
     plane_normal[1] *= inverse_normal_norm;
@@ -129,33 +129,13 @@ def handle_non_terminal_plane_intersection() -> None:
     plane_up[1] -= up_dot_normal * plane_normal[1];
     plane_up[2] -= up_dot_normal * plane_normal[2];
 
-    double up_sq =
+    const double up_sq =
         plane_up[0] * plane_up[0] +
         plane_up[1] * plane_up[1] +
         plane_up[2] * plane_up[2];
     if (!isfinite(up_sq) || up_sq <= 1.0e-18) {
-        // Select a coordinate-axis fallback least aligned with the supplied
-        // normal, then apply the same Euclidean plane projection.
-        const double fallback_axis[3] = {
-            AbsCUDA(plane_normal[0]) < 0.9 ? 1.0 : 0.0,
-            AbsCUDA(plane_normal[1]) < 0.9 ? 1.0 : 0.0,
-            AbsCUDA(plane_normal[2]) < 0.9 ? 1.0 : 0.0
-        };
-        const double fallback_dot =
-            fallback_axis[0] * plane_normal[0] +
-            fallback_axis[1] * plane_normal[1] +
-            fallback_axis[2] * plane_normal[2];
-        plane_up[0] = fallback_axis[0] - fallback_dot * plane_normal[0];
-        plane_up[1] = fallback_axis[1] - fallback_dot * plane_normal[1];
-        plane_up[2] = fallback_axis[2] - fallback_dot * plane_normal[2];
-        up_sq =
-            plane_up[0] * plane_up[0] +
-            plane_up[1] * plane_up[1] +
-            plane_up[2] * plane_up[2];
-    }
-    if (!isfinite(up_sq) || up_sq <= 1.0e-18) {
         return false;
-    }
+    } // END IF: invalid projected up vector
     const double inverse_up_norm = 1.0 / SqrtCUDA(up_sq);
     plane_up[0] *= inverse_up_norm;
     plane_up[1] *= inverse_up_norm;

@@ -99,20 +99,20 @@ def event_detection_manager_kernel(
                 for (int component = 0; component < 9; ++component) {
                     WriteCUDA(&d_non_terminal_plane_event_state_bundle[
                         IDX_F(component, i)], f_int[component]);
-                }
+                } // END LOOP: capture nonterminal photon state
 """
         terminal_capture = """
                 for (int component = 0; component < 9; ++component) {
                     WriteCUDA(&d_terminal_plane_event_state_bundle[
                         IDX_F(component, i)], f_int[component]);
-                }
+                } // END LOOP: capture terminal photon state
 """
     intersection_setup = (
         """
             double f_intersection[9];
             for (int component = 0; component < 9; ++component) {
                 f_intersection[component] = f_int[component];
-            }
+            } // END LOOP: copy normalized crossing state
             f_intersection[0] = event_integration_param;
             const double physical_lambda = f_int[0];
 """
@@ -132,7 +132,7 @@ def event_detection_manager_kernel(
          coordinate_time < {cd_access}slot_manager_t_min ||
          coordinate_time >= {cd_access}t_start + 1.0e-5)) {{
         d_status_bundle[i] = STOP_CONDITION_T_MAX_EXCEEDED;
-    }}
+    }} // END IF: coordinate time outside bounds
 """
     if parallelization == "cuda":
         loop_start = """
@@ -159,16 +159,16 @@ def event_detection_manager_kernel(
     double integration_params[@HISTORY_SIZE@];
     for (int component = 0; component < 9; ++component) {
         state_history[component] = ReadCUDA(&d_f_bundle[IDX_F(component, i)]);
-    }
+    } // END LOOP: load current photon state
     integration_params[0] = ReadCUDA(&d_integration_param[i]);
     for (int node = 1; node < @HISTORY_SIZE@; ++node) {
         for (int component = 0; component < 9; ++component) {
             state_history[9 * node + component] = ReadCUDA(
                 &d_f_history_bundle[IDX_HISTORY(node - 1, component, i)]);
-        }
+        } // END LOOP: load accepted photon components
         integration_params[node] = ReadCUDA(
             &d_integration_param_history[IDX_PARAM(node - 1, i)]);
-    }
+    } // END LOOP: load accepted photon history
     const double x = state_history[1];
     const double y = state_history[2];
     const double z = state_history[3];
@@ -187,7 +187,7 @@ def event_detection_manager_kernel(
         if (!isfinite(w_sq) || w_sq <= 1.0e-28) {
             d_status_bundle[i] = FAILURE_GENERIC;
             @ESCAPE@
-        }
+        } // END IF: invalid nonterminal normal
         const double inverse = 1.0 / SqrtCUDA(w_sq);
         for (int axis = 0; axis < 3; ++axis) w_normal[axis] *= inverse;
         w_dist = @CD@non_terminal_plane_center_x * w_normal[0] +
@@ -200,9 +200,9 @@ def event_detection_manager_kernel(
         } else if (side != d_on_pos_non_terminal_plane_prev[i]) {
             d_non_terminal_plane_crossing_pending[i] = true;
             d_non_terminal_plane_steps_past[i] = 1;
-        }
+        } // END ELSE IF: detect nonterminal crossing
         d_on_pos_non_terminal_plane_prev[i] = side;
-    }
+    } // END IF: inspect enabled nonterminal plane
 
     double s_normal[3] = {@CD@terminal_plane_normal_x,
                           @CD@terminal_plane_normal_y,
@@ -215,7 +215,7 @@ def event_detection_manager_kernel(
         if (!isfinite(s_sq) || s_sq <= 1.0e-28) {
             d_status_bundle[i] = FAILURE_GENERIC;
             @ESCAPE@
-        }
+        } // END IF: invalid terminal normal
         const double inverse = 1.0 / SqrtCUDA(s_sq);
         for (int axis = 0; axis < 3; ++axis) s_normal[axis] *= inverse;
         s_dist = @CD@terminal_plane_center_x * s_normal[0] +
@@ -228,19 +228,19 @@ def event_detection_manager_kernel(
         } else if (side != d_on_pos_terminal_plane_prev[i]) {
             d_terminal_plane_crossing_pending[i] = true;
             d_terminal_plane_steps_past[i] = 1;
-        }
+        } // END ELSE IF: detect terminal crossing
         d_on_pos_terminal_plane_prev[i] = side;
-    }
+    } // END IF: inspect enabled terminal plane
 
     const double log_energy_measure = ReadCUDA(&d_log_energy_bundle[i]);
     if (log_energy_measure > @CD@evolution_measure_max) {
         d_status_bundle[i] = STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED;
-    }
+    } // END IF: log energy exceeded limit
     const double radius_squared = x * x + y * y + z * z;
     if (radius_squared > @CD@r_escape * @CD@r_escape &&
         d_status_bundle[i] == ACTIVE) {
         d_status_bundle[i] = STOP_CONDITION_COORD_RADIUS_EXCEEDED;
-    }
+    } // END IF: photon escaped coordinate radius
 @TIME_LIMIT_CHECK@
     if (d_status_bundle[i] != ACTIVE &&
         !d_non_terminal_plane_crossing_pending[i] &&
@@ -248,6 +248,8 @@ def event_detection_manager_kernel(
 
     // Process terminal plane first. If it stops the photon, reconstruct any
     // earlier pending nonterminal crossing using available accepted states.
+    bool terminal_intersection_accepted = false;
+    double terminal_integration_param = 0.0;
     if (d_terminal_plane_crossing_pending[i] &&
         (d_terminal_plane_steps_past[i] >= @POST_STEPS@ ||
          d_status_bundle[i] != ACTIVE || @FORCE_PENDING@)) {
@@ -262,7 +264,7 @@ def event_detection_manager_kernel(
             d_status_bundle[i] = result == 0
                 ? FAILURE_PLANE_INTERPOLATION_HISTORY : FAILURE_GENERIC;
             @ESCAPE@
-        }
+        } // END IF: terminal interpolation failed
         @INTERSECTION_SETUP@
         if (handle_terminal_plane_intersection(
                 @INTERSECTION_STATE@, physical_lambda,
@@ -270,11 +272,13 @@ def event_detection_manager_kernel(
             d_status_bundle[i] = STOP_CONDITION_TERMINAL_PLANE;
             d_terminal_plane_event_found[i] = true;
             d_terminal_plane_event_degree[i] = actual_degree;
+            terminal_intersection_accepted = true;
+            terminal_integration_param = event_integration_param;
             @TERMINAL_CAPTURE@
-        }
+        } // END IF: terminal intersection accepted
         d_terminal_plane_crossing_pending[i] = false;
         d_terminal_plane_steps_past[i] = 0;
-    }
+    } // END IF: reconstruct pending terminal crossing
 
     if (d_non_terminal_plane_crossing_pending[i] &&
         (d_non_terminal_plane_steps_past[i] >= @POST_STEPS@ ||
@@ -290,18 +294,21 @@ def event_detection_manager_kernel(
             d_status_bundle[i] = result == 0
                 ? FAILURE_PLANE_INTERPOLATION_HISTORY : FAILURE_GENERIC;
             @ESCAPE@
-        }
-        @INTERSECTION_SETUP@
-        if (handle_non_terminal_plane_intersection(
-                @INTERSECTION_STATE@, physical_lambda,
-                &d_results_buffer[master_idx]@COMMONDATA_ARG@)) {
-            d_non_terminal_plane_event_found[i] = true;
-            d_non_terminal_plane_event_degree[i] = actual_degree;
-            @NON_TERMINAL_CAPTURE@
-        }
+        } // END IF: nonterminal interpolation failed
+        if (!terminal_intersection_accepted ||
+            @NONTERMINAL_BEFORE_TERMINAL@) {
+            @INTERSECTION_SETUP@
+            if (handle_non_terminal_plane_intersection(
+                    @INTERSECTION_STATE@, physical_lambda,
+                    &d_results_buffer[master_idx]@COMMONDATA_ARG@)) {
+                d_non_terminal_plane_event_found[i] = true;
+                d_non_terminal_plane_event_degree[i] = actual_degree;
+                @NON_TERMINAL_CAPTURE@
+            } // END IF: nonterminal intersection accepted
+        } // END IF: crossing precedes terminal intersection
         d_non_terminal_plane_crossing_pending[i] = false;
         d_non_terminal_plane_steps_past[i] = 0;
-    }
+    } // END IF: reconstruct pending nonterminal crossing
 
     // Shift history only for photons that will take another RK step.
     if (d_status_bundle[i] == ACTIVE) {
@@ -309,17 +316,17 @@ def event_detection_manager_kernel(
             for (int component = 0; component < 9; ++component) {
                 WriteCUDA(&d_f_history_bundle[IDX_HISTORY(node, component, i)],
                     state_history[9 * node + component]);
-            }
+            } // END LOOP: shift photon state components
             WriteCUDA(&d_integration_param_history[IDX_PARAM(node, i)],
                 integration_params[node]);
-        }
+        } // END LOOP: shift accepted photon history
         for (int component = 0; component < 9; ++component) {
             WriteCUDA(&d_f_history_bundle[IDX_HISTORY(0, component, i)],
                 state_history[component]);
-        }
+        } // END LOOP: save current photon components
         WriteCUDA(&d_integration_param_history[IDX_PARAM(0, i)],
             integration_params[0]);
-    }
+    } // END IF: photon remains active
     #undef IDX_PARAM
     #undef IDX_HISTORY
     #undef IDX_F
@@ -339,6 +346,11 @@ def event_detection_manager_kernel(
         "@COMMONDATA_ARG@": commondata_arg,
         "@NON_TERMINAL_CAPTURE@": non_terminal_capture,
         "@TERMINAL_CAPTURE@": terminal_capture,
+        "@NONTERMINAL_BEFORE_TERMINAL@": (
+            "event_integration_param >= terminal_integration_param"
+            if normalized_eom
+            else "event_integration_param <= terminal_integration_param"
+        ),
     }
     for marker, replacement in substitutions.items():
         core = core.replace(marker, replacement)

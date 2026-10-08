@@ -294,27 +294,64 @@ def main(
 
 {numerical_startup_validation}
 
-    // Normalize the two independent plane normals once. Neither normal is
-    // derived from observer position or observer look-forward direction.
-    const double non_terminal_normal_mag = sqrt(
-        commondata.non_terminal_plane_normal_x * commondata.non_terminal_plane_normal_x +
-        commondata.non_terminal_plane_normal_y * commondata.non_terminal_plane_normal_y +
-        commondata.non_terminal_plane_normal_z * commondata.non_terminal_plane_normal_z);
-    const double terminal_normal_mag = sqrt(
-        commondata.terminal_plane_normal_x * commondata.terminal_plane_normal_x +
-        commondata.terminal_plane_normal_y * commondata.terminal_plane_normal_y +
-        commondata.terminal_plane_normal_z * commondata.terminal_plane_normal_z);
-    if (!isfinite(non_terminal_normal_mag) || !isfinite(terminal_normal_mag) ||
-        non_terminal_normal_mag <= 1.0e-14 || terminal_normal_mag <= 1.0e-14) {{
-        fprintf(stderr, "FATAL: event-plane normals must be finite and nonzero.\\n");
-        return 1;
-    }}
-    commondata.non_terminal_plane_normal_x /= non_terminal_normal_mag;
-    commondata.non_terminal_plane_normal_y /= non_terminal_normal_mag;
-    commondata.non_terminal_plane_normal_z /= non_terminal_normal_mag;
-    commondata.terminal_plane_normal_x /= terminal_normal_mag;
-    commondata.terminal_plane_normal_y /= terminal_normal_mag;
-    commondata.terminal_plane_normal_z /= terminal_normal_mag;
+    // Validate each enabled plane after reading the parameter file.
+    const bool plane_enabled[2] = {{
+        commondata.non_terminal_plane_enabled,
+        commondata.terminal_plane_enabled
+    }};
+    const char *plane_name[2] = {{"nonterminal", "terminal"}};
+    const double plane_normal[2][3] = {{
+        {{commondata.non_terminal_plane_normal_x,
+          commondata.non_terminal_plane_normal_y,
+          commondata.non_terminal_plane_normal_z}},
+        {{commondata.terminal_plane_normal_x,
+          commondata.terminal_plane_normal_y,
+          commondata.terminal_plane_normal_z}}
+    }};
+    const double plane_up[2][3] = {{
+        {{commondata.non_terminal_plane_up_x,
+          commondata.non_terminal_plane_up_y,
+          commondata.non_terminal_plane_up_z}},
+        {{commondata.terminal_plane_up_x,
+          commondata.terminal_plane_up_y,
+          commondata.terminal_plane_up_z}}
+    }};
+    for (int plane = 0; plane < 2; ++plane) {{
+        if (!plane_enabled[plane]) continue;
+        const double nx = plane_normal[plane][0];
+        const double ny = plane_normal[plane][1];
+        const double nz = plane_normal[plane][2];
+        const double ux = plane_up[plane][0];
+        const double uy = plane_up[plane][1];
+        const double uz = plane_up[plane][2];
+        const double normal_mag = sqrt(nx * nx + ny * ny + nz * nz);
+        const double up_mag = sqrt(ux * ux + uy * uy + uz * uz);
+        if (!isfinite(normal_mag) || !isfinite(up_mag) ||
+            normal_mag < 1.0e-2 || up_mag < 1.0e-2) {{
+            fprintf(stderr,
+                "FATAL: %s plane requires finite normal and up magnitudes >= 1e-2; normal=(%.17g, %.17g, %.17g), up=(%.17g, %.17g, %.17g).\\n",
+                plane_name[plane], nx, ny, nz, ux, uy, uz);
+            return 1;
+        }} // END IF: invalid plane vector magnitude
+        const double alignment = fabs((nx * ux + ny * uy + nz * uz) /
+                                      (normal_mag * up_mag));
+        if (!isfinite(alignment) || alignment > 0.25) {{
+            fprintf(stderr,
+                "FATAL: %s plane requires |normal dot up|/(|normal||up|) <= 0.25; value=%.17g, normal=(%.17g, %.17g, %.17g), up=(%.17g, %.17g, %.17g).\\n",
+                plane_name[plane], alignment, nx, ny, nz, ux, uy, uz);
+            return 1;
+        }} // END IF: plane vectors insufficiently perpendicular
+        if (plane == 0) {{
+            commondata.non_terminal_plane_normal_x = nx / normal_mag;
+            commondata.non_terminal_plane_normal_y = ny / normal_mag;
+            commondata.non_terminal_plane_normal_z = nz / normal_mag;
+        }} // END IF: normalize nonterminal plane normal
+        else {{
+            commondata.terminal_plane_normal_x = nx / normal_mag;
+            commondata.terminal_plane_normal_y = ny / normal_mag;
+            commondata.terminal_plane_normal_z = nz / normal_mag;
+        }} // END ELSE: normalize terminal plane normal
+    }} // END LOOP: enabled plane validation
 
     //==========================================
     // TELEMETRY

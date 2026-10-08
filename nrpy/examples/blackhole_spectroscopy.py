@@ -13,6 +13,8 @@ Author: Zachariah B. Etienne
 """
 
 import argparse
+import json
+import math
 import os
 
 #########################################################
@@ -26,6 +28,10 @@ import nrpy.helpers.parallel_codegen as pcg
 from nrpy import params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH
+
+SUPPORTED_RAYTRACING_COORD_SYSTEMS = ("SinhCylindrical", "SinhCylindricalv2n2")
+DEFAULT_V2N2_NXX = [162, 2, 256]
+DEFAULT_RAYTRACING_DOMAIN_V2N2 = [30.0, 0.075, 0.05, 1.0, 4.0]
 
 parser = argparse.ArgumentParser(description="Black hole spectroscopy NRPy example")
 parser.add_argument(
@@ -44,10 +50,99 @@ parser.add_argument(
     help="Floating point precision (e.g. float, double).",
     default="double",
 )
+parser.add_argument(
+    "--initial-sep",
+    type=float,
+    default=None,
+    help="Override the original 0.5M puncture separation.",
+)
+parser.add_argument(
+    "--initial-p-r",
+    type=float,
+    default=None,
+    help="Override the original zero radial momentum; negative values move the punctures outward. -1 selects NRPyPN momenta and is not accepted here.",
+)
+parser.add_argument(
+    "--raytracing-time",
+    nargs="*",
+    type=float,
+    default=None,
+    metavar="VALUE",
+    help="Enable raytracing spacetime output. Provide T_FINAL DIAGNOSTICS_OUTPUT_EVERY, or no values to keep spectroscopy's existing time defaults. Requires OpenMP and double precision.",
+)
+parser.add_argument(
+    "--raytracing-data-mode",
+    choices=("g4DD", "g4DD_d0", "GammaUDD", "all"),
+    default="g4DD",
+    help="Select metric data written at each output time; all writes three datasets.",
+)
+parser.add_argument(
+    "--raytracing-static-christoffels",
+    action="store_true",
+    help="Use static-spacetime Christoffels for the last scheduled GammaUDD output.",
+)
+parser.add_argument(
+    "--raytracing-coord-system",
+    choices=SUPPORTED_RAYTRACING_COORD_SYSTEMS,
+    default=None,
+    help="Select SinhCylindricalv2n2 or retain the original SinhCylindrical default.",
+)
+parser.add_argument(
+    "--raytracing-domain",
+    nargs="+",
+    type=float,
+    default=None,
+    metavar="VALUE",
+    help="Domain: GRID_PHYSICAL_SIZE SINHWRHO SINHWZ [RHO_SLOPE Z_SLOPE]; slopes are required for SinhCylindricalv2n2 only.",
+)
+parser.add_argument(
+    "--raytracing-Nxx",
+    dest="raytracing_nxx",
+    nargs=3,
+    type=int,
+    default=None,
+    metavar=("NXX0", "NXX1", "NXX2"),
+    help="Base grid dimensions; NXX1 must be 2 for either cylindrical coordinate system.",
+)
 args = parser.parse_args()
 
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
+enable_raytracing_data_output = args.raytracing_time is not None
+raytracing_data_mode = args.raytracing_data_mode
+if fp_type not in ("float", "double"):
+    raise ValueError("--floating_point_precision must be either 'float' or 'double'.")
+if args.initial_sep is not None and (
+    not math.isfinite(args.initial_sep) or args.initial_sep <= 0.0
+):
+    raise ValueError("--initial-sep must be finite and positive.")
+if args.initial_p_r is not None and (
+    not math.isfinite(args.initial_p_r) or args.initial_p_r == -1.0
+):
+    raise ValueError(
+        "--initial-p-r must be finite and different from the NRPyPN sentinel -1."
+    )
+if enable_raytracing_data_output and (args.cuda or fp_type != "double"):
+    raise ValueError(
+        "--raytracing-time requires an OpenMP build with double precision."
+    )
+if not enable_raytracing_data_output:
+    if args.raytracing_data_mode != "g4DD":
+        raise ValueError("--raytracing-data-mode requires --raytracing-time.")
+    if args.raytracing_static_christoffels:
+        raise ValueError("--raytracing-static-christoffels requires --raytracing-time.")
+    for option_name, option_value in (
+        ("--raytracing-coord-system", args.raytracing_coord_system),
+        ("--raytracing-domain", args.raytracing_domain),
+        ("--raytracing-Nxx", args.raytracing_nxx),
+    ):
+        if option_value is not None:
+            raise ValueError(f"{option_name} requires --raytracing-time.")
+if args.raytracing_static_christoffels and raytracing_data_mode not in (
+    "GammaUDD",
+    "all",
+):
+    raise ValueError("--raytracing-static-christoffels requires GammaUDD or all.")
 enable_fCCZ4 = args.fccz4
 enable_YBS_Gamma_constraint_adjustment = False
 enable_YBS_momentum_constraint_adjustment = False
@@ -66,6 +161,8 @@ par.set_parval_from_str("fp_type", fp_type)
 # Code-generation-time parameters:
 project_name = "blackhole_spectroscopy"
 CoordSystem = "SinhCylindrical"
+if args.raytracing_coord_system is not None:
+    CoordSystem = args.raytracing_coord_system
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
 num_fisheye_transitions = (
@@ -75,10 +172,14 @@ num_fisheye_transitions = (
 )
 
 initial_sep = 0.5
+if args.initial_sep is not None:
+    initial_sep = args.initial_sep
 mass_ratio = 1.0  # must be >= 1.0. Will need higher resolution for > 1.0.
 BH_m_chix = 0.0  # dimensionless spin parameter for less-massive BH
 BH_M_chix = 0.0  # dimensionless spin parameter for more-massive BH
-initial_p_r = 0.0  # want this to be <= 0.0. 0.0 -> fall from rest, < 0.0 -> boosted toward each other.
+initial_p_r = 0.0
+if args.initial_p_r is not None:
+    initial_p_r = args.initial_p_r
 TP_npoints_A = 48
 TP_npoints_B = 48
 TP_npoints_phi = 4
@@ -92,19 +193,60 @@ KreissOliger_strength_nongauge = 0.3
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 2.0
+sinh_width = 0.2
 grid_physical_size = 300.0
 diagnostics_output_every = 0.5
 default_checkpoint_every = 2.0
 t_final = 1.5 * grid_physical_size
+raytracing_domain = None
+if enable_raytracing_data_output:
+    if len(args.raytracing_time) == 2:
+        t_final, diagnostics_output_every = args.raytracing_time
+    elif len(args.raytracing_time) != 0:
+        raise ValueError(
+            "--raytracing-time accepts no values or T_FINAL DIAGNOSTICS_OUTPUT_EVERY."
+        )
+    if not all(
+        math.isfinite(value) and value > 0.0
+        for value in (t_final, diagnostics_output_every)
+    ):
+        raise ValueError("--raytracing-time values must be finite and positive.")
+    raytracing_domain = (
+        list(args.raytracing_domain)
+        if args.raytracing_domain is not None
+        else list(
+            DEFAULT_RAYTRACING_DOMAIN_V2N2
+            if CoordSystem == "SinhCylindricalv2n2"
+            else [grid_physical_size, sinh_width, sinh_width]
+        )
+    )
+    expected_domain_length = 5 if CoordSystem == "SinhCylindricalv2n2" else 3
+    if len(raytracing_domain) != expected_domain_length:
+        raise ValueError(
+            f"{CoordSystem} requires {expected_domain_length} --raytracing-domain values."
+        )
+    if not all(math.isfinite(value) and value > 0.0 for value in raytracing_domain):
+        raise ValueError("--raytracing-domain values must be finite and positive.")
+    grid_physical_size = raytracing_domain[0]
 swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 enable_psi4_diagnostics = True
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200],
+    "SinhCylindricalv2n2": list(DEFAULT_V2N2_NXX),
     "GeneralRFM_fisheyeN1": [200, 200, 200],
     "GeneralRFM_fisheyeN2": [200, 200, 200],
 }
+if enable_raytracing_data_output:
+    Nxx = (
+        list(args.raytracing_nxx)
+        if args.raytracing_nxx is not None
+        else list(Nxx_dict[CoordSystem])
+    )
+    if any(value <= 0 for value in Nxx) or Nxx[1] != 2:
+        raise ValueError("--raytracing-Nxx requires positive values and NXX1=2.")
+    Nxx_dict[CoordSystem] = Nxx
 # Fisheye parameter defaults exposed via physical fisheye parameters in .par.
 fisheye_param_defaults: dict[str, float] = {}
 if num_fisheye_transitions == 1:
@@ -129,6 +271,9 @@ elif num_fisheye_transitions == 2:
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
 default_BH2_z_posn = -0.25
+if args.initial_sep is not None:
+    default_BH1_z_posn = +0.5 * initial_sep
+    default_BH2_z_posn = -0.5 * initial_sep
 MoL_method = "RK4"
 fd_order = 8
 radiation_BC_fd_order = 4
@@ -195,7 +340,7 @@ if "Spherical" in CoordSystem:
 if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
     OMP_collapse = 2  # might be slightly faster
-    if CoordSystem == "SinhCylindrical":
+    if CoordSystem in SUPPORTED_RAYTRACING_COORD_SYSTEMS:
         sinh_width = 0.2
 
 project_dir = os.path.join("project", project_name)
@@ -289,9 +434,13 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_nearest_diagnostics=True,
     enable_interp_diagnostics=False,
     enable_volume_integration_diagnostics=True,
+    enable_rfm_precompute=enable_rfm_precompute,
     enable_free_auxevol=False,
     enable_psi4_diagnostics=enable_psi4_diagnostics,
     enable_bhahaha=enable_bhahaha,
+    enable_raytracing_data_output=enable_raytracing_data_output,
+    raytracing_data_mode=raytracing_data_mode,
+    enable_static_christoffels=args.raytracing_static_christoffels,
 )
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
     enable_interp_diagnostics=False,
@@ -496,8 +645,19 @@ if CoordSystem == "SinhSpherical":
 if CoordSystem == "SinhCylindrical":
     par.adjust_CodeParam_default("AMPLRHO", grid_physical_size)
     par.adjust_CodeParam_default("AMPLZ", grid_physical_size)
-    par.adjust_CodeParam_default("SINHWRHO", sinh_width)
-    par.adjust_CodeParam_default("SINHWZ", sinh_width)
+    par.adjust_CodeParam_default(
+        "SINHWRHO",
+        raytracing_domain[1] if raytracing_domain is not None else sinh_width,
+    )
+    par.adjust_CodeParam_default(
+        "SINHWZ", raytracing_domain[2] if raytracing_domain is not None else sinh_width
+    )
+if CoordSystem == "SinhCylindricalv2n2":
+    assert raytracing_domain is not None
+    par.adjust_CodeParam_default("SINHWRHO", raytracing_domain[1])
+    par.adjust_CodeParam_default("SINHWZ", raytracing_domain[2])
+    par.adjust_CodeParam_default("rho_slope", raytracing_domain[3])
+    par.adjust_CodeParam_default("z_slope", raytracing_domain[4])
 par.adjust_CodeParam_default("t_final", t_final)
 # Initial data parameters
 par.adjust_CodeParam_default("initial_sep", initial_sep)
@@ -646,7 +806,128 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     CC=("nvcc" if parallelization == "cuda" else "autodetect"),
     src_code_file_ext=("cu" if parallelization == "cuda" else "c"),
 )
-print(
-    f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
-)
+if enable_raytracing_data_output:
+    copy_files(
+        package="nrpy.infrastructures.BHaH.diagnostics",
+        filenames_list=["combine_raytracing_time_slices.py"],
+        project_dir=project_dir,
+        subdirectory="",
+    )
+
+    def output_name_value(number: float) -> str:
+        """
+        Write a signed decimal parameter in a file name.
+
+        :param number: Numerical parameter value.
+        :return: File-name-safe decimal representation.
+        """
+        return str(number).replace("-", "neg").replace(".", "p")
+
+    assert raytracing_domain is not None
+    nxx0, nxx1, nxx2 = Nxx_dict[CoordSystem]
+    domain_name = "_".join(output_name_value(value) for value in raytracing_domain)
+    formulation_name = "fCCZ4" if enable_fCCZ4 else "BSSN"
+    christoffel_name = "_staticGamma" if args.raytracing_static_christoffels else ""
+    combined_stem = (
+        f"{project_name}_{formulation_name}_TP_sep_{output_name_value(initial_sep)}_"
+        f"pr_{output_name_value(initial_p_r)}_q_{output_name_value(mass_ratio)}_"
+        f"tf_{output_name_value(t_final)}_dt_{output_name_value(diagnostics_output_every)}_"
+        f"{CoordSystem}_domain_{domain_name}_{nxx0}_{nxx1}_{nxx2}{christoffel_name}"
+    )
+    raytracing_modes = (
+        ("g4DD", "g4DD_d0", "GammaUDD")
+        if raytracing_data_mode == "all"
+        else (raytracing_data_mode,)
+    )
+    combined_filenames = {
+        mode: f"{combined_stem}_{mode}.bin" for mode in raytracing_modes
+    }
+    combined_paths = {
+        mode: os.path.join("..", "raytracing_data", filename)
+        for mode, filename in combined_filenames.items()
+    }
+    metadata_filename = "raytracing_run_metadata.json"
+    run_metadata = {
+        "generator_script": "blackhole_spectroscopy.py",
+        "project_name": project_name,
+        "evolution_formulation": formulation_name,
+        "initial_data": {
+            "type": "TwoPunctures",
+            "orientation": "legacy_swap_xz",
+            "initial_sep": initial_sep,
+            "initial_p_r": initial_p_r,
+            "initial_p_t": 0.0,
+            "mass_ratio": mass_ratio,
+            "target_adm_mass_M": mass_ratio / (1.0 + mass_ratio),
+            "target_adm_mass_m": 1.0 / (1.0 + mass_ratio),
+            "TP_npoints_A": TP_npoints_A,
+            "TP_npoints_B": TP_npoints_B,
+            "TP_npoints_phi": TP_npoints_phi,
+            "bbhxy_BH_m_chix": BH_m_chix,
+            "bbhxy_BH_M_chix": BH_M_chix,
+        },
+        "grid_physical_size": grid_physical_size,
+        "raytracing_coord_system": CoordSystem,
+        "raytracing_domain": raytracing_domain,
+        "raytracing_Nxx": [nxx0, nxx1, nxx2],
+        "raytracing_time": {
+            "t_final": t_final,
+            "diagnostics_output_every": diagnostics_output_every,
+        },
+        "raytracing_data_mode": raytracing_data_mode,
+        "raytracing_static_christoffels": args.raytracing_static_christoffels,
+        "slice_filename_pattern": "raytracing_data_t????????.bin",
+        "datasets": combined_filenames,
+    }
+    if raytracing_data_mode == "all":
+        run_metadata["generated_datasets"] = list(raytracing_modes)
+    else:
+        run_metadata["combined_output_filename"] = combined_filenames[
+            raytracing_data_mode
+        ]
+    with open(
+        os.path.join(project_dir, metadata_filename), "w", encoding="utf-8"
+    ) as metadata_file:
+        json.dump(run_metadata, metadata_file, sort_keys=True, indent=2)
+        metadata_file.write("\n")
+
+    combine_commands = "\n".join(f"""echo "Combining {mode} raytracing time slices..."
+python3 combine_raytracing_time_slices.py \\
+  --input-dir "raytracing_slices/{mode}" \\
+  --pattern "raytracing_data_t????????.bin" \\
+  --run-metadata "{metadata_filename}" \\
+  --output "{combined_paths[mode]}" \\
+  --force""" for mode in raytracing_modes)
+    combined_output_messages = "\n".join(
+        f'echo "{combined_paths[mode]}"' for mode in raytracing_modes
+    )
+    script_path = os.path.join(project_dir, "run_raytracing_data_pipeline.sh")
+    script_text = f"""#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Building {project_name}..."
+make
+
+echo "Running ./{project_name}..."
+./{project_name}
+
+{combine_commands}
+
+echo "Combined raytracing data written to:"
+{combined_output_messages}
+"""
+    with open(script_path, "w", encoding="utf-8") as script_file:
+        script_file.write(script_text)
+    os.chmod(script_path, 0o755)
+    print(
+        f"Finished! Go to project/{project_name} and run ./run_raytracing_data_pipeline.sh."
+    )
+    for mode in raytracing_modes:
+        print(
+            f"    Combined {mode} data: project/raytracing_data/{combined_filenames[mode]}"
+        )
+else:
+    print(
+        f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
+    )
 print(f"    Parameter file can be found in {project_name}.par")

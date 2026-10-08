@@ -299,10 +299,12 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           automatic_center_idx == NULL || selected_center_idx == NULL)
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
 
-      for (int dirn = 0; dirn < 3; dirn++) {
-        if (!isfinite((double)xCart[dirn]))
-          return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END LOOP: for dirn over Cartesian target
+      // The SinhCylindricalv2n2 inverse is defined only within the physical
+      // cylindrical grid. Negated comparisons also reject nonfinite targets.
+      const REAL rho_squared = xCart[0] * xCart[0] + xCart[1] * xCart[1];
+      if (!(rho_squared <= params->AMPLRHO * params->AMPLRHO) ||
+          !(fabs((double)xCart[2]) <= (double)params->AMPLZ))
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
 
       Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           params, xCart, xx_target, automatic_center_idx);

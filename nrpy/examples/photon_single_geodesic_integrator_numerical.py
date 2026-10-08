@@ -323,7 +323,10 @@ if __name__ == "__main__":
         "--time-window-max-delta-t",
         type=float,
         metavar="DELTA_T",
-        help="Maximum coordinate-time change per normalized RKF45 step.",
+        help=(
+            "Backward coordinate-time lookahead below the current time-slot "
+            "boundary; use --rkf45-step-range to bound step magnitudes."
+        ),
     )
     arg_parser.add_argument(
         "--time-slice-stride",
@@ -753,7 +756,7 @@ if __name__ == "__main__":
     # Keep sparse retained-slice debugging disabled for normal runs.
     par.adjust_CodeParam_default("numerical_spacetime_time_slice_stride", 1)
 
-    # Step 6.f: Cap coordinate-time growth per accepted RKF45 step.
+    # Step 6.f: Allow backward lookahead below the current time-slot boundary.
     par.adjust_CodeParam_default("rkf45_max_delta_t", 0.5)
 
     # Step 6.g: Set time-window manager defaults.

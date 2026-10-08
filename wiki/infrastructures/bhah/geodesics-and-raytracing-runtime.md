@@ -120,7 +120,9 @@ Batch integrators shift accepted-state history and write separate sparse
 `light_blueprint_terminal_crossings_XX_YY.bin` files. Each native record holds
 the tile-local photon index, polynomial degree, crossing integration parameter,
 two local plane coordinates, and nine interpolated state components. The image
-blueprint retains its existing fields. Single-photon integrators write
+blueprint also stores the axial angular momentum, coordinate time, and signed
+plane distance at the first accepted state after a nonterminal crossing.
+Single-photon integrators write
 `plane_crossings.txt` with plane type, coordinate time, affine parameter, local
 coordinates, nine state components, and `interpolation_degree`.
 
@@ -131,8 +133,12 @@ Claim evidence:
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/find_event_time_and_state.py` — stencil selection and crossing state; `single_integrator_analytical.py` and `single_integrator_numerical.py` — text output; `batch_integrator_analytical.py` and `batch_integrator_numerical.py` — sparse crossing files; `handle_non_terminal_plane_intersection.py` and `handle_terminal_plane_intersection.py` — local coordinates and radius filtering
 
 Blueprint headers carry tile identity/counts, `alpha_w`, `alpha_h`, and binary-layout
-version 6. Records carry plane diagnostics, final angles, termination times,
-and normalized image-sample fractions. Final records admit spatial- and
+version 7. Each native same-build record is 124 bytes. Records carry nonterminal
+crossing coordinates, affine parameter, and coordinate time; terminal-plane
+texture coordinates; final angles, termination affine parameter and coordinate
+time; normalized image-sample fractions; and the first accepted state's axial
+angular momentum, coordinate time, and signed distance after a nonterminal
+crossing. Final records admit spatial- and
 temporal-interpolation failure statuses in addition to the existing physical
 stops and numerical failures; internal `ACTIVE` and `REJECTED` states remain
 invalid serialized outcomes.
@@ -142,7 +148,7 @@ vertical raster flip, while plane diagnostics remain available to
 normalization sidecars and plots their magnitudes by termination status.
 
 Claim evidence:
-- Claim: Blueprint binary-layout version 6 records tile/header geometry, plane diagnostics, termination times, final angles, and normalized image-sample fractions; the renderer preserves the documented vertical raster flip.
+- Claim: Blueprint binary-layout version 7 uses 124-byte records for terminal texture coordinates, nonterminal crossing and post-step diagnostics, final affine parameter and coordinate time, final angles, and normalized image-sample fractions; the renderer preserves the documented vertical raster flip.
 - Role: generated evidence
 - Deciding authority: `nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py` — binary-layout constants and dtype
 - Corroboration: `nrpy/examples/geodesic_visualizations/visualize_lensed_image.py` — image placement

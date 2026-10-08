@@ -610,7 +610,7 @@ static void write_plane_crossings(
                     exit(1);
                 }}
                 initial_angular_momentum[master_idx].Lz = initial_Lz;
-            }} // END LOOP: store initial L_z by photon index
+            }} // END LOOP: record initial photon L_z
         }} // END IF: evaluate initial L_z
 """
         if axisymmetric_about_z
@@ -779,7 +779,7 @@ static void write_plane_crossings(
                             } else {
                                 non_terminal_skipped_count++;
                             }
-                        } // END IF: store axial angular momentum at accepted state
+                        } // END IF: record accepted photon L_z
 """
 
     non_terminal_normalization_block = r"""
@@ -1045,7 +1045,7 @@ static void write_plane_crossings(
                 }
                 slot_add_photon(
                     &diagnostic_tsm, diagnostic_slot_idx, diagnostic_ray);
-            } // END LOOP: bin terminal photon states by coordinate time
+            } // END LOOP: bin terminal photons by time
 
             for (int diagnostic_slot_idx = diagnostic_tsm.num_slots - 1;
                  diagnostic_slot_idx >= 0;
@@ -1243,7 +1243,7 @@ static void write_plane_crossings(
                     num_rays) != 0) {
                 exit(1);
             }
-        } // END IF: write per-photon initial and final L_z
+        } // END IF: write initial and final L_z
 """
         if axisymmetric_about_z
         else ""
@@ -1296,7 +1296,7 @@ static void write_plane_crossings(
                         synthetic_slice_usage_bin_path);
                 exit(1);
             }
-        } // END IF: write per-photon synthetic temporal-stencil use records
+        } // END IF: write temporal stencil use
 """
     angular_momentum_cleanup = (
         r"""

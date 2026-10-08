@@ -62,7 +62,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=(
             "Generate a tiled analytical photon raytracing project. "
-            "The project emits v6 light-blueprint records with normalized "
+            "The project emits v7 light-blueprint records with normalized "
             "image-sample coordinates."
         )
     )

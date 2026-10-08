@@ -25,7 +25,6 @@ import numpy as np
 # Native same-build binary layout. Cross-endian persistence is intentionally
 # unsupported. Version 7 appends axial angular momentum, coordinate time, and
 # signed plane distance at the first accepted state after a nonterminal crossing.
-# Version 6 contains the preceding fields and remains readable.
 # Nonterminal coordinates are crossing diagnostics; terminal coordinates are
 # terminal-plane texture samples.
 BLUEPRINT_MAGIC = b"NRPYBP01"
@@ -34,7 +33,6 @@ BLUEPRINT_SCHEMA_VERSION = 7
 # dimensions are commondata used during initialization and are not serialized.
 BLUEPRINT_HEADER_FORMAT = "=8sIIIIIIIQdd"
 BLUEPRINT_HEADER_SIZE = 60
-BLUEPRINT_RECORD_SIZE_V6 = 100
 BLUEPRINT_RECORD_SIZE = 124
 if struct.calcsize(BLUEPRINT_HEADER_FORMAT) != BLUEPRINT_HEADER_SIZE:
     raise RuntimeError("BLUEPRINT_HEADER_FORMAT does not match header size")
@@ -43,7 +41,7 @@ if struct.calcsize(BLUEPRINT_HEADER_FORMAT) != BLUEPRINT_HEADER_SIZE:
 # This dtype MUST match the 'blueprint_data_t' struct in the C code.
 # It defines how individual ray results (endpoints, times, and types) are stored in
 # binary format.
-BLUEPRINT_DTYPE_V6 = np.dtype(
+BLUEPRINT_DTYPE = np.dtype(
     [
         (
             "termination_type",
@@ -67,21 +65,12 @@ BLUEPRINT_DTYPE_V6 = np.dtype(
         ("t_f", "=f8"),  # Coordinate time when the photon terminated
         ("image_width_fraction", "=f8"),  # Normalized width sample coordinate
         ("image_height_fraction", "=f8"),  # Normalized height sample coordinate
-    ],
-    align=False,
-)
-BLUEPRINT_DTYPE = np.dtype(
-    BLUEPRINT_DTYPE_V6.descr
-    + [
         ("non_terminal_post_step_Lz", "=f8"),
         ("non_terminal_post_step_t", "=f8"),
         ("non_terminal_post_step_distance", "=f8"),
     ],
     align=False,
 )
-BLUEPRINT_DTYPES_BY_VERSION = {6: BLUEPRINT_DTYPE_V6, 7: BLUEPRINT_DTYPE}
-if BLUEPRINT_DTYPE_V6.itemsize != BLUEPRINT_RECORD_SIZE_V6:
-    raise RuntimeError("BLUEPRINT_DTYPE_V6 does not match version-6 record size")
 if BLUEPRINT_DTYPE.itemsize != BLUEPRINT_RECORD_SIZE:
     raise RuntimeError("BLUEPRINT_DTYPE does not match blueprint_data_t size")
 BLUEPRINT_FIELDS = BLUEPRINT_DTYPE.fields

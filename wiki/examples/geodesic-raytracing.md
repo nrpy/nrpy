@@ -223,17 +223,20 @@ metric before computing `ln|alpha p^0|`; normalized mode uses `u` directly.
 
 The batch executable produces tiled `light_blueprint_XX_YY.bin` files in its
 project directory. Those binary files are generated output, not KB sources.
-The native same-build blueprint binary layout is version 6 with 100-byte records. The
-header stores tile identity/counts and `alpha_w`/`alpha_h`. Each record stores
-nonterminal/terminal-plane diagnostics, final sphere angles, affine/time values,
-and normalized `image_width_fraction`/`image_height_fraction` sample coordinates.
+The native same-build blueprint binary layout is version 7 with 124-byte records.
+The header stores tile identity/counts and `alpha_w`/`alpha_h`. Each record stores
+nonterminal-plane crossing coordinates, affine parameter, and coordinate time;
+terminal-plane texture coordinates; final sphere angles, affine parameter, and
+coordinate time; and normalized `image_width_fraction`/`image_height_fraction`
+sample coordinates. It also stores axial angular momentum, coordinate time, and
+signed plane distance at the first accepted state after a nonterminal crossing.
 The Python field definitions in `blueprint_config_and_schema.py` explicitly say the dtype must match the C
 `blueprint_data_t` layout and that termination enum constants must stay
 synchronized with generated C headers; this is the main binary-layout synchronization
 risk.
 
 Claim evidence:
-- Claim: Analytical batch blueprint files use native same-build binary-layout version 6 with 100-byte records, and Python `BLUEPRINT_DTYPE` must match the generated C `blueprint_data_t` layout and termination enums.
+- Claim: Analytical batch blueprint files use native same-build binary-layout version 7 with 124-byte records, including the first accepted state's nonterminal post-crossing diagnostics; Python `BLUEPRINT_DTYPE` must match the generated C `blueprint_data_t` layout and termination enums.
 - Role: generated evidence
 - Deciding authority: `nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py` — `BLUEPRINT_SCHEMA_VERSION`, `BLUEPRINT_DTYPE`
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/calculate_and_fill_blueprint_data_universal.py` — generated record layout
@@ -339,6 +342,12 @@ python -m nrpy.examples.photon_single_geodesic_integrator_numerical \
 The numerical batch generator has the same numerical-data arguments and adds
 the batch visualization/blueprint workflow. Both generators currently require
 the numerical `.bin` file to be available under `project/raytracing_data/`.
+Its optional `--spacetime-project blackhole_spectroscopy` changes the printed
+time-slice combination command to read spectroscopy output. The default printed
+command still reads `two_blackholes_collide` output. This option does not change
+which combined `.bin` file the photon executable reads; `--bin-name` selects
+that file. Spectroscopy output for this photon generator must use
+`SinhCylindricalv2n2` and matching `--domain` values.
 Both accept `--eom geodesic|normalized` and share the upper-only
 `--evolution-measure-max` cutoff (default `3`). For accepted-state normalization
 sidecars, direct EOM stores `|g_{mu nu} p^mu p^nu|`; normalized EOM stores

@@ -7,7 +7,7 @@ with the terminal surface. It accepts the fully interpolated nine-component tens
 state and affine parameter at the reconstructed boundary crossing alongside a pointer
 to the output blueprint structure. The mathematical mechanism constructs a local
 orthonormal basis using the parameterized terminal plane normal and up-vectors,
-with a fallback strategy for degenerate cross products. The global Cartesian
+after startup validation of the plane vectors. The global Cartesian
 intersection coordinates are projected into this local two-dimensional coordinate
 system and filtered against the minimum and maximum radial disk bounds. Valid impacts
 are stored in the blueprint structures.
@@ -114,21 +114,19 @@ def handle_terminal_plane_intersection() -> None:
         terminal_plane_normal[2] * terminal_plane_normal[2];
     if (!isfinite(normal_sq) || normal_sq <= 1.0e-28) {
         return false;
-    }
+    } // END IF: invalid terminal plane normal
     const double inverse_normal_norm = 1.0 / SqrtCUDA(normal_sq);
     terminal_plane_normal[0] *= inverse_normal_norm;
     terminal_plane_normal[1] *= inverse_normal_norm;
     terminal_plane_normal[2] *= inverse_normal_norm;
 
-    // Orthogonalize the supplied up seed against the plane normal. If it is
-    // parallel to that normal, use a coordinate-axis fallback and repeat the
-    // same projection.
+    // Project the supplied up vector perpendicular to the plane normal.
     double terminal_plane_up[3] = {
         d_commondata.terminal_plane_up_x,
         d_commondata.terminal_plane_up_y,
         d_commondata.terminal_plane_up_z
     };
-    double up_dot_normal =
+    const double up_dot_normal =
         terminal_plane_up[0] * terminal_plane_normal[0] +
         terminal_plane_up[1] * terminal_plane_normal[1] +
         terminal_plane_up[2] * terminal_plane_normal[2];
@@ -136,31 +134,13 @@ def handle_terminal_plane_intersection() -> None:
     terminal_plane_up[1] -= up_dot_normal * terminal_plane_normal[1];
     terminal_plane_up[2] -= up_dot_normal * terminal_plane_normal[2];
 
-    double up_sq =
+    const double up_sq =
         terminal_plane_up[0] * terminal_plane_up[0] +
         terminal_plane_up[1] * terminal_plane_up[1] +
         terminal_plane_up[2] * terminal_plane_up[2];
     if (!isfinite(up_sq) || up_sq <= 1.0e-18) {
-        const double fallback_axis[3] = {
-            AbsCUDA(terminal_plane_normal[0]) < 0.9 ? 1.0 : 0.0,
-            AbsCUDA(terminal_plane_normal[1]) < 0.9 ? 1.0 : 0.0,
-            AbsCUDA(terminal_plane_normal[2]) < 0.9 ? 1.0 : 0.0
-        };
-        up_dot_normal =
-            fallback_axis[0] * terminal_plane_normal[0] +
-            fallback_axis[1] * terminal_plane_normal[1] +
-            fallback_axis[2] * terminal_plane_normal[2];
-        terminal_plane_up[0] = fallback_axis[0] - up_dot_normal * terminal_plane_normal[0];
-        terminal_plane_up[1] = fallback_axis[1] - up_dot_normal * terminal_plane_normal[1];
-        terminal_plane_up[2] = fallback_axis[2] - up_dot_normal * terminal_plane_normal[2];
-        up_sq =
-            terminal_plane_up[0] * terminal_plane_up[0] +
-            terminal_plane_up[1] * terminal_plane_up[1] +
-            terminal_plane_up[2] * terminal_plane_up[2];
-    }
-    if (!isfinite(up_sq) || up_sq <= 1.0e-18) {
         return false;
-    }
+    } // END IF: invalid projected up vector
     const double inverse_up_norm = 1.0 / SqrtCUDA(up_sq);
     terminal_plane_up[0] *= inverse_up_norm;
     terminal_plane_up[1] *= inverse_up_norm;
@@ -204,7 +184,7 @@ def handle_terminal_plane_intersection() -> None:
     const double r_max = d_commondata.terminal_plane_max_coord_radius;
     if (!isfinite(r_min) || !isfinite(r_max) || r_min < 0.0 || r_max < r_min) {
         return false;
-    }
+    } // END IF: invalid radius bounds
     const double r_min_sq = r_min * r_min; // Squared minimum radius.
     const double r_max_sq = r_max * r_max; // Squared maximum radius.
 
