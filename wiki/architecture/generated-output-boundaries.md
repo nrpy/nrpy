@@ -11,7 +11,13 @@ NRPy source files are the handwritten generators, symbolic equations, infrastruc
 
 Most example generators write under `project/<name>/`. Standalone BHaH examples usually create a buildable project containing C source, headers, a Makefile, a parameter file, and an executable target for Cartesian or curvilinear-coordinate workflows. Waveform, geodesic, and some physics generators also produce standalone projects, often with a GSL build dependency.
 
-Einstein Toolkit and CarpetX generators produce thorn directories rather than standalone executables. Those thorns are generated into `project/<name>/` and then copied or linked into an Einstein Toolkit checkout for build and run. `superB` generators produce Charm++ projects, and `sebobv1_jax` generates a Python/JAX project instead of a C executable.
+Einstein Toolkit and CarpetX generators produce thorn directories rather than standalone executables. Those thorns are generated into `project/<name>/` and then copied or linked into an Einstein Toolkit checkout for build and run. `superB` generators produce Charm++ projects, `dendro_bssn.py` and `dendro_fccz4.py` produce standalone `Dendro_NRPy_BSSN` and `Dendro_NRPy_fCCZ4` CMake and MPI applications, and `sebobv1_jax` generates a Python/JAX project instead of a C executable.
+
+Claim evidence:
+- Claim: `dendro_bssn.py` and `dendro_fccz4.py` generate standalone `Dendro_NRPy_BSSN` and `Dendro_NRPy_fCCZ4` CMake and MPI applications that are built against Dendrolib.
+- Role: descriptive behavior
+- Deciding authority: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py), `main`
+- Corroboration: [main.yml](../../.github/workflows/main.yml), `dendro-validation`, which generates, builds, and runs both applications
 
 CI deliberately creates and builds generated outputs as validation evidence. The Ubuntu and macOS codegen jobs install NRPy, generate many projects, and run `make` where applicable. Separate Einstein Toolkit and Charm++ jobs generate backend products inside CI containers, the Dendro job generates them in the runner's temporary directory, and each job runs its configured build, runtime, and required checks.
 
@@ -37,6 +43,7 @@ Claim evidence:
 
 - [README.md](../../README.md) - `## What Gets Generated?`, `## Project Families and Example Generators`
 - [.github/workflows/main.yml](../../.github/workflows/main.yml) - `einsteintoolkit-validation`, `dendro-validation`, `charmpp-validation`, `codegen-ubuntu`, `codegen-mac`
+- [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - the Dendro application output directories.
 - [raw/source-docs/original-agents.md](../../raw/source-docs/original-agents.md) - `## Scope`
 
 ## See Also

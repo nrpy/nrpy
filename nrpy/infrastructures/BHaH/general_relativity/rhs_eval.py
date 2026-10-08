@@ -89,9 +89,9 @@ def register_CFunction_rhs_eval(
     :param enable_fCCZ4: Use fCCZ4 instead of BSSN evolution equations.
     :param enable_YBS_Gamma_constraint_adjustment: Enable the YBS connection-constraint
         adjustment and register the runtime parameter YBS_chi, whose default 0 disables it.
-    :param enable_YBS_momentum_constraint_adjustment: Enable the timestep-scaled
-        Yo--Lin--Cao momentum-constraint adjustment and register the runtime parameter
-        C_YBS_mom, whose default 0 disables it.
+    :param enable_YBS_momentum_constraint_adjustment: Enable the timestep-scaled,
+        W-weighted Yo--Lin--Cao momentum-constraint adjustment and register the runtime
+        parameter C_YBS_mom, whose default 0 disables it and whose recommended value is 1.75.
     :param enable_cfdD_alphadD_vetUdD_gridfunctions: Whether to read the first derivatives of
         cf, alpha and vetU from the gridfunctions cfdD_alphadD_vetUdD_eval stores, and to
         build each mixed second derivative of them as a single first derivative of those
@@ -170,10 +170,10 @@ def register_CFunction_rhs_eval(
             commondata=True,
             add_to_parfile=True,
             description=(
-                "YBS Gamma-constraint strength; 0 disables the term. "
-                "Recommended maximum (the usual xi=1 choice of Yo, Lin, and Cao; "
-                "no stability bound was derived): 2/3 for BSSN and 4/3 for fCCZ4 "
-                "(same C^i Dbar_k beta^k coefficient as BSSN with xi=1)."
+                "2/3 (BSSN) or 4/3 (fCCZ4) = recommended; the usual xi=1 choice of "
+                "Yo, Lin, and Cao, which gives the same C^i Dbar_k beta^k coefficient "
+                "in both formulations. Range: 0 (off) up to the recommended value; "
+                "no stability bound was derived, and negative values should not be used."
             ),
         )
     if enable_CAHD or enable_YBS_momentum_constraint_adjustment:
@@ -192,12 +192,13 @@ def register_CFunction_rhs_eval(
             commondata=True,
             add_to_parfile=True,
             description=(
-                "YBS momentum-damping strength; 0 disables the term. "
-                "Recommended maximum, assuming CFL_FACTOR = 0.45: 0.89 with RK4 and "
-                "0.64 for any Runge-Kutta method with real-axis limit of at least 2, "
-                "for finite-difference orders up to 8. "
-                "The maximum scales as 1/CFL_FACTOR^2 "
-                "(0.18 and 0.13 at CFL_FACTOR = 1)."
+                "1.75 = recommended; diffusive damping of momentum-constraint "
+                "violations, weighted by the conformal factor W, which vanishes at "
+                "punctures and attenuates the term there. Range: 0 (off) to about 2 "
+                "at CFL_FACTOR = 0.45 when W <= 1 everywhere. "
+                "Stability needs C_YBS_mom * CFL_FACTOR^2 * lambda_FD * W * ds_min / dsmin "
+                "below the Runge-Kutta real-axis limit (2.5 for RK3), where ds_min is "
+                "the smallest grid spacing and lambda_FD = 5.6 to 7.6 for 4th to 8th order."
             ),
         )
     if enable_fCCZ4:

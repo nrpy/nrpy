@@ -82,11 +82,6 @@ Claim evidence:
 - Deciding authority: [coding_style.md](../../coding_style.md), `#### validate_strings pattern`, its generated-kernel and size bullets
 - Corroboration: [ADM_to_BSSN.py](../../nrpy/infrastructures/Dendro/general_relativity/ADM_to_BSSN.py), the generated pointwise conversion kernel without a generated-source baseline.
 
-BHaH `compile_Makefile()` contains a retained unsafe external-compilation
-doctest. It is not precedent. A substantive touch follows the scoped-CI
-migration rule, or the strictly bounded no-expansion fallback only when
-migration is outside authorized scope, in Test Oracles And Safe Updates.
-
 ### Parallel Codegen Registration
 
 Registration functions that participate in `nrpy.helpers.parallel_codegen`
@@ -182,7 +177,6 @@ checks integer return codes immediately, and returns early when
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### Doctests`, `### Parallel Codegen Pattern`, `### Black Suppression`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### C Function Registration from Python`, `### BHaH Symbolic Codegen Rules`, `### Inlining Rules`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### Standard Struct Pointer Params`, `### Gridfunction Naming / Grouping`, `### Memory / Error Handling`
-- [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `compile_Makefile`
 - [coding_style.md](../../coding_style.md) - `#### validate_strings pattern`, its generated-kernel and size bullets
 - [ADM_to_BSSN.py](../../nrpy/infrastructures/Dendro/general_relativity/ADM_to_BSSN.py) - generated pointwise initial-data conversion.
 

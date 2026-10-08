@@ -93,9 +93,9 @@ def register_CFunction_fCCZ4_constraints(
             "Z4constraintU1": constraints.Z4constraintU[1],
             "Z4constraintU2": constraints.Z4constraintU[2],
             "H": bssn_constraints.H,
-            "MU0": momentum_covariant[0],
-            "MU1": momentum_covariant[1],
-            "MU2": momentum_covariant[2],
+            "MD0": momentum_covariant[0],
+            "MD1": momentum_covariant[1],
+            "MD2": momentum_covariant[2],
             "M_CONSTRAINT": sp.sqrt(bssn_constraints.Msquared),
             "LAMBDA_CONSTRAINT": connection_magnitude,
         }
