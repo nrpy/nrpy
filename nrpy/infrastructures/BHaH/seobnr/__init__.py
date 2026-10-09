@@ -6,6 +6,7 @@ from . import (
     SEOBNRv5_aligned_spin_omegaNR_fits_at_t_attach,
     SEOBNRv5_coprecessing_angles,
     SEOBNRv5_coprecessing_rotations,
+    SEOBNRv5_projected_attachment_reference,
     SEOBNRv5_quasi_precessing_spin_coefficients,
     dynamics,
     initial_conditions,

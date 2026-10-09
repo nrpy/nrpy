@@ -76,6 +76,19 @@ output_waveform_flag = True
 validate_sandbox_flag = False
 # Write sandbox diagnostics. This only has an effect when validate_sandbox_flag is also True.
 enable_sandbox_diagnostics_flag = False
+enable_projected_reference_diagnostics = False
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate the SEBOBv2 C executable.")
+    parser.add_argument(
+        "--projected-attachment-diagnostics",
+        action="store_true",
+        help="Emit reference and attachment data for generated-executable numerical checks.",
+    )
+    enable_projected_reference_diagnostics = (
+        parser.parse_args().projected_attachment_diagnostics
+    )
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
@@ -87,6 +100,7 @@ def register_CFunction_main_c(
     output_commondata: bool = True,
     validate_sandbox: bool = False,
     enable_sandbox_diagnostics: bool = False,
+    enable_reference_diagnostics: bool = False,
 ) -> None:
     """
     Generate a simplified C main() function for computing the SEBOB waveform.
@@ -95,6 +109,7 @@ def register_CFunction_main_c(
     :param output_commondata: Flag to enable/disable outputting commondata to a binary file.
     :param validate_sandbox: Whether to run the isolated coprecessing-rotation sandbox.
     :param enable_sandbox_diagnostics: Whether to write sandbox diagnostic sidecar files.
+    :param enable_reference_diagnostics: Whether to print numerical reference and attachment data to stderr.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """-={ main() function }=-
@@ -142,10 +157,33 @@ SEOBNRv5_quasi_precessing_spin_dynamics(&commondata);
 SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
 // Step 6: Generate the inspiral trajectory.
 SEOBNRv5_aligned_spin_pa_integration(&commondata);
+if (commondata.use_projected_attachment) {
+  SEOBNRv5_projected_attachment_reference(&commondata);
+} // END IF: prepare projected 10M reference
 // Step 7: Calculate special amplitude coefficients.
 SEOBNRv5_aligned_spin_special_coefficients(&commondata);
 // Step 8: Generate the inspiral waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
+"""
+    if enable_reference_diagnostics:
+        body += r"""
+fprintf(stderr, "NRPY_REFERENCE ready=%d r=%.17g t=%.17g omega=%.17g raw_origin=%.17g raw_start_r=%.17g initial_omega=%.17g phi=%.17g prstar=%.17g pphi=%.17g min_omega_dot=%.17g\n",
+    commondata.projected_reference_ready, commondata.r_r10M, commondata.t_r10M, commondata.omega_r10M,
+    commondata.t_dynamics_raw_origin, commondata.dynamics_raw[IDX(0,R)], commondata.initial_omega,
+    commondata.phi_r10M, commondata.prstar_r10M, commondata.pphi_r10M, commondata.min_reference_omega_dot);
+fprintf(stderr, "NRPY_SPINS lnx=%.17g lny=%.17g lnz=%.17g c1x=%.17g c1y=%.17g c1z=%.17g c2x=%.17g c2y=%.17g c2z=%.17g p1=%.17g p2=%.17g\n",
+    commondata.lnhat_r10_x, commondata.lnhat_r10_y, commondata.lnhat_r10_z,
+    commondata.chi1_r10_x, commondata.chi1_r10_y, commondata.chi1_r10_z,
+    commondata.chi2_r10_x, commondata.chi2_r10_y, commondata.chi2_r10_z,
+    commondata.chi1_projected_r10, commondata.chi2_projected_r10);
+fprintf(stderr, "NRPY_ATTACH before=%.17g t_ISCO=%.17g Delta_t=%.17g chi1=%.17g chi2=%.17g c21=%.17g c43=%.17g c55=%.17g\n",
+    commondata.t_attach, commondata.t_ISCO, commondata.Delta_t, commondata.chi1, commondata.chi2,
+    commondata.c_21, commondata.c_43, commondata.c_55);
+for (size_t sample = 0; sample < commondata.nsteps_fine; sample++) {
+  fprintf(stderr, "NRPY_FINE t=%.17g re=%.17g im=%.17g r=%.17g prstar=%.17g omega=%.17g\n", commondata.dynamics_fine[IDX(sample,TIME)],
+      creal(commondata.waveform_fine[IDX_WF(sample,STRAIN22)]), cimag(commondata.waveform_fine[IDX_WF(sample,STRAIN22)]),
+      commondata.dynamics_fine[IDX(sample,R)], commondata.dynamics_fine[IDX(sample,PRSTAR)], commondata.dynamics_fine[IDX(sample,OMEGA)]);
+} // END LOOP: report fine inspiral samples
 """
 
     if validate_sandbox:
@@ -271,8 +309,36 @@ SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
     body += r"""
 // Step 9: Compute and apply NQC corrections.
 SEBOBv2_NQC_corrections(&commondata);
+"""
+    if enable_reference_diagnostics:
+        body += r"""
+REAL checked_omega, checked_tau;
+SEOBNRv5_evaluate_l2m2_qnm(commondata.a_f, commondata.M_f, &checked_omega, &checked_tau);
+REAL attachment_amplitudes[3], attachment_frequencies[2];
+BOB_v2_NQC_rhs(&commondata, attachment_amplitudes, attachment_frequencies);
+fprintf(stderr, "NRPY_NQC after=%.17g a_f=%.17g M_f=%.17g omega=%.17g omega22=%.17g checked_omega=%.17g tau=%.17g tau22=%.17g checked_tau=%.17g A=%.17g Adot=%.17g Addot=%.17g w=%.17g wdot=%.17g a1=%.17g a2=%.17g a3=%.17g b1=%.17g b2=%.17g\n",
+    commondata.t_attach, commondata.a_f, commondata.M_f, commondata.omega_qnm, commondata.omega_qnm_l2m2, checked_omega,
+    commondata.tau_qnm, commondata.tau_qnm_l2m2, checked_tau, attachment_amplitudes[0], attachment_amplitudes[1],
+    attachment_amplitudes[2], attachment_frequencies[0], attachment_frequencies[1],
+    commondata.a_1_NQC, commondata.a_2_NQC, commondata.a_3_NQC, commondata.b_1_NQC, commondata.b_2_NQC);
+for (size_t sample = 0; sample < commondata.nsteps_fine; sample++) {
+  const size_t index = sample + commondata.nsteps_low;
+  fprintf(stderr, "NRPY_CORRECTED t=%.17g re=%.17g im=%.17g phi=%.17g\n", commondata.dynamics_fine[IDX(sample,TIME)],
+      creal(commondata.waveform_inspiral[IDX_WF(index,STRAIN22)]), cimag(commondata.waveform_inspiral[IDX_WF(index,STRAIN22)]),
+      commondata.dynamics_fine[IDX(sample,PHI)]);
+} // END LOOP: report corrected inspiral samples
+"""
+    body += r"""
 // Step 10: Compute the IMR waveform.
 SEBOBv2_IMR_waveform(&commondata);
+"""
+    if enable_reference_diagnostics:
+        body += r"""
+const REAL diagnostic_dT = commondata.dt / (commondata.total_mass * 4.925490947641266978197229498498379006e-6);
+const size_t diagnostic_ringdown_count = 15 * (size_t)(commondata.tau_qnm / diagnostic_dT);
+const size_t diagnostic_split = commondata.nsteps_IMR - diagnostic_ringdown_count;
+fprintf(stderr, "NRPY_IMR split=%.17g first_ringdown_time=%.17g\n", (REAL)diagnostic_split,
+    creal(commondata.waveform_IMR[IDX_WF(diagnostic_split,TIME)]));
 """
 
     if output_waveform:
@@ -375,6 +441,7 @@ BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_initial_conditions_dissipat
 BHaH.seobnr.dynamics.SEOBNRv5_quasi_precessing_spin_angular_momentum.register_CFunction_SEOBNRv5_quasi_precessing_spin_angular_momentum()
 BHaH.seobnr.dynamics.SEOBNRv5_quasi_precessing_spin_dynamics.register_CFunction_SEOBNRv5_quasi_precessing_spin_dynamics()
 BHaH.seobnr.dynamics.SEOBNRv5_quasi_precessing_spin_equations.register_CFunction_SEOBNRv5_quasi_precessing_spin_equations()
+BHaH.seobnr.SEOBNRv5_projected_attachment_reference.register_CFunction_SEOBNRv5_projected_attachment_reference()
 
 # register PA integration routines
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_pa_integration.register_CFunction_SEOBNRv5_aligned_spin_pa_integration()
@@ -534,6 +601,7 @@ register_CFunction_main_c(
     output_commondata_flag,
     validate_sandbox_flag,
     enable_sandbox_diagnostics_flag,
+    enable_projected_reference_diagnostics,
 )
 
 addl_cflags = ["$(shell gsl-config --cflags)"]
