@@ -553,10 +553,6 @@ class SEOBNR_aligned_spin_constants:
         Calling this method populates the ``*_precessing`` and ``*_nonzero``
         attributes declared on the class; the constructor intentionally does not
         build these comparatively expensive optional expressions.
-
-        :return: None. Populates the staged symbolic final-spin expressions.
-
-        # noqa: DAR202
         """
         chi1_x, chi1_y, chi1_z, chi2_x, chi2_y, chi2_z = sp.symbols(
             "chi1_x chi1_y chi1_z chi2_x chi2_y chi2_z", real=True
