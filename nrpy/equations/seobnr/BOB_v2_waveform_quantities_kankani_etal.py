@@ -50,7 +50,6 @@ class BOB_v2_waveform_quantities:
             - 'hddot_t_attach' : the second time derivative of the strain amplitude (l=2,m=2) mode at the t_attach.
             - 'w_t_attach' : the angular frequency of the (2,2) mode at the t_attach
             - 'wdot_t_attach' : the first time derivative of the angular frequency of the (l=2,m=2) mode at the t_attach.
-        :return None:
         """
         m1, m2, chi1, chi2, omega_qnm, tau_qnm, t_attach, t_p, t = sp.symbols(
             "m1 m2 chi1 chi2 omega_qnm tau_qnm t_attach t_p t", real=True

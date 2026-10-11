@@ -52,8 +52,6 @@ class BOB_aligned_spin_waveform_quantities_higher_modes:
                                 at the NQC attachment time.
             - 'wdot_t_attach_lm' : the BOB-derived first time derivative of the angular frequency of the (l=2,m=2) mode
                                 at the NQC attachment time.
-
-        :return None:
         """
         self.modes = [(2, 2), (3, 3), (4, 4), (5, 5), (2, 1), (3, 2), (4, 3)]
         self.h_lm = {}

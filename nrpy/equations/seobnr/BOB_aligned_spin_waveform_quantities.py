@@ -56,8 +56,6 @@ class BOB_aligned_spin_waveform_quantities:
                                 (Equation C29 of https://arxiv.org/pdf/2303.18039)
             - 'wdot_t_attach' : the BOB-derived first time derivative of the angular frequency of the (l=2,m=2) mode
                                 at the NQC attachment time.
-
-        :return None:
         """
         m1, m2, chi1, chi2, omega_qnm, tau_qnm, t_0, t = sp.symbols(
             "m1 m2 chi1 chi2 omega_qnm tau_qnm t_0 t", real=True

@@ -2596,7 +2596,6 @@ def main() -> None:
     """
     Drive CLI execution.
 
-    :return: None.
     :raises RuntimeError: If discovery, validation, layout, or output writing fails.
     """
     # Step 1: Dispatch inspect mode before any stage-1 discovery or validation.

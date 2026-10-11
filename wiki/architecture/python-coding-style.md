@@ -58,6 +58,14 @@ Sphinx/reStructuredText fields: `:param name:`, `:return:`, and
 `:raises ExceptionType:`. Do not use Google-style `Args:`, `Returns:`, or
 `Raises:` headers. Use singular `:return:`, not `:returns:`.
 
+A function annotated `-> None` has no return field in its docstring: do not
+write `:return None:`, `:return None`, or `:return: None`. `:return None:` is
+also malformed reST, because it declares a field named `return None`. Describe
+side effects in the docstring body, and do not add `return None` or
+`# noqa: DAR202` to satisfy darglint. Functions annotated `Union[None, X]` or
+`Optional[X]` keep `:return:` and describe both the `None` case and the `X`
+case, as the parallel-codegen registration functions do.
+
 Do not embed redundant type information inside `:param` descriptions because
 types already live in function signatures. Describe meaning and behavior.
 
@@ -163,6 +171,7 @@ Claim evidence:
 ## Sources
 
 - [coding_style.md](../../coding_style.md) - `### Prohibited Dependencies`, the `import re` bullet
+- [coding_style.md](../../coding_style.md) - `## Python Coding Style`, `### Docstring Style`, the `-> None` return-field bullet
 - [coding_style.md](../../coding_style.md) - `## Python Coding Style`, `### Module Docstring Format`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `## Python Style`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### Python String Literals`, `### Module Docstrings`, `### Type Hints`, `### Comments`

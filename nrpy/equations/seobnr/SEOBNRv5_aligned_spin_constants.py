@@ -106,7 +106,6 @@ class SEOBNR_aligned_spin_constants:
         :param calibration_spin: Flag to enable/disable calibration of the spinning parameters
         :param nrpy_calibrated: Flag to use the nrpy calibrated versions
         :raises ValueError: If both calibration_no_spin and calibration_spin are True, or if nrpy_calibrated is True together with either calibration mode
-        :return None:
         """
         # The calibration process for the SEOBNRv5 is done in two steps:
         # 1. Calibration of the non-spinning coefficients
@@ -374,11 +373,7 @@ class SEOBNR_aligned_spin_constants:
     def compute_calibration_params(
         self,
     ) -> None:
-        """
-        Compute the calibration parameters for the SEOBNRv5 aligned-spin model.
-
-        :return None:
-        """
+        """Compute the calibration parameters for the SEOBNRv5 aligned-spin model."""
         m1 = self.m1
         m2 = self.m2
         chi1 = self.chi1
@@ -536,8 +531,6 @@ class SEOBNR_aligned_spin_constants:
         Compute the final spin for the SEOBNRv5 aligned-spin model.
         The spin is calculated using the non-precessing HBR2016 fits with version "M3J4"
         as outlined in https://lscsoft.docs.ligo.org/lalsuite/lalinference/nrutils_8py_source.html
-
-        :return None:
         """
         q = self.m2 / self.m1
         atot = (self.chi1 + self.chi2 * q * q) / ((1 + q) * (1 + q))
@@ -645,8 +638,6 @@ class SEOBNR_aligned_spin_constants:
         Compute the final mass for the SEOBNRv5 aligned-spin model.
         The mass is calculated using the non-precessing UIB2016 fits with version "v2"
         as outlined in https://lscsoft.docs.ligo.org/lalsuite/lalinference/nrutils_8py_source.html
-
-        :return None:
         """
         m1 = self.m1
         m2 = self.m2
