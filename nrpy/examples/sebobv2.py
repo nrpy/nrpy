@@ -21,8 +21,11 @@ the following improvements over the current SEBOBv1:
 []    3.c. Analytical multipolar strain peak times
 []    3.d. Memory modes
 
-Currently, this examples calculates:
-Aligned-spin (2,2) IMR modes using SEOBNRv5 and BOBv2.
+By default, this example calculates aligned-spin (2,2) IMR modes using
+SEOBNRv5 and BOBv2. Setting ``use_projected_attachment = True`` in the
+parameter file enables projected-spin attachment, with ``chi1_z`` and
+``chi2_z`` as the authoritative initial spin projections. Projected attachment
+does not accept scalar ``chi1`` and ``chi2`` command-line overrides.
 
 Authors:
         Anuj Kankani
@@ -53,6 +56,7 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
 project_name = "sebobv2"
+use_projected_attachment_default = False
 
 enable_parallel_codegen = True
 
@@ -72,18 +76,31 @@ output_waveform_flag = True
 validate_sandbox_flag = False
 # Write sandbox diagnostics. This only has an effect when validate_sandbox_flag is also True.
 enable_sandbox_diagnostics_flag = False
+enable_projected_reference_diagnostics = False
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate the SEBOBv2 C executable.")
+    parser.add_argument(
+        "--projected-attachment-diagnostics",
+        action="store_true",
+        help="Emit reference and attachment data for generated-executable numerical checks.",
+    )
+    enable_projected_reference_diagnostics = (
+        parser.parse_args().projected_attachment_diagnostics
+    )
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
 
 
-#  Note: Removing step numbers for now.
 def register_CFunction_main_c(
     output_waveform: bool = True,
     output_commondata: bool = True,
     validate_sandbox: bool = False,
     enable_sandbox_diagnostics: bool = False,
+    enable_reference_diagnostics: bool = False,
 ) -> None:
     """
     Generate a simplified C main() function for computing the SEBOB waveform.
@@ -92,6 +109,7 @@ def register_CFunction_main_c(
     :param output_commondata: Flag to enable/disable outputting commondata to a binary file.
     :param validate_sandbox: Whether to run the isolated coprecessing-rotation sandbox.
     :param enable_sandbox_diagnostics: Whether to write sandbox diagnostic sidecar files.
+    :param enable_reference_diagnostics: Whether to print numerical reference and attachment data to stderr.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """-={ main() function }=-
@@ -101,23 +119,71 @@ Main function for computing the SEBOBv2 waveform.
     name = "main"
     params = "int argc, const char *argv[]"
     body = r"""  commondata_struct commondata; // commondata contains parameters common to all grids.
-// Step TBD: Initialize commondata
-// Step TBD: Set each commondata CodeParameter to default.
+// Step 1: Set commondata parameters to defaults.
 commondata_struct_set_to_default(&commondata);
-// Step TBD: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
+// Step 2: Apply parameter-file and command-line inputs.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
-// Step TBD: Overwrite default values of m1, m2, a6, and dSO.
+if (commondata.use_projected_attachment) {
+  if (argc > 2) {
+    fprintf(stderr,
+        "Error: projected attachment requires vector spin inputs from a parameter file; "
+        "scalar chi1 and chi2 command-line overrides are not supported.\n");
+    return EXIT_FAILURE;
+  } // END IF: projected mode has CLI inputs
+  commondata.chi1 = commondata.chi1_z;
+  commondata.chi2 = commondata.chi2_z;
+} // END IF: projected attachment input normalization
+"""
+
+    if validate_sandbox:
+        body += r"""
+if (fabs(commondata.chi1 - commondata.chi1_z) > 1e-14 ||
+    fabs(commondata.chi2 - commondata.chi2_z) > 1e-14) {
+  fprintf(stderr,
+      "Warning: the optional coprecessing-rotation sandbox uses vector spin "
+      "inputs while aligned attachment uses scalar chi1 and chi2. For "
+      "self-consistent aligned sandbox validation, set chi1=chi1_z and "
+      "chi2=chi2_z.\n");
+  fflush(stderr);
+} // END IF: sandbox spin representations differ
+"""
+
+    body += r"""
+// Step 3: Initialize masses and model coefficients.
 SEOBNRv5_quasi_precessing_spin_coefficients(&commondata);
-// Step: compute the spin dynamics
+// Step 4: Evolve the spin dynamics.
 SEOBNRv5_quasi_precessing_spin_dynamics(&commondata);
-// Step TBD: Compute SEOBNRv5 conservative initial conditions.
+// Step 5: Compute conservative initial conditions.
 SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
-// Step TBD: Run the trajectory generation.
+// Step 6: Generate the inspiral trajectory.
 SEOBNRv5_aligned_spin_pa_integration(&commondata);
-// Step TBD: Calculate Special Amplitude Coefficients
+if (commondata.use_projected_attachment) {
+  SEOBNRv5_projected_attachment_reference(&commondata);
+} // END IF: prepare projected 10M reference
+// Step 7: Calculate special amplitude coefficients.
 SEOBNRv5_aligned_spin_special_coefficients(&commondata);
-// Step TBD: Generate the waveform.
+// Step 8: Generate the inspiral waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
+"""
+    if enable_reference_diagnostics:
+        body += r"""
+fprintf(stderr, "NRPY_REFERENCE ready=%d r=%.17g t=%.17g omega=%.17g raw_origin=%.17g raw_start_r=%.17g initial_omega=%.17g phi=%.17g prstar=%.17g pphi=%.17g min_omega_dot=%.17g\n",
+    commondata.projected_reference_ready, commondata.r_r10M, commondata.t_r10M, commondata.omega_r10M,
+    commondata.t_dynamics_raw_origin, commondata.dynamics_raw[IDX(0,R)], commondata.initial_omega,
+    commondata.phi_r10M, commondata.prstar_r10M, commondata.pphi_r10M, commondata.min_reference_omega_dot);
+fprintf(stderr, "NRPY_SPINS lnx=%.17g lny=%.17g lnz=%.17g c1x=%.17g c1y=%.17g c1z=%.17g c2x=%.17g c2y=%.17g c2z=%.17g p1=%.17g p2=%.17g\n",
+    commondata.lnhat_r10_x, commondata.lnhat_r10_y, commondata.lnhat_r10_z,
+    commondata.chi1_r10_x, commondata.chi1_r10_y, commondata.chi1_r10_z,
+    commondata.chi2_r10_x, commondata.chi2_r10_y, commondata.chi2_r10_z,
+    commondata.chi1_projected_r10, commondata.chi2_projected_r10);
+fprintf(stderr, "NRPY_ATTACH before=%.17g t_ISCO=%.17g Delta_t=%.17g chi1=%.17g chi2=%.17g c21=%.17g c43=%.17g c55=%.17g\n",
+    commondata.t_attach, commondata.t_ISCO, commondata.Delta_t, commondata.chi1, commondata.chi2,
+    commondata.c_21, commondata.c_43, commondata.c_55);
+for (size_t sample = 0; sample < commondata.nsteps_fine; sample++) {
+  fprintf(stderr, "NRPY_FINE t=%.17g re=%.17g im=%.17g r=%.17g prstar=%.17g omega=%.17g\n", commondata.dynamics_fine[IDX(sample,TIME)],
+      creal(commondata.waveform_fine[IDX_WF(sample,STRAIN22)]), cimag(commondata.waveform_fine[IDX_WF(sample,STRAIN22)]),
+      commondata.dynamics_fine[IDX(sample,R)], commondata.dynamics_fine[IDX(sample,PRSTAR)], commondata.dynamics_fine[IDX(sample,OMEGA)]);
+} // END LOOP: report fine inspiral samples
 """
 
     if validate_sandbox:
@@ -133,19 +199,11 @@ SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
   const size_t n_low = commondata.nsteps_low;
   const size_t n_fine = commondata.nsteps_fine;
   const size_t n_insp = n_low + n_fine;
-  const int enable_sandbox_diagnostics = __SANDBOX_DIAGNOSTICS_FLAG__;
+  const int enable_sandbox_diagnostics = """
+        body += sandbox_diagnostics_flag
+        body += r""";
   const REAL sandbox_iota = 0.9;
   const REAL sandbox_varphi_0 = 0.3;
-
-  if (fabs(commondata.chi1 - commondata.chi1_z) > 1e-14 ||
-      fabs(commondata.chi2 - commondata.chi2_z) > 1e-14) {
-    fprintf(stderr,
-        "Warning: the optional coprecessing-rotation sandbox uses "
-        "chi1_x/y/z and chi2_x/y/z, while the current aligned-spin IMR "
-        "path uses chi1 and chi2. For a self-consistent sandbox "
-        "validation, set chi1=chi1_z and chi2=chi2_z.\n");
-    fflush(stderr);
-  } // END IF: scalar and vector spin parameters differ for sandbox validation
 
   REAL *real_buffers = (REAL *)calloc(2 * n_insp, sizeof(REAL));
   COMPLEX *complex_buffers = (COMPLEX *)calloc(7 * n_insp, sizeof(COMPLEX));
@@ -172,7 +230,7 @@ SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
       hP_44[i] = commondata.waveform_low[IDX_WF(i, STRAIN44)];
       hP_43[i] = commondata.waveform_low[IDX_WF(i, STRAIN43)];
       hP_55[i] = commondata.waveform_low[IDX_WF(i, STRAIN55)];
-    } // END LOOP: for i over low-frequency inspiral modes
+    } // END LOOP: low-frequency inspiral modes
     for (size_t i = 0; i < n_fine; i++) {
       size_t dest_idx = i + n_low;
       hP_22[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN22)];
@@ -182,7 +240,7 @@ SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
       hP_44[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN44)];
       hP_43[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN43)];
       hP_55[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN55)];
-    } // END LOOP: for i over fine-frequency inspiral modes
+    } // END LOOP: fine-frequency inspiral modes
 
     // Generate physical J->P Euler angles from the precessing dynamics.
     SEOBNRv5_coprecessing_angles(&commondata);
@@ -214,7 +272,7 @@ SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
             creal(hP_43[i]), cimag(hP_43[i]),
             creal(hP_55[i]), cimag(hP_55[i]),
             h_plus_I[i], h_cross_I[i]);
-      } // END LOOP: for i over low-frequency validation waveform samples
+      } // END LOOP: low-frequency validation samples
       for (size_t i = 0; i < n_fine; i++) {
         size_t dest_idx = i + n_low;
         fprintf(fp, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
@@ -228,38 +286,68 @@ SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
             creal(hP_43[dest_idx]), cimag(hP_43[dest_idx]),
             creal(hP_55[dest_idx]), cimag(hP_55[dest_idx]),
             h_plus_I[dest_idx], h_cross_I[dest_idx]);
-      } // END LOOP: for i over fine-frequency validation waveform samples
+      } // END LOOP: fine-frequency validation samples
       fclose(fp);
-    } else if (enable_sandbox_diagnostics) {
+    } // END IF: diagnostic file opened
+    else if (enable_sandbox_diagnostics) {
       fprintf(stderr, "Warning: Could not open validation_waveform.txt for writing.\n");
       fflush(stderr);
-    } // END ELSE IF: validation waveform requested but file open failed
-  } else {
+    } // END ELSE IF: diagnostic file open failed
+  } // END IF: sandbox buffers allocated
+  else {
     if (enable_sandbox_diagnostics) {
       fprintf(stderr, "Warning: Validation memory allocation failed. Skipping sandbox diagnostics.\n");
       fflush(stderr);
-    } // END IF: sandbox diagnostics enabled after allocation failure
+    } // END IF: diagnostic allocation failure
   } // END ELSE: sandbox work-buffer allocation failed
 
   // Free sandbox work buffers immediately.
   free(real_buffers);
   free(complex_buffers);
 } // END BLOCK: optional inspiral-only coprecessing-rotation sandbox
-""".replace("__SANDBOX_DIAGNOSTICS_FLAG__", sandbox_diagnostics_flag)
+"""
     body += r"""
-// Step TBD: Compute and apply the NQC corrections
+// Step 9: Compute and apply NQC corrections.
 SEBOBv2_NQC_corrections(&commondata);
-// Step TBD: Compute the IMR waveform
+"""
+    if enable_reference_diagnostics:
+        body += r"""
+REAL checked_omega, checked_tau;
+SEOBNRv5_evaluate_l2m2_qnm(commondata.a_f, commondata.M_f, &checked_omega, &checked_tau);
+REAL attachment_amplitudes[3], attachment_frequencies[2];
+BOB_v2_NQC_rhs(&commondata, attachment_amplitudes, attachment_frequencies);
+fprintf(stderr, "NRPY_NQC after=%.17g a_f=%.17g M_f=%.17g omega=%.17g omega22=%.17g checked_omega=%.17g tau=%.17g tau22=%.17g checked_tau=%.17g A=%.17g Adot=%.17g Addot=%.17g w=%.17g wdot=%.17g a1=%.17g a2=%.17g a3=%.17g b1=%.17g b2=%.17g\n",
+    commondata.t_attach, commondata.a_f, commondata.M_f, commondata.omega_qnm, commondata.omega_qnm_l2m2, checked_omega,
+    commondata.tau_qnm, commondata.tau_qnm_l2m2, checked_tau, attachment_amplitudes[0], attachment_amplitudes[1],
+    attachment_amplitudes[2], attachment_frequencies[0], attachment_frequencies[1],
+    commondata.a_1_NQC, commondata.a_2_NQC, commondata.a_3_NQC, commondata.b_1_NQC, commondata.b_2_NQC);
+for (size_t sample = 0; sample < commondata.nsteps_fine; sample++) {
+  const size_t index = sample + commondata.nsteps_low;
+  fprintf(stderr, "NRPY_CORRECTED t=%.17g re=%.17g im=%.17g phi=%.17g\n", commondata.dynamics_fine[IDX(sample,TIME)],
+      creal(commondata.waveform_inspiral[IDX_WF(index,STRAIN22)]), cimag(commondata.waveform_inspiral[IDX_WF(index,STRAIN22)]),
+      commondata.dynamics_fine[IDX(sample,PHI)]);
+} // END LOOP: report corrected inspiral samples
+"""
+    body += r"""
+// Step 10: Compute the IMR waveform.
 SEBOBv2_IMR_waveform(&commondata);
+"""
+    if enable_reference_diagnostics:
+        body += r"""
+const REAL diagnostic_dT = commondata.dt / (commondata.total_mass * 4.925490947641266978197229498498379006e-6);
+const size_t diagnostic_ringdown_count = 15 * (size_t)(commondata.tau_qnm / diagnostic_dT);
+const size_t diagnostic_split = commondata.nsteps_IMR - diagnostic_ringdown_count;
+fprintf(stderr, "NRPY_IMR split=%.17g first_ringdown_time=%.17g\n", (REAL)diagnostic_split,
+    creal(commondata.waveform_IMR[IDX_WF(diagnostic_split,TIME)]));
 """
 
     if output_waveform:
         body += r"""
-// Step TBD: Print the resulting IMR waveform to stdout.
+// Step 11: Print the IMR waveform.
 for (size_t i = 0; i < commondata.nsteps_IMR; i++) {
     printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR[IDX_WF(i,TIME)])
     , creal(commondata.waveform_IMR[IDX_WF(i,STRAIN22)]), cimag(commondata.waveform_IMR[IDX_WF(i,STRAIN22)]));
-}
+} // END LOOP: IMR waveform samples
 """
 
     if output_commondata:
@@ -333,7 +421,10 @@ BHaH.seobnr.utils.integration_stencil.register_CFunction_integration_stencil()
 BHaH.seobnr.utils.cumulative_integration.register_CFunction_cumulative_integration()
 
 # register SEOBNRv5 coefficients
-BHaH.seobnr.SEOBNRv5_quasi_precessing_spin_coefficients.register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients()
+BHaH.seobnr.SEOBNRv5_aligned_spin_coefficients.register_CFunction_SEOBNRv5_evaluate_l2m2_qnm()
+BHaH.seobnr.SEOBNRv5_quasi_precessing_spin_coefficients.register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients(
+    use_projected_attachment_default
+)
 
 # register h_NR fits
 BHaH.seobnr.SEOBNRv5_aligned_spin_hNR_fits_at_t_attach.register_Cfunction_SEOBNRv5_aligned_spin_hNR_fits_at_t_attach()
@@ -342,9 +433,6 @@ BHaH.seobnr.SEOBNRv5_aligned_spin_omegaNR_fits_at_t_attach.register_Cfunction_SE
 # register initial condition routines
 BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_multidimensional_root_wrapper.register_CFunction_SEOBNRv5_multidimensional_root_wrapper()
 BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
-# SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS()
-# SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS()
-# SEOBNRv5_aligned_spin_initial_conditions_conservative.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative()
 BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf()
 BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_radial_momentum_condition.register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition()
 BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_initial_conditions_dissipative.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative()
@@ -353,6 +441,7 @@ BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_initial_conditions_dissipat
 BHaH.seobnr.dynamics.SEOBNRv5_quasi_precessing_spin_angular_momentum.register_CFunction_SEOBNRv5_quasi_precessing_spin_angular_momentum()
 BHaH.seobnr.dynamics.SEOBNRv5_quasi_precessing_spin_dynamics.register_CFunction_SEOBNRv5_quasi_precessing_spin_dynamics()
 BHaH.seobnr.dynamics.SEOBNRv5_quasi_precessing_spin_equations.register_CFunction_SEOBNRv5_quasi_precessing_spin_equations()
+BHaH.seobnr.SEOBNRv5_projected_attachment_reference.register_CFunction_SEOBNRv5_projected_attachment_reference()
 
 # register PA integration routines
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_pa_integration.register_CFunction_SEOBNRv5_aligned_spin_pa_integration()
@@ -384,7 +473,7 @@ BHaH.seobnr.SEOBNRv5_coprecessing_angles.register_CFunction_SEOBNRv5_coprecessin
 )
 BHaH.seobnr.SEOBNRv5_coprecessing_rotations.register_CFunction_SEOBNRv5_coprecessing_rotations()
 
-# register additional commondata parameters needed for SEBOBv2 (but not needed for SEOBNR)
+# Register the SEBOBv2-specific BOB peak-time parameter.
 par.register_CodeParameters(
     "REAL",
     __name__,
@@ -395,13 +484,6 @@ par.register_CodeParameters(
 )
 
 if __name__ == "__main__":
-    # retaining this print statement as we will want to add usage options (aligned or precessing, etc) in the future along with help statements
-    #    print(
-    #        """Generating a compileable C project to calculate gravitational waveforms using the SEOBNRv5 and BOB model!
-    # To learn more about usage options, run: python nrpy/example/seobnrv5_aligned_spin_inspiral.py -h
-    # """
-    #    )
-
     # Register some functions/code parameters based on input flags
     BHaH.seobnr.nqc_corrections.SEBOBv2_NQC_corrections.register_CFunction_SEBOBv2_NQC_corrections()
     BHaH.seobnr.nqc_corrections.BOB_v2_NQC_rhs.register_CFunction_BOB_v2_NQC_rhs()
@@ -519,6 +601,7 @@ register_CFunction_main_c(
     output_commondata_flag,
     validate_sandbox_flag,
     enable_sandbox_diagnostics_flag,
+    enable_projected_reference_diagnostics,
 )
 
 addl_cflags = ["$(shell gsl-config --cflags)"]

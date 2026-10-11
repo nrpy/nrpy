@@ -38,6 +38,16 @@ def register_CFunction_SEOBNRv5_aligned_spin_pa_integration() -> (
         commondata=True,
         add_to_parfile=False,
     )
+    par.register_CodeParameters(
+        "REAL",
+        __name__,
+        ["t_dynamics_raw_origin"],
+        [0.0],
+        commondata=True,
+        add_to_parfile=False,
+        add_to_set_CodeParameters_h=False,
+        descriptions=["Raw ODE time origin relative to the requested waveform start."],
+    )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     prefunc = """
 #include <gsl/gsl_errno.h>
@@ -64,6 +74,7 @@ const REAL chi_eff = (m1 * chi1 + m2 * chi2) / (m1 + m2);
 const REAL r_final_prefactor = 2.7 + chi_eff * (1.0 - 4.0 * nu);
 REAL final_r = fmax(10.0, r_final_prefactor * commondata->r_ISCO);
 REAL initial_r = commondata->r;
+commondata->t_dynamics_raw_origin = 0.0;
 
 // Step 0: Skip post-adiabatic integration when the binary starts at or inside final_r.
 // The radial grid runs from initial_r down to final_r, so there is nothing to integrate;
@@ -246,6 +257,7 @@ commondata->r = r[nsteps - 1];
 commondata->phi = phi[nsteps - 1];
 commondata->prstar = prstar[nsteps - 1];
 commondata->pphi = pphi[nsteps - 1];
+commondata->t_dynamics_raw_origin = t[nsteps - 1];
 SEOBNRv5_aligned_spin_ode_integration(commondata);
 
 // Step 8: Merge PA dynamics with ODE dynamics, avoiding the duplicate interface point.
