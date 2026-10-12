@@ -1,6 +1,6 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/interpolation_kernel.py
 r"""
-Generates the CUDA/OpenMP function for tensor interpolation.
+Generate the CUDA/OpenMP function for symbolic geometry evaluation.
 
 This module registers a C function that runs the parallel evaluation of the
 spacetime metric and Christoffel symbols for a photon chunk. It generates a CUDA
@@ -21,13 +21,13 @@ import nrpy.params as par
 
 def interpolation_kernel(spacetime_name: str) -> None:
     r"""
-    Register the CUDA/OpenMP function for tensor interpolation.
+    Register the CUDA/OpenMP function for symbolic geometry evaluation.
 
     The generated parallel calculation reads the photon state vector $f^{\mu}$,
     evaluates the metric and connection components using the specified spacetime
     evaluators, and writes the resulting tensors to output arrays.
 
-    :param spacetime_name: The string identifier for the target numerical spacetime.
+    :param spacetime_name: The string identifier for the target symbolic spacetime.
     :raises ValueError: If the provided spacetime_name string is empty.
     """
     if not spacetime_name:
@@ -104,7 +104,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
     for (comp = 0; comp < 9; ++comp) {{
         // Load one photon's state-vector components into a local array.
         f_local[comp] = d_f_bundle[IDX_F(comp, i)]; // Component of the photon state vector $f^{{\mu}}$.
-    }} // END LOOP: for comp over 9 state vector components
+    }} // END LOOP: state bundle components
 
     //==========================================
     // METRIC TENSOR EVALUATION
@@ -119,7 +119,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
     for (comp = 0; comp < 10; ++comp) {{
         // Write the computed metric components $g_{{\mu\nu}}$ to the output array.
         d_metric_bundle[IDX_METRIC(comp, i)] = metric_local[comp]; // Component of the spacetime metric $g_{{\mu\nu}}$.
-    }} // END LOOP: for comp over 10 metric components
+    }} // END LOOP: metric bundle components
 
     //==========================================
     // CHRISTOFFEL CONNECTION EVALUATION
@@ -138,7 +138,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
         for (comp = 0; comp < 40; ++comp) {{
             // Write the computed connection components $\Gamma^{{\alpha}}_{{\beta\gamma}}$ to the output array.
             d_connection_bundle[IDX_CONN(comp, i)] = Gamma_local[comp];
-        }} // END LOOP: for comp over 40 connection components
+        }} // END LOOP: connection bundle components
     }} // END IF: d_connection_bundle is not NULL
 
     //==========================================

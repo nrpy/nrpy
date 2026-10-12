@@ -64,21 +64,11 @@ def calculate_ode_rhs_massive(
             )
 
     preamble_lines.append(
-        "\n  //==========================================\n  // METRIC AND CONNECTION UNPACKING\n  //=========================================="
+        "\n  //==========================================\n  // CONNECTION UNPACKING\n  //=========================================="
     )
     preamble_lines.append(
-        "  // Extract pre-computed metric $g_{\\mu\\nu}$ and Christoffel symbols $\\Gamma^\\alpha_{\\mu\\nu}$."
+        "  // Extract pre-computed Christoffel symbols $\\Gamma^\\alpha_{\\mu\\nu}$."
     )
-
-    curr_idx = 0
-    for m in range(4):
-        for n in range(m, 4):
-            comp_name = f"metric_g4DD{m}{n}"
-            if comp_name in used_symbol_names:
-                preamble_lines.append(
-                    f"  const double {comp_name} = metric_local[{curr_idx}]; // Unpack metric component $g_{{{m}{n}}}$."
-                )
-            curr_idx += 1
 
     curr_idx = 0
     for a in range(4):
@@ -109,7 +99,6 @@ def calculate_ode_rhs_massive(
     organize intermediate values during the calculation.
 
     @param f_local Local state vector $[t, x, y, z, u^t, u^x, u^y, u^z]$.
-    @param metric_local Thread-local flattened metric array $g_{\mu\nu}$.
     @param Gamma_local Thread-local flattened Christoffel symbol array $\Gamma^\mu_{\alpha\beta}$.
     @param k_local The computed derivatives $dx^\mu/d\tau$ and $du^\mu/d\tau$ stored in thread-local format."""
 
@@ -119,7 +108,6 @@ def calculate_ode_rhs_massive(
 
     params = (
         "const double *restrict f_local, "
-        "const double *restrict metric_local, "
         "const double *restrict Gamma_local, "
         "double *restrict k_local"
     )

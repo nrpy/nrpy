@@ -25,10 +25,10 @@ serialized point indices before reallocating and restoring `y_n_gfs`.
 raytracing-data export, registers the top-level `_register_CFunction_diagnostics`
 driver, and then registers per-coordinate nearest-diagnostic and volume-element
 helpers. Raytracing export is deliberately narrow: it rejects CUDA generation,
-requires `enable_rfm_precompute=True`, requires
-`enable_RbarDD_gridfunctions=True`, allows exactly one coordinate system, and
-currently supports only `Cartesian` and `Spherical`; the generated exporter also
-aborts unless `commondata->NUMGRIDS == 1`.
+allows exactly one generated coordinate system, and aborts unless
+`commondata->NUMGRIDS == 1`. Plain `g4DD` output needs no RHS payload;
+`g4DD_d0`, `GammaUDD`, and `all` require reference-metric precomputation and
+the Ricci/RHS setup supplied by `enable_RbarDD_gridfunctions=True`.
 
 `diagnostics()` is called once per timestep. Its cadence test is time-based:
 `fabs(round(time / diagnostics_output_every) * diagnostics_output_every - time)
@@ -121,18 +121,29 @@ Claim evidence:
 Raytracing output is an optional diagnostics-side stage-1 export.
 `output_raytracing_data` writes a time-stamped binary stage-1 payload through a
 unique temporary sibling and installs it with `link()` so an existing final file
-is not overwritten. Before writing payload records it refreshes same-slice
-Ricci/RHS data with `Ricci_eval(...)` and `rhs_eval(...)`, then evaluates final
-Cartesian coordinates, the ten unique covariant four-metric components, and the
-forty unique four-Christoffel components at interior logical-grid points. The
+is not overwritten. For `g4DD_d0`, `GammaUDD`, and `all`, it first refreshes
+same-slice Ricci/RHS data with `Ricci_eval(...)` and `rhs_eval(...)`. The
+mode-selected payload contains Cartesian coordinates and the ten unique
+covariant four-metric components, plus ten metric time derivatives for
+`g4DD_d0`, forty four-Christoffel components for `GammaUDD`, or both output
+families when `all` is selected. Coordinates are filled over the full logical
+grid; tensor expressions are evaluated on interior points, after which pure
+outer ghost records are extrapolated and inner ghost records are copied from
+their mapped `bcstruct` sources. The
 header records binary64, little-endian, format-version, coordinate-system,
 conformal-factor convention, logical-grid extents, offsets, component names,
-and that ghost zones are excluded. `combine_raytracing_time_slices.py` is the
+and that the payload includes ghost zones. `combine_raytracing_time_slices.py` is the
 stage-2 containerizer: it strictly parses and validates stage-1 files, sorts
 them by physical simulation time, validates compatibility and unique times,
 optionally records coordinate-table and axisymmetry metadata, then atomically
 writes a read-only combined container. It copies stage-1 point payloads; it does
 not recompute metrics, Christoffels, transforms, or a true spatial index.
+
+Claim evidence:
+- Claim: Raytracing export is single-grid host/OpenMP output with mode-specific `g4DD`, `g4DD_d0`, and `GammaUDD` payloads; it evaluates tensors on the interior and fills outer and inner ghost records through extrapolation and `bcstruct` mapping before serialization.
+- Role: generated evidence
+- Deciding authority: `nrpy/infrastructures/BHaH/diagnostics/output_raytracing_data.py` — `register_CFunction_output_raytracing_data`
+- Corroboration: `nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py` — stage-1 parsing and combined-container writing
 
 `progress_indicator` registers `start_wallclock_time` and
 `output_progress_every`. Generated C initializes the wall-clock reference at
