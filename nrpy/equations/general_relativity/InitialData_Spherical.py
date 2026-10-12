@@ -324,8 +324,16 @@ class InitialData_Spherical:
         # Define math symbols
         self.r, self.th, self.ph = sp.symbols("r th ph", real=True)
         r, th, ph = self.r, self.th, self.ph
+
         t = sp.symbols("t", real=True)
-        Amp, lam = sp.symbols("Amp lam", real=True)
+        
+        # Register wave parameters for generated C code
+        Amp, lam, t0 = par.register_CodeParameters(
+            "REAL",
+            __name__,
+            ["TW_Amp", "TW_lambda", "TW_t0"],
+            [1.0e-6, 1.0, 0.0],
+        )
 
         # Define retarded/advanced time arguments
         u = t - r  # outgoing
@@ -439,6 +447,17 @@ class InitialData_Spherical:
         KDD[1][1] = r**2 * (sp.Rational(1, 4) * A_dot_use * Y - sp.Rational(3, 2) * C_dot_use * s**2)
         KDD[1][2] = KDD[2][1] = sp.sympify(0)
         KDD[2][2] = r**2 * s**2 * (sp.Rational(1, 4) * A_dot_use * Y + sp.Rational(3, 2) * C_dot_use * s**2)
+
+        # Evaluate the wave on the chosen initial time slice
+        gammaDD = [
+            [component.subs(t, t0) for component in row]
+            for row in gammaDD
+        ]
+
+        KDD = [
+            [component.subs(t, t0) for component in row]
+            for row in KDD
+        ]
 
         # Teukolsky-wave gauge quantities
         alpha = sp.sympify(1)
