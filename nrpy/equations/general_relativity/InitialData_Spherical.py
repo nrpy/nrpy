@@ -363,15 +363,11 @@ class InitialData_Spherical:
         A_OUT = 24 * Amp * ((F2 / r**3) + (3 * F1 / r**4) + (3 * F0 / r**5))
         B_OUT = -4 * Amp * ((F3 / r**2) + (3 * F2 / r**3) + (6 * F1 / r**4) + (6 * F0 / r**5))
         C_OUT = 2 * Amp * ((F4 / r) + (2 * F3 / r**2) + (3 * F2 / r**3) + (3 * F1 / r**4) + (3 * F0 / r**5))
-        K_rad_OUT = -4 * Amp * ((F2 / r**2) + (3 * F1 / r**3) + (3 * F0 / r**4))
-        L_rad_OUT = 2 * Amp * ((F3 / r) + (2 * F2 / r**2) + (3 * F1 / r**3) + (3 * F0 / r**4))
 
         # Calculate ingoing radial components
         A_IN = 24 * Amp * ((-p2 / r**3) + (3 * p1 / r**4) - (3 * p0 / r**5))
         B_IN = 4 * Amp * ((-p3 / r**2) + (3 * p2 / r**3) - (6 * p1 / r**4) + (6 * p0 / r**5))
         C_IN = 2 * Amp * ((-p4 / r) + (2 * p3 / r**2) - (3 * p2 / r**3) + (3 * p1 / r**4) - (3 * p0 / r**5))
-        K_rad_IN = 4 * Amp * ((p2 / r**2) - (3 * p1 / r**3) + (3 * p0 / r**4))
-        L_rad_IN = 2 * Amp * ((p3 / r) - (2 * p2 / r**2) + (3 * p1 / r**3) - (3 * p0 / r**4))
 
         # Time derivatives for outgoing wave
         A_dot_OUT = 24 * Amp * ((F3 / r**3) + (3 * F2 / r**4) + (3 * F1 / r**5))
@@ -387,8 +383,6 @@ class InitialData_Spherical:
         A_REG = A_OUT + A_IN
         B_REG = B_OUT + B_IN
         C_REG = C_OUT + C_IN
-        K_rad_REG = K_rad_OUT + K_rad_IN
-        L_rad_REG = L_rad_OUT + L_rad_IN
 
         # Regular time derivatives
         A_dot_REG = A_dot_OUT + A_dot_IN
