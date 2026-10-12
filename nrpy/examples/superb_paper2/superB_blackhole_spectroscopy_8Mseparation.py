@@ -39,9 +39,9 @@ from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import (
 )
 from nrpy.infrastructures.superB import initial_data, timestepping_chare
 
-register_CFunction__Cart_to_xx_and_nearest_i0i1i2 = cast(
+register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid = cast(
     Callable[[str], object],
-    getattr(xx_tofrom_Cart, "register_CFunction__Cart_to_xx_and_nearest_i0i1i2"),
+    xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid,
 )
 register_CFunction_xx_to_Cart = xx_tofrom_Cart.register_CFunction_xx_to_Cart
 
@@ -135,8 +135,8 @@ outer_bcs_type = "radiation"
 # Number of chares, Nchare0, Nchare1, and Nchare2, in each direction,
 # should be chosen such that Nxx0/Nchare0, Nxx1/Nchare1, Nxx2/Nchare2 are integers greater than NGHOSTS,
 # NGHOSTS is fd_order/2 + 1 because upwinding requires one additional ghost zone
-par.adjust_CodeParam_default("Nchare0", 16)
-par.adjust_CodeParam_default("Nchare1", 16)
+par.adjust_CodeParam_default("Nchare0", 12)
+par.adjust_CodeParam_default("Nchare1", 12)
 par.adjust_CodeParam_default("Nchare2", 12)
 
 BHaHAHA_subdir = "BHaHAHA"
@@ -368,7 +368,7 @@ superB.MoL.register_CFunctions(
     enable_curviBCs=True,
     enable_psi4=enable_psi4,
 )
-register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(CoordSystem)
 register_CFunction_xx_to_Cart(CoordSystem)
 BHaH.read_checkpoint.register_CFunction_read_checkpoint()
 BHaH.write_checkpoint.register_CFunction_write_checkpoint(

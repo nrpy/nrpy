@@ -39,9 +39,9 @@ from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import (
 )
 from nrpy.infrastructures.superB import initial_data, timestepping_chare
 
-register_CFunction__Cart_to_xx_and_nearest_i0i1i2 = cast(
+register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid = cast(
     Callable[[str], object],
-    getattr(xx_tofrom_Cart, "register_CFunction__Cart_to_xx_and_nearest_i0i1i2"),
+    xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid,
 )
 register_CFunction_xx_to_Cart = xx_tofrom_Cart.register_CFunction_xx_to_Cart
 
@@ -347,7 +347,7 @@ superB.MoL.register_CFunctions(
     enable_curviBCs=True,
     enable_psi4=enable_psi4,
 )
-register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(CoordSystem)
 register_CFunction_xx_to_Cart(CoordSystem)
 BHaH.read_checkpoint.register_CFunction_read_checkpoint()
 BHaH.write_checkpoint.register_CFunction_write_checkpoint(

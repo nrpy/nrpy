@@ -11,7 +11,7 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 import re
-from typing import Any, Dict, List, Tuple, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union, cast
 
 import sympy as sp
 
@@ -20,6 +20,12 @@ import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.helpers.cached_functions import cached_simplify
 from nrpy.helpers.generic import superfast_uniq
+
+if TYPE_CHECKING:
+    from nrpy.equations.generalrfm.fisheye import (
+        GeneralRFMFisheye,
+        GeneralRFMSpheroidalFisheye,
+    )
 
 par.register_param(str, __name__, "CoordSystem_to_register_CodeParameters", "All")
 
@@ -188,12 +194,28 @@ class ReferenceMetric:
         ) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]]]:
             # Step 2.a: First construct Jacobian matrix:
 
-            Jac_dUCart_dDrfmUD: List[List[sp.Expr]] = [
-                [sp.sympify(0) for _ in range(3)] for _ in range(3)
-            ]
-            for i in range(3):
-                for j in range(3):
-                    Jac_dUCart_dDrfmUD[i][j] = sp.diff(self.xx_to_Cart[i], self.xx[j])
+            provider_jac = None
+            if self.CoordSystem.startswith("GeneralRFM_spheroidal_fisheyeN"):
+                provider = getattr(self, "general_rfm_provider", None)
+                provider_jac = getattr(provider, "dCart_dxxUD", None)
+
+            if provider_jac is not None:
+                Jac_dUCart_dDrfmUD = cast(
+                    List[List[sp.Expr]],
+                    [
+                        [sp.sympify(provider_jac[i][j]) for j in range(3)]
+                        for i in range(3)
+                    ],
+                )
+            else:
+                Jac_dUCart_dDrfmUD = [
+                    [sp.sympify(0) for _ in range(3)] for _ in range(3)
+                ]
+                for i in range(3):
+                    for j in range(3):
+                        Jac_dUCart_dDrfmUD[i][j] = sp.diff(
+                            self.xx_to_Cart[i], self.xx[j]
+                        )
             Jac_dUrfm_dDCartUD, dummyDET = ixp.generic_matrix_inverter3x3(
                 Jac_dUCart_dDrfmUD
             )
@@ -209,10 +231,45 @@ class ReferenceMetric:
             self: ReferenceMetric,
         ) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]]]:
             # Step 2.a: First construct Jacobian matrix:
-            Jac_dUSph_dDrfmUD = ixp.zerorank2()
-            for i in range(3):
-                for j in range(3):
-                    Jac_dUSph_dDrfmUD[i][j] = sp.diff(self.xxSph[i], self.xx[j])
+            #
+            # GeneralRFM providers may define xx->Cart using stabilized helper
+            # functions (e.g. log1p/expm1-based fisheye kernels). Differentiating
+            # xxSph = (r, theta, phi)(Cart(xx)) symbolically can reintroduce
+            # unevaluated Derivative objects through acos/atan2. Build the
+            # spherical Jacobian analytically from dCart/dxx instead.
+            provider_jac = None
+            if self.CoordSystem.startswith("GeneralRFM_spheroidal_fisheyeN"):
+                provider = getattr(self, "general_rfm_provider", None)
+                provider_jac = getattr(provider, "dCart_dxxUD", None)
+
+            if provider_jac is not None:
+                xCart = self.xx_to_Cart[0]
+                yCart = self.xx_to_Cart[1]
+                zCart = self.xx_to_Cart[2]
+                rho2 = xCart**2 + yCart**2
+                rho = sp.sqrt(rho2)
+                rSph = sp.sqrt(rho2 + zCart**2)
+                dUSph_dUCartUD = [
+                    [xCart / rSph, yCart / rSph, zCart / rSph],
+                    [
+                        xCart * zCart / (rho * rSph**2),
+                        yCart * zCart / (rho * rSph**2),
+                        -rho / rSph**2,
+                    ],
+                    [-yCart / rho2, xCart / rho2, sp.sympify(0)],
+                ]
+                Jac_dUSph_dDrfmUD = ixp.zerorank2()
+                for i in range(3):
+                    for j in range(3):
+                        Jac_dUSph_dDrfmUD[i][j] = sum(
+                            dUSph_dUCartUD[i][mu] * provider_jac[mu][j]
+                            for mu in range(3)
+                        )
+            else:
+                Jac_dUSph_dDrfmUD = ixp.zerorank2()
+                for i in range(3):
+                    for j in range(3):
+                        Jac_dUSph_dDrfmUD[i][j] = sp.diff(self.xxSph[i], self.xx[j])
             Jac_dUrfm_dDSphUD, dummyDET = ixp.generic_matrix_inverter3x3(
                 Jac_dUSph_dDrfmUD
             )
@@ -1792,24 +1849,46 @@ class ReferenceMetric:
 
         # Provider metadata for downstream infrastructure.
         self.general_rfm_provider_name = "identity_placeholder"
-        self.general_rfm_provider = None
+        self.general_rfm_provider: Optional[
+            Union["GeneralRFMFisheye", "GeneralRFMSpheroidalFisheye"]
+        ] = None
         self.general_rfm_provider_meta: Dict[str, Any] = {}
 
         # If this is a known GeneralRFM provider, override the default map.
-        if self.CoordSystem.startswith("GeneralRFM_fisheyeN"):
+        if self.CoordSystem.startswith(
+            ("GeneralRFM_fisheyeN", "GeneralRFM_spheroidal_fisheyeN")
+        ):
             from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
 
-            match = re.match(r"GeneralRFM_fisheyeN(\d+)$", self.CoordSystem)
-            if not match:
-                raise ValueError(
-                    f"GeneralRFM CoordSystem {self.CoordSystem} not supported (expected GeneralRFM_fisheyeN*)."
+            if self.CoordSystem.startswith("GeneralRFM_fisheyeN"):
+                match = re.match(r"GeneralRFM_fisheyeN(\d+)$", self.CoordSystem)
+                if not match:
+                    raise ValueError(
+                        f"GeneralRFM CoordSystem {self.CoordSystem} not supported (expected GeneralRFM_fisheyeN*)."
+                    )
+                num_transitions = int(match.group(1))
+                provider = generalrfm_fisheye.build_fisheye(num_transitions)
+                for i in range(3):
+                    self.xx_to_Cart[i] = provider.xx_to_CartU[i]
+                self.general_rfm_provider_name = "fisheye"
+                self.general_rfm_provider = provider
+            else:
+                spheroidal_prefix = "GeneralRFM_spheroidal_fisheyeN"
+                num_transitions_str = self.CoordSystem[len(spheroidal_prefix) :]
+                if num_transitions_str.endswith("\n"):
+                    num_transitions_str = num_transitions_str[:-1]
+                if not num_transitions_str.isdecimal():
+                    raise ValueError(
+                        f"GeneralRFM CoordSystem {self.CoordSystem} not supported (expected GeneralRFM_spheroidal_fisheyeN*)."
+                    )
+                num_transitions = int(num_transitions_str)
+                spheroidal_provider = generalrfm_fisheye.build_spheroidal_fisheye(
+                    num_transitions
                 )
-            num_transitions = int(match.group(1))
-            provider = generalrfm_fisheye.build_fisheye(num_transitions)
-            for i in range(3):
-                self.xx_to_Cart[i] = provider.xx_to_CartU[i]
-            self.general_rfm_provider_name = "fisheye"
-            self.general_rfm_provider = provider
+                for i in range(3):
+                    self.xx_to_Cart[i] = spheroidal_provider.xx_to_CartU[i]
+                self.general_rfm_provider_name = "spheroidal_fisheye"
+                self.general_rfm_provider = spheroidal_provider
             self.general_rfm_provider_meta = {"num_transitions": num_transitions}
 
         # Define spherical coordinates from the Cartesian map
