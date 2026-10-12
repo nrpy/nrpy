@@ -29,114 +29,121 @@ __device__ static void auxevol_gfs_single_point_gpu(const size_t streamid, const
   const REAL bare_mass_1 = d_commondata.bare_mass_1;
   const REAL zPunc = d_commondata.zPunc;
 
-  const REAL tmp0 = ((AMAX) * (AMAX));
-  const REAL tmp1 = (1.0 / (SINHWAA));
-  const REAL tmp10 = cos(xx2);
-  const REAL tmp12 = sin(xx1);
-  const REAL tmp16 = sin(xx2);
-  const REAL tmp2 = exp(tmp1) - exp(-tmp1);
-  const REAL tmp11 = ((tmp10) * (tmp10));
-  const REAL tmp13 = ((tmp12) * (tmp12));
-  const REAL tmp3 = (1.0 / ((tmp2) * (tmp2)));
-  const REAL tmp5 = exp(tmp1 * xx0) - exp(-tmp1 * xx0);
-  const REAL tmp23 = (1.0 / (tmp2));
-  const REAL tmp6 = ((tmp5) * (tmp5));
-  const REAL tmp26 = AMAX * tmp12 * tmp23 * tmp5;
-  const REAL tmp7 = tmp0 * tmp3 * tmp6;
-  const REAL tmp27 = tmp10 * tmp26;
-  const REAL tmp32 = tmp16 * tmp26;
-  const REAL tmp8 = sqrt(((bScale) * (bScale)) + tmp7) * cos(xx1);
-  const REAL tmp14 = tmp13 * tmp7;
-  const REAL tmp57 = AMAX * S1_y * tmp10 * tmp12 * tmp23 * tmp5 - S1_x * tmp32;
-  const REAL tmp58 = AMAX * S0_y * tmp10 * tmp12 * tmp23 * tmp5 - S0_x * tmp32;
-  const REAL tmp9 = tmp8 + zPunc;
-  const REAL tmp15 = tmp11 * tmp14;
-  const REAL tmp17 = tmp14 * ((tmp16) * (tmp16));
-  const REAL tmp20 = -tmp8 + zPunc;
-  const REAL tmp46 = 6 * tmp10 * tmp14 * tmp16;
-  const REAL tmp28 = S1_x * tmp9 - S1_z * tmp27;
-  const REAL tmp33 = S0_y * tmp20 + S0_z * tmp32;
-  const REAL tmp61 = -3 * tmp8 - 3 * zPunc;
-  const REAL tmp62 = -3 * tmp8 + 3 * zPunc;
-  const REAL tmp19 = tmp15 + tmp17 + ((tmp9) * (tmp9));
-  const REAL tmp22 = tmp15 + tmp17 + ((tmp20) * (tmp20));
-  const REAL tmp38 = -S1_y * tmp9 + S1_z * tmp32;
-  const REAL tmp40 = -S0_x * tmp20 - S0_z * tmp27;
-  const REAL tmp45 = -1.0 / 4.0 * P1_x * tmp27 - 1.0 / 4.0 * P1_y * tmp32 - 1.0 / 4.0 * P1_z * tmp9;
-  const REAL tmp49 = -P0_z * tmp20;
-  const REAL tmp24 = pow(tmp19, -3.0 / 2.0);
-  const REAL tmp25 = pow(tmp22, -3.0 / 2.0);
-  const REAL tmp29 = pow(tmp19, -5.0 / 2.0);
-  const REAL tmp34 = pow(tmp22, -5.0 / 2.0);
-  const REAL tmp50 = -1.0 / 4.0 * P0_x * tmp27 - 1.0 / 4.0 * P0_y * tmp32 - 1.0 / 4.0 * tmp49;
-  const REAL tmp54 = -tmp24 * tmp9;
-  const REAL tmp56 = -tmp20 * tmp25;
-  const REAL tmp64 = -tmp20 * tmp50;
-  const REAL tmp65 = P1_x * tmp24 * tmp27;
-  const REAL tmp66 = P0_x * tmp25 * tmp27;
-  const REAL tmp68 = 4 * tmp29;
-  const REAL tmp73 = 4 * tmp34;
-  const REAL tmp84 = P1_z * tmp24 * tmp9;
-  const REAL tmp89 = 2 * tmp29;
-  const REAL tmp90 = 2 * tmp34;
-  const REAL tmp31 = 3 * tmp27 * tmp29;
-  const REAL tmp36 = 3 * tmp32 * tmp34;
-  const REAL tmp39 = 3 * tmp29 * tmp32;
-  const REAL tmp41 = 3 * tmp27 * tmp34;
-  const REAL tmp53 = (7.0 / 4.0) * tmp20 * tmp25;
-  const REAL tmp70 = tmp29 * tmp57 * tmp61;
-  const REAL tmp75 = tmp34 * tmp58 * tmp62;
-  const REAL tmp79 = tmp29 * tmp45 * tmp61 * tmp9;
-  const REAL tmp81 = -tmp20 * tmp34 * tmp50 * tmp62;
-  const REAL tmp85 = P0_z * tmp20 * tmp25;
-  const REAL tmp93 =
-      -P0_y * tmp25 * tmp32 - P1_y * tmp24 * tmp32 + tmp17 * tmp45 * tmp89 + tmp17 * tmp50 * tmp90 + tmp28 * tmp32 * tmp89 + tmp32 * tmp40 * tmp90;
-  *psi_background = (1.0 / 2.0) * bare_mass_0 / sqrt(tmp22) + (1.0 / 2.0) * bare_mass_1 / sqrt(tmp19) + 1;
-  *ADD_times_AUU =
-      2 * (((3.0 / 2.0) * AMAX * P0_x * tmp12 * tmp16 * tmp23 * tmp25 * tmp5 + (3.0 / 2.0) * AMAX * P0_y * tmp10 * tmp12 * tmp23 * tmp25 * tmp5 +
-            (3.0 / 2.0) * AMAX * P1_x * tmp12 * tmp16 * tmp23 * tmp24 * tmp5 + (3.0 / 2.0) * AMAX * P1_y * tmp10 * tmp12 * tmp23 * tmp24 * tmp5 -
-            tmp28 * tmp31 - tmp29 * tmp45 * tmp46 - tmp33 * tmp36 - tmp34 * tmp46 * tmp50 - tmp38 * tmp39 - tmp40 * tmp41) *
-           ((3.0 / 2.0) * AMAX * P0_x * tmp12 * tmp16 * tmp23 * tmp25 * tmp5 + (3.0 / 2.0) * AMAX * P0_y * tmp10 * tmp12 * tmp23 * tmp25 * tmp5 +
-            (3.0 / 2.0) * AMAX * P1_x * tmp12 * tmp16 * tmp23 * tmp24 * tmp5 + (3.0 / 2.0) * AMAX * P1_y * tmp10 * tmp12 * tmp23 * tmp24 * tmp5 -
-            tmp28 * tmp31 - tmp29 * tmp45 * tmp46 - tmp33 * tmp36 - tmp34 * tmp46 * tmp50 - tmp38 * tmp39 - tmp40 * tmp41)) +
-      2 * (((3.0 / 2.0) * AMAX * P0_z * tmp10 * tmp12 * tmp23 * tmp25 * tmp5 + (3.0 / 2.0) * AMAX * P1_z * tmp10 * tmp12 * tmp23 * tmp24 * tmp5 +
-            AMAX * tmp10 * tmp12 * tmp23 * tmp29 * tmp45 * tmp5 * tmp61 + AMAX * tmp10 * tmp12 * tmp23 * tmp34 * tmp5 * tmp50 * tmp62 - P0_x * tmp53 -
-            1.0 / 4.0 * P0_x * tmp56 - 1.0 / 4.0 * P1_x * tmp24 * tmp9 - 7.0 / 4.0 * P1_x * tmp54 + tmp29 * tmp38 * tmp61 - tmp31 * tmp45 * tmp9 -
-            tmp31 * tmp57 + tmp33 * tmp34 * tmp62 - tmp41 * tmp58 - tmp41 * tmp64) *
-           ((3.0 / 2.0) * AMAX * P0_z * tmp10 * tmp12 * tmp23 * tmp25 * tmp5 + (3.0 / 2.0) * AMAX * P1_z * tmp10 * tmp12 * tmp23 * tmp24 * tmp5 +
-            AMAX * tmp10 * tmp12 * tmp23 * tmp29 * tmp45 * tmp5 * tmp61 + AMAX * tmp10 * tmp12 * tmp23 * tmp34 * tmp5 * tmp50 * tmp62 - P0_x * tmp53 -
-            1.0 / 4.0 * P0_x * tmp56 - 1.0 / 4.0 * P1_x * tmp24 * tmp9 - 7.0 / 4.0 * P1_x * tmp54 + tmp29 * tmp38 * tmp61 - tmp31 * tmp45 * tmp9 -
-            tmp31 * tmp57 + tmp33 * tmp34 * tmp62 - tmp41 * tmp58 - tmp41 * tmp64)) +
-      2 * (((3.0 / 2.0) * AMAX * P0_z * tmp12 * tmp16 * tmp23 * tmp25 * tmp5 + (3.0 / 2.0) * AMAX * P1_z * tmp12 * tmp16 * tmp23 * tmp24 * tmp5 +
-            AMAX * tmp12 * tmp16 * tmp23 * tmp29 * tmp45 * tmp5 * tmp61 + AMAX * tmp12 * tmp16 * tmp23 * tmp34 * tmp5 * tmp50 * tmp62 - P0_y * tmp53 -
-            1.0 / 4.0 * P0_y * tmp56 - 1.0 / 4.0 * P1_y * tmp24 * tmp9 - 7.0 / 4.0 * P1_y * tmp54 + tmp28 * tmp29 * tmp61 + tmp34 * tmp40 * tmp62 -
-            tmp36 * tmp58 - tmp36 * tmp64 - tmp39 * tmp45 * tmp9 - tmp39 * tmp57) *
-           ((3.0 / 2.0) * AMAX * P0_z * tmp12 * tmp16 * tmp23 * tmp25 * tmp5 + (3.0 / 2.0) * AMAX * P1_z * tmp12 * tmp16 * tmp23 * tmp24 * tmp5 +
-            AMAX * tmp12 * tmp16 * tmp23 * tmp29 * tmp45 * tmp5 * tmp61 + AMAX * tmp12 * tmp16 * tmp23 * tmp34 * tmp5 * tmp50 * tmp62 - P0_y * tmp53 -
-            1.0 / 4.0 * P0_y * tmp56 - 1.0 / 4.0 * P1_y * tmp24 * tmp9 - 7.0 / 4.0 * P1_y * tmp54 + tmp28 * tmp29 * tmp61 + tmp34 * tmp40 * tmp62 -
-            tmp36 * tmp58 - tmp36 * tmp64 - tmp39 * tmp45 * tmp9 - tmp39 * tmp57)) +
-      ((-7.0 / 3.0 * P1_z * tmp54 + tmp15 * tmp45 * tmp89 + tmp15 * tmp50 * tmp90 - 1.0 / 3.0 * tmp25 * tmp49 + tmp27 * tmp33 * tmp90 +
-        tmp27 * tmp38 * tmp89 - tmp65 - tmp66 + (4.0 / 3.0) * tmp70 + (4.0 / 3.0) * tmp75 + (4.0 / 3.0) * tmp79 + (4.0 / 3.0) * tmp81 -
-        1.0 / 3.0 * tmp84 - 7.0 / 3.0 * tmp85 + tmp93) *
-       (-7.0 / 3.0 * P1_z * tmp54 + tmp15 * tmp45 * tmp89 + tmp15 * tmp50 * tmp90 - 1.0 / 3.0 * tmp25 * tmp49 + tmp27 * tmp33 * tmp90 +
-        tmp27 * tmp38 * tmp89 - tmp65 - tmp66 + (4.0 / 3.0) * tmp70 + (4.0 / 3.0) * tmp75 + (4.0 / 3.0) * tmp79 + (4.0 / 3.0) * tmp81 -
-        1.0 / 3.0 * tmp84 - 7.0 / 3.0 * tmp85 + tmp93)) +
-      (((7.0 / 6.0) * P1_z * tmp54 - tmp15 * tmp45 * tmp68 - tmp15 * tmp50 * tmp73 + (1.0 / 6.0) * tmp25 * tmp49 - tmp27 * tmp33 * tmp73 -
-        tmp27 * tmp38 * tmp68 + 2 * tmp65 + 2 * tmp66 - 2.0 / 3.0 * tmp70 - 2.0 / 3.0 * tmp75 - 2.0 / 3.0 * tmp79 - 2.0 / 3.0 * tmp81 +
-        (1.0 / 6.0) * tmp84 + (7.0 / 6.0) * tmp85 + tmp93) *
-       ((7.0 / 6.0) * P1_z * tmp54 - tmp15 * tmp45 * tmp68 - tmp15 * tmp50 * tmp73 + (1.0 / 6.0) * tmp25 * tmp49 - tmp27 * tmp33 * tmp73 -
-        tmp27 * tmp38 * tmp68 + 2 * tmp65 + 2 * tmp66 - 2.0 / 3.0 * tmp70 - 2.0 / 3.0 * tmp75 - 2.0 / 3.0 * tmp79 - 2.0 / 3.0 * tmp81 +
-        (1.0 / 6.0) * tmp84 + (7.0 / 6.0) * tmp85 + tmp93)) +
-      ((2 * AMAX * P0_y * tmp12 * tmp16 * tmp23 * tmp25 * tmp5 + 2 * AMAX * P1_y * tmp12 * tmp16 * tmp23 * tmp24 * tmp5 +
-        2 * AMAX * tmp10 * tmp12 * tmp23 * tmp29 * tmp38 * tmp5 + 2 * AMAX * tmp10 * tmp12 * tmp23 * tmp33 * tmp34 * tmp5 + P0_z * tmp20 * tmp25 -
-        P1_z * tmp24 * tmp9 + 2 * tmp0 * tmp11 * tmp13 * tmp29 * tmp3 * tmp45 * tmp6 + 2 * tmp0 * tmp11 * tmp13 * tmp3 * tmp34 * tmp50 * tmp6 -
-        tmp17 * tmp45 * tmp68 - tmp17 * tmp50 * tmp73 - tmp28 * tmp32 * tmp68 - tmp32 * tmp40 * tmp73 - tmp65 - tmp66 - 2.0 / 3.0 * tmp70 -
-        2.0 / 3.0 * tmp75 - 2.0 / 3.0 * tmp79 - 2.0 / 3.0 * tmp81) *
-       (2 * AMAX * P0_y * tmp12 * tmp16 * tmp23 * tmp25 * tmp5 + 2 * AMAX * P1_y * tmp12 * tmp16 * tmp23 * tmp24 * tmp5 +
-        2 * AMAX * tmp10 * tmp12 * tmp23 * tmp29 * tmp38 * tmp5 + 2 * AMAX * tmp10 * tmp12 * tmp23 * tmp33 * tmp34 * tmp5 + P0_z * tmp20 * tmp25 -
-        P1_z * tmp24 * tmp9 + 2 * tmp0 * tmp11 * tmp13 * tmp29 * tmp3 * tmp45 * tmp6 + 2 * tmp0 * tmp11 * tmp13 * tmp3 * tmp34 * tmp50 * tmp6 -
-        tmp17 * tmp45 * tmp68 - tmp17 * tmp50 * tmp73 - tmp28 * tmp32 * tmp68 - tmp32 * tmp40 * tmp73 - tmp65 - tmp66 - 2.0 / 3.0 * tmp70 -
-        2.0 / 3.0 * tmp75 - 2.0 / 3.0 * tmp79 - 2.0 / 3.0 * tmp81));
+  static const REAL _Integer_1 = 1;
+  static const REAL _Rational_1_2 = 1.0 / 2.0;
+  static const REAL _Rational_7_3 = 7.0 / 3.0;
+  static const REAL _Rational_1_3 = 1.0 / 3.0;
+  static const REAL _Rational_4_3 = 4.0 / 3.0;
+  static const REAL _Integer_3 = 3;
+  static const REAL _Rational_1_4 = 1.0 / 4.0;
+  static const REAL _Integer_2 = 2;
+  static const REAL _Rational_2_3 = 2.0 / 3.0;
+  static const REAL _Rational_1_6 = 1.0 / 6.0;
+  static const REAL _Rational_7_6 = 7.0 / 6.0;
+  static const REAL _Integer_4 = 4;
+  static const REAL _Rational_3_2 = 3.0 / 2.0;
+  static const REAL _Integer_6 = 6;
+  static const REAL _Rational_7_4 = 7.0 / 4.0;
+  const REAL tmp0 = (1.0 / (SINHWAA));
+  const REAL tmp7 = cos(xx2);
+  const REAL tmp8 = sin(xx1);
+  const REAL tmp11 = sin(xx2);
+  const REAL tmp1 = exp(tmp0) - exp(-tmp0);
+  const REAL tmp3 = exp(tmp0 * xx0) - exp(-tmp0 * xx0);
+  const REAL tmp18 = (1.0 / (tmp1));
+  const REAL tmp4 = ((AMAX) * (AMAX)) * ((tmp3) * (tmp3)) / ((tmp1) * (tmp1));
+  const REAL tmp19 = AMAX * tmp18 * tmp3 * tmp8;
+  const REAL tmp5 = sqrt(((bScale) * (bScale)) + tmp4) * cos(xx1);
+  const REAL tmp9 = tmp4 * ((tmp8) * (tmp8));
+  const REAL tmp20 = tmp19 * tmp7;
+  const REAL tmp22 = tmp11 * tmp19;
+  const REAL tmp6 = tmp5 + zPunc;
+  const REAL tmp10 = ((tmp7) * (tmp7)) * tmp9;
+  const REAL tmp12 = ((tmp11) * (tmp11)) * tmp9;
+  const REAL tmp15 = -tmp5 + zPunc;
+  const REAL tmp52 = AMAX * S1_y * tmp18 * tmp3 * tmp7 * tmp8 - S1_x * tmp22;
+  const REAL tmp55 = AMAX * S0_y * tmp18 * tmp3 * tmp7 * tmp8 - S0_x * tmp22;
+  const REAL tmp76 = _Integer_6 * tmp11 * tmp7 * tmp9;
+  const REAL tmp85 = _Rational_1_4 * tmp22;
+  const REAL tmp88 = _Rational_1_4 * tmp20;
+  const REAL tmp23 = S0_y * tmp15 + S0_z * tmp22;
+  const REAL tmp30 = S1_x * tmp6 - S1_z * tmp20;
+  const REAL tmp14 = tmp10 + tmp12 + ((tmp6) * (tmp6));
+  const REAL tmp17 = tmp10 + tmp12 + ((tmp15) * (tmp15));
+  const REAL tmp27 = -S1_y * tmp6 + S1_z * tmp22;
+  const REAL tmp32 = -S0_x * tmp15 - S0_z * tmp20;
+  const REAL tmp38 = -P0_z * tmp15;
+  const REAL tmp43 = -P1_x * tmp20 - P1_y * tmp22 - P1_z * tmp6;
+  const REAL tmp21 = pow(tmp17, -5.0 / 2.0);
+  const REAL tmp25 = pow(tmp14, -5.0 / 2.0);
+  const REAL tmp35 = pow(tmp14, -3.0 / 2.0);
+  const REAL tmp37 = pow(tmp17, -3.0 / 2.0);
+  const REAL tmp47 = -P0_x * tmp20 - P0_y * tmp22 - tmp38;
+  const REAL tmp39 = P1_z * tmp35 * tmp6 + tmp37 * tmp38;
+  const REAL tmp44 = tmp25 * tmp43;
+  const REAL tmp48 = tmp21 * tmp47;
+  const REAL tmp53 = -tmp25 * tmp6;
+  const REAL tmp56 = tmp15 * tmp21;
+  const REAL tmp63 = tmp15 * tmp37;
+  const REAL tmp64 = -tmp35 * tmp6;
+  const REAL tmp66 = P0_y * tmp22 * tmp37;
+  const REAL tmp67 = P1_y * tmp22 * tmp35;
+  const REAL tmp69 = P0_x * tmp20 * tmp37;
+  const REAL tmp70 = P1_x * tmp20 * tmp35;
+  const REAL tmp82 = -tmp15 * tmp37;
+  const REAL tmp29 = tmp20 * tmp21 * tmp23 + tmp20 * tmp25 * tmp27;
+  const REAL tmp34 = tmp21 * tmp22 * tmp32 + tmp22 * tmp25 * tmp30;
+  const REAL tmp49 = _Integer_2 * tmp12 * tmp44 + _Integer_2 * tmp12 * tmp48;
+  const REAL tmp51 = _Integer_2 * tmp10 * tmp44 + _Integer_2 * tmp10 * tmp48;
+  const REAL tmp58 = tmp43 * tmp53;
+  const REAL tmp61 = tmp47 * tmp56;
+  const REAL tmp65 = P0_z * tmp63 + P1_z * tmp64;
+  const REAL tmp68 = -tmp66 - tmp67;
+  const REAL tmp71 = -tmp69 - tmp70;
+  const REAL tmp87 = -tmp15 * tmp48;
+  const REAL tmp62 = -tmp15 * tmp61;
+  const REAL tmp74 = _Integer_3 * (-_Rational_1_4 * _Rational_2_3 * tmp58 * tmp6 - _Rational_1_4 * _Rational_2_3 * tmp62 -
+                                   _Rational_2_3 * tmp52 * tmp53 - _Rational_2_3 * tmp55 * tmp56) +
+                     _Rational_1_6 * tmp39 + _Rational_7_6 * tmp65;
+  *psi_background = _Integer_1 + _Rational_1_2 * (bare_mass_0 / sqrt(tmp17) + bare_mass_1 / sqrt(tmp14));
+  *ADD_times_AUU = _Integer_2 * (((_Integer_3 * (-tmp20 * tmp21 * tmp32 - tmp20 * tmp25 * tmp30 - tmp21 * tmp22 * tmp23 - tmp22 * tmp25 * tmp27) +
+                                   _Rational_1_4 * (-tmp44 * tmp76 - tmp48 * tmp76) +
+                                   _Rational_3_2 * (P0_x * tmp22 * tmp37 + P0_y * tmp20 * tmp37 + P1_x * tmp22 * tmp35 + P1_y * tmp20 * tmp35)) *
+                                  (_Integer_3 * (-tmp20 * tmp21 * tmp32 - tmp20 * tmp25 * tmp30 - tmp21 * tmp22 * tmp23 - tmp22 * tmp25 * tmp27) +
+                                   _Rational_1_4 * (-tmp44 * tmp76 - tmp48 * tmp76) +
+                                   _Rational_3_2 * (P0_x * tmp22 * tmp37 + P0_y * tmp20 * tmp37 + P1_x * tmp22 * tmp35 + P1_y * tmp20 * tmp35))) +
+                                 ((_Integer_3 * (-tmp20 * tmp21 * tmp55 - tmp20 * tmp25 * tmp52 + tmp23 * tmp56 + tmp27 * tmp53 -
+                                                 tmp44 * tmp6 * tmp88 + tmp58 * tmp88 + tmp61 * tmp88 - tmp87 * tmp88) +
+                                   _Rational_1_4 * (-P0_x * tmp82 - P1_x * tmp35 * tmp6) +
+                                   _Rational_3_2 * (P0_z * tmp20 * tmp37 + P1_z * tmp20 * tmp35) + _Rational_7_4 * (-P0_x * tmp63 - P1_x * tmp64)) *
+                                  (_Integer_3 * (-tmp20 * tmp21 * tmp55 - tmp20 * tmp25 * tmp52 + tmp23 * tmp56 + tmp27 * tmp53 -
+                                                 tmp44 * tmp6 * tmp88 + tmp58 * tmp88 + tmp61 * tmp88 - tmp87 * tmp88) +
+                                   _Rational_1_4 * (-P0_x * tmp82 - P1_x * tmp35 * tmp6) +
+                                   _Rational_3_2 * (P0_z * tmp20 * tmp37 + P1_z * tmp20 * tmp35) + _Rational_7_4 * (-P0_x * tmp63 - P1_x * tmp64))) +
+                                 ((_Integer_3 * (-tmp21 * tmp22 * tmp55 - tmp22 * tmp25 * tmp52 + tmp30 * tmp53 + tmp32 * tmp56 -
+                                                 tmp44 * tmp6 * tmp85 + tmp58 * tmp85 + tmp61 * tmp85 - tmp85 * tmp87) +
+                                   _Rational_1_4 * (-P0_y * tmp82 - P1_y * tmp35 * tmp6) +
+                                   _Rational_3_2 * (P0_z * tmp22 * tmp37 + P1_z * tmp22 * tmp35) + _Rational_7_4 * (-P0_y * tmp63 - P1_y * tmp64)) *
+                                  (_Integer_3 * (-tmp21 * tmp22 * tmp55 - tmp22 * tmp25 * tmp52 + tmp30 * tmp53 + tmp32 * tmp56 -
+                                                 tmp44 * tmp6 * tmp85 + tmp58 * tmp85 + tmp61 * tmp85 - tmp85 * tmp87) +
+                                   _Rational_1_4 * (-P0_y * tmp82 - P1_y * tmp35 * tmp6) +
+                                   _Rational_3_2 * (P0_z * tmp22 * tmp37 + P1_z * tmp22 * tmp35) + _Rational_7_4 * (-P0_y * tmp63 - P1_y * tmp64)))) +
+                   ((_Integer_2 * (tmp29 + tmp66 + tmp67) - _Integer_4 * tmp34 +
+                     _Rational_1_4 * (-_Integer_4 * tmp12 * tmp44 - _Integer_4 * tmp12 * tmp48 + tmp51) + tmp71 + tmp74) *
+                    (_Integer_2 * (tmp29 + tmp66 + tmp67) - _Integer_4 * tmp34 +
+                     _Rational_1_4 * (-_Integer_4 * tmp12 * tmp44 - _Integer_4 * tmp12 * tmp48 + tmp51) + tmp71 + tmp74)) +
+                   ((_Integer_2 * (tmp34 + tmp69 + tmp70) - _Integer_4 * tmp29 +
+                     _Rational_1_4 * (-_Integer_4 * tmp10 * tmp44 - _Integer_4 * tmp10 * tmp48 + tmp49) + tmp68 + tmp74) *
+                    (_Integer_2 * (tmp34 + tmp69 + tmp70) - _Integer_4 * tmp29 +
+                     _Rational_1_4 * (-_Integer_4 * tmp10 * tmp44 - _Integer_4 * tmp10 * tmp48 + tmp49) + tmp68 + tmp74)) +
+                   ((_Integer_2 * (tmp29 + tmp34) - _Rational_1_3 * tmp39 + _Rational_1_4 * (tmp49 + tmp51) +
+                     _Rational_4_3 * (_Integer_3 * _Rational_1_4 * tmp58 * tmp6 + _Integer_3 * _Rational_1_4 * tmp62 + _Integer_3 * tmp52 * tmp53 +
+                                      _Integer_3 * tmp55 * tmp56) -
+                     _Rational_7_3 * tmp65 + tmp68 + tmp71) *
+                    (_Integer_2 * (tmp29 + tmp34) - _Rational_1_3 * tmp39 + _Rational_1_4 * (tmp49 + tmp51) +
+                     _Rational_4_3 * (_Integer_3 * _Rational_1_4 * tmp58 * tmp6 + _Integer_3 * _Rational_1_4 * tmp62 + _Integer_3 * tmp52 * tmp53 +
+                                      _Integer_3 * tmp55 * tmp56) -
+                     _Rational_7_3 * tmp65 + tmp68 + tmp71));
 } // END FUNCTION: auxevol_gfs_single_point_gpu
 
 /**
