@@ -322,7 +322,7 @@ class InitialData_Spherical:
         """Set ADM quantities for an analytic linearized Teukolsky wave."""
         # Define math symbols
         self.r, self.th, self.ph = sp.symbols("r th ph", real=True)
-        r, th, ph = self.r, self.th
+        r, th = self.r, self.th
 
         t = sp.symbols("t", real=True)
         
