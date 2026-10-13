@@ -266,8 +266,15 @@ def py_codegen(
                 )
             )
 
+        # cse_results[1] specifies the varnames in terms of CSE variables.
         # Output assignments follow all temporaries, so only output right-hand sides can read an overwritten name.
-        _check_no_read_after_overwrite(varnames, cse_results[1])
+        output_rhs_exprs = list(cse_results[1])
+        if PCGParams.postproc_substitution_dict:
+            output_rhs_exprs = [
+                apply_substitution_dict(result, PCGParams.postproc_substitution_dict)
+                for result in output_rhs_exprs
+            ]
+        _check_no_read_after_overwrite(varnames, output_rhs_exprs)
 
         # Processing common subexpressions and results from cse_postprocess
         # cse_results[0] contains common subexpression definitions, does not specify varnames.
@@ -278,12 +285,7 @@ def py_codegen(
                 )
             outstring += f"{common_subexpression[0]} = {printer.doprint(common_subexpression[1])}\n"
 
-        # cse_results[1] specifies the varnames in terms of CSE variables.
-        for i, result in enumerate(cse_results[1]):
-            if PCGParams.postproc_substitution_dict:
-                result = apply_substitution_dict(
-                    result, PCGParams.postproc_substitution_dict
-                )
+        for i, result in enumerate(output_rhs_exprs):
             outstring += f"{varnames[i]} = {printer.doprint(result)}\n"
 
         # End of group processing
