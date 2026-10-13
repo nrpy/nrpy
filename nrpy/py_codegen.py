@@ -83,6 +83,26 @@ class PyCodeGen:
         return generate_class_representation()
 
 
+def _check_no_read_after_overwrite(
+    output_names: List[str], rhs_exprs: Sequence[sp.Basic]
+) -> None:
+    """
+    Reject output names that are overwritten before a later assignment reads them.
+
+    :param output_names: Names assigned, in order, by the generated code.
+    :param rhs_exprs: Right-hand sides, in the same order, as printed.
+    :raises ValueError: If an output name is a free symbol of a later right-hand side.
+    """
+    read_names = [{str(s) for s in sp.sympify(r).free_symbols} for r in rhs_exprs]
+    for i, name in enumerate(output_names):
+        for j in range(i + 1, len(rhs_exprs)):
+            if name in read_names[j]:
+                raise ValueError(
+                    f"Output name '{name}' is assigned before the right-hand side of "
+                    f"'{output_names[j]}' reads it as an input or common subexpression."
+                )
+
+
 def py_codegen(
     sympyexpr: Union[
         Sequence[Union[sp.Basic, sp.Expr, sp.Symbol]],
@@ -101,6 +121,7 @@ def py_codegen(
     :raises TypeError: If either `sympyexpr` or `output_varname_str` is a tuple, as tuples can cause issues in this function.
     :raises ValueError: If the length of `sympyexpr` and `output_varname_str` do not match, indicating a mismatch between the number of expressions and output variable names.
     :raises ValueError: Under various conditions within the function that are specific to the configuration provided via `kwargs`, such as incompatible options or unsupported configurations.
+    :raises ValueError: If an output name is assigned before a later right-hand side reads it as an input symbol or common-subexpression temporary, which would give wrong values.
 
     :return: A string containing the generated JAX-compatible Python code.
 
@@ -126,6 +147,18 @@ def py_codegen(
     a = tmp0 + jnp.sin(tmp0)
     b = (1.0/(((x)*(x))))
     c = y/(x + z)
+    <BLANKLINE>
+    >>> py_codegen([x**3 + sp.sin(x**3), x**3], ["tmp0", "b"], verbose=False)
+    Traceback (most recent call last):
+    ...
+    ValueError: Output name 'tmp0' is assigned before the right-hand side of 'b' reads it as an input or common subexpression.
+    >>> py_codegen([x + 1, 2*x], ["x", "y"], verbose=False, enable_cse=False)
+    Traceback (most recent call last):
+    ...
+    ValueError: Output name 'x' is assigned before the right-hand side of 'y' reads it as an input or common subexpression.
+    >>> print(py_codegen([2*x, x + 1], ["y", "x"], verbose=False, enable_cse=False))
+    y = 2*x
+    x = x + 1
     <BLANKLINE>
     """
     # Injected tuples wreak havoc in this function, so check for them & error out if spotted.
@@ -185,11 +218,13 @@ def py_codegen(
     #         just output the SymPy string in the most boring way,
     if not PCGParams.enable_cse:
         # If CSE is disabled:
+        if PCGParams.postproc_substitution_dict:
+            sympyexpr_list = [
+                apply_substitution_dict(expr, PCGParams.postproc_substitution_dict)
+                for expr in sympyexpr_list
+            ]
+        _check_no_read_after_overwrite(output_varname_str, sympyexpr_list)
         for i, expr in enumerate(sympyexpr_list):
-            if PCGParams.postproc_substitution_dict:
-                expr = apply_substitution_dict(
-                    expr, PCGParams.postproc_substitution_dict
-                )
             outstring += f"{output_varname_str[i]} = {printer.doprint(expr)}\n"
     # Step 3b: If CSE enabled, then perform CSE using SymPy and then
     #          resulting JAX code.
@@ -230,6 +265,9 @@ def py_codegen(
                     order=PCGParams.cse_sorting,
                 )
             )
+
+        # Output assignments follow all temporaries, so only output right-hand sides can read an overwritten name.
+        _check_no_read_after_overwrite(varnames, cse_results[1])
 
         # Processing common subexpressions and results from cse_postprocess
         # cse_results[0] contains common subexpression definitions, does not specify varnames.
