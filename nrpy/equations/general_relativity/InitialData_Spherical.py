@@ -318,7 +318,7 @@ class InitialData_Spherical:
 
     # fmt: on
 
-    def TeukolskyWave(self, branch="regular") -> tuple[list[list[sp.Expr]], list[list[sp.Expr]], sp.Expr, list[sp.Expr], list[sp.Expr]]:
+    def TeukolskyWave(self, branch: str = "regular" ) -> tuple[list[list[sp.Expr]], list[list[sp.Expr]], sp.Expr, list[sp.Expr], list[sp.Expr]]:
         """Set ADM quantities for an analytic linearized Teukolsky wave."""
 
         # Define math symbols
