@@ -1,11 +1,11 @@
 # Python Codegen
 
-> Core route for turning SymPy expressions into JAX-compatible Python assignment text. · Status: confirmed
+> Core route for turning SymPy expressions into JAX-compatible Python assignment text. · Status: contested
 > Up: [Core APIs](index.md)
 
 ## Summary
 
-`py_codegen()` emits JAX-compatible Python assignment strings from SymPy expressions. `PyCodeGen` is the option object behind that public function: a stripped-down Python counterpart to `CCodeGen` for JAX-oriented code, without the finite-difference memory-read path used by C kernels.
+`py_codegen()` emits JAX-compatible Python assignment strings from SymPy expressions. `PyCodeGen` is the option object behind that public function: a stripped-down Python counterpart to `CCodeGen` for JAX-oriented code, without the finite-difference memory-read path used by C kernels. CSE combined with postprocessing substitutions can raise an exception, and output-name collisions can change later results; the limitations below qualify this interface.
 
 ## Detail
 
@@ -19,7 +19,23 @@ When `verbose` is enabled, `py_codegen()` emits a Python comment block before ge
 
 With `enable_cse=False`, each expression is emitted independently. If `postproc_substitution_dict` is nonempty, `apply_substitution_dict()` first rewrites matching free-symbol names by appending the configured suffix. The right-hand side is then printed with `printer.doprint(expr)`, and the line `output_name = <printed expression>` is appended to the output string.
 
-With `enable_cse=True`, `py_codegen()` collects the expressions and output names, then calls SymPy CSE with numbered temporaries from `cse_varprefix + "tmp"` and the configured `cse_sorting` order. For SymPy versions before 1.3, the implementation prints a warning and uses the raw `sp.cse()` result. For SymPy 1.3 and newer, it passes the `sp.cse()` result through `cse_postprocess()`. CSE temporaries and final reduced expressions both receive optional `apply_substitution_dict()` processing and are emitted in the same way, without `sp.expand()`: `printer.doprint()` prints the right-hand side and `py_codegen()` writes the assignment to the temporary or output name.
+With `enable_cse=True`, `py_codegen()` collects the expressions and output names, then calls SymPy CSE with numbered temporaries from `cse_varprefix + "tmp"` and the configured `cse_sorting` order. For SymPy versions before 1.3, the implementation prints a warning and uses the raw `sp.cse()` result. For SymPy 1.3 and newer, it passes the `sp.cse()` result through `cse_postprocess()`. Without postprocessing substitutions, CSE temporaries and final reduced expressions are emitted without `sp.expand()`: `printer.doprint()` prints each right-hand side and `py_codegen()` writes the assignment. In the postprocessed CSE path, replacement entries are tuples. A nonempty `postproc_substitution_dict` makes `py_codegen()` attempt to assign into a tuple whenever a temporary survives, raising `TypeError`, even if no substitution key matches. Substitution works on the no-CSE path and on final reduced expressions when no temporary survives.
+
+Claim status: contested; contradiction: CONTR-0012.
+See [CONTR-0012](../contradictions.md#contr-0012) for the source discrepancy and
+required resolution check. Combining CSE and postprocessing substitutions is
+not guaranteed to return code.
+
+Output target names are not reserved when CSE chooses temporary names, and
+outputs are assigned sequentially. For expressions `[x**3 + sin(x**3), x**3]`
+with targets `["tmp0", "b"]` and the default prefix, assigning the first output
+can overwrite the CSE temporary needed by the second. Choose `cse_varprefix`
+and output targets so that a target does not overwrite a temporary or input
+needed by a later assignment; this function does not check that condition.
+
+Claim status: contested; contradiction: CONTR-0013.
+See [CONTR-0013](../contradictions.md#contr-0013). Arbitrary output names are not
+guaranteed to preserve the input expressions' values.
 
 `py_codegen()` never passes the output name to `doprint()` as the `assign_to` argument. In SymPy 1.11 to 1.14, whose printer is `JaxPrinter`, and in some SymPy development commits, that path converts the right-hand side to an array expression and silently drops negative powers, printing, for example, `m2/m1` as `m2` and `1/x**2` as `jnp.einsum("", )`.
 
@@ -50,6 +66,8 @@ This page owns the public `py_codegen()` and `PyCodeGen` contract. Helper pages 
 Import these APIs from `nrpy.py_codegen`. The empty `nrpy/__init__.py` does not re-export them.
 
 ## Sources
+
+- [cse_preprocess_postprocess.py](../../nrpy/helpers/cse_preprocess_postprocess.py) - `cse_postprocess` replacement tuples
 
 - [nrpy/py_codegen.py](../../nrpy/py_codegen.py) - `PyCodeGen`, `py_codegen`, `printer`
 - [nrpy/c_codegen.py](../../nrpy/c_codegen.py) - `apply_substitution_dict`

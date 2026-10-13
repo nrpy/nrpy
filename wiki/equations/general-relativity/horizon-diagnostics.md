@@ -35,6 +35,8 @@ approximate-Killing-vector spin. Public outputs are `sqrtq`,
 `Spherical` and `Spherical_rfm_precompute`, constructs the induced 2-metric and
 surface connection, uses the standard `l=1` rotation basis on the sphere, and
 leaves the global `1/(8*pi)` angular-momentum prefactor to the caller.
+`Hmn_integrand`, `Nmn_integrand`, and `Jm_integrand` already contain `sqrtq`
+and integrate against `dtheta*dphi`; do not multiply by the area density again.
 
 `HorizonSpinVorticityDipoleClass` builds quasilocal spin-vector densities from
 the horizon vorticity one-form. It supports `K_input="BSSN"` or `"external"`,
@@ -42,7 +44,9 @@ the horizon vorticity one-form. It supports `K_input="BSSN"` or `"external"`,
 and `-1`, while the dictionary accessor exposes the usual spherical and
 rfm-precompute keys. Its public `JCart_densU` components include the `1/(8*pi)`
 factor; helper methods construct scalar spin density about an axis and
-Omega-moment densities from a supplied Omega expression.
+Omega-moment densities from a supplied Omega expression. Despite their names,
+`JCart_densU` and `Omega_xCart_densU` omit the area density and require
+`dA=sqrtq*dtheta*dphi` in the caller's integration.
 
 `SpECTRESpinEstimateClass` constructs an intrinsic two-surface estimator using
 the induced metric, `X_B = e_B^i K_ij s^j`, the surface Ricci scalar `R`, and
@@ -51,7 +55,35 @@ the spin function `Omega`. The public API returns integrands through
 `get_gridfunction_assignments`, and algebraic post-integration helpers for
 centroids, spin magnitude, and nominal/fallback spin-vector components. It is
 spherical-only, provides the same two cached coordinate keys, and leaves
-near-zero branch selection to generated C code.
+near-zero branch selection to generated C code. Its scalar public integrands
+also require `dA`; `area_density` supplies `sqrtq` separately.
+
+Claim evidence:
+- Claim: Approximate-Killing-vector H/N/J integrands include `sqrtq`, whereas vorticity-dipole J/Omega moments and SpECTRE scalar integrands require an external area measure; only the vorticity-dipole J components already include `1/(8*pi)`.
+- Role: descriptive behavior
+- Deciding authority: [approx_killing_vector_spin.py](../../../nrpy/equations/general_relativity/bhahaha/approx_killing_vector_spin.py), `_build_l1_basis_and_forms_` and `_build_spin_integrands_`; [HorizonSpinVorticityDipole.py](../../../nrpy/equations/general_relativity/bhahaha/HorizonSpinVorticityDipole.py), `_build_all` and `Omega_xCart_densU`; [SpECTRESpinEstimate.py](../../../nrpy/equations/general_relativity/bhahaha/SpECTRESpinEstimate.py), `get_public_integrands`
+- Corroboration: none available for cross-module quadrature; each expression's explicit factors decide its integration measure.
+
+The SpECTRE class expects physical metric, extrinsic curvature, and normal
+components already evaluated on the surface in the spherical basis. Its
+`hh_dD[0]` and `hh_dD[1]` mean theta and phi derivatives; the other horizon
+modules use slots 1 and 2. Callers must map these indices explicitly.
+`get_gridfunction_assignments` does not generate the required derivatives:
+assign the induced metric and `X_B`, compute their angular derivatives and
+surface curvature, then construct and differentiate the curvature-dependent
+flux where needed, using consistent finite-difference stencils.
+
+`Salpha_and_magnitude_from_zOmega` requires area-weighted integrals of externally
+supplied, appropriately normalized modes. It returns
+`S_alpha=integral(z_alpha*Omega*dA)/(8*pi)` and their Euclidean norm; this
+module neither solves for nor normalizes the modes. Rescaling them rescales
+the reported spin.
+
+Claim evidence:
+- Claim: SpECTRE spin expressions require on-surface physical tensors, their own two-dimensional angular-index convention, caller-computed derivatives in dependency order, and normalized modes with area-weighted integrals.
+- Role: descriptive behavior
+- Deciding authority: [SpECTRESpinEstimate.py](../../../nrpy/equations/general_relativity/bhahaha/SpECTRESpinEstimate.py), `SpECTRESpinEstimateClass.__init__`, `get_gridfunction_assignments`, and `Salpha_and_magnitude_from_zOmega`
+- Corroboration: [ExpansionFunctionTheta.py](../../../nrpy/equations/general_relativity/bhahaha/ExpansionFunctionTheta.py), `ExpansionFunctionThetaClass`, for the differing three-dimensional derivative slots; none available for a complete numerical spin calculation.
 
 The cited representative trusted dictionaries cover the ordinary spherical
 variants for each assigned equation-side family. The source modules also expose

@@ -30,9 +30,31 @@ After editable install, generators can run as modules from the repository root, 
 export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}."
 ```
 
-The first recommended standalone workflow is `python -m nrpy.examples.wave_equation_cartesian`, which writes `project/wave_equation_cartesian/`. Build with `make` inside that directory and run `./wave_equation_cartesian`. The project also includes `wave_equation_cartesian.par`, and the example accepts `convergence_factor` as a command-line override.
+On Linux or macOS, the first recommended standalone workflow is `python -m nrpy.examples.wave_equation_cartesian`, which writes `project/wave_equation_cartesian/`. Build with `make` inside that directory and run `./wave_equation_cartesian`. The project also includes `wave_equation_cartesian.par`, and the example accepts `convergence_factor` as a command-line override.
+
+BHaH's Makefile writer rejects executable generation on systems other than
+Linux and macOS (`platform.system()` values `Linux` and `Darwin`). This check
+applies to the Cartesian wave example's default executable build.
+
+Claim evidence:
+- Claim: The Cartesian wave example's executable-generation path requires Linux or macOS; BHaH's Makefile input validation rejects other operating systems when `create_lib=False`.
+- Role: descriptive behavior
+- Deciding authority: [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_validate_inputs`
+- Corroboration: [wave_equation_cartesian.py](../../nrpy/examples/wave_equation_cartesian.py) calls `output_CFunctions_function_prototypes_and_construct_Makefile` with the default executable-build setting.
 
 Prerequisites depend on the generated project family. Standalone BHaH workflows need a C compiler and `make`; some standalone, waveform, geodesic, and additional physics workflows also need GSL. Einstein Toolkit and CarpetX generators can generate thorns from the Python package, but compiling or running those thorns requires an Einstein Toolkit environment. `superB` workflows require a Charm++ toolchain, and generated JAX workflows need suitable Python/JAX tooling in the generated environment.
+
+The generated Dendro applications require CMake 3.18 or newer, GNU C/C++/Fortran
+compilers with C++17 support, MPI with C/C++/Fortran bindings, OpenMP, GSL,
+BLAS/LAPACK, and Git. Their first CMake configuration fetches Dendrolib, toml11,
+and spdlog and requires network access. Follow [Dendro project assembly](../infrastructures/dendro/project-assembly-and-emitters.md)
+for the configure, build, initial-data, and MPI evolution commands.
+
+Claim evidence:
+- Claim: The Dendro build instructions require CMake, GNU C/C++/Fortran compilers, MPI, OpenMP, GSL, BLAS/LAPACK, Git, and network access for dependencies fetched on first configuration.
+- Role: descriptive behavior
+- Deciding authority: [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), `build_and_run_instructions` and `output_CFunctions_function_prototypes_and_construct_CMakeLists`
+- Corroboration: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py), `main`, prints these build and run instructions after generating the application.
 
 The package setup requires Python 3.6 or newer, reads `requirements.txt`, and appends `clang-format` if the executable is not already present. The GitHub workflow configures install-and-generate jobs that install the package, generate multiple projects on Ubuntu and macOS, and build generated C projects where the job lists a `make` step. Workflow configuration establishes intended CI coverage, not the result of any particular run.
 
@@ -51,6 +73,12 @@ This command executes embedded Python with the permissions of the current proces
 Do not substitute `python bin/nrpyinline.py <file>` for the installed command. In the current source, the module's `__main__` block runs its doctests and does not call `main()`, so that direct form ignores the file argument as a command input.
 
 ## Sources
+
+- [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `_validate_inputs`
+- [wave_equation_cartesian.py](../../nrpy/examples/wave_equation_cartesian.py) - `output_CFunctions_function_prototypes_and_construct_Makefile` call
+
+- [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py) - `build_and_run_instructions`, `output_CFunctions_function_prototypes_and_construct_CMakeLists`
+- [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) - `main`
 
 - [README.md](../../README.md) - `## Installation`, `## Prerequisites by Workflow`, `## First Successful Run`, `## Contributor Setup`
 - [requirements.txt](../../requirements.txt) - runtime dependency list

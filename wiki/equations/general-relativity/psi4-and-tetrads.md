@@ -5,9 +5,10 @@
 
 ## Summary
 
-`Psi4` builds the real and imaginary parts of the Weyl scalar `psi4` from BSSN
-variables converted to ADM quantities, metric derivatives, extrinsic-curvature
-derivatives, and a null tetrad. `Psi4Tetrads` supplies the implemented
+`Psi4` builds a vacuum-derived reconstruction of the real and imaginary parts
+of the Weyl scalar `psi4` from BSSN variables converted to ADM quantities,
+metric derivatives, extrinsic-curvature derivatives, and a null tetrad. It
+provides no general matter or spacetime-Ricci corrections for nonvacuum use. `Psi4Tetrads` supplies the implemented
 Baker-Campanelli-Lousto arXiv:gr-qc/0104063v3 Sec. V.A step (a) tetrad path;
 `Psi4` can also leave the tetrad vectors symbolic for validation and
 code-generation workflows that provide them externally.
@@ -21,7 +22,16 @@ extrinsic-curvature terms, and the contractions that produce `psi4_re` and
 contractions, then records `metric_derivs_varname_list`,
 `metric_derivs_varname_arr_list`, `metric_derivs_expr_list`, and related string
 helpers for the generated C functions that compute those metric derivative
-inputs separately.
+inputs separately. The curvature reconstruction uses
+`R_ij + K*K_ij - K_ip*K^p_j` in its rank-two term. General nonvacuum spacetime
+curvature requires additional information absent from this interface; the
+result is not guaranteed to be the Weyl scalar for arbitrary matter data.
+
+Claim evidence:
+- Claim: `Psi4` uses a vacuum-derived spatial-curvature reconstruction without general nonvacuum corrections; arbitrary matter data do not have a Weyl-scalar guarantee.
+- Role: descriptive behavior
+- Deciding authority: [psi4.py](../../../nrpy/equations/general_relativity/psi4.py), `Psi4.__init__`, `rank2term3DD` and curvature contractions
+- Corroboration: none available for general nonvacuum accuracy; representative trusted samples check the implemented expressions only.
 
 The `tetrad` argument controls how the null tetrad enters. With
 `tetrad="leave_symbolic"`, `Psi4` declares symbolic `mre4U`, `mim4U`, and
@@ -52,7 +62,17 @@ zero is along the hypersurface unit normal, while components one through three
 are along the spatial coordinate basis. The unit normal therefore has frame
 components `u4U = (1, 0, 0, 0)`. `Psi4Tetrads` always uses that representation
 and exposes no option to replace it with coordinate-basis lapse and shift
-components.
+components. The construction requires a nonsingular coordinate chart and
+positive-definite spatial metric with nondegenerate Gram-Schmidt seeds. Its
+Cartesian seed `(-y,x,0)` vanishes on the z-axis, including the origin, and
+normalization divides by zero there; no alternate seed is supplied.
+`leave_symbolic` permits a caller to supply a valid external tetrad separately.
+
+Claim evidence:
+- Claim: `Psi4Tetrads` has no fallback for a vanishing Cartesian seed on the z-axis; a regular spatial metric alone does not make this normalization defined.
+- Role: descriptive behavior
+- Deciding authority: [psi4_tetrads.py](../../../nrpy/equations/general_relativity/psi4_tetrads.py), `Psi4Tetrads.__init__`, seed and norm construction
+- Corroboration: [psi4.py](../../../nrpy/equations/general_relativity/psi4.py), `Psi4` external `leave_symbolic` route
 
 Claim evidence:
 - Claim: `Psi4Tetrads` always represents the hypersurface unit normal as `(1, 0, 0, 0)` in the mixed `{n_hat, partial_i}` frame consumed by `Psi4`, and exposes no metric-normal construction option.

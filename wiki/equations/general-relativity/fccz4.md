@@ -99,11 +99,12 @@ For nondegenerate positive-definite spatial `G` and `gammahat`, one loop forms
 loaded before any corrected component is stored. Since
 `abs(det(gammahat))=det(gammahat)` in this domain,
 `det(G')=det(gammahat)` and `(G')^ij A'_ij=0` are imposed together, with the
-trace computed using the post-enforced metric. This constrained-state contract
-applies mathematically to both BSSN and fCCZ4 storage; no `trAbar` damping
-variable or RHS correction is retained. Reviewed owner paths and collision
-examples use BSSN application wiring and do not establish an end-to-end fCCZ4
-projection lifecycle for the new RHS/gauge owners and `Theta_fCCZ4`.
+trace computed using the corrected metric. These algebraic conditions apply
+mathematically to both BSSN and fCCZ4 storage; no `trAbar` damping variable or
+RHS correction is retained. BHaH spectroscopy selects this projector for
+fCCZ4 after initialization and through its Method of Lines post-RHS hook, as
+described below. That source-level call sequence does not prove successful
+runtime evolution or projection in other applications.
 No guard or behavior for singular, indefinite, or non-positive-determinant
 metric input is established.
 
@@ -114,9 +115,9 @@ Claim evidence:
 - Corroboration: [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1), conformal/reference-metric definitions in Eqs. (2.1)-(2.29)
 
 Claim evidence:
-- Claim: For nondegenerate positive-definite spatial metrics, BHaH, ETLegacy, and CarpetX provide one algebraic projection that imposes `det(gammabar)=det(gammahat)` and `tr(Abar)=0` using the inverse of the already determinant-corrected metric; the kernel is compatible with shared BSSN/fCCZ4 tensor storage, but reviewed owner paths and collision examples do not establish an end-to-end lifecycle for the new fCCZ4 evolution and `Theta_fCCZ4` storage.
+- Claim: For nondegenerate positive-definite spatial metrics, BHaH, ETLegacy, and CarpetX provide one algebraic projection that imposes `det(gammabar)=det(gammahat)` and `tr(Abar)=0` using the inverse of the already determinant-corrected metric; the kernel is compatible with shared BSSN/fCCZ4 tensor storage, and BHaH spectroscopy schedules it after initialization and through its post-RHS hook for fCCZ4, without proving runtime evolution or other application schedules.
 - Role: public/scientific contract
-- Deciding authority: backend `register_CFunction_enforce_detgbar_equals_detghat_trAzero` implementations listed in [BSSN Family](bssn-family.md); [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), constrained metric RHS
+- Deciding authority: backend `register_CFunction_enforce_detgbar_equals_detghat_trAzero` implementations listed in [BSSN Family](bssn-family.md); [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), formulation and projection registrations; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), constrained metric RHS
 - Corroboration: [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), Eqs. (8)-(10)
 
 NRPy supports evolving `phi`, `W=exp(-2 phi)`, or `chi=exp(-4 phi)`.
@@ -125,7 +126,7 @@ Claim evidence:
 - Claim: `FCCZ4RHSs` supports the existing NRPy BSSN conformal-factor options `phi`, `W=exp(-2 phi)`, and `chi=exp(-4 phi)` and rejects other values through the reused BSSN quantities interface.
 - Role: descriptive behavior
 - Deciding authority: [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities.__init__`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__`
-- Corroboration: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), module `__main__`, exercises `W`, `phi`, and `chi` in both Cartesian and SinhSpherical coordinates
+- Corroboration: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), module `__main__`, exercises `W`, `phi`, and `chi` in both SinhCartesian and SinhSpherical coordinates
 
 For time-independent reference metric `gammahat_ij`, let `Dhat_i` and
 `Gammahat^i_jk` denote its derivative and connection. Barred quantities belong
@@ -439,8 +440,17 @@ Claim evidence:
 ### Gauge equations
 
 The wrapper accepts the four lapse names supported by BSSN:
-`OnePlusLog`, `BHSHarmonicSlicing`, `Frozen`, and `OnePlusLogAlt`. For
-`OnePlusLog`, fCCZ4 changes the delegated lapse equation to
+`OnePlusLog`, `BHSHarmonicSlicing`, `Frozen`, and `OnePlusLogAlt`.
+`BHSHarmonicSlicing` requires evolved `W` or `phi`; its delegated BSSN branch
+raises `ValueError` for `chi`.
+
+Claim evidence:
+- Claim: fCCZ4 accepts the named BSSN lapse options, but `BHSHarmonicSlicing` supports only `W` and `phi`, rejecting `chi`.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs` harmonic branch
+- Corroboration: [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), `fCCZ4_gauge_RHSs` delegation
+
+For `OnePlusLog`, fCCZ4 changes the delegated lapse equation to
 
 ```text
 partial_t alpha = beta^i partial_i alpha - 2 alpha(K - 2 Theta).
@@ -619,6 +629,29 @@ definition: it contains the duplicate constraint-vector stretch documented
 above. Brown Eqs. (12a), (12b), and (15) define the connection constraint;
 Eqs. (21e) and (22e) supply the BSSN-only RHS term excluded from fCCZ4.
 
+### Complete RHS expression assembly
+
+`build_fccz4_expression_bundle` in `fCCZ4_system.py` copies the non-gauge RHS
+dictionary, adds the selected lapse and shift equations, and optionally adds
+Kreiss-Oliger dissipation, CAHD, and slow-start lapse. Curvature-aware KO
+requires KO to be enabled. It returns `FCCZ4ExpressionBundle` containing
+`rhs_by_symbol_name`, the shift-based `upwind_control_vec`,
+`diagnostics_by_name`, and `provenance_files`. Diagnostics are opt-in and
+contain `H_Z4` and `Z4constraintU0..2`; their construction can register
+auxiliary gridfunctions. The frozen dataclass prevents field reassignment,
+but its dictionary contents remain mutable.
+
+BHaH `register_CFunction_rhs_eval` uses this function for fCCZ4; Dendro
+assembles its equations independently. The expression function does not choose
+a backend state order, loop, or C function. Its module validation includes
+assembly doctests and Cartesian RHS trusted comparisons with KO off and on.
+
+Claim evidence:
+- Claim: `build_fccz4_expression_bundle` assembles the complete fCCZ4 RHS, optional terms, upwind vector, and opt-in diagnostics; BHaH calls it and Dendro assembles independently. Its frozen dataclass does not make contained dictionaries immutable.
+- Role: descriptive behavior
+- Deciding authority: [fCCZ4_system.py](../../../nrpy/equations/general_relativity/fCCZ4_system.py), `FCCZ4ExpressionBundle`, `build_fccz4_expression_bundle`, and module `__main__`; [BHaH rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [Dendro rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
+- Corroboration: [fCCZ4_system_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_system_Cartesian.py) and [fCCZ4_system_Cartesian_KO.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_system_Cartesian_KO.py), trusted assembled RHS expressions; these samples do not establish backend execution.
+
 ### BHaH spectroscopy application boundary
 
 `blackhole_spectroscopy.py` keeps BSSN as its default and accepts `--fccz4`
@@ -633,10 +666,9 @@ post-RHS hook.
 
 This wiring establishes source-selected registration and initialization order.
 It does not prove checkpoint round trips, restart correctness, long-time
-stability, convergence, waveform validity, or scientific accuracy. A bounded
-generated-project build and short fCCZ4 startup run, when recorded below, prove
-only generation, compilation, and at least one Method of Lines step for that
-specific configuration.
+stability, convergence, waveform validity, or scientific accuracy. Generation,
+compilation, and runtime stepping require separate checks of the selected
+configuration.
 
 Claim evidence:
 - Claim: BHaH spectroscopy defaults to BSSN and exposes opt-in `--fccz4`; the selected formulation controls RHS/gauge registration, fresh fCCZ4 data initializes `Theta_fCCZ4` to zero only after the checkpoint branch has declined to return, and both formulations share initial-data and post-RHS determinant/trace projection; no restart or scientific-result guarantee follows.
@@ -646,8 +678,9 @@ Claim evidence:
 
 ### Validation boundary
 
-The equation owners contain no doctest examples but run the canonical
-`doctest.testmod()` gate before trusted comparisons. Their `__main__` paths
+The fCCZ4 constraint, non-gauge RHS, and gauge modules contain no doctest
+examples but run `doctest.testmod()` before trusted comparisons. The complete
+RHS assembly module has the doctests described above. Their `__main__` paths
 cover evolution with both YBS options enabled jointly, constraint outputs,
 and lapse/shift gauge outputs with the YBS options disabled.
 
@@ -676,6 +709,11 @@ Claim evidence:
 - Corroboration: [fCCZ4_constraints_SinhSpherical_phi.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_constraints_SinhSpherical_phi.py), `trusted_dict`; [fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py), `trusted_dict`; [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py), `trusted_dict`; [fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py), `trusted_dict`
 
 ## Sources
+
+- [fCCZ4_system.py](../../../nrpy/equations/general_relativity/fCCZ4_system.py) - `FCCZ4ExpressionBundle`, `build_fccz4_expression_bundle`, module validation
+- [fCCZ4_system_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_system_Cartesian.py) - `trusted_dict`
+- [fCCZ4_system_Cartesian_KO.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_system_Cartesian_KO.py) - `trusted_dict`
+- [Dendro rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - `register_CFunction_rhs_eval`
 
 - [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2) - Eqs. (3)-(41), including the unnumbered evolution system after Eq. (32); principal reference-metric fCCZ4 source, with the documented apparent connection-sector convention error corrected locally
 - [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1) - Eqs. (2.1)-(2.29), reference-metric covariance, constraints, nonadvective lapse-factor corroboration, and BSSN limit

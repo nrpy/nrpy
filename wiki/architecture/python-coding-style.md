@@ -157,13 +157,13 @@ string manipulation or local tidiness; inline them at the point of use.
 Regular expressions are forbidden in NRPy code. `coding_style.md`'s Prohibited
 Dependencies section states the rule: do not `import re` anywhere under `nrpy/`; use
 plain string methods, because regex is brittle and obscures what the code is doing.
-Five legacy modules under `nrpy/` still import it, and two doctests do as well;
-all seven are grandfathered rather than precedent, and their patterns are removed
-when each file is next materially edited. Repository tooling outside the package,
+The legacy imports and doctests identified in `coding_style.md` are
+grandfathered rather than precedent; remove their regular-expression use when
+each file is next materially edited. Repository tooling outside the package,
 such as `tools/kb_lint.py`, is out of scope.
 
 Claim evidence:
-- Claim: new code under `nrpy/` does not import `re`; plain string methods are used instead, and the seven grandfathered sites under `nrpy/` -- five legacy modules and two doctests -- are legacy rather than precedent. Repository tooling outside the package is not covered by the rule.
+- Claim: new code under `nrpy/` does not import `re`; plain string methods are used instead, and the grandfathered sites identified in `coding_style.md` are legacy rather than precedent. Repository tooling outside the package is not covered by the rule.
 - Role: normative rule
 - Deciding authority: [coding_style.md](../../coding_style.md), `### Prohibited Dependencies`, the `import re` bullet
 - Corroboration: none available; the repository-wide dependency rule is the deciding authority.

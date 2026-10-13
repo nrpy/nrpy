@@ -1,6 +1,6 @@
 # SEOBNR Precessing Rotations And Ringdown
 
-> Map co-precessing frame rotations, inertial polarizations, and precessing merger-ringdown frame quantities. · Status: confirmed
+> Map co-precessing frame rotations, inertial polarizations, and precessing merger-ringdown frame quantities. · Status: contested
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
@@ -48,12 +48,27 @@ aliases.
 `SEOBNRv5_MergerRingdown_Quantities` starts from final spin and final orbital
 angular-momentum symbols, stores the matching angles `alpha_match`,
 `beta_match`, and `gamma_match`, and stores times `t` and `t_match`.
-It computes `chi_f_dot_L_f` and uses no-branch coordinate-bound helpers to
-select the prograde or retrograde precession-frequency expression. The selected
-frequency is stored as `omega_prec`.
+It computes `chi_f_dot_L_f` and combines the prograde and retrograde
+precession frequencies using `coord_greater_bound` and `coord_less_bound`, with
+`nrpyAbs` replaced by `Abs`. These helpers provide fractional weights rather
+than exact branch selection. Let `d = chi_f_dot_L_f` and
+`epsilon = TINYDOUBLE > 0`. Away from singular points, positive `d` multiplies
+the prograde frequency by `d/(d+epsilon)`, while negative `d` multiplies the
+retrograde frequency by `d/(d-epsilon)`. At `d = ±epsilon/2`, the active
+frequency is reduced to one third. At `d = ±epsilon`, the inactive term has a
+zero denominator. The resulting `omega_prec` feeds the Euler angles and QNM
+frequency shifts below.
 
-At `chi_f_dot_L_f == 0`, both strict branch masks vanish, so the current
-expression selects `omega_prec = 0`.
+At `d=0`, both strict weights vanish and `omega_prec=0` for positive `epsilon`.
+
+Claim status: contested; contradiction: CONTR-0020.
+See [CONTR-0020](../../contradictions.md#contr-0020).
+
+Claim evidence:
+- Claim: Merger-ringdown precession uses shifted quotient weights, which attenuate the active frequency and are singular at `chi_f_dot_L_f = ±TINYDOUBLE`; exact branch selection is not guaranteed.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_merger_ringdown.py](../../../nrpy/equations/seobnr/SEOBNRv5_merger_ringdown.py), `SEOBNRv5_MergerRingdown_Quantities.__init__`; [Min_Max_and_Piecewise_Expressions.py](../../../nrpy/equations/grhd/Min_Max_and_Piecewise_Expressions.py), `coord_greater_bound` and `coord_less_bound`
+- Corroboration: `none available`; the constructor directly combines the two helper return expressions, and the trusted dictionary does not establish exact comparison semantics.
 
 The merger-ringdown class advances post-merger Euler angles as
 `alpha_merger_RD`, `beta_merger_RD`, and `gamma_merger_RD`. It declares

@@ -13,19 +13,43 @@ These helpers support generated-text maintenance and developer feedback paths. `
 
 `clang_format()` reads the `clang_format_options` NRPy parameter, constructs a `clang-format` command, and caches successful formatted output using the exact input string plus option string as the cache key. It raises `RuntimeError` when `clang-format` exits unsuccessfully and raises `OSError` with platform-aware installation guidance when the executable is not found. The helper therefore does not imply `clang-format` is always installed. It remains an allowed owner source-normalization dependency, but its current `Popen.communicate()` call has no timeout. Until hardened, the enclosing validation command or job must be bounded; [Test Oracles And Safe Updates](../../validation/test-oracles-and-safe-updates.md) owns that known gap and operational rule.
 
-`validate_strings()` validates raw string output, usually generated C or similar text. It derives the caller's directory and function name, creates a sibling `tests/` directory when needed, and uses `tests/<caller>_<string_desc>.<file_ext>` as the trusted file path. If the trusted file exists, the function compares it byte-for-byte with `to_check` and raises a diff-producing `ValueError` on mismatch. If the file is missing, it writes the provided string as the new trusted file. That branch only captures candidate data; it does not compare, validate truth, compile, or run output. Full-output selection, normalization, independent review, and two-process acceptance belong to Test Oracles And Safe Updates.
+`validate_strings()` validates raw string output, usually generated C or similar text. It derives the caller's directory and function name, creates a sibling `tests/` directory when needed, and uses `tests/<caller>_<string_desc>.<file_ext>` as the trusted file path. If the trusted file exists, the function reads UTF-8 text with universal-newline translation and compares that string with `to_check` and raises a diff-producing `ValueError` on mismatch. If the file is missing, it writes the provided string as the new trusted file. That branch only captures candidate data; it does not compare, validate truth, compile, or run output. Full-output selection, normalization, independent review, and two-process acceptance belong to Test Oracles And Safe Updates.
+
+Claim evidence:
+- Claim: Trusted-file comparison uses decoded text with newline translation; it is not byte equality.
+- Role: descriptive behavior
+- Deciding authority: [nrpy/helpers/generic.py](../../../nrpy/helpers/generic.py), `validate_strings`
+- Corroboration: `none available`; the named implementation decides this behavior.
 
 Trusted string files from `validate_strings()` are separate from trusted expression dictionaries. `validate_strings()` compares one raw string against one caller-derived text file and does not process symbolic expression dictionaries; the equation trusted-expression workflow is documented separately in [Trusted Expression Pipeline](../../equations/trusted-expression-pipeline.md).
 
 `diff_strings()` uses `difflib.ndiff()` and reports only added or removed lines, omitting unchanged lines and intraline marker lines. This gives `validate_strings()` a compact mismatch report.
 
-`cached_functions.py` maps cache identifiers to SHA-256 names ending in `.nrpycache` below `appdirs.user_cache_dir("nrpy")`. `cache_file()` creates the directory if needed; `is_cached()`, `read_cached()`, and `write_cached()` manage pickle-backed entries. `cached_simplify()` hashes a pickled SymPy expression, returns a cached simplification when present, writes `sp.simplify()` results when absent, returns zero directly for the zero expression, and falls back to uncached `sp.simplify()` if the expression cannot be pickled. These cache files are excluded artifacts, not KB pages. Validation uses owned disposable cache and must not clear or overwrite ambient or shared cache; Test Oracles And Safe Updates owns state and cleanup policy.
+`cached_functions.py` maps cache identifiers to SHA-256 names ending in `.nrpycache` below `appdirs.user_cache_dir("nrpy")`. `cache_file()` creates the directory if needed; `is_cached()`, `read_cached()`, and `write_cached()` manage pickle-backed entries. `cached_simplify()` hashes a pickled SymPy expression, returns a cached simplification when present, writes `sp.simplify()` results when absent, returns zero directly for the zero expression, and falls back to uncached `sp.simplify()` only for `pickle.PicklingError`. Other serialization exceptions, corrupt-cache reads, and filesystem errors propagate. These cache files are excluded from the KB. Validation uses owned disposable cache and must not clear or overwrite ambient or shared cache; Test Oracles And Safe Updates owns state and cleanup policy.
 
-`ConditionalFileUpdater` is a context manager that captures generated text in a `StringIO`, optionally runs `clang_format()`, reads the existing file if present, and compares stripped old and new content. It writes only when content changes and the module-level `nochange` flag is false. When module-level `verbose` is true, it prints a context diff before writing. Status text is colorized through `colorize_text`.
+Claim evidence:
+- Claim: `cached_simplify()` catches `pickle.PicklingError`, not general serialization, cache-read, or filesystem failures.
+- Role: descriptive behavior
+- Deciding authority: [nrpy/helpers/cached_functions.py](../../../nrpy/helpers/cached_functions.py), `cached_simplify`
+- Corroboration: `none available`; the named implementation decides this behavior.
+
+`ConditionalFileUpdater` is a context manager that captures generated text in a `StringIO`, optionally runs `clang_format()`, reads the existing file if present, and compares stripped old and new content. It writes only when content changes and the module-level `nochange` flag is false. When module-level `verbose` is true, it prints a context diff before writing. Status text is colorized through `colorize_text`. `__exit__()` ignores the exception arguments and still compares and writes buffered text after an exception in the context body. Partial generated output can therefore replace the old file before the exception propagates; there is no rollback.
+
+Claim evidence:
+- Claim: A context-body exception does not prevent `ConditionalFileUpdater` from writing buffered partial content.
+- Role: descriptive behavior
+- Deciding authority: [nrpy/helpers/conditional_file_updater.py](../../../nrpy/helpers/conditional_file_updater.py), `ConditionalFileUpdater.__exit__`
+- Corroboration: `none available`; the named implementation decides this behavior.
 
 `colorize_text.py` defines `ColorNames` as the allowed literal color names and maps them to ANSI escape sequences. `apply_colorization()` validates the color name and wraps stringified output; `leave_text_alone()` returns plain text. The module selects the exported `colorize` function at import time based on whether stdout looks like a terminal or a Jupyter output stream.
 
-`type_annotation_utilities.py` provides `is_type_literal()` for recognizing `Literal` annotations across supported Python versions. `validate_literal_arguments()` inspects the calling function, finds parameters annotated with `Literal[...]`, and raises when the runtime value is outside the allowed set. `generate_class_representation()` builds a simple `ClassName(field=value, ...)` representation from public string and integer attributes on the calling object.
+`type_annotation_utilities.py` provides `is_type_literal()` for recognizing `Literal` annotations across supported Python versions. `validate_literal_arguments()` inspects the calling function, checks recognized, evaluated `Literal[...]` annotations, and raises when a value is outside the allowed set. It reads raw signature annotations without resolving strings, so quoted or postponed `Literal` annotations are skipped. `generate_class_representation()` builds a simple `ClassName(field=value, ...)` representation from public string and integer attributes on the calling object.
+
+Claim evidence:
+- Claim: Runtime Literal checking skips string annotations because it does not resolve them.
+- Role: descriptive behavior
+- Deciding authority: [nrpy/helpers/type_annotation_utilities.py](../../../nrpy/helpers/type_annotation_utilities.py), `validate_literal_arguments`
+- Corroboration: `none available`; the named implementation decides this behavior.
 
 ## Sources
 

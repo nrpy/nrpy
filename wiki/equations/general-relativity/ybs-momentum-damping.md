@@ -121,65 +121,78 @@ together.
 
 `C_YBS_mom` is zero by default, which disables the term exactly. A user who
 enables the option sets it above zero in the parameter file; the recommended
-value is 1.75. The timestep is `Delta t = CFL_FACTOR * ds_min`, and the
-coefficient is `ell_M = C_YBS_mom * CFL_FACTOR * dsmin * W`, whose first three
-factors are, in BHaH, the same prefactor as `C_CAHD`. In a cell of spacing
-`h = dsmin`, the product `ell_M * Delta t / h^2` equals
-`C_YBS_mom * CFL_FACTOR^2 * W * ds_min / dsmin`. Because `ds_min <= dsmin`, it
-is at most `C_YBS_mom * CFL_FACTOR^2 * W_max`, where `W_max` is the largest `W`
-on the grid at any step. Where `W <= 1` everywhere, as for Brill--Lindquist and
-static trumpet initial data, `W_max <= 1` and the product is at most
-`C_YBS_mom * CFL_FACTOR^2`, reached only where `W` is near 1 and `dsmin` equals
-`ds_min`. Data with `W > 1`, such as Kasner data at physical time `t < 1`
-(`W = t^(-1/3)`), can exceed that bound by up to the factor `W_max`.
+value 1.75 is a maintainer choice, not a derived stability bound. BHaH uses
+`Delta t = CFL_FACTOR * ds_min` and
+`ell_M = C_YBS_mom * CFL_FACTOR * dsmin * W`. Here `ds_min` is the global
+minimum of the reference-metric spacing `dsmin`. Therefore, for the local
+reference spacing `h=dsmin`,
 
-At principal order the term makes the momentum constraint diffuse, with rates
-`-ell_M |k|^2 / 2` (transverse) and `-2 ell_M |k|^2 / 3` (longitudinal). For
-the centered finite-difference stencils that NRPy generates, the largest
-eigenvalue magnitude of the discrete operator is `lambda_FD * ell_M / h^2`,
-with `lambda_FD` equal to 4.00, 5.62, 6.74, and 7.59 for orders 2, 4, 6, and 8.
-For the diffusion term alone, an explicit Runge-Kutta step is stable in a cell
-when `C_YBS_mom * CFL_FACTOR^2 * lambda_FD * W * ds_min / dsmin` does not
-exceed the real-axis limit of the method: 2.785 for RK4, 2.513 for RK3, and 2.0
-for RK2.
+```text
+ell_M * Delta t / h^2
+  = C_YBS_mom * CFL_FACTOR^2 * W * ds_min / dsmin
+  <= C_YBS_mom * CFL_FACTOR^2 * W_max
+```
 
-The condition holds in every cell when
-`C_YBS_mom * CFL_FACTOR^2 * lambda_FD * W_max` does not exceed the limit; where
-`W <= 1` everywhere it suffices that `C_YBS_mom * CFL_FACTOR^2 * lambda_FD` does
-not exceed the limit. At
-`CFL_FACTOR = 0.45` with RK3 and `W <= 1` that means `C_YBS_mom` up to about 2.2
-for order 4 and 1.6 for order 8 (1.9 and 1.3 once propagation is included,
-below); for `W_max > 1`, divide each of these by `W_max`. For `W <= 1`, a larger
-value stays stable only while no cell has both `W` and `ds_min / dsmin` near 1.
-The finest cells of a black-hole grid lie beside the punctures, where `W` is
-small. For `W <= 1` everywhere, the range 0 (off) to about 2 at
-`CFL_FACTOR = 0.45` follows from this condition, and its upper end scales as
-`1 / CFL_FACTOR^2`. The recommended value 1.75 is a maintainer choice, not a
-derived bound.
+for nonnegative coefficient and `W`, where `W_max` bounds `W` on the grid.
+`W<=1` holds for Brill-Lindquist and static trumpet initial data, but it is
+not a general evolution guarantee. Kasner data at `t<1` have `W=t^(-1/3)>1`.
+This spacing estimate alone does not bound the discrete momentum operator,
+which also depends on the evolved conformal metric.
 
-For orders 4, 6, and 8 the diffusive eigenvalue peaks near 0.75 pi per cell in
-each direction; for order 2 it equals its maximum along the whole line with pi
-in two directions and any wavenumber in the third. The first-derivative symbol
-is nonzero at these points, so propagation at the speed of light does lower the
-limit. At `CFL_FACTOR = 0.45`, adding the unit-speed frequency of a
-three-dimensional wavevector to every diffusive mode, the RK4 limit on
-`C_YBS_mom * CFL_FACTOR^2 * lambda_FD` is 2.77, 2.70, 2.63, and 2.56 for orders
-2, 4, 6, and 8 (2.785 without propagation), and the RK3 limit is 2.44, 2.20,
-2.06, and 1.96 (2.513 without propagation). These reduced values replace the
-real-axis limits in the condition above.
+For the isolated frozen-coefficient model with `gammabar_ij=delta_ij`, equal
+Cartesian spacing `h`, and Fourier modes, continuum momentum propagation has
+rates `-ell_M*|k|^2/2` transverse to the wavevector and
+`-2*ell_M*|k|^2/3` longitudinally. Discretizing the five-component symmetric
+trace-free `Abar` adjustment gives a distinct symbol: pure second derivatives
+use `-q_i/h^2`, while mixed derivatives use `-p_i*p_j/h^2` from the first
+derivative symbols. In general `q_i` differs from `p_i^2`; simply replacing
+`k_i` in the continuum momentum equation does not reproduce this operator.
 
-The analysis is frozen-coefficient and principal-part only. It omits variable
-coefficients, larger gauge speeds, Kreiss--Oliger dissipation, and the
-lower-order terms with derivatives of `phi` and of the connection, which vanish
-in flat space and are largest at a puncture; the weight `W` attenuates the term
-in that region, and no analysis bounds the remaining term. The coefficient
-carries `W` but no lapse factor.
+In that discrete model the maximum eigenvalue magnitude is
+`lambda_FD*ell_M/h^2`, with `lambda_FD` approximately 4.00, 5.62, 6.74, and
+7.59 for centered orders 2, 4, 6, and 8. For diffusion alone the classical
+explicit RK real-axis limits are approximately 2.785 for RK4, 2.513 for RK3,
+and 2.0 for RK2. The model condition is
+
+```text
+C_YBS_mom * CFL_FACTOR^2 * lambda_FD * W * ds_min / dsmin
+  <= RK real-axis limit.
+```
+
+Using `W_max` gives a sufficient bound for this Fourier model. It is not a
+cellwise stability theorem for curved, anisotropic, or variable-coefficient
+evolution. For example, the constant determinant-one conformal metric
+`diag(1/16,4,4)` and an `Axy` perturbation at the x-Nyquist frequency give
+`-32*ell_M/h^2` with second-order differences, exceeding the identity-metric
+value `4*ell_M/h^2`. Reference-metric spacing does not bound this additional
+inverse-conformal-metric factor.
+
+Within the identity-metric model, `CFL_FACTOR=0.45` and `W<=1` give diffusion
+limits on `C_YBS_mom` of about 2.2 for order 4 and 1.6 for order 8 with RK3.
+For `W_max>1`, divide these estimates by `W_max`; the estimates scale as
+`1/CFL_FACTOR^2`. A value near 2 is therefore an order-dependent estimate,
+not a generally safe upper limit.
+
+For orders 4, 6, and 8 the diffusive eigenvalue peaks near `0.75*pi` per cell
+in each direction; for order 2 it reaches its maximum when two directions
+have wavenumber `pi` and the third is arbitrary. Adding the discrete
+unit-speed wave frequency to every diffusive mode gives a further model
+estimate. At `CFL_FACTOR=0.45`, its RK4 limits on
+`C_YBS_mom*CFL_FACTOR^2*lambda_FD` are approximately 2.77, 2.70, 2.63, and
+2.56 for orders 2, 4, 6, and 8, while RK3 gives 2.44, 2.20, 2.06, and 1.96.
+These are limits for that imposed frequency model, not eigenvalues or
+stability bounds of the full coupled BSSN/fCCZ4 and gauge system.
+
+All these Fourier estimates omit variable coefficients, boundaries, larger
+gauge speeds, Kreiss-Oliger dissipation, and lower-order terms involving
+`phi` and connection derivatives. The coefficient contains `W` but no lapse
+factor. Its near-puncture weight does not bound every omitted term.
 
 Claim evidence:
-- Claim: the runtime default `C_YBS_mom = 0.0` removes the term exactly; the recommended value is 1.75, a maintainer choice and not a derived bound; the explicit-Runge-Kutta diffusion condition is `C_YBS_mom * CFL_FACTOR^2 * lambda_FD * W * ds_min / dsmin` below the real-axis limit in each cell; because `ds_min <= dsmin`, it holds in every cell when `C_YBS_mom * CFL_FACTOR^2 * lambda_FD * W_max` does not exceed the limit, with `W_max` the largest `W` on the grid at any step, and where `W <= 1` everywhere it suffices that `C_YBS_mom * CFL_FACTOR^2 * lambda_FD` does not exceed the limit; the range 0 to about 2 at `CFL_FACTOR = 0.45` is stated for `W <= 1` everywhere; the analysis is frozen-coefficient and principal-part only and omits the strong-field lower-order terms.
+- Claim: The default YBS-MOM coefficient is zero and 1.75 is a maintainer recommendation. The quoted FD and RK limits apply to an isolated frozen Fourier model with identity conformal metric and equal Cartesian spacing; neither the reference-spacing estimate nor the added unit-speed frequency model proves full-system or general cellwise stability.
 - Role: descriptive behavior
-- Deciding authority: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS momentum branch (`ell_M`, `W`); [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` (default value and parameter description); [numerical_grids_and_timestep.py](../../../nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py), `register_CFunction_cfl_limited_timestep`
-- Corroboration: [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (56), for the operator only; none available for the `lambda_FD`, real-axis-limit, and propagation values, because they follow from NRPy's centered finite-difference stencils and the Runge-Kutta stability limits, which Eq. (56) does not treat; none available for the recommended value, which is a maintainer choice
+- Deciding authority: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__`, `DbarM_STFDD` and `ell_M`; [finite_difference.py](../../../nrpy/finite_difference.py), `compute_fdcoeffs_fdstencl`; [rk_butcher_table_dictionary.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/rk_butcher_table_dictionary.py), `generate_Butcher_tables`; [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), coefficient default and description; [numerical_grids_and_timestep.py](../../../nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py), `ds_min_single_pt_exprs` and `register_CFunction_cfl_limited_timestep`
+- Corroboration: [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (56), for the continuum operator only; the finite-difference symbols and RK polynomials define the numerical estimates, not a general stability theorem.
 
 ### Authority reconciliation
 
@@ -208,6 +221,9 @@ Claim evidence:
 - Corroboration: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, generation options and RHS registration.
 
 ## Sources
+
+- [finite_difference.py](../../../nrpy/finite_difference.py) - `compute_fdcoeffs_fdstencl`
+- [rk_butcher_table_dictionary.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/rk_butcher_table_dictionary.py) - `generate_Butcher_tables`
 
 - [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py) - direct momentum adjustment
 - [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py) - fCCZ4 reuse

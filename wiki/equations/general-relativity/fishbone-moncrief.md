@@ -25,8 +25,19 @@ Boyer-Lindquist radius. `_compute_initial_data` then builds the torus enthalpy,
 density, pressure, Boyer-Lindquist four-velocity, transformed Kerr-Schild
 four-velocity, Kerr-Schild ADM metric fields, extrinsic curvature, vector
 potential, magnetic field, comoving magnetic invariant, and Valencia velocity.
-At the end of the pipeline it stores all public outputs as class attributes and
-sets `BU` to zero for this initial-data family.
+It stores these outputs as class attributes and sets `BU` to zero. The density
+expression evaluates
+`exp(log(hm1*(Gamma-1)/(kappa*Gamma))/(Gamma-1))` directly. It supplies no
+torus-support mask, atmosphere, or positivity enforcement. Callers must select
+admissible parameters and torus coordinates and supply exterior treatment;
+using the unmasked expressions outside their physical domain can yield
+negative or complex fluid quantities.
+
+Claim evidence:
+- Claim: Fishbone-Moncrief density and pressure are unmasked expressions; the caller must enforce their physical domain and provide exterior or atmosphere treatment.
+- Role: descriptive behavior
+- Deciding authority: [fishbone_moncrief.py](../../../nrpy/equations/general_relativity/fishbone_moncrief/fishbone_moncrief.py), `FishboneMoncriefID._compute_initial_data`
+- Corroboration: none available for exterior treatment; the constructor has no support-mask or atmosphere branch.
 
 The module-level note is part of the implementation boundary: data are
 constructed in spherical `(r, th, ph)` coordinates, and coordinate mapping is

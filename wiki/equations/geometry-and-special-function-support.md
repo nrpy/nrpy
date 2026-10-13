@@ -15,13 +15,22 @@ and reference-metric registry remain owned by the Core API pages.
 
 `BasisTransforms` wraps an existing coordinate-system `ReferenceMetric` entry
 and applies its stored Jacobians. It transforms contravariant vectors,
-covariant vectors, rank-2 covariant tensors, and time-independent four-tensors
-between the reference-metric basis and Cartesian or spherical bases. The lazy
+covariant vectors, rank-2 covariant tensors, and contravariant rank-2
+spacetime tensors between the reference-metric basis and Cartesian or spherical
+bases. The spacetime-tensor methods assume a time-independent spatial coordinate
+transformation, with unchanged time coordinate and no time-space mixing;
+the tensor components themselves may depend on time. The lazy
 `basis_transforms` dictionary constructs one `BasisTransforms` object per
 coordinate system. Its script validation emits one trusted dictionary for every
 entry currently in `reference_metric.supported_CoordSystems`; this is sampled
 expression coverage for those transforms, not a round-trip or generated-code
 runtime proof.
+
+Claim evidence:
+- Claim: The four-tensor methods assume time-independent spatial transformations, not time-independent tensor components.
+- Role: descriptive behavior
+- Deciding authority: [jacobians.py](../../nrpy/equations/basis_transforms/jacobians.py), `BasisTransforms.basis_transform_4tensorUU_from_Cartesian_to_time_indep_rfmbasis`
+- Corroboration: `none available`; the named implementation decides the stated behavior.
 
 `GeneralRFMFisheye` builds an N-transition radial fisheye map from raw
 Cartesian coordinates `xx[i]` to physical Cartesian coordinates. It registers
@@ -31,23 +40,52 @@ reference metric `ghatDD` plus first and second derivatives in the raw
 coordinates. `build_fisheye` is the public constructor wrapper, and trusted
 files cover only the N=1 and N=2 variants. The class accepts any integer
 `num_transitions >= 1`; larger N is implemented but not covered by those two
-trusted files.
+trusted files. The coordinate expressions contain `rbar/r` and higher inverse
+powers of the raw radius, so direct substitution at the origin can be
+undefined even for a map with a regular limit. Origin limits need separate
+handling. Transition widths and `tanh(R/s)` occur in denominators; callers
+must keep those denominators defined and choose a nonsingular radial map.
+The constructor checks the transition count, not these parameter-domain or
+invertibility conditions.
+
+Claim evidence:
+- Claim: Fisheye construction does not enforce a nonsingular parameter choice or automatically evaluate removable origin limits.
+- Role: descriptive behavior
+- Deciding authority: [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py), `GeneralRFMFisheye.__init__, _G_and_derivs_closed_form`
+- Corroboration: `none available`; the named implementation decides the stated behavior.
 
 `SO3Expressions` stores symbolic matrix-rotation expressions used by equation
 validation and by the generated BHaH SO(3) helper layer. Its helpers build a
 rotation matrix from orthonormal frame hats, apply `R` or `R^T` to vectors and
 rank-2 covariant tensors, compute relative rotations, dot products, norms,
 cross products, right-handed-frame invariants, Rodrigues axis-angle matrices,
-and axis recovery branches from a rotation matrix. Its script entry point sends
+and expressions used in axis recovery. Normalization and the axis-angle
+constructor require a nonzero axis. General-branch recovery divides by the
+caller-supplied `2*sin(phi)`, which must be nonzero. The pi-branch helper returns
+`(Rii+1)/2`, the squared unit-axis components at a pi rotation; it does not
+choose signs, take square roots, or select a recovery branch. Its script entry point sends
 the object dictionary through the trusted-expression pipeline. Generated BHaH C
 helpers that wrap this symbolic layer are routed from
 [BHaH SO(3) Rotation Helpers](../infrastructures/bhah/so3-rotation-helpers.md).
 
+Claim evidence:
+- Claim: SO(3) helpers require valid normalization and general-branch denominators; the pi helper supplies squared components rather than a complete recovered axis.
+- Role: descriptive behavior
+- Deciding authority: [SO3_rotations.py](../../nrpy/equations/rotation/SO3_rotations.py), `SO3Expressions.normalize_axis, axis_angle_general_branch_axis, axis_angle_pi_branch_diagonal_terms`
+- Corroboration: `none available`; the named implementation decides the stated behavior.
+
 `tensor_rotation.rotate` is a lighter quaternion path for symbolic vectors and
 3x3 tensors. It constructs a SymPy quaternion from an axis and angle, applies
 `q v q*` for vectors, and applies the corresponding row and column rotations
-for matrices. The module is doctest-only: its `__main__` block runs doctests
+for matrices. The axis must be nonzero; the function supplies no zero-axis
+fallback. The module is doctest-only: its `__main__` block runs doctests
 and does not generate a sibling trusted dictionary.
+
+Claim evidence:
+- Claim: Quaternion rotation requires a nonzero axis for the normalization performed by SymPy.
+- Role: descriptive behavior
+- Deciding authority: [tensor_rotation.py](../../nrpy/equations/quaternion_rotations/tensor_rotation.py), `rotate`
+- Corroboration: `none available`; the named implementation decides the stated behavior.
 
 `spin_weighted_spherical_harmonics.Y` implements the Goldberg-formula path for
 spin-weighted spherical harmonics. It registers `M_PI` for generated C contexts,
@@ -84,11 +122,11 @@ Pipeline](trusted-expression-pipeline.md) for that boundary.
 
 ## See Also
 
-- [Equations](index.md)
-- [Wave Equation](wave-equation.md)
-- [Conformally Flat Elliptic](conformally-flat-elliptic.md)
-- [SEOBNR And BOB](seobnr/index.md)
-- [Reference Metrics](../core/reference-metrics.md)
-- [Indexed Expressions](../core/indexed-expressions.md)
-- [Gridfunctions And Parameters](../core/gridfunctions-and-parameters.md)
-- [Trusted Expression Pipeline](trusted-expression-pipeline.md)
+- Parent: [Equations](index.md)
+- See also: [Wave Equation](wave-equation.md)
+- See also: [Conformally Flat Elliptic](conformally-flat-elliptic.md)
+- See also: [SEOBNR And BOB](seobnr/index.md)
+- See also: [Reference Metrics](../core/reference-metrics.md)
+- See also: [Indexed Expressions](../core/indexed-expressions.md)
+- See also: [Gridfunctions And Parameters](../core/gridfunctions-and-parameters.md)
+- See also: [Trusted Expression Pipeline](trusted-expression-pipeline.md)

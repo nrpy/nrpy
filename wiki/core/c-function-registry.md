@@ -17,7 +17,13 @@ Comment formatting is centralized in `prefix_with_star()`. It strips only enclos
 
 When `include_CodeParameters_h` is true, the generated body begins with a code-parameter include. It uses `set_CodeParameters-simd.h` if `enable_simd` is true or if the function body contains `SIMD_WIDTH`; otherwise it uses `set_CodeParameters.h`. This include is inserted inside the function body before the stripped body text.
 
-`generate_full_function()` creates three outputs and stores them on the object: `function_prototype`, `raw_function`, and clang-formatted `full_function`. The prototype includes decorators, return type, generated name, and parameters. The raw function assembles includes, optional prefunc text, Doxygen comment, signature, optional code-parameter include, stripped body, an `// END FUNCTION: <name>` marker, and optional postfunc text. `full_function` is `clang_format(raw_function)`.
+`generate_full_function()` returns a tuple containing `function_prototype`, `raw_function`, and clang-formatted `full_function`. The constructor stores those strings on the object. A later call returns regenerated strings without updating the stored attributes; callers that need to replace them must assign the returned tuple. The prototype includes decorators, return type, generated name, and parameters. The raw function assembles includes, optional prefunc text, Doxygen comment, signature, optional code-parameter include, stripped body, an `// END FUNCTION: <name>` marker, and optional postfunc text. `full_function` is `clang_format(raw_function)`.
+
+Claim evidence:
+- Claim: `CFunction.generate_full_function()` returns the prototype, raw function, and formatted function; it does not update the corresponding stored attributes. The constructor and callers that refresh stored text assign the returned tuple explicitly.
+- Role: descriptive behavior
+- Deciding authority: [c_function.py](../../nrpy/c_function.py), `CFunction.__init__` and `CFunction.generate_full_function`
+- Corroboration: [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_generate_c_files_and_header`, assigns regenerated strings before writing the function.
 
 Coordinate-system wrappers use `function_name_and_subdir_with_CoordSystem()`. When `CoordSystem_for_wrapper_func` is set, the generated function goes under `subdirectory/<CoordSystem>` and its actual registered name becomes `<name>__rfm__<CoordSystem>`; otherwise the original subdirectory and name are used. Constructor validation rejects coordinate-specific wrapper parameters that contain `griddata_struct`.
 
@@ -33,6 +39,8 @@ For interface-change and compatibility-shim rules, use [Contribution Style And
 Static Analysis](../architecture/contribution-style-and-static-analysis.md).
 
 ## Sources
+
+- [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `_generate_c_files_and_header`
 
 - [nrpy/c_function.py](../../nrpy/c_function.py) - `CFunction`, `CFunction_dict`, `prefix_with_star`, `generate_full_function`, `register_CFunction`, `function_name_and_subdir_with_CoordSystem`
 - [nrpy/infrastructures/BHaH/main_c.py](../../nrpy/infrastructures/BHaH/main_c.py) - `register_CFunction_main_c`

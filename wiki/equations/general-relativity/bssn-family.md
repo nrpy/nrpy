@@ -39,8 +39,20 @@ Claim evidence:
 - Deciding authority: [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`
 - Corroboration: [test_parse_BSSN.py](../../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`
 
-BHaH and ETLegacy provide one combined all-points projector for the determinant
-and trace constraints. The GeneralRFM branch explicitly forms the
+`BSSN_algebraic_constraints(CoordSystem, enable_rfm_precompute=False)`
+returns the corrected rescaled tensors `(hprimeDD, aprimeDD)`. This equation
+function selects `_project_general_rfm` for names beginning with `GeneralRFM`
+and `_project_orthogonal_rfm` otherwise. BHaH and ETLegacy call it to generate
+one combined all-points determinant/trace projector; the backends supply
+storage, loops, and schedules.
+
+Claim evidence:
+- Claim: `BSSN_algebraic_constraints` defines the symbolic determinant/trace projection and returns corrected rescaled metric and curvature tensors; BHaH and ETLegacy delegate the expressions to it.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_algebraic_constraints.py](../../../nrpy/equations/general_relativity/BSSN_algebraic_constraints.py), `BSSN_algebraic_constraints`, `_project_general_rfm`, and `_project_orthogonal_rfm`
+- Corroboration: [BHaH projector](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) and [ETLegacy projector](../../../nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
+
+The GeneralRFM branch explicitly forms the
 determinant-corrected metric, inverts it, and removes the resulting trace from
 `AbarDD`. Standard orthogonal reference metrics instead invert the reduced
 `H=I+h` matrix and use algebraic cancellation of the determinant-rescaling
@@ -109,16 +121,18 @@ Claim evidence:
 - Corroboration: none available; the papers define the scientific relations, while current NRPy option mapping is covered by the descriptive claim above
 
 `BSSNconstraints` constructs Hamiltonian, momentum, and covariant conformal
-connection constraint expressions. It unconditionally registers scalar
-diagnostic gridfunctions `H`, `M`, and `LAMBDA_CONSTRAINT`, optionally
-registers the `MU` components, and stores `H`, `MU`, the internal contraction
+connection constraint expressions. It registers scalar diagnostic `H`;
+`register_M_and_LAMBDA_CONSTRAINT_gridfunctions=True` also registers `M` and
+`LAMBDA_CONSTRAINT` by default. Disabling that option suppresses their storage
+registration while retaining the expressions. A separate option registers the
+`MU` components. The object stores `H`, `MU`, the internal contraction
 `Msquared`, and rescaled `mU`. The internal contraction is the physical norm
 square `gamma_ij M^i M^j`, implemented as the conformal-metric contraction
 divided by `exp_m4phi`; infrastructure producers export `M` as
 `sqrt(Msquared)`.
 
 Claim evidence:
-- Claim: `BSSNconstraints` registers scalar diagnostic storage named `H`, `M`, and `LAMBDA_CONSTRAINT`; its internal `Msquared` is `gamma_ij M^i M^j` with `gamma_ij = gammabar_ij / exp_m4phi`, and the BHaH, ETLegacy, and CarpetX constraint producers export `M = sqrt(Msquared)` rather than the internal square.
+- Claim: `BSSNconstraints` registers `H` and, by default, `M` and `LAMBDA_CONSTRAINT`; the latter two registrations can be disabled with `register_M_and_LAMBDA_CONSTRAINT_gridfunctions=False` while retaining their expressions; its internal `Msquared` is `gamma_ij M^i M^j` with `gamma_ij = gammabar_ij / exp_m4phi`, and the BHaH, ETLegacy, and CarpetX constraint producers export `M = sqrt(Msquared)` rather than the internal square.
 - Role: descriptive behavior
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`; [ETLegacy BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`; [CarpetX BSSN_constraints.py](../../../nrpy/infrastructures/CarpetX/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
 - Corroboration: [BSSN_constraints_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py), `trusted_dict`; [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints_dict.__getitem__` physical-ADM-norm doctest; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), existing code-generation doctest
@@ -158,11 +172,19 @@ double-count the baseline. Yo-Lin-Cao write the same coefficient as
 a user who enables the option sets `YBS_chi` above zero in the parameter file.
 The recommended maximum is `2/3` for BSSN. It is the `xi=1` value that Yo, Lin,
 and Cao state is usually chosen in Eq. (47), a customary choice and not a
-stability bound. No derivation bounds larger values: the term is lower order,
-so it adds no timestep restriction, and it changes the growth rate of `C^i` by
-`-YBS_chi*Dbar_j beta^j`. Larger values have no supporting derivation or source
-here, and negative values amplify `C^i` wherever `Dbar_j beta^j > 0` and should
-not be used.
+stability bound. The term is lower differential order and changes the local
+growth rate of `C^i` by `-YBS_chi*Dbar_j beta^j`. It leaves the principal
+characteristic speeds unchanged, but sufficiently large decay rates can
+restrict explicit timesteps. For example, classical RK4 applied to
+`dC/dt=-kappa*C` has amplification `R(-3)=1.375` when `kappa*Delta t=3`,
+despite continuum decay. Larger parameter values have no supporting bound
+here, and negative values amplify `C^i` wherever `Dbar_j beta^j > 0`.
+
+Claim evidence:
+- Claim: The lower-order YBS Gamma addition leaves principal characteristic speeds unchanged but can impose an explicit timestep restriction through its local decay rate.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS Gamma addition; [rk_butcher_table_dictionary.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/rk_butcher_table_dictionary.py), `generate_Butcher_tables`, classical RK4 coefficients
+- Corroboration: the classical RK4 polynomial `R(z)=1+z+z^2/2+z^3/6+z^4/24` gives the displayed amplification directly.
 
 The equation layer uses a plain real SymPy symbol for `YBS_chi`; constructing
 enabled symbolic RHSs does not register a global `CodeParameter`. The BHaH
@@ -180,8 +202,17 @@ is used.
 derivative-based shift choices `GammaDriving2ndOrder_NoCovariant`,
 `GammaDriving2ndOrder_Covariant`,
 `GammaDriving2ndOrder_Covariant__Hatted`, and `NonAdvectingGammaDriving`
-therefore consume the adjusted Lambda RHS. `Frozen` and both first-order
-covariant variants do not consume that RHS and remain unchanged.
+consume the adjusted Lambda RHS by default. Supplying
+`evolved_connection_rhsU` replaces that input with the caller's unrescaled
+connection RHS; forwarding the Boolean alone does not adjust a replacement
+vector. `Frozen` and both first-order covariant variants do not consume that
+RHS and remain unchanged.
+
+Claim evidence:
+- Claim: Derivative-based shift equations use the adjusted BSSN connection RHS only when `evolved_connection_rhsU` is absent; an explicit vector supplies the unrescaled connection evolution instead.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`
+- Corroboration: [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), `fCCZ4_gauge_RHSs`, supplies the fCCZ4 connection RHS.
 
 With `Theta = Dbar_j beta^j`, the corresponding constraint propagation has
 the lower-order addition `-YBS_chi*Theta*C^i`:
@@ -257,6 +288,9 @@ construction uses explicit loops, established suffixes such as `U`, `D`, `DD`,
 corresponding trusted files.
 
 ## Sources
+
+- [BSSN_algebraic_constraints.py](../../../nrpy/equations/general_relativity/BSSN_algebraic_constraints.py) - `BSSN_algebraic_constraints`
+- [rk_butcher_table_dictionary.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/rk_butcher_table_dictionary.py) - `generate_Butcher_tables`
 
 - [Brown, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2) - Eqs. (12a), (12b), (15), (21e), and (22e); published as [Phys. Rev. D 79, 104029](https://doi.org/10.1103/PhysRevD.79.104029) (secondary metadata)
 - [Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066v2](https://arxiv.org/pdf/gr-qc/0209066v2) - Eq. (45), adjusted Gamma-constraint coefficient

@@ -26,8 +26,28 @@ constraint by `particle_type`. The massive path returns eight ODE right-hand
 sides from position and four-velocity evolution, plus `u0_massive` from the
 timelike normalization condition. The photon path returns nine ODE right-hand
 sides from position and four-momentum evolution; the ninth component is the
-Eulerian path-length diagnostic, and `p0_photon` comes from the null constraint.
+signed Eulerian path-length diagnostic `dL/dlambda=alpha*p^0`, with
+`alpha=1/sqrt(-g^{00})`, requiring `g^{00}<0`. The initialization methods
+select the positive massive root and the negative photon root for reverse ray
+tracing. In Minkowski spacetime these are `u^0=sqrt(1+sum_i (u^i)^2)` and
+`p^0=-sqrt(sum_i (p^i)^2)`. Thus the photon distance decreases with increasing
+affine parameter for this nonzero, past-directed initial momentum. Both
+initialization formulas assume the documented `(-,+,+,+)` metric and
+`g_00<0`; they divide by `2*g_00` and provide no `g_00=0` fallback. These are
+initialization restrictions, not a demonstrated evolution restriction.
 Unsupported particle types raise `ValueError`.
+
+The stored analytic geometry and the returned ODE expressions are separate:
+RHSs and normalization expressions declare generic `conn_Gamma4UDD`,
+`metric_g4DD`, and tangent-component symbols. Callers must supply those metric,
+connection, and tangent values; coordinates alone do not evaluate the returned
+RHSs.
+
+Claim evidence:
+- Claim: Geodesic initialization selects a positive massive root and a negative photon root in its documented `g_00<0` domain, without a zero-coefficient fallback; the photon distance RHS is signed `alpha*p^0`. Generic RHS and normalization symbols require caller-supplied geometry and tangent values.
+- Role: descriptive behavior
+- Deciding authority: [geodesics.py](../../../nrpy/equations/general_relativity/geodesics/geodesics.py), `hamiltonian_constraint_massive`, `hamiltonian_constraint_photon`, `geodesic_eom_rhs_massive`, `geodesic_eom_rhs_photon`, and `normalization_constraint`
+- Corroboration: none available for the complete initialization domain; substituting the Minkowski metric in the displayed quadratic roots checks their time orientation directly.
 
 The same module also exposes reusable recipes for numerical spacetime data:
 `symbolic_numerical_christoffel_recipe`,
