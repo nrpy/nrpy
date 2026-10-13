@@ -5,7 +5,7 @@
 
 ## Summary
 
-`nrpy.helpers.simd` rewrites SymPy expressions into symbolic calls such as `AddSIMD`, `MulSIMD`, `DivSIMD`, and `FusedMulAddSIMD`. Handwritten headers supply C/CUDA implementations for supported names. The transformation and header must be checked together: some emitted names and constants are missing definitions, and some header branches differ from the symbolic arithmetic.
+`nrpy.helpers.simd` rewrites SymPy expressions into symbolic calls such as `AddSIMD`, `MulSIMD`, `DivSIMD`, and `FusedMulAddSIMD`. Handwritten headers supply C/CUDA implementations for supported names. The transformation and header must be checked together: some emitted names and constants are missing definitions. Fused and ordinary arithmetic can round differently.
 
 ## Detail
 
@@ -26,14 +26,15 @@ Claim evidence:
 
 Debug mode is an internal validation path for the symbolic rewrite. `_debug_eval_namespace()` builds an explicit namespace containing SymPy objects, free symbols, and `*_SIMD_check` functions such as `AbsSIMD_check`, `ConstSIMD_check`, `FusedMulAddSIMD_check`, and `NegFusedMulSubSIMD_check`. With `debug=True`, `expr_convert_to_simd_intrins()` evaluates the transformed spelling through that restricted namespace, back-substitutes rational symbols, compares against the original expression, and raises `ValueError` if simplification cannot prove the difference is zero. This documents the helper's own validation behavior, not a general recommendation to evaluate arbitrary expression strings.
 
-`simd_intrinsics.h` defines vector types, widths, loads/stores, broadcasts, arithmetic, selected math functions, horizontal addition, and `UPWIND_ALG`. Compiler macros select AVX512F, AVX, SSE2/SSE3, or scalar fallback. The supported scalar macros use width one. Header arithmetic still needs separate validation: without FMA, the AVX and SSE `NegFusedMulSubSIMD(a,b,c)` expansion computes `c-(c+(a*b+c))`, which can overflow when `-(a*b+c)` remains finite. The SSE branch with `__FMA__` defined instead computes `a*b-c`, contrary to the symbolic checker's `-(a*b+c)`; this branch is not ordinarily selected when AVX is enabled. Symbolic debug checks do not execute these headers or establish floating-point equivalence.
+`simd_intrinsics.h` defines vector types, widths, loads/stores, broadcasts, arithmetic, selected math functions, horizontal addition, and `UPWIND_ALG`. Compiler macros select AVX512F, AVX, SSE2/SSE3, or scalar fallback. The supported scalar macros use width one.
+
+`NegFusedMulSubSIMD(a,b,c)` represents `-(a*b+c)`. The non-FMA SSE/AVX forms multiply, add `c`, and flip the sum's sign bit, preserving unary negation of signed zero without redundant arithmetic involving `c`. The SSE/FMA, AVX/FMA, and AVX512 forms use their corresponding `fnmsub` intrinsics, equivalent to `fma(-a,b,-c)`. With contraction disabled, ordinary arithmetic rounds the product and sum separately; fused arithmetic rounds once. These forms can differ in rounding, overflow, and the zero sign after exact cancellation. The SSE/FMA branch is normally bypassed because AVX takes precedence in header selection. Symbolic debug checks do not execute these headers or establish floating-point equivalence.
 
 Claim evidence:
-- Claim: SIMD header coverage and arithmetic differ from the symbolic checker; non-FMA negated subtraction can overflow differently and the SSE/FMA form has a different sign expression.
+- Claim: NegFusedMulSubSIMD represents -(a*b+c): non-FMA SSE/AVX multiply, add c, and flip the sign bit; SSE/FMA, AVX/FMA, and AVX512 use fnmsub, equivalent to fma(-a,b,-c). Fused and ordinary forms can differ in rounding, overflow, and the zero sign after exact cancellation.
 - Role: descriptive behavior
 - Deciding authority: [nrpy/helpers/simd_intrinsics.h](../../../nrpy/helpers/simd_intrinsics.h), `NegFusedMulSubSIMD`
-- Corroboration: `none available`; the named implementation decides this behavior.
-- Corroborating comparison: [nrpy/helpers/simd.py](../../../nrpy/helpers/simd.py), `NegFusedMulSubSIMD_check`, defines the symbolic intended expression.
+- Corroboration: [nrpy/helpers/simd.py](../../../nrpy/helpers/simd.py), `NegFusedMulSubSIMD_check`, supplies the symbolic sign expression; it does not execute the header or validate floating-point results.
 
 `cuda_intrinsics.h` is the CUDA-oriented scalar/intrinsic contract. When `__CUDACC__` is defined, `AddCUDA`, `SubCUDA`, and `MulCUDA` are plain `+`, `-`, and `*`, so that nvcc's default `-fmad=true` contraction can fuse multiply-add pairs the symbolic lowering did not fuse itself; the opaque `__dadd_rn`/`__dsub_rn`/`__dmul_rn` intrinsics they replaced are never contracted, and each plain operator is still IEEE round-to-nearest. `DivCUDA`, `FusedMulAddCUDA`, `SqrtCUDA`, and `ReadCUDA` use CUDA device intrinsics or device read helpers, and the fused subtract and negated forms fold their exact negations into a single `__fma_rn`. The non-CUDA branch keeps the same `REAL_CUDA_ARRAY`, `CUDA_WIDTH`, arithmetic, load/store, horizontal-add, and `UPWIND_ALG` macro names as scalar C expressions. This header is separate from the SIMD symbolic transformer: it defines CUDA macro spellings and fallback behavior, but `expr_convert_to_simd_intrins()` itself emits `*SIMD` names, not `*CUDA` names.
 
@@ -42,7 +43,7 @@ Generated projects may contain copied versions of these headers, but those copie
 ## Sources
 
 - [nrpy/helpers/simd.py](../../../nrpy/helpers/simd.py) - `expr_convert_to_simd_intrins`, `_debug_eval_namespace`, `AbsSIMD_check`, `ConstSIMD_check`, `FusedMulAddSIMD_check`, `FusedMulSubSIMD_check`, `NegFusedMulAddSIMD_check`, `NegFusedMulSubSIMD_check`
-- [nrpy/helpers/simd_intrinsics.h](../../../nrpy/helpers/simd_intrinsics.h) - `REAL_SIMD_ARRAY`, `SIMD_WIDTH`, `UPWIND_ALG`, `FusedMulAddSIMD`, `HorizAddSIMD`
+- [nrpy/helpers/simd_intrinsics.h](../../../nrpy/helpers/simd_intrinsics.h) - `REAL_SIMD_ARRAY`, `SIMD_WIDTH`, `UPWIND_ALG`, `FusedMulAddSIMD`, `NegFusedMulSubSIMD`, `HorizAddSIMD`
 - [nrpy/helpers/cuda_intrinsics.h](../../../nrpy/helpers/cuda_intrinsics.h) - `REAL_CUDA_ARRAY`, `CUDA_WIDTH`, `UPWIND_ALG`, `FusedMulAddCUDA`, `ReadCUDA`
 - [nrpy/c_codegen.py](../../../nrpy/c_codegen.py) - `CCodeGen`, `c_codegen`, `gridfunction_management_and_FD_codegen`
 - [Intel Intrinsics Guide](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html) - SSE, AVX, AVX512, and intrinsic-family terminology
