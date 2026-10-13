@@ -218,14 +218,15 @@ def py_codegen(
     #         just output the SymPy string in the most boring way,
     if not PCGParams.enable_cse:
         # If CSE is disabled:
-        if PCGParams.postproc_substitution_dict:
-            sympyexpr_list = [
-                apply_substitution_dict(expr, PCGParams.postproc_substitution_dict)
-                for expr in sympyexpr_list
-            ]
-        _check_no_read_after_overwrite(output_varname_str, sympyexpr_list)
+        rhs_exprs: List[sp.Basic] = []
         for i, expr in enumerate(sympyexpr_list):
+            if PCGParams.postproc_substitution_dict:
+                expr = apply_substitution_dict(
+                    expr, PCGParams.postproc_substitution_dict
+                )
+            rhs_exprs.append(expr)
             outstring += f"{output_varname_str[i]} = {printer.doprint(expr)}\n"
+        _check_no_read_after_overwrite(output_varname_str, rhs_exprs)
     # Step 3b: If CSE enabled, then perform CSE using SymPy and then
     #          resulting JAX code.
     else:
@@ -266,16 +267,6 @@ def py_codegen(
                 )
             )
 
-        # cse_results[1] specifies the varnames in terms of CSE variables.
-        # Output assignments follow all temporaries, so only output right-hand sides can read an overwritten name.
-        output_rhs_exprs = list(cse_results[1])
-        if PCGParams.postproc_substitution_dict:
-            output_rhs_exprs = [
-                apply_substitution_dict(result, PCGParams.postproc_substitution_dict)
-                for result in output_rhs_exprs
-            ]
-        _check_no_read_after_overwrite(varnames, output_rhs_exprs)
-
         # Processing common subexpressions and results from cse_postprocess
         # cse_results[0] contains common subexpression definitions, does not specify varnames.
         for common_subexpression in cse_results[0]:
@@ -285,8 +276,17 @@ def py_codegen(
                 )
             outstring += f"{common_subexpression[0]} = {printer.doprint(common_subexpression[1])}\n"
 
-        for i, result in enumerate(output_rhs_exprs):
+        # cse_results[1] specifies the varnames in terms of CSE variables.
+        output_rhs_exprs: List[sp.Basic] = []
+        for i, result in enumerate(cse_results[1]):
+            if PCGParams.postproc_substitution_dict:
+                result = apply_substitution_dict(
+                    result, PCGParams.postproc_substitution_dict
+                )
+            output_rhs_exprs.append(result)
             outstring += f"{varnames[i]} = {printer.doprint(result)}\n"
+        # Output assignments follow all temporaries, so only output right-hand sides can read an overwritten name.
+        _check_no_read_after_overwrite(varnames, output_rhs_exprs)
 
         # End of group processing
     # Step 4: Construct final output string

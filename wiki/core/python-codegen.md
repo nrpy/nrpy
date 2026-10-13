@@ -28,7 +28,7 @@ not guaranteed to return code.
 
 Both paths emit output assignments in list order into one Python namespace, so
 an output assignment replaces any earlier value bound to that name. Before
-printing, `py_codegen()` raises `ValueError` if an output name is a free symbol
+returning code, `py_codegen()` raises `ValueError` if an output name is a free symbol
 of a later printed output right-hand side: an input symbol such as `x`, or a
 CSE temporary such as `tmp0` for expressions `[x**3 + sin(x**3), x**3]` with
 output names `["tmp0", "b"]`. Without this check, the later output would read
