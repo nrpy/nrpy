@@ -120,8 +120,7 @@ Claim evidence:
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/BHaHAHA/spectre_spin_integrator.py` `bah_compute_spectre_spin_potentials`, `diagnostics_spectre_spin`
 - Corroboration: `nrpy/equations/general_relativity/bhahaha/SpECTRESpinEstimate.py` `get_public_integrands`; `nrpy/infrastructures/BHaH/BHaHAHA/BHaHAHA_header.h` `bhahaha_diagnostics_struct`
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=not-run; precision=not-run; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=not-run; date=08-10-2026`
+- Validation: Reversing the sign of `zU0` must reverse `ZOU[0]` and exchange the extrema while preserving the full spin vector; failure of either pole fit must preserve the SpECTRE-style and Gram-matrix vectors.
 
 The cited representative trusted dictionaries cover the ordinary spherical
 variants for each assigned equation-side family. The source modules also expose

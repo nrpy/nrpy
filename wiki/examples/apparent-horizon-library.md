@@ -62,12 +62,11 @@ build in the generated BHaHAHA directory and start linking guidance from
 `BHaHAHA.h`.
 
 Claim evidence:
-- Claim: BHaHAHA supplies one explicit PRIMME source inventory plus typed `linkcheck` and cleanup metadata, while the canonical BHaH helper renders the Makefile; an isolated OpenMP-disabled serial-codegen generation built `libBHaHAHA.a` with PRIMME members, linked `linkcheck`, and cleaned objects, `.deps`, the archive, and both linkcheck artifacts.
+- Claim: BHaHAHA passes its explicit PRIMME `.c` source list, `linkcheck` target, and cleanup filenames to the canonical BHaH helper, which renders the Makefile and includes PRIMME objects in the static archive.
 - Role: descriptive behavior
 - Deciding authority: [bhahaha.py](../../nrpy/examples/bhahaha.py), `akv_primme_c_sources` and `akv_makefile_extension`; [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `MakefileExtension` and `_construct_makefile_content`
-- Corroboration: none available; validation artifacts were temporary and were not registered
-- Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=GCC 13.3.0, GNU Make 4.3, Python 3.13.7; backend=BHaHAHA CPU C static library; precision=double; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=serial codegen in an isolated copy, --no-openmp, OPENMP=0; date=08-14-2026`
+- Corroboration: none available; generated library output is not registered as frozen evidence.
+- Validation: Generate with `--no-openmp` in an isolated copy and output directory, build `libBHaHAHA.a`, check its PRIMME object members, run `make linkcheck`, and verify that `make clean` removes objects, `.deps`, the archive, `.akv_linkcheck`, and `.akv_linkcheck_main.c`.
 
 `BHaHAHA.h` is assembled from the checked-in header template plus generator
 additions. It defines `REAL` when absent, declares the 12 Cartesian ADM input

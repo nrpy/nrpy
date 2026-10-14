@@ -142,8 +142,7 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/BHaH/BHaHAHA/spectre_spin_integrator.py` `diagnostics_spectre_spin`; `nrpy/infrastructures/BHaH/BHaHAHA/diagnostics.py` `diagnostics`
 - Corroboration: `nrpy/infrastructures/BHaH/BHaHAHA/BHaHAHA_header.h` `bhahaha_diagnostics_struct`, `bah_initialize_diagnostics_struct`
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=not-run; precision=not-run; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=not-run; date=08-10-2026`
+- Validation: Exercise a pole-fit failure and verify that only `spin_chi_{x,y,z}_akv_poles` remains unavailable while the shared solve returns success and preserves the SpECTRE-style and Gram-matrix vectors.
 
 On a successful final-resolution solve, `find_horizon` shifts the previous
 surface arrays so the new surface becomes `prev_horizon_m1`, marks final
@@ -172,8 +171,7 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_file_output.py` `diagnostics_file_output`
 - Corroboration: `nrpy/infrastructures/BHaH/BHaHAHA/BHaHAHA_header.h` `bhahaha_diagnostics_struct`
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=not-run; precision=not-run; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=not-run; date=08-10-2026`
+- Validation: Check that a fresh diagnostics file preserves columns 1--27 and appends the AKV-pole components in columns 28--30, writes unavailable components as `NaN`, and preserves an existing header when appending.
 
 Cleanup is split by layer. Inside `find_horizon`,
 `free_all_but_external_input_gfs` frees each per-resolution evolution grid,
