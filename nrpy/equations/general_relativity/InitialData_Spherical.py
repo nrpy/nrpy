@@ -321,15 +321,10 @@ class InitialData_Spherical:
     def TeukolskyWave(self, branch: str = "regular" ) -> tuple[list[list[sp.Expr]], list[list[sp.Expr]], sp.Expr, list[sp.Expr], list[sp.Expr]]:
         """Set ADM quantities for an analytic linearized Teukolsky wave.
 
-            Args:
-                branch: Wave branch to construct: "regular", "outgoing", or "ingoing".
-
-            Returns:
-                Tuple containing the spatial metric gammaDD, extrinsic curvature KDD,
-                lapse alpha, shift betaU, and gauge quantity BU.
-
-            Raises:
-                ValueError: If the requested branch is unsupported.
+            :param branch: Wave branch to construct: "regular", "outgoing", or "ingoing".
+            :return: A tuple containing the spatial metric gammaDD, extrinsic curvature KDD,
+                    lapse alpha, shift betaU, and gauge quantity BU.
+            :raises ValueError: If the requested branch is unsupported.
             """
         # Define math symbols
         self.r, self.th, self.ph = sp.symbols("r th ph", real=True)
