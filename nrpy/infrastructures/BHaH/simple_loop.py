@@ -141,6 +141,7 @@ def simple_loop(
     OMP_custom_pragma: str = "",
     OMP_collapse: int = 1,
     loop_bounds: Union[Tuple[List[str], List[str]], None] = None,
+    cuda_parallel_pair: bool = False,
 ) -> str:
     """
     Generate a simple loop in C (for use inside of a function).
@@ -357,6 +358,7 @@ def simple_loop(
             increment,
             prefix_loop_with,
             loop_body=final_loop_body,
+            cuda_parallel_pair=cuda_parallel_pair,
         )
     )
 

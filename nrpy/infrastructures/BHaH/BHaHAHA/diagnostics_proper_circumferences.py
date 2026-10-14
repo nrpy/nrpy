@@ -14,7 +14,7 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.equations.general_relativity.bhahaha.area as bhahaha_area
 import nrpy.helpers.parallel_codegen as pcg
-
+from nrpy.infrastructures import BHaH
 
 def register_CFunction_diagnostics_proper_circumferences(
     enable_fd_functions: bool = False,
@@ -30,6 +30,13 @@ def register_CFunction_diagnostics_proper_circumferences(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+
+    BHaH.griddata_commondata.register_griddata_commondata(
+        __name__,
+        "diagnostics_arrays_struct diagnostics_arrays",
+        "diagnostics arrays used to transfer data between GPU grids; struct defined in BHaHAHA.h",
+        is_commondata=True,
+    )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     prefunc = """
@@ -55,6 +62,9 @@ def register_CFunction_diagnostics_proper_circumferences(
  * @pre The internal weight generator expects the sample count to be compatible
  *      with the 8th-order periodic stencil (here fixed to 128).
  */
+#ifdef __CUDACC__
+__device__
+#endif
 static void elliptic_E_and_K_integrals(const REAL k, REAL *restrict E, REAL *restrict K) {
   static const int N_sample_pts = 128; // Number of sample points for integration. Chosen for high precision.
   const REAL *restrict weights;        // Precomputed integration weights for accuracy in the midpoint method.
@@ -102,6 +112,9 @@ static void elliptic_E_and_K_integrals(const REAL k, REAL *restrict E, REAL *res
  * @return    The estimated spin parameter. Returns -10.0 if C_r is out of valid bounds or if convergence fails.
  *
  */
+#ifdef __CUDACC__
+__device__
+#endif
 static REAL compute_spin(const REAL C_r) {
   // Validate the input parameter. Return an error code if C_r exceeds the valid range.
   if (C_r > 1)
@@ -167,13 +180,22 @@ Computes proper circumferences along the equator and polar directions for appare
 @return Status code indicating success or type of error (e.g., BHAHAHA_SUCCESS or INITIAL_DATA_MALLOC_ERROR).
 @note This function uses OpenMP for parallel loops and performs interpolation and integration over grid data.
 """
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "diagnostics_proper_circumferences"
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
+    cfunc_decorators= r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     body = r"""
-  const int NUM_DIAG_GFS = 2;
+#ifdef __CUDACC__
+  // Set up cooperative group
+  namespace cg = cooperative_groups;
+  cg::grid_group gpu_grid = cg::this_grid();
+#endif
   const int grid = 0;
   // Extract grid dimensions, including ghost zones, for each coordinate direction. Needed for IDX4() macro.
   const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
@@ -181,8 +203,15 @@ Computes proper circumferences along the equator and polar directions for appare
   const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
   const int NUM_THETA = Nxx_plus_2NGHOSTS1; // Needed for IDX2() macro.
 
+  //#ifdef __CUDACC__
+  REAL *restrict metric_data_gfs = commondata->diagnostics_arrays.metric_data_gfs;
+  /*
+  #else
+  const int NUM_DIAG_GFS = 2;
   REAL *restrict metric_data_gfs;
   BHAH_MALLOC(metric_data_gfs, Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_DIAG_GFS * sizeof(REAL));
+  #endif
+  */
 
   // Compute the line element in the phi direction (sqrt(q_{phi phi})) across the entire grid.
   {
@@ -194,16 +223,22 @@ Computes proper circumferences along the equator and polar directions for appare
     const REAL invdxx1 = griddata[grid].params.invdxx1;
     const REAL invdxx2 = griddata[grid].params.invdxx2;
     const int i0 = NGHOSTS; // Fixed index for radial coordinate (r).
-
+    
     // Loop over angular grid points (theta and phi) to compute:
     // 1. sqrt(q_{theta theta}), stored to metric_data_gfs[IDX4(0,...)], and
     // 2. sqrt(q_{phi phi}), stored to metric_data_gfs[IDX4(1,...)] at each point (theta, phi).
     // Notice we do clever indexing to ensure this 2D computation stays within the memory bounds of (3D) metric_data_gfs.
+#ifdef __CUDACC__
+    PARALLEL_2D_LOOP(i1, NGHOSTS, Nxx_plus_2NGHOSTS1 - NGHOSTS, i2, NGHOSTS, Nxx_plus_2NGHOSTS2 - NGHOSTS) {
+      MAYBE_UNUSED const REAL xx2 = xx[2][i2]; // Phi coordinate at index i2.
+      MAYBE_UNUSED const REAL xx1 = xx[1][i1]; // Theta coordinate at index i1.
+#else
 #pragma omp parallel for
     for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
-      const MAYBE_UNUSED REAL xx2 = xx[2][i2]; // Phi coordinate at index i2.
+      MAYBE_UNUSED const REAL xx2 = xx[2][i2]; // Phi coordinate at index i2.
       for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {
-        const MAYBE_UNUSED REAL xx1 = xx[1][i1]; // Theta coordinate at index i1.
+        MAYBE_UNUSED const REAL xx1 = xx[1][i1]; // Theta coordinate at index i1.
+#endif
 """
     body += ccg.c_codegen(
         [
@@ -218,8 +253,13 @@ Computes proper circumferences along the equator and polar directions for appare
         enable_fd_functions=enable_fd_functions,
     )
     body += r"""
-      } // END LOOP: for i1 over theta points on the horizon surface
-    } // END LOOP: for i2 over phi points on the horizon surface
+#ifndef __CUDACC__
+      } // END LOOP over i1 (theta)
+    } // END LOOP over i2 (phi)
+#else
+    } END_PARALLEL_2D_LOOP;
+    gpu_grid.sync();
+#endif
 
     // Apply inner boundary conditions to the computed sqrt(q_{phi phi}) gridfunction.
     {
@@ -229,9 +269,13 @@ Computes proper circumferences along the equator and polar directions for appare
       const bc_info_struct *bc_info = &bcstruct->bc_info;
 
       // Apply boundary conditions at inner boundary points for the selected gridfunctions.
+#ifdef __CUDACC__
+      PARALLEL_2D_LOOP(pt, 0, bc_info->num_inner_boundary_points, which_gf, 0, 2) {
+#else
 #pragma omp parallel for collapse(2)
       for (int which_gf = 0; which_gf < 2; which_gf++) {
         for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {
+#endif
           const int dstpt = bcstruct->inner_bc_array[pt].dstpt; // Destination point index.
           const int srcpt = bcstruct->inner_bc_array[pt].srcpt; // Source point index for copying.
 
@@ -256,10 +300,15 @@ Computes proper circumferences along the equator and polar directions for appare
           if (dst_i0 == NGHOSTS) {
             metric_data_gfs[IDX4pt(which_gf, 0) + IDX2(dst_i1, dst_i2)] = metric_data_gfs[IDX4pt(which_gf, 0) + IDX2(src_i1, src_i2)];
           }
-        } // END LOOP: for pt over inner boundary points
-      } // END LOOP: for which_gf over gridfunctions
-    } // END BLOCK: apply inner boundary conditions to circumference metric data
-  } // END BLOCK: compute line-element gridfunctions on the horizon surface
+      #ifndef __CUDACC__
+        } // END LOOP over inner boundary points
+      } // END LOOP over gridfunctions
+      #else
+      } END_PARALLEL_2D_LOOP;
+      gpu_grid.sync();
+      #endif
+    } // END application of inner boundary conditions
+  } // END computation of line element gridfunction
 
   // Grid spacings in theta and phi directions.
   const REAL dxx1 = griddata[grid].params.dxx1;
@@ -267,8 +316,13 @@ Computes proper circumferences along the equator and polar directions for appare
   // Number of angular points to sample over 2 pi radians.
   const int N_angle = griddata[grid].params.Nxx2;
   // Allocate arrays for destination points (theta, phi) and circumference values.
-  REAL(*dst_pts)[2] = malloc(N_angle * sizeof(*dst_pts));
-  REAL *restrict circumference = malloc(N_angle * sizeof(REAL));
+  //#ifdef __CUDACC__
+  REAL(*dst_pts)[2] = commondata->diagnostics_arrays.dst_pts;
+  REAL *restrict circumference = commondata->diagnostics_arrays.integrand;
+  /*
+  #else
+  REAL(*dst_pts)[2] = (REAL (*)[2])malloc(N_angle * sizeof(*dst_pts));
+  REAL *restrict circumference = (REAL *)malloc(N_angle * sizeof(REAL));
   // Check for successful memory allocation.
   if (dst_pts == NULL || circumference == NULL) {
     if (dst_pts != NULL)
@@ -276,8 +330,10 @@ Computes proper circumferences along the equator and polar directions for appare
     if (circumference != NULL)
       free(circumference);
     commondata->error_flag = DIAG_PROPER_CIRCUM_MALLOC_ERROR; // Return error code if allocation fails.
-    return commondata->error_flag;
+    return;
   }
+  #endif
+  */
 
   // Compute the angular increment for sampling over 2 pi radians, whether it be in theta (xz & yz planes) or phi (xy-plane).
   const REAL d_angle = (M_PI - (-M_PI)) / ((REAL)N_angle);
@@ -285,19 +341,23 @@ Computes proper circumferences along the equator and polar directions for appare
   // Equatorial (xy-plane) circumference first
   {
     // Initialize destination points along the equator (theta = pi/2) for interpolation.
-#pragma omp parallel for
-    for (int i2 = 0; i2 < N_angle; i2++) {
+    PARALLEL_1D_LOOP(i2, 0, N_angle) { 
       dst_pts[i2][0] = M_PI / 2;                                   // Equator: theta = pi/2.
       dst_pts[i2][1] = -M_PI + ((REAL)i2 + (1.0 / 2.0)) * d_angle; // Equator: phi = [-pi, pi].
-    } // END LOOP: for i2 over phi angles
+    } END_PARALLEL_1D_LOOP; // END LOOP over phi angles
 
     // Interpolate sqrt(q_{phi phi}) values onto the equator points to compute the circumference;
     //   note that sqrt(q_{phi phi}) is stored in metric_data_gfs[IDX4(1,...)]
-    const int error =
-        bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, dxx1, dxx2, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].xx,
-                                                       &metric_data_gfs[IDX4pt(1, 0)], N_angle, dst_pts, circumference);
-    if (error != BHAHAHA_SUCCESS)
-      return error;
+#ifdef __CUDACC__
+    gpu_grid.sync();
+#endif
+    bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, dxx1, dxx2, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].xx,
+                                                       &metric_data_gfs[IDX4pt(1, 0)], N_angle, dst_pts, circumference, &commondata->error_flag);
+#ifdef __CUDACC__
+    gpu_grid.sync();
+#endif
+    if (commondata->error_flag != BHAHAHA_SUCCESS)
+      return;
 
     // Retrieve integration weights for numerical integration over the sampled points.
     const REAL *restrict weights;
@@ -305,21 +365,27 @@ Computes proper circumferences along the equator and polar directions for appare
     bah_diagnostics_integration_weights(N_angle, N_angle, &weights, &weight_stencil_size);
 
     // Compute the total xy-plane circumference by integrating over the sampled points.
+    #ifdef __CUDACC__
+    CUDA_ONE_THREAD(gpu_grid) {
+    #endif
     REAL sum_circumference = 0.0;
 #pragma omp parallel for reduction(+ : sum_circumference)
     for (int ic = 0; ic < N_angle; ic++) {
       const REAL weight = weights[ic % weight_stencil_size]; // Integration weight for this point.
       sum_circumference += circumference[ic] * weight;
-    } // END LOOP: for ic over circumference samples
+    } // END LOOP over ic
     // Multiply the sum by d[angle]
     commondata->bhahaha_diagnostics->xy_plane_circumference = sum_circumference * d_angle;
-  } // END BLOCK: compute xy-plane proper circumference
+    #ifdef __CUDACC__
+    } END_CUDA_ONE_THREAD;
+    gpu_grid.sync();
+    #endif
+  } // END xy-plane circumference
 
   // Polar (xz-plane) circumference next
   {
     // Initialize destination points along the xz-plane for interpolation.
-#pragma omp parallel for
-    for (int i2 = 0; i2 < N_angle; i2++) {
+  PARALLEL_1D_LOOP(i2, 0, N_angle) {
       if (i2 < N_angle / 2) {
         // First half: Theta from 0 to pi, phi = 0
         dst_pts[i2][0] = ((REAL)i2 + 0.5) * (M_PI / ((REAL)(N_angle) / 2.0));
@@ -328,16 +394,21 @@ Computes proper circumferences along the equator and polar directions for appare
         // Second half: Theta from pi back to 0, phi = -pi
         dst_pts[i2][0] = ((REAL)(N_angle - i2) - 0.5) * (M_PI / ((REAL)(N_angle) / 2.0));
         dst_pts[i2][1] = -M_PI; // phi spans from [-pi, pi), so instead of interpolating at phi=pi, must interpolate at phi=-pi.
-      } // END IF: theta is going from 0 to pi or vice-versa
-    } // END LOOP: for i2 over angle samples
+      } // END IF theta is going from 0 to pi or vice-versa.
+    } END_PARALLEL_1D_LOOP; // END LOOP over angle
 
     // Interpolate sqrt(q_{theta theta}) values onto the polar (xz-plane) points to compute the circumference;
     //   note that sqrt(q_{theta theta}) is stored in metric_data_gfs[IDX4(0,...)]
-    const int error =
-        bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, dxx1, dxx2, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].xx,
-                                                       &metric_data_gfs[IDX4pt(0, 0)], N_angle, dst_pts, circumference);
-    if (error != BHAHAHA_SUCCESS)
-      return error;
+#ifdef __CUDACC__
+    gpu_grid.sync();
+#endif
+    bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, dxx1, dxx2, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].xx,
+                                                       &metric_data_gfs[IDX4pt(0, 0)], N_angle, dst_pts, circumference, &commondata->error_flag);
+#ifdef __CUDACC__
+    gpu_grid.sync();
+#endif
+    if (commondata->error_flag != BHAHAHA_SUCCESS)
+      return;
 
     // Retrieve integration weights for numerical integration over the sampled points.
     const REAL *restrict weights;
@@ -345,21 +416,27 @@ Computes proper circumferences along the equator and polar directions for appare
     bah_diagnostics_integration_weights(N_angle, N_angle, &weights, &weight_stencil_size);
 
     // Compute the total xz-plane circumference by integrating over the sampled points.
+    #ifdef __CUDACC__
+    CUDA_ONE_THREAD(gpu_grid) {
+    #endif
     REAL sum_circumference = 0.0;
 #pragma omp parallel for reduction(+ : sum_circumference)
     for (int ic = 0; ic < N_angle; ic++) {
       const REAL weight = weights[ic % weight_stencil_size]; // Integration weight for this point.
       sum_circumference += circumference[ic] * weight;
-    } // END LOOP: for ic over circumference samples
+    } // END LOOP over ic
     // Multiply the sum by d[angle]
     commondata->bhahaha_diagnostics->xz_plane_circumference = sum_circumference * d_angle;
-  } // END BLOCK: compute xz-plane proper circumference
+    #ifdef __CUDACC__
+    } END_CUDA_ONE_THREAD;
+    gpu_grid.sync();
+    #endif
+  } // END xz-plane circumference
 
   // Polar (yz-plane) circumference next
   {
     // Initialize destination points along the yz-plane for interpolation.
-#pragma omp parallel for
-    for (int i2 = 0; i2 < N_angle; i2++) {
+    PARALLEL_1D_LOOP(i2, 0, N_angle) {
       if (i2 < N_angle / 2) {
         // First half: Theta from 0 to pi, phi = pi/2
         dst_pts[i2][0] = ((REAL)i2 + 0.5) * (M_PI / ((REAL)(N_angle) / 2.0));
@@ -368,16 +445,21 @@ Computes proper circumferences along the equator and polar directions for appare
         // Second half: Theta from pi back to 0, phi = -pi/2
         dst_pts[i2][0] = ((REAL)(N_angle - i2) - 0.5) * (M_PI / ((REAL)(N_angle) / 2.0));
         dst_pts[i2][1] = -M_PI / 2.0;
-      } // END IF: theta is going from 0 to pi or vice-versa
-    } // END LOOP: for i2 over angle samples
+      } // END IF theta is going from 0 to pi or vice-versa.
+    } END_PARALLEL_1D_LOOP; // END LOOP over angle
 
     // Interpolate sqrt(q_{theta theta}) values onto the polar (yz-plane) points to compute the circumference;
     //   note that sqrt(q_{theta theta}) is stored in metric_data_gfs[IDX4(0,...)]
-    const int error =
-        bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, dxx1, dxx2, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].xx,
-                                                       &metric_data_gfs[IDX4pt(0, 0)], N_angle, dst_pts, circumference);
-    if (error != BHAHAHA_SUCCESS)
-      return error;
+    #ifdef __CUDACC__
+    gpu_grid.sync();
+    #endif
+    bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, dxx1, dxx2, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].xx,
+                                                       &metric_data_gfs[IDX4pt(0, 0)], N_angle, dst_pts, circumference, &commondata->error_flag);
+    #ifdef __CUDACC__
+    gpu_grid.sync();
+    #endif
+    if (commondata->error_flag != BHAHAHA_SUCCESS)
+      return;
 
     // Retrieve integration weights for numerical integration over the sampled points.
     const REAL *restrict weights;
@@ -385,16 +467,26 @@ Computes proper circumferences along the equator and polar directions for appare
     bah_diagnostics_integration_weights(N_angle, N_angle, &weights, &weight_stencil_size);
 
     // Compute the total yz-plane circumference by integrating over the sampled points.
+    #ifdef __CUDACC__
+    CUDA_ONE_THREAD(gpu_grid) {
+    #endif
     REAL sum_circumference = 0.0;
 #pragma omp parallel for reduction(+ : sum_circumference)
     for (int ic = 0; ic < N_angle; ic++) {
       const REAL weight = weights[ic % weight_stencil_size]; // Integration weight for this point.
       sum_circumference += circumference[ic] * weight;
-    } // END LOOP: for ic over circumference samples
+    } // END LOOP over ic
     // Multiply the sum by d[angle]
     commondata->bhahaha_diagnostics->yz_plane_circumference = sum_circumference * d_angle;
-  } // END BLOCK: compute yz-plane proper circumference
+    #ifdef __CUDACC__
+    } END_CUDA_ONE_THREAD;
+    gpu_grid.sync();
+    #endif
+  } // END yz-plane circumference
 
+  #ifdef __CUDACC__
+  CUDA_ONE_THREAD(gpu_grid) {
+  #endif
   // Next estimate spin parameter magnitudes, valid for equilibrium BHs only.
   //   Based on Eq 5.2 of Alcubierre et al arXiv:gr-qc/0411149.
   {
@@ -413,12 +505,10 @@ Computes proper circumferences along the equator and polar directions for appare
     commondata->bhahaha_diagnostics->spin_a_z_from_xz_over_xy_prop_circumfs = compute_spin(C_xz_xy);
     commondata->bhahaha_diagnostics->spin_a_z_from_yz_over_xy_prop_circumfs = compute_spin(C_yz_xy);
   }
-  // Free allocated memory for destination points, circumference values, and metric_data_gfs.
-  free(dst_pts);
-  free(circumference);
-  free(metric_data_gfs);
-
-  return BHAHAHA_SUCCESS; // Return success status code.
+  #ifdef __CUDACC__
+  } END_CUDA_ONE_THREAD;
+  gpu_grid.sync();
+  #endif
 """
     cfc.register_CFunction(
         subdirectory="",
@@ -429,6 +519,7 @@ Computes proper circumferences along the equator and polar directions for appare
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )
     return pcg.NRPyEnv()

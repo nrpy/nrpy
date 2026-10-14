@@ -75,6 +75,7 @@ def loop(
     pragma: Union[str, List[str]],
     loop_body: str = "",
     tile_size: Union[str, List[str]] = "",
+    cuda_parallel_pair: bool = False,
 ) -> Union[Tuple[str, str], str]:
     """
     Generate a nested loop of arbitrary dimension in C.
@@ -171,10 +172,44 @@ def loop(
     header = "".join(headers)
     footer = "".join(footers[::-1])
 
+    if (cuda_parallel_pair):
+        cuda_loop_header = "#ifdef __CUDACC__\n"
+        match len(idx_var):
+            case 1:
+                cuda_loop_header += "PARALLEL_1D_LOOP("
+                cuda_loop_footer = "#else\n } END_PARALLEL_1D_LOOP\n#endif"
+            case 2:
+                cuda_loop_header += "PARALLEL_2D_LOOP("
+                cuda_loop_footer = "#else\n} END_PARALLEL_2D_LOOP\n#endif"
+            case 3:
+                cuda_loop_header += "PARALLEL_LOOP("
+                cuda_loop_footer = "#else\n} END_PARALLEL_LOOP\n#endif"
+            case _:
+                raise ValueError( 
+                    f"A cuda PARALLEL_LOOP is only currently possible with 1,2 or 3 Dimensions but you have provided {len(a)}: (idx_var)"
+                )
+        for i, var in enumerate(idx_var[::1]):
+        #for i in reversed(range(len(idx_var))):
+            if (i != 0):
+            #if (i != len(idx_var)-1):
+                cuda_loop_header += ", "
+            cuda_loop_header += idx_var[i] + ", " + lower_bound[i] + ", " + upper_bound[i]
+        cuda_loop_header += ") {\n"
+        for i, var in enumerate(idx_var[::-1]):
+            if "#pragma" in pragma[i]:
+                lines_of_pragma = pragma[i].split('\n')
+                for line in lines_of_pragma:
+                    if "#pragma" not in line:
+                        cuda_loop_header += line + "\n"  
+            else:
+                cuda_loop_header += pragma[i] + "\n"
+        cuda_loop_header += "#else\n"
+        header = cuda_loop_header + header + "#endif\n"
+        footer = "#ifndef __CUDACC__\n" + footer + cuda_loop_footer
+
     return header + loop_body + footer if loop_body else (header, footer)
 
-
-if __name__ == "__main__":
+if __name__ == "__main__": 
     import doctest
     import sys
 

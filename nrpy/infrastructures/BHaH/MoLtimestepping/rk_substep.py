@@ -79,6 +79,7 @@ class RKFunction:
         cfunc_type: str = "static void",
         rk_step: Union[int, None] = None,
         rational_const_alias: str = "const",
+        bhahaha: bool = False,
     ) -> None:
         parallelization = par.parval_from_str("parallelization")
         check_supported_parallelization("RKFunction")
@@ -173,7 +174,10 @@ class RKFunction:
         self.params += "const REAL dt"
         self.kernel_params["dt"] = "const REAL"
 
-        kernel_body += self.loop_body.replace("commondata->dt", "dt") + "\n}\n"
+        if bhahaha:
+          kernel_body += self.loop_body.replace("commondata->dt", "dt") + "\n} END_LOOP_ALL_GFS_GPS\n"
+        else:
+          kernel_body += self.loop_body.replace("commondata->dt", "dt") + "\n}\n"
         self.kernel_params_lst = [f"{v} {k}" for k, v in self.kernel_params.items()]
 
         comments = f"Compute RK substep {self.rk_step}."
@@ -196,10 +200,19 @@ class RKFunction:
             },
             launchblock_with_braces=False,
             thread_tiling_macro_suffix="MOL_SUBSTEP",
+            bhahaha=bhahaha,
         )
         self.body += new_body
 
         self.name += "__launcher"
+        if bhahaha:
+            self.cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
+        else:
+            self.cfunc_decorators = ""
         self.CFunction = cfc.CFunction(
             prefunc=prefunc,
             includes=self.includes,
@@ -207,6 +220,7 @@ class RKFunction:
             cfunc_type=self.cfunc_type,
             name=self.name,
             params=self.params,
+            cfunc_decorators=self.cfunc_decorators,
             body=self.body,
         )
 
@@ -259,6 +273,7 @@ def single_RK_substep_input_symbolic(
     post_post_rhs_string: str = "",
     rational_const_alias: str = "const",
     rk_step: Union[int, None] = None,
+    bhahaha: bool = False,
 ) -> str:
     """
     Generate C code for a given Runge-Kutta substep.
@@ -335,6 +350,7 @@ def single_RK_substep_input_symbolic(
         rk_step=rk_step,
         enable_intrinsics=enable_intrinsics,
         rational_const_alias=rational_const_alias,
+        bhahaha=bhahaha,
     )
     body += MoL_Functions_dict[RK_key].c_function_call()
 
