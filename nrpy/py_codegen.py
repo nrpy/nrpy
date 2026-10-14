@@ -8,6 +8,7 @@ which does not use FD-based kernels.
 Author: Siddharth Mahesh; sm0193 **at** mix **dot* wvu **dot* edu
 """
 
+import ast
 import sys
 from typing import Any, Dict, List, Optional, Sequence, Union
 
@@ -83,6 +84,29 @@ class PyCodeGen:
         return generate_class_representation()
 
 
+def _check_no_read_after_overwrite(
+    output_names: List[str], printed_rhs: List[str]
+) -> None:
+    """
+    Reject output names that are overwritten before a later assignment reads them.
+
+    :param output_names: Names assigned, in order, by the generated code.
+    :param printed_rhs: Printed Python right-hand sides, in the same order.
+    :raises ValueError: If an output name is a Python name read by a later right-hand side.
+    """
+    read_names = [
+        {n.id for n in ast.walk(ast.parse(rhs, mode="eval")) if isinstance(n, ast.Name)}
+        for rhs in printed_rhs
+    ]
+    for i, name in enumerate(output_names):
+        for j in range(i + 1, len(printed_rhs)):
+            if name in read_names[j]:
+                raise ValueError(
+                    f"Output name '{name}' is assigned before the right-hand side of "
+                    f"'{output_names[j]}' reads it."
+                )
+
+
 def py_codegen(
     sympyexpr: Union[
         Sequence[Union[sp.Basic, sp.Expr, sp.Symbol]],
@@ -101,6 +125,7 @@ def py_codegen(
     :raises TypeError: If either `sympyexpr` or `output_varname_str` is a tuple, as tuples can cause issues in this function.
     :raises ValueError: If the length of `sympyexpr` and `output_varname_str` do not match, indicating a mismatch between the number of expressions and output variable names.
     :raises ValueError: Under various conditions within the function that are specific to the configuration provided via `kwargs`, such as incompatible options or unsupported configurations.
+    :raises ValueError: If an output name is assigned before a later printed right-hand side reads that Python name (an input symbol, a common-subexpression temporary, or a name such as `jnp`), which would give wrong values.
 
     :return: A string containing the generated JAX-compatible Python code.
 
@@ -126,6 +151,22 @@ def py_codegen(
     a = tmp0 + jnp.sin(tmp0)
     b = (1.0/(((x)*(x))))
     c = y/(x + z)
+    <BLANKLINE>
+    >>> py_codegen([x**3 + sp.sin(x**3), x**3], ["tmp0", "b"], verbose=False)
+    Traceback (most recent call last):
+    ...
+    ValueError: Output name 'tmp0' is assigned before the right-hand side of 'b' reads it.
+    >>> py_codegen([x + 1, 2*x], ["x", "y"], verbose=False, enable_cse=False)
+    Traceback (most recent call last):
+    ...
+    ValueError: Output name 'x' is assigned before the right-hand side of 'y' reads it.
+    >>> py_codegen([sp.Integer(1), 2*sp.Symbol("lambda")], ["lambda_", "b"], verbose=False)
+    Traceback (most recent call last):
+    ...
+    ValueError: Output name 'lambda_' is assigned before the right-hand side of 'b' reads it.
+    >>> print(py_codegen([2*x, x + 1], ["y", "x"], verbose=False, enable_cse=False))
+    y = 2*x
+    x = x + 1
     <BLANKLINE>
     """
     # Injected tuples wreak havoc in this function, so check for them & error out if spotted.
@@ -185,12 +226,15 @@ def py_codegen(
     #         just output the SymPy string in the most boring way,
     if not PCGParams.enable_cse:
         # If CSE is disabled:
+        printed_rhs: List[str] = []
         for i, expr in enumerate(sympyexpr_list):
             if PCGParams.postproc_substitution_dict:
                 expr = apply_substitution_dict(
                     expr, PCGParams.postproc_substitution_dict
                 )
-            outstring += f"{output_varname_str[i]} = {printer.doprint(expr)}\n"
+            printed_rhs.append(printer.doprint(expr))
+            outstring += f"{output_varname_str[i]} = {printed_rhs[-1]}\n"
+        _check_no_read_after_overwrite(output_varname_str, printed_rhs)
     # Step 3b: If CSE enabled, then perform CSE using SymPy and then
     #          resulting JAX code.
     else:
@@ -241,12 +285,16 @@ def py_codegen(
             outstring += f"{common_subexpression[0]} = {printer.doprint(common_subexpression[1])}\n"
 
         # cse_results[1] specifies the varnames in terms of CSE variables.
+        output_printed_rhs: List[str] = []
         for i, result in enumerate(cse_results[1]):
             if PCGParams.postproc_substitution_dict:
                 result = apply_substitution_dict(
                     result, PCGParams.postproc_substitution_dict
                 )
-            outstring += f"{varnames[i]} = {printer.doprint(result)}\n"
+            output_printed_rhs.append(printer.doprint(result))
+            outstring += f"{varnames[i]} = {output_printed_rhs[-1]}\n"
+        # Output assignments follow all temporaries, so only output right-hand sides can read an overwritten name.
+        _check_no_read_after_overwrite(varnames, output_printed_rhs)
 
         # End of group processing
     # Step 4: Construct final output string
