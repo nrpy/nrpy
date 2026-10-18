@@ -593,7 +593,7 @@ if __name__ == "__main__":
     [0, r_wave**2, 0],
     [0, 0, r_wave**2 * sp.sin(th_wave) ** 2],
         ]
-        
+
     for i in range(3):
         for j in range(3):
             assert sp.simplify(
@@ -608,5 +608,15 @@ if __name__ == "__main__":
                 - outgoing.KDD[i][j]
                 - ingoing.KDD[i][j]
             ) == 0
-
+    # Verify that the standard-gauge override is rejected.
+    try:
+        InitialData_Spherical(
+            "TeukolskyWave", override_gauge_with_standard=True
+        )
+    except ValueError as exc:
+        assert "TeukolskyWave requires alpha=1 and betaU=0" in str(exc)
+    else:
+        raise AssertionError(
+            "TeukolskyWave must reject the standard-gauge override"
+        )
     print("Teukolsky-wave owner validation passed.")
