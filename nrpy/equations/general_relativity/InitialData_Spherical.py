@@ -606,6 +606,16 @@ if __name__ == "__main__":
                 == 0
             )
 
+    # Verify that the metric perturbation is trace-free.
+    trace = (
+        wave.gammaDD[0][0]
+        - 1
+        + (wave.gammaDD[1][1] - r_wave**2) / r_wave**2
+        + (wave.gammaDD[2][2] - r_wave**2 * sp.sin(th_wave) ** 2)
+        / (r_wave**2 * sp.sin(th_wave) ** 2)
+    )
+    assert sp.simplify(trace) == 0
+
     # Verify that the standard-gauge override is rejected.
     try:
         InitialData_Spherical("TeukolskyWave", override_gauge_with_standard=True)
