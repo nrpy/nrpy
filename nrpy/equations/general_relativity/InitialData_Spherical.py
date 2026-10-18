@@ -562,3 +562,51 @@ if __name__ == "__main__":
             f"{os.path.splitext(os.path.basename(__file__))[0]}_{ID_type}",
             results_dict,
         )
+    # Validate Teukolsky-wave initial data.
+    wave = InitialData_Spherical("TeukolskyWave")
+
+    # Check the lapse, shift, and gauge driver.
+    assert wave.alpha == 1
+    assert wave.betaU == [0, 0, 0]
+    assert wave.BU == [0, 0, 0]
+
+    # Check metric and extrinsic-curvature symmetry.
+    for i in range(3):
+        for j in range(3):
+            assert sp.simplify(wave.gammaDD[i][j] - wave.gammaDD[j][i]) == 0
+            assert sp.simplify(wave.KDD[i][j] - wave.KDD[j][i]) == 0
+
+    # Check that regular = outgoing + ingoing perturbations.
+    outgoing = InitialData_Spherical("TeukolskyWave")
+    outgoing.gammaDD, outgoing.KDD, _, _, _ = outgoing.TeukolskyWave(
+        branch="outgoing"
+    )
+
+    ingoing = InitialData_Spherical("TeukolskyWave")
+    ingoing.gammaDD, ingoing.KDD, _, _, _ = ingoing.TeukolskyWave(
+        branch="ingoing"
+    )
+
+    r, th = sp.symbols("r th", real=True)
+    flat_metric = [
+        [1, 0, 0],
+        [0, r**2, 0],
+        [0, 0, r**2 * sp.sin(th) ** 2],
+    ]
+
+    for i in range(3):
+        for j in range(3):
+            assert sp.simplify(
+                wave.gammaDD[i][j]
+                - outgoing.gammaDD[i][j]
+                - ingoing.gammaDD[i][j]
+                + flat_metric[i][j]
+            ) == 0
+
+            assert sp.simplify(
+                wave.KDD[i][j]
+                - outgoing.KDD[i][j]
+                - ingoing.KDD[i][j]
+            ) == 0
+
+    print("Teukolsky-wave owner validation passed.")
