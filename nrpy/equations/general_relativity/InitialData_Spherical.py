@@ -616,6 +616,42 @@ if __name__ == "__main__":
     )
     assert sp.simplify(trace) == 0
 
+    # Divergence-free Teukolsky perturbation in flat spherical coordinates.
+    coords = (r_wave, th_wave, wave.ph)
+    background = [1, r_wave**2, r_wave**2 * sp.sin(th_wave) ** 2]
+    inverse = [1 / component for component in background]
+    perturbation = [
+        [wave.gammaDD[i][j] - (background[i] if i == j else 0) for j in range(3)]
+        for i in range(3)
+    ]
+    connection = [
+        [
+            [
+                sp.Rational(1, 2)
+                * inverse[i]
+                * (
+                    (sp.diff(background[i], coords[j]) if i == k else 0)
+                    + (sp.diff(background[i], coords[k]) if i == j else 0)
+                    - (sp.diff(background[j], coords[i]) if j == k else 0)
+                )
+                for k in range(3)
+            ]
+            for j in range(3)
+        ]
+        for i in range(3)
+    ]
+    for i in range(3):
+        divergence = sum(
+            inverse[j]
+            * (
+                sp.diff(perturbation[i][j], coords[j])
+                - sum(connection[k][j][i] * perturbation[k][j] for k in range(3))
+                - sum(connection[k][j][j] * perturbation[i][k] for k in range(3))
+            )
+            for j in range(3)
+        )
+        assert sp.simplify(divergence) == 0
+
     # Verify that the standard-gauge override is rejected.
     try:
         InitialData_Spherical("TeukolskyWave", override_gauge_with_standard=True)
