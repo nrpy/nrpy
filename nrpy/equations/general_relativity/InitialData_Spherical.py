@@ -587,13 +587,13 @@ if __name__ == "__main__":
         branch="ingoing"
     )
 
-    r, th = sp.symbols("r th", real=True)
+    r_wave, th_wave = sp.symbols("r th", real=True)
     flat_metric = [
-        [1, 0, 0],
-        [0, r**2, 0],
-        [0, 0, r**2 * sp.sin(th) ** 2],
-    ]
-
+    [1, 0, 0],
+    [0, r_wave**2, 0],
+    [0, 0, r_wave**2 * sp.sin(th_wave) ** 2],
+        ]
+        
     for i in range(3):
         for j in range(3):
             assert sp.simplify(
