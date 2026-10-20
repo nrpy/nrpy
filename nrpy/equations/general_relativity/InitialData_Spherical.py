@@ -522,18 +522,22 @@ class InitialData_Spherical:
         # Assemble the mode-20 extrinsic curvature from the time derivatives
         KDD = ixp.zerorank2()
 
-        KDD[0][0] = -sp.Rational(1, 2) * A_dot_use * Y
-        KDD[0][1] = KDD[1][0] = 3 * r * B_dot_use * s * c
-        KDD[0][2] = KDD[2][0] = sp.sympify(0)
-        KDD[1][1] = r**2 * (
-            sp.Rational(1, 4) * A_dot_use * Y - sp.Rational(3, 2) * C_dot_use * s**2
-        )
-        KDD[1][2] = KDD[2][1] = sp.sympify(0)
-        KDD[2][2] = (
-            r**2
-            * s**2
-            * (sp.Rational(1, 4) * A_dot_use * Y + sp.Rational(3, 2) * C_dot_use * s**2)
-        )
+        if mode == 20:
+            KDD[0][0] = -sp.Rational(1, 2) * A_dot_use * Y
+            KDD[0][1] = KDD[1][0] = 3 * r * B_dot_use * s * c
+            KDD[0][2] = KDD[2][0] = sp.sympify(0)
+            KDD[1][1] = r**2 * (sp.Rational(1, 4) * A_dot_use * Y - sp.Rational(3, 2) * C_dot_use * s**2)
+            KDD[1][2] = KDD[2][1] = sp.sympify(0)
+            KDD[2][2] = (r**2 * s**2 * (sp.Rational(1, 4) * A_dot_use * Y + sp.Rational(3, 2) * C_dot_use * s**2))
+
+        # Assemble the mode-22 extrinsic curvature from the time derivatives
+        elif mode == 22:
+            KDD[0][0] = -sp.Rational(1, 2) * A_dot_use * s**2 * P
+            KDD[0][1] = KDD[1][0] = -r * B_dot_use * s * c * P
+            KDD[0][2] = KDD[2][0] = r * B_dot_use * s**2 * Q
+            KDD[1][1] = r**2 * (sp.Rational(1, 4) * A_dot_use * s**2 * P - sp.Rational(1, 2) * C_dot_use * (1 + c**2) * P)
+            KDD[1][2] = KDD[2][1] = r**2 * C_dot_use * s * c * Q
+            KDD[2][2] = r**2 * s**2 * (sp.Rational(1, 4) * A_dot_use * s**2 * P + sp.Rational(1, 2) * C_dot_use * (1 + c**2) * P)
 
         # Evaluate the wave on the chosen initial time slice
         gammaDD = [[component.subs(t, t0) for component in row] for row in gammaDD]
