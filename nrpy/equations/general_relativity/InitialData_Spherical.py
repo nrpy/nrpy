@@ -319,7 +319,7 @@ class InitialData_Spherical:
     # fmt: on
 
     def TeukolskyWave(
-        self, branch: str = "regular"
+        self, branch: str = "regular", mode: int = 20
     ) -> tuple[
         list[list[sp.Expr]], list[list[sp.Expr]], sp.Expr, list[sp.Expr], list[sp.Expr]
     ]:
@@ -331,6 +331,9 @@ class InitialData_Spherical:
                 lapse alpha, shift betaU, and gauge quantity BU.
         :raises ValueError: If the requested branch is unsupported.
         """
+        # Validate the requested Teukolsky mode
+        if mode not in (20, 22):
+            raise ValueError("TeukolskyWave mode must be 20 or 22")
         # Define math symbols
         self.r, self.th, self.ph = sp.symbols("r th ph", real=True)
         r, th = self.r, self.th
