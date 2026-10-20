@@ -490,20 +490,34 @@ class InitialData_Spherical:
         else:
             raise ValueError("branch must be 'outgoing', 'ingoing', or 'regular'")
 
-        # Define Mode 20 angular terms
+        # Define angular terms
         s = sp.sin(th)
         c = sp.cos(th)
-        Y = 3 * c**2 - 1
+        if mode == 20:
+            Y = 3 * c**2 - 1
 
         # Assemble the mode-20 spatial metric in spherical coordinates
         gammaDD = ixp.zerorank2()
 
-        gammaDD[0][0] = 1 + A_use * Y
-        gammaDD[0][1] = gammaDD[1][0] = -6 * r * B_use * s * c
-        gammaDD[0][2] = gammaDD[2][0] = sp.sympify(0)
-        gammaDD[1][1] = r**2 * (1 - A_use * Y / 2 + 3 * C_use * s**2)
-        gammaDD[1][2] = gammaDD[2][1] = sp.sympify(0)
-        gammaDD[2][2] = r**2 * s**2 * (1 - A_use * Y / 2 - 3 * C_use * s**2)
+        if mode == 20:
+            gammaDD[0][0] = 1 + A_use * Y
+            gammaDD[0][1] = gammaDD[1][0] = -6 * r * B_use * s * c
+            gammaDD[0][2] = gammaDD[2][0] = sp.sympify(0)
+            gammaDD[1][1] = r**2 * (1 - A_use * Y / 2 + 3 * C_use * s**2)
+            gammaDD[1][2] = gammaDD[2][1] = sp.sympify(0)
+            gammaDD[2][2] = r**2 * s**2 * (1 - A_use * Y / 2 - 3 * C_use * s**2)
+
+        # Assemble the mode-22 spatial metric in spherical coordinates
+        elif mode == 22:
+            P = sp.cos(2 * self.ph)
+            Q = sp.sin(2* self.ph)
+
+            gammDD[0][0] = 1 + A_use * s**2 * P
+            gammaDD[0][1] = gammaDD[1][0] = 2 * r * B_use * s * c * P
+            gammaDD[0][2] = gammaDD[2][0] = -2 * r * B_use * s**2 * Q
+            gammaDD[1][1] = r**2 * (1 - A_use * s**2 * P / 2 - C_use * (1 + C**2) * P)
+            gammaDD[1][2] = gammaDD[2][1] = -2 * r**2 * C_use * s * c * Q
+            gammaDD[2][2] = r**2 * s**2 * (1 - A_use * s**2 * P / 2 - C_use * (1 + c**2) * P)
 
         # Assemble the mode-20 extrinsic curvature from the time derivatives
         KDD = ixp.zerorank2()
