@@ -44,6 +44,9 @@ void set_initial_data(commondata_struct *restrict commondata, griddata_struct *r
     } END_PARALLEL_2D_LOOP;
       // Choosing an NGHOSTS stencil half-width significantly speeds up BHaHAHA finds.
 
+#ifdef __CUDACC__
+    gpu_grid.sync();
+#endif
     bah_interpolation_2d_general__uniform_src_grid(NGHOSTS, commondata->coarse_horizon_dxx1, commondata->coarse_horizon_dxx2,
                                                    commondata->coarse_horizon_Nxx_plus_2NGHOSTS1, commondata->coarse_horizon_Nxx_plus_2NGHOSTS2,
                                                    commondata->coarse_horizon_r_theta_phi, commondata->coarse_horizon, num_dst_pts, dst_pts,

@@ -177,15 +177,15 @@ def loop(
         if (len(idx_var) == 1):
             cuda_loop_header += "PARALLEL_1D_LOOP("
             cuda_loop_footer = "#else\n } END_PARALLEL_1D_LOOP\n#endif"
-        elif (len(idx_var == 2):
+        elif (len(idx_var) == 2):
             cuda_loop_header += "PARALLEL_2D_LOOP("
             cuda_loop_footer = "#else\n} END_PARALLEL_2D_LOOP\n#endif"
-        elif (len(idx_var == 3):
+        elif (len(idx_var) == 3):
             cuda_loop_header += "PARALLEL_LOOP("
             cuda_loop_footer = "#else\n} END_PARALLEL_LOOP\n#endif"
         else:
             raise ValueError( 
-                f"A cuda PARALLEL_LOOP is only currently possible with 1,2 or 3 Dimensions but you have provided {len(a)}: (idx_var)"
+                f"A cuda PARALLEL_LOOP is only currently possible with 1,2 or 3 Dimensions but you have provided {len(idx_var)}"
             )
         for i, var in enumerate(idx_var[::1]):
             if (i != 0):

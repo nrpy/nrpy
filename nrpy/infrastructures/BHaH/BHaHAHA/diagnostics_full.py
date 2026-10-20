@@ -201,9 +201,6 @@ iteration intervals, as well as a detailed final iteration diagnostic.
     _ = gri.register_gridfunctions(
         "Theta", group="AUX", gf_array_name="diagnostic_output_gfs"
     )
-    _ = par.register_CodeParameter(
-        "int", __name__, "output_diagnostics_every_nn", 500, commondata=True
-    )
     cfunc_decorators = r"""
 #ifdef __CUDACC__
 __global__

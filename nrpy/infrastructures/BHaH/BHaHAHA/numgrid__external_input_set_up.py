@@ -424,19 +424,6 @@ This function performs the following steps:
   commondata->external_input_invdxx1 = 1.0 / commondata->external_input_dxx1;
   commondata->external_input_invdxx2 = 1.0 / commondata->external_input_dxx2;
 
-#ifdef __CUDACC__
-  //Deep copy bhahaha_params_and_data & bhahaha_diagnostics
-  bhahaha_params_and_data_struct *d_bhahaha_params_and_data = NULL;
-  gpuErrchk( cudaMalloc((void**)&d_bhahaha_params_and_data, sizeof(bhahaha_params_and_data_struct)) );
-  gpuErrchk( cudaMemcpy(d_bhahaha_params_and_data, commondata->bhahaha_params_and_data, sizeof(bhahaha_params_and_data_struct), cudaMemcpyHostToDevice) );
-  commondata->bhahaha_params_and_data = d_bhahaha_params_and_data;
-
-  bhahaha_diagnostics_struct *d_bhahaha_diagnostics = NULL;
-  cudaMalloc((void**)&d_bhahaha_diagnostics, sizeof(bhahaha_diagnostics_struct));
-  cudaMemcpy(d_bhahaha_diagnostics, commondata->bhahaha_diagnostics, sizeof(bhahaha_diagnostics_struct), cudaMemcpyHostToDevice);
-  commondata->bhahaha_diagnostics = d_bhahaha_diagnostics;
-#endif
-
   // Step 2: Add ghost zones to the external input data.
   // Ghost zones are added to so that inner boundary conditions may be applied; 2 * NGHOSTS in each angular direction and NGHOSTS in the radial
   // direction.
@@ -450,11 +437,24 @@ This function performs the following steps:
 
   // Step 2.a: Allocate memory for the external input gridfunctions without ghost zones.
 #ifdef __CUDACC__
-  const int total_elements_no_gzs = commondata->external_input_Nxx0 * commondata->external_input_Nxx1 * commondata->external_input_Nxx2;
+  const int total_elements_no_gzs = commondata->bhahaha_params_and_data->Nr_external_input * commondata->external_input_Nxx1 * commondata->external_input_Nxx2;
   REAL *restrict d_external_input_gfs_no_gzs = NULL;
   cudaMalloc((void**)&d_external_input_gfs_no_gzs, sizeof(REAL)*NUM_EXT_INPUT_CARTESIAN_GFS * total_elements_incl_gzs);
   cudaMemcpy(d_external_input_gfs_no_gzs, commondata->external_input_gfs_Cart_basis_no_gzs,  sizeof(REAL)*NUM_EXT_INPUT_CARTESIAN_GFS * total_elements_no_gzs, cudaMemcpyHostToDevice);
   commondata->external_input_gfs_Cart_basis_no_gzs = d_external_input_gfs_no_gzs;
+#endif
+
+#ifdef __CUDACC__
+  //Deep copy bhahaha_params_and_data & bhahaha_diagnostics
+  bhahaha_params_and_data_struct *d_bhahaha_params_and_data = NULL;
+  gpuErrchk( cudaMalloc((void**)&d_bhahaha_params_and_data, sizeof(bhahaha_params_and_data_struct)) );
+  gpuErrchk( cudaMemcpy(d_bhahaha_params_and_data, commondata->bhahaha_params_and_data, sizeof(bhahaha_params_and_data_struct), cudaMemcpyHostToDevice) );
+  commondata->bhahaha_params_and_data = d_bhahaha_params_and_data;
+
+  bhahaha_diagnostics_struct *d_bhahaha_diagnostics = NULL;
+  cudaMalloc((void**)&d_bhahaha_diagnostics, sizeof(bhahaha_diagnostics_struct));
+  cudaMemcpy(d_bhahaha_diagnostics, commondata->bhahaha_diagnostics, sizeof(bhahaha_diagnostics_struct), cudaMemcpyHostToDevice);
+  commondata->bhahaha_diagnostics = d_bhahaha_diagnostics;
 #endif
 
   // Step 2.b: Allocate memory for the external input gridfunctions with ghost zones.
@@ -509,7 +509,10 @@ This function performs the following steps:
 #ifdef __CUDACC__
     void *Args[] = {&d_commondata};
     COOPERATIVE_KERNEL(initialize_transform_and_rescale, Args);
-    #else
+
+    //Copy changes to host side commondata  
+    gpuErrchk(cudaMemcpy(commondata, d_commondata, sizeof(commondata_struct), cudaMemcpyDeviceToHost));
+#else
     initialize_transform_and_rescale(commondata);
 #endif
   }

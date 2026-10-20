@@ -158,10 +158,10 @@ __device__
             fprintf(stderr, "Ensure that the destination point is within grid bounds or adjust the interpolation stencil.\n");
 #endif // CUDACC
 #endif // DEBUG
-#pragma omp critical
 #ifdef __CUDACC__
             bhahaha_gpu_set_error(&commondata->error_flag, INTERP2D_EXT_TO_INTERPSRC_HORIZON_OUT_OF_BOUNDS);
 #else
+#pragma omp critical
             commondata->error_flag = INTERP2D_EXT_TO_INTERPSRC_HORIZON_OUT_OF_BOUNDS;
 #endif
 #ifndef __CUDACC__
@@ -218,7 +218,9 @@ __device__
             for (int ith = 0; ith < INTERP_ORDER; ith++) {
               const int idx_th = base_idx_th + ith;
               const REAL coeff = coeff_2d[iph][ith];
+#ifndef __CUDACC__
 #pragma omp simd
+#endif
               for (int gf = 0; gf < NUM_EXT_INPUT_CONFORMAL_GFS; gf++) {
                 sum[gf] += src_gfs[SRC_IDX4(gf, ir, idx_th, idx_ph)] * coeff;
               } // END LOOP over src gridfunctions
