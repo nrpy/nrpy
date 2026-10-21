@@ -195,7 +195,6 @@ def register_CFunction_rhs_eval(
                 CoordSystem=CoordSystem,
                 enable_rfm_precompute=False,
                 registering_module=__name__,
-                ShiftEvolutionOption=ShiftEvolutionOption,
                 KreissOliger_strength_gauge=0.3,
                 KreissOliger_strength_nongauge=0.3,
                 enable_CAKO=False,

@@ -150,7 +150,7 @@ trusted_dict = {
     "Jac_dUrfm_dDSphUD_5": mpf("0.411876352734953155021457860129688"),
     "Jac_dUrfm_dDSphUD_6": mpf("5.55857858035569631964394726033475"),
     "Jac_dUrfm_dDSphUD_7": mpf("-0.619581540624960795963565726264622"),
-    "Jac_dUrfm_dDSphUD_8": mpf("-2.65455826322041927589217820949009e-32"),
+    "Jac_dUrfm_dDSphUD_8": mpf("0.0"),
     "NewtonRaphson_f_of_xx_0": mpf("0.0"),
     "NewtonRaphson_f_of_xx_1": mpf("0.0"),
     "NewtonRaphson_f_of_xx_2": mpf("0.0"),

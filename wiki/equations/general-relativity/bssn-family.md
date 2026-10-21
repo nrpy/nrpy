@@ -319,27 +319,28 @@ sections.
 
 For each direction `k`, the helper adds a strength times `Q_dKOD[k]` times the
 reference-metric factor `ReU[k]` to the right-hand side of each dissipated
-field `Q`. The gauge strength multiplies the `alpha` and `vetU` terms, and the
-`betU` terms only when the shift option name contains `2ndOrder`. The
-non-gauge strength multiplies the `cf`, `trK`, `lambdaU`, `aDD`, and `hDD`
+field `Q`. The gauge strength multiplies the `alpha`, `vetU`, and `betU` terms,
+and the non-gauge strength multiplies the `cf`, `trK`, `lambdaU`, `aDD`, and `hDD`
 terms, plus `Theta_fCCZ4` when `include_Theta_fCCZ4` is set. With
 `enable_CAKO`, both strengths are multiplied by the caller's conformal-factor
 expression `W`; [YBS-MOM Timestep-Scaled Momentum
 Adjustment](ybs-momentum-damping.md) records that weight for each
 conformal-factor choice.
 
-The helper does not read the lapse option, and it selects shift-driver
-dissipation by the `2ndOrder` substring. With dissipation enabled, a `Frozen`
-lapse and shift therefore still receive dissipation terms, and the evolved
-`B^i` of `NonAdvectingGammaDriving` receives none. This describes current
-behavior; it is not a guarantee that each gauge field is dissipated exactly
-when it evolves.
+A gauge field receives dissipation only when its RHS entry is not exactly the
+SymPy zero when the helper is called. `BSSN_gauge_RHSs` returns that zero for a
+field that does not evolve, so the helper adds nothing to a `Frozen` lapse, a
+`Frozen` shift and its driver, or the `betU` driver of the first-order shift
+options, and it dissipates the evolved `B^i` of `NonAdvectingGammaDriving` and
+of the second-order drivers. Callers insert the gauge RHSs before calling the
+helper, as BHaH, Dendro, and `build_fccz4_expression_bundle` do; terms a caller
+adds afterwards, such as the slow-start lapse term, do not affect the choice.
 
 Claim evidence:
-- Claim: `add_KreissOliger_dissipation_terms` adds `strength * Q_dKOD[k] * ReU[k]` for each direction to the RHS entries in place; the gauge strength applies to `alpha_rhs` and `vet_rhsU` always, and to `bet_rhsU` only when `"2ndOrder"` is in `ShiftEvolutionOption`; the non-gauge strength applies to `cf_rhs`, `trK_rhs`, `lambda_rhsU`, `a_rhsDD`, `h_rhsDD`, and `Theta_fCCZ4_rhs` when `include_Theta_fCCZ4` is set; `enable_CAKO` multiplies both strengths by `W`; the lapse option is not read, so `Frozen` gauges receive dissipation and the `NonAdvectingGammaDriving` `B^i` receives none.
+- Claim: `add_KreissOliger_dissipation_terms` adds `strength * Q_dKOD[k] * ReU[k]` for each direction to the RHS entries in place; the gauge strength applies to each `alpha_rhs`, `vet_rhsU`, and `bet_rhsU` entry that is not exactly the SymPy zero on entry, so a `Frozen` lapse or shift and the `bet_rhsU` of the first-order shift options receive none; the non-gauge strength applies to `cf_rhs`, `trK_rhs`, `lambda_rhsU`, `a_rhsDD`, `h_rhsDD`, and `Theta_fCCZ4_rhs` when `include_Theta_fCCZ4` is set; `enable_CAKO` multiplies both strengths by `W`.
 - Role: descriptive behavior
-- Deciding authority: [kreiss_oliger_terms.py](../../../nrpy/equations/general_relativity/kreiss_oliger_terms.py), `add_KreissOliger_dissipation_terms`
-- Corroboration: [kreiss_oliger_terms_Cartesian_CAKO.py](../../../nrpy/equations/general_relativity/tests/kreiss_oliger_terms_Cartesian_CAKO.py), `trusted_dict`, which samples only the `GammaDriving2ndOrder_Covariant`, CAKO, and `Theta_fCCZ4` branches
+- Deciding authority: [kreiss_oliger_terms.py](../../../nrpy/equations/general_relativity/kreiss_oliger_terms.py), `add_KreissOliger_dissipation_terms`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`
+- Corroboration: [kreiss_oliger_terms_Cartesian_CAKO.py](../../../nrpy/equations/general_relativity/tests/kreiss_oliger_terms_Cartesian_CAKO.py), `trusted_dict`, which samples the CAKO and `Theta_fCCZ4` branches with every gauge RHS nonzero; no trusted file samples the helper with a zero gauge RHS entry
 
 ## Sources
 
