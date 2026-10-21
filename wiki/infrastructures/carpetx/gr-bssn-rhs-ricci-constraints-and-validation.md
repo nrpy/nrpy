@@ -55,7 +55,9 @@ The RHS options that change generated behavior are `enable_T4munu`,
 `enable_rfm_precompute`, `enable_simd`, `LapseEvolutionOption`, and
 `ShiftEvolutionOption`. `enable_T4munu` changes the BSSN RHS and gauge RHS
 lookup keys. `enable_KreissOliger_dissipation` adds `_dKOD` derivative terms to
-gauge and non-gauge RHSs; when `enable_CAKO` is true, separate gauge and
+the non-gauge RHSs and to each gauge RHS that is not exactly the SymPy zero, so
+a `Frozen` lapse or shift and the driver of the first-order shift options
+receive none; when `enable_CAKO` is true, separate gauge and
 non-gauge dissipation strengths are registered and multiplied by the evolved
 conformal-factor-derived `W`. `enable_CAHD` builds the matching
 `BSSN_constraints` object and adds a Hamiltonian-damping term to `cf_rhs`.
@@ -66,6 +68,12 @@ header and `CCTK_ParameterGet()` plus `ConstSIMD()` parameter reads, but this
 path then passes `enable_simd=True` into CarpetX `simple_loop()`, which raises
 `ValueError`; the current simple-loop-backed RHS kernel path is therefore not
 usable with `enable_simd=True`.
+
+Claim evidence:
+- Claim: With `enable_KreissOliger_dissipation`, CarpetX `register_CFunction_rhs_eval` adds `_dKOD` dissipation to every non-gauge RHS and to each gauge RHS entry (`alpha_rhs`, `vet_rhsU`, `bet_rhsU`) that is not exactly the SymPy zero before dissipation is added; `BSSN_gauge_RHSs` returns that zero for a `Frozen` lapse, a `Frozen` shift and its driver, and the driver of the first-order shift options, so those fields receive no dissipation, while the evolved `B^i` of `NonAdvectingGammaDriving` and of the second-order drivers is dissipated.
+- Role: descriptive behavior
+- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/CarpetX/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`
+- Corroboration: the `rhs_eval` trusted dictionaries listed in Sources, which sample only `OnePlusLog` with second-order shift drivers, where every gauge RHS entry is nonzero; no trusted file samples a zero gauge RHS entry
 
 After option handling, the RHS codegen constructs an upwind control vector
 `betaU[i] = vetU[i] * rfm.ReU[i]` and calls `c_codegen()` with finite-difference
