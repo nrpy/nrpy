@@ -275,12 +275,10 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/equations/general_relativity/LorentzBoost.py` | living |
 | `nrpy/equations/general_relativity/T4munu.py` | living |
 | `nrpy/equations/general_relativity/bhahaha/ExpansionFunctionTheta.py` | living |
-| `nrpy/equations/general_relativity/bhahaha/HorizonSpinVorticityDipole.py` | living |
 | `nrpy/equations/general_relativity/bhahaha/SpECTRESpinEstimate.py` | living |
 | `nrpy/equations/general_relativity/bhahaha/approx_killing_vector_spin.py` | living |
 | `nrpy/equations/general_relativity/bhahaha/area.py` | living |
 | `nrpy/equations/general_relativity/bhahaha/tests/ExpansionFunctionTheta_Spherical.py` | living |
-| `nrpy/equations/general_relativity/bhahaha/tests/HorizonSpinVorticityDipole_Spherical.py` | living |
 | `nrpy/equations/general_relativity/bhahaha/tests/SpECTRESpinEstimate_Spherical.py` | living |
 | `nrpy/equations/general_relativity/bhahaha/tests/approx_killing_vector_spin_Spherical.py` | living |
 | `nrpy/equations/general_relativity/bhahaha/tests/area_Spherical.py` | living |

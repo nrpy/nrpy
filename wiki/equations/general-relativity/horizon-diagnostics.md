@@ -9,9 +9,8 @@ The `nrpy.equations.general_relativity.bhahaha` modules define symbolic
 apparent-horizon geometry and spin diagnostics on surfaces
 `r = h(theta, phi)` in a spherical reference-metric chart. This page covers only
 equation-side modules: surface area and circumference ingredients, the
-expansion function, approximate-Killing-vector spin integrands,
-vorticity-dipole spin integrands, and SpECTRE-style Omega-based spin
-estimators.
+expansion function, approximate-Killing-vector spin integrands, and
+SpECTRE-style Omega-based spin estimators.
 
 ## Detail
 
@@ -38,16 +37,6 @@ leaves the global `1/(8*pi)` angular-momentum prefactor to the caller.
 `Hmn_integrand`, `Nmn_integrand`, and `Jm_integrand` already contain `sqrtq`
 and integrate against `dtheta*dphi`; do not multiply by the area density again.
 
-`HorizonSpinVorticityDipoleClass` builds quasilocal spin-vector densities from
-the horizon vorticity one-form. It supports `K_input="BSSN"` or `"external"`,
-`normal_orientation` values `outward` and `inward`, and `K_sign` values `+1`
-and `-1`, while the dictionary accessor exposes the usual spherical and
-rfm-precompute keys. Its public `JCart_densU` components include the `1/(8*pi)`
-factor; helper methods construct scalar spin density about an axis and
-Omega-moment densities from a supplied Omega expression. Despite their names,
-`JCart_densU` and `Omega_xCart_densU` omit the area density and require
-`dA=sqrtq*dtheta*dphi` in the caller's integration.
-
 `SpECTRESpinEstimateClass` constructs an intrinsic two-surface estimator using
 the induced metric, `X_B = e_B^i K_ij s^j`, the surface Ricci scalar `R`, and
 the spin function `Omega`. The public API returns integrands through
@@ -59,9 +48,9 @@ near-zero branch selection to generated C code. Its scalar public integrands
 also require `dA`; `area_density` supplies `sqrtq` separately.
 
 Claim evidence:
-- Claim: Approximate-Killing-vector H/N/J integrands include `sqrtq`, whereas vorticity-dipole J/Omega moments and SpECTRE scalar integrands require an external area measure; only the vorticity-dipole J components already include `1/(8*pi)`.
+- Claim: Approximate-Killing-vector H/N/J integrands include `sqrtq`, whereas SpECTRE scalar integrands require an external area measure.
 - Role: descriptive behavior
-- Deciding authority: [approx_killing_vector_spin.py](../../../nrpy/equations/general_relativity/bhahaha/approx_killing_vector_spin.py), `_build_l1_basis_and_forms_` and `_build_spin_integrands_`; [HorizonSpinVorticityDipole.py](../../../nrpy/equations/general_relativity/bhahaha/HorizonSpinVorticityDipole.py), `_build_all` and `Omega_xCart_densU`; [SpECTRESpinEstimate.py](../../../nrpy/equations/general_relativity/bhahaha/SpECTRESpinEstimate.py), `get_public_integrands`
+- Deciding authority: [approx_killing_vector_spin.py](../../../nrpy/equations/general_relativity/bhahaha/approx_killing_vector_spin.py), `_build_l1_basis_and_forms_` and `_build_spin_integrands_`; [SpECTRESpinEstimate.py](../../../nrpy/equations/general_relativity/bhahaha/SpECTRESpinEstimate.py), `get_public_integrands`
 - Corroboration: none available for cross-module quadrature; each expression's explicit factors decide its integration measure.
 
 The SpECTRE class expects physical metric, extrinsic curvature, and normal
@@ -96,12 +85,10 @@ expressions; they do not document infrastructure generation.
 - [ExpansionFunctionTheta.py](../../../nrpy/equations/general_relativity/bhahaha/ExpansionFunctionTheta.py) - `ExpansionFunctionThetaClass`, `ExpansionFunctionTheta`
 - [area.py](../../../nrpy/equations/general_relativity/bhahaha/area.py) - `area`, `area2`, `area3`, `compute_q2DD`, `circumference_metric_roots`
 - [approx_killing_vector_spin.py](../../../nrpy/equations/general_relativity/bhahaha/approx_killing_vector_spin.py) - `ApproxKillingSpinClass`, `ApproxKillingSpin`
-- [HorizonSpinVorticityDipole.py](../../../nrpy/equations/general_relativity/bhahaha/HorizonSpinVorticityDipole.py) - `HorizonSpinVorticityDipoleClass`, `JCart_densU`
 - [SpECTRESpinEstimate.py](../../../nrpy/equations/general_relativity/bhahaha/SpECTRESpinEstimate.py) - `SpECTRESpinEstimateClass`, `get_public_integrands`, `compute_spin_vectors_for_c`
 - [area_Spherical.py](../../../nrpy/equations/general_relativity/bhahaha/tests/area_Spherical.py) - `trusted_dict`
 - [ExpansionFunctionTheta_Spherical.py](../../../nrpy/equations/general_relativity/bhahaha/tests/ExpansionFunctionTheta_Spherical.py) - `trusted_dict`
 - [approx_killing_vector_spin_Spherical.py](../../../nrpy/equations/general_relativity/bhahaha/tests/approx_killing_vector_spin_Spherical.py) - `trusted_dict`
-- [HorizonSpinVorticityDipole_Spherical.py](../../../nrpy/equations/general_relativity/bhahaha/tests/HorizonSpinVorticityDipole_Spherical.py) - `trusted_dict`
 - [SpECTRESpinEstimate_Spherical.py](../../../nrpy/equations/general_relativity/bhahaha/tests/SpECTRESpinEstimate_Spherical.py) - `trusted_dict`
 
 ## See Also
