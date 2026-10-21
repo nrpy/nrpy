@@ -165,6 +165,22 @@ domains. All cited trusted files are sampled expression checks, not generated
 build, runtime, shock-tube, conservation, convergence, or numerical-accuracy
 tests.
 
+At the general-metric sample point shared by the speed and HLL checks, the
+characteristic speeds entering `cmax` are all negative, so `cmax = 0` there and
+the sampled HLL fluxes equal the right-state fluxes. Both modules therefore
+also evaluate a flat face (`alpha = 1`, `beta^i = 0`, `gamma_ij = delta_ij`)
+with a subsonic right state moving in `+x` and a subsonic left state moving in
+`-x`, which makes both speed bounds nonzero and distinct, and repeat that
+evaluation with the face states exchanged, so each state sets each bound in one
+of the two evaluations. The `HLL_test` entry samples `HLL_solver` with an
+independent symbol for every input.
+
+Claim evidence:
+- Claim: At the shared general-metric sample point the GRHD characteristic speeds entering `cmax` are all negative, so `cmax = 0` and the sampled HLL fluxes reduce to right-state fluxes; the speed and HLL modules also sample a flat-face pair of subsonic states and its exchange, which makes both speed bounds nonzero and lets each state set each bound in one of the two evaluations; `HLL_test` samples `HLL_solver` with independent symbols. These are sampled expression checks, not generated-code execution.
+- Role: descriptive behavior
+- Deciding authority: [characteristic_speeds.py](../../nrpy/equations/grhd/characteristic_speeds.py), module `__main__`; [HLL_fluxes.py](../../nrpy/equations/grhd/HLL_fluxes.py), module `__main__`
+- Corroboration: [characteristic_speeds.py](../../nrpy/equations/grhd/tests/characteristic_speeds.py) and [HLL_fluxes.py](../../nrpy/equations/grhd/tests/HLL_fluxes.py), `trusted_dict` entries with the `subsonic_` and `subsonic_exchanged_` prefixes
+
 ## Sources
 
 - [Duez et al. (2005)](https://arxiv.org/pdf/astro-ph/0503420v2) - Eqs. (16), (34)-(39), (48)-(50)
