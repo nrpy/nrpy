@@ -714,8 +714,15 @@ SinhCartesian and SinhSpherical, then adds a Cartesian default representative
 and a SinhSpherical precompute-with-matter representative. Each trusted
 dictionary contains only the stated final outputs. The gauge-only APIs do not
 own a YBS-MOM output, so those dictionaries remain default-YBS rather than
-testing YBS Gamma alone; the jointly enabled BHaH `rhs_eval` dictionaries
-cover the resulting shift-driver and momentum-adjusted `a_rhsDD` changes together.
+testing YBS Gamma alone. The BHaH `rhs_eval` dictionaries enable both YBS
+options jointly, but the `__main__` of `rhs_eval.py` never sets `enable_fCCZ4`,
+so they pin the BSSN branch only. `build_fccz4_expression_bundle`, which
+`rhs_eval` calls for `enable_fCCZ4=True`, has Cartesian trusted comparisons with
+Kreiss-Oliger dissipation off and on and every other option at its default. No
+trusted dictionary therefore covers the shift-driver change that YBS Gamma makes
+in fCCZ4, or `build_fccz4_expression_bundle` with either YBS option enabled; the
+fCCZ4 `a_rhsDD` change from YBS-MOM is pinned only in the `fCCZ4_RHSs`
+dictionaries.
 
 These deterministic samples are regression evidence for symbolic construction
 under the exercised options. They are not an independent scientific
@@ -723,10 +730,10 @@ implementation and do not establish generated C/CUDA compilation, long-time
 stability, convergence order, waveform validity, or scientific accuracy.
 
 Claim evidence:
-- Claim: The equation owners configure trusted final-output comparisons for evolution with both YBS options enabled jointly, constraints, and default-YBS gauge expressions, while BHaH `rhs_eval` dictionaries jointly cover the YBS-driven downstream expressions; this validation does not establish generated backend builds, numerical stability, convergence, waveform validity, or scientific accuracy.
+- Claim: The equation owners configure trusted final-output comparisons for evolution with both YBS options enabled jointly, constraints, and default-YBS gauge expressions, while the BHaH `rhs_eval` dictionaries pin the BSSN branch only and `build_fccz4_expression_bundle` is pinned only with default options other than Kreiss-Oliger dissipation, so no trusted dictionary covers the fCCZ4 shift-driver change from YBS Gamma; this validation does not establish generated backend builds, numerical stability, convergence, waveform validity, or scientific accuracy.
 - Role: descriptive behavior
-- Deciding authority: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), module `__main__`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), module `__main__`; [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), module `__main__`; [validate_expressions.py](../../../nrpy/validate_expressions/validate_expressions.py), `process_dictionary_of_expressions` and `compare_or_generate_trusted_results`
-- Corroboration: [fCCZ4_constraints_SinhSpherical_phi.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_constraints_SinhSpherical_phi.py), `trusted_dict`; [fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py), `trusted_dict`; [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py), `trusted_dict`; [fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py), `trusted_dict`
+- Deciding authority: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), module `__main__`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), module `__main__`; [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), module `__main__`; [fCCZ4_system.py](../../../nrpy/equations/general_relativity/fCCZ4_system.py), module `__main__`; [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), module `__main__`, which never sets `enable_fCCZ4`; [validate_expressions.py](../../../nrpy/validate_expressions/validate_expressions.py), `process_dictionary_of_expressions` and `compare_or_generate_trusted_results`
+- Corroboration: [fCCZ4_constraints_SinhSpherical_phi.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_constraints_SinhSpherical_phi.py), `trusted_dict`; [fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py), `trusted_dict`; [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py), `trusted_dict`; [fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py), `trusted_dict`; [fCCZ4_system_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_system_Cartesian.py), `trusted_dict`; [fCCZ4_system_Cartesian_KO.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_system_Cartesian_KO.py), `trusted_dict`; [rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_SinhSpherical_RbargfsTrue_T4munuTrue_ImprovementsTrue.py](../../../nrpy/infrastructures/BHaH/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_SinhSpherical_RbargfsTrue_T4munuTrue_ImprovementsTrue.py), `trusted_dict`
 
 ## Sources
 
