@@ -63,6 +63,20 @@ Claim evidence:
 - Deciding authority: [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py), `SEOBNRv5_aligned_spin_Hamiltonian_quantities.__init__`
 - Corroboration: [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_Hamiltonian.py), `trusted_dict`, pins the sampled circular-derivative outputs against the module's own default-constructor evaluation
 
+Every first derivative of `Hreal` is divided by `nu`. The non-circular second
+derivatives `dHreal_dr_dr` and `dHreal_dr_dpphi` differentiate the normalized
+`dHreal_dr` and divide by `nu` again, so they carry `1/nu**2` where the circular
+second derivatives carry `1/nu`; at `prstar = 0`, `dHreal_dr_dr` equals
+`dHreal_dr_dr_circ / nu`. The BHaH radial-momentum initial condition uses only
+their ratio, in which the extra factor cancels; see [SEOBNR BOB Generated
+Library](../../infrastructures/bhah/seobnr-bob-generated-library.md).
+
+Claim evidence:
+- Claim: `SEOBNRv5_aligned_spin_Hamiltonian_quantities` divides `dHreal_dr_dr` and `dHreal_dr_dpphi` by `nu` twice, so they carry `1/nu**2`, while its circular second derivatives carry `1/nu`; at `prstar = 0`, `dHreal_dr_dr` equals `dHreal_dr_dr_circ / nu`.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py), `SEOBNRv5_aligned_spin_Hamiltonian_quantities.__init__`
+- Corroboration: none available; the trusted values fix the sampled numbers but do not separate the normalization factor
+
 Validation is module-local. Running the Hamiltonian source as a script executes
 doctests, processes the class `__dict__` through the trusted-expression helper,
 and compares the resulting expression dictionary against the sibling trusted

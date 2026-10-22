@@ -54,6 +54,17 @@ Claim evidence:
 - Deciding authority: [SEOBNRv5_quasi_precessing_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py), `SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities.__init__`
 - Corroboration: [SEOBNRv5_quasi_precessing_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py), `trusted_dict`, pins the sampled circular-derivative outputs against the module's own default-constructor evaluation
 
+As in the aligned-spin Hamiltonian, the non-circular second derivatives
+`dHreal_dr_dr` and `dHreal_dr_dpphi` differentiate the normalized `dHreal_dr`
+and divide by `nu` again, so they carry `1/nu**2` where the circular second
+derivatives carry `1/nu`.
+
+Claim evidence:
+- Claim: `SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities` divides `dHreal_dr_dr` and `dHreal_dr_dpphi` by `nu` twice, so they carry `1/nu**2`, while its circular second derivatives carry `1/nu`.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_quasi_precessing_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py), `SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities.__init__`
+- Corroboration: none available; the trusted values fix the sampled numbers but do not separate the normalization factor
+
 `SEOBNRv5_spin_evolution_equations` declares masses, orbital frequency
 `omega`, spin-vector components, and the Newtonian angular-momentum unit vector
 `ln_x`, `ln_y`, and `ln_z`. It builds SymPy matrices for the spin vectors and
