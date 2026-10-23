@@ -71,7 +71,11 @@ def register_terminal_plane_parameters() -> None:
 
 
 def handle_terminal_plane_intersection(normalized_eom: bool = False) -> None:
-    """Register local terminal-plane coordinates and radial bounds."""
+    """
+    Register local terminal-plane coordinates and radial bounds.
+
+    :param normalized_eom: Whether coordinate time is the integration parameter.
+    """
     parallelization = par.parval_from_str("parallelization")
 
     register_terminal_plane_crossing_result()

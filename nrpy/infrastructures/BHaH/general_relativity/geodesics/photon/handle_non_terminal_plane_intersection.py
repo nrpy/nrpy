@@ -67,7 +67,11 @@ def register_non_terminal_plane_parameters() -> None:
 
 
 def handle_non_terminal_plane_intersection(normalized_eom: bool = False) -> None:
-    """Generate local nonterminal-plane quantities from a refined root."""
+    """
+    Generate local nonterminal-plane quantities from a refined root.
+
+    :param normalized_eom: Whether coordinate time is the integration parameter.
+    """
     parallelization = par.parval_from_str("parallelization")
 
     register_non_terminal_plane_crossing_result()

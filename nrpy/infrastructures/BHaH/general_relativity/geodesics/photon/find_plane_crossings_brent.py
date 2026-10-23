@@ -127,6 +127,8 @@ def plane_crossing_brent_refine_candidate(
             f"connections_{spacetime_name}"
         ].full_function
         if par.parval_from_str("parallelization") == "cuda":
+            # Keep analytical CUDA imports local to this refinement path.
+            # pylint: disable=import-outside-toplevel
             from nrpy.equations.general_relativity.geodesics.geodesics import (
                 Geodesic_Equations,
             )
