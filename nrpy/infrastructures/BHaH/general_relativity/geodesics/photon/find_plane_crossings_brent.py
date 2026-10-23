@@ -753,7 +753,12 @@ def find_plane_crossings_brent(normalized_eom: bool = False) -> None:
 def find_plane_crossings_brent_analytical(
     spacetime_name: str, normalized_eom: bool = False
 ) -> None:
-    """Register analytical Brent refinement and select plane crossings."""
+    """
+    Register analytical Brent refinement and select plane crossings.
+
+    :param spacetime_name: Analytical spacetime metric name.
+    :param normalized_eom: Whether coordinate time is the integration parameter.
+    """
     plane_crossing_brent_refine_candidate(normalized_eom, spacetime_name)
     projection_suffix = (
         "_host" if par.parval_from_str("parallelization") == "cuda" else ""
