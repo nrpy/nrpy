@@ -30,7 +30,41 @@ thismodule = __name__
 
 
 class SEOBNR_aligned_spin_constants:
-    """Compute SEOBNR aligned-spin constants and optional precessing-remnant stages."""
+    """
+    Compute SEOBNR aligned-spin constants and optional precessing-remnant stages.
+
+    The (2,2) peak-amplitude fit nu * hNR["(2 , 2)"] and the (2,2) peak-frequency
+    fit omegaNR["(2 , 2)"] are also written out in the merger-ringdown modules.
+    BOB uses the opposite sign convention for the peak frequency.
+
+    Doctests:
+    >>> import sympy as sp
+    >>> from nrpy.equations.seobnr.BOB_aligned_spin_waveform_quantities import (
+    ...     BOB_aligned_spin_waveform_quantities,
+    ... )
+    >>> from nrpy.equations.seobnr.SEOBNRv5_aligned_spin_merger_quantities import (
+    ...     SEOBNRv5_aligned_spin_merger_quantities,
+    ... )
+    >>> const = SEOBNR_aligned_spin_constants()
+    >>> bob = BOB_aligned_spin_waveform_quantities()
+    >>> merger = SEOBNRv5_aligned_spin_merger_quantities()
+    >>> values = {
+    ...     sp.Symbol("m1", real=True): sp.Rational(3, 5),
+    ...     sp.Symbol("m2", real=True): sp.Rational(2, 5),
+    ...     sp.Symbol("chi1", real=True): sp.Rational(3, 10),
+    ...     sp.Symbol("chi2", real=True): -sp.Rational(1, 5),
+    ... }
+    >>> h22 = (const.nu * const.hNR["(2 , 2)"]).subs(values)
+    >>> w22 = const.omegaNR["(2 , 2)"].subs(values)
+    >>> abs(sp.N(h22 - bob.h_t_attach.subs(values), 30)) < sp.Float("1e-25")
+    True
+    >>> abs(sp.N(h22 - merger.h_t_attach.subs(values), 30)) < sp.Float("1e-25")
+    True
+    >>> abs(sp.N(w22 + bob.w_t_attach.subs(values), 30)) < sp.Float("1e-25")
+    True
+    >>> abs(sp.N(w22 - merger.w_t_attach.subs(values), 30)) < sp.Float("1e-25")
+    True
+    """
 
     a_f_nonprecessing_reference: sp.Expr
     a_f_precessing: sp.Expr
@@ -182,19 +216,19 @@ class SEOBNR_aligned_spin_constants:
             self.omegaNR.update({f"({l} , {m})": sp.sympify(0)})
 
         self.hNR["(2 , 2)"] = sp.Abs(
-            0.430147 * chi**3 * nu
-            - 0.084939 * chi**3
-            + 0.619889 * chi**2 * nu**2
-            - 0.020826 * chi**2
-            - 13.357614 * chi * nu**3
-            + 7.194264 * chi * nu**2
-            - 1.743135 * chi * nu
-            + 0.18694 * chi
-            + 71.979698 * nu**4
-            - 46.87586 * nu**3
-            + 12.440405 * nu**2
-            - 0.868289 * nu
-            + 1.467097
+            f2r(0.43014673069078152023) * nu * chi**3
+            - f2r(0.08493901280736430859) * chi**3
+            + f2r(0.61988944517825661507) * nu**2 * chi**2
+            - f2r(0.02082621429567295401) * chi**2
+            - f2r(13.35761402231352157344) * nu**3 * chi
+            + f2r(7.19426416189229733789) * nu**2 * chi
+            - f2r(1.74313546783413597652) * nu * chi
+            + f2r(0.18693991146784910695) * chi
+            + f2r(71.97969776036882194603) * nu**4
+            - f2r(46.87585958426210908101) * nu**3
+            + f2r(12.44040490932310127903) * nu**2
+            - f2r(0.86828935763242798274) * nu
+            + f2r(1.46709663479911811557)
         )
 
         self.omegaNR["(2 , 2)"] = (
