@@ -161,9 +161,11 @@ At the sample values, `cmax` there is zero and the left state sets `cmin`, so
 the speed module also requires GRMHD `find_cmax_cmin` to equal GRHD
 `find_cmax_cmin` built from the two face-state `compute_v02` values on a flat
 face metric in every `flux_dirn`; this ties each face field, density, and
-enthalpy to its own state. Also as in GRHD, the HLL trusted dictionary records
-the right-state conserved variables and physical fluxes for `flux_dirn = 2` and
-one `HLL_solver` combination with the `flux_dirn = 1` speed bounds. It records
+enthalpy to its own state. As in GRHD, the HLL trusted dictionary records the
+right-state conserved variables and physical fluxes for `flux_dirn = 2`. Unlike
+the GRHD `HLL_test`, which samples `HLL_solver` with an independent symbol for
+every input, it records one `HLL_solver` combination of the `rho_star` and
+`Ye_star` fluxes with the `flux_dirn = 1` speed bounds. It records
 all HLL fluxes for `flux_dirn = 1`, where both speed bounds are nonzero at the
 sample values, so both face states and the magnetic speed bounds enter the
 stored fluxes. Because the left state sets both bounds at the sample values, it

@@ -95,13 +95,25 @@ Claim evidence:
 - Corroboration: none available; direct signed-infinity and `assert_equal()` doctests are colocated with the deciding helper, and no separate source exercises every conversion branch
 
 Near-zero handling is a retry, not symbolic simplification. If a nonzero result
-has magnitude below `10 ** (-4.0 / 5.0 * mp.dps)`, the helper reruns the same
-common-subexpression form at twice the standard precision. The retry does not
+has magnitude below `10 ** (-4.0 / 5.0 * mp.dps)`, the helper clears SymPy's
+process-wide cache and reruns the same common-subexpression form at twice the
+standard precision, then clears the cache again. The first clear makes SymPy
+recompute results built from the sampled inputs, such as products, powers, and
+`exp`, at the higher precision; without it, inputs that compare equal at both
+precisions would reuse the first evaluation's results and reproduce its
+residue. The second clear keeps later evaluations at the standard precision
+from reusing the doubled-precision results. The retry does not
 forward `hex_offset`; in non-fixed mode it also draws new random substitutions.
 It therefore need not evaluate the same numerical point. The helper collapses
 the result to `mp.mpf("0.0")` only if the higher-precision result is still below
 the tolerance at that higher `mp.dps`; otherwise it keeps the original nonzero
 value and restores `mp.dps` to `precision`.
+
+Claim evidence:
+- Claim: `convert_one_expression_to_mpfmpc` clears SymPy's process-wide cache before and after the doubled-precision retry, so results cached during the first evaluation are recomputed at the higher precision instead of reproducing the first evaluation's residue, and later standard-precision evaluations do not reuse doubled-precision results.
+- Role: descriptive behavior
+- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `convert_one_expression_to_mpfmpc`
+- Corroboration: [reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py), `trusted_dict` entry `Jac_dUrfm_dDSphUD_8`, an analytically zero Jacobian entry stored as `0.0`
 
 `process_dictionary_of_expressions()` sorts dictionary items, skips keys
 containing `funcform`, converts scalar SymPy expressions directly, and flattens
@@ -149,6 +161,7 @@ time evolution, boundary conditions, executable output, or convergence.
 - [nrpy/validate_expressions/validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `precision`, `assert_equal`, `check_zero`
 - [nrpy/validate_expressions/validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `convert_free_symbols_set_to_mpf_dict`, `convert_one_expression_to_mpfmpc`, `inject_mpfs_into_cse_expression`
 - [nrpy/validate_expressions/validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `process_dictionary_of_expressions`, `output_trusted`, `compare_against_trusted`, `compare_or_generate_trusted_results`
+- [reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py) - `trusted_dict` entry `Jac_dUrfm_dDSphUD_8`
 
 ## See Also
 

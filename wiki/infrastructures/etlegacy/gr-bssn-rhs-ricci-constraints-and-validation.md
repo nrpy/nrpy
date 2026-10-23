@@ -62,7 +62,9 @@ Claim evidence:
 
 Reference-metric precompute is threaded through the BSSN and reference-metric
 lookup keys. Kreiss-Oliger
-dissipation adds `_dKOD` derivative terms to gauge and non-gauge RHSs; CAKO
+dissipation adds `_dKOD` derivative terms to the non-gauge RHSs and to each
+gauge RHS that is not exactly the SymPy zero, so a `Frozen` lapse or shift and
+the driver of the first-order shift options receive none; CAKO
 uses separate gauge and non-gauge strength parameters multiplied by the
 conformal-factor-derived `W`, while the non-CAKO path uses the shared
 `diss_strength` parameter name. CAHD builds the matching `BSSN_constraints`
@@ -71,6 +73,12 @@ object, registers `C_CAHD` and
 prefactor, and adds a conformal-factor-adjusted Hamiltonian-damping term to
 `cf_rhs`. SSL registers `SSL_h` and `SSL_sigma`, computes a time-dependent
 Gaussian prefactor, and modifies `alpha_rhs`.
+
+Claim evidence:
+- Claim: With `enable_KreissOliger_dissipation`, ETLegacy `register_CFunction_rhs_eval` adds `_dKOD` dissipation to every non-gauge RHS and to each gauge RHS entry (`alpha_rhs`, `vet_rhsU`, `bet_rhsU`) that is not exactly the SymPy zero before dissipation is added; `BSSN_gauge_RHSs` returns that zero for a `Frozen` lapse, a `Frozen` shift and its driver, and the driver of the first-order shift options, so those fields receive no dissipation, while the evolved `B^i` of `NonAdvectingGammaDriving` and of the second-order drivers is dissipated.
+- Role: descriptive behavior
+- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`
+- Corroboration: the `rhs_eval` trusted dictionaries listed in Sources, which sample only `OnePlusLog` with second-order shift drivers, where every gauge RHS entry is nonzero; no trusted file samples a zero gauge RHS entry
 
 After option handling, `register_CFunction_rhs_eval()` maps RHS expression
 names onto ETLegacy RHS gridfunction names and constructs the upwind control

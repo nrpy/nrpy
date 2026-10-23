@@ -33,6 +33,18 @@ builds a two-variable `gsl_multiroot_function_fdf`, seeds `r` and `pphi` from
 to `commondata`. The nodf and dissipative initial-condition routes use the same
 support family, while `root_finding_1d` and `root_finding_multidimensional`
 provide reusable GSL wrappers used later by post-adiabatic and NQC stages.
+The radial-momentum condition used by the dissipative initial conditions forms
+`dLdr = -dHreal_dr_dr / dHreal_dr_dpphi` from locally evaluated values of the
+aligned-spin Hamiltonian's non-circular second derivatives. Both carry
+`1/nu**2` (see [Aligned-Spin
+Hamiltonian](../../equations/seobnr/aligned-spin-hamiltonian.md)), so that
+normalization cancels in the ratio.
+
+Claim evidence:
+- Claim: `SEOBNRv5_aligned_spin_radial_momentum_condition` computes `dLdr = -dHreal_dr_dr / dHreal_dr_dpphi` from local values of the aligned-spin Hamiltonian's `dHreal_dr_dr` and `dHreal_dr_dpphi`, so a normalization factor common to both, such as their `1/nu**2`, cancels in `dLdr`.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_aligned_spin_radial_momentum_condition.py](../../../nrpy/infrastructures/BHaH/seobnr/initial_conditions/SEOBNRv5_aligned_spin_radial_momentum_condition.py), `register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition`
+- Corroboration: none available; no trusted file or generated-project check isolates this generated expression
 
 Dynamics generation is split into equation kernels and integration managers.
 `register_CFunction_SEOBNRv5_aligned_spin_pa_integration` first sets the final
@@ -204,6 +216,7 @@ consistency scripts.
 - [seobnrv5_aligned_spin_inspiral.py](../../../nrpy/examples/seobnrv5_aligned_spin_inspiral.py) - `register_CFunction_main_c`, `SEOBNRv5_aligned_spin_IMR_waveform`
 - [sebobv2.py](../../../nrpy/examples/sebobv2.py) - `register_CFunction_main_c`, `SEBOBv2_IMR_waveform`, `supplemental_defines_dict`
 - [SEOBNRv5_aligned_spin_initial_conditions_conservative.py](../../../nrpy/infrastructures/BHaH/seobnr/initial_conditions/SEOBNRv5_aligned_spin_initial_conditions_conservative.py) - `register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative`
+- [SEOBNRv5_aligned_spin_radial_momentum_condition.py](../../../nrpy/infrastructures/BHaH/seobnr/initial_conditions/SEOBNRv5_aligned_spin_radial_momentum_condition.py) - `register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition`
 - [root_finding_1d.py](../../../nrpy/infrastructures/BHaH/seobnr/utils/root_finding_1d.py) - `register_CFunction_root_finding_1d`
 - [root_finding_multidimensional.py](../../../nrpy/infrastructures/BHaH/seobnr/utils/root_finding_multidimensional.py) - `register_CFunction_root_finding_multidimensional`
 - [SEOBNRv5_aligned_spin_pa_integration.py](../../../nrpy/infrastructures/BHaH/seobnr/dynamics/SEOBNRv5_aligned_spin_pa_integration.py) - `register_CFunction_SEOBNRv5_aligned_spin_pa_integration`

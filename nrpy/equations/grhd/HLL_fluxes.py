@@ -399,27 +399,12 @@ if __name__ == "__main__":
         u4rU_test,
     )
 
-    cmin_test, cmax_test = find_cmax_cmin(
-        1,
-        gamma_faceDD_test,
-        beta_faceU_test,
-        alpha_face_test,
-        u4rU_test,
-        u4lU_test,
-        cs2_r_test,
-        cs2_l_test,
+    # Sample HLL_solver itself, with an independent symbol for every input.
+    cmax_test, cmin_test, Fr_test, Fl_test, Ur_test, Ul_test = sp.symbols(
+        "cmax cmin F_r F_l U_r U_l", real=True
     )
-
-    cmin_test = cmin_test.subs(sp.Function("nrpyAbs"), sp.Abs)
-    cmax_test = cmax_test.subs(sp.Function("nrpyAbs"), sp.Abs)
-
     exprs_dict["HLL_test"] = HLL_solver(
-        cmax_test,
-        cmin_test,
-        exprs_dict["F_rho_star"],
-        exprs_dict["F_Ye_star"],
-        exprs_dict["U_rho_star"],
-        exprs_dict["U_Ye_star"],
+        cmax_test, cmin_test, Fr_test, Fl_test, Ur_test, Ul_test
     )
 
     # Step 4: Evaluate the final HLL flux expressions.
@@ -472,6 +457,92 @@ if __name__ == "__main__":
     exprs_dict["Stilde_flux_HLLD"][2] = exprs_dict["Stilde_flux_HLLD"][2].subs(
         sp.Function("nrpyAbs"), sp.Abs
     )
+
+    # Step 5: At the sample values above, every characteristic speed is negative,
+    #         so cmax = 0 and each HLL flux reduces to its right-state flux.
+    #         Repeat the evaluation on a flat face (alpha = 1, beta^i = 0,
+    #         gamma_ij = delta_ij) with a subsonic right state moving in +x and a
+    #         subsonic left state moving in -x: cmax then comes from the right
+    #         state, cmin from the left state, and the two differ. A second
+    #         evaluation exchanges the face states, so the other state sets each
+    #         bound.
+    flat_gammaDD = ixp.zerorank2()
+    for i in range(3):
+        flat_gammaDD[i][i] = sp.sympify(1)
+    v_r, v_l = sp.Rational(1, 10), sp.Rational(-3, 10)
+    u4rU_subsonic: List[sp.Expr] = [
+        1 / sp.sqrt(1 - v_r**2),
+        v_r / sp.sqrt(1 - v_r**2),
+        sp.sympify(0),
+        sp.sympify(0),
+    ]
+    u4lU_subsonic: List[sp.Expr] = [
+        1 / sp.sqrt(1 - v_l**2),
+        v_l / sp.sqrt(1 - v_l**2),
+        sp.sympify(0),
+        sp.sympify(0),
+    ]
+    cs2_r_subsonic, cs2_l_subsonic = sp.Rational(1, 3), sp.Rational(1, 4)
+    subsonic_fluxes = calculate_HLL_fluxes(
+        0,
+        sp.sympify(1),
+        flat_gammaDD,
+        ixp.zerorank1(),
+        sp.sympify(1),
+        u4rU_subsonic,
+        u4lU_subsonic,
+        rho_b_r_test,
+        rho_b_l_test,
+        Ye_r_test,
+        Ye_l_test,
+        S_r_test,
+        S_l_test,
+        P_r_test,
+        P_l_test,
+        h_r_test,
+        h_l_test,
+        cs2_r_subsonic,
+        cs2_l_subsonic,
+    )
+    exchanged_subsonic_fluxes = calculate_HLL_fluxes(
+        0,
+        sp.sympify(1),
+        flat_gammaDD,
+        ixp.zerorank1(),
+        sp.sympify(1),
+        u4lU_subsonic,
+        u4rU_subsonic,
+        rho_b_l_test,
+        rho_b_r_test,
+        Ye_l_test,
+        Ye_r_test,
+        S_l_test,
+        S_r_test,
+        P_l_test,
+        P_r_test,
+        h_l_test,
+        h_r_test,
+        cs2_l_subsonic,
+        cs2_r_subsonic,
+    )
+    nrpyAbs = sp.Function("nrpyAbs")
+    for prefix, fluxes in (
+        ("subsonic_", subsonic_fluxes),
+        ("subsonic_exchanged_", exchanged_subsonic_fluxes),
+    ):
+        for name, flux in zip(
+            (
+                "rho_star_HLL_flux",
+                "Ye_star_HLL_flux",
+                "S_star_HLL_flux",
+                "tau_tilde_HLL_flux",
+            ),
+            fluxes[:4],
+        ):
+            exprs_dict[prefix + name] = flux.subs(nrpyAbs, sp.Abs)
+        exprs_dict[prefix + "Stilde_flux_HLLD"] = [
+            component.subs(nrpyAbs, sp.Abs) for component in fluxes[4]
+        ]
 
     results_dict = ve.process_dictionary_of_expressions(
         exprs_dict, fixed_mpfs_for_free_symbols=True

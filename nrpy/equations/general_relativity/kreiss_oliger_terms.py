@@ -29,7 +29,6 @@ def add_KreissOliger_dissipation_terms(
     CoordSystem: str,
     enable_rfm_precompute: bool,
     registering_module: str,
-    ShiftEvolutionOption: str,
     KreissOliger_strength_gauge: float,
     KreissOliger_strength_nongauge: float,
     enable_CAKO: bool,
@@ -43,6 +42,12 @@ def add_KreissOliger_dissipation_terms(
     geometric and Z4 quantities receive the non-gauge strength.  With
     ``enable_CAKO`` both strengths are multiplied by the conformal factor W.
 
+    A gauge field whose RHS entry is exactly the SymPy zero on entry does not
+    evolve (a frozen lapse or shift, or the shift driver of a first-order or
+    frozen shift option) and receives no dissipation, so callers must insert
+    the gauge RHSs before calling this function. Terms a caller adds
+    afterwards do not affect this choice.
+
     :param rhs_by_symbol_name: RHS dictionary, keyed by NRPy RHS symbol name;
         mutated in place.
     :param CoordSystem: Reference-metric coordinate system.
@@ -50,8 +55,6 @@ def add_KreissOliger_dissipation_terms(
     :param registering_module: Module name under which the two strength
         CodeParameters are registered (the caller's ``__name__``, so generated
         parameter metadata is unchanged by this extraction).
-    :param ShiftEvolutionOption: Shift evolution option; the second-order
-        shift driver has its own evolved field to dissipate.
     :param KreissOliger_strength_gauge: Default gauge dissipation strength.
     :param KreissOliger_strength_nongauge: Default non-gauge strength.
     :param enable_CAKO: Multiply both strengths by the conformal factor W.
@@ -86,10 +89,18 @@ def add_KreissOliger_dissipation_terms(
     hDD_dKOD = ixp.declarerank3("hDD_dKOD", symmetry="sym01")
     if include_Theta_fCCZ4:
         Theta_fCCZ4_dKOD = ixp.declarerank1("Theta_fCCZ4_dKOD")
+    # Record which gauge fields evolve before any dissipation is added.
+    gauge_field_evolves = {
+        name: rhs_by_symbol_name[name] != 0
+        for name in ["alpha_rhs"]
+        + [f"vet_rhsU{i}" for i in range(3)]
+        + [f"bet_rhsU{i}" for i in range(3)]
+    }
     for k in range(3):
-        rhs_by_symbol_name["alpha_rhs"] += (
-            diss_strength_gauge * alpha_dKOD[k] * rfm.ReU[k]
-        )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+        if gauge_field_evolves["alpha_rhs"]:
+            rhs_by_symbol_name["alpha_rhs"] += (
+                diss_strength_gauge * alpha_dKOD[k] * rfm.ReU[k]
+            )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
         rhs_by_symbol_name["cf_rhs"] += (
             diss_strength_nongauge * cf_dKOD[k] * rfm.ReU[k]
         )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
@@ -101,13 +112,14 @@ def add_KreissOliger_dissipation_terms(
                 diss_strength_nongauge * Theta_fCCZ4_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
         for i in range(3):
-            if "2ndOrder" in ShiftEvolutionOption:
+            if gauge_field_evolves[f"bet_rhsU{i}"]:
                 rhs_by_symbol_name[f"bet_rhsU{i}"] += (
                     diss_strength_gauge * betU_dKOD[i][k] * rfm.ReU[k]
                 )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-            rhs_by_symbol_name[f"vet_rhsU{i}"] += (
-                diss_strength_gauge * vetU_dKOD[i][k] * rfm.ReU[k]
-            )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+            if gauge_field_evolves[f"vet_rhsU{i}"]:
+                rhs_by_symbol_name[f"vet_rhsU{i}"] += (
+                    diss_strength_gauge * vetU_dKOD[i][k] * rfm.ReU[k]
+                )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
             rhs_by_symbol_name[f"lambda_rhsU{i}"] += (
                 diss_strength_nongauge * lambdaU_dKOD[i][k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
@@ -135,8 +147,9 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    # Exercise every evolved-field family, the second-order shift branch, the
-    # fCCZ4 Theta branch, and curvature-aware scaling in one expression set.
+    # Exercise every evolved-field family, the shift-driver (bet_rhsU) branch
+    # with every gauge RHS nonzero, the fCCZ4 Theta branch, and curvature-aware
+    # scaling in one expression set.
     validation_rhs: Dict[str, sp.Expr] = {
         name: sp.Symbol(f"{name}_input", real=True)
         for name in ("alpha_rhs", "cf_rhs", "trK_rhs", "Theta_fCCZ4_rhs")
@@ -155,7 +168,6 @@ if __name__ == "__main__":
         CoordSystem="Cartesian",
         enable_rfm_precompute=False,
         registering_module=__name__,
-        ShiftEvolutionOption="GammaDriving2ndOrder_Covariant",
         KreissOliger_strength_gauge=0.3,
         KreissOliger_strength_nongauge=0.2,
         enable_CAKO=True,

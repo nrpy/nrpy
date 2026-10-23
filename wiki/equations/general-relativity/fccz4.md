@@ -481,7 +481,10 @@ partial_t B^i    = 3 partial_t Lambdatilde^i / 4 - eta B^i.
 The default is the hatted covariant second-order driver, and `eta=2` is reused
 from BSSN. The wrapper passes the complete fCCZ4 connection RHS to
 `BSSN_gauge_RHSs`, so Brown's BSSN-only term never enters the driver. It adds
-`4 alpha Theta` for `OnePlusLog`; other lapse choices need no local change.
+`4 alpha Theta` only for `OnePlusLog`, turning that lapse RHS `-2 alpha K` into
+`-2 alpha (K - 2 Theta)`; the other lapse options keep their BSSN form. This is
+an NRPy choice, not a derived requirement: `OnePlusLogAlt` and
+`BHSHarmonicSlicing` receive no `Theta` coupling.
 
 The YBS Boolean is forwarded through both the BSSN gauge base and the matching
 fCCZ4 RHS cache. The three second-order drivers plus the nonadvecting driver
@@ -633,13 +636,30 @@ Eqs. (21e) and (22e) supply the BSSN-only RHS term excluded from fCCZ4.
 
 `build_fccz4_expression_bundle` in `fCCZ4_system.py` copies the non-gauge RHS
 dictionary, adds the selected lapse and shift equations, and optionally adds
-Kreiss-Oliger dissipation, CAHD, and slow-start lapse. Curvature-aware KO
+Kreiss-Oliger dissipation (see [BSSN Family](bssn-family.md) for the dissipated
+fields), CAHD, and slow-start lapse. Curvature-aware KO
 requires KO to be enabled. It returns `FCCZ4ExpressionBundle` containing
 `rhs_by_symbol_name`, the shift-based `upwind_control_vec`,
 `diagnostics_by_name`, and `provenance_files`. Diagnostics are opt-in and
 contain `H_Z4` and `Z4constraintU0..2`; their construction can register
 auxiliary gridfunctions. The frozen dataclass prevents field reassignment,
 but its dictionary contents remain mutable.
+
+CAHD registers the CodeParameter `C_CAHD` (default `0.15`) and adds
+`-C_CAHD * CFL_FACTOR * dsmin * H` to the conformal-factor RHS when the evolved
+conformal factor is `phi`, or that term times `-2 W` or `-4 chi` for `W` or
+`chi`. Its `H` is the BSSN Hamiltonian constraint from `BSSN_constraints`,
+built on the shared BSSN quantities with the evolved connection `lambdaU` in
+the Ricci tensor; it is not the opt-in diagnostic `H_Z4`. Constructing that
+constraint object registers the `H` diagnostic gridfunction and, while the
+NRPy parameter `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` is `True`, `M`
+and `LAMBDA_CONSTRAINT`, whether or not diagnostics are enabled.
+
+Claim evidence:
+- Claim: With CAHD enabled, `build_fccz4_expression_bundle` registers `C_CAHD`, adds `-C_CAHD * CFL_FACTOR * dsmin * H` to `cf_rhs` (times `-2 cf` for `W` and `-4 cf` for `chi`), takes `H` from `BSSN_constraints` rather than the `H_Z4` diagnostic, and thereby registers `H` and, under the default parameter value, `M` and `LAMBDA_CONSTRAINT` independently of `enable_diagnostics`.
+- Role: descriptive behavior
+- Deciding authority: [fCCZ4_system.py](../../../nrpy/equations/general_relativity/fCCZ4_system.py), `build_fccz4_expression_bundle`; [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`
+- Corroboration: none available; the fCCZ4 system trusted files sample assembly with CAHD disabled
 
 BHaH `register_CFunction_rhs_eval` uses this function for fCCZ4; Dendro
 assembles its equations independently. The expression function does not choose
@@ -694,8 +714,15 @@ SinhCartesian and SinhSpherical, then adds a Cartesian default representative
 and a SinhSpherical precompute-with-matter representative. Each trusted
 dictionary contains only the stated final outputs. The gauge-only APIs do not
 own a YBS-MOM output, so those dictionaries remain default-YBS rather than
-testing YBS Gamma alone; the jointly enabled BHaH `rhs_eval` dictionaries
-cover the resulting shift-driver and momentum-adjusted `a_rhsDD` changes together.
+testing YBS Gamma alone. The BHaH `rhs_eval` dictionaries enable both YBS
+options jointly, but the `__main__` of `rhs_eval.py` never sets `enable_fCCZ4`,
+so they pin the BSSN branch only. `build_fccz4_expression_bundle`, which
+`rhs_eval` calls for `enable_fCCZ4=True`, has Cartesian trusted comparisons with
+Kreiss-Oliger dissipation off and on and every other option at its default. No
+trusted dictionary therefore covers the shift-driver change that YBS Gamma makes
+in fCCZ4, or `build_fccz4_expression_bundle` with either YBS option enabled; the
+fCCZ4 `a_rhsDD` change from YBS-MOM is pinned only in the `fCCZ4_RHSs`
+dictionaries.
 
 These deterministic samples are regression evidence for symbolic construction
 under the exercised options. They are not an independent scientific
@@ -703,10 +730,10 @@ implementation and do not establish generated C/CUDA compilation, long-time
 stability, convergence order, waveform validity, or scientific accuracy.
 
 Claim evidence:
-- Claim: The equation owners configure trusted final-output comparisons for evolution with both YBS options enabled jointly, constraints, and default-YBS gauge expressions, while BHaH `rhs_eval` dictionaries jointly cover the YBS-driven downstream expressions; this validation does not establish generated backend builds, numerical stability, convergence, waveform validity, or scientific accuracy.
+- Claim: The equation owners configure trusted final-output comparisons for evolution with both YBS options enabled jointly, constraints, and default-YBS gauge expressions, while the BHaH `rhs_eval` dictionaries pin the BSSN branch only and `build_fccz4_expression_bundle` is pinned only with default options other than Kreiss-Oliger dissipation, so no trusted dictionary covers the fCCZ4 shift-driver change from YBS Gamma; this validation does not establish generated backend builds, numerical stability, convergence, waveform validity, or scientific accuracy.
 - Role: descriptive behavior
-- Deciding authority: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), module `__main__`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), module `__main__`; [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), module `__main__`; [validate_expressions.py](../../../nrpy/validate_expressions/validate_expressions.py), `process_dictionary_of_expressions` and `compare_or_generate_trusted_results`
-- Corroboration: [fCCZ4_constraints_SinhSpherical_phi.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_constraints_SinhSpherical_phi.py), `trusted_dict`; [fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py), `trusted_dict`; [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py), `trusted_dict`; [fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py), `trusted_dict`
+- Deciding authority: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), module `__main__`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), module `__main__`; [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), module `__main__`; [fCCZ4_system.py](../../../nrpy/equations/general_relativity/fCCZ4_system.py), module `__main__`; [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), module `__main__`, which never sets `enable_fCCZ4`; [validate_expressions.py](../../../nrpy/validate_expressions/validate_expressions.py), `process_dictionary_of_expressions` and `compare_or_generate_trusted_results`
+- Corroboration: [fCCZ4_constraints_SinhSpherical_phi.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_constraints_SinhSpherical_phi.py), `trusted_dict`; [fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py), `trusted_dict`; [fCCZ4_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py), `trusted_dict`; [fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py), `trusted_dict`; [fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py), `trusted_dict`; [fCCZ4_system_Cartesian.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_system_Cartesian.py), `trusted_dict`; [fCCZ4_system_Cartesian_KO.py](../../../nrpy/equations/general_relativity/tests/fCCZ4_system_Cartesian_KO.py), `trusted_dict`; [rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_SinhSpherical_RbargfsTrue_T4munuTrue_ImprovementsTrue.py](../../../nrpy/infrastructures/BHaH/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_SinhSpherical_RbargfsTrue_T4munuTrue_ImprovementsTrue.py), `trusted_dict`
 
 ## Sources
 
@@ -719,7 +746,7 @@ Claim evidence:
 - [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1) - Eqs. (2.1)-(2.29), reference-metric covariance, constraints, nonadvective lapse-factor corroboration, and BSSN limit
 - [Alic et al., arXiv:1106.2254v2](https://arxiv.org/pdf/1106.2254v2) - Sec. II, Eqs. (19)-(20) and the covariance discussion following Eq. (23)
 - [Brown, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2) - Eqs. (12a), (12b), (15), (21e), and (22e), covariant BSSN connection and RHS adjustment
-- [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py) - `BSSNconstraints.MU`, unchanged momentum-constraint diagnostic
+- [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py) - `BSSNconstraints.MU`, unchanged momentum-constraint diagnostic; `BSSNconstraints.__init__` and `H`, the Hamiltonian constraint damped by CAHD
 - [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py) - `BSSNQuantities`, inherited conformal variables and reference-metric quantities
 - [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py) - `BSSNRHSs`, inherited BSSN evolution expressions
 - [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py) - `BSSN_gauge_RHSs`, delegated gauge equations and `eta` default

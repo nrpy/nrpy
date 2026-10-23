@@ -57,7 +57,9 @@ and safe regeneration; [Code Test Policy](../validation/code-test-policy.md)
 owns test placement and meaningfulness.
 
 Family pages own the implementation-specific validation inventory. In compact
-form, current coverage includes BSSN quantities/RHSs/constraints, ADM/BSSN and
+form, current coverage includes BSSN quantities/RHSs/constraints, the BSSN
+algebraic constraint projector, Kreiss-Oliger dissipation terms, fCCZ4
+constraints/RHSs/gauge RHSs and assembled RHS sets, ADM/BSSN and
 four-metric conversions, initial data, Psi4/tetrads, geodesics, horizon
 diagnostics, Fishbone-Moncrief data, GRHD and GRMHD equations/speeds/HLL fluxes, scalar
 wave RHSs and initial data, conformally flat elliptic RHS/source terms, TOV ODE
@@ -73,6 +75,9 @@ symbols; this page owns the common caller flow and family inventory.
 - [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py) - `test_example_BSSN`
 - [BSSN_RHSs.py](../../nrpy/equations/general_relativity/BSSN_RHSs.py) - `BSSNRHSs`, `BSSN_RHSs`
 - [BSSN_RHSs_Cartesian.py](../../nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py) - `trusted_dict`
+- [BSSN_algebraic_constraints.py](../../nrpy/equations/general_relativity/BSSN_algebraic_constraints.py) - `BSSN_algebraic_constraints`
+- [kreiss_oliger_terms.py](../../nrpy/equations/general_relativity/kreiss_oliger_terms.py) - `add_KreissOliger_dissipation_terms`
+- [fCCZ4_system.py](../../nrpy/equations/general_relativity/fCCZ4_system.py) - `build_fccz4_expression_bundle`
 - [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py) - `GRHD_Equations`, `construct_all_equations`
 - [GRMHD_equations.py](../../nrpy/equations/grmhd/GRMHD_equations.py) - `GRMHD_Equations.compute_T4UU`, `compute_smallb4U`, `compute_smallb2`
 - [WaveEquation_RHSs.py](../../nrpy/equations/wave_equation/WaveEquation_RHSs.py) - `WaveEquation_RHSs`
@@ -87,6 +92,7 @@ symbols; this page owns the common caller flow and family inventory.
 - Depends on: [Test Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md)
 - Depends on: [Code Test Policy](../validation/code-test-policy.md)
 - Example: [BSSN Family](general-relativity/bssn-family.md)
+- Example: [Fully Covariant Conformal Z4](general-relativity/fccz4.md)
 - Example: [GRHD](grhd.md)
 - Example: [GRMHD](grmhd.md)
 - Example: [Wave Equation](wave-equation.md)
