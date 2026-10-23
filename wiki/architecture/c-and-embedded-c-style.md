@@ -33,16 +33,24 @@ snake_case; structs use a `_struct` suffix. Macros and enum values use
 UPPER_SNAKE_CASE. Place opening braces on the same line for functions, control
 structures, and struct definitions.
 
-Header guards use traditional `#ifndef` and `#define` pairs with UPPER_SNAKE_CASE
-names. Both simple names such as `BHAHAHA_HEADER_H` and legacy double-underscore
-forms such as `__SIMD_INTRINSICS_H__` appear in the codebase. The guard is
-structure rather than cosmetics, so an emitted header carries one too: BHaH and
-Dendro both generate the `#ifndef`/`#define` pair, Dendro deriving the macro
-from the header's own file name. What the
-generated-string exemption covers is the raw layout and generated-identifier
-casing, not whether the guard is there. Put standard
-library includes first, then project headers in quotes, with platform-specific
-headers behind conditional compilation such as `#if defined(__AVX512F__)`.
+Handwritten header guards use traditional `#ifndef` and `#define` pairs with
+UPPER_SNAKE_CASE names. Both simple names such as `BHAHAHA_HEADER_H` and legacy
+double-underscore forms such as `__SIMD_INTRINSICS_H__` appear in the codebase.
+Generated headers must preserve their intended inclusion behavior. In particular,
+BHaH's `set_CodeParameters*.h` files contain local declarations and are deliberately
+unguarded: different generated functions can include the same file within their
+own scopes. Adding an include guard would suppress declarations after the first
+inclusion in a translation unit.
+
+Claim evidence:
+- Claim: BHaH's generated `set_CodeParameters*.h` files are unguarded declaration fragments that may be included in multiple function scopes; a conventional include guard would suppress later declarations.
+- Role: descriptive behavior
+- Deciding authority: [CodeParameters.py](../../nrpy/infrastructures/BHaH/CodeParameters.py), `write_CodeParameters_h_files`
+- Corroboration: [c_function.py](../../nrpy/c_function.py), `CFunction.generate_full_function`, inserts the parameter-file include within generated functions.
+
+Put standard library includes first, then project headers in quotes, with
+platform-specific headers behind conditional compilation such as
+`#if defined(__AVX512F__)`.
 
 Function-like macros parenthesize arguments and macro parameter uses.
 Conditional compilation should use `#if defined(...)`, `#elif defined(...)`,
@@ -150,6 +158,16 @@ For handwritten C/CUDA/H only, do not add braces around one-statement
 control-flow bodies in new code. Write the single statement directly under the
 control-flow header instead.
 
+For handwritten multi-statement blocks only, the end comment may be omitted
+when the body has fewer than five lines and the opening brace is visible without
+scrolling. This exception does not permit one-statement braced blocks.
+
+Claim evidence:
+- Claim: Handwritten multi-statement blocks may omit the end comment only when the body has fewer than five lines and the opening brace is visible without scrolling; one-statement braced blocks remain prohibited.
+- Role: normative rule
+- Deciding authority: [coding_style.md](../../coding_style.md), `### 10. End-Curly-Brace Comments`
+- Corroboration: none available; the current style guide defines this exception.
+
 ### Doxygen And `desc=` Text
 
 Documentation-content requirements apply to handwritten and generated
@@ -208,6 +226,9 @@ Common generated-code patterns include:
   `simd_intrinsics.h` copied to projects when needed.
 
 ## Sources
+
+- [CodeParameters.py](../../nrpy/infrastructures/BHaH/CodeParameters.py) - `write_CodeParameters_h_files`
+- [c_function.py](../../nrpy/c_function.py) - `CFunction.generate_full_function`
 
 - [coding_style.md](../../coding_style.md) - `#### Embedded C Code String Conventions`, `## C/H Coding Style`, `### 10. End-Curly-Brace Comments`, `## Style Comparison Summary`; current authority for formatter ownership and generated naming scope
 - [original-agents.md](../../raw/source-docs/original-agents.md) - historical `## C/H Style`; current `coding_style.md` decides conflicts

@@ -9,7 +9,7 @@ the numerical integrator. The registered function writes trajectory samples and
 reports normalization and conserved-quantity diagnostics while preserving the
 Structure of Arrays layout expected by the shared geodesic kernels. Optional
 terminal and nonterminal planes record crossing time, affine parameter, local
-plane coordinates, and all nine interpolated state components in
+plane coordinates, and all nine Brent-refined state components in
 ``plane_crossings.txt``. Optional RKF45 debugging writes trial-controller
 records and analytic metric, connection, and right-hand-side records from the
 single-photon integration loop.
@@ -29,7 +29,6 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.set_initial_c
 def single_integrator_analytical(
     spacetime: str,
     particle: str,
-    maximum_degree: int,
     normalized_eom: bool = False,
     enable_rkf45_trial_debug: bool = False,
 ) -> None:
@@ -41,17 +40,15 @@ def single_integrator_analytical(
     normalization and conserved-quantity diagnostics. Optional plane crossings
     are reconstructed after accepted steps. ``plane_crossings.txt`` records
     crossing time, affine parameter, local plane coordinates, and all nine
-    interpolated state components.
+    Brent-refined state components.
 
     :param spacetime: The background spacetime descriptor.
     :param particle: The test-particle type.
-    :param maximum_degree: Largest generated plane interpolation polynomial degree.
     :param normalized_eom: Whether to use normalized photon evolution.
     :param enable_rkf45_trial_debug: Whether to write one diagnostic row for every
         RKF45 trial to ``rkf45_trials.txt`` and one analytic metric, connection,
         and right-hand-side row for each of its six stages to
         ``rkf45_stages.txt``.
-    :raises ValueError: If maximum_degree is below three.
 
     Doctests:
     >>> import nrpy.c_function as cfc
@@ -70,7 +67,6 @@ def single_integrator_analytical(
     >>> single_integrator_analytical(
     ...     "BrillLindquist_InitialData_Static_Cartesian",
     ...     "photon",
-    ...     4,
     ...     normalized_eom=True,
     ...     enable_rkf45_trial_debug=True,
     ... )
@@ -80,8 +76,6 @@ def single_integrator_analytical(
     True
     >>> cache_dir.cleanup()
     """
-    if maximum_degree < 3:
-        raise ValueError("Plane interpolation degree must be at least three")
     register_photon_batch_structs()
 
     macro_defs = r"""
@@ -126,7 +120,7 @@ Initializes one photon state, evolves it with the split RKF45 pipeline,
 writes trajectory samples, and reports final normalization and
 conserved-quantity diagnostics. Optional terminal and nonterminal planes record
 crossing time, affine parameter, local plane coordinates, and all nine
-interpolated state components in ``plane_crossings.txt``.
+Brent-refined state components in ``plane_crossings.txt``.
 
 When RKF45 trial debugging is enabled, ``rkf45_trials.txt`` records every
 adaptive-step trial and ``rkf45_stages.txt`` records all six analytic metric,
@@ -209,20 +203,20 @@ connection, and right-hand-side stages of each trial in execution order.
         initial_normalization_check = ""
 
     event_state_columns = (
-        "interpolated_lambda interpolated_x interpolated_y interpolated_z "
-        "interpolated_u interpolated_Pi_1 interpolated_Pi_2 "
-        "interpolated_Pi_3 interpolated_L_normal"
+        "refined_lambda refined_x refined_y refined_z "
+        "refined_u refined_Pi_1 refined_Pi_2 "
+        "refined_Pi_3 refined_L_normal"
         if normalized_eom
-        else "interpolated_t interpolated_x interpolated_y interpolated_z "
-        "interpolated_p^t interpolated_p^x interpolated_p^y "
-        "interpolated_p^z interpolated_L_normal"
+        else "refined_t refined_x refined_y refined_z "
+        "refined_p^t refined_p^x refined_p^y "
+        "refined_p^z refined_L_normal"
     )
     event_state_format = " ".join(["%.17e"] * 9)
     non_terminal_event_state_arguments = ", ".join(
-        f"non_terminal_plane_event_state[{component}]" for component in range(9)
+        f"non_terminal_result.state[{component}]" for component in range(9)
     )
     terminal_event_state_arguments = ", ".join(
-        f"terminal_plane_event_state[{component}]" for component in range(9)
+        f"terminal_result.state[{component}]" for component in range(9)
     )
 
     stage_normalization_diagnostic_expression = (
@@ -545,19 +539,9 @@ connection, and right-hand-side stages of each trial in execution order.
 {stage_debug_declarations}
     bool on_positive_side_of_non_terminal_plane_prev = false;
     bool on_positive_side_of_terminal_plane_prev = false;
-    bool non_terminal_plane_event_found = false;
-    bool terminal_plane_event_found = false;
-    bool non_terminal_plane_crossing_pending = false;
-    bool terminal_plane_crossing_pending = false;
-    int non_terminal_plane_steps_past = 0;
-    int terminal_plane_steps_past = 0;
-    int non_terminal_plane_event_degree = 0;
-    int terminal_plane_event_degree = 0;
-    double non_terminal_plane_event_state[9] = {{0.0}};
-    double terminal_plane_event_state[9] = {{0.0}};
-    double f_event_history[{maximum_degree} * 9] = {{0.0}};
-    double integration_param_event_history[{maximum_degree}] = {{0.0}};
-    blueprint_data_t plane_crossing_results = {{0}};
+    photon_plane_crossing_candidates_t plane_candidates = {{0}};
+    non_terminal_plane_crossing_result_t non_terminal_result = {{0}};
+    terminal_plane_crossing_result_t terminal_result = {{0}};
     const long int event_chunk_index[1] = {{0}};
     const bool event_planes_enabled =
         commondata.non_terminal_plane_enabled || commondata.terminal_plane_enabled;
@@ -605,21 +589,10 @@ connection, and right-hand-side stages of each trial in execution order.
     all_photons.f = f;
     all_photons.h = h;
     all_photons.integration_param = integration_param;
-    all_photons.f_history = f_event_history;
-    all_photons.integration_param_history = integration_param_event_history;
     all_photons.on_positive_side_of_non_terminal_plane_prev =
         &on_positive_side_of_non_terminal_plane_prev;
     all_photons.on_positive_side_of_terminal_plane_prev =
         &on_positive_side_of_terminal_plane_prev;
-    all_photons.non_terminal_plane_crossing_pending =
-        &non_terminal_plane_crossing_pending;
-    all_photons.terminal_plane_crossing_pending =
-        &terminal_plane_crossing_pending;
-    all_photons.non_terminal_plane_steps_past = &non_terminal_plane_steps_past;
-    all_photons.terminal_plane_steps_past = &terminal_plane_steps_past;
-    all_photons.non_terminal_plane_event_degree =
-        &non_terminal_plane_event_degree;
-    all_photons.terminal_plane_event_degree = &terminal_plane_event_degree;
 
     // ==========================================
     // INITIAL CONDITIONS
@@ -658,11 +631,17 @@ connection, and right-hand-side stages of each trial in execution order.
       &commondata, num_rays, &all_photons, metric, observer_tetrad
     );
 {normalized_momentum_conversion}
-    for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-      for (int component = 0; component < 9; ++component)
-        f_event_history[history_step * 9 + component] = f[component];
-      integration_param_event_history[history_step] = *integration_param;
-    }} // END LOOP: initialize accepted-state history
+    plane_candidates.non_terminal_candidate.photon_index = 0;
+    plane_candidates.non_terminal_candidate.plane_type = NON_TERMINAL_PLANE_EVENT;
+    photon_plane_crossing_candidate_t *terminal_candidates[3] = {{
+        &plane_candidates.terminal_candidate_1,
+        &plane_candidates.terminal_candidate_2,
+        &plane_candidates.terminal_candidate_3
+    }};
+    for (int candidate = 0; candidate < 3; ++candidate) {{
+      terminal_candidates[candidate]->photon_index = 0;
+      terminal_candidates[candidate]->plane_type = TERMINAL_PLANE_EVENT;
+    }}
 {initial_normalization_check}
 
     printf("Initial State:\n");
@@ -696,6 +675,7 @@ connection, and right-hand-side stages of each trial in execution order.
         f_base[i] = f[i];
         f_temp[i] = f[i];
       }} // END LOOP: copy current state
+      const double parameter_before = *integration_param;
 {trial_debug_trial_metadata}
 
       for (int stage = 1; stage <= 6; stage++) {{
@@ -745,25 +725,14 @@ connection, and right-hand-side stages of each trial in execution order.
           event_detection_manager_kernel(
             &commondata,
             f,
+            f_base,
             &log_energy_measure,
-            f_event_history,
+            &parameter_before,
             integration_param,
-            integration_param_event_history,
-            &plane_crossing_results,
             status,
             &on_positive_side_of_non_terminal_plane_prev,
             &on_positive_side_of_terminal_plane_prev,
-            &non_terminal_plane_event_found,
-            &terminal_plane_event_found,
-            &non_terminal_plane_crossing_pending,
-            &terminal_plane_crossing_pending,
-            &non_terminal_plane_steps_past,
-            &terminal_plane_steps_past,
-            &non_terminal_plane_event_degree,
-            &terminal_plane_event_degree,
-            non_terminal_plane_event_state,
-            terminal_plane_event_state,
-            steps + 1 >= max_accepted_steps,
+            &plane_candidates,
             event_chunk_index,
             chunk_size,
             stream_idx);
@@ -786,14 +755,11 @@ connection, and right-hand-side stages of each trial in execution order.
         steps++;
 
         if (event_planes_enabled && *status != ACTIVE) {{
-          if (*status == STOP_CONDITION_TERMINAL_PLANE) {{
-            printf("Photon crossed the configured terminal plane.\n");
-          }} else if (*status == STOP_CONDITION_COORD_RADIUS_EXCEEDED) {{
+          if (*status == STOP_CONDITION_COORD_RADIUS_EXCEEDED) {{
             printf("Particle escaped to r > %.2f.\n", commondata.r_escape);
           }} else if (*status == STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED) {{
             printf("Evolution measure exceeded numerical limit.\n");
-          }} else if (*status == FAILURE_PLANE_INTERPOLATION_HISTORY ||
-                     *status == FAILURE_GENERIC) {{
+          }} else if (*status == FAILURE_GENERIC) {{
             fprintf(stderr, "Plane crossing failed with status %d.\n", *status);
             exit_status = EXIT_FAILURE;
           }} // END ELSE IF: event manager failure
@@ -830,6 +796,10 @@ connection, and right-hand-side stages of each trial in execution order.
     }} // END WHILE: integrate the photon geodesic
 
     if (event_planes_enabled) {{
+      find_plane_crossings_brent_analytical(
+          &commondata, num_rays, &plane_candidates,
+          &non_terminal_result, &terminal_result);
+      if (terminal_result.found) *status = STOP_CONDITION_TERMINAL_PLANE;
       plane_crossings_file = fopen("plane_crossings.txt", "w");
       if (plane_crossings_file == NULL) {{
         fprintf(stderr, "ERROR: could not open plane_crossings.txt for writing.\n");
@@ -837,42 +807,44 @@ connection, and right-hand-side stages of each trial in execution order.
       }} else {{
         fprintf(
           plane_crossings_file,
-          "# plane_type coordinate_time affine_parameter local_y local_z {event_state_columns} interpolation_degree\n");
-        if (non_terminal_plane_event_found) {{
+          "# plane_type coordinate_time affine_parameter local_y local_z {event_state_columns} brent_iterations signed_plane_distance\n");
+        if (non_terminal_result.found) {{
           fprintf(
             plane_crossings_file,
-            "nonterminal %.17e %.17e %.17e %.17e {event_state_format} %d\n",
-            plane_crossing_results.non_terminal_plane_t,
-            plane_crossing_results.non_terminal_plane_lambda,
-            plane_crossing_results.y_nt,
-            plane_crossing_results.z_nt,
+            "nonterminal %.17e %.17e %.17e %.17e {event_state_format} %d %.17e\n",
+            non_terminal_result.coordinate_time,
+            non_terminal_result.physical_lambda,
+            non_terminal_result.y_local,
+            non_terminal_result.z_local,
             {non_terminal_event_state_arguments},
-            non_terminal_plane_event_degree);
+            non_terminal_result.brent_iterations,
+            non_terminal_result.plane_distance);
           printf(
             "Nonterminal-plane crossing: t=%.15e, lambda=%.15e, "
             "local=(%.15e, %.15e)\n",
-            plane_crossing_results.non_terminal_plane_t,
-            plane_crossing_results.non_terminal_plane_lambda,
-            plane_crossing_results.y_nt,
-            plane_crossing_results.z_nt);
+            non_terminal_result.coordinate_time,
+            non_terminal_result.physical_lambda,
+            non_terminal_result.y_local,
+            non_terminal_result.z_local);
         }} // END IF: nonterminal plane was crossed
-        if (terminal_plane_event_found) {{
+        if (terminal_result.found) {{
           fprintf(
             plane_crossings_file,
-            "terminal %.17e %.17e %.17e %.17e {event_state_format} %d\n",
-            plane_crossing_results.t_f,
-            plane_crossing_results.L_f,
-            plane_crossing_results.y_t,
-            plane_crossing_results.z_t,
+            "terminal %.17e %.17e %.17e %.17e {event_state_format} %d %.17e\n",
+            terminal_result.coordinate_time,
+            terminal_result.physical_lambda,
+            terminal_result.y_local,
+            terminal_result.z_local,
             {terminal_event_state_arguments},
-            terminal_plane_event_degree);
+            terminal_result.brent_iterations,
+            terminal_result.plane_distance);
           printf(
             "Terminal-plane crossing: t=%.15e, lambda=%.15e, "
             "local=(%.15e, %.15e)\n",
-            plane_crossing_results.t_f,
-            plane_crossing_results.L_f,
-            plane_crossing_results.y_t,
-            plane_crossing_results.z_t);
+            terminal_result.coordinate_time,
+            terminal_result.physical_lambda,
+            terminal_result.y_local,
+            terminal_result.z_local);
         }} // END IF: terminal plane was crossed
         if (fclose(plane_crossings_file) != 0) {{
           fprintf(stderr, "ERROR: failed to close plane_crossings.txt.\n");

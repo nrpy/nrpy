@@ -19,12 +19,31 @@ provider supports `UIUCBlackHole`, `StaticTrumpet`, and `OffsetKerrSchild`.
 and the Cartesian symbols `x`, `y`, and `z`. `BrillLindquist` registers two
 black-hole positions and masses, builds a conformally flat spatial metric, and
 sets zero extrinsic curvature. `Kasner` delegates to
-`kasner_adm_quantities`, which constructs diagonal exact-Kasner ADM fields from
-`KASNER_t0`, `KASNER_p1`, `KASNER_p2`, and `KASNER_p3`.
+`kasner_adm_quantities`, which constructs diagonal Kasner-form ADM fields from
+`KASNER_t0`, `KASNER_p1`, `KASNER_p2`, and `KASNER_p3`. The usual nonstatic
+vacuum Kasner solution requires `sum_i p_i = sum_i p_i^2 = 1`; generic real
+powers require positive time. The helper does not enforce these conditions.
+For arbitrary exponents its vacuum Hamiltonian residual is
+`((sum_i p_i)^2-sum_i p_i^2)/t^2`.
+
+Claim evidence:
+- Claim: `kasner_adm_quantities` constructs power-law ADM fields without checking positive time or the usual vacuum Kasner exponent conditions; arbitrary exponents need not solve the vacuum equations.
+- Role: descriptive behavior
+- Deciding authority: [InitialData_Cartesian.py](../../../nrpy/equations/general_relativity/InitialData_Cartesian.py), `kasner_adm_quantities`
+- Corroboration: direct contraction of the returned diagonal `gammaDD` and `KDD` gives the displayed Hamiltonian residual; trusted expression samples do not enforce physical parameter conditions.
 
 `InitialData_Spherical` initializes the same ADM outputs with spherical symbols
 `r`, `th`, and `ph`. `UIUCBlackHole` registers `M` and `chi` and returns the
 spinning-black-hole spatial metric and extrinsic curvature in the UIUC slicing.
+Its `a=M*chi` and `sqrt(M^2-a^2)` require `M^2-a^2>=0` for real horizon radii,
+or `abs(chi)<=1` for positive mass; the provider does not validate this input.
+
+Claim evidence:
+- Claim: `UIUCBlackHole` forms `sqrt(M^2-a^2)` with `a=M*chi` without checking the real-valued spin domain.
+- Role: descriptive behavior
+- Deciding authority: [InitialData_Spherical.py](../../../nrpy/equations/general_relativity/InitialData_Spherical.py), `UIUCBlackHole`
+- Corroboration: none available for invalid-input rejection; the constructor contains no such check.
+
 `StaticTrumpet` returns spherical trumpet data with its own lapse and radial
 shift. `OffsetKerrSchild` registers `M`, `a`, and `r0`, uses the offset
 Kerr-Schild radius `r + r0`, and returns ADM metric, extrinsic curvature,

@@ -6,9 +6,9 @@ To install the nrpy package, navigate to this directory and execute:
 This will install nrpy and its required dependencies.
 
 Instructions for creating the new GitHub release:
-    git tag -a v2.2026.6 -m "NRPy 2.2026.06"
+    git tag -a v2.2026.10 -m "NRPy 2.2026.10"
     git push origin main
-    git push origin v2.2026.6
+    git push origin v2.2026.10
 
 Instructions for uploading latest release to PyPI:
     rm -rf build dist && python setup.py sdist bdist_wheel && twine check dist/*

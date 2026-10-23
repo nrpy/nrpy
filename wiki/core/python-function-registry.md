@@ -19,7 +19,18 @@ Import validation happens in two stages. Construction rejects a truthy non-list 
 
 `subdirectory_depth()` reports the normalized depth of a target subdirectory. It uses path normalization, treats `.` as depth zero, and handles forms such as leading `./`, repeated slashes, and trailing slashes before counting path components.
 
-`generate_full_function()` assembles `full_function` in a fixed order: imports, optional `prefunc`, decorators plus `def`, normalized docstring, indented body, and optional `postfunc`. Imports are emitted one per line followed by a blank line. `prefunc` is stripped of leading and trailing newlines and placed before the function definition. Decorators are emitted immediately before `def`. `postfunc` is stripped of leading and trailing newlines and appended after the function body when present.
+`generate_full_function()` returns assembled function text in a fixed order: imports, optional `prefunc`, decorators plus `def`, normalized docstring, indented body, and optional `postfunc`. Imports are emitted one per line followed by a blank line. `prefunc` is stripped of leading and trailing newlines and placed before the function definition. Decorators are emitted immediately before `def`. `postfunc` is stripped of leading and trailing newlines and appended after the function body when present.
+
+The constructor stores this returned string in `full_function`. Changing a text
+field and calling `generate_full_function()` does not update that attribute;
+refresh it explicitly with `obj.full_function = obj.generate_full_function()`
+when the stored text must reflect those changes.
+
+Claim evidence:
+- Claim: `PyFunction.generate_full_function()` returns new text; the constructor stores the initial `full_function`, and later text changes require explicit assignment to refresh it.
+- Role: descriptive behavior
+- Deciding authority: [py_function.py](../../nrpy/py_function.py), `PyFunction.__init__` and `PyFunction.generate_full_function`
+- Corroboration: [jax_project_generator.py](../../nrpy/infrastructures/JAX/jax_project_generator.py), `_generate_python_files_and_init`, writes the stored `full_function` and explicitly refreshes it in its prefix-handling branch.
 
 `register_PyFunction()` is the global registry boundary. It rejects duplicate names already present in `PyFunction_dict` with `ValueError`; otherwise it constructs a `PyFunction` from the supplied fields and stores it in `PyFunction_dict` under `name`.
 
@@ -28,6 +39,8 @@ Import these objects from `nrpy.py_function`. The empty `nrpy/__init__.py` does 
 Ownership is split between core and infrastructure pages. This page owns the `PyFunction` object contract, registry duplicate behavior, and text assembly rules. JAX infrastructure pages own how registered `PyFunction.full_function` values are written into package files.
 
 ## Sources
+
+- [jax_project_generator.py](../../nrpy/infrastructures/JAX/jax_project_generator.py) - `_generate_python_files_and_init`
 
 - [nrpy/py_function.py](../../nrpy/py_function.py) - `PyFunction`, `PyFunction_dict`, `register_PyFunction`
 - [nrpy/__init__.py](../../nrpy/__init__.py) - empty package initializer; no Python-function registry re-exports

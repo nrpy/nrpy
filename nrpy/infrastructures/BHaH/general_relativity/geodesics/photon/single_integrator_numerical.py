@@ -7,9 +7,10 @@ control logic, but removes batching, double buffering, device memory, streams,
 and blueprint output. It writes one trajectory row after every accepted RKF45
 step, including a signed normalization diagnostic. Optional RKF45 debugging
 writes trial-level and stage-level records from this single-photon host loop.
-Optional terminal and nonterminal planes use the shared event-time interpolation
-and write crossing times, local plane coordinates, and all nine interpolated
-state components to ``plane_crossings.txt``.
+Optional terminal and nonterminal planes save accepted crossing steps. After
+evolution, fixed-anchor RKF45 trials and Brent refinement write crossing times,
+local plane coordinates, and nine refined state components to
+``plane_crossings.txt``.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -38,7 +39,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation import
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     calculate_ode_rhs_kernel,
     event_detection_manager_kernel,
-    find_event_time_and_state,
+    find_plane_crossings_brent,
     handle_non_terminal_plane_intersection,
     handle_terminal_plane_intersection,
     normal_observer_log_energy,
@@ -56,7 +57,6 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     spacetime_name: str,
     dataset_coord_system: str,
     interpolation_method: str = "g4DD",
-    maximum_degree: int = 4,
     normalized_eom: bool = False,
     enable_rkf45_trial_debug: bool = False,
     axisymmetric_about_z: bool = False,
@@ -68,7 +68,6 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     :param spacetime_name: Spacetime identifier used to select photon equations.
     :param dataset_coord_system: Coordinate system used by the numerical dataset.
     :param interpolation_method: Numerical geometry payload method used by the generated project.
-    :param maximum_degree: Largest generated plane interpolation polynomial degree.
     :param normalized_eom: Whether to evolve normalized coordinate-time equations.
     :param enable_rkf45_trial_debug: Whether to write one diagnostic row for every
         RKF45 trial to ``rkf45_trials.txt`` and one row for each of its six
@@ -155,8 +154,6 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
             "interpolation_method must be one of ('g4DD', 'g4DD_d0', 'GammaUDD'); "
             f"found '{interpolation_method}'."
         )
-    if maximum_degree < 3:
-        raise ValueError("Plane interpolation degree must be at least three")
     if dataset_coord_system != "SinhCylindricalv2n2":
         raise ValueError(
             "single_integrator_numerical supports only "
@@ -182,6 +179,10 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
 
     # Register the shared batch state definitions and metric-tetrad initializer.
     register_photon_batch_structs()
+    find_plane_crossings_brent.register_plane_crossing_candidates()
+    find_plane_crossings_brent.register_plane_crossing_root()
+    handle_non_terminal_plane_intersection.register_non_terminal_plane_crossing_result()
+    handle_terminal_plane_intersection.register_terminal_plane_crossing_result()
     BHaH_defines_h.register_BHaH_defines(
         "single_photon_macros",
         """
@@ -191,7 +192,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     )
     set_initial_conditions_kernel(
         normalized_eom=normalized_eom,
-        initialize_event_history=True,
+        initialize_plane_sides=True,
         tile_indices_add_to_parfile=True,
     )
 
@@ -316,20 +317,16 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         normalization_diagnostic_expression = "normalization.C"
 
     event_state_columns = (
-        "interpolated_lambda interpolated_x interpolated_y interpolated_z "
-        "interpolated_u interpolated_Pi_1 interpolated_Pi_2 "
-        "interpolated_Pi_3 interpolated_L_normal"
+        "lambda x y z u Pi_1 Pi_2 Pi_3 L_normal"
         if normalized_eom
-        else "interpolated_t interpolated_x interpolated_y interpolated_z "
-        "interpolated_p^t interpolated_p^x interpolated_p^y "
-        "interpolated_p^z interpolated_L_normal"
+        else "t x y z p^t p^x p^y p^z L_normal"
     )
     event_state_format = " ".join(["%.17e"] * 9)
     non_terminal_event_state_arguments = ", ".join(
-        f"non_terminal_plane_event_state[{component}]" for component in range(9)
+        f"non_terminal_result.state[{component}]" for component in range(9)
     )
     terminal_event_state_arguments = ", ".join(
-        f"terminal_plane_event_state[{component}]" for component in range(9)
+        f"terminal_result.state[{component}]" for component in range(9)
     )
 
     if enable_accepted_Lz_diagnostic:
@@ -705,9 +702,9 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
 
     desc = rf"""Integrate one photon through a numerical spacetime on the CPU.
 
-The executable initializes one photon from direct position and momentum parameters,
-solves the initial null constraint, maps numerical time windows by coordinate-time
-slot, and advances the state with the shared six-stage RKF45 pipeline. A trajectory
+The executable constructs one photon from the observer tetrad and camera sample,
+maps numerical time windows by coordinate-time slot, and advances the state
+with the shared six-stage RKF45 method. A trajectory
 row, including signed normalization deviation, is written only after an accepted
 step. ``initial_state.txt`` stores the initial event and direct contravariant
 momentum at full precision before any normalized-state conversion. If the
@@ -717,11 +714,10 @@ accepted-state $L_z$ is appended to that row. When RKF45 trial debugging is
 enabled, ``rkf45_trials.txt`` records every trial and ``rkf45_stages.txt``
 records all six interpolation/RHS stages of every trial in execution order.
 When a terminal or nonterminal plane is enabled, accepted steps pass through the
-shared event detector. It interpolates each crossing state and writes one row per
-detected plane to ``plane_crossings.txt`` with plane type, coordinate time,
-affine parameter, local plane coordinates, and all nine interpolated state
-components. A terminal-plane hit stops the integration only when its local radius
-is within the configured bounds.
+shared event detector. After evolution, fixed-anchor RKF45 steps and Brent
+refinement locate each saved crossing. ``plane_crossings.txt`` records selected
+crossing states, local coordinates, trial counts, and signed plane distances.
+An in-range terminal crossing determines the final photon status.
 
 For normalized equations, the state layout is
 ``(lambda, x, y, z, u, Pi_1, Pi_2, Pi_3, L_normal)``: ``f[0]`` is lambda and
@@ -810,7 +806,6 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
     "REJECTED",
     "FAILURE_SPATIAL_INTERPOLATION",
     "FAILURE_TEMPORAL_INTERPOLATION",
-    "FAILURE_PLANE_INTERPOLATION_HISTORY"
   }};
 
   int exit_status = EXIT_SUCCESS;
@@ -835,21 +830,11 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   int *rejection_retries = NULL;
   termination_type_t *status = NULL;
   PhotonStateSoA initial_photon = {{0}};
-  double f_event_history[{maximum_degree} * 9] = {{0.0}};
-  double integration_param_event_history[{maximum_degree}] = {{0.0}};
   bool on_positive_side_of_non_terminal_plane_prev = false;
   bool on_positive_side_of_terminal_plane_prev = false;
-  bool non_terminal_plane_event_found = false;
-  bool terminal_plane_event_found = false;
-  bool non_terminal_plane_crossing_pending = false;
-  bool terminal_plane_crossing_pending = false;
-  int non_terminal_plane_steps_past = 0;
-  int terminal_plane_steps_past = 0;
-  int non_terminal_plane_event_degree = 0;
-  int terminal_plane_event_degree = 0;
-  double non_terminal_plane_event_state[9] = {{0.0}};
-  double terminal_plane_event_state[9] = {{0.0}};
-  blueprint_data_t plane_crossing_results = {{0}};
+  photon_plane_crossing_candidates_t plane_candidates = {{0}};
+  non_terminal_plane_crossing_result_t non_terminal_result = {{0}};
+  terminal_plane_crossing_result_t terminal_result = {{0}};
   const long int event_chunk_index[1] = {{0}};
   const bool event_planes_enabled =
       commondata.non_terminal_plane_enabled || commondata.terminal_plane_enabled;
@@ -1063,34 +1048,16 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   initial_photon.f = f;
   initial_photon.h = h;
   initial_photon.integration_param = integration_param;
-  initial_photon.f_history = f_event_history;
-  initial_photon.integration_param_history = integration_param_event_history;
   initial_photon.on_positive_side_of_non_terminal_plane_prev =
       &on_positive_side_of_non_terminal_plane_prev;
   initial_photon.on_positive_side_of_terminal_plane_prev =
       &on_positive_side_of_terminal_plane_prev;
-  initial_photon.non_terminal_plane_crossing_pending =
-      &non_terminal_plane_crossing_pending;
-  initial_photon.terminal_plane_crossing_pending =
-      &terminal_plane_crossing_pending;
-  initial_photon.non_terminal_plane_steps_past = &non_terminal_plane_steps_past;
-  initial_photon.terminal_plane_steps_past = &terminal_plane_steps_past;
-  initial_photon.non_terminal_plane_event_degree =
-      &non_terminal_plane_event_degree;
-  initial_photon.terminal_plane_event_degree = &terminal_plane_event_degree;
   set_initial_conditions_kernel(
       &commondata, num_rays, &initial_photon, observer_metric, observer_tetrad);
   // Retain the direct tangent before normalized-EOM conversion. It defines
   // the inertial straight-line reference for an analytic spacetime.
   const double initial_direct_momentum[4] = {{f[4], f[5], f[6], f[7]}};
   {momentum_conversion_call}
-
-  // Seed accepted-state history after normalized-momentum conversion.
-  for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-    for (int component = 0; component < 9; ++component)
-      f_event_history[history_step * 9 + component] = f[component];
-    integration_param_event_history[history_step] = *integration_param;
-  }} // END LOOP: initialize accepted-state history
 
   normalization_constraint_t initial_normalization;
   {normalization_kernel_name}(
@@ -1203,6 +1170,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
       mapped_slot_index = slot_index;
     }} // END IF: photon moved to different slot
 
+    const double integration_param_before_step = *integration_param;
     memcpy(f_start, f, sizeof(double) * 9);
     memcpy(f_temp, f, sizeof(double) * 9);
 {trial_debug_trial_metadata}
@@ -1322,35 +1290,12 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
         goto cleanup;
       }} // END IF: accepted-state log-energy measure invalid
 
-      if (event_planes_enabled) {{
-        event_detection_manager_kernel(
-            &commondata,
-            f,
-            &log_energy_measure,
-            f_event_history,
-            integration_param,
-            integration_param_event_history,
-            &plane_crossing_results,
-            status,
-            &on_positive_side_of_non_terminal_plane_prev,
-            &on_positive_side_of_terminal_plane_prev,
-            &non_terminal_plane_event_found,
-            &terminal_plane_event_found,
-            &non_terminal_plane_crossing_pending,
-            &terminal_plane_crossing_pending,
-            &non_terminal_plane_steps_past,
-            &terminal_plane_steps_past,
-            &non_terminal_plane_event_degree,
-            &terminal_plane_event_degree,
-            non_terminal_plane_event_state,
-            terminal_plane_event_state,
-            accepted_steps + 1 >= max_accepted_steps ||
-                rkf45_attempts >= max_rkf45_attempts ||
-                slot_get_index(&tsm, {coordinate_time_expression}) < 0,
-            event_chunk_index,
-            chunk_size,
-            stream_idx);
-      }} // END IF: a physical plane is enabled
+      event_detection_manager_kernel(
+          &commondata, f, f_start, &log_energy_measure,
+          &integration_param_before_step, integration_param, status,
+          &on_positive_side_of_non_terminal_plane_prev,
+          &on_positive_side_of_terminal_plane_prev, &plane_candidates,
+          event_chunk_index, chunk_size, stream_idx);
 
       normalization_constraint_t normalization;
       {normalization_kernel_name}(
@@ -1379,35 +1324,21 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
       fflush(trajectory_file);
       accepted_steps++;
 
-      if (event_planes_enabled && *status != ACTIVE) {{
-        if (*status == STOP_CONDITION_TERMINAL_PLANE) {{
-          printf("Photon crossed the configured terminal plane.\n");
-        }} else if (*status == STOP_CONDITION_COORD_RADIUS_EXCEEDED) {{
+      if (*status != ACTIVE) {{
+        if (*status == STOP_CONDITION_COORD_RADIUS_EXCEEDED) {{
           printf("Photon escaped to r > %.15e.\n", (double)commondata.r_escape);
         }} else if (*status == STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED) {{
           printf(
               "Evolution measure exceeded %.15e.\n",
               commondata.evolution_measure_max);
-        }} else if (*status == FAILURE_PLANE_INTERPOLATION_HISTORY ||
-                   *status == FAILURE_GENERIC) {{
-          fprintf(stderr, "Plane crossing failed with status %d.\n", (int)*status);
+        }} else if (*status == STOP_CONDITION_T_MAX_EXCEEDED) {{
+          printf("Photon reached the numerical time limit.\n");
+        }} else if (*status == FAILURE_GENERIC) {{
+          fprintf(stderr, "Accepted-state event detection failed.\n");
           exit_status = EXIT_FAILURE;
-        }} // END ELSE IF: event manager failure
+        }} // END ELSE IF: accepted-state stop
         break;
       }} // END IF: event manager stopped the photon
-
-      const double radius_squared = f[1] * f[1] + f[2] * f[2] + f[3] * f[3];
-      if (radius_squared > commondata.r_escape * commondata.r_escape) {{
-        *status = STOP_CONDITION_COORD_RADIUS_EXCEEDED;
-        printf("Photon escaped to r > %.15e.\n", (double)commondata.r_escape);
-        break;
-      }} // END IF: photon state crossed boundary
-
-      if (log_energy_measure > commondata.evolution_measure_max) {{
-        *status = STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED;
-        printf("Evolution measure exceeded %.15e.\n", commondata.evolution_measure_max);
-        break;
-      }} // END IF: evolution measure exceeded limit
     }} else if (*status == REJECTED) {{
       *status = ACTIVE;
       continue;
@@ -1426,59 +1357,6 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   }} // END ELSE: unexpected RKF45 finalization status
   }} // END WHILE: evolve photon through accepted steps
 
-  if (event_planes_enabled) {{
-    plane_crossings_file = fopen("plane_crossings.txt", "w");
-    if (plane_crossings_file == NULL) {{
-      fprintf(stderr, "ERROR: could not open plane_crossings.txt for writing.\n");
-      exit_status = EXIT_FAILURE;
-    }} else {{
-      fprintf(
-          plane_crossings_file,
-          "# plane_type coordinate_time affine_parameter local_y local_z {event_state_columns} interpolation_degree\n");
-      if (non_terminal_plane_event_found) {{
-        fprintf(
-            plane_crossings_file,
-            "nonterminal %.17e %.17e %.17e %.17e {event_state_format} %d\n",
-            plane_crossing_results.non_terminal_plane_t,
-            plane_crossing_results.non_terminal_plane_lambda,
-            plane_crossing_results.y_nt,
-            plane_crossing_results.z_nt,
-            {non_terminal_event_state_arguments},
-            non_terminal_plane_event_degree);
-        printf(
-            "Nonterminal-plane crossing: t=%.15e, lambda=%.15e, "
-            "local=(%.15e, %.15e)\n",
-            plane_crossing_results.non_terminal_plane_t,
-            plane_crossing_results.non_terminal_plane_lambda,
-            plane_crossing_results.y_nt,
-            plane_crossing_results.z_nt);
-      }} // END IF: nonterminal plane was crossed
-      if (terminal_plane_event_found) {{
-        fprintf(
-            plane_crossings_file,
-            "terminal %.17e %.17e %.17e %.17e {event_state_format} %d\n",
-            plane_crossing_results.t_f,
-            plane_crossing_results.L_f,
-            plane_crossing_results.y_t,
-            plane_crossing_results.z_t,
-            {terminal_event_state_arguments},
-            terminal_plane_event_degree);
-        printf(
-            "Terminal-plane crossing: t=%.15e, lambda=%.15e, "
-            "local=(%.15e, %.15e)\n",
-            plane_crossing_results.t_f,
-            plane_crossing_results.L_f,
-            plane_crossing_results.y_t,
-            plane_crossing_results.z_t);
-      }} // END IF: terminal plane was crossed
-      if (fclose(plane_crossings_file) != 0) {{
-        fprintf(stderr, "ERROR: failed to close plane_crossings.txt.\n");
-        exit_status = EXIT_FAILURE;
-      }} // END IF: close crossing output
-      plane_crossings_file = NULL;
-    }} // END ELSE: crossing output file opened
-  }} // END IF: enabled plane output
-
   if ((*status == ACTIVE || *status == REJECTED) &&
       accepted_steps >= max_accepted_steps) {{
     *status = FAILURE_GENERIC;
@@ -1488,6 +1366,75 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
     *status = FAILURE_GENERIC;
     printf("Integration stopped at the RKF45-attempt safety limit.\n");
   }} // END ELSE IF: integration reached the RKF45-attempt safety
+
+  if (event_planes_enabled) {{
+    printf("Refining recorded plane crossings with Brent's method...\n");
+    fflush(stdout);
+    find_plane_crossings_brent(
+        &commondata, &numerical_params, &spatial_context, &numerical_window,
+        slot_manager_t_max, num_rays, &plane_candidates,
+        &non_terminal_result, &terminal_result);
+    mapped_slot_index = -1;
+    printf("Plane crossing refinement complete.\n");
+    if (terminal_result.found) {{
+      terminal_result.trajectory_stop_reason = *status;
+      *status = STOP_CONDITION_TERMINAL_PLANE;
+    }}
+
+    plane_crossings_file = fopen("plane_crossings.txt", "w");
+    if (plane_crossings_file == NULL) {{
+      fprintf(stderr, "ERROR: could not open plane_crossings.txt for writing.\n");
+      exit_status = EXIT_FAILURE;
+    }} else {{
+      fprintf(
+          plane_crossings_file,
+          "# plane_type coordinate_time affine_parameter local_y local_z {event_state_columns} brent_iterations signed_plane_distance\n");
+      if (non_terminal_result.found) {{
+        fprintf(
+            plane_crossings_file,
+            "nonterminal %.17e %.17e %.17e %.17e {event_state_format} %d %.17e\n",
+            non_terminal_result.coordinate_time,
+            non_terminal_result.physical_lambda,
+            non_terminal_result.y_local,
+            non_terminal_result.z_local,
+            {non_terminal_event_state_arguments},
+            non_terminal_result.brent_iterations,
+            non_terminal_result.plane_distance);
+        printf(
+            "Nonterminal-plane crossing: t=%.15e, lambda=%.15e, "
+            "local=(%.15e, %.15e)\n",
+            non_terminal_result.coordinate_time,
+            non_terminal_result.physical_lambda,
+            non_terminal_result.y_local,
+            non_terminal_result.z_local);
+      }}
+      if (terminal_result.found) {{
+        fprintf(
+            plane_crossings_file,
+            "terminal %.17e %.17e %.17e %.17e {event_state_format} %d %.17e\n",
+            terminal_result.coordinate_time,
+            terminal_result.physical_lambda,
+            terminal_result.y_local,
+            terminal_result.z_local,
+            {terminal_event_state_arguments},
+            terminal_result.brent_iterations,
+            terminal_result.plane_distance);
+        printf(
+            "Terminal-plane crossing %d: t=%.15e, lambda=%.15e, "
+            "local=(%.15e, %.15e)\n",
+            terminal_result.selected_candidate_number,
+            terminal_result.coordinate_time,
+            terminal_result.physical_lambda,
+            terminal_result.y_local,
+            terminal_result.z_local);
+      }}
+      if (fclose(plane_crossings_file) != 0) {{
+        fprintf(stderr, "ERROR: failed to close plane_crossings.txt.\n");
+        exit_status = EXIT_FAILURE;
+      }}
+      plane_crossings_file = NULL;
+    }}
+  }}
 
   const int final_status_index = (int)*status;
   const char *final_status_name =
@@ -1502,8 +1449,8 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
       "Final status: %s (%d), lambda=%.15e, t=%.15e\n",
       final_status_name,
       final_status_index,
-      {trajectory_lambda_expression},
-      {trajectory_time_expression});
+      terminal_result.found ? terminal_result.physical_lambda : {trajectory_lambda_expression},
+      terminal_result.found ? terminal_result.coordinate_time : {trajectory_time_expression});
 
   //==========================================
   // 6. OPTIONAL TERMINAL NORMALIZATION CHECK
@@ -1566,7 +1513,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
                 "Terminal normalization skipped: deviation was not finite.\n");
           }} else {{
             printf(
-                "Final signed normalization deviation: %.15e\n",
+              "Trajectory-stop signed normalization deviation: %.15e\n",
                 normalization_deviation);
           }} // END ELSE: terminal normalization deviation is finite
         }} // END ELSE: terminal normalization interpolation succeeded
@@ -1678,17 +1625,22 @@ if __name__ == "__main__":
         normalized_eom=NORMALIZED_EOM,
     )
     rkf45_stage_update.rkf45_stage_update()
-    find_event_time_and_state.find_event_time_and_state(4)
-    handle_terminal_plane_intersection.handle_terminal_plane_intersection()
-    handle_non_terminal_plane_intersection.handle_non_terminal_plane_intersection()
-    event_detection_manager_kernel.event_detection_manager_kernel(
-        maximum_degree=4,
-        normalized_eom=NORMALIZED_EOM,
-        capture_event_state=True,
-        single_photon_step_limit=True,
+    find_plane_crossings_brent.plane_crossing_brent_refine_candidate(
+        normalized_eom=NORMALIZED_EOM
     )
+    handle_terminal_plane_intersection.handle_terminal_plane_intersection(
+        normalized_eom=NORMALIZED_EOM
+    )
+    handle_non_terminal_plane_intersection.handle_non_terminal_plane_intersection(
+        normalized_eom=NORMALIZED_EOM
+    )
+    event_detection_manager_kernel.event_detection_manager_kernel(
+        normalized_eom=NORMALIZED_EOM,
+    )
+    find_plane_crossings_brent.find_plane_crossings_brent(normalized_eom=NORMALIZED_EOM)
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
         enable_numerical_time_window_step_cap=True,
+        normalized_eom=NORMALIZED_EOM,
         retry_interpolation_failures=True,
     )
     single_integrator_numerical(
@@ -1698,13 +1650,6 @@ if __name__ == "__main__":
         normalized_eom=NORMALIZED_EOM,
     )
     main_single.main_single("single_integrator_numerical")
-
-    for internal_func in [
-        "find_event_time_and_state_centered",
-        "handle_terminal_plane_intersection",
-        "handle_non_terminal_plane_intersection",
-    ]:
-        cfc.CFunction_dict.pop(internal_func, None)
 
     # Step 7: Generate parameter headers, the default parfile, and CPU definitions.
     print("Generating headers, parameter handling, and Makefile...")

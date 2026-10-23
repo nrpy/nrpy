@@ -13,11 +13,13 @@ post-Newtonian right-hand sides for the spin vectors, Newtonian orbital-plane
 unit vector, orbital angular momentum, and orbital frequency.
 
 “Quasi-precessing” is material scope. The unversioned precessing-dynamics paper
-landing page is model background, not a versioned intended contract. The
+landing page is model background, not a version-pinned statement of the
+implemented equations. The
 implementation orbit-averages in-plane spin
 terms under circular-orbit assumptions and sets non-black-hole multipolar
-coefficients to zero; audit a specific paper revision before asserting an exact
-paper-to-code specialization mapping.
+coefficients to zero. The spin-evolution right-hand sides are mapped below to
+the version-pinned arXiv:2303.18143v2; the Hamiltonian module has no exact
+paper-revision mapping here, so audit a specific revision before asserting one.
 
 ## Detail
 
@@ -52,6 +54,17 @@ Claim evidence:
 - Deciding authority: [SEOBNRv5_quasi_precessing_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py), `SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities.__init__`
 - Corroboration: [SEOBNRv5_quasi_precessing_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py), `trusted_dict`, pins the sampled circular-derivative outputs against the module's own default-constructor evaluation
 
+As in the aligned-spin Hamiltonian, the non-circular second derivatives
+`dHreal_dr_dr` and `dHreal_dr_dpphi` differentiate the normalized `dHreal_dr`
+and divide by `nu` again, so they carry `1/nu**2` where the circular second
+derivatives carry `1/nu`.
+
+Claim evidence:
+- Claim: `SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities` divides `dHreal_dr_dr` and `dHreal_dr_dpphi` by `nu` twice, so they carry `1/nu**2`, while its circular second derivatives carry `1/nu`.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_quasi_precessing_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py), `SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities.__init__`
+- Corroboration: none available; the trusted values fix the sampled numbers but do not separate the normalization factor
+
 `SEOBNRv5_spin_evolution_equations` declares masses, orbital frequency
 `omega`, spin-vector components, and the Newtonian angular-momentum unit vector
 `ln_x`, `ln_y`, and `ln_z`. It builds SymPy matrices for the spin vectors and
@@ -65,6 +78,25 @@ friendly. It stores `chi1_dot_x`, `chi1_dot_y`, `chi1_dot_z`,
 `ln_dot_z`, `L_x`, `L_y`, `L_z`, and `omega_dot`. The implementation computes
 `omega_dot` by differentiating through `omega = v^3`, so the stored output is
 the orbital-frequency derivative rather than only a PN velocity derivative.
+
+In arXiv:2303.18143v2, the spin derivatives follow Eq. (66), `L` is Eq. (65)
+divided by `M mu` (the module works in `M = 1` units, where `mu = nu`),
+`ln_dot` follows Eqs. (71a)-(71d), and `omega_dot` is `3 v^2` times `v_dot`
+from Eq. (69). The terms proportional to `Ctilde_1ES2 = C_1ES2 - 1` in
+Eqs. (65f), (66b), (69f), and (71e) vanish for black holes and are omitted. The
+radiation-reaction contribution to `ln_dot` in Eq. (77) is not included.
+
+`ln_dot` is not orthogonal to `ln`. For a unit `ln`, the two `delta`
+spin1-spin2 terms of Eq. (71c) give
+`ln . ln_dot = nu ln . (S1 x S2) / (M^3 mu^2) [-(delta/4) v^9 + (delta/96)(35 nu - 54) v^11]`,
+which is Eq. (72) of the paper. Integrating these right-hand sides therefore
+does not keep `|ln| = 1` unless the integration renormalizes `ln`.
+
+Claim evidence:
+- Claim: `SEOBNRv5_spin_evolution_equations` implements Eqs. (65), (66), (69), and (71a)-(71d) of arXiv:2303.18143v2 for black holes, omitting the terms proportional to `Ctilde_1ES2`, and stores `L/(M mu)` and `omega_dot = 3 v^2 v_dot`; its `ln_dot` has the component parallel to a unit `ln` given by Eq. (72), so these right-hand sides do not preserve `|ln| = 1`.
+- Role: descriptive behavior
+- Deciding authority: [SEOBNRv5_spin_evolution_equations.py](../../../nrpy/equations/seobnr/SEOBNRv5_spin_evolution_equations.py), `SEOBNRv5_spin_evolution_equations`
+- Corroboration: [Khalil et al., arXiv:2303.18143v2](https://arxiv.org/pdf/2303.18143v2), Eqs. (65), (66), (69), (71), and (72), and the paragraph before Eq. (72)
 
 Both modules validate by running doctests, processing an instantiated object's
 `__dict__` with `process_dictionary_of_expressions`, and comparing the
@@ -84,7 +116,8 @@ generated implementation, or establish waveform accuracy.
 - [SEOBNRv5_spin_evolution_equations.py](../../../nrpy/equations/seobnr/SEOBNRv5_spin_evolution_equations.py) - `SEOBNRv5_spin_evolution_equations`, `chi1_dot_x`, `chi2_dot_x`, `ln_dot_x`, `L_x`, `omega_dot`
 - [SEOBNRv5_quasi_precessing_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py) - `trusted_dict`
 - [SEOBNRv5_spin_evolution_equations.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_spin_evolution_equations.py) - `trusted_dict`
-- [SEOBNRv5 dynamics paper landing page](https://arxiv.org/abs/2303.18143) - background orientation only; cited sections/equations have no exact revision mapping here
+- [SEOBNRv5 dynamics paper landing page](https://arxiv.org/abs/2303.18143) - background orientation only; the version-pinned PDF below carries the equation mapping
+- [Khalil et al., arXiv:2303.18143v2](https://arxiv.org/pdf/2303.18143v2) - Eqs. (65), (66), (69), (71), and (72), spin-evolution right-hand sides
 
 ## See Also
 

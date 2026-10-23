@@ -13,9 +13,21 @@ At import time, `parallel_codegen.py` registers two NRPy parameters: `enable_par
 
 `ParallelCodeGen` stores one deferred call. It splits a dotted path into `module_path` and `function_name`, then stores the argument dictionary that will later be passed as keyword arguments. `ParallelCodeGen_dict` is the module-level registry for these deferred calls. `register_func_call()` keys entries by `name + str(args)` and raises if the same string key has already been registered. This is textual duplicate detection: argument dictionaries with different insertion order can produce different keys even when they contain the same pairs.
 
-`NRPyEnv()` snapshots the global dictionaries that generated code usually mutates: `par.glb_params_dict`, `par.glb_code_params_dict`, `cfc.CFunction_dict`, `pyfc.PyFunction_dict`, `gri.glb_gridfcs_dict`, and `par.glb_extras_dict`. The explicit return type records the same shape, including concrete gridfunction variants.
+`NRPyEnv()` returns references to `par.glb_params_dict`, `par.glb_code_params_dict`, `cfc.CFunction_dict`, `pyfc.PyFunction_dict`, `gri.glb_gridfcs_dict`, and `par.glb_extras_dict`. It does not copy them: later in-process mutations remain visible through the tuple. Multiprocessing transfers these values through later serialization.
 
-`deep_update()` recursively merges nested dictionaries. `unpack_NRPy_environment_dict()` walks the worker result dictionary and merges each returned environment into the parent process: parameters, code parameters, C functions, Python functions, and gridfunctions are updated directly, while extras are merged recursively through `deep_update()`. These merges perform no duplicate or semantic-conflict check; a later value for the same key overwrites an earlier value. Callers must avoid conflicting worker registrations because this helper does not define a conflict winner as public behavior.
+Claim evidence:
+- Claim: `NRPyEnv()` returns the original dictionaries; it does not create an independent snapshot.
+- Role: descriptive behavior
+- Deciding authority: [nrpy/helpers/parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py), `NRPyEnv`
+- Corroboration: `none available`; the named implementation decides this behavior.
+
+`unpack_NRPy_environment_dict()` merges complete worker registries into the parent. Parameters, code parameters, C/Python functions, and gridfunctions use dictionary updates; extras use `deep_update()`. Returned registries include inherited entries, so an unchanged value from a later worker can overwrite another worker's change. There is no semantic-conflict check. `deep_update()` recurses whenever the incoming value is a dictionary and otherwise assigns the value. Existing nested values must have compatible dictionary structure: updating `{"k": 1}` with `{"k": {"x": 2}}` raises `TypeError`, with no rollback of preceding updates.
+
+Claim evidence:
+- Claim: Complete worker registries can overwrite independent changes with inherited values; recursive extras merging can fail on incompatible nested types.
+- Role: descriptive behavior
+- Deciding authority: [nrpy/helpers/parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py), `NRPyEnv, unpack_NRPy_environment_dict, deep_update, do_parallel_codegen`
+- Corroboration: `none available`; the named implementation decides this behavior.
 
 `pcg_registration_phase()` is true only when `enable_parallel_codegen` is enabled and `parallel_codegen_stage` is `"register"`. Call sites can use that predicate to choose registration instead of immediate generation. `register_func_call()` only performs duplicate detection and storage; it does not itself check the phase predicate, so callers remain responsible for using it in the intended phase.
 
@@ -39,9 +51,9 @@ Because this helper mutates global registries, it is closely related to the C-fu
 
 ## See Also
 
-- [Helper APIs](index.md)
-- [Loop Kernel And Device Helpers](loop-kernel-and-device-helpers.md)
-- [C Function Registry](../c-function-registry.md)
-- [Python Function Registry](../python-function-registry.md)
-- [Gridfunctions And Parameters](../gridfunctions-and-parameters.md)
-- [Lifecycle And Project Assembly](../../infrastructures/bhah/lifecycle-and-project-assembly.md)
+- Parent: [Helper APIs](index.md)
+- See also: [Loop Kernel And Device Helpers](loop-kernel-and-device-helpers.md)
+- See also: [C Function Registry](../c-function-registry.md)
+- See also: [Python Function Registry](../python-function-registry.md)
+- See also: [Gridfunctions And Parameters](../gridfunctions-and-parameters.md)
+- See also: [Lifecycle And Project Assembly](../../infrastructures/bhah/lifecycle-and-project-assembly.md)

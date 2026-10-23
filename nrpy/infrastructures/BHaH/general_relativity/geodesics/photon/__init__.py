@@ -4,7 +4,7 @@ from . import (
     calculate_and_fill_blueprint_data_universal,
     calculate_ode_rhs_kernel,
     event_detection_manager_kernel,
-    find_event_time_and_state,
+    find_plane_crossings_brent,
     handle_non_terminal_plane_intersection,
     handle_terminal_plane_intersection,
     interpolation_kernel,

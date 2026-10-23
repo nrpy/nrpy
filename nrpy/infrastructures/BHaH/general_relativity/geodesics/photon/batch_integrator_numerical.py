@@ -25,7 +25,7 @@ The script keeps the broad photon orchestration, RKF45 stepping, and
 ``TimeSlotManager`` structure used by the analytic photon batch integrator, but
 all geometry evaluations go through the numerical ``.bin`` data path. When the
 generator declares axial symmetry about the Cartesian ``z`` axis, optional
-initial, nonterminal post-step, and final ``L_z`` evaluations measure
+initial, nonterminal plane, and terminal ``L_z`` evaluations measure
 angular-momentum conservation.
 
 Author: Dalton J. Moone
@@ -34,6 +34,15 @@ Author: Dalton J. Moone
 
 import nrpy.c_function as cfc
 import nrpy.params as par
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.find_plane_crossings_brent import (
+    register_plane_crossing_candidates,
+)
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.handle_non_terminal_plane_intersection import (
+    register_non_terminal_plane_crossing_result,
+)
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.handle_terminal_plane_intersection import (
+    register_terminal_plane_crossing_result,
+)
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (
     time_slot_manager_helpers,
 )
@@ -42,7 +51,6 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_man
 def batch_integrator_numerical(
     spacetime_name: str,
     dataset_coord_system: str,
-    maximum_degree: int,
     interpolation_method: str = "g4DD",
     normalized_eom: bool = False,
     axisymmetric_about_z: bool = False,
@@ -52,12 +60,10 @@ def batch_integrator_numerical(
 
     :param spacetime_name: Spacetime identifier used to validate registration context.
     :param dataset_coord_system: Coordinate system used by the numerical dataset.
-    :param maximum_degree: Largest generated plane interpolation polynomial degree.
     :param interpolation_method: Numerical geometry payload method used by the generated project.
     :param normalized_eom: Whether to evolve normalized coordinate-time photon equations.
     :param axisymmetric_about_z: Whether the numerical spacetime has a rotational
         Killing vector about the Cartesian ``z`` axis, permitting ``L_z`` checks.
-    :raises ValueError: If maximum_degree is below three.
     :raises ValueError: If the parallelization mode, interpolation method, or
         dataset coordinate system is unsupported.
 
@@ -69,7 +75,7 @@ def batch_integrator_numerical(
     >>> with tempfile.TemporaryDirectory() as cache_dir, patch.dict(os.environ, {"XDG_CACHE_HOME": cache_dir}):
     ...     cfc.CFunction_dict.clear()
     ...     batch_integrator_numerical(
-    ...         "Schwarzschild", "SinhCylindricalv2n2", 4, interpolation_method="g4DD"
+    ...         "Schwarzschild", "SinhCylindricalv2n2", interpolation_method="g4DD"
     ...     )
     ...     generated = cfc.CFunction_dict["batch_integrator_numerical"].full_function
     >>> "@param[in,out] commondata" in generated
@@ -87,7 +93,7 @@ def batch_integrator_numerical(
     >>> with tempfile.TemporaryDirectory() as cache_dir, patch.dict(os.environ, {"XDG_CACHE_HOME": cache_dir}):
     ...     cfc.CFunction_dict.clear()
     ...     batch_integrator_numerical(
-    ...         "Schwarzschild", "SinhCylindricalv2n2", 4, interpolation_method="g4DD",
+    ...         "Schwarzschild", "SinhCylindricalv2n2", interpolation_method="g4DD",
     ...         normalized_eom=True
     ...     )
     ...     generated = cfc.CFunction_dict["batch_integrator_numerical"].full_function
@@ -99,12 +105,12 @@ def batch_integrator_numerical(
     True
     >>> "normalization_abs_by_ray[master_idx] = sidecar_norm_err;" in generated
     True
-    >>> "non_terminal_norm_recorded" in generated
+    >>> "non_terminal_plane_norm_recorded_by_ray" in generated
     True
     >>> "normalization_abs_non_terminal_by_ray" in generated
     True
-    >>> "!all_photons_host.non_terminal_norm_recorded[m_idx]" in generated
-    True
+    >>> "all_photons_host.non_terminal_norm_f" in generated
+    False
     >>> "normal_observer_log_energy(" in generated
     False
     >>> "d_f_bundle[current][4 * BUNDLE_CAPACITY + log_energy_i]" in generated
@@ -112,9 +118,9 @@ def batch_integrator_numerical(
     """
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
-
-    if maximum_degree < 3:
-        raise ValueError("Plane interpolation degree must be at least three")
+    register_plane_crossing_candidates()
+    register_non_terminal_plane_crossing_result()
+    register_terminal_plane_crossing_result()
 
     if not isinstance(axisymmetric_about_z, bool):
         raise ValueError(
@@ -246,7 +252,7 @@ def batch_integrator_numerical(
                                  absolute direct-scale-equivalent null-constraint
                                  error sidecar.
     @param[in] norm_abs_non_terminal_bin_path Optional output filename for the
-                                              sparse accepted-state nonterminal
+                                              sparse nonterminal plane
                                               normalization sidecar.
     @param[in] synthetic_slice_usage_bin_path Optional output filename for the
                                                per-photon synthetic temporal-
@@ -273,19 +279,12 @@ def batch_integrator_numerical(
         f"{angular_momentum_param}"
     )
 
-    crossing_parameter_fields = (
-        ("t_f", "non_terminal_plane_t")
-        if normalized_eom
-        else ("L_f", "non_terminal_plane_lambda")
-    )
     plane_crossing_writer = r"""
 static void write_plane_crossings(
     const char *restrict path,
     const long int num_rays,
-    const bool *restrict event_found,
-    const int *restrict event_degree,
-    const double *restrict event_state,
-    const blueprint_data_t *restrict results,
+    const non_terminal_plane_crossing_result_t *restrict non_terminal_results,
+    const terminal_plane_crossing_result_t *restrict terminal_results,
     const bool terminal_plane)
 {
     FILE *restrict output = fopen(path, "wb");
@@ -294,19 +293,24 @@ static void write_plane_crossings(
         exit(EXIT_FAILURE);
     }
     for (long int photon_index = 0; photon_index < num_rays; ++photon_index) {
-        if (!event_found[photon_index]) continue;
+        const non_terminal_plane_crossing_result_t *non_terminal =
+            &non_terminal_results[photon_index];
+        const terminal_plane_crossing_result_t *terminal =
+            &terminal_results[photon_index];
+        if (!(terminal_plane ? terminal->found : non_terminal->found)) continue;
         plane_crossing_record_t record = {0};
         record.photon_index = (uint64_t)photon_index;
-        record.interpolation_degree = (uint32_t)event_degree[photon_index];
+        record.brent_iterations = terminal_plane
+            ? terminal->brent_iterations : non_terminal->brent_iterations;
         record.integration_param = terminal_plane
-            ? results[photon_index].@TERMINAL_PARAMETER@
-            : results[photon_index].@NON_TERMINAL_PARAMETER@;
+            ? terminal->integration_param : non_terminal->integration_param;
         record.y_local = terminal_plane
-            ? results[photon_index].y_t : results[photon_index].y_nt;
+            ? terminal->y_local : non_terminal->y_local;
         record.z_local = terminal_plane
-            ? results[photon_index].z_t : results[photon_index].z_nt;
+            ? terminal->z_local : non_terminal->z_local;
         for (int component = 0; component < 9; ++component) {
-            record.state[component] = event_state[component * num_rays + photon_index];
+            record.state[component] = terminal_plane
+                ? terminal->state[component] : non_terminal->state[component];
         }
         if (fwrite(&record, sizeof(record), 1, output) != 1) {
             fprintf(stderr, "ERROR: Could not write plane crossing to '%s'.\n", path);
@@ -319,9 +323,7 @@ static void write_plane_crossings(
         exit(EXIT_FAILURE);
     }
 }
-""".replace("@TERMINAL_PARAMETER@", crossing_parameter_fields[0]).replace(
-        "@NON_TERMINAL_PARAMETER@", crossing_parameter_fields[1]
-    )
+"""
 
     include_CodeParameters_h = True
 
@@ -335,9 +337,6 @@ static void write_plane_crossings(
     )
     scratch_alloc_comment = (
         "Allocate 1D Host scratchpad arrays for temporal data staging."
-    )
-    results_memcpy = (
-        "// Event outputs are written directly to results_buffer on the CPU."
     )
     calc_blueprint = (
         "calculate_and_fill_blueprint_data_universal("
@@ -359,7 +358,7 @@ static void write_plane_crossings(
         "normalization_abs_by_ray, "
         "norm_abs_bin_path, "
         "normalization_abs_non_terminal_by_ray, "
-        "all_photons_host.non_terminal_norm_recorded, "
+        "non_terminal_plane_norm_recorded_by_ray, "
         "norm_abs_non_terminal_bin_path, "
         "0);"
     )
@@ -386,14 +385,13 @@ static void write_plane_crossings(
         else "all_photons_host.f[0 * num_rays + m_idx]"
     )
     terminal_coordinate_time = (
-        "all_photons_host.integration_param[norm_ray]"
-        if normalized_eom
-        else "all_photons_host.f[0 * num_rays + norm_ray]"
-    )
-    accepted_coordinate_time_bridge = (
-        "integration_param_bridge[current][fin_i]"
-        if normalized_eom
-        else "f_bridge[current][0 * BUNDLE_CAPACITY + fin_i]"
+        "terminal_crossing_results[norm_ray].found ? "
+        "terminal_crossing_results[norm_ray].coordinate_time : "
+        + (
+            "all_photons_host.integration_param[norm_ray]"
+            if normalized_eom
+            else "all_photons_host.f[0 * num_rays + norm_ray]"
+        )
     )
     interpolation_synthetic_usage_args_current = (
         "commondata->perform_synthetic_slice_check ? chunk_buffer[current] : NULL, "
@@ -459,7 +457,9 @@ static void write_plane_crossings(
                     for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {
                         const long int master_idx = chunk_buffer[0][norm_i];
                         integration_param_bridge[0][norm_i] =
-                            all_photons_host.integration_param[master_idx];
+                            terminal_crossing_results[master_idx].found
+                                ? terminal_crossing_results[master_idx].integration_param
+                                : all_photons_host.integration_param[master_idx];
                     } // END LOOP: for norm_i over terminal integration
                     memcpy(
                         d_integration_param_bundle[0],
@@ -723,8 +723,8 @@ static void write_plane_crossings(
                     for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {
                         const long int master_idx = chunk_buffer[0][norm_i];
                         integration_param_bridge[0][norm_i] =
-                            all_photons_host.non_terminal_norm_coordinate_time[master_idx];
-                    } // END LOOP: load accepted nonterminal coordinate times
+                            non_terminal_crossing_results[master_idx].integration_param;
+                    } // END LOOP: load nonterminal plane parameters
                     memcpy(
                         d_integration_param_bundle[0],
                         integration_param_bridge[0],
@@ -734,10 +734,7 @@ static void write_plane_crossings(
         else ""
     )
 
-    # The nonterminal diagnostic deliberately uses the accepted state saved by
-    # the host synchronization path, not the reconstructed plane-intersection
-    # state. Keep this separate from event detection: the event manager remains
-    # responsible only for geometric crossing detection and the persistent lock.
+    # Evaluate both diagnostics at the refined nonterminal plane state.
     non_terminal_diagnostic_condition = "commondata->perform_normalization_check"
     non_terminal_Lz_kernel_call = ""
     non_terminal_Lz_store = ""
@@ -754,37 +751,23 @@ static void write_plane_crossings(
 """
         non_terminal_Lz_store = r"""
                         if (commondata->perform_Lz_check) {
-                            const double post_step_Lz =
+                            const double plane_Lz =
                                 d_angular_momentum_bundle[norm_i].Lz;
-                            const double post_step_t =
-                                all_photons_host.non_terminal_norm_coordinate_time[master_idx];
-                            const double post_step_x =
-                                f_bridge[0][1 * BUNDLE_CAPACITY + norm_i];
-                            const double post_step_y =
-                                f_bridge[0][2 * BUNDLE_CAPACITY + norm_i];
-                            const double post_step_z =
-                                f_bridge[0][3 * BUNDLE_CAPACITY + norm_i];
-                            const double signed_distance =
-                                (post_step_x - commondata->non_terminal_plane_center_x) *
-                                    commondata->non_terminal_plane_normal_x +
-                                (post_step_y - commondata->non_terminal_plane_center_y) *
-                                    commondata->non_terminal_plane_normal_y +
-                                (post_step_z - commondata->non_terminal_plane_center_z) *
-                                    commondata->non_terminal_plane_normal_z;
-                            if (isfinite(post_step_Lz) && isfinite(post_step_t) &&
-                                isfinite(signed_distance)) {
-                                results_buffer[master_idx].non_terminal_post_step_Lz = post_step_Lz;
-                                results_buffer[master_idx].non_terminal_post_step_t = post_step_t;
-                                results_buffer[master_idx].non_terminal_post_step_distance = signed_distance;
+                            if (isfinite(plane_Lz)) {
+                                non_terminal_crossing_results[master_idx].Lz = plane_Lz;
+                                non_terminal_crossing_results[master_idx].Lz_recorded = true;
+                                results_buffer[master_idx].non_terminal_plane_Lz = plane_Lz;
+                                results_buffer[master_idx].non_terminal_plane_Lz_time =
+                                    non_terminal_crossing_results[master_idx].coordinate_time;
                             } else {
                                 non_terminal_skipped_count++;
                             }
-                        } // END IF: record accepted photon L_z
+                        } // END IF: record L_z at nonterminal plane
 """
 
     non_terminal_normalization_block = r"""
         //==========================================
-        // NONTERMINAL ACCEPTED-STATE NORM AND ANGULAR MOMENTUM DIAGNOSTICS
+        // NONTERMINAL PLANE NORM AND ANGULAR MOMENTUM DIAGNOSTICS
         //==========================================
         if ({NON_TERMINAL_DIAGNOSTIC_CONDITION}) {
             TimeSlotManager non_terminal_norm_tsm;
@@ -798,20 +781,19 @@ static void write_plane_crossings(
                 num_rays);
 
             for (long int norm_ray = 0; norm_ray < num_rays; ++norm_ray) {
-                if (!all_photons_host.non_terminal_norm_recorded[norm_ray] ||
-                    !all_photons_host.non_terminal_plane_event_found[norm_ray]) {
+                if (!non_terminal_crossing_results[norm_ray].found) {
                     continue;
                 }
                 non_terminal_recorded_count++;
                 const int norm_slot_idx = slot_get_index(
                     &non_terminal_norm_tsm,
-                    all_photons_host.non_terminal_norm_coordinate_time[norm_ray]);
+                    non_terminal_crossing_results[norm_ray].coordinate_time);
                 if (norm_slot_idx < 0) {
                     non_terminal_skipped_count++;
                     continue;
                 }
                 slot_add_photon(&non_terminal_norm_tsm, norm_slot_idx, norm_ray);
-            } // END LOOP: bin saved accepted nonterminal states
+            } // END LOOP: bin nonterminal plane states
 
             for (int norm_slot_idx = non_terminal_norm_tsm.num_slots - 1;
                  norm_slot_idx >= 0;
@@ -842,10 +824,9 @@ static void write_plane_crossings(
                         for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {
                             const long int master_idx = chunk_buffer[0][norm_i];
                             f_bridge[0][norm_k * BUNDLE_CAPACITY + norm_i] =
-                                all_photons_host.non_terminal_norm_f[
-                                    norm_k * num_rays + master_idx];
+                                non_terminal_crossing_results[master_idx].state[norm_k];
                         }
-                    } // END LOOP: copy saved accepted nonterminal states
+                    } // END LOOP: copy nonterminal plane states
 
                     for (int norm_k = 0; norm_k < 9; ++norm_k) {
                         memcpy(
@@ -899,20 +880,24 @@ static void write_plane_crossings(
                             } else {
                                 normalization_abs_non_terminal_by_ray[master_idx] =
                                     sidecar_norm_err;
+                                non_terminal_plane_norm_recorded_by_ray[master_idx] = true;
+                                non_terminal_crossing_results[master_idx].null_constraint_abs =
+                                    sidecar_norm_err;
+                                non_terminal_crossing_results[master_idx].null_constraint_recorded = true;
                             }
                         }
 {NON_TERMINAL_LZ_STORE}
-                    } // END LOOP: evaluate accepted nonterminal diagnostics
+                    } // END LOOP: evaluate nonterminal plane diagnostics
                 } // END WHILE: evaluate nonterminal normalization slot
             } // END LOOP: evaluate nonterminal normalization slots
 
             slot_manager_free(&non_terminal_norm_tsm);
 
             printf(
-                "Nonterminal accepted-state diagnostic records: %ld; skipped diagnostics: %ld\n",
+                "Nonterminal plane diagnostic records: %ld; skipped diagnostics: %ld\n",
                 non_terminal_recorded_count,
                 non_terminal_skipped_count);
-        } // END IF: evaluate accepted-state nonterminal diagnostics
+        } // END IF: evaluate nonterminal plane diagnostics
 """
     non_terminal_normalization_block = (
         non_terminal_normalization_block.replace(
@@ -988,6 +973,10 @@ static void write_plane_crossings(
                                 angular_momentum_skipped_count++;
                             } else {
                                 final_angular_momentum[master_idx].Lz = final_Lz;
+                                if (terminal_crossing_results[master_idx].found) {
+                                    terminal_crossing_results[master_idx].Lz = final_Lz;
+                                    terminal_crossing_results[master_idx].Lz_recorded = true;
+                                }
                                 if (worst_ray_Lz < 0 ||
                                     abs_delta_Lz > max_abs_delta_Lz) {
                                     max_abs_delta_Lz = abs_delta_Lz;
@@ -1083,8 +1072,10 @@ static void write_plane_crossings(
                                 chunk_buffer[0][diagnostic_i];
                             f_bridge[0][
                                 diagnostic_k * BUNDLE_CAPACITY + diagnostic_i] =
-                                all_photons_host.f[
-                                    diagnostic_k * num_rays + master_idx];
+                                terminal_crossing_results[master_idx].found
+                                    ? terminal_crossing_results[master_idx].state[diagnostic_k]
+                                    : all_photons_host.f[
+                                        diagnostic_k * num_rays + master_idx];
                         }
                     }
 
@@ -1148,6 +1139,11 @@ static void write_plane_crossings(
                             } else {
                                 normalization_abs_by_ray[master_idx] =
                                     sidecar_norm_err;
+                                if (terminal_crossing_results[master_idx].found) {
+                                    terminal_crossing_results[master_idx].null_constraint_abs =
+                                        sidecar_norm_err;
+                                    terminal_crossing_results[master_idx].null_constraint_recorded = true;
+                                }
                                 if (current_norm_err > max_err_norm) {
                                     max_err_norm = current_norm_err;
                                     worst_ray_norm = master_idx;
@@ -1319,36 +1315,6 @@ static void write_plane_crossings(
     stream_arg_current = ", current"
     stream_arg_next = ", next"
 
-    plane_fields = (
-        "non_terminal_plane_crossing_pending",
-        "terminal_plane_crossing_pending",
-        "non_terminal_plane_steps_past",
-        "terminal_plane_steps_past",
-        "non_terminal_plane_event_degree",
-        "terminal_plane_event_degree",
-    )
-    plane_pack_current = "\n".join(
-        f"d_{field}[current][bridge_i] = all_photons_host.{field}[m_idx];"
-        for field in plane_fields
-    )
-    plane_pack_next = plane_pack_current.replace("current", "next")
-    plane_unpack = "\n".join(
-        f"all_photons_host.{field}[m_idx] = d_{field}[current][fin_i];"
-        for field in plane_fields
-    )
-    plane_event_capture = "\n".join(
-        (
-            f"if (d_{plane}_plane_event_found[current][fin_i] && "
-            f"!all_photons_host.{plane}_plane_event_found[m_idx]) {{\n"
-            "    for (int component = 0; component < 9; ++component) {\n"
-            f"        all_photons_host.{plane}_plane_event_f_intersect[component * num_rays + m_idx] = "
-            f"d_{plane}_plane_event_state_bundle[current][component * BUNDLE_CAPACITY + fin_i];\n"
-            "    }\n"
-            "}"
-        )
-        for plane in ("non_terminal", "terminal")
-    )
-
     def event_manager_call(slot: str) -> str:
         """
         Return the accepted-state event call for one CPU processing slot.
@@ -1358,21 +1324,12 @@ static void write_plane_crossings(
         """
         return (
             f"event_detection_manager_kernel(commondata, d_f_bundle[{slot}], "
-            f"d_log_energy_bundle[{slot}], d_f_history_bundle[{slot}], "
-            f"d_integration_param_bundle[{slot}], d_integration_param_history[{slot}], "
-            f"results_buffer, d_status[{slot}], "
+            f"d_f_start_bundle[{slot}], d_log_energy_bundle[{slot}], "
+            f"integration_param_bridge[{slot}], d_integration_param_bundle[{slot}], "
+            f"d_status[{slot}], "
             f"d_on_pos_non_terminal_plane_prev[{slot}], "
             f"d_on_pos_terminal_plane_prev[{slot}], "
-            f"d_non_terminal_plane_event_found[{slot}], "
-            f"d_terminal_plane_event_found[{slot}], "
-            f"d_non_terminal_plane_crossing_pending[{slot}], "
-            f"d_terminal_plane_crossing_pending[{slot}], "
-            f"d_non_terminal_plane_steps_past[{slot}], "
-            f"d_terminal_plane_steps_past[{slot}], "
-            f"d_non_terminal_plane_event_degree[{slot}], "
-            f"d_terminal_plane_event_degree[{slot}], "
-            f"d_non_terminal_plane_event_state_bundle[{slot}], "
-            f"d_terminal_plane_event_state_bundle[{slot}], "
+            "plane_crossing_candidates, "
             f"d_chunk_buffer[{slot}], active_chunks[{slot}], {slot});"
         )
 
@@ -1384,9 +1341,9 @@ static void write_plane_crossings(
     for (long int i = 0; i < num_rays; ++i) {{
         results_buffer[i] = (blueprint_data_t){{0}};
         results_buffer[i].termination_type = FAILURE_GENERIC;
-        results_buffer[i].non_terminal_post_step_Lz = NAN;
-        results_buffer[i].non_terminal_post_step_t = NAN;
-        results_buffer[i].non_terminal_post_step_distance = NAN;
+        results_buffer[i].non_terminal_plane_Lz = NAN;
+        results_buffer[i].non_terminal_plane_Lz_time = NAN;
+        results_buffer[i].non_terminal_plane_signed_distance = NAN;
     }} // END LOOP: initialize deterministic numerical-batch result records
 
     //==========================================
@@ -1396,10 +1353,46 @@ static void write_plane_crossings(
     // The master host-side Structure of Arrays (SoA) tracking all photons $f^\mu$.
     PhotonStateSoA all_photons_host = {{0}};
 
+    // Saved crossing steps and their later plane results, indexed by photon.
+    photon_plane_crossing_candidates_t *plane_crossing_candidates = NULL;
+    non_terminal_plane_crossing_result_t *non_terminal_crossing_results = NULL;
+    terminal_plane_crossing_result_t *terminal_crossing_results = NULL;
+    {malloc_pinned}(plane_crossing_candidates,
+        sizeof(*plane_crossing_candidates) * num_rays);
+    {malloc_pinned}(non_terminal_crossing_results,
+        sizeof(*non_terminal_crossing_results) * num_rays);
+    {malloc_pinned}(terminal_crossing_results,
+        sizeof(*terminal_crossing_results) * num_rays);
+    if (num_rays > 0 && (plane_crossing_candidates == NULL ||
+                         non_terminal_crossing_results == NULL ||
+                         terminal_crossing_results == NULL)) {{
+        fprintf(stderr, "ERROR: could not allocate photon plane crossing records.\n");
+        exit(EXIT_FAILURE);
+    }}
+    for (long int ray = 0; ray < num_rays; ++ray) {{
+        plane_crossing_candidates[ray] = (photon_plane_crossing_candidates_t){{0}};
+        non_terminal_crossing_results[ray] = (non_terminal_plane_crossing_result_t){{0}};
+        terminal_crossing_results[ray] = (terminal_plane_crossing_result_t){{0}};
+        plane_crossing_candidates[ray].non_terminal_candidate.photon_index = ray;
+        plane_crossing_candidates[ray].non_terminal_candidate.plane_type =
+            NON_TERMINAL_PLANE_EVENT;
+        photon_plane_crossing_candidate_t *terminal_candidates[3] = {{
+            &plane_crossing_candidates[ray].terminal_candidate_1,
+            &plane_crossing_candidates[ray].terminal_candidate_2,
+            &plane_crossing_candidates[ray].terminal_candidate_3
+        }};
+        for (int candidate = 0; candidate < 3; ++candidate) {{
+            terminal_candidates[candidate]->photon_index = ray;
+            terminal_candidates[candidate]->plane_type = TERMINAL_PLANE_EVENT;
+        }}
+        non_terminal_crossing_results[ray].null_constraint_abs = NAN;
+        non_terminal_crossing_results[ray].Lz = NAN;
+        terminal_crossing_results[ray].null_constraint_abs = NAN;
+        terminal_crossing_results[ray].Lz = NAN;
+    }} // END LOOP: initialize crossing records
+
     // {pin_comment} the state vector $f^\mu$.
     {malloc_pinned}(all_photons_host.f, sizeof(double) * 9 * num_rays);
-    // {pin_comment} accepted states preceding the current state.
-    {malloc_pinned}(all_photons_host.f_history, sizeof(double) * {maximum_degree} * 9 * num_rays);
     // {pin_comment} the integration parameter.
     {malloc_pinned}(all_photons_host.integration_param, sizeof(double) * num_rays);
     // {pin_comment} individual integration step sizes $h$.
@@ -1412,30 +1405,6 @@ static void write_plane_crossings(
     {malloc_pinned}(all_photons_host.on_positive_side_of_non_terminal_plane_prev, sizeof(bool) * num_rays);
     // {pin_comment} the previous terminal-plane boundary state.
     {malloc_pinned}(all_photons_host.on_positive_side_of_terminal_plane_prev, sizeof(bool) * num_rays);
-    // {pin_comment} accepted integration parameters preceding the current state.
-    {malloc_pinned}(all_photons_host.integration_param_history, sizeof(double) * {maximum_degree} * num_rays);
-    // {pin_comment} the nonterminal plane intersection lock.
-    {malloc_pinned}(all_photons_host.non_terminal_plane_event_found, sizeof(bool) * num_rays);
-    // {pin_comment} the terminal-plane intersection lock.
-    {malloc_pinned}(all_photons_host.terminal_plane_event_found, sizeof(bool) * num_rays);
-    {malloc_pinned}(all_photons_host.non_terminal_plane_crossing_pending, sizeof(bool) * num_rays);
-    {malloc_pinned}(all_photons_host.terminal_plane_crossing_pending, sizeof(bool) * num_rays);
-    {malloc_pinned}(all_photons_host.non_terminal_plane_steps_past, sizeof(int) * num_rays);
-    {malloc_pinned}(all_photons_host.terminal_plane_steps_past, sizeof(int) * num_rays);
-    {malloc_pinned}(all_photons_host.non_terminal_plane_event_degree, sizeof(int) * num_rays);
-    {malloc_pinned}(all_photons_host.terminal_plane_event_degree, sizeof(int) * num_rays);
-    {malloc_pinned}(all_photons_host.non_terminal_plane_event_f_intersect, sizeof(double) * 9 * num_rays);
-    {malloc_pinned}(all_photons_host.terminal_plane_event_f_intersect, sizeof(double) * 9 * num_rays);
-    // Optional per-ray state for norm and angular momentum after a nonterminal crossing.
-    all_photons_host.non_terminal_norm_recorded = NULL;
-    all_photons_host.non_terminal_norm_f = NULL;
-    all_photons_host.non_terminal_norm_coordinate_time = NULL;
-    if ({non_terminal_diagnostic_condition}) {{
-        {malloc_pinned}(all_photons_host.non_terminal_norm_recorded, sizeof(bool) * num_rays);
-        {malloc_pinned}(all_photons_host.non_terminal_norm_f, sizeof(double) * 9 * num_rays);
-        {malloc_pinned}(all_photons_host.non_terminal_norm_coordinate_time, sizeof(double) * num_rays);
-    }} // END IF: allocate accepted-state nonterminal diagnostic storage
-
     // CPU-only numerical integration: direct commondata access and no extra execution-buffer setup.
 
     //==========================================
@@ -1458,9 +1427,7 @@ static void write_plane_crossings(
     // Bridge array staging the previous terminal-plane boundary side flag for memory transfers.
     bool *on_pos_terminal_plane_prev_bridge[2];
     // Bridge array staging the nonterminal plane event lock for memory transfers.
-    bool *non_terminal_plane_event_found_bridge[2];
     // Bridge array staging the terminal-plane event lock for memory transfers.
-    bool *terminal_plane_event_found_bridge[2];
 
     //==========================================
     // DOUBLE-BUFFERED CPU SCRATCHPADS
@@ -1471,8 +1438,6 @@ static void write_plane_crossings(
     double *d_f_start_bundle[2];
     // Scratchpad tracking the intermediate cumulative RKF45 stage updates.
     double *d_f_temp_bundle[2];
-    // Accepted state history for centered plane interpolation.
-    double *d_f_history_bundle[2];
     // Scratchpad persisting the symmetric metric tensor $g_{{\mu\nu}}$.
     double *d_metric_bundle[2];
     // Scratchpad carrying the common upper-only log-energy measure.
@@ -1493,20 +1458,8 @@ static void write_plane_crossings(
     bool *d_on_pos_non_terminal_plane_prev[2];
     // Array flagging the previous terminal-plane boundary side.
     bool *d_on_pos_terminal_plane_prev[2];
-    // Accepted integration-parameter history for centered plane interpolation.
-    double *d_integration_param_history[2];
     // Array guarding nonterminal-plane intersection coordinates from multi-trigger overwrites.
-    bool *d_non_terminal_plane_event_found[2];
     // Array guarding the terminal-plane intersection coordinates from multi-trigger overwrites.
-    bool *d_terminal_plane_event_found[2];
-    bool *d_non_terminal_plane_crossing_pending[2];
-    bool *d_terminal_plane_crossing_pending[2];
-    int *d_non_terminal_plane_steps_past[2];
-    int *d_terminal_plane_steps_past[2];
-    int *d_non_terminal_plane_event_degree[2];
-    int *d_terminal_plane_event_degree[2];
-    double *d_non_terminal_plane_event_state_bundle[2];
-    double *d_terminal_plane_event_state_bundle[2];
     // Array carrying the absolute master indices $m_{{idx}}$ mapping the execution chunk.
     long int *d_chunk_buffer[2];
 {spatial_center_declarations}
@@ -1522,14 +1475,11 @@ static void write_plane_crossings(
         {malloc_pinned}(retries_bridge[s], sizeof(int) * BUNDLE_CAPACITY); // Pin retries bridges.
         {malloc_pinned}(on_pos_non_terminal_plane_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin nonterminal-plane flag bridges.
         {malloc_pinned}(on_pos_terminal_plane_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source flag bridges.
-        {malloc_pinned}(non_terminal_plane_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin nonterminal-plane lock bridges.
-        {malloc_pinned}(terminal_plane_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin terminal-plane lock bridges.
 
         // {scratch_alloc_comment}
         {malloc_device}(d_f_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu$ scratchpad.
         {malloc_device}(d_f_start_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f_{{start}}$ scratchpad.
         {malloc_device}(d_f_temp_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate temporary stage scratchpad.
-        {malloc_device}(d_f_history_bundle[s], sizeof(double) * {maximum_degree} * 9 * BUNDLE_CAPACITY);
         {malloc_device}(d_metric_bundle[s], sizeof(double) * 10 * BUNDLE_CAPACITY); // Allocate $g_{{\mu\nu}}$ scratchpad.
         {malloc_device}(d_log_energy_bundle[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate common log-energy scratchpad.
         {malloc_device}(d_rhs_geometry_bundle[s], sizeof(double) * 40 * BUNDLE_CAPACITY); // Allocate the geometry scratchpad.
@@ -1540,17 +1490,6 @@ static void write_plane_crossings(
         {malloc_device}(d_retries[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate retries scratchpad.
         {malloc_device}(d_on_pos_non_terminal_plane_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate nonterminal-plane flag scratchpad.
         {malloc_device}(d_on_pos_terminal_plane_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source flag scratchpad.
-        {malloc_device}(d_integration_param_history[s], sizeof(double) * {maximum_degree} * BUNDLE_CAPACITY);
-        {malloc_device}(d_non_terminal_plane_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate nonterminal-plane lock scratchpad.
-        {malloc_device}(d_terminal_plane_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate terminal-plane lock scratchpad.
-        {malloc_device}(d_non_terminal_plane_crossing_pending[s], sizeof(bool) * BUNDLE_CAPACITY);
-        {malloc_device}(d_terminal_plane_crossing_pending[s], sizeof(bool) * BUNDLE_CAPACITY);
-        {malloc_device}(d_non_terminal_plane_steps_past[s], sizeof(int) * BUNDLE_CAPACITY);
-        {malloc_device}(d_terminal_plane_steps_past[s], sizeof(int) * BUNDLE_CAPACITY);
-        {malloc_device}(d_non_terminal_plane_event_degree[s], sizeof(int) * BUNDLE_CAPACITY);
-        {malloc_device}(d_terminal_plane_event_degree[s], sizeof(int) * BUNDLE_CAPACITY);
-        {malloc_device}(d_non_terminal_plane_event_state_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
-        {malloc_device}(d_terminal_plane_event_state_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
         {malloc_device}(d_chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Allocate chunk mapping scratchpad.
 {spatial_center_allocations}
     }} // END LOOP: for s over 2
@@ -1566,8 +1505,9 @@ static void write_plane_crossings(
     // Host array storing one absolute direct-scale-equivalent null-constraint
     // error per photon in master-ray order.
     double *normalization_abs_by_ray = NULL;
-    // Host array storing the accepted-state nonterminal norm in master-ray order.
+    // Host array storing the nonterminal plane null-constraint error by photon.
     double *normalization_abs_non_terminal_by_ray = NULL;
+    bool *non_terminal_plane_norm_recorded_by_ray = NULL;
     // Host array storing first synthetic temporal-stencil use times per photon.
     synthetic_slice_usage_t *synthetic_slice_usage_by_photon = NULL;
 
@@ -1575,9 +1515,11 @@ static void write_plane_crossings(
         {malloc_device}(d_norm_bundle, sizeof(normalization_constraint_t) * BUNDLE_CAPACITY); // Allocate terminal normalization scratchpad.
         {malloc_pinned}(normalization_abs_by_ray, sizeof(double) * num_rays); // Allocate per-photon direct-scale-equivalent normalization sidecar buffer.
         {malloc_pinned}(normalization_abs_non_terminal_by_ray, sizeof(double) * num_rays); // Allocate sparse nonterminal normalization values.
+        {malloc_pinned}(non_terminal_plane_norm_recorded_by_ray, sizeof(bool) * num_rays);
         for (long int norm_init_i = 0; norm_init_i < num_rays; ++norm_init_i) {{
             normalization_abs_by_ray[norm_init_i] = NAN; // Marks photons whose terminal normalization was not evaluated.
-            normalization_abs_non_terminal_by_ray[norm_init_i] = NAN; // Marks photons not yet captured after a nonterminal crossing.
+            normalization_abs_non_terminal_by_ray[norm_init_i] = NAN;
+            non_terminal_plane_norm_recorded_by_ray[norm_init_i] = false;
         }} // END LOOP: for norm_init_i over num_rays
     }} // END IF: commondata->perform_normalization_check to allocate normalization scratchpad
     if (commondata->perform_synthetic_slice_check) {{
@@ -1888,36 +1830,11 @@ static void write_plane_crossings(
 
     {free_device}(d_initial_norm_bundle); // Purges the initialization constraint scratchpad.
 
-    long int sync_i; // Loop iterator index $sync_i$ spanning the entire global ray count to synchronize starting properties across history states.
+    long int sync_i; // Loop iterator spanning the photon states.
     for(sync_i = 0; sync_i < num_rays; ++sync_i) {{
-        for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-            for (int component = 0; component < 9; ++component) {{
-                all_photons_host.f_history[(history_step * 9 + component) * num_rays + sync_i] =
-                    all_photons_host.f[component * num_rays + sync_i];
-            }}
-            all_photons_host.integration_param_history[history_step * num_rays + sync_i] =
-                {initial_integration_param};
-        }}
         all_photons_host.status[sync_i] = ACTIVE; // Assigns the initial trajectory activity enum for the global physics engine.
         all_photons_host.integration_param[sync_i] = {initial_integration_param}; // Sets the initial integration parameter.
         all_photons_host.rejection_retries[sync_i] = 0; // Clears the error rejection scalar to initialize the step size convergence tracking.
-
-        all_photons_host.non_terminal_plane_event_found[sync_i] = false; // Sets the nonterminal plane intersection logical lock to false.
-        all_photons_host.terminal_plane_event_found[sync_i] = false; // Sets the terminal-plane intersection logical lock to false.
-        all_photons_host.non_terminal_plane_crossing_pending[sync_i] = false;
-        all_photons_host.terminal_plane_crossing_pending[sync_i] = false;
-        all_photons_host.non_terminal_plane_steps_past[sync_i] = 0;
-        all_photons_host.terminal_plane_steps_past[sync_i] = 0;
-        all_photons_host.non_terminal_plane_event_degree[sync_i] = 0;
-        all_photons_host.terminal_plane_event_degree[sync_i] = 0;
-        if ({non_terminal_diagnostic_condition}) {{
-            all_photons_host.non_terminal_norm_recorded[sync_i] = false;
-            all_photons_host.non_terminal_norm_coordinate_time[sync_i] = NAN;
-            for (int norm_state_component = 0; norm_state_component < 9; ++norm_state_component) {{
-                all_photons_host.non_terminal_norm_f[
-                    norm_state_component * num_rays + sync_i] = NAN;
-            }} // END LOOP: initialize accepted-state nonterminal norm state
-        }} // END IF: initialize accepted-state nonterminal norm state
 
         int s_idx = slot_get_index(&tsm, {initial_coordinate_time}); // Maps coordinate time to a TimeSlotManager bin.
         if (s_idx != -1) {{
@@ -1990,10 +1907,6 @@ static void write_plane_crossings(
                 for (int bridge_i = 0; bridge_i < active_chunks[current]; ++bridge_i) {{  // Loop iterator $bridge_i$ packing the physical state payloads into the Host-side bridge arrays.
                     long int m_idx = chunk_buffer[current][bridge_i]; // Absolute master index $m_{{ idx}}$ mapping the active payload to the global trajectory matrix.
                     f_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx]; // Packs the coordinate state vector $f^\mu$ into the transfer bridge.
-                    for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                        d_f_history_bundle[current][(history_step * 9 + c_k) * BUNDLE_CAPACITY + bridge_i] =
-                            all_photons_host.f_history[(history_step * 9 + c_k) * num_rays + m_idx];
-                    }}
                 }} // END LOOP: for bridge_i over active_chunks[current]
             }} // END LOOP: for c_k over 9
 
@@ -2006,13 +1919,6 @@ static void write_plane_crossings(
                 integration_param_bridge[current][bridge_i] = all_photons_host.integration_param[m_idx]; // Packs the integration parameter into the transfer bridge.
                 on_pos_non_terminal_plane_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_non_terminal_plane_prev[m_idx]; // Packs the nonterminal plane boundary flag into the transfer bridge.
                 on_pos_terminal_plane_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx]; // Packs the terminal-plane boundary flag into the transfer bridge.
-                non_terminal_plane_event_found_bridge[current][bridge_i] = all_photons_host.non_terminal_plane_event_found[m_idx]; // Packs the nonterminal plane intersection lock into the transfer bridge.
-                terminal_plane_event_found_bridge[current][bridge_i] = all_photons_host.terminal_plane_event_found[m_idx]; // Packs the terminal-plane intersection lock into the transfer bridge.
-                for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                    d_integration_param_history[current][history_step * BUNDLE_CAPACITY + bridge_i] =
-                        all_photons_host.integration_param_history[history_step * num_rays + m_idx];
-                }}
-                {plane_pack_current}
             }} // END LOOP: for bridge_i over active_chunks[current]
 
             for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components.
@@ -2032,9 +1938,7 @@ static void write_plane_crossings(
             // CPU buffer copy: Synchronously pushes terminal-plane boundary flags to CPU scratch strictly on buffer [current] to minimize latency.
             {memcpy_cpu("d_on_pos_terminal_plane_prev[current]", "on_pos_terminal_plane_prev_bridge[current]", "sizeof(bool) * active_chunks[current]")}
             // CPU buffer copy: Synchronously pushes nonterminal-plane intersection locks to CPU scratch strictly on buffer [current] to minimize latency.
-            {memcpy_cpu("d_non_terminal_plane_event_found[current]", "non_terminal_plane_event_found_bridge[current]", "sizeof(bool) * active_chunks[current]")}
             // CPU buffer copy: Synchronously pushes terminal-plane intersection locks to CPU scratch strictly on buffer [current] to minimize latency.
-            {memcpy_cpu("d_terminal_plane_event_found[current]", "terminal_plane_event_found_bridge[current]", "sizeof(bool) * active_chunks[current]")}
             // CPU buffer copy: Synchronously pushes chunk indices $m_{{ idx}}$ to CPU scratch strictly on buffer [current] to minimize latency.
             {memcpy_cpu("d_chunk_buffer[current]", "chunk_buffer[current]", "sizeof(long int) * active_chunks[current]")}
 
@@ -2076,8 +1980,7 @@ static void write_plane_crossings(
 {accepted_metric_refresh_current}
 {log_energy_evaluation_current}
             attempted_rkf45_steps_since_print += active_chunks[current];
-            // Event step: detect geometric events and record intersection coordinate
-            // states on the active buffer.
+            // Record accepted steps that change sides of either plane.
             {event_manager_current}
 
             for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components.
@@ -2096,10 +1999,6 @@ static void write_plane_crossings(
             {memcpy_cpu("on_pos_non_terminal_plane_prev_bridge[current]", "d_on_pos_non_terminal_plane_prev[current]", "sizeof(bool) * active_chunks[current]")}
             // CPU buffer copy: Retrieves updated terminal-plane boundary flags back to CPU RAM synchronously on the active buffer.
             {memcpy_cpu("on_pos_terminal_plane_prev_bridge[current]", "d_on_pos_terminal_plane_prev[current]", "sizeof(bool) * active_chunks[current]")}
-            // CPU buffer copy: Retrieves active nonterminal-plane locks back to CPU RAM synchronously on the active buffer.
-            {memcpy_cpu("non_terminal_plane_event_found_bridge[current]", "d_non_terminal_plane_event_found[current]", "sizeof(bool) * active_chunks[current]")}
-            // CPU buffer copy: Retrieves active terminal-plane locks back to CPU RAM synchronously on the active buffer.
-            {memcpy_cpu("terminal_plane_event_found_bridge[current]", "d_terminal_plane_event_found[current]", "sizeof(bool) * active_chunks[current]")}
         }} // END IF: active chunks available
 
         //==========================================
@@ -2118,10 +2017,6 @@ static void write_plane_crossings(
                     for (int bridge_i = 0; bridge_i < active_chunks[next]; ++bridge_i) {{  // Loop iterator $bridge_i$ packing the physical state payloads into the next Host-side bridge array.
                         long int m_idx = chunk_buffer[next][bridge_i]; // Absolute master index $m_{{ idx}}$ mapping the active payload to the global trajectory matrix.
                         f_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx]; // Packs the coordinate state vector $f^\mu$ into the transfer bridge.
-                        for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                            d_f_history_bundle[next][(history_step * 9 + c_k) * BUNDLE_CAPACITY + bridge_i] =
-                                all_photons_host.f_history[(history_step * 9 + c_k) * num_rays + m_idx];
-                        }}
                     }} // END LOOP: for bridge_i over active_chunks[next]
                 }} // END LOOP: for c_k over 9
 
@@ -2134,13 +2029,6 @@ static void write_plane_crossings(
                     integration_param_bridge[next][bridge_i] = all_photons_host.integration_param[m_idx]; // Packs the integration parameter into the transfer bridge.
                     on_pos_non_terminal_plane_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_non_terminal_plane_prev[m_idx]; // Packs the nonterminal plane boundary flag into the transfer bridge.
                     on_pos_terminal_plane_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx]; // Packs the terminal-plane boundary flag into the transfer bridge.
-                    non_terminal_plane_event_found_bridge[next][bridge_i] = all_photons_host.non_terminal_plane_event_found[m_idx]; // Packs the nonterminal plane intersection lock into the transfer bridge.
-                    terminal_plane_event_found_bridge[next][bridge_i] = all_photons_host.terminal_plane_event_found[m_idx]; // Packs the terminal-plane intersection lock into the transfer bridge.
-                    for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                        d_integration_param_history[next][history_step * BUNDLE_CAPACITY + bridge_i] =
-                            all_photons_host.integration_param_history[history_step * num_rays + m_idx];
-                    }}
-                    {plane_pack_next}
                 }} // END LOOP: for bridge_i over active_chunks[next]
 
                 for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components for the upcoming payload.
@@ -2160,9 +2048,7 @@ static void write_plane_crossings(
                 // CPU buffer copy: Synchronously pushes terminal-plane boundary flags to CPU scratch strictly on buffer [next] to overlap execution.
                 {memcpy_cpu("d_on_pos_terminal_plane_prev[next]", "on_pos_terminal_plane_prev_bridge[next]", "sizeof(bool) * active_chunks[next]")}
                 // CPU buffer copy: Synchronously pushes nonterminal-plane intersection locks to CPU scratch strictly on buffer [next] to overlap execution.
-                {memcpy_cpu("d_non_terminal_plane_event_found[next]", "non_terminal_plane_event_found_bridge[next]", "sizeof(bool) * active_chunks[next]")}
                 // CPU buffer copy: Synchronously pushes terminal-plane intersection locks to CPU scratch strictly on buffer [next] to overlap execution.
-                {memcpy_cpu("d_terminal_plane_event_found[next]", "terminal_plane_event_found_bridge[next]", "sizeof(bool) * active_chunks[next]")}
                 // CPU buffer copy: Synchronously pushes chunk indices $m_{{ idx}}$ to CPU scratch strictly on buffer [next] to overlap execution.
                 {memcpy_cpu("d_chunk_buffer[next]", "chunk_buffer[next]", "sizeof(long int) * active_chunks[next]")}
 
@@ -2205,8 +2091,7 @@ static void write_plane_crossings(
 {accepted_metric_refresh_next}
 {log_energy_evaluation_next}
                 attempted_rkf45_steps_since_print += active_chunks[next];
-                // Event step: detect geometric events and record intersection
-                // coordinate states on the alternate buffer.
+                // Record accepted steps that change sides of either plane.
                 {event_manager_next}
                 for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 upcoming state vector components.
                     // CPU buffer copy: Retrieves updated coordinate states $f^\mu$ back to CPU RAM synchronously on the alternate buffer.
@@ -2224,10 +2109,6 @@ static void write_plane_crossings(
                 {memcpy_cpu("on_pos_non_terminal_plane_prev_bridge[next]", "d_on_pos_non_terminal_plane_prev[next]", "sizeof(bool) * active_chunks[next]")}
                 // CPU buffer copy: Retrieves upcoming updated terminal-plane boundary flags back to CPU RAM synchronously on the alternate buffer.
                 {memcpy_cpu("on_pos_terminal_plane_prev_bridge[next]", "d_on_pos_terminal_plane_prev[next]", "sizeof(bool) * active_chunks[next]")}
-                // CPU buffer copy: Retrieves upcoming active nonterminal-plane locks back to CPU RAM synchronously on the alternate buffer.
-                {memcpy_cpu("non_terminal_plane_event_found_bridge[next]", "d_non_terminal_plane_event_found[next]", "sizeof(bool) * active_chunks[next]")}
-                // CPU buffer copy: Retrieves upcoming active terminal-plane locks back to CPU RAM synchronously on the alternate buffer.
-                {memcpy_cpu("terminal_plane_event_found_bridge[next]", "d_terminal_plane_event_found[next]", "sizeof(bool) * active_chunks[next]")}
             }} // END IF: next chunks available
 
             if (active_chunks[current] > 0) {{
@@ -2239,10 +2120,6 @@ static void write_plane_crossings(
                     for (int fin_i = 0; fin_i < active_chunks[current]; ++fin_i) {{  // Loop iterator $fin_i$ unpacking the finalized physical data back to the global Host matrix.
                         long int m_idx = chunk_buffer[current][fin_i]; // Absolute master index $m_{{ idx}}$ retrieving the specific photon index from the execution chunk.
                         all_photons_host.f[fin_k * num_rays + m_idx] = f_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i]; // Unpacks the synchronized state vector $f^\mu$ into the global Host matrix.
-                        for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                            all_photons_host.f_history[(history_step * 9 + fin_k) * num_rays + m_idx] =
-                                d_f_history_bundle[current][(history_step * 9 + fin_k) * BUNDLE_CAPACITY + fin_i];
-                        }}
                     }} // END LOOP: for fin_i over active_chunks[current]
                 }} // END LOOP: for fin_k over 9
 
@@ -2253,32 +2130,9 @@ static void write_plane_crossings(
                     all_photons_host.status[m_idx] = status_bridge[current][fin_i]; // Unpacks the synchronized trajectory status into the global Host matrix.
                     all_photons_host.rejection_retries[m_idx] = retries_bridge[current][fin_i]; // Unpacks the synchronized rejection count into the global Host matrix.
                     all_photons_host.integration_param[m_idx] = integration_param_bridge[current][fin_i]; // Unpacks the synchronized integration parameter into the global Host matrix.
-                    for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                        all_photons_host.integration_param_history[history_step * num_rays + m_idx] =
-                            d_integration_param_history[current][history_step * BUNDLE_CAPACITY + fin_i];
-                    }}
                     all_photons_host.on_positive_side_of_non_terminal_plane_prev[m_idx] = on_pos_non_terminal_plane_prev_bridge[current][fin_i]; // Unpacks the synchronized nonterminal-plane boundary flag into the global Host matrix.
                     all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx] = on_pos_terminal_plane_prev_bridge[current][fin_i]; // Unpacks the synchronized terminal-plane boundary flag into the global Host matrix.
-                    {plane_event_capture}
-                    all_photons_host.non_terminal_plane_event_found[m_idx] = non_terminal_plane_event_found_bridge[current][fin_i]; // Unpacks the synchronized nonterminal-plane lock into the global Host matrix.
-                    all_photons_host.terminal_plane_event_found[m_idx] = terminal_plane_event_found_bridge[current][fin_i]; // Unpacks the synchronized terminal-plane lock into the global Host matrix.
-                    {plane_unpack}
 
-                    // Save the first accepted RK state past the nonterminal
-                    // plane. Centered interpolation may finish on a later step.
-                    if (({non_terminal_diagnostic_condition}) &&
-                        !all_photons_host.non_terminal_norm_recorded[m_idx] &&
-                        (all_photons_host.non_terminal_plane_crossing_pending[m_idx] ||
-                         all_photons_host.non_terminal_plane_event_found[m_idx])) {{
-                        for (int norm_state_component = 0; norm_state_component < 9; ++norm_state_component) {{
-                            all_photons_host.non_terminal_norm_f[
-                                norm_state_component * num_rays + m_idx] =
-                                f_bridge[current][norm_state_component * BUNDLE_CAPACITY + fin_i];
-                        }} // END LOOP: save accepted crossing state
-                        all_photons_host.non_terminal_norm_coordinate_time[m_idx] =
-                            {accepted_coordinate_time_bridge};
-                        all_photons_host.non_terminal_norm_recorded[m_idx] = true;
-                    }} // END IF: capture first accepted crossing state
                 }} // END LOOP: for fin_i over active_chunks[current]
 
                 // 3. TimeSlotManager State Update (Cache-hot, strictly sequential)
@@ -2402,23 +2256,49 @@ static void write_plane_crossings(
     //==========================================
     // Process terminal photon trajectories, evaluate optional diagnostics, and extract final geometric intersections.
 
-        // CPU buffer copy: Extracts validated CPU-side blueprints $b_i$ containing geometric plane intersections.
-        {results_memcpy}
+        printf("Refining recorded plane crossings with Brent's method...\n");
+        fflush(stdout);
+        find_plane_crossings_brent(
+            commondata, &numerical_params, &spatial_context, &numerical_window,
+            slot_manager_t_max, num_rays, plane_crossing_candidates,
+            non_terminal_crossing_results, terminal_crossing_results);
+        printf("Plane crossing refinement complete.\n");
+        fflush(stdout);
 
-        write_plane_crossings(non_terminal_crossings_path, num_rays,
-            all_photons_host.non_terminal_plane_event_found,
-            all_photons_host.non_terminal_plane_event_degree,
-            all_photons_host.non_terminal_plane_event_f_intersect,
-            results_buffer, false);
-        write_plane_crossings(terminal_crossings_path, num_rays,
-            all_photons_host.terminal_plane_event_found,
-            all_photons_host.terminal_plane_event_degree,
-            all_photons_host.terminal_plane_event_f_intersect,
-            results_buffer, true);
+        // Record selected plane positions before final blueprint calculation.
+        for (long int ray = 0; ray < num_rays; ++ray) {{
+            non_terminal_plane_crossing_result_t *non_terminal =
+                &non_terminal_crossing_results[ray];
+            terminal_plane_crossing_result_t *terminal =
+                &terminal_crossing_results[ray];
+            if (non_terminal->found) {{
+                results_buffer[ray].y_nt = non_terminal->y_local;
+                results_buffer[ray].z_nt = non_terminal->z_local;
+                results_buffer[ray].non_terminal_plane_lambda =
+                    non_terminal->physical_lambda;
+                results_buffer[ray].non_terminal_plane_t =
+                    non_terminal->coordinate_time;
+                results_buffer[ray].non_terminal_plane_signed_distance =
+                    non_terminal->plane_distance;
+            }}
+            if (terminal->found) {{
+                terminal->trajectory_stop_reason = all_photons_host.status[ray];
+                all_photons_host.status[ray] = STOP_CONDITION_TERMINAL_PLANE;
+                results_buffer[ray].y_t = terminal->y_local;
+                results_buffer[ray].z_t = terminal->z_local;
+                results_buffer[ray].L_f = terminal->physical_lambda;
+                results_buffer[ray].t_f = terminal->coordinate_time;
+            }}
+        }} // END LOOP: copy refined plane positions and terminal time
 
 {terminal_diagnostics_block}
 
 {non_terminal_normalization_block}
+
+        write_plane_crossings(non_terminal_crossings_path, num_rays,
+            non_terminal_crossing_results, terminal_crossing_results, false);
+        write_plane_crossings(terminal_crossings_path, num_rays,
+            non_terminal_crossing_results, terminal_crossing_results, true);
 
         // Final output step: process escaped photons intersecting the celestial
         // sphere $r > r_{{escape}}$ and optionally write the direct-scale-equivalent
@@ -2438,6 +2318,7 @@ static void write_plane_crossings(
             {free_device}(d_norm_bundle); // Purges the terminal normalization diagnostic scratchpad.
             {free_pinned}(normalization_abs_by_ray); // Purges the per-photon normalization sidecar buffer.
             {free_pinned}(normalization_abs_non_terminal_by_ray); // Purges the sparse nonterminal normalization values.
+            {free_pinned}(non_terminal_plane_norm_recorded_by_ray);
         }} // END IF: commondata->perform_normalization_check to purge normalization scratchpad
         if (commondata->perform_synthetic_slice_check) {{
             {free_pinned}(synthetic_slice_usage_by_photon);
@@ -2455,35 +2336,21 @@ static void write_plane_crossings(
             {free_pinned}(retries_bridge[s]); // Purges the error rejection scalar bridge.
             {free_pinned}(on_pos_non_terminal_plane_prev_bridge[s]); // Purges the nonterminal plane boundary flag bridge.
             {free_pinned}(on_pos_terminal_plane_prev_bridge[s]); // Purges the terminal-plane boundary flag bridge.
-            {free_pinned}(non_terminal_plane_event_found_bridge[s]); // Purges the nonterminal plane intersection lock bridge.
-            {free_pinned}(terminal_plane_event_found_bridge[s]); // Purges the terminal-plane intersection lock bridge.
 
             // Host Memory Free: Purges remaining CPU scratch operational pipeline scratchpads.
             {free_device}(d_f_bundle[s]); // Purges the state vector $f^\mu$ scratchpad.
             {free_device}(d_f_start_bundle[s]); // Purges the anchor state vector $f_{{start}}$ scratchpad.
             {free_device}(d_f_temp_bundle[s]); // Purges the temporary stage $f^\mu_{{temp}}$ scratchpad.
-            {free_device}(d_f_history_bundle[s]);
             {free_device}(d_metric_bundle[s]); // Purges the symmetric metric tensor $g_{{\mu\nu}}$ scratchpad.
             {free_device}(d_log_energy_bundle[s]); // Purges the common log-energy scratchpad.
             {free_device}(d_rhs_geometry_bundle[s]); // Purges the geometry scratchpad.
             {free_device}(d_k_bundle[s]); // Purges the derivative tensor $\dot{{f}}^\mu$ scratchpad.
             {free_device}(d_h[s]); // Purges the active integration step sizing $h$ scratchpad.
             {free_device}(d_integration_param_bundle[s]); // Purges the integration-parameter scratchpad.
-            {free_device}(d_integration_param_history[s]);
             {free_device}(d_status[s]); // Purges the current trajectory status limit scratchpad.
             {free_device}(d_retries[s]); // Purges the sequential error rejection scratchpad.
             {free_device}(d_on_pos_non_terminal_plane_prev[s]); // Purges the previous nonterminal plane boundary side scratchpad.
             {free_device}(d_on_pos_terminal_plane_prev[s]); // Purges the previous terminal-plane boundary side scratchpad.
-            {free_device}(d_non_terminal_plane_event_found[s]); // Purges the nonterminal-plane intersection coordinate guard scratchpad.
-            {free_device}(d_terminal_plane_event_found[s]); // Purges the terminal-plane intersection coordinate guard scratchpad.
-            {free_device}(d_non_terminal_plane_crossing_pending[s]);
-            {free_device}(d_terminal_plane_crossing_pending[s]);
-            {free_device}(d_non_terminal_plane_steps_past[s]);
-            {free_device}(d_terminal_plane_steps_past[s]);
-            {free_device}(d_non_terminal_plane_event_degree[s]);
-            {free_device}(d_terminal_plane_event_degree[s]);
-            {free_device}(d_non_terminal_plane_event_state_bundle[s]);
-            {free_device}(d_terminal_plane_event_state_bundle[s]);
             {free_device}(d_chunk_buffer[s]); // Purges the absolute master indices $m_{{idx}}$ mapping scratchpad.
 {spatial_center_frees}
         }} // END LOOP: for s over 2
@@ -2491,29 +2358,15 @@ static void write_plane_crossings(
 
         // Host Memory Free: Purges the primary Host state and integration-parameter arrays.
         {free_pinned}(all_photons_host.f); // Purges the primary Host array state $f^\mu$.
-        {free_pinned}(all_photons_host.f_history);
         {free_pinned}(all_photons_host.integration_param); // Purges the primary Host integration-parameter array.
-        {free_pinned}(all_photons_host.integration_param_history);
         {free_pinned}(all_photons_host.h); // Purges the primary Host array integration step size $h$.
         {free_pinned}(all_photons_host.status); // Purges the primary Host array trajectory status enum.
         {free_pinned}(all_photons_host.rejection_retries); // Purges the primary Host array error rejection scalar.
         {free_pinned}(all_photons_host.on_positive_side_of_non_terminal_plane_prev); // Purges the primary Host array nonterminal plane boundary flag.
         {free_pinned}(all_photons_host.on_positive_side_of_terminal_plane_prev); // Purges the primary Host array terminal-plane boundary flag.
-        {free_pinned}(all_photons_host.non_terminal_plane_event_found); // Purges the primary Host array nonterminal plane intersection lock.
-        {free_pinned}(all_photons_host.terminal_plane_event_found); // Purges the primary Host array terminal-plane intersection lock.
-        {free_pinned}(all_photons_host.non_terminal_plane_crossing_pending);
-        {free_pinned}(all_photons_host.terminal_plane_crossing_pending);
-        {free_pinned}(all_photons_host.non_terminal_plane_steps_past);
-        {free_pinned}(all_photons_host.terminal_plane_steps_past);
-        {free_pinned}(all_photons_host.non_terminal_plane_event_degree);
-        {free_pinned}(all_photons_host.terminal_plane_event_degree);
-        {free_pinned}(all_photons_host.non_terminal_plane_event_f_intersect);
-        {free_pinned}(all_photons_host.terminal_plane_event_f_intersect);
-        if ({non_terminal_diagnostic_condition}) {{
-            {free_pinned}(all_photons_host.non_terminal_norm_recorded);
-            {free_pinned}(all_photons_host.non_terminal_norm_f);
-            {free_pinned}(all_photons_host.non_terminal_norm_coordinate_time);
-        }} // END IF: purge accepted-state nonterminal normalization storage
+        {free_pinned}(plane_crossing_candidates);
+        {free_pinned}(non_terminal_crossing_results);
+        {free_pinned}(terminal_crossing_results);
 
         // Release the active numerical spacetime window before the slot lattice is destroyed.
         time_window_manager_numerical_free(&numerical_window);

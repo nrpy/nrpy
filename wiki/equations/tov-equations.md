@@ -19,10 +19,18 @@ integration-facing state-vector slots used by downstream relativistic-star
 initial-data consumers.
 
 The stored RHS attributes are `dP_dr`, `dnu_dr`, `dM_dr`, and `dr_iso_dr`.
-`dP_dr` and `dnu_dr` use the same relativistic pressure-gravity factor built
-from enclosed mass, radius, pressure, and total energy density; `dM_dr` evolves
-the enclosed mass from `rho_energy`; and `dr_iso_dr` converts the
-Schwarzschild-radius integration to isotropic radius.
+The metric-potential derivative depends on enclosed mass, radius, and pressure:
+`dnu_dr = 2*(M + 4*M_PI*r_Schw**3*P)/(r_Schw*(r_Schw - 2*M))`.
+Energy density enters the pressure derivative through
+`dP_dr = -(rho_energy + P)*dnu_dr/2`; it is absent from `dnu_dr` itself.
+`dM_dr` evolves the enclosed mass from `rho_energy`, and `dr_iso_dr` relates
+the areal coordinate `r_Schw` to isotropic radius.
+
+Claim evidence:
+- Claim: `dnu_dr` has no energy-density dependence; `dP_dr` equals `-(rho_energy + P)*dnu_dr/2`.
+- Role: descriptive behavior
+- Deciding authority: [TOV_equations.py](../../nrpy/equations/tov/TOV_equations.py), `TOV_Equations.__init__`
+- Corroboration: `none available`; the named implementation decides the stated behavior.
 
 The equation module does not choose an equation of state, integration stepper,
 stellar surface rule, interpolation strategy, or generated C layout. Those are
@@ -53,8 +61,8 @@ run generated code, or establish mass-radius or numerical-accuracy results.
 
 ## See Also
 
-- [Equations](index.md)
-- [Conformally Flat Elliptic](conformally-flat-elliptic.md)
-- [GRHD](grhd.md)
-- [Trusted Expression Pipeline](trusted-expression-pipeline.md)
-- [Lifecycle And Project Assembly](../infrastructures/bhah/lifecycle-and-project-assembly.md)
+- Parent: [Equations](index.md)
+- See also: [Conformally Flat Elliptic](conformally-flat-elliptic.md)
+- See also: [GRHD](grhd.md)
+- See also: [Trusted Expression Pipeline](trusted-expression-pipeline.md)
+- See also: [Lifecycle And Project Assembly](../infrastructures/bhah/lifecycle-and-project-assembly.md)

@@ -74,6 +74,10 @@ make
 python3 visualize_trajectory.py --particle_type Photon
 ```
 
+The analytical photon commands evaluate metric and Christoffel components at
+each fixed-anchor RKF45 Brent trial. The event manager records accepted
+crossing steps before physical stopping checks.
+
 The analytical single-photon path defaults to `KerrSchild_Cartesian` and also
 accepts `BrillLindquist_InitialData_Static_Cartesian` through `--spacetime`.
 It accepts direct or normalized photon equations through `--eom` and does not
@@ -95,41 +99,34 @@ option in each enabled group:
 - Nonterminal: `--non-terminal-plane-center`, `--non-terminal-plane-normal`,
   and `--non-terminal-plane-up`.
 
-All four photon generators accept `--plane-interpolation-degree` as the maximum
-polynomial degree; the default is 4 and the minimum is 3. After an accepted
-RKF45 step changes the side of a plane, the integrator keeps evolving until it
-has enough accepted states on both sides for a centered fit. A physical stop
-uses the highest available fit. The generated fits include the requested
-degree and lower even degrees down to 2. A crossing fails with
-`FAILURE_PLANE_INTERPOLATION_HISTORY` if no quadratic fit has distinct
-integration parameters. An even-degree fit tries both equally centered
-contiguous stencils before using a lower degree.
+Both single-photon generators accept
+`--plane-crossing-residual-tolerance` and
+`--plane-crossing-parameter-tolerance`, each defaulting to `1e-12`. After an
+accepted RKF45 step changes sides of a plane, it saves the state before that
+step and both integration parameters. The photon continues evolving. After
+evolution, each Brent trial takes one fifth-order RKF45 step from the saved
+state. The numerical integrator selects the first terminal crossing inside the
+radial bounds and keeps a nonterminal crossing only when it precedes that hit.
 
-Both single-photon integrators write coordinate time, affine parameter, local
-plane coordinates, and all nine interpolated state components to
-`plane_crossings.txt`. The final column, `interpolation_degree`, records the
-degree used for that crossing. The state columns are:
-
-- Direct EOM: `interpolated_t`, `interpolated_x`, `interpolated_y`,
-  `interpolated_z`, `interpolated_p^t`, `interpolated_p^x`,
-  `interpolated_p^y`, `interpolated_p^z`, `interpolated_L_normal`.
-- Normalized EOM: `interpolated_lambda`, `interpolated_x`,
-  `interpolated_y`, `interpolated_z`, `interpolated_u`,
-  `interpolated_Pi_1`, `interpolated_Pi_2`, `interpolated_Pi_3`,
-  `interpolated_L_normal`.
+Both single-photon integrators write coordinate time, affine parameter,
+local plane coordinates, nine state components, `brent_iterations`, and
+`signed_plane_distance` to `plane_crossings.txt`. For direct EOM, state
+components are `t`, `x`, `y`, `z`, `p^t`, `p^x`, `p^y`, `p^z`, and `L_normal`.
+For normalized EOM, they are `lambda`, `x`, `y`, `z`, `u`, `Pi_1`, `Pi_2`,
+`Pi_3`, and `L_normal`.
 
 The numerical single-photon executable also writes `initial_state.txt` with
 the observer event and initial direct `p^mu` at full precision. For normalized
 evolution, it records that momentum before converting to `u` and `Pi_i`.
 
-An in-range terminal crossing stops integration. A nonterminal crossing does
-not stop integration.
+For numerical spacetime, an in-range terminal crossing sets final status after
+trajectory integration. A nonterminal crossing does not stop integration.
 
 Claim evidence:
-- Claim: All four photon generators select a maximum centered plane-interpolation degree of at least 3, with default 4; the single-photon output records crossing time, local coordinates, the nine-component EOM-specific state, and the degree used.
+- Claim: Both single-photon generators refine accepted crossing steps with fixed-anchor RKF45 Brent trials and write the refined states to `plane_crossings.txt`.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/single_integrator_analytical.py` and `single_integrator_numerical.py` — `plane_crossings.txt` output and EOM state columns
-- Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py` — pending crossings and crossing-state capture; `find_event_time_and_state.py` — degree selection and nine-component interpolation; four photon example generators — interpolation-degree CLI
+- Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py` — accepted-step crossing capture; `find_plane_crossings_brent.py` — analytical and numerical refinement; both single-photon generators — Brent-tolerance CLI
 
 Both single-photon generators enable RKF45 trial and stage diagnostics by
 default. Their generated executables write adaptive-step controller values to
@@ -194,6 +191,11 @@ make
 ./photon_batch_geodesic_integrator_analytical
 ```
 
+The analytical batch integrator saves crossing steps and transfers CUDA
+crossing records to the host before Brent refinement. Analytical CUDA event
+capture runs on the device; terminal and nonterminal projections run on the
+host after transfer. Analytical event capture has no numerical time-window stop.
+
 The batch generator derives `project_dir` from `--outdir` plus
 `photon_batch_geodesic_integrator_analytical`. It sets `parallelization` to `openmp` unless
 `--cuda` is present. OpenMP uses `gcc`, `-fopenmp`, and C sources; CUDA uses
@@ -223,7 +225,7 @@ metric before computing `ln|alpha p^0|`; normalized mode uses `u` directly.
 
 The batch executable produces tiled `light_blueprint_XX_YY.bin` files in its
 project directory. Those binary files are generated output, not KB sources.
-The native same-build blueprint binary layout is version 7 with 124-byte records.
+The native same-build blueprint binary layout is version 8 with 124-byte records.
 The header stores tile identity/counts and `alpha_w`/`alpha_h`. Each record stores
 nonterminal-plane crossing coordinates, affine parameter, and coordinate time;
 terminal-plane texture coordinates; final sphere angles, affine parameter, and
@@ -236,7 +238,7 @@ synchronized with generated C headers; this is the main binary-layout synchroniz
 risk.
 
 Claim evidence:
-- Claim: Analytical batch blueprint files use native same-build binary-layout version 7 with 124-byte records, including the first accepted state's nonterminal post-crossing diagnostics; Python `BLUEPRINT_DTYPE` must match the generated C `blueprint_data_t` layout and termination enums.
+- Claim: Photon batch blueprint files use native same-build binary-layout version 8 with 124-byte records; Python `BLUEPRINT_DTYPE` must match the generated C `blueprint_data_t` layout and termination enums.
 - Role: generated evidence
 - Deciding authority: `nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py` — `BLUEPRINT_SCHEMA_VERSION`, `BLUEPRINT_DTYPE`
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/calculate_and_fill_blueprint_data_universal.py` — generated record layout

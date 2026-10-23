@@ -231,7 +231,7 @@ def calculate_and_fill_blueprint_data_universal(
     @param[in] normalization_abs_by_ray Optional per-ray normalization magnitudes.
     @param[in] norm_abs_bin_path Optional separate normalization-sidecar filename.
     @param[in] normalization_abs_non_terminal_by_ray Optional sparse-event norm values.
-    @param[in] non_terminal_norm_recorded Per-ray flags identifying saved crossings.
+    @param[in] non_terminal_norm_recorded Per-ray flags for measured plane norms.
     @param[in] norm_abs_non_terminal_bin_path Optional sparse sidecar filename.
     @param stream_idx The stream index identifier for asynchronous scheduling.
 
@@ -242,7 +242,7 @@ def calculate_and_fill_blueprint_data_universal(
     4. Evaluates final 3D positions onto a celestial sphere $(\theta, \phi)$ for escaped rays.
     5. Optionally writes one raw double per photon to the final normalization
        sidecar and sparse photon-index/norm-error records for nonterminal
-       accepted-state diagnostics; normalization values are never embedded in
+       plane-crossing diagnostics; normalization values are never embedded in
        blueprint records."""
     cfunc_type = "void"
     name = "calculate_and_fill_blueprint_data_universal"
@@ -363,7 +363,7 @@ def calculate_and_fill_blueprint_data_universal(
     }} // END IF: sparse nonterminal sidecar close failed
 
     printf(
-        "Wrote %llu nonterminal accepted-state normalization records to %s\\n",
+        "Wrote %llu nonterminal plane normalization records to %s\\n",
         (unsigned long long)non_terminal_record_count,
         norm_abs_non_terminal_bin_path);
     """

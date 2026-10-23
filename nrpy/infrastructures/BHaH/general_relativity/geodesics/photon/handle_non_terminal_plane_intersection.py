@@ -2,11 +2,9 @@
 """
 Defines the C engine that handles a nonterminal-plane intersection.
 
-This module provides the metaprogramming orchestration that defines the C function
-responsible for calculating local 2D coordinates on the nonterminal plane when a photon
-crosses that plane. It uses the plane's own center, normal, and up seed; it does not
-derive its basis from observer setup and it never applies a finite rectangle filter.
-The crossing is recorded as a diagnostic and integration continues.
+The generated C function projects a refined photon state onto the nonterminal
+plane. It uses that plane's center, normal, and up seed to compute local
+coordinates. The crossing result leaves the photon trajectory unchanged.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -14,7 +12,36 @@ Author: Dalton J. Moone
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallelization.utilities as parallel_utils
+import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.params as par
+
+
+def register_non_terminal_plane_crossing_result() -> None:
+    """Register the state and measured quantities at a nonterminal crossing."""
+    if "non_terminal_plane_crossing_result" in par.glb_extras_dict.get(
+        "BHaH_defines", {}
+    ):
+        return
+    Bdefines_h.register_BHaH_defines(
+        "non_terminal_plane_crossing_result",
+        r"""
+    typedef struct {
+        bool found;
+        double state[9];
+        double integration_param;
+        double coordinate_time;
+        double physical_lambda;
+        double y_local;
+        double z_local;
+        double plane_distance;
+        int brent_iterations;
+        bool null_constraint_recorded;
+        double null_constraint_abs;
+        bool Lz_recorded;
+        double Lz;
+    } non_terminal_plane_crossing_result_t;
+""",
+    )
 
 
 def register_non_terminal_plane_parameters() -> None:
@@ -39,10 +66,11 @@ def register_non_terminal_plane_parameters() -> None:
     )
 
 
-def handle_non_terminal_plane_intersection() -> None:
-    """Generate and register the C engine for nonterminal-plane intersections."""
+def handle_non_terminal_plane_intersection(normalized_eom: bool = False) -> None:
+    """Generate local nonterminal-plane quantities from a refined root."""
     parallelization = par.parval_from_str("parallelization")
 
+    register_non_terminal_plane_crossing_result()
     register_non_terminal_plane_parameters()
 
     # Add the access variable
@@ -56,27 +84,16 @@ def handle_non_terminal_plane_intersection() -> None:
         includes.append("cuda_intrinsics.h")
 
     # Define the Doxygen-formatted description for the C function.
-    desc = r""" Processes a nonterminal-plane intersection without terminating the trajectory.
-
-    @param[in] f_local Thread-local intersection state; slot zero contains coordinate time.
-    @param physical_lambda Physical affine parameter $\lambda$ at the intersection.
-    @param[in,out] final_blueprint_data Blueprint structure $b_i$ updated with the intersection.
-    @param[in] commondata Host-only commondata pointer for non-CUDA builds.
-
-    Algorithm:
-    1. Reconstructs the independent nonterminal-plane basis ($w_x$, $w_y$, $w_z$).
-    2. Projects the 3D intersection point $x^i$ onto local plane axes.
-    3. Stores $y_{nt}$, $z_{nt}$, $t_{nt}$, and the affine parameter."""
+    desc = "Project a refined photon state onto the nonterminal plane."
 
     # Specify the signature components of the C function.
-    cfunc_type = "BHAH_HD_INLINE bool"
+    cfunc_type = "__device__ bool" if parallelization == "cuda" else "bool"
     name = "handle_non_terminal_plane_intersection"
 
     # Define the specific C arguments passed into the kernel.
     params = (
-        "const double *restrict f_local, "
-        "const double physical_lambda, "
-        "blueprint_data_t *restrict final_blueprint_data"
+        "const photon_plane_crossing_root_t *restrict root, "
+        "non_terminal_plane_crossing_result_t *restrict result"
     )
     if parallelization != "cuda":
         params += ", const commondata_struct *restrict commondata"
@@ -86,10 +103,14 @@ def handle_non_terminal_plane_intersection() -> None:
 
     # Construct the C-string for the function body.
     body = r"""
+    *result = (non_terminal_plane_crossing_result_t){0};
+    if (!root->found) return false;
+    const double *f_local = root->state;
     //==========================================
     // STATE UNPACKING
     //==========================================
-    const double t_intersect = f_local[0];
+    const double t_intersect = @COORDINATE_TIME@;
+    const double physical_lambda = @PHYSICAL_LAMBDA@;
     const double x_intersect = f_local[1];
     const double y_intersect = f_local[2];
     const double z_intersect = f_local[3];
@@ -150,29 +171,45 @@ def handle_non_terminal_plane_intersection() -> None:
     };
 
     //==========================================
-    // LOCAL COORDINATES AND NONTERMINAL RECORD
+    // LOCAL COORDINATES AND NONTERMINAL RESULT
     //==========================================
     const double relative_pos[3] = {
         x_intersect - d_commondata.non_terminal_plane_center_x,
         y_intersect - d_commondata.non_terminal_plane_center_y,
         z_intersect - d_commondata.non_terminal_plane_center_z
     };
-    final_blueprint_data->y_nt =
+    result->y_local =
         relative_pos[0] * plane_right[0] +
         relative_pos[1] * plane_right[1] +
         relative_pos[2] * plane_right[2];
-    final_blueprint_data->z_nt =
+    result->z_local =
         relative_pos[0] * plane_up[0] +
         relative_pos[1] * plane_up[1] +
         relative_pos[2] * plane_up[2];
-    final_blueprint_data->non_terminal_plane_t = t_intersect;
-    final_blueprint_data->non_terminal_plane_lambda = physical_lambda;
-
-    // A nonterminal crossing is diagnostic only; it never changes status.
+    if (!isfinite(result->y_local) || !isfinite(result->z_local) ||
+        !isfinite(t_intersect) || !isfinite(physical_lambda)) return false;
+    result->found = true;
+    result->integration_param = root->parameter;
+    result->coordinate_time = t_intersect;
+    result->physical_lambda = physical_lambda;
+    result->plane_distance = root->plane_distance;
+    result->brent_iterations = root->iterations;
+    result->null_constraint_abs = NAN;
+    result->Lz = NAN;
+    for (int component = 0; component < 9; ++component) {
+        result->state[component] = f_local[component];
+    }
     return true;
     """
 
-    # Inject the string replacement right before registration
+    body = body.replace(
+        "@COORDINATE_TIME@", "root->parameter" if normalized_eom else "f_local[0]"
+    ).replace(
+        "@PHYSICAL_LAMBDA@", "f_local[0]" if normalized_eom else "root->parameter"
+    )
+    host_body = body.replace("d_commondata.", "commondata->").replace(
+        "SqrtCUDA(", "sqrt("
+    )
     body = body.replace("d_commondata.", cd_access)
 
     # Register the C function using the defined components.
@@ -185,6 +222,20 @@ def handle_non_terminal_plane_intersection() -> None:
         include_CodeParameters_h=include_CodeParameters_h,
         body=body,
     )
+    if parallelization == "cuda":
+        cfc.register_CFunction(
+            includes=["BHaH_defines.h", "<math.h>"],
+            desc="Project a refined photon state onto the nonterminal plane on the host.",
+            cfunc_type="bool",
+            name="handle_non_terminal_plane_intersection_host",
+            params=(
+                "const photon_plane_crossing_root_t *restrict root, "
+                "non_terminal_plane_crossing_result_t *restrict result, "
+                "const commondata_struct *restrict commondata"
+            ),
+            include_CodeParameters_h=False,
+            body=host_body,
+        )
 
 
 if __name__ == "__main__":

@@ -7,7 +7,8 @@
 
 BHaH has standalone single- and batch-photon geodesic programs plus an
 evolution-time raytracing-data export. Both analytical and numerical
-single-photon programs support optional terminal and nonterminal planes. The
+single-photon programs accept optional terminal and nonterminal planes; the
+analytical Brent evaluation still requires the shared crossing functions. The
 batch program initializes observer and independent plane parameters, tiles the
 angular pixel grid, integrates photon groups with RKF45, and writes per-tile
 light-blueprint binary files. The evolution-time export writes mode-selected
@@ -41,8 +42,8 @@ The shared `set_initial_conditions_kernel` receives one metric evaluated at the
 observer event and constructs one validated metric-orthonormal tetrad per call.
 It uses that tetrad for every requested ray, writes complete contravariant
 `p^mu`, and only then performs any requested normalized-variable conversion.
-Batch generators and both single-photon generators request initialization of
-event-plane-side history when registering their shared initializer.
+Batch generators and both single-photon generators initialize each enabled
+plane's starting side when registering their shared initializer.
 Event-plane bases used by crossing handlers are not the metric tetrad used to
 initialize momentum.
 The generated ray construction sets the initial camera-tetrad photon energy
@@ -51,16 +52,16 @@ affine normalization is distinct from the hypersurface-normal measure
 `|alpha p^0|` used by later termination diagnostics.
 
 Claim evidence:
-- Claim: `set_initial_conditions_kernel` constructs one validated metric-orthonormal camera tetrad per call, initializes unit camera-tetrad energy magnitude `E_camera=1`, writes complete contravariant momentum, optionally initializes batch or single-photon event-plane-side history, and performs normalized-variable conversion afterward when requested; the later hypersurface-normal energy magnitude is `|alpha p^0|`.
+- Claim: `set_initial_conditions_kernel` constructs one validated metric-orthonormal camera tetrad per call, initializes unit camera-tetrad energy magnitude `E_camera=1`, writes complete contravariant momentum, optionally initializes batch or single-photon plane-side flags, and performs normalized-variable conversion afterward when requested; the later hypersurface-normal energy magnitude is `|alpha p^0|`.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/set_initial_conditions_kernel.py` — observer initialization
-- Corroboration: `nrpy/examples/photon_batch_geodesic_integrator_numerical.py`, `nrpy/examples/photon_single_geodesic_integrator_analytical.py`, `nrpy/examples/photon_single_geodesic_integrator_numerical.py`, `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/single_integrator_analytical.py`, and `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/single_integrator_numerical.py` — shared observer and event-history initialization arguments
+- Corroboration: `nrpy/examples/photon_batch_geodesic_integrator_numerical.py`, `nrpy/examples/photon_single_geodesic_integrator_analytical.py`, `nrpy/examples/photon_single_geodesic_integrator_numerical.py`, `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/single_integrator_analytical.py`, and `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/single_integrator_numerical.py` — shared observer and plane-side initialization arguments
 
 `batch_integrator_numerical` is the host orchestrator for photon batches. It
 registers integration limits and RKF45 controls in `commondata`, allocates the
-Structure-of-Arrays photon state, history, step-size, status, event-lock, and
-result buffers, sets up CUDA streams or CPU equivalents, and uses the
-TimeSlotManager to process active rays by coordinate-time slots. The split
+Structure-of-Arrays photon state, step-size, status, saved crossing steps, and
+result buffers, and uses the TimeSlotManager to process active rays by
+coordinate-time slots. The split
 pipeline stages exchange flat bundles for state, metric, connection, derivative
 stages, affine parameter, retries, and termination state. After an accepted RKF45
 step, direct mode refreshes the metric at the accepted state using the same
@@ -72,7 +73,7 @@ normalization sidecar stores `|C_direct|` for direct EOM and
 `|exp(2u)(C_normalized - 1)|` for normalized EOM.
 
 Claim evidence:
-- Claim: `batch_integrator_numerical` orchestrates host-side photon batches, manages flat state/history/geometry/result bundles, reuses trial-locked spatial centers for accepted-state metric refresh, computes the common log-energy bundle, and processes active rays through coordinate-time slots.
+- Claim: `batch_integrator_numerical` orchestrates host-side photon batches, manages flat state, geometry, saved crossing-step, and result arrays, reuses trial-locked spatial centers for accepted-state metric refresh, computes the common log-energy bundle, and processes active rays through coordinate-time slots.
 - Role: generated evidence
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/batch_integrator_numerical.py` — `batch_integrator_numerical`
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/time_slot_manager_helpers.py` — `TimeSlotManager`
@@ -96,49 +97,50 @@ Claim evidence:
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/rkf45_finalize_and_control_kernel.py` — acceptance/control
 
 `event_detection_manager_kernel` applies log-energy and coordinate-radius
-termination rules and checks enabled planes. Both single-photon integrators call
-it after each accepted step when a plane is enabled. The manager marks a sign
-change of the plane function as pending, counts subsequent accepted states, and
-calls `find_event_time_and_state_centered` when the requested centered stencil
-is available or a stop requires an earlier fit. Rejected RKF45 steps do not
-advance this count. The interpolator tries the requested polynomial degree,
-then lower even degrees through 2. It checks distinct integration parameters
-in each contiguous stencil and returns the nine-component crossing state and
-the degree used. The integration parameter is affine parameter for direct EOM
-and coordinate time for normalized EOM; state component zero stores the other
-quantity. The plane handlers compute local coordinates and apply the terminal
-plane's radial bounds. An accepted terminal crossing stops the photon; a
-nonterminal crossing does not.
+termination rules and checks enabled planes after accepted RKF45 steps. In
+analytical CUDA batches, device threads record crossings; the batch integrator
+copies those records to the host for Brent refinement and plane projection.
+Analytical evolution has no numerical time-window stop. A plane sign change saves the accepted state before the
+crossing and both integration parameters around that step. Rejected steps do
+not create plane candidates. The integration parameter is affine parameter
+for direct EOM and coordinate time for normalized EOM; state component zero
+stores the other quantity. Plane handlers compute local coordinates and apply
+the terminal plane's radial bounds after numerical refinement.
 
-For numerical batches, the manager applies the coordinate-time slot limit on
-the accepted state before resolving pending crossings. This preserves a
-crossing when that state reaches the last allowed time slot. The host time-slot
-manager then removes stopped photons from the active list.
+Numerical batches save the accepted state before each detected crossing, then
+continue evolving the photon. After evolution, a fixed-anchor RKF45 step and
+Brent refinement locate each saved crossing. The numerical batch selects the
+first terminal crossing within the configured radial bounds and retains a
+nonterminal crossing only if it precedes that selected terminal crossing.
+Normalization and axial angular momentum diagnostics use the refined plane
+states. The selected terminal crossing sets the blueprint termination status,
+coordinate time, and affine parameter before final blueprint calculation.
 
-Batch integrators shift accepted-state history and write separate sparse
+Both batch integrators write separate sparse
 `light_blueprint_non_terminal_crossings_XX_YY.bin` and
 `light_blueprint_terminal_crossings_XX_YY.bin` files. Each native record holds
-the tile-local photon index, polynomial degree, crossing integration parameter,
-two local plane coordinates, and nine interpolated state components. The image
-blueprint also stores the axial angular momentum, coordinate time, and signed
-plane distance at the first accepted state after a nonterminal crossing.
-Single-photon integrators write
-`plane_crossings.txt` with plane type, coordinate time, affine parameter, local
-coordinates, nine state components, and `interpolation_degree`.
+the tile-local photon index, crossing integration parameter, two local plane
+coordinates, nine state components, and Brent iteration counts. The numerical
+image blueprint stores axial angular momentum, its measurement time, and signed
+plane residual at the refined nonterminal crossing.
+Both single-photon integrators write `plane_crossings.txt` after evolution.
+The rows contain refined plane states, local coordinates, Brent iteration
+counts, and signed plane distances. Analytical batches transfer CUDA crossing
+records to the host before refinement.
 
 Claim evidence:
-- Claim: The event manager delays detected plane crossings until a centered stencil or physical stop is available, selects the highest usable generated degree, and stores full crossing states and actual degrees in separate batch files or `plane_crossings.txt` for single photons.
+- Claim: Analytical and numerical photon integrators save accepted crossing steps and refine plane states after evolution; batches also evaluate requested diagnostics at those states.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py` — `event_detection_manager_kernel`
-- Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/find_event_time_and_state.py` — stencil selection and crossing state; `single_integrator_analytical.py` and `single_integrator_numerical.py` — text output; `batch_integrator_analytical.py` and `batch_integrator_numerical.py` — sparse crossing files; `handle_non_terminal_plane_intersection.py` and `handle_terminal_plane_intersection.py` — local coordinates and radius filtering
+- Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/find_plane_crossings_brent.py` — analytical and numerical refinement and terminal selection; `single_integrator_analytical.py` and `single_integrator_numerical.py` — single-photon crossing output; `batch_integrator_analytical.py` and `batch_integrator_numerical.py` — sparse crossing files and plane diagnostics; `handle_non_terminal_plane_intersection.py` and `handle_terminal_plane_intersection.py` — local coordinates and radius filtering
 
 Blueprint headers carry tile identity/counts, `alpha_w`, `alpha_h`, and binary-layout
-version 7. Each native same-build record is 124 bytes. Records carry nonterminal
+version 8. Each native same-build record is 124 bytes. Records carry nonterminal
 crossing coordinates, affine parameter, and coordinate time; terminal-plane
 texture coordinates; final angles, termination affine parameter and coordinate
-time; normalized image-sample fractions; and the first accepted state's axial
-angular momentum, coordinate time, and signed distance after a nonterminal
-crossing. Final records admit spatial- and
+time; normalized image-sample fractions; and axial angular momentum, its
+measurement time, and signed plane residual at a refined nonterminal crossing.
+Final records admit spatial- and
 temporal-interpolation failure statuses in addition to the existing physical
 stops and numerical failures; internal `ACTIVE` and `REJECTED` states remain
 invalid serialized outcomes.
@@ -148,7 +150,7 @@ vertical raster flip, while plane diagnostics remain available to
 normalization sidecars and plots their magnitudes by termination status.
 
 Claim evidence:
-- Claim: Blueprint binary-layout version 7 uses 124-byte records for terminal texture coordinates, nonterminal crossing and post-step diagnostics, final affine parameter and coordinate time, final angles, and normalized image-sample fractions; the renderer preserves the documented vertical raster flip.
+- Claim: Blueprint binary-layout version 8 uses 124-byte records for terminal texture coordinates, refined nonterminal crossing diagnostics, final affine parameter and coordinate time, final angles, and normalized image-sample fractions; the renderer preserves the documented vertical raster flip.
 - Role: generated evidence
 - Deciding authority: `nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py` — binary-layout constants and dtype
 - Corroboration: `nrpy/examples/geodesic_visualizations/visualize_lensed_image.py` — image placement
@@ -262,18 +264,21 @@ Claim evidence:
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/numerical_interpolation.py` — endpoint dispatch; `output_raytracing_data.py` — payload mode
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/temporal_lagrange_interpolation.py` — temporal endpoint handling
 
-Startup reads `.bin` `NGHOSTS` metadata and terminates if the configured spatial
-half-width requires more ghost zones than available. It also terminates when
-observer or positive Cartesian `r_escape` probes cannot support the requested
-native stencil; the relevant `.par` controls are
+Startup reads `.bin` `NGHOSTS` metadata and uses that value to convert between
+native coordinates and stored grid indices, including the two stored azimuthal
+planes. The numerical reader does not use the finite-difference `NGHOSTS` macro
+from `BHaH_defines.h` for these offsets. Startup terminates if the configured
+spatial half-width requires more ghost zones than the `.bin` provides. It also
+terminates when observer or positive Cartesian `r_escape` probes cannot support
+the requested native stencil; the relevant `.par` controls are
 `observer_x/y/z`, `r_escape`, and
 `numerical_spacetime_spatial_interp_half_width`.
 
 Claim evidence:
-- Claim: Numerical startup rejects insufficient ghost-zone capacity and observer or positive Cartesian `r_escape` probes that cannot support the requested native stencil.
+- Claim: Numerical interpolation uses the `.bin` ghost-zone count for stored grid indices, independently of the finite-difference `NGHOSTS` macro; startup rejects insufficient ghost-zone capacity and observer or positive Cartesian `r_escape` probes that cannot support the requested native stencil.
 - Role: public/scientific contract
-- Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/time_window_manager_numerical.py` — startup domain validation
-- Corroboration: `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` — Cartesian-to-native inversion and admission checks
+- Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/time_window_manager_numerical.py` — metadata loading and startup domain validation; `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/azimuthal_symmetry_spatial_lagrange_interpolation.py` — stored grid indices
+- Corroboration: `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` — Cartesian-to-native inversion and nearest stored index
 
 Evolution-time raytracing export lives under BHaH diagnostics. When enabled by
 `register_all_diagnostics`, the diagnostics function calls
@@ -312,7 +317,7 @@ Claim evidence:
 - [rkf45_stage_update.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/rkf45_stage_update.py) - `rkf45_stage_update`
 - [rkf45_finalize_and_control_kernel.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/rkf45_finalize_and_control_kernel.py) - `rkf45_finalize_and_control_kernel`, `rkf45_finalize_and_control`
 - [event_detection_manager_kernel.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py) - `event_detection_manager_kernel`
-- [find_event_time_and_state.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/find_event_time_and_state.py) - `find_event_time_and_state`
+- [find_plane_crossings_brent.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/find_plane_crossings_brent.py) - accepted crossing steps and analytical or numerical Brent refinement
 - [handle_non_terminal_plane_intersection.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/handle_non_terminal_plane_intersection.py) - `handle_non_terminal_plane_intersection`
 - [handle_terminal_plane_intersection.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/handle_terminal_plane_intersection.py) - `handle_terminal_plane_intersection`
 - [g4DD_metric.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/g4DD_metric.py) - `g4DD_metric`

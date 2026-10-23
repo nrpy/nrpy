@@ -111,6 +111,14 @@ def time_window_manager_numerical(
 
     # Step 1: Register the runtime grid metadata fields this helper copies from
     # the combined numerical-spacetime container into params_struct.
+    _ = par.register_CodeParameter(
+        "int",
+        __name__,
+        "numerical_spacetime_nghosts",
+        0,
+        commondata=False,
+        add_to_parfile=False,
+    )
     for dirn in range(3):
         _ = par.register_CodeParameter(
             "int",
@@ -956,8 +964,9 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
         params_struct *restrict params) {
       if (ntwm == NULL || params == NULL)
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      if (ntwm->nghosts != (uint32_t)NGHOSTS)
+      if (ntwm->nghosts > (uint32_t)INT_MAX)
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      params->numerical_spacetime_nghosts = (int)ntwm->nghosts;
       for (int dirn = 0; dirn < 3; dirn++) {
         if (ntwm->Nxx[dirn] > (uint64_t)INT_MAX ||
             ntwm->Nxx_plus_2NGHOSTS[dirn] > (uint64_t)INT_MAX)
@@ -1274,7 +1283,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
         } // END IF: JSON grid metadata invalid
         expected_point_record_count *= ntwm->Nxx_plus_2NGHOSTS[dirn];
       } // END LOOP: for dirn over JSON grid
-      if (ntwm->nghosts != (uint32_t)NGHOSTS ||
+      if (ntwm->nghosts > (uint32_t)INT_MAX ||
           expected_point_record_count > UINT64_MAX / expected_point_record_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;

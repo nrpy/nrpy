@@ -27,7 +27,13 @@ A `CodeParameter` whose `cparam_type` is `#define` is treated as a C-preprocesso
 
 ### Array CodeParameters
 
-Array `CodeParameter` types are parsed only for C-style `REAL[N]` and `int[N]` strings. `_parse_array_spec()` extracts `N`; invalid or unsupported strings do not enter the array branch. Array parameters must use `add_to_set_CodeParameters_h=False`. If the default value is a list, its length must equal `N`; if the default is scalar, construction broadcasts that scalar to a list of length `N`. `adjust_CodeParam_default("name[i]", value)` updates one indexed default in an existing list-valued array parameter, and `adjust_CodeParam_default("name", value, new_cparam_type)` updates the whole default and optionally the C type.
+The intended array `CodeParameter` spellings are `REAL[N]` and `int[N]`. `_parse_array_spec()` recognizes strings beginning with `REAL` or `int`, containing `[`, ending in `]`, and having bracket contents accepted by `int()`. It does not require an exact base-type name or a positive size: for example, `integer[2]` and `REAL[-1]` enter the array branch. This helper is not a complete C-type validator. Array parameters must use `add_to_set_CodeParameters_h=False`. If the default value is a list, its length must equal `N`; if the default is scalar, construction uses Python list repetition `[defaultvalue] * N`. A positive size produces that many entries; a zero or negative size silently produces an empty list. `adjust_CodeParam_default("name[i]", value)` updates one indexed default in an existing list-valued array parameter, and `adjust_CodeParam_default("name", value, new_cparam_type)` updates the whole default and optionally the C type.
+
+Claim evidence:
+- Claim: `_parse_array_spec()` uses prefix and integer parsing checks, without validating an exact C base type or a positive array size; scalar defaults use list repetition, which yields an empty list for nonpositive sizes.
+- Role: descriptive behavior
+- Deciding authority: [params.py](../../nrpy/params.py), `_parse_array_spec` and `CodeParameter._process_parameter_type`
+- Corroboration: none available; the parsing conditions are defined in this module and no separate test establishes stricter validation.
 
 ### Batch Versus Single Registration
 
@@ -43,7 +49,13 @@ Array `CodeParameter` types are parsed only for C-style `REAL[N]` and `int[N]` s
 
 ### Parity
 
-`get_parity_type()` returns parity code `0` for rank-0 scalars. For rank-1 components, it reads the final component digit and returns component index plus one. For rank-2 components, it reads the final two component digits and consults fixed lookup tables for dimension 3 or dimension 4. `set_parity_types()` looks up each requested name in `glb_gridfcs_dict`, computes its parity from rank and dimension, and raises if a name is missing, rank or dimension is unsupported, or the resulting parity list length does not match the input list.
+`get_parity_type()` returns parity code `0` for rank-0 scalars. For rank-1 components, it reads the final component digit and returns component index plus one. For rank-2 components, it reads the final two component digits and consults fixed lookup tables for dimension 3 or dimension 4. Dimension is consulted only for rank-two lookup; scalar and vector cases ignore it. `set_parity_types()` looks up each requested name in `glb_gridfcs_dict`, computes the parity code, and raises when a code cannot be determined or the result length differs from the input length, including missing gridfunctions. It does not provide general dimension validation.
+
+Claim evidence:
+- Claim: Parity lookup checks dimension-specific tables for rank two only; scalar and vector parity computation does not validate dimension.
+- Role: descriptive behavior
+- Deciding authority: [grid.py](../../nrpy/grid.py), `GridFunction.get_parity_type` and `GridFunction.set_parity_types`
+- Corroboration: none available; the defining method's doctests exercise ordinary scalar, vector, and tensor cases but do not establish general dimension validation.
 
 ### BHaH Access
 

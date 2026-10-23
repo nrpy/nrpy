@@ -2,15 +2,10 @@
 """
 Defines the computation for impact parameters on the physical terminal plane.
 
-This module constructs the C engine responsible for evaluating terminal interactions
-with the terminal surface. It accepts the fully interpolated nine-component tensor
-state and affine parameter at the reconstructed boundary crossing alongside a pointer
-to the output blueprint structure. The mathematical mechanism constructs a local
-orthonormal basis using the parameterized terminal plane normal and up-vectors,
-after startup validation of the plane vectors. The global Cartesian
-intersection coordinates are projected into this local two-dimensional coordinate
-system and filtered against the minimum and maximum radial disk bounds. Valid impacts
-are stored in the blueprint structures.
+The generated C function projects a refined photon state onto the terminal
+plane. It constructs the plane basis from its normal and up vector, computes
+local coordinates, and records whether the crossing lies inside the radial
+bounds. The wrapper selects one in-range crossing for each photon.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -18,7 +13,37 @@ Author: Dalton J. Moone
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallelization.utilities as parallel_utils
+import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.params as par
+
+
+def register_terminal_plane_crossing_result() -> None:
+    """Register the selected terminal crossing and its plane quantities."""
+    if "terminal_plane_crossing_result" in par.glb_extras_dict.get("BHaH_defines", {}):
+        return
+    Bdefines_h.register_BHaH_defines(
+        "terminal_plane_crossing_result",
+        r"""
+    typedef struct {
+        bool found;
+        bool inside_radial_bounds;
+        int selected_candidate_number; // Zero means no terminal candidate selected.
+        termination_type_t trajectory_stop_reason;
+        double state[9];
+        double integration_param;
+        double coordinate_time;
+        double physical_lambda;
+        double y_local;
+        double z_local;
+        double plane_distance;
+        int brent_iterations;
+        bool null_constraint_recorded;
+        double null_constraint_abs;
+        bool Lz_recorded;
+        double Lz;
+    } terminal_plane_crossing_result_t;
+""",
+    )
 
 
 def register_terminal_plane_parameters() -> None:
@@ -45,10 +70,11 @@ def register_terminal_plane_parameters() -> None:
     )
 
 
-def handle_terminal_plane_intersection() -> None:
-    """Register the C engine for terminal plane intersection handling."""
+def handle_terminal_plane_intersection(normalized_eom: bool = False) -> None:
+    """Register local terminal-plane coordinates and radial bounds."""
     parallelization = par.parval_from_str("parallelization")
 
+    register_terminal_plane_crossing_result()
     register_terminal_plane_parameters()
 
     # Add the access variable
@@ -60,27 +86,15 @@ def handle_terminal_plane_intersection() -> None:
         includes.append("BHaH_device_defines.h")
         includes.append("cuda_intrinsics.h")
 
-    desc = r""" Processes a terminal intersection with the configured terminal plane.
+    desc = "Project a refined photon state onto the terminal plane and check radius."
 
-    @param[in] terminal_plane_event_f_intersect Thread-local intersection state; slot zero contains coordinate time.
-    @param physical_lambda Physical affine parameter $\lambda$ at the intersection.
-    @param[in,out] final_blueprint_data Local blueprint structure $b_i$ updated with impact geometry.
-    @param[in] commondata Host-only commondata pointer for non-CUDA builds.
-
-    Algorithm:
-    1. Reconstructs the terminal plane orthonormal basis ($s_x$, $s_y$, $s_z$).
-    2. Projects the intersection state $x^\mu$ into local 2D coordinates.
-    3. Filters based on terminal-plane coordinate-radius bounds
-       [$r_{min}$, $r_{max}$]."""
-
-    cfunc_type = "BHAH_HD_INLINE bool"
+    cfunc_type = "__device__ bool" if parallelization == "cuda" else "bool"
 
     name = "handle_terminal_plane_intersection"
 
     params = (
-        "const double *restrict terminal_plane_event_f_intersect, "
-        "const double physical_lambda, "
-        "blueprint_data_t *restrict final_blueprint_data"
+        "const photon_plane_crossing_root_t *restrict root, "
+        "terminal_plane_crossing_result_t *restrict result"
     )
     if parallelization != "cuda":
         params += ", const commondata_struct *restrict commondata"
@@ -88,11 +102,16 @@ def handle_terminal_plane_intersection() -> None:
     include_CodeParameters_h = False
 
     body = r"""
+    *result = (terminal_plane_crossing_result_t){0};
+    if (!root->found) return false;
+    const double *terminal_plane_event_f_intersect = root->state;
     //==========================================
     // UNPACK INTERSECTION STATE
     //==========================================
-    // Reads intersection data from thread-local registers, circumventing global reads.
-    const double t_intersect = terminal_plane_event_f_intersect[0]; // Coordinate time $t$ at intersection.
+    // Root parameter stores coordinate time for normalized equations and
+    // affine parameter for direct equations.
+    const double t_intersect = @COORDINATE_TIME@;
+    const double physical_lambda = @PHYSICAL_LAMBDA@;
     const double x_intersect = terminal_plane_event_f_intersect[1]; // Cartesian $x^1$ at intersection.
     const double y_intersect = terminal_plane_event_f_intersect[2]; // Cartesian $x^2$ at intersection.
     const double z_intersect = terminal_plane_event_f_intersect[3]; // Cartesian $x^3$ at intersection.
@@ -176,10 +195,12 @@ def handle_terminal_plane_intersection() -> None:
         relative_pos[2] * terminal_plane_up[2]; // Local height coordinate.
 
     //==========================================
-    // RADIAL FILTERING AND TERMINATION
+    // TERMINAL PLANE RADIAL BOUNDS
     //==========================================
     // Filters photons that fall outside the physical bounds of the accretion disk.
     const double r_sq = y_t*y_t + z_t*z_t; // Squared radial distance $r^2$ from the terminal-plane center.
+    if (!isfinite(r_sq) || !isfinite(t_intersect) ||
+        !isfinite(physical_lambda)) return false;
     const double r_min = d_commondata.terminal_plane_min_coord_radius;
     const double r_max = d_commondata.terminal_plane_max_coord_radius;
     if (!isfinite(r_min) || !isfinite(r_max) || r_min < 0.0 || r_max < r_min) {
@@ -188,19 +209,33 @@ def handle_terminal_plane_intersection() -> None:
     const double r_min_sq = r_min * r_min; // Squared minimum radius.
     const double r_max_sq = r_max * r_max; // Squared maximum radius.
 
-    if (r_sq >= r_min_sq && r_sq <= r_max_sq) {
-        final_blueprint_data->termination_type = STOP_CONDITION_TERMINAL_PLANE; // Flags the ray as stopped on the terminal plane.
-        final_blueprint_data->y_t = y_t;
-        final_blueprint_data->z_t = z_t;
-        // For terminal-plane hits, the intersection is the termination event.
-        final_blueprint_data->t_f = t_intersect;
-        final_blueprint_data->L_f = physical_lambda; // Explicit $\lambda$ mapped to persistent blueprint.
-        return true;
-    } // END IF: radial filtering
-    return false;
+    result->found = true;
+    result->inside_radial_bounds = r_sq >= r_min_sq && r_sq <= r_max_sq;
+    result->integration_param = root->parameter;
+    result->coordinate_time = t_intersect;
+    result->physical_lambda = physical_lambda;
+    result->plane_distance = root->plane_distance;
+    result->brent_iterations = root->iterations;
+    result->y_local = y_t;
+    result->z_local = z_t;
+    result->null_constraint_abs = NAN;
+    result->Lz = NAN;
+    for (int component = 0; component < 9; ++component) {
+        result->state[component] = terminal_plane_event_f_intersect[component];
+    }
+    return true;
     """
 
-    # Inject the string replacement right before registration
+    body = body.replace(
+        "@COORDINATE_TIME@",
+        "root->parameter" if normalized_eom else "terminal_plane_event_f_intersect[0]",
+    ).replace(
+        "@PHYSICAL_LAMBDA@",
+        "terminal_plane_event_f_intersect[0]" if normalized_eom else "root->parameter",
+    )
+    host_body = body.replace("d_commondata.", "commondata->").replace(
+        "SqrtCUDA(", "sqrt("
+    )
     body = body.replace("d_commondata.", cd_access)
 
     cfc.register_CFunction(
@@ -212,6 +247,20 @@ def handle_terminal_plane_intersection() -> None:
         include_CodeParameters_h=include_CodeParameters_h,
         body=body,
     )
+    if parallelization == "cuda":
+        cfc.register_CFunction(
+            includes=["BHaH_defines.h", "<math.h>"],
+            desc="Project a refined photon state onto the terminal plane on the host.",
+            cfunc_type="bool",
+            name="handle_terminal_plane_intersection_host",
+            params=(
+                "const photon_plane_crossing_root_t *restrict root, "
+                "terminal_plane_crossing_result_t *restrict result, "
+                "const commondata_struct *restrict commondata"
+            ),
+            include_CodeParameters_h=False,
+            body=host_body,
+        )
 
 
 if __name__ == "__main__":

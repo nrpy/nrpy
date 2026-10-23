@@ -27,16 +27,12 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_man
 )
 
 
-def batch_integrator_analytical(spacetime_name: str, maximum_degree: int) -> None:
+def batch_integrator_analytical(spacetime_name: str) -> None:
     r"""
     Construct the CPU/OpenMP or CUDA orchestrator for analytical photon batches.
 
     :param spacetime_name: The identifier for the spacetime metric (e.g., 'KerrSchild').
-    :param maximum_degree: Largest generated plane interpolation polynomial degree.
-    :raises ValueError: If maximum_degree is below three.
     """
-    if maximum_degree < 3:
-        raise ValueError("Plane interpolation degree must be at least three")
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
 
@@ -110,10 +106,8 @@ def batch_integrator_analytical(spacetime_name: str, maximum_degree: int) -> Non
 static void write_plane_crossings(
     const char *restrict path,
     const long int num_rays,
-    const bool *restrict event_found,
-    const int *restrict event_degree,
-    const double *restrict event_state,
-    const blueprint_data_t *restrict results,
+    const non_terminal_plane_crossing_result_t *restrict non_terminal_results,
+    const terminal_plane_crossing_result_t *restrict terminal_results,
     const bool terminal_plane)
 {
     FILE *restrict output = fopen(path, "wb");
@@ -122,19 +116,24 @@ static void write_plane_crossings(
         exit(EXIT_FAILURE);
     }
     for (long int photon_index = 0; photon_index < num_rays; ++photon_index) {
-        if (!event_found[photon_index]) continue;
+        const non_terminal_plane_crossing_result_t *non_terminal =
+            &non_terminal_results[photon_index];
+        const terminal_plane_crossing_result_t *terminal =
+            &terminal_results[photon_index];
+        if (!(terminal_plane ? terminal->found : non_terminal->found)) continue;
         plane_crossing_record_t record = {0};
         record.photon_index = (uint64_t)photon_index;
-        record.interpolation_degree = (uint32_t)event_degree[photon_index];
+        record.brent_iterations = terminal_plane
+            ? terminal->brent_iterations : non_terminal->brent_iterations;
         record.integration_param = terminal_plane
-            ? results[photon_index].L_f
-            : results[photon_index].non_terminal_plane_lambda;
+            ? terminal->integration_param : non_terminal->integration_param;
         record.y_local = terminal_plane
-            ? results[photon_index].y_t : results[photon_index].y_nt;
+            ? terminal->y_local : non_terminal->y_local;
         record.z_local = terminal_plane
-            ? results[photon_index].z_t : results[photon_index].z_nt;
+            ? terminal->z_local : non_terminal->z_local;
         for (int component = 0; component < 9; ++component) {
-            record.state[component] = event_state[component * num_rays + photon_index];
+            record.state[component] = terminal_plane
+                ? terminal->state[component] : non_terminal->state[component];
         }
         if (fwrite(&record, sizeof(record), 1, output) != 1) {
             fprintf(stderr, "ERROR: Could not write plane crossing to '%s'.\n", path);
@@ -277,18 +276,6 @@ static void write_plane_crossings(
     stream_arg_current = ", current" if parallelization == "cuda" else ", current"
     stream_arg_next = ", next" if parallelization == "cuda" else ", next"
     initial_state_value = "commondata->t_start"
-    zero_event_states = (
-        "cudaMemset(d_non_terminal_plane_event_state_bundle[s], 0, "
-        "sizeof(double) * 9 * BUNDLE_CAPACITY);\n"
-        "        cudaMemset(d_terminal_plane_event_state_bundle[s], 0, "
-        "sizeof(double) * 9 * BUNDLE_CAPACITY);"
-        if parallelization == "cuda"
-        else "memset(d_non_terminal_plane_event_state_bundle[s], 0, "
-        "sizeof(double) * 9 * BUNDLE_CAPACITY);\n"
-        "        memset(d_terminal_plane_event_state_bundle[s], 0, "
-        "sizeof(double) * 9 * BUNDLE_CAPACITY);"
-    )
-
     if parallelization == "cuda":
         observer_state_transfer = "\n".join(
             [
@@ -326,79 +313,6 @@ static void write_plane_crossings(
         )
         observer_metric_wait = ""
 
-    # The two processing slots carry identical pending-crossing state.
-    plane_fields = (
-        ("non_terminal_plane_crossing_pending", "bool"),
-        ("terminal_plane_crossing_pending", "bool"),
-        ("non_terminal_plane_steps_past", "int"),
-        ("terminal_plane_steps_past", "int"),
-        ("non_terminal_plane_event_degree", "int"),
-        ("terminal_plane_event_degree", "int"),
-    )
-    plane_pack = {}
-    plane_host_to_device = {}
-    plane_device_to_host = {}
-    for slot in ("current", "next"):
-        plane_pack[slot] = "\n".join(
-            f"{field}_bridge[{slot}][bridge_i] = all_photons_host.{field}[m_idx];"
-            for field, _ in plane_fields
-        )
-        plane_host_to_device[slot] = "\n".join(
-            memcpy_async(
-                f"d_{field}[{slot}]",
-                f"{field}_bridge[{slot}]",
-                f"sizeof({field_type}) * active_chunks[{slot}]",
-                "cudaMemcpyHostToDevice",
-                f"streams[{slot}]",
-            )
-            for field, field_type in plane_fields
-        )
-        plane_device_to_host[slot] = "\n".join(
-            [
-                memcpy_async(
-                    f"{field}_bridge[{slot}]",
-                    f"d_{field}[{slot}]",
-                    f"sizeof({field_type}) * active_chunks[{slot}]",
-                    "cudaMemcpyDeviceToHost",
-                    f"streams[{slot}]",
-                )
-                for field, field_type in plane_fields
-            ]
-            + [
-                "for (int component = 0; component < 9; ++component) {\n"
-                + memcpy_async(
-                    f"{plane}_plane_event_state_bridge[{slot}] + component * BUNDLE_CAPACITY",
-                    f"d_{plane}_plane_event_state_bundle[{slot}] + component * BUNDLE_CAPACITY",
-                    f"sizeof(double) * active_chunks[{slot}]",
-                    "cudaMemcpyDeviceToHost",
-                    f"streams[{slot}]",
-                )
-                + "\n}"
-                for plane in ("non_terminal", "terminal")
-            ]
-        )
-
-    plane_unpack = "\n".join(
-        [
-            (
-                "if ({plane}_plane_event_found_bridge[current][fin_i] && "
-                "!all_photons_host.{plane}_plane_event_found[m_idx]) {{\n"
-                "    for (int component = 0; component < 9; ++component) {{\n"
-                "        all_photons_host.{plane}_plane_event_f_intersect[component * num_rays + m_idx] =\n"
-                "            {plane}_plane_event_state_bridge[current][component * BUNDLE_CAPACITY + fin_i];\n"
-                "    }}\n"
-                "}}\n"
-                "all_photons_host.{plane}_plane_event_found[m_idx] = "
-                "{plane}_plane_event_found_bridge[current][fin_i];"
-            ).format(plane=plane)
-            for plane in ("non_terminal", "terminal")
-        ]
-        + [
-            f"all_photons_host.{field}[m_idx] = {field}_bridge[current][fin_i];"
-            for field, _ in plane_fields
-        ]
-    )
-
     body = rf"""
     //==========================================
     // 1. HOST & DEVICE ALLOCATION
@@ -407,10 +321,46 @@ static void write_plane_crossings(
     // The master host-side Structure of Arrays (SoA) tracking all photons $f^\mu$.
     PhotonStateSoA all_photons_host = {{0}};
 
+    photon_plane_crossing_candidates_t *plane_crossing_candidates = NULL;
+    non_terminal_plane_crossing_result_t *non_terminal_crossing_results = NULL;
+    terminal_plane_crossing_result_t *terminal_crossing_results = NULL;
+    photon_plane_crossing_candidates_t *d_plane_crossing_candidates = NULL;
+    {malloc_pinned}(plane_crossing_candidates,
+        sizeof(*plane_crossing_candidates) * num_rays);
+    {malloc_pinned}(non_terminal_crossing_results,
+        sizeof(*non_terminal_crossing_results) * num_rays);
+    {malloc_pinned}(terminal_crossing_results,
+        sizeof(*terminal_crossing_results) * num_rays);
+    {malloc_device}(d_plane_crossing_candidates,
+        sizeof(*d_plane_crossing_candidates) * num_rays);
+    if (num_rays > 0 && (plane_crossing_candidates == NULL ||
+                         non_terminal_crossing_results == NULL ||
+                         terminal_crossing_results == NULL ||
+                         d_plane_crossing_candidates == NULL)) {{
+        fprintf(stderr, "ERROR: could not allocate plane crossing records.\n");
+        exit(EXIT_FAILURE);
+    }}
+    for (long int ray = 0; ray < num_rays; ++ray) {{
+        plane_crossing_candidates[ray] = (photon_plane_crossing_candidates_t){{0}};
+        non_terminal_crossing_results[ray] =
+            (non_terminal_plane_crossing_result_t){{0}};
+        terminal_crossing_results[ray] = (terminal_plane_crossing_result_t){{0}};
+        plane_crossing_candidates[ray].non_terminal_candidate.photon_index = ray;
+        plane_crossing_candidates[ray].non_terminal_candidate.plane_type =
+            NON_TERMINAL_PLANE_EVENT;
+        photon_plane_crossing_candidate_t *terminal_candidates[3] = {{
+            &plane_crossing_candidates[ray].terminal_candidate_1,
+            &plane_crossing_candidates[ray].terminal_candidate_2,
+            &plane_crossing_candidates[ray].terminal_candidate_3
+        }};
+        for (int candidate = 0; candidate < 3; ++candidate) {{
+            terminal_candidates[candidate]->photon_index = ray;
+            terminal_candidates[candidate]->plane_type = TERMINAL_PLANE_EVENT;
+        }}
+    }}
+
     // {pin_comment} the state vector $f^\mu$.
     {malloc_pinned}(all_photons_host.f, sizeof(double) * 9 * num_rays);
-    // {pin_comment} accepted state history, newest preceding state first.
-    {malloc_pinned}(all_photons_host.f_history, sizeof(double) * {maximum_degree} * 9 * num_rays);
     // {pin_comment} the physical integration parameter $\lambda$.
     {malloc_pinned}(all_photons_host.integration_param, sizeof(double) * num_rays);
     // {pin_comment} individual integration step sizes $h$.
@@ -423,22 +373,10 @@ static void write_plane_crossings(
     {malloc_pinned}(all_photons_host.on_positive_side_of_non_terminal_plane_prev, sizeof(bool) * num_rays);
     // {pin_comment} the previous terminal-plane boundary state.
     {malloc_pinned}(all_photons_host.on_positive_side_of_terminal_plane_prev, sizeof(bool) * num_rays);
-    // {pin_comment} accepted integration-parameter history.
-    {malloc_pinned}(all_photons_host.integration_param_history, sizeof(double) * {maximum_degree} * num_rays);
-    // {pin_comment} the nonterminal plane intersection lock.
-    {malloc_pinned}(all_photons_host.non_terminal_plane_event_found, sizeof(bool) * num_rays);
-    // {pin_comment} the terminal-plane intersection lock.
-    {malloc_pinned}(all_photons_host.terminal_plane_event_found, sizeof(bool) * num_rays);
-    {malloc_pinned}(all_photons_host.non_terminal_plane_crossing_pending, sizeof(bool) * num_rays);
-    {malloc_pinned}(all_photons_host.terminal_plane_crossing_pending, sizeof(bool) * num_rays);
-    {malloc_pinned}(all_photons_host.non_terminal_plane_steps_past, sizeof(int) * num_rays);
-    {malloc_pinned}(all_photons_host.terminal_plane_steps_past, sizeof(int) * num_rays);
-    {malloc_pinned}(all_photons_host.non_terminal_plane_event_degree, sizeof(int) * num_rays);
-    {malloc_pinned}(all_photons_host.terminal_plane_event_degree, sizeof(int) * num_rays);
-    {malloc_pinned}(all_photons_host.non_terminal_plane_event_f_intersect, sizeof(double) * 9 * num_rays);
-    {malloc_pinned}(all_photons_host.terminal_plane_event_f_intersect, sizeof(double) * 9 * num_rays);
 
     {stream_setup_str}
+    {memcpy_async("d_plane_crossing_candidates", "plane_crossing_candidates", "sizeof(*plane_crossing_candidates) * num_rays", "cudaMemcpyHostToDevice", "streams[0]")}
+    BHAH_DEVICE_SYNC();
 
     //==========================================
     // DOUBLE-BUFFERED BRIDGE ARRAYS
@@ -447,8 +385,6 @@ static void write_plane_crossings(
     long int *chunk_buffer[2];
     // Bridge array staging the state vector $f^\mu$ for memory transfers.
     double *f_bridge[2];
-    // Bridge array staging preceding accepted states.
-    double *f_history_bridge[2];
     // Bridge array staging the integration parameter $\lambda$ for memory transfers.
     double *integration_param_bridge[2];
     // Bridge array staging the current integration step size $h$ for memory transfers.
@@ -461,20 +397,6 @@ static void write_plane_crossings(
     bool *on_pos_non_terminal_plane_prev_bridge[2];
     // Bridge array staging the previous terminal-plane boundary side flag for memory transfers.
     bool *on_pos_terminal_plane_prev_bridge[2];
-    // Bridge array staging preceding accepted integration parameters.
-    double *integration_param_history_bridge[2];
-    // Bridge array staging the nonterminal plane event lock for memory transfers.
-    bool *non_terminal_plane_event_found_bridge[2];
-    // Bridge array staging the terminal-plane event lock for memory transfers.
-    bool *terminal_plane_event_found_bridge[2];
-    bool *non_terminal_plane_crossing_pending_bridge[2];
-    bool *terminal_plane_crossing_pending_bridge[2];
-    int *non_terminal_plane_steps_past_bridge[2];
-    int *terminal_plane_steps_past_bridge[2];
-    int *non_terminal_plane_event_degree_bridge[2];
-    int *terminal_plane_event_degree_bridge[2];
-    double *non_terminal_plane_event_state_bridge[2];
-    double *terminal_plane_event_state_bridge[2];
 
     //==========================================
     // DOUBLE-BUFFERED VRAM SCRATCHPADS
@@ -487,8 +409,6 @@ static void write_plane_crossings(
     double *d_f_start_bundle[2];
     // Scratchpad tracking the intermediate cumulative RKF45 stage updates.
     double *d_f_temp_bundle[2];
-    // Scratchpad tracking preceding accepted states for plane interpolation.
-    double *d_f_history_bundle[2];
     // Scratchpad persisting the symmetric metric tensor $g_{{\mu\nu}}$.
     double *d_metric_bundle[2];
     // Scratchpad carrying the common upper-only log-energy measure $\ln|\alpha p^0|$.
@@ -501,6 +421,7 @@ static void write_plane_crossings(
     double *d_h[2];
     // Array regulating total integration parameter progress $\lambda$.
     double *d_integration_param[2];
+    double *d_integration_param_start[2];
     // Array holding the current trajectory status limits.
     termination_type_t *d_status[2];
     // Array tracking sequential error rejections per photon.
@@ -509,20 +430,8 @@ static void write_plane_crossings(
     bool *d_on_pos_non_terminal_plane_prev[2];
     // Array flagging the previous terminal-plane boundary side.
     bool *d_on_pos_terminal_plane_prev[2];
-    // Array tracking preceding accepted integration parameters.
-    double *d_integration_param_history[2];
     // Array guarding nonterminal-plane intersection coordinates from multi-trigger overwrites.
-    bool *d_non_terminal_plane_event_found[2];
     // Array guarding the terminal-plane intersection coordinates from multi-trigger overwrites.
-    bool *d_terminal_plane_event_found[2];
-    bool *d_non_terminal_plane_crossing_pending[2];
-    bool *d_terminal_plane_crossing_pending[2];
-    int *d_non_terminal_plane_steps_past[2];
-    int *d_terminal_plane_steps_past[2];
-    int *d_non_terminal_plane_event_degree[2];
-    int *d_terminal_plane_event_degree[2];
-    double *d_non_terminal_plane_event_state_bundle[2];
-    double *d_terminal_plane_event_state_bundle[2];
     // Array carrying the absolute master indices $m_{{idx}}$ mapping the execution chunk.
     long int *d_chunk_buffer[2];
 
@@ -531,52 +440,28 @@ static void write_plane_crossings(
         // {bridge_alloc_comment}
         {malloc_pinned}(chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Pin chunk buffers.
         {malloc_pinned}(f_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $f^\mu$ bridges.
-        {malloc_pinned}(f_history_bridge[s], sizeof(double) * {maximum_degree} * 9 * BUNDLE_CAPACITY);
         {malloc_pinned}(integration_param_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda$ bridges.
         {malloc_pinned}(h_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $h$ bridges.
         {malloc_pinned}(status_bridge[s], sizeof(termination_type_t) * BUNDLE_CAPACITY); // Pin status bridges.
         {malloc_pinned}(retries_bridge[s], sizeof(int) * BUNDLE_CAPACITY); // Pin retries bridges.
         {malloc_pinned}(on_pos_non_terminal_plane_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin nonterminal-plane flag bridges.
         {malloc_pinned}(on_pos_terminal_plane_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin terminal-plane side-flag bridges.
-        {malloc_pinned}(integration_param_history_bridge[s], sizeof(double) * {maximum_degree} * BUNDLE_CAPACITY);
-        {malloc_pinned}(non_terminal_plane_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin nonterminal-plane lock bridges.
-        {malloc_pinned}(terminal_plane_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin terminal-plane lock bridges.
-        {malloc_pinned}(non_terminal_plane_crossing_pending_bridge[s], sizeof(bool) * BUNDLE_CAPACITY);
-        {malloc_pinned}(terminal_plane_crossing_pending_bridge[s], sizeof(bool) * BUNDLE_CAPACITY);
-        {malloc_pinned}(non_terminal_plane_steps_past_bridge[s], sizeof(int) * BUNDLE_CAPACITY);
-        {malloc_pinned}(terminal_plane_steps_past_bridge[s], sizeof(int) * BUNDLE_CAPACITY);
-        {malloc_pinned}(non_terminal_plane_event_degree_bridge[s], sizeof(int) * BUNDLE_CAPACITY);
-        {malloc_pinned}(terminal_plane_event_degree_bridge[s], sizeof(int) * BUNDLE_CAPACITY);
-        {malloc_pinned}(non_terminal_plane_event_state_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
-        {malloc_pinned}(terminal_plane_event_state_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
 
         // {scratch_alloc_comment}
         {malloc_device}(d_f_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu$ scratchpad.
         {malloc_device}(d_f_start_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f_{{start}}$ scratchpad.
         {malloc_device}(d_f_temp_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate temporary stage scratchpad.
-        {malloc_device}(d_f_history_bundle[s], sizeof(double) * {maximum_degree} * 9 * BUNDLE_CAPACITY);
         {malloc_device}(d_metric_bundle[s], sizeof(double) * 10 * BUNDLE_CAPACITY); // Allocate $g_{{\mu\nu}}$ scratchpad.
         {malloc_device}(d_log_energy_bundle[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate common log-energy scratchpad.
         {malloc_device}(d_connection_bundle[s], sizeof(double) * 40 * BUNDLE_CAPACITY); // Allocate $\Gamma^\alpha_{{\beta\gamma}}$ scratchpad.
         {malloc_device}(d_k_bundle[s], sizeof(double) * 6 * 9 * BUNDLE_CAPACITY); // Allocate derivative scratchpad.
         {malloc_device}(d_h[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $h$ scratchpad.
         {malloc_device}(d_integration_param[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda$ scratchpad.
+        {malloc_device}(d_integration_param_start[s], sizeof(double) * BUNDLE_CAPACITY);
         {malloc_device}(d_status[s], sizeof(termination_type_t) * BUNDLE_CAPACITY); // Allocate status scratchpad.
         {malloc_device}(d_retries[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate retries scratchpad.
         {malloc_device}(d_on_pos_non_terminal_plane_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate nonterminal-plane flag scratchpad.
         {malloc_device}(d_on_pos_terminal_plane_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate terminal-plane side-flag scratchpad.
-        {malloc_device}(d_integration_param_history[s], sizeof(double) * {maximum_degree} * BUNDLE_CAPACITY);
-        {malloc_device}(d_non_terminal_plane_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate nonterminal-plane lock scratchpad.
-        {malloc_device}(d_terminal_plane_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate terminal-plane lock scratchpad.
-        {malloc_device}(d_non_terminal_plane_crossing_pending[s], sizeof(bool) * BUNDLE_CAPACITY);
-        {malloc_device}(d_terminal_plane_crossing_pending[s], sizeof(bool) * BUNDLE_CAPACITY);
-        {malloc_device}(d_non_terminal_plane_steps_past[s], sizeof(int) * BUNDLE_CAPACITY);
-        {malloc_device}(d_terminal_plane_steps_past[s], sizeof(int) * BUNDLE_CAPACITY);
-        {malloc_device}(d_non_terminal_plane_event_degree[s], sizeof(int) * BUNDLE_CAPACITY);
-        {malloc_device}(d_terminal_plane_event_degree[s], sizeof(int) * BUNDLE_CAPACITY);
-        {malloc_device}(d_non_terminal_plane_event_state_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
-        {malloc_device}(d_terminal_plane_event_state_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
-        {zero_event_states}
         {malloc_device}(d_chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Allocate chunk mapping scratchpad.
         {malloc_device}(d_norm_bundle[s], sizeof(normalization_constraint_t) * BUNDLE_CAPACITY); // Allocate diagnostic outputs scratchpad.
     }} // END LOOP: for s over 2
@@ -732,19 +617,10 @@ static void write_plane_crossings(
     }} // END IF: perform_conservation_check to evaluate baseline conserved
 
     for (long int sync_i = 0; sync_i < num_rays; ++sync_i) {{
-        for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-            for (int component = 0; component < 9; ++component) {{
-                all_photons_host.f_history[(history_step * 9 + component) * num_rays + sync_i] =
-                    all_photons_host.f[component * num_rays + sync_i];
-            }}
-            all_photons_host.integration_param_history[history_step * num_rays + sync_i] = 0.0;
-        }}
         all_photons_host.status[sync_i] = ACTIVE; // Assigns the initial trajectory activity enum for the global physics engine.
         all_photons_host.integration_param[sync_i] = 0.0; // Sets the initial baseline progression scalar for the integration parameter $\lambda$.
         all_photons_host.rejection_retries[sync_i] = 0; // Clears the error rejection scalar to initialize the step size convergence tracking.
 
-        all_photons_host.non_terminal_plane_event_found[sync_i] = false; // Sets the nonterminal plane intersection logical lock to false.
-        all_photons_host.terminal_plane_event_found[sync_i] = false; // Sets the terminal-plane intersection logical lock to false.
 
         int s_idx = slot_get_index(&tsm, all_photons_host.f[sync_i]); // Integer index $s_{{idx}}$ mapping the current photon's temporal coordinate $t$ to a discrete execution bin in the TimeSlotManager.
         if (s_idx != -1) {{
@@ -794,11 +670,6 @@ static void write_plane_crossings(
                 for (int bridge_i = 0; bridge_i < active_chunks[current]; ++bridge_i) {{  // Loop iterator $bridge_i$ packing the physical state payloads into the Host-side bridge arrays.
                     long int m_idx = chunk_buffer[current][bridge_i]; // Absolute master index $m_{{ idx}}$ mapping the active payload to the global trajectory matrix.
                     f_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx]; // Packs the coordinate state vector $f^\mu$ into the transfer bridge.
-                    for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                        const int history_component = history_step * 9 + c_k;
-                        f_history_bridge[current][history_component * BUNDLE_CAPACITY + bridge_i] =
-                            all_photons_host.f_history[history_component * num_rays + m_idx];
-                    }}
                 }} // END LOOP: for bridge_i over active_chunks[current]
             }} // END LOOP: for c_k over 9
 
@@ -811,23 +682,11 @@ static void write_plane_crossings(
                 integration_param_bridge[current][bridge_i] = all_photons_host.integration_param[m_idx]; // Packs the integration parameter $\lambda$ into the transfer bridge.
                 on_pos_non_terminal_plane_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_non_terminal_plane_prev[m_idx]; // Packs the nonterminal plane boundary flag into the transfer bridge.
                 on_pos_terminal_plane_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx]; // Packs the terminal-plane boundary flag into the transfer bridge.
-                for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                    integration_param_history_bridge[current][history_step * BUNDLE_CAPACITY + bridge_i] =
-                        all_photons_host.integration_param_history[history_step * num_rays + m_idx];
-                }}
-                non_terminal_plane_event_found_bridge[current][bridge_i] = all_photons_host.non_terminal_plane_event_found[m_idx]; // Packs the nonterminal plane intersection lock into the transfer bridge.
-                terminal_plane_event_found_bridge[current][bridge_i] = all_photons_host.terminal_plane_event_found[m_idx]; // Packs the terminal-plane intersection lock into the transfer bridge.
-                {plane_pack["current"]}
             }} // END LOOP: for bridge_i over active_chunks[current]
 
             for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Host-to-Device transfer of the 9 state vector components.
                 // Host-to-Device transfer: Asynchronously pushes bounded state vectors $f^\mu$ to VRAM strictly on stream [current] to minimize latency.
                 {memcpy_async("d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "f_bridge[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-                // Host-to-Device transfer: Pushes accepted state history to VRAM strictly on stream [current] to minimize latency.
-                for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                    const int history_component = history_step * 9 + c_k;
-                    {memcpy_async("d_f_history_bundle[current] + history_component * BUNDLE_CAPACITY", "f_history_bridge[current] + history_component * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-                }}
             }} // END LOOP: for c_k over 9
             // Host-to-Device transfer: Asynchronously pushes step sizes $h$ to VRAM strictly on stream [current] to minimize latency.
             {memcpy_async("d_h[current]", "h_bridge[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
@@ -837,19 +696,11 @@ static void write_plane_crossings(
             {memcpy_async("d_retries[current]", "retries_bridge[current]", "sizeof(int) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
             // Host-to-Device transfer: Asynchronously pushes integration parameters $\lambda$ to VRAM strictly on stream [current] to minimize latency.
             {memcpy_async("d_integration_param[current]", "integration_param_bridge[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
+            {memcpy_async("d_integration_param_start[current]", "integration_param_bridge[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
             // Host-to-Device transfer: Asynchronously pushes nonterminal-plane boundary flags to VRAM strictly on stream [current] to minimize latency.
             {memcpy_async("d_on_pos_non_terminal_plane_prev[current]", "on_pos_non_terminal_plane_prev_bridge[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
             // Host-to-Device transfer: Asynchronously pushes terminal-plane boundary flags to VRAM strictly on stream [current] to minimize latency.
             {memcpy_async("d_on_pos_terminal_plane_prev[current]", "on_pos_terminal_plane_prev_bridge[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            // Host-to-Device transfer: Pushes accepted integration-parameter history to VRAM strictly on stream [current] to minimize latency.
-            for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                {memcpy_async("d_integration_param_history[current] + history_step * BUNDLE_CAPACITY", "integration_param_history_bridge[current] + history_step * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            }}
-            // Host-to-Device transfer: Asynchronously pushes nonterminal-plane intersection locks to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_non_terminal_plane_event_found[current]", "non_terminal_plane_event_found_bridge[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            // Host-to-Device transfer: Asynchronously pushes terminal-plane intersection locks to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_terminal_plane_event_found[current]", "terminal_plane_event_found_bridge[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            {plane_host_to_device["current"]}
             // Host-to-Device transfer: Asynchronously pushes chunk indices $m_{{ idx}}$ to VRAM strictly on stream [current] to minimize latency.
             {memcpy_async("d_chunk_buffer[current]", "chunk_buffer[current]", "sizeof(long int) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
 
@@ -879,16 +730,11 @@ static void write_plane_crossings(
             // Kernel Launch: Computes the accepted-state normal-observer log-energy measure $\ln|\alpha p^0|$.
             normal_observer_log_energy(d_f_bundle[current], d_metric_bundle[current], d_log_energy_bundle[current], active_chunks[current]{stream_arg_current});
             // Kernel Launch: Detects geometric events and records intersection coordinates asynchronously on the active stream.
-            event_detection_manager_kernel(commondata, d_f_bundle[current], d_log_energy_bundle[current], d_f_history_bundle[current], d_integration_param[current], d_integration_param_history[current], d_results_buffer, d_status[current], d_on_pos_non_terminal_plane_prev[current], d_on_pos_terminal_plane_prev[current], d_non_terminal_plane_event_found[current], d_terminal_plane_event_found[current], d_non_terminal_plane_crossing_pending[current], d_terminal_plane_crossing_pending[current], d_non_terminal_plane_steps_past[current], d_terminal_plane_steps_past[current], d_non_terminal_plane_event_degree[current], d_terminal_plane_event_degree[current], d_non_terminal_plane_event_state_bundle[current], d_terminal_plane_event_state_bundle[current], d_chunk_buffer[current], active_chunks[current]{stream_arg_current});
+            event_detection_manager_kernel(commondata, d_f_bundle[current], d_f_start_bundle[current], d_log_energy_bundle[current], d_integration_param_start[current], d_integration_param[current], d_status[current], d_on_pos_non_terminal_plane_prev[current], d_on_pos_terminal_plane_prev[current], d_plane_crossing_candidates, d_chunk_buffer[current], active_chunks[current]{stream_arg_current});
 
             for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Device-to-Host transfer of the 9 state vector components.
                 // Device-to-Host transfer: Retrieves updated coordinate states $f^\mu$ back to CPU RAM asynchronously on the active stream.
                 {memcpy_async("f_bridge[current] + c_k * BUNDLE_CAPACITY", "d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-                // Device-to-Host transfer: Retrieves accepted state history back to CPU RAM asynchronously on the active stream.
-                for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                    const int history_component = history_step * 9 + c_k;
-                    {memcpy_async("f_history_bridge[current] + history_component * BUNDLE_CAPACITY", "d_f_history_bundle[current] + history_component * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-                }}
             }} // END LOOP: for c_k over 9
             // Device-to-Host transfer: Retrieves active step sizes $h$ back to CPU RAM asynchronously on the active stream.
             {memcpy_async("h_bridge[current]", "d_h[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
@@ -902,15 +748,8 @@ static void write_plane_crossings(
             {memcpy_async("on_pos_non_terminal_plane_prev_bridge[current]", "d_on_pos_non_terminal_plane_prev[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
             // Device-to-Host transfer: Retrieves updated terminal-plane boundary flags back to CPU RAM asynchronously on the active stream.
             {memcpy_async("on_pos_terminal_plane_prev_bridge[current]", "d_on_pos_terminal_plane_prev[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            // Device-to-Host transfer: Retrieves accepted integration-parameter history back to CPU RAM asynchronously on the active stream.
-            for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                {memcpy_async("integration_param_history_bridge[current] + history_step * BUNDLE_CAPACITY", "d_integration_param_history[current] + history_step * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            }}
             // Device-to-Host transfer: Retrieves active nonterminal-plane locks back to CPU RAM asynchronously on the active stream.
-            {memcpy_async("non_terminal_plane_event_found_bridge[current]", "d_non_terminal_plane_event_found[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
             // Device-to-Host transfer: Retrieves active terminal-plane locks back to CPU RAM asynchronously on the active stream.
-            {memcpy_async("terminal_plane_event_found_bridge[current]", "d_terminal_plane_event_found[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            {plane_device_to_host["current"]}
         }} // END IF: active chunks available
 
         //==========================================
@@ -929,11 +768,6 @@ static void write_plane_crossings(
                     for (int bridge_i = 0; bridge_i < active_chunks[next]; ++bridge_i) {{  // Loop iterator $bridge_i$ packing the physical state payloads into the next Host-side bridge array.
                         long int m_idx = chunk_buffer[next][bridge_i]; // Absolute master index $m_{{ idx}}$ mapping the active payload to the global trajectory matrix.
                         f_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx]; // Packs the coordinate state vector $f^\mu$ into the transfer bridge.
-                        for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                            const int history_component = history_step * 9 + c_k;
-                            f_history_bridge[next][history_component * BUNDLE_CAPACITY + bridge_i] =
-                                all_photons_host.f_history[history_component * num_rays + m_idx];
-                        }}
                     }} // END LOOP: for bridge_i over active_chunks[next]
                 }} // END LOOP: for c_k over 9
 
@@ -946,23 +780,11 @@ static void write_plane_crossings(
                     integration_param_bridge[next][bridge_i] = all_photons_host.integration_param[m_idx]; // Packs the integration parameter $\lambda$ into the transfer bridge.
                     on_pos_non_terminal_plane_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_non_terminal_plane_prev[m_idx]; // Packs the nonterminal plane boundary flag into the transfer bridge.
                     on_pos_terminal_plane_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx]; // Packs the terminal-plane boundary flag into the transfer bridge.
-                    for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                        integration_param_history_bridge[next][history_step * BUNDLE_CAPACITY + bridge_i] =
-                            all_photons_host.integration_param_history[history_step * num_rays + m_idx];
-                    }}
-                    non_terminal_plane_event_found_bridge[next][bridge_i] = all_photons_host.non_terminal_plane_event_found[m_idx]; // Packs the nonterminal plane intersection lock into the transfer bridge.
-                    terminal_plane_event_found_bridge[next][bridge_i] = all_photons_host.terminal_plane_event_found[m_idx]; // Packs the terminal-plane intersection lock into the transfer bridge.
-                    {plane_pack["next"]}
                 }} // END LOOP: for bridge_i over active_chunks[next]
 
                 for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Host-to-Device transfer of the 9 state vector components for the upcoming payload.
                     // Host-to-Device transfer: Asynchronously pushes bounded state vectors $f^\mu$ to VRAM strictly on stream [next] to overlap execution.
                     {memcpy_async("d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "f_bridge[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                    // Host-to-Device transfer: Pushes accepted state history to VRAM strictly on stream [next] to overlap execution.
-                    for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                        const int history_component = history_step * 9 + c_k;
-                        {memcpy_async("d_f_history_bundle[next] + history_component * BUNDLE_CAPACITY", "f_history_bridge[next] + history_component * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                    }}
                 }} // END LOOP: for c_k over 9
                 // Host-to-Device transfer: Asynchronously pushes step sizes $h$ to VRAM strictly on stream [next] to overlap execution.
                 {memcpy_async("d_h[next]", "h_bridge[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
@@ -972,19 +794,11 @@ static void write_plane_crossings(
                 {memcpy_async("d_retries[next]", "retries_bridge[next]", "sizeof(int) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
                 // Host-to-Device transfer: Asynchronously pushes integration parameters $\lambda$ to VRAM strictly on stream [next] to overlap execution.
                 {memcpy_async("d_integration_param[next]", "integration_param_bridge[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
+                {memcpy_async("d_integration_param_start[next]", "integration_param_bridge[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
                 // Host-to-Device transfer: Asynchronously pushes nonterminal-plane boundary flags to VRAM strictly on stream [next] to overlap execution.
                 {memcpy_async("d_on_pos_non_terminal_plane_prev[next]", "on_pos_non_terminal_plane_prev_bridge[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
                 // Host-to-Device transfer: Asynchronously pushes terminal-plane boundary flags to VRAM strictly on stream [next] to overlap execution.
                 {memcpy_async("d_on_pos_terminal_plane_prev[next]", "on_pos_terminal_plane_prev_bridge[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                // Host-to-Device transfer: Pushes accepted integration-parameter history to VRAM strictly on stream [next] to overlap execution.
-                for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                    {memcpy_async("d_integration_param_history[next] + history_step * BUNDLE_CAPACITY", "integration_param_history_bridge[next] + history_step * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                }}
-            // Host-to-Device transfer: Asynchronously pushes nonterminal-plane intersection locks to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_non_terminal_plane_event_found[next]", "non_terminal_plane_event_found_bridge[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                // Host-to-Device transfer: Asynchronously pushes terminal-plane intersection locks to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_terminal_plane_event_found[next]", "terminal_plane_event_found_bridge[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                {plane_host_to_device["next"]}
                 // Host-to-Device transfer: Asynchronously pushes chunk indices $m_{{ idx}}$ to VRAM strictly on stream [next] to overlap execution.
                 {memcpy_async("d_chunk_buffer[next]", "chunk_buffer[next]", "sizeof(long int) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
 
@@ -1014,15 +828,10 @@ static void write_plane_crossings(
                 // Kernel Launch: Computes the accepted-state normal-observer log-energy measure $\ln|\alpha p^0|$.
                 normal_observer_log_energy(d_f_bundle[next], d_metric_bundle[next], d_log_energy_bundle[next], active_chunks[next]{stream_arg_next});
                 // Kernel Launch: Detects geometric events and records intersection coordinates asynchronously on the alternate stream.
-                event_detection_manager_kernel(commondata, d_f_bundle[next], d_log_energy_bundle[next], d_f_history_bundle[next], d_integration_param[next], d_integration_param_history[next], d_results_buffer, d_status[next], d_on_pos_non_terminal_plane_prev[next], d_on_pos_terminal_plane_prev[next], d_non_terminal_plane_event_found[next], d_terminal_plane_event_found[next], d_non_terminal_plane_crossing_pending[next], d_terminal_plane_crossing_pending[next], d_non_terminal_plane_steps_past[next], d_terminal_plane_steps_past[next], d_non_terminal_plane_event_degree[next], d_terminal_plane_event_degree[next], d_non_terminal_plane_event_state_bundle[next], d_terminal_plane_event_state_bundle[next], d_chunk_buffer[next], active_chunks[next]{stream_arg_next});
+            event_detection_manager_kernel(commondata, d_f_bundle[next], d_f_start_bundle[next], d_log_energy_bundle[next], d_integration_param_start[next], d_integration_param[next], d_status[next], d_on_pos_non_terminal_plane_prev[next], d_on_pos_terminal_plane_prev[next], d_plane_crossing_candidates, d_chunk_buffer[next], active_chunks[next]{stream_arg_next});
                 for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Device-to-Host transfer of the 9 upcoming state vector components.
                     // Device-to-Host transfer: Retrieves updated coordinate states $f^\mu$ back to CPU RAM asynchronously on the alternate stream.
                     {memcpy_async("f_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                    // Device-to-Host transfer: Retrieves accepted state history back to CPU RAM asynchronously on the alternate stream.
-                    for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                        const int history_component = history_step * 9 + c_k;
-                        {memcpy_async("f_history_bridge[next] + history_component * BUNDLE_CAPACITY", "d_f_history_bundle[next] + history_component * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                    }}
                 }} // END LOOP: for c_k over 9
                 // Device-to-Host transfer: Retrieves upcoming active step sizes $h$ back to CPU RAM asynchronously on the alternate stream.
                 {memcpy_async("h_bridge[next]", "d_h[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
@@ -1036,15 +845,8 @@ static void write_plane_crossings(
                 {memcpy_async("on_pos_non_terminal_plane_prev_bridge[next]", "d_on_pos_non_terminal_plane_prev[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
                 // Device-to-Host transfer: Retrieves upcoming updated terminal-plane boundary flags back to CPU RAM asynchronously on the alternate stream.
                 {memcpy_async("on_pos_terminal_plane_prev_bridge[next]", "d_on_pos_terminal_plane_prev[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                // Device-to-Host transfer: Retrieves accepted integration-parameter history back to CPU RAM asynchronously on the alternate stream.
-                for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                    {memcpy_async("integration_param_history_bridge[next] + history_step * BUNDLE_CAPACITY", "d_integration_param_history[next] + history_step * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                }}
                 // Device-to-Host transfer: Retrieves upcoming active nonterminal-plane locks back to CPU RAM asynchronously on the alternate stream.
-                {memcpy_async("non_terminal_plane_event_found_bridge[next]", "d_non_terminal_plane_event_found[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
                 // Device-to-Host transfer: Retrieves upcoming active terminal-plane locks back to CPU RAM asynchronously on the alternate stream.
-                {memcpy_async("terminal_plane_event_found_bridge[next]", "d_terminal_plane_event_found[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                {plane_device_to_host["next"]}
             }} // END IF: next chunks available
 
             if (active_chunks[current] > 0) {{
@@ -1056,11 +858,6 @@ static void write_plane_crossings(
                     for (int fin_i = 0; fin_i < active_chunks[current]; ++fin_i) {{  // Loop iterator $fin_i$ unpacking the finalized physical data back to the global Host matrix.
                         long int m_idx = chunk_buffer[current][fin_i]; // Absolute master index $m_{{ idx}}$ retrieving the specific photon index from the execution chunk.
                         all_photons_host.f[fin_k * num_rays + m_idx] = f_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i]; // Unpacks the synchronized state vector $f^\mu$ into the global Host matrix.
-                        for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                            const int history_component = history_step * 9 + fin_k;
-                            all_photons_host.f_history[history_component * num_rays + m_idx] =
-                                f_history_bridge[current][history_component * BUNDLE_CAPACITY + fin_i];
-                        }}
                     }} // END LOOP: for fin_i over active_chunks[current]
                 }} // END LOOP: for fin_k over 9
 
@@ -1073,11 +870,6 @@ static void write_plane_crossings(
                     all_photons_host.integration_param[m_idx] = integration_param_bridge[current][fin_i]; // Unpacks the synchronized integration parameter $\lambda$ into the global Host matrix.
                     all_photons_host.on_positive_side_of_non_terminal_plane_prev[m_idx] = on_pos_non_terminal_plane_prev_bridge[current][fin_i]; // Unpacks the synchronized nonterminal-plane boundary flag into the global Host matrix.
                     all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx] = on_pos_terminal_plane_prev_bridge[current][fin_i]; // Unpacks the synchronized terminal-plane boundary flag into the global Host matrix.
-                    for (int history_step = 0; history_step < {maximum_degree}; ++history_step) {{
-                        all_photons_host.integration_param_history[history_step * num_rays + m_idx] =
-                            integration_param_history_bridge[current][history_step * BUNDLE_CAPACITY + fin_i];
-                    }}
-                    {plane_unpack}
                 }} // END LOOP: for fin_i over active_chunks[current]
 
                 // 3. TimeSlotManager State Update (Cache-hot, strictly sequential)
@@ -1180,19 +972,45 @@ static void write_plane_crossings(
     //==========================================
     // Process terminal photon trajectories and extract final geometric intersections.
 
-        // Device-to-Host transfer: Extracts validated device-native blueprints $b_i$ containing geometric plane intersections.
+        // Copy accepted crossing steps to the host before analytical Brent trials.
+        {memcpy_async("plane_crossing_candidates", "d_plane_crossing_candidates", "sizeof(*plane_crossing_candidates) * num_rays", "cudaMemcpyDeviceToHost", "streams[0]")}
+        BHAH_DEVICE_SYNC();
+
+        // Device-to-Host transfer: Extracts initialized blueprint fields.
         {results_memcpy}
 
+        find_plane_crossings_brent_analytical(
+            commondata, num_rays, plane_crossing_candidates,
+            non_terminal_crossing_results, terminal_crossing_results);
+        for (long int ray = 0; ray < num_rays; ++ray) {{
+            const non_terminal_plane_crossing_result_t *non_terminal =
+                &non_terminal_crossing_results[ray];
+            terminal_plane_crossing_result_t *terminal =
+                &terminal_crossing_results[ray];
+            if (non_terminal->found) {{
+                results_buffer[ray].y_nt = non_terminal->y_local;
+                results_buffer[ray].z_nt = non_terminal->z_local;
+                results_buffer[ray].non_terminal_plane_lambda =
+                    non_terminal->physical_lambda;
+                results_buffer[ray].non_terminal_plane_t =
+                    non_terminal->coordinate_time;
+                results_buffer[ray].non_terminal_plane_signed_distance =
+                    non_terminal->plane_distance;
+            }}
+            if (terminal->found) {{
+                terminal->trajectory_stop_reason = all_photons_host.status[ray];
+                all_photons_host.status[ray] = STOP_CONDITION_TERMINAL_PLANE;
+                results_buffer[ray].y_t = terminal->y_local;
+                results_buffer[ray].z_t = terminal->z_local;
+                results_buffer[ray].L_f = terminal->physical_lambda;
+                results_buffer[ray].t_f = terminal->coordinate_time;
+            }}
+        }}
+
         write_plane_crossings(non_terminal_crossings_path, num_rays,
-            all_photons_host.non_terminal_plane_event_found,
-            all_photons_host.non_terminal_plane_event_degree,
-            all_photons_host.non_terminal_plane_event_f_intersect,
-            results_buffer, false);
+            non_terminal_crossing_results, terminal_crossing_results, false);
         write_plane_crossings(terminal_crossings_path, num_rays,
-            all_photons_host.terminal_plane_event_found,
-            all_photons_host.terminal_plane_event_degree,
-            all_photons_host.terminal_plane_event_f_intersect,
-            results_buffer, true);
+            non_terminal_crossing_results, terminal_crossing_results, true);
 
         // Kernel Launch: Processes escaped photons intersecting the celestial sphere $r > r_{{escape}}$.
         {calc_blueprint}
@@ -1258,51 +1076,28 @@ static void write_plane_crossings(
             // Host Memory Free: Purges bridge components supporting scatter logic mapped to PCIe DMA transfers.
             {free_pinned}(chunk_buffer[s]); // Purges the execution chunk mapping bridge.
             {free_pinned}(f_bridge[s]); // Purges the state vector $f^\mu$ bridge.
-            {free_pinned}(f_history_bridge[s]);
             {free_pinned}(integration_param_bridge[s]); // Purges the integration parameter $\lambda$ bridge.
             {free_pinned}(h_bridge[s]); // Purges the integration step size $h$ bridge.
             {free_pinned}(status_bridge[s]); // Purges the trajectory status bridge.
             {free_pinned}(retries_bridge[s]); // Purges the error rejection scalar bridge.
             {free_pinned}(on_pos_non_terminal_plane_prev_bridge[s]); // Purges the nonterminal plane boundary flag bridge.
             {free_pinned}(on_pos_terminal_plane_prev_bridge[s]); // Purges the terminal-plane boundary flag bridge.
-            {free_pinned}(integration_param_history_bridge[s]);
-            {free_pinned}(non_terminal_plane_event_found_bridge[s]); // Purges the nonterminal plane intersection lock bridge.
-            {free_pinned}(terminal_plane_event_found_bridge[s]); // Purges the terminal-plane intersection lock bridge.
-            {free_pinned}(non_terminal_plane_crossing_pending_bridge[s]);
-            {free_pinned}(terminal_plane_crossing_pending_bridge[s]);
-            {free_pinned}(non_terminal_plane_steps_past_bridge[s]);
-            {free_pinned}(terminal_plane_steps_past_bridge[s]);
-            {free_pinned}(non_terminal_plane_event_degree_bridge[s]);
-            {free_pinned}(terminal_plane_event_degree_bridge[s]);
-            {free_pinned}(non_terminal_plane_event_state_bridge[s]);
-            {free_pinned}(terminal_plane_event_state_bridge[s]);
 
             // Device Memory Free: Purges remaining VRAM operational pipeline scratchpads.
             {free_device}(d_f_bundle[s]); // Purges the state vector $f^\mu$ scratchpad.
             {free_device}(d_f_start_bundle[s]); // Purges the anchor state vector $f_{{start}}$ scratchpad.
             {free_device}(d_f_temp_bundle[s]); // Purges the temporary stage $f^\mu_{{temp}}$ scratchpad.
-            {free_device}(d_f_history_bundle[s]);
             {free_device}(d_metric_bundle[s]); // Purges the symmetric metric tensor $g_{{\mu\nu}}$ scratchpad.
             {free_device}(d_log_energy_bundle[s]); // Purges the common log-energy scratchpad.
             {free_device}(d_connection_bundle[s]); // Purges the Christoffel symbols $\Gamma^\alpha_{{\beta\gamma}}$ scratchpad.
             {free_device}(d_k_bundle[s]); // Purges the derivative tensor $\dot{{f}}^\mu$ scratchpad.
             {free_device}(d_h[s]); // Purges the active integration step sizing $h$ scratchpad.
             {free_device}(d_integration_param[s]); // Purges the total integration parameter progress $\lambda$ scratchpad.
+            {free_device}(d_integration_param_start[s]);
             {free_device}(d_status[s]); // Purges the current trajectory status limit scratchpad.
             {free_device}(d_retries[s]); // Purges the sequential error rejection scratchpad.
             {free_device}(d_on_pos_non_terminal_plane_prev[s]); // Purges the previous nonterminal plane boundary side scratchpad.
             {free_device}(d_on_pos_terminal_plane_prev[s]); // Purges the previous terminal-plane boundary side scratchpad.
-            {free_device}(d_integration_param_history[s]);
-            {free_device}(d_non_terminal_plane_event_found[s]); // Purges the nonterminal-plane intersection coordinate guard scratchpad.
-            {free_device}(d_terminal_plane_event_found[s]); // Purges the terminal-plane intersection coordinate guard scratchpad.
-            {free_device}(d_non_terminal_plane_crossing_pending[s]);
-            {free_device}(d_terminal_plane_crossing_pending[s]);
-            {free_device}(d_non_terminal_plane_steps_past[s]);
-            {free_device}(d_terminal_plane_steps_past[s]);
-            {free_device}(d_non_terminal_plane_event_degree[s]);
-            {free_device}(d_terminal_plane_event_degree[s]);
-            {free_device}(d_non_terminal_plane_event_state_bundle[s]);
-            {free_device}(d_terminal_plane_event_state_bundle[s]);
             {free_device}(d_chunk_buffer[s]); // Purges the absolute master indices $m_{{idx}}$ mapping scratchpad.
             {free_device}(d_norm_bundle[s]); // Purges the diagnostic outputs scratchpad.
 
@@ -1397,24 +1192,16 @@ static void write_plane_crossings(
 
         // Host Memory Free: Purges the primary Host array states $f^\mu$ and integration parameters $\lambda$.
         {free_pinned}(all_photons_host.f); // Purges the primary Host array state $f^\mu$.
-        {free_pinned}(all_photons_host.f_history);
         {free_pinned}(all_photons_host.integration_param); // Purges the primary Host array integration parameter $\lambda$.
         {free_pinned}(all_photons_host.h); // Purges the primary Host array integration step size $h$.
         {free_pinned}(all_photons_host.status); // Purges the primary Host array trajectory status enum.
         {free_pinned}(all_photons_host.rejection_retries); // Purges the primary Host array error rejection scalar.
         {free_pinned}(all_photons_host.on_positive_side_of_non_terminal_plane_prev); // Purges the primary Host array nonterminal plane boundary flag.
         {free_pinned}(all_photons_host.on_positive_side_of_terminal_plane_prev); // Purges the primary Host array terminal-plane boundary flag.
-        {free_pinned}(all_photons_host.integration_param_history);
-        {free_pinned}(all_photons_host.non_terminal_plane_event_found); // Purges the primary Host array nonterminal plane intersection lock.
-        {free_pinned}(all_photons_host.terminal_plane_event_found); // Purges the primary Host array terminal-plane intersection lock.
-        {free_pinned}(all_photons_host.non_terminal_plane_crossing_pending);
-        {free_pinned}(all_photons_host.terminal_plane_crossing_pending);
-        {free_pinned}(all_photons_host.non_terminal_plane_steps_past);
-        {free_pinned}(all_photons_host.terminal_plane_steps_past);
-        {free_pinned}(all_photons_host.non_terminal_plane_event_degree);
-        {free_pinned}(all_photons_host.terminal_plane_event_degree);
-        {free_pinned}(all_photons_host.non_terminal_plane_event_f_intersect);
-        {free_pinned}(all_photons_host.terminal_plane_event_f_intersect);
+        {free_pinned}(plane_crossing_candidates);
+        {free_pinned}(non_terminal_crossing_results);
+        {free_pinned}(terminal_crossing_results);
+        {free_device}(d_plane_crossing_candidates);
 
         // Device Memory Free: Purges the final single-pointer intersection blueprint buffer $b_i$.
         {free_device}(d_results_buffer); // Purges the intersection blueprint buffer $b_i$.

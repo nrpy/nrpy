@@ -18,13 +18,13 @@ Author: Dalton J. Moone
 """
 
 import argparse
+import math
 import os
 import shutil
 import sys
 
 import sympy as sp
 
-import nrpy.c_function as cfc
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.equations.general_relativity.geodesics import geodesics as geo
@@ -47,7 +47,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     calculate_and_fill_blueprint_data_universal,
     calculate_ode_rhs_kernel,
     event_detection_manager_kernel,
-    find_event_time_and_state,
+    find_plane_crossings_brent,
     handle_non_terminal_plane_intersection,
     handle_terminal_plane_intersection,
     main_batch,
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=(
             "Generate a tiled numerical-spacetime photon raytracing project. "
-            "The project emits v7 light-blueprint records with normalized "
+            "The project emits v8 light-blueprint records with normalized "
             "image-sample coordinates."
         ),
         epilog=(
@@ -222,13 +222,6 @@ if __name__ == "__main__":
         help="Width-side ray samples per tile; height-side count is derived.",
     )
     parser.add_argument(
-        "--plane-interpolation-degree",
-        type=int,
-        default=4,
-        metavar="DEGREE",
-        help="Maximum polynomial degree for centered plane crossings (at least 3; default: 4).",
-    )
-    parser.add_argument(
         "--tile-counts",
         nargs=2,
         type=int,
@@ -291,6 +284,20 @@ if __name__ == "__main__":
         type=float,
         metavar=("UX", "UY", "UZ"),
         help="Nonterminal-plane up direction; requires all nonterminal-plane options.",
+    )
+    parser.add_argument(
+        "--plane-crossing-residual-tolerance",
+        type=float,
+        default=1.0e-12,
+        metavar="DISTANCE",
+        help="Maximum absolute signed plane distance after Brent refinement; default: 1e-12.",
+    )
+    parser.add_argument(
+        "--plane-crossing-parameter-tolerance",
+        type=float,
+        default=1.0e-12,
+        metavar="WIDTH",
+        help="Maximum integration-parameter bracket width after Brent refinement; default: 1e-12.",
     )
     parser.add_argument(
         "--initial-step",
@@ -394,14 +401,20 @@ if __name__ == "__main__":
     )
     _require(args.scan_density >= 1, "--scan-density must be positive.")
     _require(
-        args.plane_interpolation_degree >= 3,
-        "--plane-interpolation-degree must be at least 3.",
-    )
-    _require(
         all(value >= 1 for value in args.tile_counts),
         "--tile-counts values must be positive.",
     )
     _require(args.escape_radius > 0.0, "--escape-radius must be positive.")
+    for name, value in (
+        ("--plane-crossing-residual-tolerance", args.plane_crossing_residual_tolerance),
+        (
+            "--plane-crossing-parameter-tolerance",
+            args.plane_crossing_parameter_tolerance,
+        ),
+    ):
+        _require(
+            math.isfinite(value) and value > 0.0, f"{name} must be finite and positive."
+        )
     terminal_plane_values = (
         args.terminal_plane_center,
         args.terminal_plane_normal,
@@ -535,8 +548,12 @@ if __name__ == "__main__":
     # Step 5: Register C functions in split-pipeline order.
     print(" -> Registering C functions and local CodeParameters...")
 
-    # Step 5.a: Register batch state definitions and initialization kernels.
+    # Step 5.a: Define photon states and plane records before their C functions.
     set_initial_conditions_kernel.register_photon_batch_structs()
+    find_plane_crossings_brent.register_plane_crossing_candidates()
+    find_plane_crossings_brent.register_plane_crossing_root()
+    handle_non_terminal_plane_intersection.register_non_terminal_plane_crossing_result()
+    handle_terminal_plane_intersection.register_terminal_plane_crossing_result()
     set_initial_conditions_kernel.set_initial_conditions_kernel(
         normalized_eom=normalized_eom
     )
@@ -600,21 +617,27 @@ if __name__ == "__main__":
         normalized_eom=normalized_eom,
     )
     rkf45_stage_update.rkf45_stage_update()
+    find_plane_crossings_brent.plane_crossing_brent_refine_candidate(
+        normalized_eom=normalized_eom,
+    )
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
         enable_numerical_time_window_step_cap=True,
         normalized_eom=normalized_eom,
         retry_interpolation_failures=True,
     )
 
-    # Step 5.e: Register event-detection and boundary-intersection kernels.
-    find_event_time_and_state.find_event_time_and_state(args.plane_interpolation_degree)
-    handle_terminal_plane_intersection.handle_terminal_plane_intersection()
-    handle_non_terminal_plane_intersection.handle_non_terminal_plane_intersection()
+    # Step 5.e: Register plane parameters and accepted-step crossing detection.
+    handle_terminal_plane_intersection.handle_terminal_plane_intersection(
+        normalized_eom=normalized_eom
+    )
+    handle_non_terminal_plane_intersection.handle_non_terminal_plane_intersection(
+        normalized_eom=normalized_eom
+    )
     event_detection_manager_kernel.event_detection_manager_kernel(
         normalized_eom=normalized_eom,
-        maximum_degree=args.plane_interpolation_degree,
-        capture_event_state=True,
-        numerical_time_limit=True,
+    )
+    find_plane_crossings_brent.find_plane_crossings_brent(
+        normalized_eom=normalized_eom,
     )
     calculate_and_fill_blueprint_data_universal.calculate_and_fill_blueprint_data_universal(
         normalized_eom=normalized_eom
@@ -627,7 +650,6 @@ if __name__ == "__main__":
     batch_integrator_numerical.batch_integrator_numerical(
         SPACETIME,
         coord_system_numerical,
-        args.plane_interpolation_degree,
         interpolation_method=interpolation_method,
         normalized_eom=normalized_eom,
         axisymmetric_about_z=axisymmetric_about_z,
@@ -638,17 +660,6 @@ if __name__ == "__main__":
         normalized_eom=normalized_eom,
         axisymmetric_about_z=axisymmetric_about_z,
     )
-
-    # Step 5.g: Remove helper registrations emitted only through other kernels.
-    # The event manager emits its local event helpers through prefunc, so keeping
-    # standalone registrations would add unused source files and prototypes.
-    internal_funcs_to_remove = [
-        "find_event_time_and_state_centered",
-        "handle_terminal_plane_intersection",
-        "handle_non_terminal_plane_intersection",
-    ]
-    for internal_func in internal_funcs_to_remove:
-        cfc.CFunction_dict.pop(internal_func, None)
 
     # Step 6: Override CodeParameter defaults before parfile generation.
     print(" -> Overriding desired photon CodeParameters before .par generation...")
@@ -800,6 +811,12 @@ if __name__ == "__main__":
         )
     for name, value in {**terminal_defaults, **non_terminal_defaults}.items():
         par.adjust_CodeParam_default(name, value)
+    par.adjust_CodeParam_default(
+        "plane_crossing_residual_tolerance", args.plane_crossing_residual_tolerance
+    )
+    par.adjust_CodeParam_default(
+        "plane_crossing_parameter_tolerance", args.plane_crossing_parameter_tolerance
+    )
 
     # Step 6.k: Set nonterminal-plane tiling defaults.
     par.adjust_CodeParam_default("tiles_width", args.tile_counts[0])
@@ -951,8 +968,8 @@ if __name__ == "__main__":
         "BHAH_DEVICE_SYNC()": "#define BHAH_DEVICE_SYNC() do {} while(0)\n",
     }
 
-    # Step 7.b: Match the combined raytracing payload layout, which uses
-    # NGHOSTS = 3.
+    # Step 7.b: The numerical reader uses the .bin grid metadata for ghost-zone
+    # offsets; the finite-difference NGHOSTS below does not set those offsets.
     BHaH_defines_h.output_BHaH_defines_h(
         project_dir=project_dir,
         enable_rfm_precompute=False,

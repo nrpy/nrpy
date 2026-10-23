@@ -281,7 +281,7 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
   // coefficients on the two-dimensional native stencil.
   const int interp_order = (int)interp_order_long;
   const int phi_plane = target_phi < (REAL)0.0 ? 0 : 1;
-  const int phi_plane_storage_index = NGHOSTS + phi_plane;
+  const int phi_plane_storage_index = params->numerical_spacetime_nghosts + phi_plane;
   const REAL phi_ref = (REAL)context->stored_phi_samples[phi_plane];
 
   REAL inv_denom[interp_order];
@@ -301,12 +301,12 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
   for (int u = 0; u < interp_order; u++) {
     const int interp_0_raw = selected_center_idx[0] + (u - n_interp_ghosts);
     interp_0_storage_stencil[u] = interp_0_raw;
-    src_interp_0_stencil[u] = (REAL)(params->xxmin0 + (((interp_0_raw - NGHOSTS) + 0.5) * params->dxx0));
+    src_interp_0_stencil[u] = (REAL)(params->xxmin0 + (((interp_0_raw - params->numerical_spacetime_nghosts) + 0.5) * params->dxx0));
   } // END LOOP: for u over first interpolation-dimension
   for (int v = 0; v < interp_order; v++) {
     const int interp_1_raw = selected_center_idx[2] + (v - n_interp_ghosts);
     interp_1_storage_stencil[v] = interp_1_raw;
-    src_interp_1_stencil[v] = (REAL)(params->xxmin2 + (((interp_1_raw - NGHOSTS) + 0.5) * params->dxx2));
+    src_interp_1_stencil[v] = (REAL)(params->xxmin2 + (((interp_1_raw - params->numerical_spacetime_nghosts) + 0.5) * params->dxx2));
   } // END LOOP: for v over second interpolation-dimension
 
   compute_inv_denom(interp_order, inv_denom);

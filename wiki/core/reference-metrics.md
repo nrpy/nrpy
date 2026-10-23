@@ -5,19 +5,58 @@
 
 ## Summary
 
-`ReferenceMetric` builds and stores coordinate-system-specific reference-metric data used by NRPy equations and infrastructures. It sets coordinate maps, scale factors, reference metric tensors, inverse metrics, determinant derivatives, rescaling factors, and reference Christoffel symbols. `reference_metric` is a lazy `rfm_dict` cache that builds base and precompute variants on demand. The module-level validation path processes every supported coordinate system into trusted dictionaries and includes a separate inverse-map check for `SinhSymTP`.
+`ReferenceMetric` builds and stores coordinate-system-specific reference-metric data used by NRPy equations and infrastructures. It sets coordinate maps, scale factors, reference metric tensors, inverse metrics, determinant derivatives, rescaling factors, and reference Christoffel symbols. `reference_metric` is a lazy `rfm_dict` cache that builds base and precompute variants on demand. The module-level validation path processes the names in `supported_CoordSystems` into trusted dictionaries and includes a separate inverse-map check for `SinhSymTP`.
 
 ## Detail
 
-`ReferenceMetric` is initialized with a coordinate-system name and an `enable_rfm_precompute` flag. The module parameter `CoordSystem_to_register_CodeParameters` controls constructor CodeParameter registration: when this parameter equals one coordinate-system name, constructor-registered coordinate-system CodeParameters are added to the global CodeParameter dictionary only for that system, and when it equals `All`, all systems register globally. This guard prevents multipatch or multi-system setup from polluting the global CodeParameter namespace unintentionally.
+`ReferenceMetric` is initialized with a coordinate-system name and an
+`enable_rfm_precompute` flag. `CoordSystem_to_register_CodeParameters` sets
+`add_CodeParams_to_glb_code_params_dict` when its value is `All` or matches the
+requested coordinate system. Only registration calls that receive that flag
+are restricted by this selection. Shared parameters, `register_pi()`,
+`register_sqrt1_2()`, and the fisheye provider's `fisheye_*` registrations do not
+use it. Constructing an unselected fisheye metric can therefore still change the
+global CodeParameter dictionary.
+
+Claim evidence:
+- Claim: Coordinate-system selection controls only registrations that receive `add_CodeParams_to_glb_code_params_dict`; it does not suppress shared, special-constant, or fisheye-provider registrations.
+- Role: descriptive behavior
+- Deciding authority: [reference_metric.py](../../nrpy/reference_metric.py), `ReferenceMetric.__init__`, `register_pi`, `register_sqrt1_2`, and `general_rfm_like`
+- Corroboration: [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py), `GeneralRFMFisheye.__init__`, registers provider parameters without the coordinate-selection flag.
 
 Every constructor registers or uses the shared reference-metric parameters `enable_grid_physical_size`, `grid_physical_size`, `grid_hole_radius`, and `CoordSystemName`. It creates symbolic grid coordinates `xx`, declares Cartesian symbols, and initializes mappings such as `xx_to_Cart`, `Cart_to_xx`, `xxSph`, orthogonal scale factors, unit vectors, grid bounds, hole-radius dictionaries, physical-size dictionaries, and rescaling arrays.
 
-Coordinate-system dispatch is by coordinate family. Names beginning with `GeneralRFM` use `general_rfm_like()`. Names containing `Cartesian`, `Spherical`, `Wedge`, `SymTP`, or `Cylindrical` route to Cartesian-like, spherical-like, wedge-like, SymTP/prolate-spheroidal, or cylindrical-like setup paths. Unknown names raise `ValueError`.
+Coordinate-system dispatch is by coordinate family. Names beginning with `GeneralRFM` use `general_rfm_like()`. Names containing `Cartesian`, `Spherical`, `Wedge`, `SymTP`, or `Cylindrical` route to Cartesian-like, spherical-like, wedge-like, SymTP/prolate-spheroidal, or cylindrical-like setup paths.
 
 After coordinate setup, the class computes Jacobians to and from Cartesian and spherical coordinates; rescaling arrays `ReU`, `ReD`, and `ReDD`; the reference metric `ghatDD`; inverse metric `ghatUU`; determinant `detgammahat`; determinant derivatives `detgammahatdD` and `detgammahatdDD`; derivatives of the rescaling arrays; reference-metric derivatives `ghatDDdD` and `ghatDDdDD`; and reference Christoffel quantities `GammahatUDD` and `GammahatUDDdD`.
 
-Supported coordinate systems are `Spherical`, `SinhSpherical`, `SinhSphericalv2n2`, `Cartesian`, `SinhCartesian`, `Cylindrical`, `SinhCylindrical`, `SinhCylindricalv2n2`, `SymTP`, `SinhSymTP`, `LWedgeHSinhSph`, `UWedgeHSinhSph`, `RingHoleySinhSpherical`, `HoleySinhSpherical`, and `GeneralRFM_fisheyeN2`. `unittest_CoordSystems` is a smaller regression subset: `SinhSymTP`, `HoleySinhSpherical`, `Cartesian`, and `SinhCylindricalv2n2`.
+The module-level validation list `supported_CoordSystems` contains `Spherical`, `SinhSpherical`, `SinhSphericalv2n2`, `Cartesian`, `SinhCartesian`, `Cylindrical`, `SinhCylindrical`, `SinhCylindricalv2n2`, `SymTP`, `SinhSymTP`, `LWedgeHSinhSph`, `UWedgeHSinhSph`, `RingHoleySinhSpherical`, `HoleySinhSpherical`, and `GeneralRFM_fisheyeN2`. `unittest_CoordSystems` is a smaller regression subset: `SinhSymTP`, `HoleySinhSpherical`, `Cartesian`, and `SinhCylindricalv2n2`.
+
+That validation list does not enumerate every name accepted by coordinate
+setup. The implementation also includes `SinhCartesianSplitOffZ`, the
+`SinhSphericalv2n*` and `SinhCylindricalv2n*` families with even exponents at least
+two, and `GeneralRFM_fisheyeN*` providers with positive transition counts.
+Accepting a name does not mean that the module's trusted-value loop exercises it.
+Unrecognized coordinate families raise `ValueError`. A `GeneralRFM` name that does not begin with `GeneralRFM_fisheyeN` retains placeholder provider metadata. Names beginning with that prefix must have the required numeric suffix and a positive transition count; malformed suffixes raise `ValueError`.
+
+Claim evidence:
+- Claim: `supported_CoordSystems` selects the module's trusted-value comparisons; coordinate dispatch accepts additional implemented variants and some `GeneralRFM` names with placeholder provider metadata, so the list is neither an exhaustive accepted-name list nor proof of validation for every accepted variant.
+- Role: descriptive behavior
+- Deciding authority: [reference_metric.py](../../nrpy/reference_metric.py), `supported_CoordSystems`, `ReferenceMetric.__init__`, `cartesian_like`, `Sinhv2`, `general_rfm_like`, and the module `__main__` loop
+- Corroboration: [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py), `GeneralRFMFisheye.__init__`, checks the positive transition count independently of that list.
+
+The `SinhSphericalv2n*` radial inverse and the `SinhCylindricalv2n*` radial and
+axial inverses require numerical root finding. Their `Cart_to_xx` entries contain
+the string `"NewtonRaphson"`, with `requires_NewtonRaphson_for_Cart_to_xx=True`
+and residuals in `NewtonRaphson_f_of_xx`. These entries are not analytic SymPy
+expressions. BHaH's [coordinate conversion](../infrastructures/bhah/grids-coordinates-reference-metrics-and-boundaries.md)
+uses this information when generating the Cartesian-to-grid map.
+
+Claim evidence:
+- Claim: The spherical v2 radial inverse and cylindrical v2 radial and axial inverses use `"NewtonRaphson"` markers and residual expressions rather than analytic inverse-map expressions.
+- Role: descriptive behavior
+- Deciding authority: [reference_metric.py](../../nrpy/reference_metric.py), `spherical_like` and `cylindrical_like`
+- Corroboration: [xx_tofrom_Cart.py](../../nrpy/infrastructures/BHaH/xx_tofrom_Cart.py), `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, generates the numerical inversion.
 
 `rfm_dict.__getitem__()` lazily builds reference metrics. If a requested key is missing, it strips any `_rfm_precompute` suffix, builds the base `ReferenceMetric(CoordSystem, enable_rfm_precompute=False)`, caches it under the base key, and also caches a precompute key. Non-`GeneralRFM` systems get a separate `ReferenceMetric(CoordSystem, enable_rfm_precompute=True)` under `CoordSystem + "_rfm_precompute"`; `GeneralRFM` precompute keys map to the same base object because GeneralRFM data is already gridfunction-provided.
 
@@ -38,11 +77,25 @@ Claim evidence:
 
 When precompute is enabled for non-`GeneralRFM` systems, hatted quantities are first expressed through generic function forms such as `f0_of_xx0_funcform`. The replacement pass rewrites functions and derivatives into rigid NRPy variable names such as base function names plus `__D...` derivative suffixes, folds derivatives that evaluate to coordinate-independent values, and skips creating a separate precompute object for `GeneralRFM`.
 
-`register_pi()` and `register_sqrt1_2()` provide special constants as CodeParameters named `PI` and `SQRT1_2`, with values emitted into generated CodeParameters headers and excluded from parfiles.
+`register_pi()` and `register_sqrt1_2()` register `REAL` CodeParameters named
+`PI` and `SQRT1_2`, with numeric default strings and `add_to_parfile=False`.
+In BHaH, generated default-initialization functions assign these values to the
+parameter struct; `set_CodeParameters*.h` supplies local reads of the stored
+parameters rather than their numeric initialization.
+
+Claim evidence:
+- Claim: `PI` and `SQRT1_2` are registered parameter defaults excluded from parfiles; BHaH emits numeric assignments in default-initialization functions and local parameter reads in declaration headers.
+- Role: descriptive behavior
+- Deciding authority: [reference_metric.py](../../nrpy/reference_metric.py), `register_pi` and `register_sqrt1_2`; [CodeParameters.py](../../nrpy/infrastructures/BHaH/CodeParameters.py), `register_CFunctions_params_commondata_struct_set_to_default` and `write_CodeParameters_h_files`
+- Corroboration: none available; this statement follows the registrations and their defining output functions, without a separate runtime initialization test.
 
 In the module `__main__` validation path, doctests run first. Then every entry in `supported_CoordSystems` is processed through `validate_expressions.process_dictionary_of_expressions()` and compared or regenerated through `compare_or_generate_trusted_results()`. A separate `SinhSymTP` validation substitutes `Cart_to_xx` into `xx_to_Cart` and checks each Cartesian residual with `check_zero()`.
 
 ## Sources
+
+- [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py) - `GeneralRFMFisheye.__init__`
+- [CodeParameters.py](../../nrpy/infrastructures/BHaH/CodeParameters.py) - `register_CFunctions_params_commondata_struct_set_to_default`, `write_CodeParameters_h_files`
+- [xx_tofrom_Cart.py](../../nrpy/infrastructures/BHaH/xx_tofrom_Cart.py) - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`
 
 - [nrpy/reference_metric.py](../../nrpy/reference_metric.py) - `ReferenceMetric`, `CoordSystem_to_register_CodeParameters`, `reference_metric`, `rfm_dict`
 - [nrpy/reference_metric.py](../../nrpy/reference_metric.py) - `supported_CoordSystems`, `unittest_CoordSystems`

@@ -20,6 +20,17 @@ source-side truth and containment; it does not imply that NRPy source was fixed.
 | CONTR-0009 | The Dendro BSSN leaf claimed the BSSN constraint builder "removes"/"deletes" the newly added AUX gridfunction names it does not write. The builder deletes nothing; it suppresses the two registrations at the source by setting `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` to `False` across the factory construction and restoring it in a `finally` block. | resolved | [`bssn-application-wiring.md`](infrastructures/dendro/bssn-application-wiring.md), "The DIAG-before-factory ordering, and why" and its claim-evidence block (superseded wording) | [`BSSN_constraints.py`](../nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py), the `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` save/set/restore around the equation construction | For descriptive current behavior the code decides. No Dendro builder deletes a registered name from `glb_gridfcs_dict`. The flag is a construction-parameter memo key, so setting it forces a rebuild that never registers the two names. The `NUM_AUX_GFS = 0` outcome the leaf reports is unaffected. | [BSSN Application Wiring](infrastructures/dendro/bssn-application-wiring.md) | The page stays `provisional`: one bounded mechanism sentence and its claim-evidence block are rewritten, and the page's routed answer about what the BSSN builders do is unchanged. | Dendro owner; trigger when the AUX suppression mechanism, the `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` flag, or the emitted `NUM_AUX_GFS` changes. | Inspect `glb_gridfcs_dict` mutations in Dendro owners; generate the complete BSSN generated application and verify `NUM_AUX_GFS = 0`; build it and run authorized MPI diagnostics. | The superseded wording attested only the outcome, not the mechanism. |
 | CONTR-0010 | The Dendro BSSN leaf called the private-builder-per-formulation layout "BHaH's own arrangement". BHaH's module holding both formulations' RHS systems holds no private builder and no private registrar. | resolved | [`bssn-application-wiring.md`](infrastructures/dendro/bssn-application-wiring.md), the Summary's layout paragraph (superseded wording) | [BHaH rhs_eval.py](../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` | The code decides. BHaH's module holding both formulations' RHS systems uses public `register_CFunction_rhs_eval`, branches inline on `enable_fCCZ4`, and holds no private builder or registrar. Dendro's module layout does follow BHaH; the split inside the module does not. | [BSSN Application Wiring](infrastructures/dendro/bssn-application-wiring.md) | The page stayed `provisional` for this row: the layout paragraph is rewritten to separate the conforming module layout from the Dendro-only intra-module split, and the rest of the page is unaffected. CONTR-0011 subsequently opened and was resolved by consolidation. | Dendro owner; trigger when either Dendro leaf describes the intra-module layout, or when BHaH's `rhs_eval.py` gains a private per-formulation builder. | Require `rg '^def ' nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py` to identify only `register_CFunction_rhs_eval`, and require the Dendro BSSN leaf to attribute the per-formulation split to no peer. | The superseded Dendro wording conflated module layout with intra-module structure. |
 | CONTR-0011 | The Dendro RHS and constraint modules duplicated private builders and registrars per formulation without a host requirement. | resolved | [New Infrastructure Conformance](infrastructures/new-infrastructure-conformance.md), `### Conformance is one-way` and `## Summary` | [rhs_eval.py](../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_constraints.py](../nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`; [fCCZ4_constraints.py](../nrpy/infrastructures/Dendro/general_relativity/fCCZ4_constraints.py), `register_CFunction_fCCZ4_constraints` | Each generated operation has one public registrar. Formulation-specific constraint equations remain in their named modules. | [BSSN Application Wiring](infrastructures/dendro/bssn-application-wiring.md) | The affected page returns to provisional: this conflict is closed, while broader runtime qualification remains explicitly scoped. | Dendro owner; trigger when either module's per-formulation expression assembly or registrar structure changes, when a host requirement for a split is identified, or when the shared registrar changes. | Inspect for private per-formulation builder or registrar pairs. Generate and build both complete generated applications, then run authorized MPI diagnostics. | Resolved by one public registrar per operation. |
+| CONTR-0012 | Python codegen and ordinary scalar C codegen expose substitution options, but a surviving postprocessed CSE temporary makes a nonempty substitution dictionary raise `TypeError`. | contested | [py_codegen.py](../nrpy/py_codegen.py), `PyCodeGen` and `py_codegen` option and returned-code descriptions; [c_codegen.py](../nrpy/c_codegen.py), `CCodeGen` and `c_codegen` substitution option | [py_codegen.py](../nrpy/py_codegen.py) and [c_codegen.py](../nrpy/c_codegen.py), assignment to `common_subexpression[1]`; [cse_preprocess_postprocess.py](../nrpy/helpers/cse_preprocess_postprocess.py), `cse_postprocess` tuple entries | The implementation decides current behavior; tuple assignment prevents code return for these combinations. The KB documents the failure without treating it as successful substitution. | [Python Codegen](core/python-codegen.md); [C Codegen](core/c-codegen.md) | Both pages are `contested` because a public option combination fails. | C and Python codegen sources; recheck when substitution handling or CSE replacement representation changes. | For Python and ordinary non-FD, non-SIMD C generation, retain a common subexpression and supply a nonempty substitution dictionary with matching and nonmatching keys; require code return and agreement with the intended substituted expressions. Retain no-CSE and no-temporary cases. | This claim does not extend the scalar C failure to SIMD or FD paths. |
+| CONTR-0013 | The public Python-codegen description maps input expressions to output names, but an output name could overwrite a CSE temporary or input symbol required by a later output. | resolved | [py_codegen.py](../nrpy/py_codegen.py), `py_codegen` input/output description | [py_codegen.py](../nrpy/py_codegen.py), numbered temporary construction and sequential output assignment | The implementation decides. `py_codegen()` now parses each printed output right-hand side and raises `ValueError` when an earlier output name is a Python name that a later one reads, with CSE enabled or disabled. This covers CSE temporaries, input symbols, identifiers renamed by `NRPyJaxPrinter` such as `lambda_`, and printer-emitted names such as `jnp`, so it never returns assignments that read an overwritten name. Names that no later right-hand side reads remain accepted. | [Python Codegen](core/python-codegen.md) | The inline marker is removed. The page stays `contested` only because of CONTR-0012. | Python-codegen source; recheck when temporary naming, output assignment order, `_check_no_read_after_overwrite`, or `NRPyJaxPrinter` identifier renaming changes. | Generate `[x**3 + sin(x**3), x**3]` with output names `["tmp0", "b"]`: with CSE enabled, require `ValueError`, because the second output reads the temporary `tmp0`; with CSE disabled, no temporary exists, so require returned assignments that evaluate to `x**3 + sin(x**3)` and `x**3` (at `x = 2`, `8 + sin(8)` and `8`). Generate `[x + 1, 2*x]` with `["x", "y"]` with CSE enabled and disabled; require `ValueError` in each case. Generate `[1, 2*lambda]` with `["lambda_", "b"]` with CSE enabled and disabled; require `ValueError`. Generate `[2*x, x + 1]` with `["y", "x"]`; require the unchanged assignments `y = 2*x` and `x = x + 1`. | Resolved by rejection, not by renaming temporaries; generated variable names are unchanged. The `py_codegen` doctests cover the resolution test. The check reads names from the printed code, so printer renaming of reserved words is covered. |
+| CONTR-0014 | CSE sorting can preserve input-list order for tied structural keys, and unchecked generated constant or temporary names can capture input symbols. | contested | [cse_preprocess_postprocess.py](../nrpy/helpers/cse_preprocess_postprocess.py), documented helper behavior | [cse_preprocess_postprocess.py](../nrpy/helpers/cse_preprocess_postprocess.py), `cse_preprocess, sort_cse_output_deterministically` | The implementation decides current behavior; the documented general guarantee is not established for these inputs. | [CSE And Printer Support](core/helpers/cse-and-printer-support.md); [C Codegen](core/c-codegen.md) | Pages are `contested`: ordering and expression preservation require qualifications. | Helper sources; recheck when the named implementation or its documented guarantee changes. | Permute replacements for `x**y` and `y**x` and require equal renamed output. Restore preprocessed constants in `2*x + _Integer_2`, and expand renamed output for `([(a0,x**3)], [a0+tmp0])`; require the original expressions or explicit collision rejection. | Source limitations remain; this KB correction does not change the implementation. |
+| CONTR-0015 | SIMD symbolic rewrites can omit the reciprocal numerator constant or emit Pow/Cbrt/Log/Sign names missing from the header. | contested | [simd.py](../nrpy/helpers/simd.py), `expr_convert_to_simd_intrins` | [simd_intrinsics.h](../nrpy/helpers/simd_intrinsics.h), instruction-set definitions | The implementation decides current behavior; missing numerator registration and definitions prevent a general supported-expression guarantee. | [SIMD And Intrinsic Support](core/helpers/simd-and-intrinsic-support.md) | Page is `contested`: missing constants and definitions affect generated calculations. | Helper sources; recheck when the named implementation or its documented guarantee changes. | Verify declared constants for negative half-powers and compile supported Pow/Cbrt/Log/Sign expressions. | Including simd_intrinsics.h alone does not supply the missing SIMD names. |
+| CONTR-0016 | The symbol-name helper claims SymPy free-symbol equivalence but removes free occurrences of bound-symbol names in limits or substitution points. | contested | [expression_utils.py](../nrpy/helpers/expression_utils.py), documented helper behavior | [expression_utils.py](../nrpy/helpers/expression_utils.py), `_get_free_symbol_names_cached, get_params_commondata_symbols_from_expr_list` | The implementation decides current behavior; the documented general guarantee is not established for these inputs. | [Symbolic Expression Utilities](core/helpers/symbolic-expression-utilities.md) | Page is `contested`: symbol discovery, rational conversion, and product behavior each have source discrepancies. | Helper sources; recheck when the named implementation or its documented guarantee changes. | Compare names with SymPy free_symbols for Integral, Lambda, and Subs, including `Integral(x,(x,0,x))`; verify parameter grouping retains registered free names. | Source limitations remain; this KB correction does not change the implementation. |
+| CONTR-0017 | f2r claims high-precision float conversion but appends zeros after scientific-notation exponents, changing values or creating invalid input; padding cannot recover lost float precision. | contested | [float_to_rational.py](../nrpy/helpers/float_to_rational.py), documented helper behavior | [float_to_rational.py](../nrpy/helpers/float_to_rational.py), `f2r` | The implementation decides current behavior; the documented general guarantee is not established for these inputs. | [Symbolic Expression Utilities](core/helpers/symbolic-expression-utilities.md) | Page is `contested`: multiple helper guarantees require qualifications. | Helper sources; recheck when the named implementation or its documented guarantee changes. | Require scientific and fixed-point strings for the same decimal value to produce equal rationals; cover `1e-7`, `1.2e-7`, and explicit padding values. | Source limitations remain; this KB correction does not change the implementation. |
+| CONTR-0018 | product describes Cartesian tuples but flattens iterable-valued elements, consumes one-shot inner iterators, and mishandles single scalar-valued inputs and repeat=0. | contested | [functional.py](../nrpy/helpers/functional.py), documented helper behavior | [functional.py](../nrpy/helpers/functional.py), `product` | The implementation decides current behavior; the documented general guarantee is not established for these inputs. | [Symbolic Expression Utilities](core/helpers/symbolic-expression-utilities.md) | Page is `contested`: multiple helper guarantees require qualifications. | Helper sources; recheck when the named implementation or its documented guarantee changes. | Compare with itertools.product for reusable and one-shot inputs, iterable-valued elements, single integer-valued inputs, and repeat=0. | Source limitations remain; this KB correction does not change the implementation. |
+| CONTR-0019 | Kernel call generation corrupts empty-argument calls; the CUDA wrapper ignores cfunc_type and may leave rewritten parameter accesses without a declared streamid. | contested | [utilities.py](../nrpy/helpers/parallelization/utilities.py), documented helper behavior | [gpu_kernel.py](../nrpy/helpers/parallelization/gpu_kernel.py), `GPUKernel.c_function_call and GPUKernel.__init__` | The implementation decides current behavior; the documented general guarantee is not established for these inputs. | [Loop Kernel And Device Helpers](core/helpers/loop-kernel-and-device-helpers.md) | Page is `contested`: public wrapper inputs can produce invalid calls or a different return type. | Helper sources; recheck when the named implementation or its documented guarantee changes. | Generate and compile an empty-argument host call, a CUDA helper with a requested non-void return type, and custom CUDA launch settings with parameter reads; require a valid call, the requested return type, and a declared streamid. | Source limitations remain; this KB correction does not change the implementation. |
+| CONTR-0020 | Coordinate-bound helper docstrings promise Boolean comparisons, but shifted quotients yield fractional values, shifted thresholds, and singular denominators; the SEOBNR ringdown frequency inherits those weights. | contested | [Min_Max_and_Piecewise_Expressions.py](../nrpy/equations/grhd/Min_Max_and_Piecewise_Expressions.py), coordinate-helper docstrings | [Min_Max_and_Piecewise_Expressions.py](../nrpy/equations/grhd/Min_Max_and_Piecewise_Expressions.py), coordinate-helper return expressions | Return expressions decide current behavior; exact comparison semantics are not guaranteed. | [GRHD](equations/grhd.md); [Precessing Rotations And Ringdown](equations/seobnr/precessing-rotations-and-ringdown.md) | GRHD remains `confirmed`: one bounded helper claim is qualified inline. The SEOBNR page is `contested` because the frequency, Euler angles, and QNM shifts inherit the discrepancy. | GRHD comparison helpers and SEOBNR ringdown constructor; recheck on changes to offsets, formulas, or documented comparison semantics. | Interpret nrpyAbs as absolute value and compare with true predicates on both sides of zero and at plus/minus TINYDOUBLE; require finite 0-or-1 results matching the predicates or an explicitly restricted interface. Verify the corresponding ringdown frequency weights and downstream angle/QNM expressions. | Trusted samples replacing nrpyAbs with sin, cos, or exp do not decide these semantics. |
+| CONTR-0021 | Wave constructors can leave required gridfunctions or CodeParameters unregistered when existing names trigger incomplete or incorrect guards. | contested | [WaveEquation_RHSs.py](../nrpy/equations/wave_equation/WaveEquation_RHSs.py), constructor registration comments; [WaveEquation_Solutions_InitialData.py](../nrpy/equations/wave_equation/WaveEquation_Solutions_InitialData.py), constructor registration comments | [WaveEquation_RHSs.py](../nrpy/equations/wave_equation/WaveEquation_RHSs.py), [WaveEquationCurvilinear_RHSs.py](../nrpy/equations/wave_equation/WaveEquationCurvilinear_RHSs.py), and [WaveEquation_Solutions_InitialData.py](../nrpy/equations/wave_equation/WaveEquation_Solutions_InitialData.py), constructors; [params.py](../nrpy/params.py), CodeParameter registration | Actual registry checks decide current behavior; callers must provide compatible entries when reusing state. | [Wave Equation](equations/wave-equation.md) | Page is `contested`: independent gridfunction and parameter-registration conditions invalidate unconditional setup claims. | Wave equation constructors; recheck when registry guards or registration validation changes. | In separate isolated processes, pre-register uu without vv, or with incompatible metadata, and pre-register NRPy parameters named wavespeed or time; require compatible gridfunction and CodeParameter entries or explicit rejection. Keep a clean-registry case. | Curvilinear RHS wavespeed registration is unconditional; its uu-only gridfunction guard still applies. |
+| CONTR-0022 | A zero Lorentz boost should be the identity, but direct zero-velocity construction produces undefined spatial entries. | contested | [LorentzBoost.py](../nrpy/equations/general_relativity/LorentzBoost.py), documented Lorentz-transformation purpose | [LorentzBoost.py](../nrpy/equations/general_relativity/LorentzBoost.py), `_compute_LorentzMatrix` spatial block | The implemented division by squared speed decides current behavior; zero input is not handled by its identity limit. | [Metric Conversions And Matter](equations/general-relativity/metric-conversions-and-matter.md) | Page remains `confirmed`: this is one bounded helper defect, qualified inline; other metric and matter conversions remain valid. | LorentzBoost constructor; recheck when speed-domain handling or the spatial matrix formula changes. | Construct the direct zero boost and its inverse; require finite identity matrices and unchanged transformed tensors, retaining nonzero subluminal cases. | This KB correction documents the source defect without changing Python. |
 
 ### CONTR-0001
 
@@ -210,3 +221,124 @@ Claim evidence:
 - Role: normative rule
 - Deciding authority: [new-infrastructure-conformance.md](infrastructures/new-infrastructure-conformance.md), `Conformance is one-way`; [rhs_eval.py](../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_constraints.py](../nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`; [fCCZ4_constraints.py](../nrpy/infrastructures/Dendro/general_relativity/fCCZ4_constraints.py), `register_CFunction_fCCZ4_constraints`
 - Corroboration: [BHaH rhs_eval.py](../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), inline formulation branching; complete generated BSSN and fCCZ4 project tests exercise both consolidated paths
+
+
+### CONTR-0012
+
+The postprocessed CSE replacements are tuples, but a nonempty
+`postproc_substitution_dict` makes `py_codegen()` assign a new right-hand side
+into `common_subexpression[1]`. The ordinary non-FD, non-SIMD CSE loop in
+`c_codegen()` performs the same assignment. A surviving temporary therefore causes
+`TypeError` even when no substitution key matches. The no-CSE path and the
+final-expression path without surviving temporaries do not perform that tuple
+assignment. This is an implementation limitation, not evidence of successful
+support for every combination of options.
+
+Claim evidence:
+- Claim: In Python codegen and ordinary non-FD, non-SIMD C codegen, a nonempty substitution dictionary and a surviving postprocessed CSE temporary cause tuple-item assignment to raise `TypeError`; the no-CSE and no-surviving-temporary cases avoid that assignment.
+- Role: descriptive behavior
+- Deciding authority: [py_codegen.py](../nrpy/py_codegen.py), `py_codegen`, and [c_codegen.py](../nrpy/c_codegen.py), `c_codegen`, scalar common-subexpression substitution loops
+- Corroboration: [cse_preprocess_postprocess.py](../nrpy/helpers/cse_preprocess_postprocess.py), `cse_postprocess`, constructs the returned replacement entries as tuples.
+
+### CONTR-0013
+
+Resolved. `py_codegen()` emits output assignments sequentially into one Python
+namespace. Previously, for `[x**3 + sin(x**3), x**3]` and targets
+`["tmp0", "b"]`, the first output assignment replaced the temporary that the
+second still read, and an output could likewise overwrite an input symbol read
+later. `_check_no_read_after_overwrite` now raises `ValueError` whenever a
+later printed right-hand side reads an earlier output name, on the CSE and
+no-CSE paths, before any code is returned. The test is whether a later
+right-hand side reads the name, not how the output is spelled: with CSE
+disabled, the `tmp0` example creates no temporary, so its second output reads
+only `x` and the request is accepted with correct values. The input-symbol
+example `[x + 1, 2*x]` with targets `["x", "y"]` is rejected on both paths.
+Requests in which no later right-hand side reads an output name emit the same
+assignments as before; the generated SEBOBv1 coefficient module is unchanged. The fix rejects
+colliding names rather than renaming temporaries, so generated variable names
+do not change.
+
+The check parses each printed output right-hand side with Python's `ast`
+module, so it compares output names with the names the generated code reads,
+not with SymPy symbol names. A symbol named `lambda` prints as `lambda_`, so
+`[sp.Integer(1), 2*sp.Symbol("lambda")]` with output names `["lambda_", "b"]`
+is rejected with CSE enabled or disabled. Printer-emitted names such as `jnp`
+are covered the same way.
+
+Claim evidence:
+- Claim: Python codegen raises `ValueError` when an earlier output name is a Python name read by a later printed output right-hand side, covering CSE temporaries, input symbols, printer-renamed identifiers, and printer-emitted names, and otherwise emits unchanged assignments.
+- Role: descriptive behavior
+- Deciding authority: [py_codegen.py](../nrpy/py_codegen.py), `_check_no_read_after_overwrite` and its calls in `py_codegen`, and the module-level `printer`
+- Corroboration: none available; the `py_codegen` doctests in the deciding module exercise the rejected and accepted cases but are not a separate source.
+
+### CONTR-0014
+
+Claim evidence:
+- Claim: CSE sorting can preserve input-list order for tied structural keys, and unchecked generated constant or temporary names can capture input symbols.
+- Role: descriptive behavior
+- Deciding authority: [cse_preprocess_postprocess.py](../nrpy/helpers/cse_preprocess_postprocess.py), `cse_preprocess, sort_cse_output_deterministically`
+- Corroboration: `none available`; the stated counterexamples follow from the implementation, while its docstring or paired symbolic definition supplies the intended behavior.
+
+### CONTR-0015
+
+Claim evidence:
+- Claim: SIMD symbolic rewrites can omit the reciprocal numerator constant or emit Pow/Cbrt/Log/Sign names missing from the header.
+- Role: descriptive behavior
+- Deciding authority: [simd.py](../nrpy/helpers/simd.py), `expr_convert_to_simd_intrins`; [simd_intrinsics.h](../nrpy/helpers/simd_intrinsics.h), instruction-set definitions
+- Corroboration: `none available`; the stated counterexamples follow from the implementation, while its docstring or paired symbolic definition supplies the intended behavior.
+
+### CONTR-0016
+
+Claim evidence:
+- Claim: The symbol-name helper claims SymPy free-symbol equivalence but removes free occurrences of bound-symbol names in limits or substitution points.
+- Role: descriptive behavior
+- Deciding authority: [expression_utils.py](../nrpy/helpers/expression_utils.py), `_get_free_symbol_names_cached, get_params_commondata_symbols_from_expr_list`
+- Corroboration: `none available`; the stated counterexamples follow from the implementation, while its docstring or paired symbolic definition supplies the intended behavior.
+
+### CONTR-0017
+
+Claim evidence:
+- Claim: f2r claims high-precision float conversion but appends zeros after scientific-notation exponents, changing values or creating invalid input; padding cannot recover lost float precision.
+- Role: descriptive behavior
+- Deciding authority: [float_to_rational.py](../nrpy/helpers/float_to_rational.py), `f2r`
+- Corroboration: `none available`; the stated counterexamples follow from the implementation, while its docstring or paired symbolic definition supplies the intended behavior.
+
+### CONTR-0018
+
+Claim evidence:
+- Claim: product describes Cartesian tuples but flattens iterable-valued elements, consumes one-shot inner iterators, and mishandles single scalar-valued inputs and repeat=0.
+- Role: descriptive behavior
+- Deciding authority: [functional.py](../nrpy/helpers/functional.py), `product`
+- Corroboration: `none available`; the stated counterexamples follow from the implementation, while its docstring or paired symbolic definition supplies the intended behavior.
+
+### CONTR-0019
+
+Claim evidence:
+- Claim: Kernel call generation corrupts empty-argument calls; the CUDA wrapper ignores cfunc_type and may leave rewritten parameter accesses without a declared streamid.
+- Role: descriptive behavior
+- Deciding authority: [gpu_kernel.py](../nrpy/helpers/parallelization/gpu_kernel.py), `GPUKernel.c_function_call` and `GPUKernel.__init__`; [utilities.py](../nrpy/helpers/parallelization/utilities.py), `generate_kernel_and_launch_code`
+- Corroboration: `none available`; the stated counterexamples follow from the implementation, while its docstring or paired symbolic definition supplies the intended behavior.
+
+### CONTR-0020
+
+Claim evidence:
+- Claim: With positive `TINYDOUBLE`, strict coordinate comparisons can return fractional values, non-strict comparisons shift their threshold, and all four helpers have a shifted zero-denominator point. The SEOBNR ringdown constructor directly uses the strict weights in its precession frequency.
+- Role: descriptive behavior
+- Deciding authority: [Min_Max_and_Piecewise_Expressions.py](../nrpy/equations/grhd/Min_Max_and_Piecewise_Expressions.py), coordinate-helper return expressions
+- Corroboration: [SEOBNRv5_merger_ringdown.py](../nrpy/equations/seobnr/SEOBNRv5_merger_ringdown.py), `SEOBNRv5_MergerRingdown_Quantities.__init__`, substitutes `Abs` and combines the strict helper values for `omega_prec`.
+
+### CONTR-0021
+
+Claim evidence:
+- Claim: Wave constructors check only `uu` before paired gridfunction registration; the Cartesian RHS and initial-data constructors check `glb_params_dict` before CodeParameter registration, so existing names can suppress required entries.
+- Role: descriptive behavior
+- Deciding authority: [WaveEquation_RHSs.py](../nrpy/equations/wave_equation/WaveEquation_RHSs.py), `WaveEquation_RHSs.__init__`; [WaveEquationCurvilinear_RHSs.py](../nrpy/equations/wave_equation/WaveEquationCurvilinear_RHSs.py), `WaveEquationCurvilinear_RHSs.__init__`; [WaveEquation_Solutions_InitialData.py](../nrpy/equations/wave_equation/WaveEquation_Solutions_InitialData.py), `WaveEquation_solution_Cartesian.__init__`
+- Corroboration: [params.py](../nrpy/params.py), `CodeParameter._register_globally`, stores CodeParameters in the separate `glb_code_params_dict`.
+
+### CONTR-0022
+
+Claim evidence:
+- Claim: Direct zero-velocity LorentzBoost construction yields undefined spatial entries instead of the identity because the implementation divides by the squared speed without a zero branch.
+- Role: descriptive behavior
+- Deciding authority: [LorentzBoost.py](../nrpy/equations/general_relativity/LorentzBoost.py), `LorentzBoost._compute_LorentzMatrix`
+- Corroboration: none available for zero-velocity handling; direct zero substitution exposes `0/0`, and the current trusted tensor samples do not assert the identity limit.

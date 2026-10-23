@@ -19,9 +19,17 @@ add magnetic stress-energy.
 `GRHD_Equations` initializes a coordinate-system reference metric, imports the
 matching `BSSN_quantities` entry, converts BSSN quantities to ADM spatial metric
 and extrinsic curvature through `BSSN_to_ADM`, and declares primitive fluid
-symbols `u4Ut`, `rhob`, `P`, `h`, `Ye`, `S`, and `rescaledvU`. The physical
-three-velocity `VU` and spatial four-velocity components are reconstructed from
-`rescaledvU` with the reference-metric rescaling factors `ReU`.
+symbols `u4Ut`, `rhob`, `P`, `h`, `Ye`, `S`, and `rescaledvU`. The coordinate
+transport velocity is `VU[i] = u4U[i+1]/u4U[0] = ReU[i]*rescaledvU[i]`.
+The constructor uses it to form the spatial four-velocity components. This is
+the velocity transporting the fluid through the coordinates; the Eulerian
+three-velocity is `(VU[i] + betaU[i])/alpha`.
+
+Claim evidence:
+- Claim: `VU` denotes coordinate transport velocity, `u^i/u^0`, and `rescaledvU[i] = VU[i]/ReU[i]`.
+- Role: descriptive behavior
+- Deciding authority: [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py), `GRHD_Equations.__init__, compute_vU_from_u4U__no_speed_limit`
+- Corroboration: `none available`; the named implementation decides the stated behavior.
 
 The conserved variables are stored as object attributes. `compute_rho_star`,
 `compute_Ye_star`, `compute_S_star`, `compute_tau_tilde`, and
@@ -120,11 +128,26 @@ Claim evidence:
 - Deciding authority: [HLL_fluxes.py](../../nrpy/equations/grhd/HLL_fluxes.py), `calculate_Tmunu_and_contractions_from_equations` and `calculate_HLL_fluxes`
 - Corroboration: [GRMHD HLL_fluxes.py](../../nrpy/equations/grmhd/HLL_fluxes.py), `calculate_HLL_fluxes` caller
 
-`Min_Max_and_Piecewise_Expressions.py` provides symbolic branch-avoidance
-helpers. `min_noif` and `max_noif` express extrema through `nrpyAbs`, which
-later becomes a generated C absolute-value call. The coordinate-bound helpers
-register `TINYDOUBLE` on demand and return symbolic 0-or-1 masks for
-less-than, less-or-equal, greater-than, and greater-or-equal comparisons.
+`Min_Max_and_Piecewise_Expressions.py` provides symbolic min/max expressions
+through `nrpyAbs`, which later becomes a generated C absolute-value call.
+The coordinate-bound helpers register `TINYDOUBLE` on demand and use shifted
+denominators. They do not implement exact Boolean comparisons near the shift.
+Let `d = x - xstar` and `epsilon = TINYDOUBLE > 0`, with `nrpyAbs` interpreted
+as absolute value. `coord_less_bound` gives `d/(d-epsilon)` for `d < 0`, so
+`d = -epsilon/2` gives `1/3`; `coord_greater_bound` has the analogous positive
+branch. The non-strict helpers shift the comparison thresholds to `epsilon`
+and `-epsilon`. Denominators vanish at `d = epsilon` for the less/less-or-equal
+helpers and at `d = -epsilon` for the greater/greater-or-equal helpers.
+Callers must account for these fractional values and singular points.
+
+Claim status: contested; contradiction: CONTR-0020.
+See [CONTR-0020](../contradictions.md#contr-0020).
+
+Claim evidence:
+- Claim: Coordinate-bound helpers use shifted quotients, so exact 0-or-1 comparison semantics are not guaranteed and denominators can vanish.
+- Role: descriptive behavior
+- Deciding authority: [Min_Max_and_Piecewise_Expressions.py](../../nrpy/equations/grhd/Min_Max_and_Piecewise_Expressions.py), `coord_leq_bound`, `coord_geq_bound`, `coord_less_bound`, `coord_greater_bound`
+- Corroboration: `none available`; the module's trusted-value path substitutes other functions for `nrpyAbs` and does not validate absolute-value comparison semantics.
 
 Representative trusted files cover both Cartesian-equivalent and curvilinear
 paths. `GRHD_equations_Cartesian.py`, `GRHD_equations_Spherical.py`, and
@@ -141,6 +164,22 @@ absolute-value lowering or prove the 0/1 mask semantics over coordinate
 domains. All cited trusted files are sampled expression checks, not generated
 build, runtime, shock-tube, conservation, convergence, or numerical-accuracy
 tests.
+
+At the general-metric sample point shared by the speed and HLL checks, the
+characteristic speeds entering `cmax` are all negative, so `cmax = 0` there and
+the sampled HLL fluxes equal the right-state fluxes. Both modules therefore
+also evaluate a flat face (`alpha = 1`, `beta^i = 0`, `gamma_ij = delta_ij`)
+with a subsonic right state moving in `+x` and a subsonic left state moving in
+`-x`, which makes both speed bounds nonzero and distinct, and repeat that
+evaluation with the face states exchanged, so each state sets each bound in one
+of the two evaluations. The `HLL_test` entry samples `HLL_solver` with an
+independent symbol for every input.
+
+Claim evidence:
+- Claim: At the shared general-metric sample point the GRHD characteristic speeds entering `cmax` are all negative, so `cmax = 0` and the sampled HLL fluxes reduce to right-state fluxes; the speed and HLL modules also sample a flat-face pair of subsonic states and its exchange, which makes both speed bounds nonzero and lets each state set each bound in one of the two evaluations; `HLL_test` samples `HLL_solver` with independent symbols. These are sampled expression checks, not generated-code execution.
+- Role: descriptive behavior
+- Deciding authority: [characteristic_speeds.py](../../nrpy/equations/grhd/characteristic_speeds.py), module `__main__`; [HLL_fluxes.py](../../nrpy/equations/grhd/HLL_fluxes.py), module `__main__`
+- Corroboration: [characteristic_speeds.py](../../nrpy/equations/grhd/tests/characteristic_speeds.py) and [HLL_fluxes.py](../../nrpy/equations/grhd/tests/HLL_fluxes.py), `trusted_dict` entries with the `subsonic_` and `subsonic_exchanged_` prefixes
 
 ## Sources
 

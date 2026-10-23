@@ -211,7 +211,9 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         project_dir=project_dir,
         subdirectory="interpolation",
     )
-    register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(CoordSystem)
+    register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+        CoordSystem, use_numerical_spacetime_nghosts=True
+    )
     storage_exprs = {
         interp_dim0: "interp_0_storage_stencil[u]",
         interp_dim1: "interp_1_storage_stencil[v]",
@@ -851,7 +853,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
   // coefficients on the two-dimensional native stencil.
   const int interp_order = (int)interp_order_long;
   const int phi_plane = target_phi < (REAL)0.0 ? 0 : 1;
-  const int phi_plane_storage_index = NGHOSTS + phi_plane;
+  const int phi_plane_storage_index = params->numerical_spacetime_nghosts + phi_plane;
   const REAL phi_ref = (REAL)context->stored_phi_samples[phi_plane];
 
   REAL inv_denom[interp_order];
@@ -874,14 +876,14 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
     interp_0_storage_stencil[u] = interp_0_raw;
     src_interp_0_stencil[u] =
         (REAL)(params->xxmin{interp_dim0} +
-               (((interp_0_raw - NGHOSTS) + 0.5) * params->dxx{interp_dim0}));
+               (((interp_0_raw - params->numerical_spacetime_nghosts) + 0.5) * params->dxx{interp_dim0}));
   } // END LOOP: for u over first interpolation-dimension
   for (int v = 0; v < interp_order; v++) {
     const int interp_1_raw = selected_center_idx[{interp_dim1}] + (v - n_interp_ghosts);
     interp_1_storage_stencil[v] = interp_1_raw;
     src_interp_1_stencil[v] =
         (REAL)(params->xxmin{interp_dim1} +
-               (((interp_1_raw - NGHOSTS) + 0.5) * params->dxx{interp_dim1}));
+               (((interp_1_raw - params->numerical_spacetime_nghosts) + 0.5) * params->dxx{interp_dim1}));
   } // END LOOP: for v over second interpolation-dimension
 
   compute_inv_denom(interp_order, inv_denom);

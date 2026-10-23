@@ -411,6 +411,7 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     CoordSystem: str,
     relative_to: str = "local_grid_center",
     gridding_approach: str = "independent grid(s)",
+    use_numerical_spacetime_nghosts: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register a C function that maps Cartesian coordinates to xx and finds the nearest grid indices.
@@ -424,6 +425,7 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     :param relative_to: Whether the computation is relative to the "local_grid_center"
                         (default) or "global_grid_center".
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
+    :param use_numerical_spacetime_nghosts: Use the numerical file's ghost-zone count for nearest grid indices.
     :raises ValueError: If `gridding_approach` is invalid, a GeneralRFM provider is
                         unsupported or missing, or GeneralRFM conversion is requested
                         with CUDA parallelization.
@@ -527,6 +529,11 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
 
     namesuffix = f"_{relative_to}" if relative_to == "global_grid_center" else ""
     name = f"Cart_to_xx_and_nearest_i0i1i2_assume_valid{namesuffix}"
+    ghost_zone_count = (
+        "params->numerical_spacetime_nghosts"
+        if use_numerical_spacetime_nghosts
+        else "NGHOSTS"
+    )
     params = "const params_struct *restrict params, const REAL xCart[3], REAL xx[3], int Cart_to_i0i1i2[3]"
     cfunc_decorators = "__host__ __device__" if parallelization == "cuda" else ""
 
@@ -725,20 +732,20 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
 
       // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
       // Assuming a cell-centered grid, which follows the pattern:
-      //   xx0[i0] = params->xxmin0 + ((REAL)(i0 - NGHOSTS) + 0.5) * params->dxx0
+      //   xx0[i0] = params->xxmin0 + ((REAL)(i0 - grid_ghost_zones) + 0.5) * params->dxx0
       // The index i0 can be derived as:
-      //   i0 = (xx0[i0] - params->xxmin0) / params->dxx0 - 0.5 + NGHOSTS
+      //   i0 = (xx0[i0] - params->xxmin0) / params->dxx0 - 0.5 + grid_ghost_zones
       // Now, including typecasts:
-      //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS)
+      //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)grid_ghost_zones)
       // C integer conversion truncates toward zero. For valid in-domain cell-centered
       // coordinates, adding 0.5 converts the center-based quantity to the nearest index:
-      //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS + 0.5)
+      //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)grid_ghost_zones + 0.5)
       // The 0.5 values cancel out:
-      //   i0 =           (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)NGHOSTS )
-      Cart_to_i0i1i2[0] = (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)NGHOSTS );
-      Cart_to_i0i1i2[1] = (int)( ( xx[1] - params->xxmin1 ) / params->dxx1 + (REAL)NGHOSTS );
-      Cart_to_i0i1i2[2] = (int)( ( xx[2] - params->xxmin2 ) / params->dxx2 + (REAL)NGHOSTS );
-""")
+      //   i0 =           (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)grid_ghost_zones )
+      Cart_to_i0i1i2[0] = (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)grid_ghost_zones );
+      Cart_to_i0i1i2[1] = (int)( ( xx[1] - params->xxmin1 ) / params->dxx1 + (REAL)grid_ghost_zones );
+      Cart_to_i0i1i2[2] = (int)( ( xx[2] - params->xxmin2 ) / params->dxx2 + (REAL)grid_ghost_zones );
+""".replace("grid_ghost_zones", ghost_zone_count))
     core_body = "".join(core_body_list)
 
     # Step 3: Assemble the full C function body.

@@ -16,6 +16,7 @@ Author: Dalton J. Moone
 """
 
 import argparse
+import math
 import os
 import shutil
 
@@ -41,7 +42,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics import (
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     calculate_ode_rhs_kernel,
     event_detection_manager_kernel,
-    find_event_time_and_state,
+    find_plane_crossings_brent,
     handle_non_terminal_plane_intersection,
     handle_terminal_plane_intersection,
     interpolation_kernel,
@@ -191,11 +192,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Initial RKF45 step magnitude; default: current analytical value.",
     )
     parser.add_argument(
-        "--plane-interpolation-degree",
-        type=int,
-        default=4,
-        metavar="DEGREE",
-        help="Maximum polynomial degree for centered plane crossings (at least 3; default: 4).",
+        "--plane-crossing-residual-tolerance",
+        type=float,
+        default=1.0e-12,
+        metavar="DISTANCE",
+        help="Maximum absolute signed plane distance after Brent refinement; default: 1e-12.",
+    )
+    parser.add_argument(
+        "--plane-crossing-parameter-tolerance",
+        type=float,
+        default=1.0e-12,
+        metavar="WIDTH",
+        help="Maximum integration-parameter bracket width after Brent refinement; default: 1e-12.",
     )
     parser.add_argument(
         "--rkf45-tolerances",
@@ -258,8 +266,15 @@ if __name__ == "__main__":
         raise ValueError("--observer-fov values must be positive.")
     if args.escape_radius <= 0.0:
         raise ValueError("--escape-radius must be positive.")
-    if args.plane_interpolation_degree < 3:
-        raise ValueError("--plane-interpolation-degree must be at least 3.")
+    for name, value in (
+        ("--plane-crossing-residual-tolerance", args.plane_crossing_residual_tolerance),
+        (
+            "--plane-crossing-parameter-tolerance",
+            args.plane_crossing_parameter_tolerance,
+        ),
+    ):
+        if not math.isfinite(value) or value <= 0.0:
+            raise ValueError(f"{name} must be finite and positive.")
     terminal_plane_values = (
         args.terminal_plane_center,
         args.terminal_plane_normal,
@@ -328,7 +343,7 @@ if __name__ == "__main__":
 
     set_initial_conditions_kernel.register_photon_batch_structs()
     set_initial_conditions_kernel.set_initial_conditions_kernel(
-        normalized_eom=normalized_eom, initialize_event_history=True
+        normalized_eom=normalized_eom, initialize_plane_sides=True
     )
     interpolation_kernel.interpolation_kernel(SPACETIME)
     geodesic_rhs = (
@@ -348,22 +363,28 @@ if __name__ == "__main__":
         enable_rkf45_trial_debug=args.enable_rkf45_trial_debug,
     )
 
-    # Step 5.a: Register plane-crossing functions with full state capture.
-    find_event_time_and_state.find_event_time_and_state(args.plane_interpolation_degree)
-    handle_terminal_plane_intersection.handle_terminal_plane_intersection()
-    handle_non_terminal_plane_intersection.handle_non_terminal_plane_intersection()
+    # Step 5.a: Register accepted-step crossing records and plane projections.
+    find_plane_crossings_brent.register_plane_crossing_candidates()
+    find_plane_crossings_brent.register_plane_crossing_root()
+    handle_terminal_plane_intersection.register_terminal_plane_crossing_result()
+    handle_non_terminal_plane_intersection.register_non_terminal_plane_crossing_result()
+    handle_terminal_plane_intersection.handle_terminal_plane_intersection(
+        normalized_eom=normalized_eom
+    )
+    handle_non_terminal_plane_intersection.handle_non_terminal_plane_intersection(
+        normalized_eom=normalized_eom
+    )
     event_detection_manager_kernel.event_detection_manager_kernel(
-        maximum_degree=args.plane_interpolation_degree,
-        normalized_eom=normalized_eom,
-        capture_event_state=True,
-        single_photon_step_limit=True,
+        normalized_eom=normalized_eom, analytical=True
+    )
+    find_plane_crossings_brent.find_plane_crossings_brent_analytical(
+        spacetime_name=SPACETIME, normalized_eom=normalized_eom
     )
 
     # Step 5.b: Register the single-ray C main function.
     single_integrator_analytical.single_integrator_analytical(
         SPACETIME,
         PARTICLE,
-        args.plane_interpolation_degree,
         normalized_eom=normalized_eom,
         enable_rkf45_trial_debug=args.enable_rkf45_trial_debug,
     )
@@ -374,9 +395,6 @@ if __name__ == "__main__":
     # kernels, so emitting standalone wrappers here would add redundant source
     # files and prototypes.
     for internal_func in [
-        "find_event_time_and_state_centered",
-        "handle_terminal_plane_intersection",
-        "handle_non_terminal_plane_intersection",
         f"g4DD_metric_{SPACETIME}",
         f"connections_{SPACETIME}",
     ]:
@@ -388,6 +406,12 @@ if __name__ == "__main__":
     par.adjust_CodeParam_default("rkf45_h_max", 10.0)
     par.adjust_CodeParam_default("rkf45_h_min", 1e-20)
     par.adjust_CodeParam_default("rkf45_max_retries", 15)
+    par.adjust_CodeParam_default(
+        "plane_crossing_residual_tolerance", args.plane_crossing_residual_tolerance
+    )
+    par.adjust_CodeParam_default(
+        "plane_crossing_parameter_tolerance", args.plane_crossing_parameter_tolerance
+    )
     for name, value in zip(
         ["observer_x", "observer_y", "observer_z"], args.observer_position
     ):

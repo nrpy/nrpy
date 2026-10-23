@@ -50,7 +50,20 @@ constraint by `particle_type`. The massive path returns eight ODE right-hand
 sides from position and four-velocity evolution, plus `u0_massive` from the
 timelike normalization condition. The photon path returns nine ODE right-hand
 sides from position and four-momentum evolution; the ninth component is the
-normal-observer path-length diagnostic, and `p0_photon` comes from the null constraint.
+signed normal-observer path-length diagnostic, and `p0_photon` comes from the
+null constraint. For the direct RHS, the ninth component evolves signed
+normal-observer path length:
+`dL_normal/dlambda = alpha*p^0`, with `alpha=1/sqrt(-g^{00})` on the
+`g^{00}<0` domain. Its sign follows `p^0`. Reverse-ray initialization selects
+the negative photon root, so path length decreases as the affine parameter
+increases while `p^0<0`; the RHS can change sign if evolved `p^0` becomes
+positive, including inside an ergosphere. In Minkowski spacetime, initialization
+gives `u^0=sqrt(1+sum_i (u^i)^2)` for a massive particle and
+`p^0=-sqrt(sum_i (p^i)^2)` for a reverse-traced photon. The massive and photon
+initialization formulas assume signature `(-,+,+,+)` and `g_00<0`; each
+divides by `2*g_00` and has no `g_00=0` fallback. These are initialization
+limits, not restrictions established for subsequent evolution.
+
 For photon evolution, the module provides four explicit RHS forms: ordinary
 `geodesic_eom_rhs_photon` and
 `geodesic_eom_rhs_photon_christoffel`, plus normalized
@@ -58,7 +71,6 @@ For photon evolution, the module provides four explicit RHS forms: ordinary
 `geodesic_eom_rhs_photon_normalized_christoffel`. The first member of each pair
 consumes metric derivatives; the second consumes Christoffels. EOM-family
 selection and geometry-payload selection are separate generation choices.
-Unsupported particle types raise `ValueError`.
 
 The photon normalization helpers make the direct and normalized state
 conventions explicit. They define `u = ln|alpha p^0|` and
@@ -66,21 +78,28 @@ conventions explicit. They define `u = ln|alpha p^0|` and
 `gamma^ij Pi_i Pi_j = 1`; the direct constraint is
 `g_mu_nu p^mu p^nu = 0`. `normal_observer_log_energy` evaluates the same
 normal-observer log-energy measure for direct states by constructing the needed
-inverse-metric component from the covariant `g4DD`. The measure is an
-upper-only evolution cutoff, not a claim that energy is conserved in a general
-spacetime.
+inverse-metric component from covariant `g4DD`. This measure is an upper-only
+evolution cutoff, not a claim that energy is conserved in a general spacetime.
+
+The analytic geometry stored by `GeodesicEquations` and its returned generic
+RHS expressions are separate: the RHS and normalization expressions use
+`conn_Gamma4UDD`, `metric_g4DD`, and tangent-component symbols. Callers supply
+the metric, connection, and tangent values needed to evaluate them.
+Unsupported particle types raise `ValueError`.
 
 Claim evidence:
 - Claim: Photon direct and normalized states use the documented null constraints, and direct states can be mapped to the common normal-observer log-energy measure `ln|alpha p^0|`.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/equations/general_relativity/geodesics/geodesics.py` — `photon_momentum_to_normalized_quantities`, `normalization_constraint_photon`, `normalization_constraint_photon_normalized`
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/normal_observer_log_energy.py` — `normal_observer_log_energy`
-
-Claim evidence:
 - Claim: `GeodesicEquations` exposes direct and normalized photon RHS forms for metric-derivative and Christoffel payloads, with EOM-family and geometry-payload selection independent.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/equations/general_relativity/geodesics/geodesics.py` — `GeodesicEquations`
 - Corroboration: `nrpy/equations/general_relativity/geodesics/geodesics.py` — photon RHS construction and payload selection branches
+- Claim: Initialization selects the positive massive root and negative photon root for `g_00<0`, without a zero-coefficient fallback; direct photon path length evolves as signed `alpha*p^0`.
+- Role: descriptive behavior
+- Deciding authority: [geodesics.py](../../../nrpy/equations/general_relativity/geodesics/geodesics.py), `hamiltonian_constraint_massive`, `hamiltonian_constraint_photon`, `geodesic_eom_rhs_photon`, and `geodesic_eom_rhs_photon_christoffel`
+- Corroboration: substituting the Minkowski metric in the quadratic roots checks their time orientation directly.
 
 The same module also exposes reusable recipes for numerical spacetime data:
 `symbolic_numerical_christoffel_recipe`,

@@ -55,14 +55,13 @@ batch_structs_c_code = r"""
         REJECTED = 8, // Photon RKF45 step was rejected.
         FAILURE_SPATIAL_INTERPOLATION = 9, // Spatial interpolation failed for this photon.
         FAILURE_TEMPORAL_INTERPOLATION = 10, // Temporal interpolation failed for this photon.
-        FAILURE_PLANE_INTERPOLATION_HISTORY = 11 // Too few distinct accepted states for quadratic plane interpolation.
     } termination_type_t; // END ENUM: termination_type_t
 
     // Native same-build metadata for one serialized blueprint tile.
     #define BLUEPRINT_MAGIC "NRPYBP01"
-    // Version 7 adds the axial angular momentum at the first accepted state
-    // after a nonterminal-plane crossing, with its time and signed distance.
-    #define BLUEPRINT_SCHEMA_VERSION 7U
+    // Version 8 measures axial angular momentum and signed plane distance
+    // at the refined nonterminal-plane crossing.
+    #define BLUEPRINT_SCHEMA_VERSION 8U
     typedef struct {
         char magic[8];
         uint32_t native_schema_version;
@@ -92,9 +91,9 @@ batch_structs_c_code = r"""
         double t_f; // Physical coordinate time $t$ when the photon terminated.
         double image_width_fraction; // Normalized width coordinate in [0,1].
         double image_height_fraction; // Normalized height coordinate in [0,1].
-        double non_terminal_post_step_Lz; // Axial angular momentum at the first accepted state beyond the nonterminal plane.
-        double non_terminal_post_step_t; // Coordinate time of that accepted state.
-        double non_terminal_post_step_distance; // Signed distance from that state to the nonterminal plane.
+        double non_terminal_plane_Lz; // Axial angular momentum at the refined plane crossing.
+        double non_terminal_plane_Lz_time; // Coordinate time of the L_z measurement.
+        double non_terminal_plane_signed_distance; // Signed residual at the refined crossing.
     } __attribute__((packed)) blueprint_data_t; // END STRUCT: blueprint_data_t
 
     // One successful crossing in a sparse per-plane diagnostic file.
@@ -103,11 +102,11 @@ batch_structs_c_code = r"""
     // complementary time or affine parameter, respectively.
     typedef struct {
         uint64_t photon_index; // Tile-local photon index.
-        uint32_t interpolation_degree; // Polynomial degree used at this crossing.
+        uint32_t brent_iterations; // Number of Brent trial states at this crossing.
         double integration_param; // Independent integration parameter at the plane.
         double y_local; // Local horizontal plane coordinate.
         double z_local; // Local vertical plane coordinate.
-        double state[9]; // Interpolated nine-component photon state.
+        double state[9]; // Integrated nine-component photon state on the plane.
     } __attribute__((packed)) plane_crossing_record_t;
 
 #if defined(__cplusplus)
@@ -138,9 +137,9 @@ batch_structs_c_code = r"""
     static_assert(offsetof(blueprint_data_t, t_f) == 76, "blueprint t_f offset changed");
     static_assert(offsetof(blueprint_data_t, image_width_fraction) == 84, "blueprint width fraction offset changed");
     static_assert(offsetof(blueprint_data_t, image_height_fraction) == 92, "blueprint height fraction offset changed");
-    static_assert(offsetof(blueprint_data_t, non_terminal_post_step_Lz) == 100, "blueprint post-step Lz offset changed");
-    static_assert(offsetof(blueprint_data_t, non_terminal_post_step_t) == 108, "blueprint post-step time offset changed");
-    static_assert(offsetof(blueprint_data_t, non_terminal_post_step_distance) == 116, "blueprint post-step distance offset changed");
+    static_assert(offsetof(blueprint_data_t, non_terminal_plane_Lz) == 100, "blueprint plane Lz offset changed");
+    static_assert(offsetof(blueprint_data_t, non_terminal_plane_Lz_time) == 108, "blueprint plane Lz time offset changed");
+    static_assert(offsetof(blueprint_data_t, non_terminal_plane_signed_distance) == 116, "blueprint plane distance offset changed");
 #else
     _Static_assert(sizeof(blueprint_header_t) == 60, "blueprint_header_t size changed");
     _Static_assert(offsetof(blueprint_header_t, magic) == 0, "blueprint header magic offset changed");
@@ -169,9 +168,9 @@ batch_structs_c_code = r"""
     _Static_assert(offsetof(blueprint_data_t, t_f) == 76, "blueprint t_f offset changed");
     _Static_assert(offsetof(blueprint_data_t, image_width_fraction) == 84, "blueprint width fraction offset changed");
     _Static_assert(offsetof(blueprint_data_t, image_height_fraction) == 92, "blueprint height fraction offset changed");
-    _Static_assert(offsetof(blueprint_data_t, non_terminal_post_step_Lz) == 100, "blueprint post-step Lz offset changed");
-    _Static_assert(offsetof(blueprint_data_t, non_terminal_post_step_t) == 108, "blueprint post-step time offset changed");
-    _Static_assert(offsetof(blueprint_data_t, non_terminal_post_step_distance) == 116, "blueprint post-step distance offset changed");
+    _Static_assert(offsetof(blueprint_data_t, non_terminal_plane_Lz) == 100, "blueprint plane Lz offset changed");
+    _Static_assert(offsetof(blueprint_data_t, non_terminal_plane_Lz_time) == 108, "blueprint plane Lz time offset changed");
+    _Static_assert(offsetof(blueprint_data_t, non_terminal_plane_signed_distance) == 116, "blueprint plane distance offset changed");
 #endif
 
     // ==========================================
@@ -179,9 +178,7 @@ batch_structs_c_code = r"""
     // ==========================================
     typedef struct {
         double *f; // Current nine-component state; component meanings depend on the photon EOM.
-        double *f_history; // Accepted states before f, indexed by history step then component then photon.
         double *integration_param; // Current mode-dependent integration parameter.
-        double *integration_param_history; // Accepted parameters before the current step, indexed by history step then photon.
         double *h; // Current adaptive step size $h$ for the RKF45 integrator.
         termination_type_t *status; // Current physical/numerical status of the photon.
         int *rejection_retries; // Counter for consecutive RKF45 error tolerance rejections.
@@ -190,26 +187,6 @@ batch_structs_c_code = r"""
         bool *on_positive_side_of_non_terminal_plane_prev; // Previous side of nonterminal plane.
         bool *on_positive_side_of_terminal_plane_prev; // True if photon was previously 'above' the terminal plane.
 
-        bool *terminal_plane_event_found; // Flag indicating a terminal plane intersection was detected.
-        bool *terminal_plane_crossing_pending; // A crossing awaits enough accepted states for centered interpolation.
-        int *terminal_plane_steps_past; // Accepted states after the pending terminal crossing.
-        int *terminal_plane_event_degree; // Polynomial degree used for the accepted terminal crossing.
-        double *terminal_plane_event_lambda; // Exact affine parameter $\lambda$ at terminal crossing.
-        double *terminal_plane_event_f_intersect; // State vector at terminal crossing.
-
-        bool *non_terminal_plane_event_found; // Nonterminal-plane intersection lock.
-        bool *non_terminal_plane_crossing_pending; // A nonterminal crossing awaits centered interpolation.
-        int *non_terminal_plane_steps_past; // Accepted states after the pending nonterminal crossing.
-        int *non_terminal_plane_event_degree; // Polynomial degree used for the accepted nonterminal crossing.
-        double *non_terminal_plane_event_lambda; // Affine parameter $\lambda$ at nonterminal plane.
-        double *non_terminal_plane_event_f_intersect; // State at nonterminal-plane intersection.
-
-        // Numerical-batch diagnostic state. These arrays capture the first
-        // accepted RK state after a nonterminal crossing and remain separate
-        // from the geometric event lock.
-        bool *non_terminal_norm_recorded;
-        double *non_terminal_norm_f;
-        double *non_terminal_norm_coordinate_time;
     } PhotonStateSoA; // END STRUCT: PhotonStateSoA
 """
 
@@ -220,8 +197,7 @@ def register_photon_batch_structs() -> None:
 
     Batch and single-ray generators call this before registering code that
     consumes the shared PhotonStateSoA. The shared definition includes the
-    event-side and interpolated-intersection fields used by the initializer and
-    event-detection kernels.
+    plane-side fields used by the initializer and event-detection kernels.
     """
     if "photon_batch_structs" not in par.glb_extras_dict.get("BHaH_defines", {}):
         Bdefines_h.register_BHaH_defines("photon_batch_structs", batch_structs_c_code)
@@ -229,7 +205,7 @@ def register_photon_batch_structs() -> None:
 
 def set_initial_conditions_kernel(
     normalized_eom: bool = False,
-    initialize_event_history: bool = True,
+    initialize_plane_sides: bool = True,
     tile_indices_add_to_parfile: bool = False,
 ) -> None:
     """
@@ -250,14 +226,10 @@ def set_initial_conditions_kernel(
     initializer therefore always constructs the complete direct momentum
     first.  No algebraic temporal-momentum recovery is needed.
 
-    The batch integrator fills accepted-state history after any normalized
-    momentum conversion, so every history slot initially matches the EOM used
-    for evolution.
-
     :param normalized_eom: Whether to initialize the normalized photon state
         layout.
-    :param initialize_event_history: Whether to validate event-plane parameters
-        and initialize the photon event-side flags.
+    :param initialize_plane_sides: Whether to validate event-plane parameters
+        and initialize the photon plane-side flags.
     :param tile_indices_add_to_parfile: Include tile indices in the parameter
         file for a single numerical ray.
     """
@@ -957,7 +929,7 @@ static void nrpy_photon_construct_observer_tetrad(
         for basis in range(4)
         for mu in range(4)
     )
-    event_history_initialization = (
+    plane_side_initialization = (
         r"""
     //==========================================
     // INITIAL EVENT-SIDE FLAGS
@@ -1012,23 +984,8 @@ static void nrpy_photon_construct_observer_tetrad(
             all_photons->on_positive_side_of_terminal_plane_prev[plane_i] = init_terminal_plane_side;
         } // END LOOP: initialize plane sides
     } // END IF: plane-side arrays allocated
-    if (all_photons->non_terminal_plane_crossing_pending != NULL &&
-        all_photons->terminal_plane_crossing_pending != NULL &&
-        all_photons->non_terminal_plane_steps_past != NULL &&
-        all_photons->terminal_plane_steps_past != NULL &&
-        all_photons->non_terminal_plane_event_degree != NULL &&
-        all_photons->terminal_plane_event_degree != NULL) {
-        for (long int plane_i = 0; plane_i < num_rays; ++plane_i) {
-            all_photons->non_terminal_plane_crossing_pending[plane_i] = false;
-            all_photons->terminal_plane_crossing_pending[plane_i] = false;
-            all_photons->non_terminal_plane_steps_past[plane_i] = 0;
-            all_photons->terminal_plane_steps_past[plane_i] = 0;
-            all_photons->non_terminal_plane_event_degree[plane_i] = 0;
-            all_photons->terminal_plane_event_degree[plane_i] = 0;
-        } // END LOOP: initialize crossing history
-    } // END IF: crossing-history arrays allocated
 """
-        if initialize_event_history
+        if initialize_plane_sides
         else ""
     )
     body = r"""
@@ -1106,7 +1063,7 @@ __TETRAD_SCALAR_DECLARATIONS__
         exit(EXIT_FAILURE);
     }
 
-__EVENT_HISTORY_INITIALIZATION__
+__PLANE_SIDE_INITIALIZATION__
 
     //==========================================
     // STAGING ALLOCATION AND RAY INITIALIZATION
@@ -1123,9 +1080,7 @@ __EVENT_HISTORY_INITIALIZATION__
 __INTEGRATION_PARAM_INITIALIZATION__
 """
     body = body.replace("__TETRAD_SCALAR_DECLARATIONS__", tetrad_scalar_declarations)
-    body = body.replace(
-        "__EVENT_HISTORY_INITIALIZATION__", event_history_initialization
-    )
+    body = body.replace("__PLANE_SIDE_INITIALIZATION__", plane_side_initialization)
     body = body.replace("__HOST_LOOP_CODE__", str(host_loop_code))
     body = body.replace(
         "__INTEGRATION_PARAM_INITIALIZATION__", integration_param_initialization

@@ -344,7 +344,6 @@ def register_CFunction_initialize_yn_and_non_yn_gfs_to_nan(
     :param Butcher_dict: Dictionary containing Butcher tableau data.
     :param MoL_method: Method of Lines (MoL) method name.
     :raises RuntimeError: If an error occurs while registering the CFunction
-    :return None
     """
     includes: List[str] = ["BHaH_defines.h"]
     desc: str = "Initialize yn and non-yn gfs to nan"
@@ -429,8 +428,6 @@ def register_CFunction_MoL_step_forward_in_time(
     :param enable_rfm_precompute: Flag to enable reference metric functionality.
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
     :param enable_simd: Flag to enable SIMD functionality.
-
-    :return None
 
     Doctest:
     # FIXME
@@ -834,7 +831,7 @@ def register_CFunction_MoL_sync_data_defines(
 
     :param enable_psi4: Whether or not to enable psi4 diagnostics.
     :raises RuntimeError: If an error occurs while registering the CFunction
-    :return: None
+    :return: The numbers of synchronized evolved, auxiliary-evolution, and auxiliary gridfunctions.
     """
     includes: List[str] = ["BHaH_defines.h"]
     if enable_psi4:
@@ -933,8 +930,6 @@ def register_CFunctions(
     :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
     :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
     :param enable_psi4: Whether or not to enable psi4 diagnostics.
-
-    :return None
 
     Doctests:
     >>> from nrpy.helpers.generic import validate_strings

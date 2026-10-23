@@ -87,11 +87,11 @@ def main(
         if integrator_mode == "Numerical"
         else """
             // Analytical batches do not evaluate axial angular momentum at
-            // the first accepted state after the nonterminal plane.
+            // the refined nonterminal plane crossing.
             for (long int i = 0; i < num_rays; ++i) {
-                results_buffer[i].non_terminal_post_step_Lz = NAN;
-                results_buffer[i].non_terminal_post_step_t = NAN;
-                results_buffer[i].non_terminal_post_step_distance = NAN;
+                results_buffer[i].non_terminal_plane_Lz = NAN;
+                results_buffer[i].non_terminal_plane_Lz_time = NAN;
+                results_buffer[i].non_terminal_plane_signed_distance = NAN;
             }
 """
     )
@@ -493,9 +493,9 @@ def main(
             for (long int i = 0; i < num_rays; ++i) {{
                 results_buffer[i] = (blueprint_data_t){{0}};
                 results_buffer[i].termination_type = FAILURE_GENERIC;
-                results_buffer[i].non_terminal_post_step_Lz = NAN;
-                results_buffer[i].non_terminal_post_step_t = NAN;
-                results_buffer[i].non_terminal_post_step_distance = NAN;
+                results_buffer[i].non_terminal_plane_Lz = NAN;
+                results_buffer[i].non_terminal_plane_Lz_time = NAN;
+                results_buffer[i].non_terminal_plane_signed_distance = NAN;
             }} // END LOOP: initialize tile results
 
             {batch_integrator_call}

@@ -13,6 +13,7 @@ Author: Dalton J. Moone
 """
 
 import argparse
+import math
 import os
 import shutil
 
@@ -43,7 +44,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     calculate_and_fill_blueprint_data_universal,
     calculate_ode_rhs_kernel,
     event_detection_manager_kernel,
-    find_event_time_and_state,
+    find_plane_crossings_brent,
     handle_non_terminal_plane_intersection,
     handle_terminal_plane_intersection,
     interpolation_kernel,
@@ -62,7 +63,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=(
             "Generate a tiled analytical photon raytracing project. "
-            "The project emits v7 light-blueprint records with normalized "
+            "The project emits v8 light-blueprint records with normalized "
             "image-sample coordinates."
         )
     )
@@ -117,11 +118,18 @@ if __name__ == "__main__":
         help="Width-side ray samples per tile; height-side count is derived.",
     )
     parser.add_argument(
-        "--plane-interpolation-degree",
-        type=int,
-        default=4,
-        metavar="DEGREE",
-        help="Maximum polynomial degree for centered plane crossings (at least 3; default: 4).",
+        "--plane-crossing-residual-tolerance",
+        type=float,
+        default=1.0e-12,
+        metavar="DISTANCE",
+        help="Maximum absolute signed plane distance after Brent refinement; default: 1e-12.",
+    )
+    parser.add_argument(
+        "--plane-crossing-parameter-tolerance",
+        type=float,
+        default=1.0e-12,
+        metavar="WIDTH",
+        help="Maximum integration-parameter bracket width after Brent refinement; default: 1e-12.",
     )
     parser.add_argument(
         "--tile-counts",
@@ -234,8 +242,15 @@ if __name__ == "__main__":
         parser.error("--observer-fov values must be positive.")
     if args.scan_density < 1:
         parser.error("--scan-density must be a positive integer.")
-    if args.plane_interpolation_degree < 3:
-        parser.error("--plane-interpolation-degree must be at least 3.")
+    for name, value in (
+        ("--plane-crossing-residual-tolerance", args.plane_crossing_residual_tolerance),
+        (
+            "--plane-crossing-parameter-tolerance",
+            args.plane_crossing_parameter_tolerance,
+        ),
+    ):
+        if not math.isfinite(value) or value <= 0.0:
+            parser.error(f"{name} must be finite and positive.")
     if any(value < 1 for value in args.tile_counts):
         parser.error("--tile-counts values must be positive integers.")
     if args.escape_radius <= 0.0:
@@ -321,14 +336,18 @@ if __name__ == "__main__":
         normalized_eom=False
     )
 
-    # Step 5.d: Register event-detection and boundary-intersection kernels.
-    find_event_time_and_state.find_event_time_and_state(args.plane_interpolation_degree)
+    # Step 5.d: Register accepted-step crossing records and plane projections.
+    find_plane_crossings_brent.register_plane_crossing_candidates()
+    find_plane_crossings_brent.register_plane_crossing_root()
+    handle_terminal_plane_intersection.register_terminal_plane_crossing_result()
+    handle_non_terminal_plane_intersection.register_non_terminal_plane_crossing_result()
     handle_terminal_plane_intersection.handle_terminal_plane_intersection()
     handle_non_terminal_plane_intersection.handle_non_terminal_plane_intersection()
     event_detection_manager_kernel.event_detection_manager_kernel(
-        normalized_eom=False,
-        maximum_degree=args.plane_interpolation_degree,
-        capture_event_state=True,
+        normalized_eom=False, analytical=True
+    )
+    find_plane_crossings_brent.find_plane_crossings_brent_analytical(
+        spacetime_name=SPACETIME, normalized_eom=False
     )
     calculate_and_fill_blueprint_data_universal.calculate_and_fill_blueprint_data_universal(
         normalized_eom=False
@@ -336,9 +355,7 @@ if __name__ == "__main__":
 
     # Step 5.e: Register project-level orchestration helpers.
     time_slot_manager_helpers.time_slot_manager_helpers()
-    batch_integrator_analytical.batch_integrator_analytical(
-        SPACETIME, args.plane_interpolation_degree
-    )
+    batch_integrator_analytical.batch_integrator_analytical(SPACETIME)
     main_batch.main(SPACETIME, normalized_eom=False)
 
     # Step 5.f: Remove helper registrations emitted only through other kernels.
@@ -349,9 +366,6 @@ if __name__ == "__main__":
     # wrappers in both OpenMP and CUDA builds, and also avoids duplicate CUDA
     # definitions during device linking.
     for internal_func in [
-        "find_event_time_and_state_centered",
-        "handle_terminal_plane_intersection",
-        "handle_non_terminal_plane_intersection",
         f"g4DD_metric_{SPACETIME}",
         f"connections_{SPACETIME}",
     ]:
@@ -369,6 +383,12 @@ if __name__ == "__main__":
     par.adjust_CodeParam_default("evolution_measure_max", 3.0)
     par.adjust_CodeParam_default("perform_conservation_check", True)
     par.adjust_CodeParam_default("r_escape", args.escape_radius)
+    par.adjust_CodeParam_default(
+        "plane_crossing_residual_tolerance", args.plane_crossing_residual_tolerance
+    )
+    par.adjust_CodeParam_default(
+        "plane_crossing_parameter_tolerance", args.plane_crossing_parameter_tolerance
+    )
     par.adjust_CodeParam_default("slot_manager_delta_t", 100.0)
     par.adjust_CodeParam_default("slot_manager_t_min", -1000.0)
 

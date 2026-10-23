@@ -66,10 +66,19 @@ Tensor and derivative suffixes encode meaning:
 - `rhs` means evolution-equation right-hand side, as in `alpha_rhs` and
   `gammabar_rhsDD`.
 
-Derivative-like symbols intended to represent finite-difference-like
-derivatives must include the `dD` or `dDD` components. Do not invent derivative
-names that omit those markers. Use `nrpy.indexedexp` declaration helpers so
-SymPy symbols carry expected suffix and component encoding.
+Use `dD` and `dDD` for centered first and second partial derivatives, and
+`dupD` for upwinded derivatives as explicitly allowed by `coding_style.md`.
+The guide's specific upwind convention qualifies its broader `dD`/`dDD`
+wording; valid `dupD` names must not be renamed to satisfy that broader
+sentence. Consult [Finite Difference](../core/finite-difference.md) for the
+recognized derivative families and which can generate C code. Use
+`nrpy.indexedexp` declaration helpers for the suffix and component encoding.
+
+Claim evidence:
+- Claim: The explicit `dupD` upwind naming rule qualifies the style guide's blanket `dD`/`dDD` sentence.
+- Role: normative rule
+- Deciding authority: [coding_style.md](../../coding_style.md), `### Derivative Variable Naming Conventions`, the explicit upwind bullet
+- Corroboration: [finite_difference.py](../../nrpy/finite_difference.py), `C_CODEGEN_DERIVATIVE_FAMILIES`, recognizes `_dupD` for generated derivatives.
 
 ### Trusted Expression Validation
 
@@ -83,10 +92,19 @@ must also use stable descriptive keys. [Expression Validation
 Helpers](../validation/expression-validation-helpers.md) owns helper behavior
 and limitations.
 
-Expression keys must match the corresponding `trusted_dict` keys in
-`tests/<module>*.py`. Use established names such as `*_rhs`, `*_expr_list_*`,
-or the owning module family's existing convention. Do not invent new result-key
-conventions without aligning the trusted files.
+Processed result keys must match the corresponding `trusted_dict` keys in
+`tests/<module>*.py`. List entries become `<name>_<flat_index>`; `funcform`
+keys and unsupported values are skipped, and colliding processed names silently
+overwrite earlier entries. Choose names so every intended numerical output
+survives processing with a distinct key. Use established names such as `*_rhs`,
+`*_expr_list_*`, or the owning family's convention, and align any intentional
+name changes with the trusted files.
+
+Claim evidence:
+- Claim: Trusted dictionaries compare processed names; list flattening, skipped values, and collisions can remove intended input outputs before comparison.
+- Role: descriptive behavior
+- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `process_dictionary_of_expressions`
+- Corroboration: `none available`; the named implementation decides the stated behavior.
 
 Trusted-value files under `*/tests/` are generated artifacts. They contain only
 the needed `mpf` or `mpc` import with `# type: ignore` and a `trusted_dict`
@@ -104,12 +122,17 @@ owner-runner placement and the meaningful-contract gate.
 
 ### Dependencies
 
-Do not import `re` for simple string manipulation that direct string methods
-can handle. Regex is allowed only for genuine pattern matching, such as
-coordinate-system variant detection or variable text layouts that cannot be
-handled robustly with plain replacement. If a regex is needed, follow existing
-legitimate examples and add a comment explaining why `.replace()` is
-insufficient.
+Do not add `import re` anywhere under `nrpy/`; use plain string methods instead.
+The legacy uses identified in `coding_style.md` are grandfathered rather than
+precedent. Remove their regular-expression use when each file is next materially
+edited; do not attach that removal to unrelated changes elsewhere. Repository
+tooling outside `nrpy/`, such as `tools/kb_lint.py`, is outside this restriction.
+
+Claim evidence:
+- Claim: New code under `nrpy/` does not import `re`; the legacy sites named in `coding_style.md` are grandfathered until their next material edit and do not authorize new uses. Repository tooling outside `nrpy/` is excluded.
+- Role: normative rule
+- Deciding authority: [coding_style.md](../../coding_style.md), `### Prohibited Dependencies`, the `import re` bullet
+- Corroboration: none available; the current style guide supersedes the frozen historical dependency guidance.
 
 Core NRPy code must not depend on numpy. The core workflow is symbolic
 expression to generated C, with computation done through SymPy and code
@@ -117,6 +140,9 @@ generation. Visualization and post-processing scripts may use numpy for image
 handling, plotting, binary parsing, or similar non-core analysis.
 
 ## Sources
+
+- [coding_style.md](../../coding_style.md) - `### Prohibited Dependencies`, `### Derivative Variable Naming Conventions`
+- [finite_difference.py](../../nrpy/finite_difference.py) - `C_CODEGEN_DERIVATIVE_FAMILIES`
 
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `## Equation Setup Rules`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### SymPy`, `### Indexed Expressions`, `### Expression Construction`

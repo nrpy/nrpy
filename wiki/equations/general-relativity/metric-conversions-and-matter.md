@@ -56,17 +56,25 @@ Claim evidence:
 build physical spacetime Christoffels from BSSN quantities. Its public state
 includes the four-metric `g4DD`, inverse four-metric `g4UU`, metric derivatives
 `g4DD_dD`, spatial-metric time derivative `gammaDDd0`, and `Gamma4UDD`. It
-projects any residual conformal trace out of `AbarDD` before reconstructing
+projects residual conformal trace out of `AbarDD` before reconstructing
 `KDD`, so the physical trace remains `trK`. It also exposes
-`g4DD_dD_static` and `Gamma4UDD_static`, which retain spatial derivatives while
-setting only coordinate-time metric derivatives to zero. The class validates
-coordinate-system and precompute inputs before using reference-metric caches.
+`g4DD_dD_static` and `Gamma4UDD_static`, which retain spatial derivatives
+while setting only coordinate-time metric derivatives to zero. The class
+validates coordinate-system and precompute inputs before using reference-metric
+caches. It reconstructs `gammaDDd0` from ADM evolution, while `alpha_d0` and
+`vetU_d0` remain independent coordinate-time derivative symbols in the
+Christoffels. Callers must supply these lapse and rescaled-shift derivatives;
+the spatial BSSN fields alone do not determine the full returned expressions.
 
 Claim evidence:
-- Claim: `BSSN_to_g4Christoffel` removes the residual conformal trace when reconstructing `KDD` and provides a static derivative/Christoffel branch that zeroes only coordinate-time metric derivatives.
+- Claim: `BSSN_to_g4Christoffel` removes residual conformal trace from `AbarDD` when reconstructing `KDD`, reconstructs `gammaDDd0` from ADM evolution, and leaves `alpha_d0` and `vetU_d0` as caller-supplied symbols. Its static derivative and Christoffel outputs zero only coordinate-time metric derivatives.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/equations/general_relativity/BSSN_to_g4Christoffel.py` — `BSSN_to_g4Christoffel`
 - Corroboration: `nrpy/equations/general_relativity/tests/BSSN_to_g4Christoffel_Cartesian.py` — trusted expressions
+- Claim: `alpha_d0` and `vetU_d0` are independent time-derivative symbols because the class selects no lapse or shift evolution equation.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_to_g4Christoffel.py](../../../nrpy/equations/general_relativity/BSSN_to_g4Christoffel.py), `BSSN_to_g4Christoffel.__init__`
+- Corroboration: none available for a caller-independent gauge evolution.
 
 `T4munu.py` declares symbolic `T4UU` and projects it into `SDD`, `SD`, `S`,
 and `rho` using either explicit ADM fields or BSSN fields converted through
@@ -78,12 +86,31 @@ module registers `PI` as a code parameter for those source terms.
 Cartesian boost velocity, then applies them to contravariant vectors, covariant
 vectors, and covariant rank-2 through rank-4 tensors. This helper is
 four-dimensional but deliberately Cartesian; it does not use NRPy reference
-metrics.
+metrics. Real boosts require `sum_i v_i^2<1`, which the constructor does not
+check. At direct zero velocity its spatial block evaluates `0/0` and yields
+`nan` instead of the identity; callers need separate identity handling until
+this is corrected. See [CONTR-0022](../../contradictions.md#contr-0022).
+Claim status: contested; contradiction: CONTR-0022.
+
+Claim evidence:
+- Claim: `LorentzBoost` does not validate subluminality, and direct zero velocity produces undefined spatial matrix entries because the implemented formula divides by the squared speed.
+- Role: descriptive behavior
+- Deciding authority: [LorentzBoost.py](../../../nrpy/equations/general_relativity/LorentzBoost.py), `LorentzBoost._compute_LorentzMatrix`
+- Corroboration: none available for a zero-input identity guarantee; substituting a zero vector in the constructor exposes the division by zero.
 
 The representative trusted files show the validation coverage shape: direct
 ADM-to-BSSN StaticTrumpet conversion, BSSN-to-ADM coordinate variants,
-four-metric round trips and BSSN four-metric variants, four-Christoffel
-variants, matter projections/source terms, and Lorentz-boost tensor outputs.
+separately sampled forward/inverse four-metric formulas and BSSN four-metric
+variants, four-Christoffel variants, matter projections/source terms, and
+Lorentz-boost tensor outputs. These trusted files do not compose a four-metric
+round trip. The separate `g4DD_to_ADM` doctest composes `ADM_to_g4DD` with
+`g4DD_to_ADM` for a concrete positive-lapse example.
+
+Claim evidence:
+- Claim: Four-metric trusted validation samples the forward and inverse formulas separately; the concrete round-trip check is the `g4DD_to_ADM` doctest.
+- Role: descriptive behavior
+- Deciding authority: [g4munu_conversions.py](../../../nrpy/equations/general_relativity/g4munu_conversions.py), `g4DD_to_ADM` doctest and module `__main__`
+- Corroboration: [g4munu_conversions.py trusted values](../../../nrpy/equations/general_relativity/tests/g4munu_conversions.py), separately named formula outputs.
 
 ## Sources
 
