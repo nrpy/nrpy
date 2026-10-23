@@ -55,18 +55,26 @@ Claim evidence:
 `BSSN_to_g4Christoffel` reconstructs enough ADM and gauge derivative data to
 build physical spacetime Christoffels from BSSN quantities. Its public state
 includes the four-metric `g4DD`, inverse four-metric `g4UU`, metric derivatives
-`g4DD_dD`, spatial-metric time derivative `gammaDDd0`, and `Gamma4UDD`. The
-class validates coordinate-system and precompute inputs before using reference
-metric caches. It reconstructs `gammaDDd0` from ADM evolution, but leaves
-`alpha_d0` and `vetU_d0` as independent coordinate-time derivative symbols in
-the Christoffels. Callers must provide these gauge derivatives; spatial BSSN
-fields alone do not determine all returned expressions.
+`g4DD_dD`, spatial-metric time derivative `gammaDDd0`, and `Gamma4UDD`. It
+projects residual conformal trace out of `AbarDD` before reconstructing
+`KDD`, so the physical trace remains `trK`. It also exposes
+`g4DD_dD_static` and `Gamma4UDD_static`, which retain spatial derivatives
+while setting only coordinate-time metric derivatives to zero. The class
+validates coordinate-system and precompute inputs before using reference-metric
+caches. It reconstructs `gammaDDd0` from ADM evolution, while `alpha_d0` and
+`vetU_d0` remain independent coordinate-time derivative symbols in the
+Christoffels. Callers must supply these lapse and rescaled-shift derivatives;
+the spatial BSSN fields alone do not determine the full returned expressions.
 
 Claim evidence:
-- Claim: `BSSN_to_g4Christoffel` leaves lapse and rescaled-shift coordinate-time derivatives as caller-supplied symbols while reconstructing the spatial-metric time derivative.
+- Claim: `BSSN_to_g4Christoffel` removes residual conformal trace from `AbarDD` when reconstructing `KDD`, reconstructs `gammaDDd0` from ADM evolution, and leaves `alpha_d0` and `vetU_d0` as caller-supplied symbols. Its static derivative and Christoffel outputs zero only coordinate-time metric derivatives.
+- Role: public/scientific contract
+- Deciding authority: `nrpy/equations/general_relativity/BSSN_to_g4Christoffel.py` — `BSSN_to_g4Christoffel`
+- Corroboration: `nrpy/equations/general_relativity/tests/BSSN_to_g4Christoffel_Cartesian.py` — trusted expressions
+- Claim: `alpha_d0` and `vetU_d0` are independent time-derivative symbols because the class selects no lapse or shift evolution equation.
 - Role: descriptive behavior
 - Deciding authority: [BSSN_to_g4Christoffel.py](../../../nrpy/equations/general_relativity/BSSN_to_g4Christoffel.py), `BSSN_to_g4Christoffel.__init__`
-- Corroboration: none available for a caller-independent gauge evolution; the class selects no lapse or shift evolution equation.
+- Corroboration: none available for a caller-independent gauge evolution.
 
 `T4munu.py` declares symbolic `T4UU` and projects it into `SDD`, `SD`, `S`,
 and `rho` using either explicit ADM fields or BSSN fields converted through
@@ -110,7 +118,7 @@ Claim evidence:
 - [ADM_to_BSSN.py](../../../nrpy/equations/general_relativity/ADM_to_BSSN.py) - `ADM_to_BSSN`, `compute_cf_only`
 - [BSSN_to_ADM.py](../../../nrpy/equations/general_relativity/BSSN_to_ADM.py) - `BSSN_to_ADM`
 - [g4munu_conversions.py](../../../nrpy/equations/general_relativity/g4munu_conversions.py) - `ADM_to_g4DD`, `BSSN_to_g4DD`, `ADM_to_g4UU`, `BSSN_to_g4UU`, `g4DD_to_ADM`, `g4DD_to_BSSN`
-- [BSSN_to_g4Christoffel.py](../../../nrpy/equations/general_relativity/BSSN_to_g4Christoffel.py) - `BSSN_to_g4Christoffel`, `Gamma4UDD`
+- [BSSN_to_g4Christoffel.py](../../../nrpy/equations/general_relativity/BSSN_to_g4Christoffel.py) - `BSSN_to_g4Christoffel`, `Gamma4UDD`, `g4DD_dD_static`, `Gamma4UDD_static`
 - [T4munu.py](../../../nrpy/equations/general_relativity/T4munu.py) - `T4UU_and_ADM_to_SDD_SD_S_rho`, `T4UU_and_BSSN_to_SDD_SD_S_rho`, `BSSN_RHSs_T4UU_source_terms`, `BSSN_constraints_T4UU_source_terms`
 - [LorentzBoost.py](../../../nrpy/equations/general_relativity/LorentzBoost.py) - `LorentzBoost`
 - [ADM_to_BSSN_StaticTrumpet.py](../../../nrpy/equations/general_relativity/tests/ADM_to_BSSN_StaticTrumpet.py) - `trusted_dict`

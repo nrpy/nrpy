@@ -22,6 +22,9 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH
+from nrpy.infrastructures.BHaH.general_relativity.geodesics import (
+    raytracing_example_helper,
+)
 
 parser = argparse.ArgumentParser(
     description="NRPyElliptic Solver for Conformally Flat BBH initial data"
@@ -41,11 +44,15 @@ parser.add_argument(
     "--raytracing-outputs",
     action="store_true",
     help=(
-        "Enable Cartesian metric and Christoffel raytracing outputs on "
-        "diagnostics output steps. Currently supported only for OpenMP builds."
+        "Write selected raytracing spacetime data at diagnostic output times. "
+        "Requires OpenMP and double precision."
     ),
 )
+raytracing_example_helper.add_raytracing_cli(parser, "two_blackholes_collide")
 args = parser.parse_args()
+raytracing_options = raytracing_example_helper.check_raytracing_cli(
+    args, "two_blackholes_collide"
+)
 
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
@@ -68,6 +75,8 @@ par.set_parval_from_str("fp_type", fp_type)
 # Code-generation-time parameters:
 project_name = "two_blackholes_collide"
 CoordSystem = "Spherical"
+if raytracing_options.enabled:
+    CoordSystem = raytracing_options.coord_system
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
 num_fisheye_transitions = (
@@ -81,7 +90,11 @@ GammaDriving_eta = 1.0
 grid_physical_size = 7.5
 diagnostics_output_every = 0.25
 t_final = 1.0 * grid_physical_size
-enable_raytracing_data_output = args.raytracing_outputs
+if raytracing_options.enabled:
+    grid_physical_size = raytracing_options.grid_physical_size
+    diagnostics_output_every = raytracing_options.output_every
+    t_final = raytracing_options.t_final
+enable_raytracing_data_output = raytracing_options.enabled
 Nxx_dict = {
     "Spherical": [72, 12, 2],
     "SinhSpherical": [72, 12, 2],
@@ -89,9 +102,14 @@ Nxx_dict = {
     "GeneralRFM_fisheyeN1": [128, 128, 128],
     "GeneralRFM_fisheyeN2": [128, 128, 128],
 }
+if raytracing_options.nxx is not None:
+    Nxx_dict[CoordSystem] = list(raytracing_options.nxx)
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.5
 default_BH2_z_posn = -0.5
+if args.raytracing_bhs is not None:
+    default_BH1_mass, default_BH2_mass = raytracing_options.bh_masses
+    default_BH1_z_posn, default_BH2_z_posn = raytracing_options.bh_positions
 # Fisheye parameters
 fisheye_param_defaults: dict[str, float] = {}
 if num_fisheye_transitions == 1:
@@ -284,11 +302,12 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_interp_diagnostics=False,
     enable_volume_integration_diagnostics=True,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_free_auxevol=False,
     enable_psi4_diagnostics=False,
     enable_bhahaha=enable_bhahaha,
     enable_raytracing_data_output=enable_raytracing_data_output,
+    raytracing_data_mode=raytracing_options.data_mode,
+    enable_static_christoffels=raytracing_options.static_christoffels,
 )
 BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
@@ -354,6 +373,7 @@ BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 par.adjust_CodeParam_default("t_final", t_final)
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", 0.4)
+raytracing_example_helper.adjust_raytracing_code_parameters(raytracing_options)
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
 par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
 par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
@@ -464,7 +484,5 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     ),
 )
 
-print(
-    f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
-)
+print(raytracing_example_helper.shell_generator(raytracing_options, project_dir))
 print(f"    Parameter file can be found in {project_name}.par")
