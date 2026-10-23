@@ -54,6 +54,17 @@ class InitialData_Spherical:
                 self.betaU,
                 self.BU,
             ) = self.OffsetKerrSchild()
+        elif IDtype == "TeukolskyWave":
+            if override_gauge_with_standard:
+                raise ValueError("TeukolskyWave requires alpha=1 and betaU=0")
+            ID_defines_gauge_quantities = True
+            (
+                self.gammaDD,
+                self.KDD,
+                self.alpha,
+                self.betaU,
+                self.BU,
+            ) = self.TeukolskyWave()
         else:
             raise ValueError(f"IDtype = {IDtype} is not supported.")
 
@@ -307,6 +318,239 @@ class InitialData_Spherical:
 
     # fmt: on
 
+    def TeukolskyWave(
+        self, branch: str = "regular", mode: int = 20
+    ) -> tuple[
+        list[list[sp.Expr]], list[list[sp.Expr]], sp.Expr, list[sp.Expr], list[sp.Expr]
+    ]:
+        """
+        Set ADM quantities for an analytic linearized Teukolsky wave.
+
+        :param branch: Wave branch to construct: "regular", "outgoing", or "ingoing".
+        :return: A tuple containing the spatial metric gammaDD, extrinsic curvature KDD,
+                lapse alpha, shift betaU, and gauge quantity BU.
+        :raises ValueError: If the requested branch is unsupported.
+        """
+        # Validate the requested Teukolsky mode
+        if mode not in (20, 22):
+            raise ValueError("TeukolskyWave mode must be 20 or 22")
+        # Define math symbols
+        self.r, self.th, self.ph = sp.symbols("r th ph", real=True)
+        r, th = self.r, self.th
+
+        t = sp.symbols("t", real=True)
+
+        # Register wave parameters for generated C code
+        Amp, lam, t0 = par.register_CodeParameters(
+            "REAL",
+            __name__,
+            ["TW_Amp", "TW_lambda", "TW_t0"],
+            [1.0e-6, 1.0, 0.0],
+        )
+
+        # Define retarded/advanced time arguments
+        u = t - r  # outgoing
+        v = t + r  # ingoing
+
+        # Evaluate derivatives at u
+        E = sp.exp(-lam * u**2)
+
+        F0 = u * E
+        F1 = (1 - 2 * lam * u**2) * E
+        F2 = (-6 * lam * u + 4 * lam**2 * u**3) * E
+        F3 = (-6 * lam + 24 * lam**2 * u**2 - 8 * lam**3 * u**4) * E
+        F4 = (60 * lam**2 * u - 80 * lam**3 * u**3 + 16 * lam**4 * u**5) * E
+        F5 = (
+            60 * lam**2 - 360 * lam**3 * u**2 + 240 * lam**4 * u**4 - 32 * lam**5 * u**6
+        ) * E
+
+        # Evaluate derivatives at v
+        E_IN = sp.exp(-lam * v**2)
+
+        p0 = v * E_IN
+        p1 = (1 - 2 * lam * v**2) * E_IN
+        p2 = (-6 * lam * v + 4 * lam**2 * v**3) * E_IN
+        p3 = (-6 * lam + 24 * lam**2 * v**2 - 8 * lam**3 * v**4) * E_IN
+        p4 = (60 * lam**2 * v - 80 * lam**3 * v**3 + 16 * lam**4 * v**5) * E_IN
+        p5 = (
+            60 * lam**2 - 360 * lam**3 * v**2 + 240 * lam**4 * v**4 - 32 * lam**5 * v**6
+        ) * E_IN
+
+        # Calculate outgoing radial components
+        A_OUT = 24 * Amp * ((F2 / r**3) + (3 * F1 / r**4) + (3 * F0 / r**5))
+        B_OUT = (
+            -4
+            * Amp
+            * ((F3 / r**2) + (3 * F2 / r**3) + (6 * F1 / r**4) + (6 * F0 / r**5))
+        )
+        C_OUT = (
+            2
+            * Amp
+            * (
+                (F4 / r)
+                + (2 * F3 / r**2)
+                + (3 * F2 / r**3)
+                + (3 * F1 / r**4)
+                + (3 * F0 / r**5)
+            )
+        )
+
+        # Calculate ingoing radial components
+        A_IN = 24 * Amp * ((-p2 / r**3) + (3 * p1 / r**4) - (3 * p0 / r**5))
+        B_IN = (
+            4
+            * Amp
+            * ((-p3 / r**2) + (3 * p2 / r**3) - (6 * p1 / r**4) + (6 * p0 / r**5))
+        )
+        C_IN = (
+            2
+            * Amp
+            * (
+                (-p4 / r)
+                + (2 * p3 / r**2)
+                - (3 * p2 / r**3)
+                + (3 * p1 / r**4)
+                - (3 * p0 / r**5)
+            )
+        )
+
+        # Time derivatives for outgoing wave
+        A_dot_OUT = 24 * Amp * ((F3 / r**3) + (3 * F2 / r**4) + (3 * F1 / r**5))
+        B_dot_OUT = (
+            -4
+            * Amp
+            * ((F4 / r**2) + (3 * F3 / r**3) + (6 * F2 / r**4) + (6 * F1 / r**5))
+        )
+        C_dot_OUT = (
+            2
+            * Amp
+            * (
+                (F5 / r)
+                + (2 * F4 / r**2)
+                + (3 * F3 / r**3)
+                + (3 * F2 / r**4)
+                + (3 * F1 / r**5)
+            )
+        )
+
+        # Time derivatives for ingoing wave
+        A_dot_IN = 24 * Amp * ((-p3 / r**3) + (3 * p2 / r**4) - (3 * p1 / r**5))
+        B_dot_IN = (
+            4
+            * Amp
+            * ((-p4 / r**2) + (3 * p3 / r**3) - (6 * p2 / r**4) + (6 * p1 / r**5))
+        )
+        C_dot_IN = (
+            2
+            * Amp
+            * (
+                (-p5 / r)
+                + (2 * p4 / r**2)
+                - (3 * p3 / r**3)
+                + (3 * p2 / r**4)
+                - (3 * p1 / r**5)
+            )
+        )
+
+        # Regular radial components = outgoing + ingoing
+        A_REG = A_OUT + A_IN
+        B_REG = B_OUT + B_IN
+        C_REG = C_OUT + C_IN
+
+        # Regular time derivatives
+        A_dot_REG = A_dot_OUT + A_dot_IN
+        B_dot_REG = B_dot_OUT + B_dot_IN
+        C_dot_REG = C_dot_OUT + C_dot_IN
+
+        # Select wave branch
+        if branch == "outgoing":
+            A_use = A_OUT
+            B_use = B_OUT
+            C_use = C_OUT
+            A_dot_use = A_dot_OUT
+            B_dot_use = B_dot_OUT
+            C_dot_use = C_dot_OUT
+
+        elif branch == "ingoing":
+            A_use = A_IN
+            B_use = B_IN
+            C_use = C_IN
+            A_dot_use = A_dot_IN
+            B_dot_use = B_dot_IN
+            C_dot_use = C_dot_IN
+
+        elif branch == "regular":
+            A_use = A_REG
+            B_use = B_REG
+            C_use = C_REG
+            A_dot_use = A_dot_REG
+            B_dot_use = B_dot_REG
+            C_dot_use = C_dot_REG
+
+        else:
+            raise ValueError("branch must be 'outgoing', 'ingoing', or 'regular'")
+
+        # Define angular terms
+        s = sp.sin(th)
+        c = sp.cos(th)
+        if mode == 20:
+            Y = 3 * c**2 - 1
+
+        # Assemble the mode-20 spatial metric in spherical coordinates
+        gammaDD = ixp.zerorank2()
+
+        if mode == 20:
+            gammaDD[0][0] = 1 + A_use * Y
+            gammaDD[0][1] = gammaDD[1][0] = -6 * r * B_use * s * c
+            gammaDD[0][2] = gammaDD[2][0] = sp.sympify(0)
+            gammaDD[1][1] = r**2 * (1 - A_use * Y / 2 + 3 * C_use * s**2)
+            gammaDD[1][2] = gammaDD[2][1] = sp.sympify(0)
+            gammaDD[2][2] = r**2 * s**2 * (1 - A_use * Y / 2 - 3 * C_use * s**2)
+
+        # Assemble the mode-22 spatial metric in spherical coordinates
+        elif mode == 22:
+            P = sp.cos(2 * self.ph)
+            Q = sp.sin(2* self.ph)
+
+            gammaDD[0][0] = 1 + A_use * s**2 * P
+            gammaDD[0][1] = gammaDD[1][0] = 2 * r * B_use * s * c * P
+            gammaDD[0][2] = gammaDD[2][0] = -2 * r * B_use * s**2 * Q
+            gammaDD[1][1] = r**2 * (1 - A_use * s**2 * P / 2 - C_use * (1 + c**2) * P)
+            gammaDD[1][2] = gammaDD[2][1] = -2 * r**2 * C_use * s * c * Q
+            gammaDD[2][2] = r**2 * s**2 * (1 - A_use * s**2 * P / 2 - C_use * (1 + c**2) * P)
+
+        # Assemble the mode-20 extrinsic curvature from the time derivatives
+        KDD = ixp.zerorank2()
+
+        if mode == 20:
+            KDD[0][0] = -sp.Rational(1, 2) * A_dot_use * Y
+            KDD[0][1] = KDD[1][0] = 3 * r * B_dot_use * s * c
+            KDD[0][2] = KDD[2][0] = sp.sympify(0)
+            KDD[1][1] = r**2 * (sp.Rational(1, 4) * A_dot_use * Y - sp.Rational(3, 2) * C_dot_use * s**2)
+            KDD[1][2] = KDD[2][1] = sp.sympify(0)
+            KDD[2][2] = (r**2 * s**2 * (sp.Rational(1, 4) * A_dot_use * Y + sp.Rational(3, 2) * C_dot_use * s**2))
+
+        # Assemble the mode-22 extrinsic curvature from the time derivatives
+        elif mode == 22:
+            KDD[0][0] = -sp.Rational(1, 2) * A_dot_use * s**2 * P
+            KDD[0][1] = KDD[1][0] = -r * B_dot_use * s * c * P
+            KDD[0][2] = KDD[2][0] = r * B_dot_use * s**2 * Q
+            KDD[1][1] = r**2 * (sp.Rational(1, 4) * A_dot_use * s**2 * P - sp.Rational(1, 2) * C_dot_use * (1 + c**2) * P)
+            KDD[1][2] = KDD[2][1] = r**2 * C_dot_use * s * c * Q
+            KDD[2][2] = r**2 * s**2 * (sp.Rational(1, 4) * A_dot_use * s**2 * P + sp.Rational(1, 2) * C_dot_use * (1 + c**2) * P)
+
+        # Evaluate the wave on the chosen initial time slice
+        gammaDD = [[component.subs(t, t0) for component in row] for row in gammaDD]
+
+        KDD = [[component.subs(t, t0) for component in row] for row in KDD]
+
+        # Teukolsky-wave gauge quantities
+        alpha = sp.sympify(1)
+        betaU = ixp.zerorank1()
+        BU = ixp.zerorank1()
+
+        return gammaDD, KDD, alpha, betaU, BU
+
 
 if __name__ == "__main__":
     import doctest
@@ -339,3 +583,102 @@ if __name__ == "__main__":
             f"{os.path.splitext(os.path.basename(__file__))[0]}_{ID_type}",
             results_dict,
         )
+    # Validate Teukolsky-wave initial data.
+    wave = InitialData_Spherical("TeukolskyWave")
+
+    # Check the lapse, shift, and gauge driver.
+    assert wave.alpha == 1
+    assert wave.betaU == [0, 0, 0]
+    assert wave.BU == [0, 0, 0]
+
+    # Check metric and extrinsic-curvature symmetry.
+    for i in range(3):
+        for j in range(3):
+            assert sp.simplify(wave.gammaDD[i][j] - wave.gammaDD[j][i]) == 0
+            assert sp.simplify(wave.KDD[i][j] - wave.KDD[j][i]) == 0
+
+    # Check that regular = outgoing + ingoing perturbations.
+    outgoing = InitialData_Spherical("TeukolskyWave")
+    outgoing.gammaDD, outgoing.KDD, _, _, _ = outgoing.TeukolskyWave(branch="outgoing")
+
+    ingoing = InitialData_Spherical("TeukolskyWave")
+    ingoing.gammaDD, ingoing.KDD, _, _, _ = ingoing.TeukolskyWave(branch="ingoing")
+
+    r_wave, th_wave = sp.symbols("r th", real=True)
+    flat_metric = [
+        [1, 0, 0],
+        [0, r_wave**2, 0],
+        [0, 0, r_wave**2 * sp.sin(th_wave) ** 2],
+    ]
+
+    for i in range(3):
+        for j in range(3):
+            assert (
+                sp.simplify(
+                    wave.gammaDD[i][j]
+                    - outgoing.gammaDD[i][j]
+                    - ingoing.gammaDD[i][j]
+                    + flat_metric[i][j]
+                )
+                == 0
+            )
+            assert (
+                sp.simplify(wave.KDD[i][j] - outgoing.KDD[i][j] - ingoing.KDD[i][j])
+                == 0
+            )
+
+    # Verify that the metric perturbation is trace-free.
+    trace = (
+        wave.gammaDD[0][0]
+        - 1
+        + (wave.gammaDD[1][1] - r_wave**2) / r_wave**2
+        + (wave.gammaDD[2][2] - r_wave**2 * sp.sin(th_wave) ** 2)
+        / (r_wave**2 * sp.sin(th_wave) ** 2)
+    )
+    assert sp.simplify(trace) == 0
+
+    # Divergence-free Teukolsky perturbation in flat spherical coordinates.
+    coords = (r_wave, th_wave, wave.ph)
+    background = [1, r_wave**2, r_wave**2 * sp.sin(th_wave) ** 2]
+    inverse = [1 / component for component in background]
+    perturbation = [
+        [wave.gammaDD[i][j] - (background[i] if i == j else 0) for j in range(3)]
+        for i in range(3)
+    ]
+    connection = [
+        [
+            [
+                sp.Rational(1, 2)
+                * inverse[i]
+                * (
+                    (sp.diff(background[i], coords[j]) if i == k else 0)
+                    + (sp.diff(background[i], coords[k]) if i == j else 0)
+                    - (sp.diff(background[j], coords[i]) if j == k else 0)
+                )
+                for k in range(3)
+            ]
+            for j in range(3)
+        ]
+        for i in range(3)
+    ]
+    for i in range(3):
+        divergence = sum(
+            inverse[j]
+            * (
+                sp.diff(perturbation[i][j], coords[j])
+                - sum(connection[k][j][i] * perturbation[k][j] for k in range(3))
+                - sum(connection[k][j][j] * perturbation[i][k] for k in range(3))
+            )
+            for j in range(3)
+        )
+        assert sp.simplify(divergence) == 0
+
+    # Verify that the standard-gauge override is rejected.
+    try:
+        InitialData_Spherical("TeukolskyWave", override_gauge_with_standard=True)
+    except ValueError as exc:
+        assert "TeukolskyWave requires alpha=1 and betaU=0" in str(exc)
+    else:
+        raise AssertionError("TeukolskyWave must reject the standard-gauge override")
+
+    print("Teukolsky-wave owner validation passed.")

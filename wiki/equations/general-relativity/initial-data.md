@@ -68,6 +68,8 @@ quantities, or if `override_gauge_with_standard=True`, the provider sets
 `EvolvedConformalFactor_cf`: `phi` uses `exp(-2*cf)`, `chi` uses `sqrt(cf)`,
 and `W` uses `cf`.
 
+**Teukolsky-wave exception:** The `TeukolskyWave` initial-data family uses unit lapse (`alpha = 1`), zero shift (`betaU = 0`), and zero shift time derivative (`BU = 0`). Unlike the other supported families, it rejects `override_gauge_with_standard=True`. Calling `InitialData_Spherical("TeukolskyWave", override_gauge_with_standard=True)` raises a `ValueError` because the wave requires its prescribed gauge.
+
 The trusted files validate the public object state for each supported family:
 Cartesian Brill-Lindquist and Kasner, plus spherical UIUCBlackHole,
 StaticTrumpet, and OffsetKerrSchild. The separate `ADM_to_BSSN_StaticTrumpet`
