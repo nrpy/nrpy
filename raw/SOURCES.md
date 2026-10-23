@@ -37,6 +37,13 @@ aggregate rows and `wiki/source-map.md`.
 | Source | Status |
 | --- | --- |
 | `AGENTS.md` | living |
+| `nrpy/infrastructures/BHaH/MoLtimestepping/MoL_step_forward_in_time.py` | living |
+| `nrpy/infrastructures/BHaH/MoLtimestepping/rk_butcher_table_dictionary.py` | living |
+| `nrpy/infrastructures/BHaH/CurviBoundaryConditions/register_all.py` | living |
+| `nrpy/infrastructures/BHaH/CurviBoundaryConditions/apply_bcs_outerradiation_and_inner.py` | living |
+| `.github/tests/rk3_cpu/check.py` | living |
+| `.github/tests/rk3_cpu/generate.py` | living |
+| `.github/tests/rk3_cpu/runtime.c` | living |
 | `README.md` | living |
 | `CITATION.md` | living |
 | `setup.py` | living |

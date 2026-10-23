@@ -130,6 +130,7 @@ default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
 default_BH2_z_posn = -0.25
 MoL_method = "RK4"
+enable_RK3_accumulation = MoL_method in ("RK3 Ralston", "RK3 Heun")
 fd_order = 8
 radiation_BC_fd_order = 4
 separate_Ricci_and_BSSN_RHS = True
@@ -148,8 +149,13 @@ separate_Ricci_and_BSSN_RHS = True
 # carries ten, and it ran before the register-pressure statement ordering and the inlining of the
 # finite-difference helpers, which is what put rhs_eval at the FP64 issue peak where trading
 # memory traffic for arithmetic pays. Measured for SinhCylindrical, fd_order 8, double.
+# Diagonal RK3 uses all three evolved-field arrays during stage 2, so none
+# can serve as scratch for stored metric derivatives.
 enable_hDDdD_gridfunctions = (
-    separate_Ricci_and_BSSN_RHS and parallelization == "cuda" and fp_type == "double"
+    separate_Ricci_and_BSSN_RHS
+    and parallelization == "cuda"
+    and fp_type == "double"
+    and not enable_RK3_accumulation
 )
 # The same tensor-product identity for the BSSN right-hand sides: store the first derivatives of
 # cf, alpha and vetU that its fifteen mixed second derivatives are built from, so that each
@@ -313,6 +319,7 @@ enable_rhs_eval_with_Ricci = (
     and not enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU
 )
 BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
+    enable_RK3_accumulation=enable_RK3_accumulation,
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -418,6 +425,7 @@ BHaH.numerical_grids_and_timestep.register_CFunctions(
 )
 
 BHaH.CurviBoundaryConditions.register_all.register_C_functions(
+    enable_RK3_accumulation=enable_RK3_accumulation,
     set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
@@ -447,22 +455,18 @@ elif separate_Ricci_and_BSSN_RHS:
 if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU:
     # Must precede rhs_eval, which reads these values within the substep.
     rhs_string += "\ncfdD_alphadD_vetUdD_eval(params, RK_INPUT_GFS, auxevol_gfs);"
-rhs_string += """
-rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
-if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
-  apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
-                                     gridfunctions_wavespeed,gridfunctions_f_infinity,
-                                     RK_INPUT_GFS, RK_OUTPUT_GFS);"""
+rhs_string, rhs_accumulation_string = BHaH.general_relativity.rhs_eval.MoL_rhs_strings(
+    pre_rhs_string=rhs_string, enable_rfm_precompute=enable_rfm_precompute
+)
 if enable_rhs_eval_with_Ricci:
     rhs_string = rhs_string.replace(
         "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);", ""
     ).replace("rhs_eval(", "rhs_eval_with_Ricci(")
-if not enable_rfm_precompute:
-    rhs_string = rhs_string.replace("rfmstruct", "xx")
 
 BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
+    rhs_accumulation_string=rhs_accumulation_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
   enforce_detgbar_equals_detghat_trAzero(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",

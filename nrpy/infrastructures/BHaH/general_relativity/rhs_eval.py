@@ -9,7 +9,7 @@ from collections import OrderedDict as ODict
 from inspect import currentframe as cfr
 from pathlib import Path
 from types import FrameType as FT
-from typing import Dict, List, Union, cast
+from typing import Dict, List, Tuple, Union, cast
 
 import sympy as sp
 from mpmath import mpc, mpf  # type: ignore
@@ -28,9 +28,7 @@ from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
 from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
-from nrpy.equations.general_relativity.fCCZ4_system import (
-    build_fccz4_expression_bundle,
-)
+from nrpy.equations.general_relativity.fCCZ4_system import build_fccz4_expression_bundle
 from nrpy.equations.general_relativity.kreiss_oliger_terms import (
     add_KreissOliger_dissipation_terms,
 )
@@ -42,6 +40,66 @@ from nrpy.infrastructures import BHaH
 from nrpy.infrastructures.BHaH.general_relativity.cfdD_alphadD_vetUdD_eval import (
     register_cfdD_alphadD_vetUdD_gridfunctions,
 )
+
+
+def MoL_rhs_strings(
+    pre_rhs_string: str = "",
+    enable_rfm_precompute: bool = True,
+    outer_bcs_type: str = "runtime",
+) -> Tuple[str, str]:
+    """
+    Build ordinary and accumulated GR RHS calls for BHaH and superB timestepping.
+
+    The preamble computes Ricci, matter sources, or gauge coefficients from
+    RK_INPUT_GFS. It must leave that input and both accumulated outputs unchanged.
+    The accumulated call prepares radiation boundaries before changing either
+    output, then completes them after the interior RHS evaluation.
+
+    :param pre_rhs_string: C statements to execute before each RHS evaluation.
+    :param enable_rfm_precompute: Whether the RHS takes rfmstruct instead of the
+        three coordinate arrays xx[0], xx[1], and xx[2].
+    :param outer_bcs_type: "runtime" for BHaH's outer_bc_type parameter, or the
+        superB generation-time choice "radiation" or "extrapolation".
+    :raises ValueError: If outer_bcs_type is unsupported.
+    :return: Ordinary rhs_string and diagonal-RK3 rhs_accumulation_string.
+
+    Doctests:
+    >>> MoL_rhs_strings(outer_bcs_type="unknown")
+    Traceback (most recent call last):
+      ...
+    ValueError: Unsupported outer_bcs_type: unknown
+    """
+    if outer_bcs_type not in ("runtime", "radiation", "extrapolation"):
+        raise ValueError(f"Unsupported outer_bcs_type: {outer_bcs_type}")
+    coordinates = "rfmstruct" if enable_rfm_precompute else "xx[0], xx[1], xx[2]"
+    rhs_args = f"commondata, params, {coordinates}, auxevol_gfs, RK_INPUT_GFS"
+    bc_args = (
+        "commondata, params, bcstruct, griddata[grid].xx, "
+        "gridfunctions_wavespeed, gridfunctions_f_infinity, RK_INPUT_GFS"
+    )
+    radiation_if = (
+        'if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)\n'
+        if outer_bcs_type == "runtime"
+        else ""
+    )
+    rhs_string = pre_rhs_string + f"\nrhs_eval({rhs_args}, RK_OUTPUT_GFS);\n"
+    accumulation_string = (
+        pre_rhs_string
+        + f"\nrhs_eval_accumulate({rhs_args}, RK_STAGE_GFS, RK_ACCUM_GFS, RK_STAGE_DT, RK_ACCUM_DT);\n"
+    )
+    if outer_bcs_type != "extrapolation":
+        rhs_string += (
+            radiation_if
+            + f"apply_bcs_outerradiation_and_inner({bc_args}, RK_OUTPUT_GFS);\n"
+        )
+        accumulate_bc = (
+            radiation_if + f"apply_bcs_outerradiation_and_inner_accumulate({bc_args}, "
+            "RK_STAGE_GFS, RK_ACCUM_GFS, RK_STAGE_DT, RK_ACCUM_DT, "
+        )
+        accumulation_string = (
+            accumulate_bc + "1);\n" + accumulation_string + accumulate_bc + "0);\n"
+        )
+    return rhs_string, accumulation_string
 
 
 def register_CFunction_rhs_eval(
@@ -66,6 +124,7 @@ def register_CFunction_rhs_eval(
     enable_YBS_momentum_constraint_adjustment: bool = False,
     enable_cfdD_alphadD_vetUdD_gridfunctions: bool = False,
     enable_cpu_tiling: bool = False,
+    enable_RK3_accumulation: bool = False,
 ) -> Union[None, Dict[str, Union[mpf, mpc]], pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for BSSN or fCCZ4.
@@ -102,6 +161,11 @@ def register_CFunction_rhs_eval(
     :param enable_cpu_tiling: Whether to register the tile-bounded OpenMP variant used by
         rhs_eval_with_Ricci. This requires precomputed reference metrics, RbarDD
         gridfunctions, and BSSN rather than fCCZ4.
+    :param enable_RK3_accumulation: Also register rhs_eval_accumulate, which adds each
+        RHS to two evolved-field arrays while reading a separate, unchanged stage.
+        This supports projected diagonal RK3 with three evolved-field arrays total.
+        SIMD accumulation stores only interior lanes, preserving prepared radiation
+        ghosts at partial rows. An output with a zero multiplier remains unchanged.
 
     :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
 
@@ -413,125 +477,202 @@ def register_CFunction_rhs_eval(
         },
     }
 
-    arg_dict_host = {
-        "params": "const params_struct *restrict",
-        **{k.replace("CUDA", "SIMD"): v for k, v in arg_dict_cuda.items()},
-    }
-
-    point_body = ccg.c_codegen(
-        expr_list,
-        RHSs_access_gf,
-        enable_fd_codegen=True,
-        stored_first_derivatives=stored_first_derivatives,
-        enable_simd=enable_intrinsics,
-        upwind_control_vec=betaU,
-        enable_fd_functions=enable_fd_functions,
-        rational_const_alias=(
-            "static constexpr" if parallelization == "cuda" else "static const"
-        ),
-    ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD")
-    emit_cpu_tile_function = (
-        enable_cpu_tiling
-        and parallelization == "openmp"
-        and enable_rfm_precompute
-        and enable_RbarDD_gridfunctions
-        and not enable_fCCZ4
-    )
-    for tiled in ([False, True] if emit_cpu_tile_function else [False]):
-        kernel_body = BHaH.simple_loop.simple_loop(
-            loop_body=point_body,
-            loop_region="interior",
-            enable_intrinsics=enable_intrinsics,
-            CoordSystem=CoordSystem,
-            enable_rfm_precompute=enable_rfm_precompute,
-            read_xxs=not enable_rfm_precompute,
-            OMP_collapse=OMP_collapse,
-            enable_OpenMP=not tiled,
-            loop_bounds=(
-                (
-                    ["lo2", "lo1", "NGHOSTS"],
-                    ["hi2", "hi1", "Nxx_plus_2NGHOSTS0 - NGHOSTS"],
-                )
-                if tiled
-                else None
-            ),
-        )
-        loop_params = parallel_utils.get_loop_parameters(
-            parallelization, enable_intrinsics=enable_intrinsics
-        )
-        if enable_intrinsics:
-            for symbol in commondata_symbols:
-                loop_params += f"MAYBE_UNUSED const REAL_SIMD_ARRAY {symbol} = ConstSIMD(NOSIMD{symbol});\n"
-
-        params_definitions = generate_definition_header(
-            param_symbols,
-            enable_intrinsics=enable_intrinsics,
-            var_access=parallel_utils.get_params_access(parallelization),
-        )
-        kernel_body = f"{loop_params}\n{params_definitions}\n{kernel_body}"
-
-        kernel, launch_body = parallel_utils.generate_kernel_and_launch_code(
-            name + ("_tile" if tiled else ""),
-            kernel_body.replace(
-                "SIMD", "CUDA" if parallelization == "cuda" else "SIMD"
-            ),
-            arg_dict_cuda,
-            {
-                **arg_dict_host,
-                **(
-                    {key: "const int" for key in ("lo1", "hi1", "lo2", "hi2")}
-                    if tiled
-                    else {}
-                ),
-            },
-            parallelization=parallelization,
-            comments=desc,
-            cfunc_type=f"static {cfunc_type}",
-            launchblock_with_braces=False,
-            launch_dict={
-                **BHaH.parallelization.cuda_utilities.default_launch_dictionary,
-                "threads_per_block": ["64", "1", "1"],
-            },
-            thread_tiling_macro_suffix="BSSN_RHS",
-        )
-
-        for symbol in commondata_symbols:
-            tmp_sym = (
-                f"NOCUDA{symbol}"
-                if parallelization == "cuda" and enable_intrinsics
-                else (
-                    f"NOSIMD{symbol}"
-                    if enable_intrinsics
-                    else symbol if enable_intrinsics else symbol
-                )
+    for accumulate in [False, True] if enable_RK3_accumulation else [False]:
+        function_name = name + ("_accumulate" if accumulate else "")
+        function_params = params
+        kernel_args = arg_dict_cuda.copy()
+        rhs_outputs = RHSs_access_gf
+        weight_symbols: List[str] = []
+        local_rhs = updates = ""
+        if accumulate:
+            del kernel_args["rhs_gfs"]
+            kernel_args.update(
+                {"stage_gfs": "REAL *restrict", "accum_gfs": "REAL *restrict"}
             )
-            launch_body = launch_body.replace(tmp_sym, f"commondata->{symbol}")
+            weight_symbols = ["stage_dt", "accum_dt"]
+            kernel_args.update(
+                {
+                    f"NOCUDA{k}" if enable_intrinsics else k: "const REAL"
+                    for k in weight_symbols
+                }
+            )
+            function_params = params.replace(
+                "REAL *restrict rhs_gfs",
+                "REAL *restrict stage_gfs, REAL *restrict accum_gfs, "
+                "const REAL stage_dt, const REAL accum_dt",
+            )
+            # This point-local array holds one RHS per field (one SIMD vector
+            # per field with intrinsics). Its size does not grow with the grid.
+            # The same finite-difference expressions serve both entry points.
+            width = "SIMD_WIDTH" if enable_intrinsics else "1"
+            local_rhs = f"REAL rk_rhs[{len(expr_list)} * {width}];\n"
+            rhs_outputs = [f"rk_rhs[{i} * {width}]" for i in range(len(expr_list))]
+            for output, weight in (
+                ("stage_gfs", "stage_dt"),
+                ("accum_gfs", "accum_dt"),
+            ):
+                vector_updates = scalar_updates = ""
+                for i, rhs_access in enumerate(RHSs_access_gf):
+                    output_access = rhs_access.replace("rhs_gfs", output)
+                    if enable_intrinsics and parallelization == "openmp":
+                        vector_updates += (
+                            f"WriteSIMD(&{output_access}, FusedMulAddSIMD({weight}, "
+                            f"ReadSIMD(&{rhs_outputs[i]}), ReadSIMD(&{output_access})));\n"
+                        )
+                        lane_access = output_access.replace("i0,", "i0 + lane,")
+                        scalar_updates += f"{lane_access} += NOSIMD{weight} * rk_rhs[{i} * SIMD_WIDTH + lane];\n"
+                    else:
+                        # CUDA local and updated arrays need ordinary loads, not __ldg.
+                        scalar_updates += (
+                            f"{output_access} += {weight} * {rhs_outputs[i]};\n"
+                        )
+                if vector_updates:
+                    # Only accumulation stores must preserve the right-hand ghosts:
+                    # radiation completion adds to their prepared values.
+                    updates += f"""
+if (NOSIMD{weight} != 0.0) {{
+  if (i0 + SIMD_WIDTH <= Nxx_plus_2NGHOSTS0 - NGHOSTS) {{
+    {vector_updates}
+  }} else {{
+    for (int lane = 0; lane < Nxx_plus_2NGHOSTS0 - NGHOSTS - i0; lane++) {{
+      {scalar_updates}
+    }}
+  }}
+}}
+"""
+                else:
+                    updates += f"if ({weight} != 0.0) {{\n{scalar_updates}}}\n"
 
-        prefunc = ""
-        if parallelization == "cuda" and enable_fd_functions:
-            prefunc = fin.construct_FD_functions_prefunc(
-                cfunc_decorators="__device__ "
-            ).replace("SIMD", "CUDA")
-        elif enable_fd_functions:
-            prefunc = fin.construct_FD_functions_prefunc()
+        arg_dict_host = {
+            "params": "const params_struct *restrict",
+            **{k.replace("CUDA", "SIMD"): v for k, v in kernel_args.items()},
+        }
 
-        cfc.register_CFunction(
-            include_CodeParameters_h=False,
-            includes=includes,
-            prefunc=prefunc + kernel,
-            desc=desc,
-            cfunc_type=cfunc_type,
-            CoordSystem_for_wrapper_func=CoordSystem,
-            name=name + ("_tile" if tiled else ""),
-            params=params
-            + (
-                ", const int lo1, const int hi1, const int lo2, const int hi2"
-                if tiled
-                else ""
-            ),
-            body=launch_body,
+        point_body = ccg.c_codegen(
+            expr_list,
+            rhs_outputs,
+            enable_fd_codegen=True,
+            stored_first_derivatives=stored_first_derivatives,
             enable_simd=enable_intrinsics,
+            upwind_control_vec=betaU,
+            enable_fd_functions=enable_fd_functions,
+            rational_const_alias=(
+                "static constexpr" if parallelization == "cuda" else "static const"
+            ),
         )
+        if accumulate:
+            point_body = "{\n" + local_rhs + point_body + updates + "}\n"
+        point_body = point_body.replace(
+            "SIMD", "CUDA" if parallelization == "cuda" else "SIMD"
+        )
+        emit_cpu_tile_function = (
+            enable_cpu_tiling
+            and not accumulate
+            and parallelization == "openmp"
+            and enable_rfm_precompute
+            and enable_RbarDD_gridfunctions
+            and not enable_fCCZ4
+        )
+        for tiled in [False, True] if emit_cpu_tile_function else [False]:
+            kernel_body = BHaH.simple_loop.simple_loop(
+                loop_body=point_body,
+                loop_region="interior",
+                enable_intrinsics=enable_intrinsics,
+                CoordSystem=CoordSystem,
+                enable_rfm_precompute=enable_rfm_precompute,
+                read_xxs=not enable_rfm_precompute,
+                OMP_collapse=OMP_collapse,
+                enable_OpenMP=not tiled,
+                loop_bounds=(
+                    (
+                        ["lo2", "lo1", "NGHOSTS"],
+                        ["hi2", "hi1", "Nxx_plus_2NGHOSTS0 - NGHOSTS"],
+                    )
+                    if tiled
+                    else None
+                ),
+            )
+            loop_params = parallel_utils.get_loop_parameters(
+                parallelization, enable_intrinsics=enable_intrinsics
+            )
+            if enable_intrinsics:
+                for symbol in commondata_symbols + weight_symbols:
+                    loop_params += f"MAYBE_UNUSED const REAL_SIMD_ARRAY {symbol} = ConstSIMD(NOSIMD{symbol});\n"
+
+            params_definitions = generate_definition_header(
+                param_symbols,
+                enable_intrinsics=enable_intrinsics,
+                var_access=parallel_utils.get_params_access(parallelization),
+            )
+            kernel_body = f"{loop_params}\n{params_definitions}\n{kernel_body}"
+
+            kernel, launch_body = parallel_utils.generate_kernel_and_launch_code(
+                function_name + ("_tile" if tiled else ""),
+                kernel_body.replace(
+                    "SIMD", "CUDA" if parallelization == "cuda" else "SIMD"
+                ),
+                kernel_args,
+                {
+                    **arg_dict_host,
+                    **(
+                        {key: "const int" for key in ("lo1", "hi1", "lo2", "hi2")}
+                        if tiled
+                        else {}
+                    ),
+                },
+                parallelization=parallelization,
+                comments=desc,
+                cfunc_type=f"static {cfunc_type}",
+                launchblock_with_braces=False,
+                launch_dict={
+                    **BHaH.parallelization.cuda_utilities.default_launch_dictionary,
+                    "threads_per_block": ["64", "1", "1"],
+                },
+                thread_tiling_macro_suffix="BSSN_RHS",
+            )
+
+            for symbol in commondata_symbols:
+                tmp_sym = (
+                    f"NOCUDA{symbol}"
+                    if parallelization == "cuda" and enable_intrinsics
+                    else (
+                        f"NOSIMD{symbol}"
+                        if enable_intrinsics
+                        else symbol if enable_intrinsics else symbol
+                    )
+                )
+                launch_body = launch_body.replace(tmp_sym, f"commondata->{symbol}")
+
+            for symbol in weight_symbols:
+                launch_body = launch_body.replace(f"NOCUDA{symbol}", symbol).replace(
+                    f"NOSIMD{symbol}", symbol
+                )
+
+            prefunc = ""
+            if parallelization == "cuda" and enable_fd_functions:
+                prefunc = fin.construct_FD_functions_prefunc(
+                    cfunc_decorators="__device__ "
+                ).replace("SIMD", "CUDA")
+            elif enable_fd_functions:
+                prefunc = fin.construct_FD_functions_prefunc()
+
+            cfc.register_CFunction(
+                include_CodeParameters_h=False,
+                includes=includes,
+                prefunc=prefunc + kernel,
+                desc=desc,
+                cfunc_type=cfunc_type,
+                CoordSystem_for_wrapper_func=CoordSystem,
+                name=function_name + ("_tile" if tiled else ""),
+                params=function_params
+                + (
+                    ", const int lo1, const int hi1, const int lo2, const int hi2"
+                    if tiled
+                    else ""
+                ),
+                body=launch_body,
+                enable_simd=enable_intrinsics,
+            )
     return pcg.NRPyEnv()
 
 
@@ -590,7 +731,13 @@ for (int lo2 = NGHOSTS; lo2 < end2; lo2 += 8) {{
 
 
 if __name__ == "__main__":
+    import doctest
     import os
+    import sys
+
+    results = doctest.testmod()
+    if results.failed:
+        sys.exit(1)
 
     Coord = "SinhSpherical"
     LapseEvolOption = "OnePlusLog"
