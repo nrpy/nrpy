@@ -22,6 +22,11 @@ def register_CFunction_hDD_dD_and_W_dD_in_interp_src_grid_interior() -> None:
     cfunc_type = "void"
     name = "hDD_dD_and_W_dD_in_interp_src_grid_interior"
     params = "commondata_struct *restrict commondata"
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     body = r"""
   int i0_min_shift = 0;
   if (commondata->bhahaha_params_and_data->r_min_external_input == 0)
@@ -36,10 +41,7 @@ def register_CFunction_hDD_dD_and_W_dD_in_interp_src_grid_interior() -> None:
   const REAL invdxx2 = commondata->interp_src_invdxx2;
 
   // PART 1 OF 2: Compute angular derivatives h_{ij,k} and W_{,k} (k = 1, 2) at all active radial points.
-#pragma omp parallel for
-  for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
-    for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)
-      for (int i0 = i0_min_shift; i0 < Nxx_plus_2NGHOSTS0; i0++) {
+  PARALLEL_LOOP(i0, i0_min_shift, Nxx_plus_2NGHOSTS0, i1, NGHOSTS, Nxx_plus_2NGHOSTS1 - NGHOSTS, i2, NGHOSTS, Nxx_plus_2NGHOSTS2 - NGHOSTS) {
 """
     # Calling hDD_dD this ensures that c_codegen sets it as a derivative.
     hDD_dD = ixp.declarerank3("hDD_dD", symmetry="sym01")
@@ -64,13 +66,10 @@ def register_CFunction_hDD_dD_and_W_dD_in_interp_src_grid_interior() -> None:
         enable_fd_codegen=True,
     ).replace("auxevol_gfs[IDX4(", "commondata->interp_src_gfs[IDX4(SRC_")
     body += r"""
-      } // END LOOP: for pt over non-inner-boundary points
+      } END_PARALLEL_LOOP; // END LOOP: for pt over non-inner-boundary points
 
   // PART 2 OF 2: Compute radial derivatives h_{ij,k} and W_{,k} (k = 0) at ALL interior points.
-#pragma omp parallel for
-  for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
-    for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)
-      for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {
+  PARALLEL_LOOP(i0, NGHOSTS, Nxx_plus_2NGHOSTS0 - NGHOSTS, i1, NGHOSTS, Nxx_plus_2NGHOSTS1 - NGHOSTS, i2, NGHOSTS, Nxx_plus_2NGHOSTS2 - NGHOSTS) {
 """
     hDD_dD_and_W_dD_rad_derivs_expr_list = []
     hDD_dD_and_W_dD_rad_derivs_name_list = []
@@ -94,7 +93,7 @@ def register_CFunction_hDD_dD_and_W_dD_in_interp_src_grid_interior() -> None:
     ).replace("auxevol_gfs[IDX4(", "commondata->interp_src_gfs[IDX4(SRC_")
 
     body += r"""
-} // END LOOP: for i0/i1/i2 over all interior points
+} END_PARALLEL_LOOP; // END LOOP: for i0/i1/i2 over all interior points
 """
 
     cfc.register_CFunction(
@@ -105,5 +104,6 @@ def register_CFunction_hDD_dD_and_W_dD_in_interp_src_grid_interior() -> None:
         name=name,
         params=params,
         include_CodeParameters_h=False,  # params not passed to function
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )

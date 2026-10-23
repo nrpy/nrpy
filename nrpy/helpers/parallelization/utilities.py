@@ -120,6 +120,7 @@ def generate_kernel_and_launch_code(
     launchblock_with_braces: bool = False,
     thread_tiling_macro_suffix: str = "DEFAULT",
     cfunc_decorators: str = "__global__",
+    bhahaha: bool = False,
 ) -> Tuple[str, str]:
     """
     Generate kernels as prefuncs and the necessary launch body.
@@ -173,6 +174,12 @@ def generate_kernel_and_launch_code(
             .replace("__device__", "")
             .replace("__host__", "")
         )
+        if bhahaha:
+          host_cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+""" + host_cfunc_decorators
         device_kernel = GPUKernel(
             kernel_body,
             arg_dict_host,

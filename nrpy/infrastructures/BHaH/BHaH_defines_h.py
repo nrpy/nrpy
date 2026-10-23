@@ -336,6 +336,22 @@ def _register_grid_defines(enable_rfm_precompute: bool) -> None:
   for (int(i2) = (i2min); (i2) < (i2max); (i2)++)                                                                                                    \
     for (int(i1) = (i1min); (i1) < (i1max); (i1)++)                                                                                                  \
       for (int(i0) = (i0min); (i0) < (i0max); (i0)++)
+
+// CUDA_3D_LOOP: Similar to LOOP_OMP, in practice, but different in structure, uses threads of a 1D CUDA block structure to evaluate a 3D "loop"
+#define CUDA_3D_LOOP(i0, i0_min, i0_max, i1, i1_min, i1_max, i2, i2_min, i2_max) \
+  for (int j = 0; j < ( (i0_max - i0_min)*(i1_max-i1_min)*(i2_max - i2_min) )/(blockDim.x*gridDim.x) + 1; j++) { \
+    int threadIndex = (blockIdx.x * blockDim.x + threadIdx.x) + j*blockDim.x*gridDim.x;\
+    if (threadIndex < (i0_max - i0_min)*(i1_max-i1_min)*(i2_max - i2_min)) { \
+            int i0 = threadIndex / ((i2_max - i2_min)*(i1_max-i1_min)); \
+            int i1 = (threadIndex - ((i2_max - i2_min)*(i1_max-i1_min))*i0)/ (i2_max-i2_min); \
+            int i2 = threadIndex - ((i2_max - i2_min)*(i1_max-i1_min))*i0 - (i2_max-i2_min)*i1; \
+            i0 += i0_min; \
+            i1 += i1_min; \
+            i2 += i2_min;
+
+#define END_CUDA_3D_LOOP }}
+
+
 // LOOP_BREAKOUT: Forces an exit from the nested loops by setting the loop indices to their maximum values and executing a break.
 #define LOOP_BREAKOUT(i0, i1, i2, i0max, i1max, i2max)                                                                                               \
   {                                                                                                                                                  \
@@ -344,6 +360,26 @@ def _register_grid_defines(enable_rfm_precompute: bool) -> None:
     i2 = (i2max);                                                                                                                                    \
     break;                                                                                                                                           \
   }
+
+// PARALLEL_LOOP: Calls either LOOP_OMP(omp parallel for", ...) or CUDA_3D LOOP chosen at compile time. Because of the slightly more complex nature of the bracketing for CUDA_3D_LOOPs, it MUST be paired with an END_PARALLEL_LOOP macro.
+#ifdef __CUDACC__
+  #define PARALLEL_LOOP(macro_i0, macro_i0min, macro_i0max, macro_i1, macro_i1min, macro_i1max, macro_i2, macro_i2min, macro_i2max)\
+    CUDA_3D_LOOP(macro_i0, macro_i0min, macro_i0max, macro_i1, macro_i1min, macro_i1max, macro_i2, macro_i2min, macro_i2max)
+  #define END_PARALLEL_LOOP END_CUDA_3D_LOOP
+#else
+  #define PARALLEL_LOOP(macro_i0, macro_i0min, macro_i0max, macro_i1, macro_i1min, macro_i1max, macro_i2, macro_i2min, macro_i2max)\
+    LOOP_OMP("omp parallel for",(macro_i0), (macro_i0min), (macro_i0max), (macro_i1), (macro_i1min), (macro_i1max), (macro_i2), (macro_i2min), (macro_i2max)) {
+  #define END_PARALLEL_LOOP }
+#endif
+
+#define PARALLEL_2D_LOOP(macro_i1, macro_i1_min, macro_i1_max, macro_i2, macro_i2_min, macro_i2_max) \
+   PARALLEL_LOOP(macro_i0, 0, 1, (macro_i1), (macro_i1_min), (macro_i1_max), (macro_i2), (macro_i2_min), (macro_i2_max))
+#define END_PARALLEL_2D_LOOP END_PARALLEL_LOOP
+
+#define PARALLEL_1D_LOOP(macro_i0, macro_i0_min, macro_i0_max) \
+   PARALLEL_LOOP((macro_i0), (macro_i0_min), (macro_i0_max), macro_i1, 0, 1, macro_i2, 0, 1)
+#define END_PARALLEL_1D_LOOP END_PARALLEL_LOOP
+
 // IS_IN_GRID_INTERIOR: Checks whether the provided 3D index array (i0i1i2) lies within the grid interior,
 // defined as the region excluding NG ghost cells on each boundary.
 #define IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, NG)                                                  \
@@ -445,7 +481,75 @@ def output_BHaH_defines_h(
 #define restrict __restrict__
 #endif // __cplusplus
 #ifdef __CUDACC__
-#include "BHaH_device_defines.h"
+#include <cooperative_groups.h>
+#define NUM_STREAMS 1
+#define THREADSPERBLOCK 64 
+
+/* Device-side helper: record the first error and its payload. */
+__device__ static inline
+int bhahaha_gpu_set_error(int *error_flag, int code)
+{
+  /* First error wins: change code from 0 to 'code' atomically. */
+  return atomicCAS(error_flag, 0, code);
+}
+
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess) 
+   {
+      fprintf(stderr,"GPUassert: %s %s %d\\n", cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
+
+// CUDA Error checking macro only active if compiled with -DDEBUG
+// Otherwise additional synchronization overhead will occur
+#ifdef DEBUG
+#define cudaCheckErrors(v, msg)                                                                                                                      \
+  do {                                                                                                                                               \
+    cudaError_t __err = cudaGetLastError();                                                                                                          \
+    if (__err != cudaSuccess) {                                                                                                                      \
+      fprintf(stderr, "Fatal error: %s %s (%s at %s:%d)\\n", #v, msg, cudaGetErrorString(__err), __FILE__, __LINE__);                                 \
+      fprintf(stderr, "*** FAILED - ABORTING\\n");                                                                                                    \
+      exit(1);                                                                                                                                       \
+    }                                                                                                                                                \
+  } while (0);
+#else
+#define cudaCheckErrors(v, msg)
+#endif
+
+#ifndef CUDART_VERSION
+#error CUDART_VERSION Undefined!
+#elif (CUDART_VERSION < 9000)
+#error BHaHAHA requires CUDA 9.0
+#elif (CUDART_VERSION < 12020)
+#define CUDA_ONE_THREAD(call_group) if (blockIdx.x*blockDim.x + threadIdx.x == 0) {
+#define END_CUDA_ONE_THREAD }
+#elif (CUDART_VERSION >= 12020)
+#define CUDA_ONE_THREAD(call_group) cooperative_groups::invoke_one((call_group), [&]() {
+#define END_CUDA_ONE_THREAD });
+#else
+#error  urecognized CUDART_VERSION
+#endif
+
+#define COOPERATIVE_KERNEL_NO_SHARED_MEMORY(kernel_name, kernel_args)                    \
+    gpuErrchk( cudaLaunchCooperativeKernel((void*)(kernel_name), gridDim, blockDim, (kernel_args)) );
+
+#define COOPERATIVE_KERNEL_SHARED_MEMORY(kernel_name, kernel_args, kernel_sharesize)                    \
+    gpuErrchk( cudaLaunchCooperativeKernel((void*)(kernel_name), gridDim, blockDim, (kernel_args), (kernel_sharesize)) );
+
+#define GET_COOPERATIVE_KERNEL(_1, _2, NAME, ...) NAME
+#define COOPERATIVE_KERNEL(kernel_name, ...)                          \
+  do {                                                                \
+    int dev = 0;                                                      \
+    cudaDeviceProp deviceProp;                                        \
+    cudaGetDeviceProperties(&deviceProp, dev);                        \
+    int blockDim = THREADSPERBLOCK;                                   \
+    int gridDim = deviceProp.multiProcessorCount;                     \
+    GET_COOPERATIVE_KERNEL(__VA_ARGS__, COOPERATIVE_KERNEL_SHARED_MEMORY, COOPERATIVE_KERNEL_NO_SHARED_MEMORY)(kernel_name, __VA_ARGS__)            \
+    cudaDeviceSynchronize();                                          \
+  } while (0); 
 #endif // __CUDACC__
 
 #ifndef BHAH_TYPEOF
@@ -482,6 +586,24 @@ do { \
         BHAH_FREE(a->b); \
     } \
 } while(0);
+
+#ifdef __CUDACC__
+#define MALLOC(a, sz)                                                   \
+  do {                                                                  \
+    gpuErrchk( cudaMalloc((void**)&(a),sz) );                           \
+  } while (0);
+#else
+#define MALLOC(a, sz)                                                   \
+  do {                                                                  \
+    a = (BHAH_TYPEOF(a))malloc(sz);                                     \
+  } while (0);
+#endif
+
+#ifdef __CUDACC__
+#define FREE(a) gpuErrchk( cudaFree((a)) );
+#else
+#define FREE(a) free((a));
+#endif
 
 #ifdef __CUDACC__
   /* Expand to the statement(s) you pass in */

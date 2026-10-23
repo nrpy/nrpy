@@ -46,6 +46,7 @@ def register_CFunction_MoL_step_forward_in_time(
     enable_curviBCs: bool = False,
     enable_intrinsics: bool = False,
     rational_const_alias: str = "const",
+    bhahaha: bool = False,
 ) -> None:
     r"""
     Register MoL_step_forward_in_time() C function, which is the core driver for time evolution in BHaH codes.
@@ -140,9 +141,25 @@ MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     if enable_curviBCs:
         gf_aliases += "MAYBE_UNUSED const bc_struct *restrict bcstruct = &griddata[grid].bcstruct;\n"
 
+    cfunc_decorators = ""
+    if bhahaha:
+        cfunc_decorators += r"""
+#ifdef __CUDACC__
+__device__
+#endif 
+"""
     body = f"""
 // C code implementation of -={{ {MoL_method} }}=- Method of Lines timestepping.
-
+"""
+    if (bhahaha):
+      body += """
+#ifdef __CUDACC__
+// Set up cooperative group
+namespace cg = cooperative_groups;
+cg::grid_group gpu_grid = cg::this_grid();
+#endif
+"""
+    body += f"""
 // First set the initial time:
 const REAL time_start = commondata->time;
 """
@@ -196,6 +213,7 @@ const REAL time_start = commondata->time;
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
                 rational_const_alias=rational_const_alias,
+                bhahaha=bhahaha,
             )
             + "// -={ END k1 substep }=-\n\n"
         )
@@ -229,6 +247,7 @@ const REAL time_start = commondata->time;
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
                 rational_const_alias=rational_const_alias,
+                bhahaha=bhahaha,
             )
             + "// -={ END k2 substep }=-\n\n"
         )
@@ -257,6 +276,7 @@ const REAL time_start = commondata->time;
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
                 rational_const_alias=rational_const_alias,
+                bhahaha=bhahaha,
             )
             + "// -={ END k3 substep }=-\n\n"
         )
@@ -315,6 +335,7 @@ const REAL time_start = commondata->time;
                         gf_aliases=gf_aliases,
                         post_post_rhs_string=post_post_rhs_string,
                         rational_const_alias=rational_const_alias,
+                        bhahaha=bhahaha,
                     )
                     + f"// -={{ END k{str(s + 1)} substep }}=-\n\n"
                 )
@@ -342,6 +363,7 @@ const REAL time_start = commondata->time;
                         post_post_rhs_string=post_post_rhs_string,
                         rational_const_alias=rational_const_alias,
                         rk_step=None,
+                        bhahaha=bhahaha,
                     )
                 )
             else:
@@ -443,6 +465,7 @@ const REAL time_start = commondata->time;
                             gf_aliases=gf_aliases,
                             post_post_rhs_string=post_post_rhs_string,
                             rational_const_alias=rational_const_alias,
+                            bhahaha=bhahaha,
                         )
                         + f"// -={{ END k{s + 1} substep }}=-\n\n"
                     )
@@ -455,11 +478,27 @@ const int stride0 = blockDim.x * gridDim.x; \
   for(int (ii)=(tid0);(ii)<d_params[streamid].Nxx_plus_2NGHOSTS0*d_params[streamid].Nxx_plus_2NGHOSTS1*d_params[streamid].Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)+=(stride0))
 """
     else:
-        prefunc = r"""
+        if bhahaha:
+            prefunc = r"""
+#ifdef __CUDACC__
+#define LOOP_ALL_GFS_GPS(ii) \
+PARALLEL_1D_LOOP((ii), 0, params->Nxx_plus_2NGHOSTS0*params->Nxx_plus_2NGHOSTS1*params->Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS)
+
+#define END_LOOP_ALL_GFS_GPS END_PARALLEL_1D_LOOP
+#else
+#define LOOP_ALL_GFS_GPS(ii) \
+_Pragma("omp parallel for simd") \
+  for(int (ii)=0;(ii)<params->Nxx_plus_2NGHOSTS0*params->Nxx_plus_2NGHOSTS1*params->Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)++)
+#define END_LOOP_ALL_GFS_GPS
+#endif
+"""
+        else:
+            prefunc = r"""
 #define LOOP_ALL_GFS_GPS(ii) \
 _Pragma("omp parallel for simd") \
   for(int (ii)=0;(ii)<params->Nxx_plus_2NGHOSTS0*params->Nxx_plus_2NGHOSTS1*params->Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)++)
 """
+
         if enable_intrinsics:
             warnings.warn(
                 "SIMD intrinsics in MoL is not properly supported -- MoL update loops are not properly bounds checked."
@@ -476,12 +515,26 @@ _Pragma("omp parallel for simd") \
 // so here we set time based on the iteration number.
 // Note: t_0 and nn_0 are updated at regrid (when dt may change),
 //       so that the time formula remains correct across dt changes.
+"""
+    if bhahaha:
+      body += """
+#ifdef __CUDACC__
+CUDA_ONE_THREAD(gpu_grid) {
+#endif
+"""
+    body += """
 commondata->time = commondata->t_0 + (REAL)(commondata->nn - commondata->nn_0 + 1) * commondata->dt;
 
 // Increment the timestep n:
 commondata->nn++;
 """
-
+    if bhahaha:
+      body += """
+#ifdef __CUDACC__
+} END_CUDA_ONE_THREAD;
+gpu_grid.sync();
+#endif
+"""
     cfc.register_CFunction(
         subdirectory="MoL",
         includes=includes,
@@ -490,6 +543,7 @@ commondata->nn++;
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
         prefunc=prefunc,
     )

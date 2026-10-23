@@ -220,10 +220,17 @@ def write_CodeParameters_h_files(
                         # Handle char array C type
                         CPsize = int(CPtype.split("[")[1].split("]")[0])
                         # Char arrays are never unused; we use them below.
-                        Coutput = rf"""char {CPname}[{CPsize}]; {comment}
+                        Coutput = rf"""
 {{
+#ifdef __CUDACC__
+  MAYBE_UNUSED char {CPname}[{CPsize}]; {comment}
+  for (int i = 0; params->CoordSystemName[i] != '\0' && i<100; i++)
+    CoordSystemName[i] = params->CoordSystemName[i];
+#else
+  char {CPname}[{CPsize}]; {comment}
   // Safely copy string with snprintf, which guarantees null termination
   snprintf({CPname}, sizeof({CPname}), "%s", {struct}{pointer}{CPname});
+#endif
 }}"""
                     elif "[" in CPtype and "]" in CPtype:
                         # Handle REAL[N] and int[N] arrays

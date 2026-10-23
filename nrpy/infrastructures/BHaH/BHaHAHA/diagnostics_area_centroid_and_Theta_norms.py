@@ -15,6 +15,7 @@ import nrpy.c_function as cfc
 import nrpy.equations.general_relativity.bhahaha.area as bhahaha_area
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
+from nrpy.infrastructures import BHaH
 from nrpy.equations.general_relativity.bhahaha.ExpansionFunctionTheta import (
     ExpansionFunctionTheta,
 )
@@ -51,7 +52,54 @@ def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
         add_to_parfile=False,
     )
 
+    BHaH.griddata_commondata.register_griddata_commondata(
+        __name__,
+        "diag_norms_struct *norms",
+        "intermediate diagnostics used in GPU versions",
+        is_commondata=True,
+    )
+
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    prefunc = r"""
+#ifdef __CUDACC__
+/**
+ * Function that leverages CUDA's atomicCAS to compute the minimum between 
+ * a double stored at the initial address and a new double. Akin to CUDA's 
+ * atomicMin function but for doubles, this function returns the previous 
+ * value stored at the original address.
+ */
+__device__ static double atomicMin_double(double* address, double val)
+{
+  unsigned long long int* address_as_ull = (unsigned long long int*) address;
+  unsigned long long int old = *address_as_ull, assumed;
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, 
+        __double_as_longlong(fmin(val, __longlong_as_double(assumed))));
+  } while (assumed != old);
+  return __longlong_as_double(old);
+}
+
+/**
+ * Function that leverages CUDA's atomicCAS to compute the maximium between 
+ * a double stored at the initial address and a new double. Akin to CUDA's 
+ * atomicMax function but for doubles, this function returns the previous 
+ * value stored at the original address.
+ */
+__device__ static double atomicMax_double(double* address, double val)
+{
+  unsigned long long int* address_as_ull = (unsigned long long int*) address;
+  unsigned long long int old = *address_as_ull, assumed;
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, 
+        __double_as_longlong(fmax(val, __longlong_as_double(assumed))));
+  } while (assumed != old);
+  return __longlong_as_double(old);
+}
+#endif
+
+"""
     desc = "BHaHAHA apparent horizon diagnostics: compute area, centroid location, and Theta (L2 and Linfinity) norms."
     cfunc_type = "void"
     name = "diagnostics_area_centroid_and_Theta_norms"
@@ -61,13 +109,30 @@ def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
     Th = ExpansionFunctionTheta[
         CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
     ]
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     body = r"""
-  const int grid=0;
+  #ifdef __CUDACC__
+  // Set up cooperative group
+  namespace cg = cooperative_groups;
+  cg::grid_group gpu_grid = cg::this_grid();
+  
+  // Set up shared memory
+  extern __shared__ REAL s[];
+
+  // Set global space for intermediate norm calculation and storage
+  diag_norms_struct *norms = commondata->norms;
+  #endif
+  const int grid = 0;
   const params_struct *restrict params = &griddata[grid].params;
   REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
   const REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs;
   REAL *restrict xx[3];
-  for(int ww=0;ww<3;ww++) xx[ww] = griddata[grid].xx[ww];
+  for (int ww = 0; ww < 3; ww++)
+    xx[ww] = griddata[grid].xx[ww];
 #include "set_CodeParameters.h"
 
   // Set integration weights.
@@ -76,21 +141,60 @@ def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
   bah_diagnostics_integration_weights(Nxx1, Nxx2, &weights, &weight_stencil_size);
 
   // Compute Linfinity and L2 norms of Theta
+#ifdef __CUDACC__  
+
+  CUDA_ONE_THREAD(gpu_grid) {
+    norms->min_radius = 1e10;
+    norms->max_radius = -1e10;
+    norms->sum_Theta_squared_for_L2_norm = 0.0;
+    norms->sum_curr_area = 0.0;
+    norms->sum_x_centroid = 0.0;
+    norms->sum_y_centroid = 0.0;
+    norms->sum_z_centroid = 0.0;
+    norms->max_Theta_squared_for_Linf_norm = -1e30;
+  } END_CUDA_ONE_THREAD; //End global variable modification
+  REAL *s_min_radius = &s[0];
+  REAL *s_max_radius = &s[1*blockDim.x];
+  REAL *s_sum_Theta_squared_for_L2_norm = &s[2*blockDim.x];
+  REAL *s_sum_curr_area =  &s[3*blockDim.x];
+  REAL *s_sum_x_centroid =  &s[4*blockDim.x];
+  REAL *s_sum_y_centroid =  &s[5*blockDim.x];
+  REAL *s_sum_z_centroid =  &s[6*blockDim.x];
+  REAL *s_max_Theta_squared_for_Linf_norm =  &s[7*blockDim.x];
+
+  int tid = threadIdx.x;
+  s_min_radius[threadIdx.x] = 1e10;
+  s_max_radius[threadIdx.x] = -1e-10;
+  s_sum_Theta_squared_for_L2_norm[threadIdx.x] = 0.0;
+  s_sum_curr_area[threadIdx.x] = 0.0;
+  s_sum_x_centroid[threadIdx.x] = 0.0;
+  s_sum_y_centroid[threadIdx.x] = 0.0;
+  s_sum_z_centroid[threadIdx.x] = 0.0;
+  s_max_Theta_squared_for_Linf_norm[threadIdx.x] = -1e30;
+#endif
   REAL min_radius = 1e10, max_radius = -1e10;
   REAL sum_Theta_squared_for_L2_norm = 0.0;
   REAL sum_curr_area = 0;
   REAL sum_x_centroid = 0, sum_y_centroid = 0, sum_z_centroid = 0;
   REAL max_Theta_squared_for_Linf_norm = -1e30;
-#pragma omp parallel
-{
-#pragma omp for
-  for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
+#ifdef __CUDACC__
+  PARALLEL_LOOP(i0, NGHOSTS, NGHOSTS+Nxx0, i1, NGHOSTS, NGHOSTS+Nxx1, i2, NGHOSTS, NGHOSTS+Nxx2) { 
     const REAL weight2 = weights[(i2 - NGHOSTS) % weight_stencil_size];
     const REAL xx2 = xx[2][i2];
+    const REAL weight1 = weights[(i1 - NGHOSTS) % weight_stencil_size];
+    const REAL xx1 = xx[1][i1];
+#else
+#pragma omp parallel
+  {
+#pragma omp for
+    for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
+      const REAL weight2 = weights[(i2 - NGHOSTS) % weight_stencil_size];
+      const REAL xx2 = xx[2][i2];
       for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
         const REAL weight1 = weights[(i1 - NGHOSTS) % weight_stencil_size];
         const REAL xx1 = xx[1][i1];
         for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
+#endif
 """
     body += (
         ccg.c_codegen(
@@ -100,6 +204,7 @@ def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
             enable_fd_functions=enable_fd_functions,
         )
         + """
+#ifndef __CUDACC__
 #pragma omp critical
           {
             sum_curr_area += area_element * weight1 * weight2;
@@ -109,21 +214,91 @@ def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
               sum_x_centroid += (Cart_originx + tmp0 * cos(xx2)) * area_element * weight1 * weight2;
               sum_y_centroid += (Cart_originy + tmp0 * sin(xx2)) * area_element * weight1 * weight2;
               sum_z_centroid += (Cart_originz + hh * cos(xx1)) * area_element * weight1 * weight2;
-            } // END BLOCK: accumulate centroid numerators
+            } // END centroid sums
             if (Theta * Theta > max_Theta_squared_for_Linf_norm)
               max_Theta_squared_for_Linf_norm = Theta * Theta;
             if (hh > max_radius)
               max_radius = hh;
             if (hh < min_radius)
               min_radius = hh;
-          } // END OMP CRITICAL: update shared area and centroid diagnostics
-        } // END LOOP: for i0 over radial horizon-grid points
-      } // END LOOP: for i1 over theta horizon-grid points
-    } // END LOOP: for i2 over phi horizon-grid points
-  } // END OMP PARALLEL: scan all horizon surface points
+          } // END OMP CRITICAL
+        } // END LOOP over i0
+      } // END LOOP over i1
+    } // END LOOP over i2
+  } // END OMP PARALLEL
+#else
+          //Prep for Reduction in the "loop"
+          s_sum_curr_area[tid] += area_element * weight1 * weight2;
+          s_sum_Theta_squared_for_L2_norm[tid] += Theta * Theta * area_element * weight1 * weight2;
+          {
+            const REAL tmp0 = hh * sin(xx1);
+            s_sum_x_centroid[tid] += (Cart_originx + tmp0 * cos(xx2)) * area_element * weight1 * weight2;
+            s_sum_y_centroid[tid] += (Cart_originy + tmp0 * sin(xx2)) * area_element * weight1 * weight2;
+            s_sum_z_centroid[tid] += (Cart_originz + hh * cos(xx1)) * area_element * weight1 * weight2;
+          } // END centroid sums
+          if (Theta * Theta > s_max_Theta_squared_for_Linf_norm[tid])
+            s_max_Theta_squared_for_Linf_norm[tid] = Theta * Theta;
+          if (hh > s_max_radius[tid])
+            s_max_radius[tid] = hh;
+          if (hh < s_min_radius[tid])
+            s_min_radius[tid] = hh;
+  } END_PARALLEL_LOOP;
+  gpu_grid.sync();
+#endif
 
-  // Store diagnostics in commondata->bhahaha_diagnostics struct.
+#ifdef __CUDACC__
+  //Reduction at block level within shared memory to thread 0 of each block
+  unsigned int halfsize = blockDim.x>>1;
+  while (halfsize > 0) {
+    if (tid < halfsize) {
+      if ((blockDim.x*blockIdx.x + tid) < Nxx0*Nxx1*Nxx2  && (blockDim.x*blockIdx.x + (tid + halfsize)) < Nxx0*Nxx1*Nxx2 ) {
+        s_sum_curr_area[tid] += s_sum_curr_area[tid + halfsize];
+        s_sum_Theta_squared_for_L2_norm[tid] += s_sum_Theta_squared_for_L2_norm[tid + halfsize];
+        s_sum_x_centroid[tid] += s_sum_x_centroid[tid + halfsize];
+        s_sum_y_centroid[tid] += s_sum_y_centroid[tid + halfsize];
+        s_sum_z_centroid[tid] += s_sum_z_centroid[tid + halfsize];
+        if (s_max_Theta_squared_for_Linf_norm[tid] < s_max_Theta_squared_for_Linf_norm[tid + halfsize])
+          s_max_Theta_squared_for_Linf_norm[tid] = s_max_Theta_squared_for_Linf_norm[tid + halfsize];
+        if (s_max_radius[tid] < s_max_radius[tid + halfsize])
+          s_max_radius[tid] = s_max_radius[tid + halfsize];
+        if (s_min_radius[tid] > s_min_radius[tid + halfsize])
+          s_min_radius[tid] = s_min_radius[tid + halfsize];
+      }
+    }
+    __syncthreads();
+    halfsize = halfsize>>1;
+  }
+  //Reduction at grid level to norms struct
+  if (blockDim.x*blockIdx.x < Nxx0*Nxx1*Nxx2 && threadIdx.x == 0 ) {
+    atomicAdd(&norms->sum_curr_area, s_sum_curr_area[0]);
+    atomicAdd(&norms->sum_Theta_squared_for_L2_norm, s_sum_Theta_squared_for_L2_norm[0]);
+    atomicAdd(&norms->sum_x_centroid, s_sum_x_centroid[0]);
+    atomicAdd(&norms->sum_y_centroid, s_sum_y_centroid[0]);
+    atomicAdd(&norms->sum_z_centroid, s_sum_z_centroid[0]);
+    atomicMax_double(&norms->max_Theta_squared_for_Linf_norm, s_max_Theta_squared_for_Linf_norm[0]);
+    atomicMax_double(&norms->max_radius, s_max_radius[0]);
+    atomicMin_double(&norms->min_radius, s_min_radius[0]);
+  }
+  gpu_grid.sync();
+#endif
+
+  //Set diagnostic norms in the commondata  bhahaha_diagnostics
+#ifdef __CUDACC__
+  CUDA_ONE_THREAD(gpu_grid)
+#endif
   {
+#ifdef __CUDACC__    
+    max_Theta_squared_for_Linf_norm = norms->max_Theta_squared_for_Linf_norm;
+    min_radius = norms->min_radius;
+    max_radius = norms->max_radius;
+    sum_curr_area = norms->sum_curr_area;
+    sum_Theta_squared_for_L2_norm = norms->sum_Theta_squared_for_L2_norm;
+    sum_x_centroid = norms->sum_x_centroid;
+    sum_y_centroid = norms->sum_y_centroid;
+    sum_z_centroid = norms->sum_z_centroid;
+  // Store diagnostics in commondata->bhahaha_diagnostics struct.
+#endif
+  
 
     // {min,max}_radius_wrt_grid_center are strictly internal diagnostics; these will
     //   exhibit a kink the second time a horizon is found, as the initial guess for
@@ -149,17 +324,22 @@ def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
     bhahaha_diags->x_centroid_wrt_coord_origin = sum_x_centroid * params->dxx1 * params->dxx2 / bhahaha_diags->area;
     bhahaha_diags->y_centroid_wrt_coord_origin = sum_y_centroid * params->dxx1 * params->dxx2 / bhahaha_diags->area;
     bhahaha_diags->z_centroid_wrt_coord_origin = sum_z_centroid * params->dxx1 * params->dxx2 / bhahaha_diags->area;
-  } // END BLOCK: store area, centroid, and Theta norms in commondata diagnostics
-"""
+  } // END store diagnostics in commondata->bhahaha_diagnostics struct.
+  #ifdef __CUDACC__
+  END_CUDA_ONE_THREAD; //End global variable modification
+  gpu_grid.sync();
+  #endif"""
     )
     cfc.register_CFunction(
         subdirectory="",
         includes=includes,
+        prefunc=prefunc,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )
     return pcg.NRPyEnv()

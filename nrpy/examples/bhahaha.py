@@ -86,6 +86,8 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 #########################################################
 # STEP 4: Declare core C functions & register each to cfc.CFunction_dict["function_name"]
 BHaH.BHaHAHA.find_horizon.register_CFunction_find_horizon()
+BHaH.BHaHAHA.main_simulation_loop.register_CFunction_main_simulation_loop()
+BHaH.BHaHAHA.store_horizon.register_CFunction_store_horizon()
 BHaH.BHaHAHA.poisoning_set_inputs.register_CFunction_poisoning_set_inputs()
 BHaH.BHaHAHA.poisoning_check_inputs.register_CFunction_poisoning_check_inputs()
 BHaH.BHaHAHA.over_relaxation.register_CFunction_over_relaxation()
@@ -115,6 +117,7 @@ BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 BHaH.BHaHAHA.diagnostics.register_CFunction_diagnostics()
 BHaH.BHaHAHA.diagnostics_area_centroid_and_Theta_norms.register_CFunction_diagnostics_area_centroid_and_Theta_norms()
 BHaH.BHaHAHA.diagnostics_file_output.register_CFunction_diagnostics_file_output()
+BHaH.BHaHAHA.diagnostics_full.register_CFunction_diagnostics_full()
 BHaH.BHaHAHA.diagnostics_integration_weights.register_CFunction_diagnostics_integration_weights()
 BHaH.BHaHAHA.diagnostics_min_max_mean_radii_wrt_centroid.register_CFunction_diagnostics_min_max_mean_radii_wrt_centroid()
 BHaH.BHaHAHA.diagnostics_proper_circumferences.register_CFunction_diagnostics_proper_circumferences()
@@ -123,6 +126,7 @@ BHaH.BHaHAHA.diagnostics_proper_circumferences_general.register_CFunction_diagno
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
         set_of_CoordSystems={CoordSystem},
+        dual_compile=True,
     )
 
 BHaH.BHaHAHA.rhs_eval_KO_apply.register_CFunction_rhs_eval(
@@ -150,19 +154,42 @@ BHaH.BHaHAHA.bcstruct_set_up.register_CFunction_bcstruct_set_up(CoordSystem="Sph
 
 rhs_string = """
 bah_rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
+#ifdef __CUDACC__
+gpu_grid.sync();
+CUDA_ONE_THREAD(gpu_grid) {
+#endif
 // Theta was just evaluated at Nxx1*Nxx2 gridpoints; update counter:
 commondata->bhahaha_diagnostics->Theta_eval_points_counter += params->Nxx1 * params->Nxx2;
-if(commondata->KO_diss_strength > 0.0)
+#ifdef __CUDACC__
+} END_CUDA_ONE_THREAD // END single thread execution for global variable modification
+#endif
+if(commondata->KO_diss_strength > 0.0) {
   bah_KO_apply(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
+#ifdef __CUDACC__
+gpu_grid.sync();
+#endif
+}
 """
+
+post_rhs_string= """
+#ifdef __CUDACC__
+gpu_grid.sync();
+#endif
+bah_apply_bcs_inner_only(commondata, params, bcstruct, RK_OUTPUT_GFS);
+#ifdef __CUDACC__
+gpu_grid.sync();
+#endif
+"""
+
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
 BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
-    post_rhs_string="bah_apply_bcs_inner_only(commondata, params, bcstruct, RK_OUTPUT_GFS);",
+    post_rhs_string=post_rhs_string,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
+    bhahaha=True,
 )
 
 #########################################################
@@ -213,6 +240,8 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     create_lib=True,
     static_lib=True,
     use_openmp=use_openmp,
+    bhahaha=True,
+    dual_compile=True,
 )
 
 # Append latest error codes & error message function prototype to BHaHAHA.h
@@ -246,7 +275,13 @@ BHaHAHA_h += "} bhahaha_error_codes;\n"
 BHaHAHA_h += """
 // Function: bah_error_message
 // Interprets bah_find_horizon() error codes & returns a useful string.
+#ifdef __cplusplus
+extern "C" {
+#endif
 const char *bah_error_message(const bhahaha_error_codes error_code);
+#ifdef __cplusplus
+}
+#endif
 //===============================================
 
 #endif // BHAHAHA_HEADER_H
