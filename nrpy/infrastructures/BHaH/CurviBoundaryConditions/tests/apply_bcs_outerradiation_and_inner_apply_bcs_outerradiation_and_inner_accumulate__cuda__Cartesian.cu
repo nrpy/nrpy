@@ -286,8 +286,8 @@ __global__ static void apply_bcs_inner_accumulate_gpu(const size_t streamid, con
         stage_gfs[dst] += weight * stage_gfs[src];
       if (accum_dt != 0.0)
         accum_gfs[dst] += weight * accum_gfs[src];
-    }
-  }
+    } // END LOOP: which_gf over evolved fields
+  } // END LOOP: pt over inner boundaries
 } // END FUNCTION: apply_bcs_inner_accumulate_gpu
 /**
  * Kernel: apply_bcs_pure_accumulate_gpu.
@@ -338,9 +338,9 @@ __global__ static void apply_bcs_pure_accumulate_gpu(const size_t streamid, cons
           stage_gfs[dst] += stage_dt * beta;
         if (accum_dt != 0.0)
           accum_gfs[dst] += accum_dt * beta;
-      }
-    }
-  }
+      } // END IF: complete radiation increments
+    } // END LOOP: which_gf over evolved fields
+  } // END LOOP: pt over outer boundaries
 } // END FUNCTION: apply_bcs_pure_accumulate_gpu
 
 /**
@@ -357,7 +357,7 @@ void apply_bcs_outerradiation_and_inner_accumulate__rfm__Cartesian(const commond
     cudaCheckErrors(copy, "Copy to d_gridfunctions_wavespeed failed");
     cudaMemcpyToSymbol(d_gridfunctions_f_infinity, custom_f_infinity, NUM_EVOL_GFS * sizeof(REAL));
     cudaCheckErrors(copy, "Copy to d_gridfunctions_f_infinity failed");
-  }
+  } // END IF: copy radiation parameters
 
   const bc_info_struct *bc_info = &bcstruct->bc_info;
   const int num_inner_boundary_points = bc_info->num_inner_boundary_points;
@@ -379,7 +379,8 @@ void apply_bcs_outerradiation_and_inner_accumulate__rfm__Cartesian(const commond
     apply_bcs_inner_accumulate_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, num_inner_boundary_points, inner_bc_array,
                                                                                                   stage_gfs, accum_gfs, stage_dt, accum_dt, prepare);
     cudaCheckErrors(cudaKernel, "apply_bcs_inner_accumulate_gpu failure");
-  }
+
+  } // END IF: subtract inner source values
 
   // Reverse the complete layer/face dependency order only during preparation.
   for (int layer = 0; layer < NGHOSTS; layer++) {
@@ -401,9 +402,10 @@ void apply_bcs_outerradiation_and_inner_accumulate__rfm__Cartesian(const commond
         apply_bcs_pure_accumulate_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(
             streamid, num_pure_outer_boundary_points, pure_outer_bc_array, in_gfs, stage_gfs, accum_gfs, x0, x1, x2, stage_dt, accum_dt, prepare);
         cudaCheckErrors(cudaKernel, "apply_bcs_pure_accumulate_gpu failure");
-      }
-    }
-  }
+
+      } // END IF: nonempty outer boundary face
+    } // END LOOP: face over boundary directions
+  } // END LOOP: layer over ghost zones
 
   // All outer sources must have their final accumulated values before inner completion.
   if (!prepare) {
@@ -418,5 +420,6 @@ void apply_bcs_outerradiation_and_inner_accumulate__rfm__Cartesian(const commond
     apply_bcs_inner_accumulate_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, num_inner_boundary_points, inner_bc_array,
                                                                                                   stage_gfs, accum_gfs, stage_dt, accum_dt, prepare);
     cudaCheckErrors(cudaKernel, "apply_bcs_inner_accumulate_gpu failure");
-  }
+
+  } // END IF: restore inner source values
 } // END FUNCTION: apply_bcs_outerradiation_and_inner_accumulate__rfm__Cartesian

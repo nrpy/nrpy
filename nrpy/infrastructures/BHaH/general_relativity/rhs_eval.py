@@ -533,15 +533,16 @@ def register_CFunction_rhs_eval(
 if (NOSIMD{weight} != 0.0) {{
   if (i0 + SIMD_WIDTH <= Nxx_plus_2NGHOSTS0 - NGHOSTS) {{
     {vector_updates}
-  }} else {{
+  }} // END IF: complete SIMD group
+  else {{
     for (int lane = 0; lane < Nxx_plus_2NGHOSTS0 - NGHOSTS - i0; lane++) {{
       {scalar_updates}
-    }}
-  }}
-}}
+    }} // END LOOP: lane over interior remainder
+  }} // END ELSE: partial SIMD group
+}} // END IF: nonzero {weight} multiplier
 """
                 else:
-                    updates += f"if ({weight} != 0.0) {{\n{scalar_updates}}}\n"
+                    updates += f"if ({weight} != 0.0) {{\n{scalar_updates}}} // END IF: nonzero {weight} multiplier\n"
 
         arg_dict_host = {
             "params": "const params_struct *restrict",
@@ -561,7 +562,13 @@ if (NOSIMD{weight} != 0.0) {{
             ),
         )
         if accumulate:
-            point_body = "{\n" + local_rhs + point_body + updates + "}\n"
+            point_body = (
+                "{\n"
+                + local_rhs
+                + point_body
+                + updates
+                + "} // END BLOCK: point-local RHS accumulation\n"
+            )
         point_body = point_body.replace(
             "SIMD", "CUDA" if parallelization == "cuda" else "SIMD"
         )

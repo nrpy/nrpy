@@ -1,6 +1,14 @@
-"""Generate the CPU BSSN, radiation, projection, and complete RK3 functions for CI."""
+"""
+Generate the CPU BSSN, radiation, projection, and complete RK3 functions for CI.
+
+With no arguments, print the command-line help without generating files.
+
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot** com
+"""
 
 import argparse
+import sys
 from pathlib import Path
 
 import nrpy.c_function as cfc
@@ -163,5 +171,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
     parser.add_argument("--simd", action="store_true")
-    args = parser.parse_args()
-    generate(args.output, args.simd)
+    if len(sys.argv) == 1:
+        parser.print_help()
+    else:
+        args = parser.parse_args()
+        generate(args.output, args.simd)

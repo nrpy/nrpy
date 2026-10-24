@@ -717,143 +717,6 @@ applies BCs to the inner boundary points, which may map either to the grid inter
     )
 
 
-def setup_Cfunction_apply_bcs_inner_accumulate() -> Tuple[str, str]:
-    """
-    Generate inner-boundary difference and restoration kernels for two RK arrays.
-
-    Inner sources are interior or pure outer points, so every inner destination
-    can be processed independently. Preparation subtracts the original source;
-    completion adds the source after its RHS contribution has been accumulated.
-
-    :return: The kernel definitions and their launch code.
-    """
-    parallelization = par.parval_from_str("parallelization")
-    kernel_body = parallel_utils.get_loop_parameters(parallelization)
-    kernel_body += (
-        "\nfor (int pt = tid0; pt < num_inner_boundary_points; pt += stride0) {\n"
-        if parallelization == "cuda"
-        else "\n#pragma omp parallel for\nfor (int pt = 0; pt < num_inner_boundary_points; pt++) {\n"
-    )
-    parity_array = "d_evol_gf_parity" if parallelization == "cuda" else "evol_gf_parity"
-    kernel_body += f"""
-  const innerpt_bc_struct *restrict bc = &inner_bc_array[pt];
-  const REAL sign = prepare ? -1.0 : 1.0;
-  for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {{
-    const int dst = IDX4pt(which_gf, bc->dstpt);
-    const int src = IDX4pt(which_gf, bc->srcpt);
-    const REAL weight = sign * bc->parity[{parity_array}[which_gf]];
-    if (stage_dt != 0.0) stage_gfs[dst] += weight * stage_gfs[src];
-    if (accum_dt != 0.0) accum_gfs[dst] += weight * accum_gfs[src];
-  }}
-}}
-"""
-    arg_dict_cuda = {
-        "num_inner_boundary_points": "const int",
-        "inner_bc_array": "const innerpt_bc_struct *restrict",
-        "stage_gfs": "REAL *restrict",
-        "accum_gfs": "REAL *restrict",
-        "stage_dt": "const REAL",
-        "accum_dt": "const REAL",
-        "prepare": "const int",
-    }
-    return parallel_utils.generate_kernel_and_launch_code(
-        "apply_bcs_inner_accumulate",
-        kernel_body,
-        arg_dict_cuda,
-        {"params": "const params_struct *restrict", **arg_dict_cuda},
-        parallelization=parallelization,
-        comments="Prepare or complete inner-boundary RHS accumulation in two RK arrays.",
-        launch_dict={
-            "blocks_per_grid": [
-                "NRPYMAX(1U, (num_inner_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir)"
-            ],
-            "stream": "params->grid_idx % NUM_STREAMS",
-        },
-        thread_tiling_macro_suffix="CURVIBC_INNER",
-    )
-
-
-def setup_Cfunction_apply_bcs_pure_accumulate() -> Tuple[str, str]:
-    """
-    Generate radiation-boundary difference and restoration kernels for two RK arrays.
-
-    With the projected stage fixed, the radiation RHS has the affine form
-    ``q_ghost = weight * q_inner + beta``. Passing zero as the neighboring RHS
-    to ``radiation_bcs`` evaluates beta using the ordinary boundary formula.
-
-    :return: The kernel definitions and their launch code.
-    """
-    parallelization = par.parval_from_str("parallelization")
-    kernel_body = parallel_utils.get_loop_parameters(parallelization)
-    kernel_body += (
-        "\nfor (int pt = tid0; pt < num_pure_outer_boundary_points; pt += stride0) {\n"
-        if parallelization == "cuda"
-        else "\n#pragma omp parallel for\nfor (int pt = 0; pt < num_pure_outer_boundary_points; pt++) {\n"
-    )
-    kernel_body += """
-  const outerpt_bc_struct *restrict bc = &pure_outer_bc_array[pt];
-  const int dstpt = IDX3(bc->i0, bc->i1, bc->i2);
-  const int srcpt = IDX3(bc->i0 + bc->FACEX0, bc->i1 + bc->FACEX1, bc->i2 + bc->FACEX2);
-  const REAL rinv = 1.0 / bc->r;
-  const REAL weight = bc->r_int * bc->r_int * bc->r_int * rinv * rinv * rinv;
-  const REAL sign = prepare ? -1.0 : 1.0;
-  REAL *xx[3] = {x0, x1, x2};
-  for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
-    const int dst = IDX4pt(which_gf, dstpt);
-    const int src = IDX4pt(which_gf, srcpt);
-    if (stage_dt != 0.0) stage_gfs[dst] += sign * weight * stage_gfs[src];
-    if (accum_dt != 0.0) accum_gfs[dst] += sign * weight * accum_gfs[src];
-    if (!prepare) {
-      const REAL beta = radiation_bcs(params, xx, in_gfs, 0.0, which_gf,
-          custom_wavespeed[which_gf], custom_f_infinity[which_gf],
-          bc->i0, bc->i1, bc->i2, bc->FACEX0, bc->FACEX1, bc->FACEX2,
-          bc->r, bc->partial_x0_partial_r, bc->partial_x1_partial_r, bc->partial_x2_partial_r,
-          bc->r_int, bc->partial_x0_partial_r_int, bc->partial_x1_partial_r_int, bc->partial_x2_partial_r_int);
-      if (stage_dt != 0.0) stage_gfs[dst] += stage_dt * beta;
-      if (accum_dt != 0.0) accum_gfs[dst] += accum_dt * beta;
-    }
-  }
-}
-"""
-    if parallelization == "cuda":
-        kernel_body = kernel_body.replace("params,", "streamid,").replace(
-            "custom_", "d_gridfunctions_"
-        )
-    arg_dict_cuda = {
-        "num_pure_outer_boundary_points": "const int",
-        "pure_outer_bc_array": "const outerpt_bc_struct *restrict",
-        "in_gfs": "const REAL *restrict",
-        "stage_gfs": "REAL *restrict",
-        "accum_gfs": "REAL *restrict",
-        "x0": "REAL *restrict",
-        "x1": "REAL *restrict",
-        "x2": "REAL *restrict",
-        "stage_dt": "const REAL",
-        "accum_dt": "const REAL",
-        "prepare": "const int",
-    }
-    return parallel_utils.generate_kernel_and_launch_code(
-        "apply_bcs_pure_accumulate",
-        kernel_body,
-        arg_dict_cuda,
-        {
-            "params": "const params_struct *restrict",
-            **arg_dict_cuda,
-            "custom_wavespeed": "const REAL *",
-            "custom_f_infinity": "const REAL *",
-        },
-        parallelization=parallelization,
-        comments="Prepare or complete radiation-boundary RHS accumulation in two RK arrays.",
-        launch_dict={
-            "blocks_per_grid": [
-                "NRPYMAX(1U, (num_pure_outer_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir)"
-            ],
-            "stream": "params->grid_idx % NUM_STREAMS",
-        },
-        thread_tiling_macro_suffix="CURVIBC_RAD_PURE",
-    )
-
-
 def register_CFunction_apply_bcs_outerradiation_and_inner_accumulate(
     CoordSystem: str,
     cfunc_decorators: str = "",
@@ -895,6 +758,17 @@ def register_CFunction_apply_bcs_outerradiation_and_inner_accumulate(
     ...     validation_desc = f"apply_bcs_outerradiation_and_inner_accumulate__{parallelization}__Cartesian"
     ...     validate_strings(clang_format(generated_str), validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
+    # Step 1: Declare the accumulated-boundary function.
+    desc = "Apply radiation and inner RHS boundary conditions while accumulating into two RK arrays."
+    cfunc_type = "void"
+    name = "apply_bcs_outerradiation_and_inner_accumulate"
+    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
+const bc_struct *restrict bcstruct, REAL *restrict xx[3],
+const REAL custom_wavespeed[NUM_EVOL_GFS], const REAL custom_f_infinity[NUM_EVOL_GFS],
+const REAL *restrict in_gfs, REAL *restrict stage_gfs, REAL *restrict accum_gfs,
+const REAL stage_dt, const REAL accum_dt, const int prepare"""
+    parallelization = par.parval_from_str("parallelization")
+    # Step 2: Generate the shared radiation formula and the two boundary kernels.
     prefunc = setup_Cfunction_radiation_bcs(
         CoordSystem=CoordSystem,
         cfunc_decorators=cfunc_decorators,
@@ -902,18 +776,132 @@ def register_CFunction_apply_bcs_outerradiation_and_inner_accumulate(
         rational_const_alias=rational_const_alias,
         rhs_is_scalar=True,
     )
-    inner_prefunc, inner_call = setup_Cfunction_apply_bcs_inner_accumulate()
-    outer_prefunc, outer_call = setup_Cfunction_apply_bcs_pure_accumulate()
+    # Step 2.a: Inner sources are interior or outer points, never inner destinations.
+    kernel_body = parallel_utils.get_loop_parameters(parallelization)
+    kernel_body += (
+        "\nfor (int pt = tid0; pt < num_inner_boundary_points; pt += stride0) {\n"
+        if parallelization == "cuda"
+        else "\n#pragma omp parallel for\nfor (int pt = 0; pt < num_inner_boundary_points; pt++) {\n"
+    )
+    parity_array = "d_evol_gf_parity" if parallelization == "cuda" else "evol_gf_parity"
+    kernel_body += f"""
+  const innerpt_bc_struct *restrict bc = &inner_bc_array[pt];
+  const REAL sign = prepare ? -1.0 : 1.0;
+  for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {{
+    const int dst = IDX4pt(which_gf, bc->dstpt);
+    const int src = IDX4pt(which_gf, bc->srcpt);
+    const REAL weight = sign * bc->parity[{parity_array}[which_gf]];
+    if (stage_dt != 0.0) stage_gfs[dst] += weight * stage_gfs[src];
+    if (accum_dt != 0.0) accum_gfs[dst] += weight * accum_gfs[src];
+  }} // END LOOP: which_gf over evolved fields
+}} // END LOOP: pt over inner boundaries
+"""
+    arg_dict_cuda = {
+        "num_inner_boundary_points": "const int",
+        "inner_bc_array": "const innerpt_bc_struct *restrict",
+        "stage_gfs": "REAL *restrict",
+        "accum_gfs": "REAL *restrict",
+        "stage_dt": "const REAL",
+        "accum_dt": "const REAL",
+        "prepare": "const int",
+    }
+    inner_prefunc, inner_call = parallel_utils.generate_kernel_and_launch_code(
+        "apply_bcs_inner_accumulate",
+        kernel_body,
+        arg_dict_cuda,
+        {"params": "const params_struct *restrict", **arg_dict_cuda},
+        parallelization=parallelization,
+        comments="Prepare or complete inner-boundary RHS accumulation in two RK arrays.",
+        launch_dict={
+            "blocks_per_grid": [
+                "NRPYMAX(1U, (num_inner_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir)"
+            ],
+            "stream": "params->grid_idx % NUM_STREAMS",
+        },
+        thread_tiling_macro_suffix="CURVIBC_INNER",
+    )
+
+    # Step 2.b: At a fixed input stage, q_ghost = weight * q_inner + beta.
+    # Passing a zero neighboring RHS to radiation_bcs evaluates beta.
+    kernel_body = parallel_utils.get_loop_parameters(parallelization)
+    kernel_body += (
+        "\nfor (int pt = tid0; pt < num_pure_outer_boundary_points; pt += stride0) {\n"
+        if parallelization == "cuda"
+        else "\n#pragma omp parallel for\nfor (int pt = 0; pt < num_pure_outer_boundary_points; pt++) {\n"
+    )
+    kernel_body += """
+  const outerpt_bc_struct *restrict bc = &pure_outer_bc_array[pt];
+  const int dstpt = IDX3(bc->i0, bc->i1, bc->i2);
+  const int srcpt = IDX3(bc->i0 + bc->FACEX0, bc->i1 + bc->FACEX1, bc->i2 + bc->FACEX2);
+  const REAL rinv = 1.0 / bc->r;
+  const REAL weight = bc->r_int * bc->r_int * bc->r_int * rinv * rinv * rinv;
+  const REAL sign = prepare ? -1.0 : 1.0;
+  REAL *xx[3] = {x0, x1, x2};
+  for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+    const int dst = IDX4pt(which_gf, dstpt);
+    const int src = IDX4pt(which_gf, srcpt);
+    if (stage_dt != 0.0) stage_gfs[dst] += sign * weight * stage_gfs[src];
+    if (accum_dt != 0.0) accum_gfs[dst] += sign * weight * accum_gfs[src];
+    if (!prepare) {
+      const REAL beta = radiation_bcs(params, xx, in_gfs, 0.0, which_gf,
+          custom_wavespeed[which_gf], custom_f_infinity[which_gf],
+          bc->i0, bc->i1, bc->i2, bc->FACEX0, bc->FACEX1, bc->FACEX2,
+          bc->r, bc->partial_x0_partial_r, bc->partial_x1_partial_r, bc->partial_x2_partial_r,
+          bc->r_int, bc->partial_x0_partial_r_int, bc->partial_x1_partial_r_int, bc->partial_x2_partial_r_int);
+      if (stage_dt != 0.0) stage_gfs[dst] += stage_dt * beta;
+      if (accum_dt != 0.0) accum_gfs[dst] += accum_dt * beta;
+    } // END IF: complete radiation increments
+  } // END LOOP: which_gf over evolved fields
+} // END LOOP: pt over outer boundaries
+"""
+    if parallelization == "cuda":
+        kernel_body = kernel_body.replace("params,", "streamid,").replace(
+            "custom_", "d_gridfunctions_"
+        )
+    arg_dict_cuda = {
+        "num_pure_outer_boundary_points": "const int",
+        "pure_outer_bc_array": "const outerpt_bc_struct *restrict",
+        "in_gfs": "const REAL *restrict",
+        "stage_gfs": "REAL *restrict",
+        "accum_gfs": "REAL *restrict",
+        "x0": "REAL *restrict",
+        "x1": "REAL *restrict",
+        "x2": "REAL *restrict",
+        "stage_dt": "const REAL",
+        "accum_dt": "const REAL",
+        "prepare": "const int",
+    }
+    outer_prefunc, outer_call = parallel_utils.generate_kernel_and_launch_code(
+        "apply_bcs_pure_accumulate",
+        kernel_body,
+        arg_dict_cuda,
+        {
+            "params": "const params_struct *restrict",
+            **arg_dict_cuda,
+            "custom_wavespeed": "const REAL *",
+            "custom_f_infinity": "const REAL *",
+        },
+        parallelization=parallelization,
+        comments="Prepare or complete radiation-boundary RHS accumulation in two RK arrays.",
+        launch_dict={
+            "blocks_per_grid": [
+                "NRPYMAX(1U, (num_pure_outer_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir)"
+            ],
+            "stream": "params->grid_idx % NUM_STREAMS",
+        },
+        thread_tiling_macro_suffix="CURVIBC_RAD_PURE",
+    )
+    # Step 3: Subtract sources in reverse order and restore them in forward order.
     prefunc += inner_prefunc + outer_prefunc
     body = ""
-    if par.parval_from_str("parallelization") == "cuda":
+    if parallelization == "cuda":
         body += """
 if (!prepare) {
   cudaMemcpyToSymbol(d_gridfunctions_wavespeed, custom_wavespeed, NUM_EVOL_GFS * sizeof(REAL));
   cudaCheckErrors(copy, "Copy to d_gridfunctions_wavespeed failed");
   cudaMemcpyToSymbol(d_gridfunctions_f_infinity, custom_f_infinity, NUM_EVOL_GFS * sizeof(REAL));
   cudaCheckErrors(copy, "Copy to d_gridfunctions_f_infinity failed");
-}
+} // END IF: copy radiation parameters
 """
     body += f"""
 const bc_info_struct *bc_info = &bcstruct->bc_info;
@@ -926,7 +914,7 @@ REAL *restrict x2 = xx[2];
 // Inner sources may be pure outer points: subtract them before changing outer values.
 if (prepare) {{
   {inner_call}
-}}
+}} // END IF: subtract inner source values
 
 // Reverse the complete layer/face dependency order only during preparation.
 for (int layer = 0; layer < NGHOSTS; layer++) {{
@@ -938,27 +926,23 @@ for (int layer = 0; layer < NGHOSTS; layer++) {{
       const int gz_idx = dirn + 3 * which_gz;
       const outerpt_bc_struct *restrict pure_outer_bc_array = bcstruct->pure_outer_bc_array[gz_idx];
       {outer_call}
-    }}
-  }}
-}}
+    }} // END IF: nonempty outer boundary face
+  }} // END LOOP: face over boundary directions
+}} // END LOOP: layer over ghost zones
 
 // All outer sources must have their final accumulated values before inner completion.
 if (!prepare) {{
   {inner_call}
-}}
+}} // END IF: restore inner source values
 """
     cfc.register_CFunction(
         includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
         prefunc=prefunc,
-        desc="Apply radiation and inner RHS boundary conditions while accumulating into two RK arrays.",
-        cfunc_type="void",
+        desc=desc,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func=CoordSystem,
-        name="apply_bcs_outerradiation_and_inner_accumulate",
-        params="""const commondata_struct *restrict commondata, const params_struct *restrict params,
-const bc_struct *restrict bcstruct, REAL *restrict xx[3],
-const REAL custom_wavespeed[NUM_EVOL_GFS], const REAL custom_f_infinity[NUM_EVOL_GFS],
-const REAL *restrict in_gfs, REAL *restrict stage_gfs, REAL *restrict accum_gfs,
-const REAL stage_dt, const REAL accum_dt, const int prepare""",
+        name=name,
+        params=params,
         include_CodeParameters_h=False,
         body=body,
     )

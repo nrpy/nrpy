@@ -108,7 +108,7 @@ without another complete evolved array.
 Claim evidence:
 - Claim: Accumulated radiation and inner boundaries preserve arbitrary old output values plus the weighted boundary RHS by reversing source subtraction during preparation and restoring sources and radiation terms in forward order during completion.
 - Role: descriptive behavior
-- Deciding authority: [apply_bcs_outerradiation_and_inner.py](../../../nrpy/infrastructures/BHaH/CurviBoundaryConditions/apply_bcs_outerradiation_and_inner.py), `register_CFunction_apply_bcs_outerradiation_and_inner_accumulate`, `setup_Cfunction_apply_bcs_inner_accumulate`, and `setup_Cfunction_apply_bcs_pure_accumulate`.
+- Deciding authority: [apply_bcs_outerradiation_and_inner.py](../../../nrpy/infrastructures/BHaH/CurviBoundaryConditions/apply_bcs_outerradiation_and_inner.py), `register_CFunction_apply_bcs_outerradiation_and_inner_accumulate`.
 - Corroboration: [runtime.c](../../../.github/tests/rk3_cpu/runtime.c), `make_boundary` and `check_accumulation`, compare the ordinary generated radiation RHS with the accumulated result across faces, edges, corners, and inner sources. The boundary owner's doctests compare complete emitted CPU and CUDA source; source comparison alone does not establish GPU execution.
 
 `rk_substep.py` provides the low-level RK code generator. `RKFunction` turns

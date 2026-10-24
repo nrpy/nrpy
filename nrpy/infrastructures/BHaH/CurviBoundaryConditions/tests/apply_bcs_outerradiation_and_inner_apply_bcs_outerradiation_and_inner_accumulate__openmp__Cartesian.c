@@ -237,8 +237,8 @@ static void apply_bcs_inner_accumulate_host(const params_struct *restrict params
         stage_gfs[dst] += weight * stage_gfs[src];
       if (accum_dt != 0.0)
         accum_gfs[dst] += weight * accum_gfs[src];
-    }
-  }
+    } // END LOOP: which_gf over evolved fields
+  } // END LOOP: pt over inner boundaries
 } // END FUNCTION: apply_bcs_inner_accumulate_host
 /**
  * Kernel: apply_bcs_pure_accumulate_host.
@@ -283,9 +283,9 @@ static void apply_bcs_pure_accumulate_host(const params_struct *restrict params,
           stage_gfs[dst] += stage_dt * beta;
         if (accum_dt != 0.0)
           accum_gfs[dst] += accum_dt * beta;
-      }
-    }
-  }
+      } // END IF: complete radiation increments
+    } // END LOOP: which_gf over evolved fields
+  } // END LOOP: pt over outer boundaries
 } // END FUNCTION: apply_bcs_pure_accumulate_host
 
 /**
@@ -307,7 +307,8 @@ void apply_bcs_outerradiation_and_inner_accumulate__rfm__Cartesian(const commond
   // Inner sources may be pure outer points: subtract them before changing outer values.
   if (prepare) {
     apply_bcs_inner_accumulate_host(params, num_inner_boundary_points, inner_bc_array, stage_gfs, accum_gfs, stage_dt, accum_dt, prepare);
-  }
+
+  } // END IF: subtract inner source values
 
   // Reverse the complete layer/face dependency order only during preparation.
   for (int layer = 0; layer < NGHOSTS; layer++) {
@@ -320,12 +321,14 @@ void apply_bcs_outerradiation_and_inner_accumulate__rfm__Cartesian(const commond
         const outerpt_bc_struct *restrict pure_outer_bc_array = bcstruct->pure_outer_bc_array[gz_idx];
         apply_bcs_pure_accumulate_host(params, num_pure_outer_boundary_points, pure_outer_bc_array, in_gfs, stage_gfs, accum_gfs, x0, x1, x2,
                                        stage_dt, accum_dt, prepare, custom_wavespeed, custom_f_infinity);
-      }
-    }
-  }
+
+      } // END IF: nonempty outer boundary face
+    } // END LOOP: face over boundary directions
+  } // END LOOP: layer over ghost zones
 
   // All outer sources must have their final accumulated values before inner completion.
   if (!prepare) {
     apply_bcs_inner_accumulate_host(params, num_inner_boundary_points, inner_bc_array, stage_gfs, accum_gfs, stage_dt, accum_dt, prepare);
-  }
+
+  } // END IF: restore inner source values
 } // END FUNCTION: apply_bcs_outerradiation_and_inner_accumulate__rfm__Cartesian

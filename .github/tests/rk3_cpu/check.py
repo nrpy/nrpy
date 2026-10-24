@@ -4,6 +4,9 @@ Compile and check complete projected RK3 CPU programs against a dense tableau.
 Run from a checkout with the normal NRPy generation dependencies, GCC, and an
 AVX2 CPU. Generated C, compiler output, and caches use a temporary directory
 removed on success or failure. No network access or installation is performed.
+
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot** com
 """
 
 import os
