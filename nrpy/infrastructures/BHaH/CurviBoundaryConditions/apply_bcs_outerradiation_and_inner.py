@@ -244,9 +244,11 @@ const REAL *restrict gf, const int i0,const int i1,const int i2, const int offse
                 elif dirn == 2:
                     body += f"{sign_str} {rational_dict[decl_coeff]}*gf[IDX3(i0,i1,i2+{offset_str})]\n"
 
-        body = body[:-1].replace("+-", "-") + f") * invdxx{dirn};\n }}\n"
+        body = body[:-1].replace("+-", "-") + (
+            f") * invdxx{dirn};\n }} // END BLOCK: stencil offset {offset}\n"
+        )
 
-    body += """}
+    body += """} // END SWITCH: finite-difference stencil offset
 return 0.0 / 0.0;  // poison output if offset computed incorrectly
 """
 
