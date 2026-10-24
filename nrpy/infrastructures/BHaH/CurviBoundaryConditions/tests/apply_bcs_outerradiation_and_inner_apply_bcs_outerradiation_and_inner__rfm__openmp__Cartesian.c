@@ -18,7 +18,7 @@ static inline REAL FD1_arbitrary_upwind_x0_dirn(const params_struct *restrict pa
   case 0: {
     static const REAL Rational_decl__1_2 = 1.0 / 2.0;
     return (-Rational_decl__1_2 * gf[IDX3(i0 - 1, i1, i2)] + Rational_decl__1_2 * gf[IDX3(i0 + 1, i1, i2)]) * invdxx0;
-  }
+  } // END BLOCK: stencil offset 0
   case 1: {
     static const REAL Rational_decl__3_2 = 3.0 / 2.0;
     static const REAL Rational_decl__2_1 = 2;
@@ -26,7 +26,7 @@ static inline REAL FD1_arbitrary_upwind_x0_dirn(const params_struct *restrict pa
     return (-Rational_decl__3_2 * gf[IDX3(i0, i1, i2)] + Rational_decl__2_1 * gf[IDX3(i0 + 1, i1, i2)] -
             Rational_decl__1_2 * gf[IDX3(i0 + 2, i1, i2)]) *
            invdxx0;
-  }
+  } // END BLOCK: stencil offset 1
   case -1: {
     static const REAL Rational_decl__1_2 = 1.0 / 2.0;
     static const REAL Rational_decl__2_1 = 2;
@@ -34,8 +34,8 @@ static inline REAL FD1_arbitrary_upwind_x0_dirn(const params_struct *restrict pa
     return (+Rational_decl__1_2 * gf[IDX3(i0 - 2, i1, i2)] - Rational_decl__2_1 * gf[IDX3(i0 - 1, i1, i2)] +
             Rational_decl__3_2 * gf[IDX3(i0, i1, i2)]) *
            invdxx0;
-  }
-  }
+  } // END BLOCK: stencil offset -1
+  } // END SWITCH: finite-difference stencil offset
   return 0.0 / 0.0; // poison output if offset computed incorrectly
 } // END FUNCTION: FD1_arbitrary_upwind_x0_dirn
 /**
@@ -55,7 +55,7 @@ static inline REAL FD1_arbitrary_upwind_x1_dirn(const params_struct *restrict pa
   case 0: {
     static const REAL Rational_decl__1_2 = 1.0 / 2.0;
     return (-Rational_decl__1_2 * gf[IDX3(i0, i1 - 1, i2)] + Rational_decl__1_2 * gf[IDX3(i0, i1 + 1, i2)]) * invdxx1;
-  }
+  } // END BLOCK: stencil offset 0
   case 1: {
     static const REAL Rational_decl__3_2 = 3.0 / 2.0;
     static const REAL Rational_decl__2_1 = 2;
@@ -63,7 +63,7 @@ static inline REAL FD1_arbitrary_upwind_x1_dirn(const params_struct *restrict pa
     return (-Rational_decl__3_2 * gf[IDX3(i0, i1, i2)] + Rational_decl__2_1 * gf[IDX3(i0, i1 + 1, i2)] -
             Rational_decl__1_2 * gf[IDX3(i0, i1 + 2, i2)]) *
            invdxx1;
-  }
+  } // END BLOCK: stencil offset 1
   case -1: {
     static const REAL Rational_decl__1_2 = 1.0 / 2.0;
     static const REAL Rational_decl__2_1 = 2;
@@ -71,8 +71,8 @@ static inline REAL FD1_arbitrary_upwind_x1_dirn(const params_struct *restrict pa
     return (+Rational_decl__1_2 * gf[IDX3(i0, i1 - 2, i2)] - Rational_decl__2_1 * gf[IDX3(i0, i1 - 1, i2)] +
             Rational_decl__3_2 * gf[IDX3(i0, i1, i2)]) *
            invdxx1;
-  }
-  }
+  } // END BLOCK: stencil offset -1
+  } // END SWITCH: finite-difference stencil offset
   return 0.0 / 0.0; // poison output if offset computed incorrectly
 } // END FUNCTION: FD1_arbitrary_upwind_x1_dirn
 /**
@@ -92,7 +92,7 @@ static inline REAL FD1_arbitrary_upwind_x2_dirn(const params_struct *restrict pa
   case 0: {
     static const REAL Rational_decl__1_2 = 1.0 / 2.0;
     return (-Rational_decl__1_2 * gf[IDX3(i0, i1, i2 - 1)] + Rational_decl__1_2 * gf[IDX3(i0, i1, i2 + 1)]) * invdxx2;
-  }
+  } // END BLOCK: stencil offset 0
   case 1: {
     static const REAL Rational_decl__3_2 = 3.0 / 2.0;
     static const REAL Rational_decl__2_1 = 2;
@@ -100,7 +100,7 @@ static inline REAL FD1_arbitrary_upwind_x2_dirn(const params_struct *restrict pa
     return (-Rational_decl__3_2 * gf[IDX3(i0, i1, i2)] + Rational_decl__2_1 * gf[IDX3(i0, i1, i2 + 1)] -
             Rational_decl__1_2 * gf[IDX3(i0, i1, i2 + 2)]) *
            invdxx2;
-  }
+  } // END BLOCK: stencil offset 1
   case -1: {
     static const REAL Rational_decl__1_2 = 1.0 / 2.0;
     static const REAL Rational_decl__2_1 = 2;
@@ -108,8 +108,8 @@ static inline REAL FD1_arbitrary_upwind_x2_dirn(const params_struct *restrict pa
     return (+Rational_decl__1_2 * gf[IDX3(i0, i1, i2 - 2)] - Rational_decl__2_1 * gf[IDX3(i0, i1, i2 - 1)] +
             Rational_decl__3_2 * gf[IDX3(i0, i1, i2)]) *
            invdxx2;
-  }
-  }
+  } // END BLOCK: stencil offset -1
+  } // END SWITCH: finite-difference stencil offset
   return 0.0 / 0.0; // poison output if offset computed incorrectly
 } // END FUNCTION: FD1_arbitrary_upwind_x2_dirn
 /**

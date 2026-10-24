@@ -46,6 +46,7 @@ def register_CFunction_MoL_step_forward_in_time(
     enable_curviBCs: bool = False,
     enable_intrinsics: bool = False,
     rational_const_alias: str = "const",
+    rhs_accumulation_string: str = "",
 ) -> None:
     r"""
     Register MoL_step_forward_in_time() C function, which is the core driver for time evolution in BHaH codes.
@@ -59,15 +60,22 @@ def register_CFunction_MoL_step_forward_in_time(
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
     :param enable_intrinsics: A flag to specify if hardware instructions should be used.
     :param rational_const_alias: Overload const specifier for Rational definitions
-    :raises ValueError: If unsupported Butcher table specified since adaptive RK steps are not implemented in MoL.
+    :param rhs_accumulation_string: Required second-stage RHS evaluation for diagonal RK3.
+        Only the BSSN and fCCZ4 rhs_eval generator provides it.
+        Read RK_INPUT_GFS without modifying it and accumulate each derivative into
+        RK_STAGE_GFS and RK_ACCUM_GFS with multipliers RK_STAGE_DT and RK_ACCUM_DT.
+        Complete RHS boundary treatment before returning; do not project the accumulator.
+    :raises ValueError: If an adaptive tableau is requested or diagonal RK3 is missing
+        the second-stage RHS accumulation code.
 
-    Doctest:
+    Doctests:
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> from nrpy.infrastructures import BHaH
     >>> from nrpy.helpers.generic import validate_strings
     >>> Butcher_dict = BHaH.MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
     >>> rhs_string = "rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"
+    >>> rhs_accumulation_string = "rhs_eval_accumulate(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_STAGE_GFS, RK_ACCUM_GFS, RK_STAGE_DT, RK_ACCUM_DT);"
     >>> post_rhs_string = (
     ... "if (strncmp(commondata->outer_bc_type, \"extrapolation\", 50) == 0)\n"
     ... "    apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);"
@@ -86,7 +94,8 @@ def register_CFunction_MoL_step_forward_in_time(
     ...         rhs_string=rhs_string,
     ...         post_rhs_string=post_rhs_string,
     ...         enable_intrinsics=True,
-    ...         rational_const_alias="static constexpr"
+    ...         rational_const_alias="static constexpr",
+    ...         rhs_accumulation_string=rhs_accumulation_string,
     ...     )
     ...     generated_str = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
     ...     validation_desc = f"CUDA__MoL_step_forward_in_time__{k}".replace(" ", "_")
@@ -98,11 +107,22 @@ def register_CFunction_MoL_step_forward_in_time(
     ... except ValueError as e:
     ...     print(f"ValueError: {e.args[0]}")
     ValueError: Adaptive order Butcher tables are currently not supported in MoL.
+    >>> for method in ("RK3 Ralston", "RK3 Heun"):
+    ...     for accumulation_string in ("", "   "):
+    ...         try:
+    ...             register_CFunction_MoL_step_forward_in_time(Butcher_dict, method, rhs_accumulation_string=accumulation_string)
+    ...         except ValueError as e:
+    ...             print(f"ValueError: {e.args[0]}")
+    ValueError: RK3 Ralston and RK3 Heun need rhs_accumulation_string, a second-stage RHS that adds directly into two arrays. Only the BSSN and fCCZ4 rhs_eval generator provides it; use another MoL method, such as RK4, for other equations.
+    ValueError: RK3 Ralston and RK3 Heun need rhs_accumulation_string, a second-stage RHS that adds directly into two arrays. Only the BSSN and fCCZ4 rhs_eval generator provides it; use another MoL method, such as RK4, for other equations.
+    ValueError: RK3 Ralston and RK3 Heun need rhs_accumulation_string, a second-stage RHS that adds directly into two arrays. Only the BSSN and fCCZ4 rhs_eval generator provides it; use another MoL method, such as RK4, for other equations.
+    ValueError: RK3 Ralston and RK3 Heun need rhs_accumulation_string, a second-stage RHS that adds directly into two arrays. Only the BSSN and fCCZ4 rhs_eval generator provides it; use another MoL method, such as RK4, for other equations.
     """
     parallelization = par.parval_from_str("parallelization")
     BHaH.MoLtimestepping.rk_substep.check_supported_parallelization(
         "register_CFunction_MoL_step_forward_in_time"
     )
+    BHaH.MoLtimestepping.rk_substep.MoL_Functions_dict.clear()
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if enable_intrinsics and parallelization == "cuda":
         includes += [os.path.join("intrinsics", "cuda_intrinsics.h")]
@@ -163,8 +183,15 @@ const REAL time_start = commondata->time;
         )
         and "RK3" in MoL_method
     ):
+        if not rhs_accumulation_string.strip():
+            raise ValueError(
+                "RK3 Ralston and RK3 Heun need rhs_accumulation_string, a second-stage RHS that adds directly into two arrays. "
+                "Only the BSSN and fCCZ4 rhs_eval generator provides it; use another MoL method, such as RK4, for other equations."
+            )
         body += """
-// In a diagonal RK3 method, we only need 3 gridfunctions (y_n, k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs, k2_or_y_nplus_a32_k2_gfs).
+// Diagonal RK3 uses three evolved-field arrays, including RHS storage.
+// Save the weighted first derivative before projecting the next stage.
+// The second RHS updates y_n and the accumulator directly, with its input unchanged.
 """
 
         y_n_gfs = sp.Symbol("y_n_gfsL", real=True)
@@ -177,17 +204,18 @@ const REAL time_start = commondata->time;
         rk_step_body_dict["RK_SUBSTEP_K1"] = (
             BHaH.MoLtimestepping.rk_substep.single_RK_substep_input_symbolic(
                 additional_comments="""
-// RHS evaluation:
-//  1. We will store k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs
-// Post-RHS evaluation: apply boundaries""",
+// Form the second-stage state and the weighted first-derivative sum.
+// Apply post-RHS operations only to the second-stage state.""",
                 substep_time_offset_dt=Butcher[0][0],
                 rhs_str=rhs_string,
                 rhs_input_expr=y_n_gfs,
                 rhs_output_expr=k1_or_yrun,
-                RK_lhs_list=[k1_or_yrun],
+                RK_lhs_list=[k1_or_yrun, k2_or_yrun],
                 RK_rhs_list=[
                     Butcher[1][1] * k1_or_yrun * sp.Symbol("commondata->dt", real=True)
-                    + y_n_gfs
+                    + y_n_gfs,
+                    Butcher[3][1] * k1_or_yrun * sp.Symbol("commondata->dt", real=True)
+                    + y_n_gfs,
                 ],
                 rk_step=1,
                 post_rhs_list=[post_rhs_string],
@@ -200,31 +228,27 @@ const REAL time_start = commondata->time;
             + "// -={ END k1 substep }=-\n\n"
         )
 
-        # k2
+        # k2: keep the projected input intact; consume each derivative in two outputs.
+        second_rhs_string = (
+            rhs_accumulation_string.replace("RK_STAGE_GFS", "y_n_gfs")
+            .replace("RK_ACCUM_GFS", str(k2_or_yrun).replace("gfsL", "gfs"))
+            .replace("RK_STAGE_DT", f"({sp.ccode(Butcher[2][2])} * commondata->dt)")
+            .replace("RK_ACCUM_DT", f"({sp.ccode(Butcher[3][2])} * commondata->dt)")
+        )
         rk_step_body_dict["RK_SUBSTEP_K2"] = (
             BHaH.MoLtimestepping.rk_substep.single_RK_substep_input_symbolic(
                 additional_comments="""
-// RHS evaluation:
-//    1. Reassign k1_or_yrun to the running total
-// Post-RHS evaluation:
-//    1. Apply post-RHS""",
+// Accumulate k2 into the third-stage state and the final running sum.
+// Apply post-RHS operations only to the third-stage state.""",
                 substep_time_offset_dt=Butcher[1][0],
-                rhs_str=rhs_string,
+                rhs_str=second_rhs_string,
                 rhs_input_expr=k1_or_yrun,
-                rhs_output_expr=k2_or_yrun,
-                RK_lhs_list=[k1_or_yrun, k2_or_yrun],
-                RK_rhs_list=[
-                    Butcher[3][1] * (k1_or_yrun - y_n_gfs) / Butcher[1][1]
-                    + y_n_gfs
-                    + Butcher[3][2]
-                    * k2_or_yrun
-                    * sp.Symbol("commondata->dt", real=True),
-                    Butcher[2][2] * k2_or_yrun * sp.Symbol("commondata->dt", real=True)
-                    + y_n_gfs,
-                ],
+                rhs_output_expr=y_n_gfs,
+                RK_lhs_list=[],
+                RK_rhs_list=[],
                 rk_step=2,
                 post_rhs_list=[post_rhs_string],
-                post_rhs_output_list=[k2_or_yrun],
+                post_rhs_output_list=[y_n_gfs],
                 enable_intrinsics=enable_intrinsics,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
@@ -237,18 +261,17 @@ const REAL time_start = commondata->time;
         rk_step_body_dict["RK_SUBSTEP_K3"] = (
             BHaH.MoLtimestepping.rk_substep.single_RK_substep_input_symbolic(
                 additional_comments="""
-// RHS evaluation:
-//    1. Add k3 to the running total and save to y_n
-// Post-RHS evaluation:
-//    1. Apply post-RHS to y_n""",
+// Add k3 to the running sum and apply post-RHS operations to the final state.""",
                 substep_time_offset_dt=Butcher[2][0],
                 rhs_str=rhs_string,
-                rhs_input_expr=k2_or_yrun,
-                rhs_output_expr=y_n_gfs,
+                rhs_input_expr=y_n_gfs,
+                rhs_output_expr=k1_or_yrun,
                 RK_lhs_list=[y_n_gfs],
                 RK_rhs_list=[
-                    k1_or_yrun
-                    + Butcher[3][3] * y_n_gfs * sp.Symbol("commondata->dt", real=True)
+                    k2_or_yrun
+                    + Butcher[3][3]
+                    * k1_or_yrun
+                    * sp.Symbol("commondata->dt", real=True)
                 ],
                 rk_step=3,
                 post_rhs_list=[post_rhs_string],

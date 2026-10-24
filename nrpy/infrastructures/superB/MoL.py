@@ -116,64 +116,62 @@ switch (which_MOL_part) {
   }
   case MOL_RK_UPDATE: {"""
 
-    # Part 2: RK update
-    if enable_simd:
-        warnings.warn(
-            "enable_simd in MoL is not properly supported -- MoL update loops are not properly bounds checked."
-        )
-        return_str += "#pragma omp parallel for\n"
-        return_str += "for(int i=0;i<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;i+=SIMD_WIDTH) {{\n"
-    else:
-        return_str += "LOOP_ALL_GFS_GPS(i) {\n"
-
-    var_type = "REAL_SIMD_ARRAY" if enable_simd else "REAL"
-
-    RK_lhs_str_list = [
-        (
-            f"const REAL_SIMD_ARRAY __rhs_exp_{i}"
-            if enable_simd
-            else f"{str(el).replace('gfsL', 'gfs[i]')}"
-        )
-        for i, el in enumerate(RK_lhs_list)
-    ]
-
-    read_list = [
-        read for el in RK_rhs_list for read in list(sp.ordered(el.free_symbols))
-    ]
-    read_list_unique = superfast_uniq(read_list)
-
-    for el in read_list_unique:
-        if str(el) != "commondata->dt":
-            if enable_simd:
-                simd_el = str(el).replace("gfsL", "gfs[i]")
-                return_str += f"const {var_type} {el} = ReadSIMD(&{simd_el});\n"
-            else:
-                return_str += (
-                    f"const {var_type} {el} = {str(el).replace('gfsL', 'gfs[i]')};\n"
-                )
-
-    if enable_simd:
-        return_str += "const REAL_SIMD_ARRAY DT = ConstSIMD(commondata->dt);\n"
-
-    kernel = c_codegen(
-        RK_rhs_list,
-        RK_lhs_str_list,
-        include_braces=False,
-        verbose=False,
-        enable_simd=enable_simd,
-    )
-
-    if enable_simd:
-        return_str += kernel.replace("commondata->dt", "DT")
-        for i, el in enumerate(RK_lhs_list):
-            return_str += (
-                f"  WriteSIMD(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{i});\n"
+    # The fused second RK3 stage writes both updates during RHS evaluation.
+    if RK_rhs_list:
+        # Part 2: RK update
+        if enable_simd:
+            warnings.warn(
+                "enable_simd in MoL is not properly supported -- MoL update loops are not properly bounds checked."
             )
+            return_str += "#pragma omp parallel for\n"
+            return_str += "for(int i=0;i<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;i+=SIMD_WIDTH) {{\n"
+        else:
+            return_str += "LOOP_ALL_GFS_GPS(i) {\n"
 
-    else:
-        return_str += kernel
+        var_type = "REAL_SIMD_ARRAY" if enable_simd else "REAL"
 
-    return_str += "}\n"
+        RK_lhs_str_list = [
+            (
+                f"const REAL_SIMD_ARRAY __rhs_exp_{i}"
+                if enable_simd
+                else f"{str(el).replace('gfsL', 'gfs[i]')}"
+            )
+            for i, el in enumerate(RK_lhs_list)
+        ]
+
+        read_list = [
+            read for el in RK_rhs_list for read in list(sp.ordered(el.free_symbols))
+        ]
+        read_list_unique = superfast_uniq(read_list)
+
+        for el in read_list_unique:
+            if str(el) != "commondata->dt":
+                if enable_simd:
+                    simd_el = str(el).replace("gfsL", "gfs[i]")
+                    return_str += f"const {var_type} {el} = ReadSIMD(&{simd_el});\n"
+                else:
+                    return_str += f"const {var_type} {el} = {str(el).replace('gfsL', 'gfs[i]')};\n"
+
+        if enable_simd:
+            return_str += "const REAL_SIMD_ARRAY DT = ConstSIMD(commondata->dt);\n"
+
+        kernel = c_codegen(
+            RK_rhs_list,
+            RK_lhs_str_list,
+            include_braces=False,
+            verbose=False,
+            enable_simd=enable_simd,
+        )
+
+        if enable_simd:
+            return_str += kernel.replace("commondata->dt", "DT")
+            for i, el in enumerate(RK_lhs_list):
+                return_str += f"  WriteSIMD(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{i});\n"
+
+        else:
+            return_str += kernel
+
+        return_str += "}\n"
     return_str += """
     break;
   }
@@ -224,6 +222,14 @@ def generate_post_rhs_output_list(
     :param MoL_method: The method of lines method name.
     :param rk_substep: The current Runge-Kutta substep.
     :return: A list of strings representing the post RHS output.
+
+    The final accumulator is not a stage state and must never be projected.
+
+    >>> tables = BHaH.MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
+    >>> for method in ("RK3 Ralston", "RK3 Heun"):
+    ...     print([generate_post_rhs_output_list(tables, method, stage) for stage in (1, 2, 3)])
+    [['K1_OR_Y_NPLUS_A21_K1_OR_Y_NPLUS1_RUNNING_TOTAL_GFS'], ['Y_N_GFS'], ['Y_N_GFS']]
+    [['K1_OR_Y_NPLUS_A21_K1_OR_Y_NPLUS1_RUNNING_TOTAL_GFS'], ['Y_N_GFS'], ['Y_N_GFS']]
     """
     num_steps = len(Butcher_dict[MoL_method][0]) - 1
     s = rk_substep - 1  # Convert to 0-indexed
@@ -239,15 +245,11 @@ def generate_post_rhs_output_list(
         k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs = (
             "K1_OR_Y_NPLUS_A21_K1_OR_Y_NPLUS1_RUNNING_TOTAL_GFS"
         )
-        k2_or_y_nplus_a32_k2_gfs = "K2_OR_Y_NPLUS_A32_K2_GFS"
 
         if s == 0:
             post_rhs = [k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs]
         elif s == 1:
-            post_rhs = [
-                k2_or_y_nplus_a32_k2_gfs,
-                k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
-            ]
+            post_rhs = [y_n_gfs]
         elif s == 2:
             post_rhs = [y_n_gfs]
     else:
@@ -289,6 +291,15 @@ def generate_rhs_output_exprs(
     :param MoL_method: The method of lines method name.
     :param rk_substep: The current Runge-Kutta substep (1-indexed).
     :return: A list of sympy expressions representing the RHS output expressions.
+
+    Both affine stage-2 outputs receive the inner-boundary exchange before the
+    next state is projected. Other stages exchange the ordinary derivative.
+
+    >>> tables = BHaH.MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
+    >>> for method in ("RK3 Ralston", "RK3 Heun"):
+    ...     print([generate_rhs_output_exprs(tables, method, stage) for stage in (1, 2, 3)])
+    [['K1_OR_Y_NPLUS_A21_K1_OR_Y_NPLUS1_RUNNING_TOTAL_GFS'], ['Y_N_GFS', 'K2_OR_Y_NPLUS_A32_K2_GFS'], ['K1_OR_Y_NPLUS_A21_K1_OR_Y_NPLUS1_RUNNING_TOTAL_GFS']]
+    [['K1_OR_Y_NPLUS_A21_K1_OR_Y_NPLUS1_RUNNING_TOTAL_GFS'], ['Y_N_GFS', 'K2_OR_Y_NPLUS_A32_K2_GFS'], ['K1_OR_Y_NPLUS_A21_K1_OR_Y_NPLUS1_RUNNING_TOTAL_GFS']]
     """
     s = rk_substep - 1  # Convert to 0-indexed
     rhs_output_expr = []
@@ -308,9 +319,10 @@ def generate_rhs_output_exprs(
         if s == 0:
             rhs_output_expr = [k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs]
         elif s == 1:
-            rhs_output_expr = [k2_or_y_nplus_a32_k2_gfs]
+            # Inner parity is linear, so exchange both affine RHS updates.
+            rhs_output_expr = [y_n_gfs, k2_or_y_nplus_a32_k2_gfs]
         elif s == 2:
-            rhs_output_expr = [y_n_gfs]
+            rhs_output_expr = [k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs]
     else:
         if not BHaH.MoLtimestepping.rk_butcher_table_dictionary.is_diagonal_Butcher(
             Butcher_dict, MoL_method
@@ -416,6 +428,7 @@ def register_CFunction_MoL_step_forward_in_time(
     enable_rfm_precompute: bool = False,
     enable_curviBCs: bool = False,
     enable_simd: bool = False,
+    rhs_accumulation_string: str = "",
 ) -> None:
     """
     Register MoL_step_forward_in_time() C function, which is the core driver for time evolution in BHaH codes.
@@ -428,9 +441,34 @@ def register_CFunction_MoL_step_forward_in_time(
     :param enable_rfm_precompute: Flag to enable reference metric functionality.
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
     :param enable_simd: Flag to enable SIMD functionality.
+    :param rhs_accumulation_string: Fused second-stage RHS for diagonal RK3.
+        It reads RK_INPUT_GFS and adds RK_STAGE_DT times the RHS to
+        RK_STAGE_GFS and RK_ACCUM_DT times the RHS to RK_ACCUM_GFS.
+        The input remains unchanged, and boundary conditions must be included.
+    :raises ValueError: If a diagonal RK3 method has no fused RHS hook.
 
-    Doctest:
-    # FIXME
+    Doctests:
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> par.set_parval_from_str("parallelization", "openmp")
+    >>> tables = BHaH.MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
+    >>> cfc.CFunction_dict.clear()
+    >>> register_CFunction_MoL_step_forward_in_time(tables, "RK3 Ralston")  # doctest: +ELLIPSIS
+    Traceback (most recent call last):
+        ...
+    ValueError: RK3 Ralston requires rhs_accumulation_string: ...
+    >>> for method in ("RK3 Ralston", "RK3 Heun"):
+    ...     cfc.CFunction_dict.clear()
+    ...     register_CFunction_MoL_step_forward_in_time(
+    ...         tables, method,
+    ...         rhs_string="rhs_eval(commondata, params, RK_INPUT_GFS, RK_OUTPUT_GFS);",
+    ...         post_rhs_bcs_str="apply_bcs(params, RK_OUTPUT_GFS);",
+    ...         post_rhs_string="project_constraints(params, RK_OUTPUT_GFS);",
+    ...         rhs_accumulation_string="rhs_eval_accumulate(commondata, params, RK_INPUT_GFS, RK_STAGE_GFS, RK_ACCUM_GFS, RK_STAGE_DT, RK_ACCUM_DT);",
+    ...     )
+    ...     validate_strings(
+    ...         cfc.CFunction_dict["MoL_step_forward_in_time"].full_function,
+    ...         "superB_MoL_" + method.replace(" ", "_"),
+    ...     )
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if enable_simd:
@@ -493,133 +531,96 @@ REAL *restrict y_n_gfs = {gf_prefix}y_n_gfs;
         )
         and "RK3" in MoL_method
     ):
-        # Diagonal RK3 only!!!
-        #  In a diagonal RK3 method, only 3 gridfunctions need be defined. Below implements this approach.
+        if not rhs_accumulation_string.strip():
+            raise ValueError(
+                f"{MoL_method} requires rhs_accumulation_string: a second-stage RHS "
+                "that adds directly into two arrays. Only the BSSN and fCCZ4 "
+                "rhs_eval generator provides it; use another MoL method, such "
+                "as RK4, for other equations."
+            )
+
+        # These three existing arrays hold the old state, stage, and accumulator.
         y_n_gfs = sp.Symbol("y_n_gfsL", real=True)
-        k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs = sp.Symbol(
+        stage_gfs = sp.Symbol(
             "k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfsL", real=True
         )
-        k2_or_y_nplus_a32_k2_gfs = sp.Symbol("k2_or_y_nplus_a32_k2_gfsL", real=True)
-
-        # k_1
-        body += r"""
-          case RK_SUBSTEP_K1:
-          {
-"""
+        accum_gfs = sp.Symbol("k2_or_y_nplus_a32_k2_gfsL", real=True)
+        stage2_rhs = (
+            rhs_accumulation_string.replace(
+                "RK_INPUT_GFS", str(stage_gfs).replace("gfsL", "gfs")
+            )
+            .replace("RK_STAGE_GFS", "y_n_gfs")
+            .replace("RK_ACCUM_GFS", str(accum_gfs).replace("gfsL", "gfs"))
+            .replace("RK_STAGE_DT", f"({sp.ccode(Butcher[2][2] * dt)})")
+            .replace("RK_ACCUM_DT", f"({sp.ccode(Butcher[3][2] * dt)})")
+        )
 
         body += """
-// In a diagonal RK3 method like this one, only 3 gridfunctions need be defined. Below implements this approach.
-// Using y_n_gfs as input, k1 and apply boundary conditions\n"""
-        body += (
-            single_RK_substep_input_symbolic(
-                comment_block="""// -={ START k1 substep }=-
-// RHS evaluation:
-//  1. We will store k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs now as
-//     ...  the update for the next rhs evaluation y_n + a21*k1*dt
-// Post-RHS evaluation:
-//  1. Apply post-RHS to y_n + a21*k1*dt""",
-                substep_time_offset_dt=Butcher[0][0],
-                rhs_str=rhs_string,
-                rhs_input_expr=y_n_gfs,
-                rhs_output_expr=k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
-                RK_lhs_list=[k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs],
-                RK_rhs_list=[
-                    Butcher[1][1]
-                    * k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs
-                    * dt
-                    + y_n_gfs
-                ],
-                post_rhs_bcs_str=post_rhs_bcs_str,
-                post_rhs_output_list=[
-                    k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs
-                ],
-                enable_simd=enable_simd,
-                gf_aliases=gf_aliases,
-                post_rhs_string=post_rhs_string,
-            )
-            + "// -={ END k1 substep }=-\n\n"
+// Diagonal RK3 uses three evolved-field arrays and three RHS evaluations.
+// Save the k1 contribution before projecting the first provisional stage.
+          case RK_SUBSTEP_K1: {
+"""
+        body += single_RK_substep_input_symbolic(
+            comment_block="// -={ START k1 substep }=-",
+            substep_time_offset_dt=Butcher[0][0],
+            rhs_str=rhs_string,
+            rhs_input_expr=y_n_gfs,
+            rhs_output_expr=stage_gfs,
+            RK_lhs_list=[stage_gfs, accum_gfs],
+            RK_rhs_list=[
+                y_n_gfs + Butcher[1][1] * dt * stage_gfs,
+                y_n_gfs + Butcher[3][1] * dt * stage_gfs,
+            ],
+            post_rhs_bcs_str=post_rhs_bcs_str,
+            post_rhs_output_list=[stage_gfs],
+            enable_simd=enable_simd,
+            gf_aliases=gf_aliases,
+            post_rhs_string=post_rhs_string,
         )
         body += """
-        break;
-        }
+          break;
+          }
+// Evaluate k2 from the projected stage without changing that input.
+// The fused RHS advances y_n to the next stage and adds k2 to the accumulator.
+          case RK_SUBSTEP_K2: {
 """
-
-        body += r"""
-          case RK_SUBSTEP_K2:
-          {
-"""
-        body += (
-            single_RK_substep_input_symbolic(
-                comment_block="""// -={ START k2 substep }=-
-// RHS evaluation:
-//    1. Reassign k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs to be the running total y_{n+1}; a32*k2*dt to the running total
-//    2. Store k2_or_y_nplus_a32_k2_gfs now as y_n + a32*k2*dt
-// Post-RHS evaluation:
-//    1. Apply post-RHS to both y_n + a32*k2 (stored in k2_or_y_nplus_a32_k2_gfs)
-//       ... and the y_{n+1} running total, as they have not been applied yet to k2-related gridfunctions""",
-                rhs_str=rhs_string,
-                substep_time_offset_dt=Butcher[1][0],
-                rhs_input_expr=k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
-                rhs_output_expr=k2_or_y_nplus_a32_k2_gfs,
-                RK_lhs_list=[
-                    k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
-                    k2_or_y_nplus_a32_k2_gfs,
-                ],
-                RK_rhs_list=[
-                    Butcher[3][1]
-                    * (k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs - y_n_gfs)
-                    / Butcher[1][1]
-                    + y_n_gfs
-                    + Butcher[3][2] * k2_or_y_nplus_a32_k2_gfs * dt,
-                    Butcher[2][2] * k2_or_y_nplus_a32_k2_gfs * dt + y_n_gfs,
-                ],
-                post_rhs_output_list=[
-                    k2_or_y_nplus_a32_k2_gfs,
-                    k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
-                ],
-                enable_simd=enable_simd,
-                gf_aliases=gf_aliases,
-                post_rhs_string=post_rhs_string,
-            )
-            + "// -={ END k2 substep }=-\n\n"
+        body += single_RK_substep_input_symbolic(
+            comment_block="// -={ START k2 substep }=-",
+            substep_time_offset_dt=Butcher[1][0],
+            rhs_str=stage2_rhs,
+            rhs_input_expr=stage_gfs,
+            rhs_output_expr=y_n_gfs,
+            RK_lhs_list=[],
+            RK_rhs_list=[],
+            post_rhs_bcs_str=post_rhs_bcs_str,
+            post_rhs_output_list=[y_n_gfs],
+            enable_simd=enable_simd,
+            gf_aliases=gf_aliases,
+            post_rhs_string=post_rhs_string,
         )
         body += """
-        break;
-        }
+          break;
+          }
+// Only the stage state is projected; the accumulator stays unprojected.
+          case RK_SUBSTEP_K3: {
 """
-
-        body += r"""
-          case RK_SUBSTEP_K3:
-          {
-"""
-
-        body += (
-            single_RK_substep_input_symbolic(
-                comment_block="""// -={ START k3 substep }=-
-// RHS evaluation:
-//    1. Add k3 to the running total and save to y_n
-// Post-RHS evaluation:
-//    1. Apply post-RHS to y_n""",
-                substep_time_offset_dt=Butcher[2][0],
-                rhs_str=rhs_string,
-                rhs_input_expr=k2_or_y_nplus_a32_k2_gfs,
-                rhs_output_expr=y_n_gfs,
-                RK_lhs_list=[y_n_gfs],
-                RK_rhs_list=[
-                    k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs
-                    + Butcher[3][3] * y_n_gfs * dt
-                ],
-                post_rhs_bcs_str=post_rhs_bcs_str,
-                post_rhs_output_list=[y_n_gfs],
-                enable_simd=enable_simd,
-                gf_aliases=gf_aliases,
-                post_rhs_string=post_rhs_string,
-            )
-            + "// -={ END k3 substep }=-\n\n"
+        body += single_RK_substep_input_symbolic(
+            comment_block="// -={ START k3 substep }=-",
+            substep_time_offset_dt=Butcher[2][0],
+            rhs_str=rhs_string,
+            rhs_input_expr=y_n_gfs,
+            rhs_output_expr=stage_gfs,
+            RK_lhs_list=[y_n_gfs],
+            RK_rhs_list=[accum_gfs + Butcher[3][3] * dt * stage_gfs],
+            post_rhs_bcs_str=post_rhs_bcs_str,
+            post_rhs_output_list=[y_n_gfs],
+            enable_simd=enable_simd,
+            gf_aliases=gf_aliases,
+            post_rhs_string=post_rhs_string,
         )
         body += """
-        break;
-        }
+          break;
+          }
 """
 
     else:
@@ -917,6 +918,7 @@ def register_CFunctions(
     enable_simd: bool = False,
     register_MoL_step_forward_in_time: bool = True,
     enable_psi4: bool = False,
+    rhs_accumulation_string: str = "",
 ) -> None:
     r"""
     Register all MoL C functions and NRPy basic defines.
@@ -930,6 +932,8 @@ def register_CFunctions(
     :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
     :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
     :param enable_psi4: Whether or not to enable psi4 diagnostics.
+    :param rhs_accumulation_string: Fused second-stage RHS hook required for
+        diagonal RK3; see register_CFunction_MoL_step_forward_in_time.
 
     Doctests:
     >>> from nrpy.helpers.generic import validate_strings
@@ -963,6 +967,7 @@ def register_CFunctions(
             enable_rfm_precompute=enable_rfm_precompute,
             enable_curviBCs=enable_curviBCs,
             enable_simd=enable_simd,
+            rhs_accumulation_string=rhs_accumulation_string,
         )
 
     BHaH.griddata_commondata.register_griddata_commondata(
