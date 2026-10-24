@@ -746,19 +746,15 @@ def register_CFunction_apply_bcs_outerradiation_and_inner_accumulate(
     :param rational_const_alias: Alias for rational constants.
 
     Doctests:
-    >>> import contextlib
-    >>> import io
-    >>> from nrpy.helpers.generic import clang_format, validate_strings
-    >>> par.set_parval_from_str("fd_order", 4)
+    >>> from nrpy.helpers.generic import validate_strings
     >>> for parallelization in ("openmp", "cuda"):
     ...     par.set_parval_from_str("parallelization", parallelization)
     ...     cfc.CFunction_dict.clear()
-    ...     with contextlib.redirect_stdout(io.StringIO()):
-    ...         register_CFunction_apply_bcs_outerradiation_and_inner_accumulate("Cartesian")
+    ...     register_CFunction_apply_bcs_outerradiation_and_inner_accumulate("Cartesian")
     ...     name = "apply_bcs_outerradiation_and_inner_accumulate__rfm__Cartesian"
     ...     generated_str = cfc.CFunction_dict[name].full_function
     ...     validation_desc = f"apply_bcs_outerradiation_and_inner_accumulate__{parallelization}__Cartesian"
-    ...     validate_strings(clang_format(generated_str), validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
+    ...     validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     # Step 1: Declare the accumulated-boundary function.
     desc = "Apply radiation and inner RHS boundary conditions while accumulating into two RK arrays."

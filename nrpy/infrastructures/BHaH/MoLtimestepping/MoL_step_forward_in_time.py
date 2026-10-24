@@ -108,13 +108,15 @@ def register_CFunction_MoL_step_forward_in_time(
     ...     print(f"ValueError: {e.args[0]}")
     ValueError: Adaptive order Butcher tables are currently not supported in MoL.
     >>> for method in ("RK3 Ralston", "RK3 Heun"):
-    ...     for hook in ("", "   "):
+    ...     for accumulation_string in ("", "   "):
     ...         try:
-    ...             register_CFunction_MoL_step_forward_in_time(Butcher_dict, method, rhs_accumulation_string=hook)
-    ...         except ValueError as error:
-    ...             assert str(error) == "RK3 Ralston and RK3 Heun need rhs_accumulation_string, a second-stage RHS that adds directly into two arrays. Only the BSSN and fCCZ4 rhs_eval generator provides it; use another MoL method, such as RK4, for other equations."
-    ...         else:
-    ...             raise AssertionError("Projected diagonal RK3 must require an accumulation hook")
+    ...             register_CFunction_MoL_step_forward_in_time(Butcher_dict, method, rhs_accumulation_string=accumulation_string)
+    ...         except ValueError as e:
+    ...             print(f"ValueError: {e.args[0]}")
+    ValueError: RK3 Ralston and RK3 Heun need rhs_accumulation_string, a second-stage RHS that adds directly into two arrays. Only the BSSN and fCCZ4 rhs_eval generator provides it; use another MoL method, such as RK4, for other equations.
+    ValueError: RK3 Ralston and RK3 Heun need rhs_accumulation_string, a second-stage RHS that adds directly into two arrays. Only the BSSN and fCCZ4 rhs_eval generator provides it; use another MoL method, such as RK4, for other equations.
+    ValueError: RK3 Ralston and RK3 Heun need rhs_accumulation_string, a second-stage RHS that adds directly into two arrays. Only the BSSN and fCCZ4 rhs_eval generator provides it; use another MoL method, such as RK4, for other equations.
+    ValueError: RK3 Ralston and RK3 Heun need rhs_accumulation_string, a second-stage RHS that adds directly into two arrays. Only the BSSN and fCCZ4 rhs_eval generator provides it; use another MoL method, such as RK4, for other equations.
     """
     parallelization = par.parval_from_str("parallelization")
     BHaH.MoLtimestepping.rk_substep.check_supported_parallelization(

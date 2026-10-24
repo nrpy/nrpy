@@ -448,7 +448,7 @@ def register_CFunction_MoL_step_forward_in_time(
     :raises ValueError: If a diagonal RK3 method has no fused RHS hook.
 
     Doctests:
-    >>> from nrpy.helpers.generic import clang_format, validate_strings
+    >>> from nrpy.helpers.generic import validate_strings
     >>> par.set_parval_from_str("parallelization", "openmp")
     >>> tables = BHaH.MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
     >>> cfc.CFunction_dict.clear()
@@ -466,8 +466,8 @@ def register_CFunction_MoL_step_forward_in_time(
     ...         rhs_accumulation_string="rhs_eval_accumulate(commondata, params, RK_INPUT_GFS, RK_STAGE_GFS, RK_ACCUM_GFS, RK_STAGE_DT, RK_ACCUM_DT);",
     ...     )
     ...     validate_strings(
-    ...         clang_format(cfc.CFunction_dict["MoL_step_forward_in_time"].full_function),
-    ...         "superB_MoL_" + method.replace(" ", "_"), file_ext="c",
+    ...         cfc.CFunction_dict["MoL_step_forward_in_time"].full_function,
+    ...         "superB_MoL_" + method.replace(" ", "_"),
     ...     )
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
