@@ -103,8 +103,10 @@ Finite-difference lowering selects their reads and stencils while retaining the 
 mathematical derivative temporaries. Equation construction and cache keys are unchanged. No additional array is allocated during evolution for `hDDdD`: `blackhole_spectroscopy.py` calls
 `hDDdD_eval(params, RK_INPUT_GFS, RK_OUTPUT_GFS)` and
 `Ricci_eval(params, rfmstruct, RK_INPUT_GFS, RK_OUTPUT_GFS, auxevol_gfs)` before `rhs_eval`
-overwrites `RK_OUTPUT_GFS` in the same substep, and enables this only for CUDA double
-precision, where it was measured to help.
+overwrites `RK_OUTPUT_GFS` in the same substep. It enables this only for CUDA double
+precision, where it was measured to help, and never with `RK3 Ralston` or `RK3 Heun`:
+their second stage keeps all three evolved-field arrays live, so none can hold the
+`hDDdD` values.
 
 Claim evidence:
 - Claim: Stored-derivative selection belongs to finite-difference lowering. Ricci and RHS consumers explicitly supply the registered fields available to each kernel; centered first derivatives read storage, canonical mixed second derivatives apply a first-derivative stencil to it, and diagonal/upwind/KO derivatives retain their operators. Equations and equation caches do not select storage.

@@ -533,9 +533,10 @@ REAL *restrict y_n_gfs = {gf_prefix}y_n_gfs;
     ):
         if not rhs_accumulation_string.strip():
             raise ValueError(
-                f"{MoL_method} requires rhs_accumulation_string: a fused RHS "
-                "hook that updates the next stage and the unprojected final "
-                "accumulator using three evolved-field arrays."
+                f"{MoL_method} requires rhs_accumulation_string: a second-stage RHS "
+                "that adds directly into two arrays. Only the BSSN and fCCZ4 "
+                "rhs_eval generator provides it; use another MoL method, such "
+                "as RK4, for other equations."
             )
 
         # These three existing arrays hold the old state, stage, and accumulator.

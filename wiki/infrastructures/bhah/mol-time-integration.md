@@ -64,7 +64,10 @@ registration flags `enable_rfm_precompute`, `enable_curviBCs`, and
 `bcstruct`, and SIMD/CUDA intrinsic headers and update loops.
 
 `RK3 Ralston` and `RK3 Heun` require `rhs_accumulation_string` in addition
-to the ordinary RHS hook. Its placeholders `RK_INPUT_GFS`, `RK_STAGE_GFS`,
+to the ordinary RHS hook. Only the BSSN and fCCZ4 generator in `rhs_eval.py`
+supplies it, so registering either method for another equation set stops at
+generation time with an error that names the missing string and suggests a
+method such as `RK4`. Its placeholders `RK_INPUT_GFS`, `RK_STAGE_GFS`,
 `RK_ACCUM_GFS`, `RK_STAGE_DT`, and `RK_ACCUM_DT` specify an unchanged input
 stage and two distinct arrays that receive weighted derivatives. The first
 substep saves the weighted first derivative before projection changes its
@@ -79,7 +82,7 @@ Claim evidence:
 - Claim: Diagonal RK3 requires the accumulation hook above, preserves the original Ralston and Heun coefficients, and uses three evolved arrays and three RHS evaluations when its hooks follow the stated input and projection requirements.
 - Role: descriptive behavior
 - Deciding authority: [MoL_step_forward_in_time.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/MoL_step_forward_in_time.py), `register_CFunction_MoL_step_forward_in_time`; [rk_butcher_table_dictionary.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/rk_butcher_table_dictionary.py), `generate_Butcher_tables` and `intermediate_stage_gf_names_list`.
-- Corroboration: [runtime.c](../../../.github/tests/rk3_cpu/runtime.c), `dense_step`, the linked evaluation counters, and the allocation checks in `main`; [generate.py](../../../.github/tests/rk3_cpu/generate.py), `generate`, builds the complete CPU drivers. The configured comparison covers BSSN and does not establish fCCZ4, CUDA, distributed execution, or long-evolution convergence.
+- Corroboration: the `register_CFunction_MoL_step_forward_in_time` doctests compare the emitted CUDA driver text for both methods with stored references and check the missing-hook error. They do not execute the schedule, and no numerical comparison against a dense Runge-Kutta tableau is maintained.
 
 `general_relativity/rhs_eval.py::MoL_rhs_strings()` builds matching ordinary
 and accumulated BSSN/fCCZ4 calls.
@@ -97,7 +100,7 @@ Claim evidence:
 - Claim: The separate RHS and boundary registration flags enable the matching accumulated calls; the RHS reads a fixed stage, adds only to interior output lanes, and leaves an output with a zero multiplier unchanged.
 - Role: descriptive behavior
 - Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `MoL_rhs_strings` and `register_CFunction_rhs_eval`; [boundary register_all.py](../../../nrpy/infrastructures/BHaH/CurviBoundaryConditions/register_all.py), `register_C_functions`.
-- Corroboration: [runtime.c](../../../.github/tests/rk3_cpu/runtime.c), `check_accumulation`, compares independent initial outputs with ordinary RHS updates, checks input and zero-weight identity, and includes partial SIMD rows. [check.py](../../../.github/tests/rk3_cpu/check.py), `main`, configures scalar and AVX2 CPU execution with the generated BSSN functions; this comparison does not execute every coordinate system or formulation.
+- Corroboration: none available. The `MoL_rhs_strings` doctest checks only the unsupported-option error, and no test executes the accumulated RHS kernel.
 
 For radiation, preparation subtracts each old boundary-source contribution
 in reverse dependency order; completion adds the updated source and radiation
@@ -109,7 +112,7 @@ Claim evidence:
 - Claim: Accumulated radiation and inner boundaries preserve arbitrary old output values plus the weighted boundary RHS by reversing source subtraction during preparation and restoring sources and radiation terms in forward order during completion.
 - Role: descriptive behavior
 - Deciding authority: [apply_bcs_outerradiation_and_inner.py](../../../nrpy/infrastructures/BHaH/CurviBoundaryConditions/apply_bcs_outerradiation_and_inner.py), `register_CFunction_apply_bcs_outerradiation_and_inner_accumulate`.
-- Corroboration: [runtime.c](../../../.github/tests/rk3_cpu/runtime.c), `make_boundary` and `check_accumulation`, compare the ordinary generated radiation RHS with the accumulated result across faces, edges, corners, and inner sources. The boundary owner's doctests compare complete emitted CPU and CUDA source; source comparison alone does not establish GPU execution.
+- Corroboration: the `register_CFunction_apply_bcs_outerradiation_and_inner_accumulate` doctests compare the complete emitted CPU and CUDA source for the Cartesian case with stored references. Source comparison does not execute the boundary update on a CPU or GPU, and no test compares it with the ordinary radiation RHS.
 
 `rk_substep.py` provides the low-level RK code generator. `RKFunction` turns
 symbolic RK left-hand and right-hand sides into a launchable update function,
@@ -136,9 +139,6 @@ regrids where `dt` can change. It then increments `commondata->nn`.
 - [MoL_free_intermediate_stage_gfs.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/MoL_free_intermediate_stage_gfs.py) - `register_CFunction_MoL_free_intermediate_levels`
 - [apply_bcs_outerradiation_and_inner.py](../../../nrpy/infrastructures/BHaH/CurviBoundaryConditions/apply_bcs_outerradiation_and_inner.py) - radiation and inner accumulation functions
 - [boundary register_all.py](../../../nrpy/infrastructures/BHaH/CurviBoundaryConditions/register_all.py) - `register_C_functions`
-- [check.py](../../../.github/tests/rk3_cpu/check.py) - scoped generated CPU comparison
-- [generate.py](../../../.github/tests/rk3_cpu/generate.py) - `generate`
-- [runtime.c](../../../.github/tests/rk3_cpu/runtime.c) - `dense_step`, `check_accumulation`, linked evaluation counters
 - [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py) - `MoL_rhs_strings`, `register_CFunction_rhs_eval`
 - [rk_substep.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/rk_substep.py) - `RKFunction`, `single_RK_substep_input_symbolic`, `construct_RK_functions_prefunc`, `MoL_Functions_dict`, `check_supported_parallelization`
 - [rk_butcher_table_dictionary.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/rk_butcher_table_dictionary.py) - `generate_Butcher_tables`, `validate`, `is_diagonal_Butcher`, `intermediate_stage_gf_names_list`

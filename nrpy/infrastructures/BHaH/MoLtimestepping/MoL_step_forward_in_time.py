@@ -61,6 +61,7 @@ def register_CFunction_MoL_step_forward_in_time(
     :param enable_intrinsics: A flag to specify if hardware instructions should be used.
     :param rational_const_alias: Overload const specifier for Rational definitions
     :param rhs_accumulation_string: Required second-stage RHS evaluation for diagonal RK3.
+        Only the BSSN and fCCZ4 rhs_eval generator provides it.
         Read RK_INPUT_GFS without modifying it and accumulate each derivative into
         RK_STAGE_GFS and RK_ACCUM_GFS with multipliers RK_STAGE_DT and RK_ACCUM_DT.
         Complete RHS boundary treatment before returning; do not project the accumulator.
@@ -111,7 +112,7 @@ def register_CFunction_MoL_step_forward_in_time(
     ...         try:
     ...             register_CFunction_MoL_step_forward_in_time(Butcher_dict, method, rhs_accumulation_string=hook)
     ...         except ValueError as error:
-    ...             assert str(error) == "Diagonal RK3 requires rhs_accumulation_string to preserve derivatives across stage projections."
+    ...             assert str(error) == "RK3 Ralston and RK3 Heun need rhs_accumulation_string, a second-stage RHS that adds directly into two arrays. Only the BSSN and fCCZ4 rhs_eval generator provides it; use another MoL method, such as RK4, for other equations."
     ...         else:
     ...             raise AssertionError("Projected diagonal RK3 must require an accumulation hook")
     """
@@ -182,7 +183,8 @@ const REAL time_start = commondata->time;
     ):
         if not rhs_accumulation_string.strip():
             raise ValueError(
-                "Diagonal RK3 requires rhs_accumulation_string to preserve derivatives across stage projections."
+                "RK3 Ralston and RK3 Heun need rhs_accumulation_string, a second-stage RHS that adds directly into two arrays. "
+                "Only the BSSN and fCCZ4 rhs_eval generator provides it; use another MoL method, such as RK4, for other equations."
             )
         body += """
 // Diagonal RK3 uses three evolved-field arrays, including RHS storage.
