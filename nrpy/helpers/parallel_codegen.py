@@ -11,7 +11,7 @@ import pickle
 import time
 from importlib import import_module
 from multiprocessing import Pool, set_start_method
-from typing import Any, Callable, Dict, Tuple, Union, cast
+from typing import Any, Callable, Dict, Mapping, Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.grid as gri
@@ -97,57 +97,6 @@ def deep_update(d: Dict[Any, Any], u: Dict[Any, Any]) -> None:
             deep_update(d[k], v)
         else:
             d[k] = v
-
-
-# NRPyEnv_type fixes a value type per dictionary, but the two helpers below treat all six
-# dictionaries alike, so they use Dict[Any, Any].
-def pickle_environment(env: NRPyEnv_type) -> Tuple[Dict[Any, Any], ...]:
-    """
-    Record the current contents of the NRPy environment dictionaries as pickled bytes.
-
-    :param env: NRPy environment dictionaries.
-    :return: One dictionary per input dictionary, holding the pickled value of each entry (nested dictionaries stay dictionaries).
-    """
-
-    def pickled(d: Dict[Any, Any]) -> Dict[Any, Any]:
-        return {
-            k: pickled(v) if isinstance(v, dict) else pickle.dumps(v)
-            for k, v in d.items()
-        }
-
-    return tuple(pickled(d) for d in env)
-
-
-def changed_environment(
-    env: NRPyEnv_type, before: Tuple[Dict[Any, Any], ...]
-) -> NRPyEnv_type:
-    """
-    Return the entries of the NRPy environment dictionaries that differ from an earlier record.
-
-    :param env: NRPy environment dictionaries.
-    :param before: Record of the same dictionaries from pickle_environment().
-    :return: NRPy environment dictionaries holding only new or modified entries (only the extras dictionary is reduced recursively).
-    """
-    current: Tuple[Dict[Any, Any], ...] = env
-
-    def changed(
-        d: Dict[Any, Any], old: Dict[Any, Any], recurse: bool
-    ) -> Dict[Any, Any]:
-        result: Dict[Any, Any] = {}
-        for k, v in d.items():
-            old_v = old.get(k)
-            if recurse and isinstance(v, dict):
-                nested = changed(v, old_v if isinstance(old_v, dict) else {}, True)
-                if nested or not isinstance(old_v, dict):
-                    result[k] = nested
-            elif old_v is None or isinstance(old_v, dict) or pickle.dumps(v) != old_v:
-                result[k] = v
-        return result
-
-    return cast(
-        NRPyEnv_type,
-        tuple(changed(d, b, n == 5) for n, (d, b) in enumerate(zip(current, before))),
-    )
 
 
 def unpack_NRPy_environment_dict(
@@ -269,12 +218,41 @@ def wrapper_func(args: Tuple[str, ParallelCodeGen]) -> Tuple[str, NRPyEnv_type]:
     :return: The key and the entries of the NRPy environment changed by the parallel_function_call.
     :raises RuntimeError: If any exception occurs during the task's execution.
     """
+
+    def pickled(d: Mapping[str, object]) -> Dict[str, object]:
+        return {
+            k: pickled(v) if isinstance(v, dict) else pickle.dumps(v)
+            for k, v in d.items()
+        }
+
+    def changed(
+        d: Mapping[str, object], old: Mapping[str, object], recurse: bool
+    ) -> Dict[str, object]:
+        result: Dict[str, object] = {}
+        for k, v in d.items():
+            old_v = old.get(k)
+            if recurse and isinstance(v, dict):
+                nested = changed(v, old_v if isinstance(old_v, dict) else {}, True)
+                if nested or not isinstance(old_v, dict):
+                    result[k] = nested
+            elif old_v is None or isinstance(old_v, dict) or pickle.dumps(v) != old_v:
+                result[k] = v
+        return result
+
     key, value = args
     start_time = time.time()
     try:
-        before = pickle_environment(NRPyEnv())
+        # Record the environment before the task; only the extras dictionary (index 5) is
+        # compared recursively afterwards.
+        before = tuple(pickled(d) for d in NRPyEnv())
         # logging.debug(f"Starting task with key: {key}")
-        result = changed_environment(parallel_function_call(value), before)
+        current: Tuple[Mapping[str, object], ...] = parallel_function_call(value)
+        result = cast(
+            NRPyEnv_type,
+            tuple(
+                changed(d, b, n == 5) for n, (d, b) in enumerate(zip(current, before))
+            ),
+        )
         # logging.debug(f"Task {key} completed: {result}")
         funcname_args = value.function_name
         elapsed_time = time.time() - start_time
