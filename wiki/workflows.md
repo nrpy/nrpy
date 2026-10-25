@@ -116,8 +116,9 @@ active affected page; use `stale` in the same form when applicable.
 When a living source has moved and reconciliation cannot finish in the same
 change, mark affected pages `stale`, add or update the contradiction/staleness
 row, and record the blocked reconciliation reason there. When a claim is
-reconciled, update affected pages and close or revise the row in
-[contradictions.md](contradictions.md).
+reconciled, update affected pages and delete the row, its subsection, and every
+pointer to its ID from [contradictions.md](contradictions.md), or revise the row
+if the conflict narrows.
 
 Before closure, review source-map reverse dependents, all pages citing either
 source, catalog aliases/key symbols, current affected pages, typed neighbors,

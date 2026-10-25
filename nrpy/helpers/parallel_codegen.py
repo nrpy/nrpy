@@ -7,9 +7,10 @@ Author: Zachariah B. Etienne
 """
 
 import logging
+import pickle
 import time
 from importlib import import_module
-from multiprocessing import Manager, Pool, set_start_method
+from multiprocessing import Pool, set_start_method
 from typing import Any, Callable, Dict, Tuple, Union, cast
 
 import nrpy.c_function as cfc
@@ -98,11 +99,60 @@ def deep_update(d: Dict[Any, Any], u: Dict[Any, Any]) -> None:
             d[k] = v
 
 
+def pickle_environment(env: NRPyEnv_type) -> Tuple[Dict[Any, Any], ...]:
+    """
+    Record the current contents of the NRPy environment dictionaries as pickled bytes.
+
+    :param env: NRPy environment dictionaries.
+    :return: One dictionary per input dictionary, holding the pickled value of each entry (nested dictionaries stay dictionaries).
+    """
+
+    def pickled(d: Dict[Any, Any]) -> Dict[Any, Any]:
+        return {
+            k: pickled(v) if isinstance(v, dict) else pickle.dumps(v)
+            for k, v in d.items()
+        }
+
+    return tuple(pickled(d) for d in env)
+
+
+def changed_environment(
+    env: NRPyEnv_type, before: Tuple[Dict[Any, Any], ...]
+) -> NRPyEnv_type:
+    """
+    Return the entries of the NRPy environment dictionaries that differ from an earlier record.
+
+    :param env: NRPy environment dictionaries.
+    :param before: Record of the same dictionaries from pickle_environment().
+    :return: NRPy environment dictionaries holding only new or modified entries (only the extras dictionary is reduced recursively).
+    """
+    current: Tuple[Dict[Any, Any], ...] = env
+
+    def changed(
+        d: Dict[Any, Any], old: Dict[Any, Any], recurse: bool
+    ) -> Dict[Any, Any]:
+        result: Dict[Any, Any] = {}
+        for k, v in d.items():
+            old_v = old.get(k)
+            if recurse and isinstance(v, dict):
+                nested = changed(v, old_v if isinstance(old_v, dict) else {}, True)
+                if nested or not isinstance(old_v, dict):
+                    result[k] = nested
+            elif old_v is None or isinstance(old_v, dict) or pickle.dumps(v) != old_v:
+                result[k] = v
+        return result
+
+    return cast(
+        NRPyEnv_type,
+        tuple(changed(d, b, n == 5) for n, (d, b) in enumerate(zip(current, before))),
+    )
+
+
 def unpack_NRPy_environment_dict(
     NRPy_environment_dict: Dict[str, NRPyEnv_type],
 ) -> None:
     """
-    Unpack the NRPy environment dictionaries.
+    Unpack the NRPy environment dictionaries, applying them in the order of the dictionary.
 
     :param NRPy_environment_dict: Dictionary containing NRPy environment types.
     """
@@ -204,24 +254,26 @@ def parallel_function_call(PCG: Any) -> NRPyEnv_type:
         ) from ex
 
 
-def wrapper_func(args: Tuple[Dict[str, Any], str, Any]) -> Any:
+def wrapper_func(args: Tuple[str, Any]) -> Tuple[str, NRPyEnv_type]:
     """
     Execute a given function in parallel, wrapping its call for error-handling and performance logging.
 
     This wrapper calls one generated-code task in a worker process, records its
-    completion time, and reports exceptions from that task.
+    completion time, and reports exceptions from that task. A worker process runs
+    several tasks in turn, so the result holds only the entries that this task
+    added or modified.
 
-    :param args: A tuple containing the shared dictionary, key, and value for each task.
-    :return: The key and the result of the parallel_function_call.
+    :param args: A tuple containing the key and value for each task.
+    :return: The key and the entries of the NRPy environment changed by the parallel_function_call.
     :raises RuntimeError: If any exception occurs during the task's execution.
     """
-    shared_dict, key, value = args
+    key, value = args
     start_time = time.time()
     try:
+        before = pickle_environment(NRPyEnv())
         # logging.debug(f"Starting task with key: {key}")
-        result = parallel_function_call(value)
+        result = changed_environment(parallel_function_call(value), before)
         # logging.debug(f"Task {key} completed: {result}")
-        shared_dict[key] = result
         funcname_args = value.function_name
         elapsed_time = time.time() - start_time
         logging.info(
@@ -252,19 +304,12 @@ def do_parallel_codegen() -> None:
     # Note that prior to using multiprocessing, we used the `multiprocess` library,
     #   which was very janky -- causing all sorts of race conditions.
     set_start_method("fork", force=True)
-    manager = Manager()
-    NRPy_environment_to_unpack: Dict[str, Any] = manager.dict()  # type: ignore
 
     with Pool() as pool:  # Set Pool(processes=1) to disable parallel codegen.
-        pool.map(
-            wrapper_func,
-            [
-                (NRPy_environment_to_unpack, key, value)
-                for key, value in ParallelCodeGen_dict.items()
-            ],
-        )
+        # pool.map returns the results in registration order, whichever worker finishes first.
+        worker_results = pool.map(wrapper_func, list(ParallelCodeGen_dict.items()))
 
-    unpack_NRPy_environment_dict(dict(NRPy_environment_to_unpack))
+    unpack_NRPy_environment_dict(dict(worker_results))
 
 
 if __name__ == "__main__":

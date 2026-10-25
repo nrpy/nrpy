@@ -9,22 +9,29 @@
 
 ## Detail
 
-`expr_convert_to_simd_intrins()` is the transformation entry point. If the caller does not supply a `symbol_to_Rational_dict`, it first calls `cse_preprocess()` so rational constants can be represented by generated symbols before the SIMD pass. The function then builds an `ExprTree` over the expression, creates SymPy function objects for the SIMD spelling, and rewrites the tree in stages: absolute value and transcendental functions, powers and selected roots, subtraction patterns, binary addition and multiplication trees, division patterns, fused multiply-add/subtract patterns, negative fused patterns, and optional cleanup of an unused prefixed `_NegativeOne_` constant.
+`expr_convert_to_simd_intrins()` is the transformation entry point. If the caller does not supply a `symbol_to_Rational_dict`, it first calls `cse_preprocess()` so rational constants can be represented by generated symbols before the SIMD pass. The function then builds an `ExprTree` over the expression, creates SymPy function objects for the SIMD spelling, broadcasts each real number that preprocessing leaves as a scalar (a float, `pi`, `sqrt(2)`) as `ConstSIMD(<C double literal>)` while keeping power exponents exact, and rewrites the tree in stages: absolute value (`Abs` and `nrpyAbs` become `AbsSIMD`) and transcendental functions, powers and selected roots, subtraction patterns, binary addition and multiplication trees, division patterns, fused multiply-add/subtract patterns, negative fused patterns, and optional cleanup of an unused prefixed `_NegativeOne_` constant. `c_codegen()` skips that cleanup for the final expressions when any common subexpression reads `_NegativeOne_`. A subtraction rewrite removes the two matched summands by position, so a repeated summand is kept.
 
 The SIMD pass is algebraic and symbolic. It does not choose an instruction set, allocate vector registers, or include a header. It produces expression text containing names such as `SqrtSIMD`, `CosSIMD`, `PowSIMD`, `FusedMulSubSIMD`, `NegFusedMulAddSIMD`, and `NegFusedMulSubSIMD`; later C code generation prints those names into generated code. `nrpy.c_codegen.CCodeGen` is the integration point that enables this path through `enable_simd`, restricts SIMD output to double precision, uses `REAL_SIMD_ARRAY` for supported infrastructures, calls `expr_convert_to_simd_intrins()` on common subexpressions and final expressions, and emits SIMD constant declarations through `ConstSIMD`.
 
-Reciprocal half-power rewrites for exponents `-1/2`, `-3/2`, and `-5/2` introduce the prefixed `_Integer_1` numerator without registering it in `symbol_to_Rational_dict`. If it was not already present, declarations derived from that dictionary omit it; the expression requires a matching numerator constant. Separately, `PowSIMD`, `CbrtSIMD`, `LogSIMD`, and `SignSIMD` can be emitted but have no definitions in `simd_intrinsics.h`. Including that header alone is insufficient for those expressions; supply suitable definitions or use a supported expression form.
+Reciprocal half-power rewrites for exponents `-1/2`, `-3/2`, and `-5/2`, and negative integer powers, use the prefixed `_Integer_1` numerator and register it in `symbol_to_Rational_dict` when it is not already present, so declarations derived from that dictionary include it. A general power with a real numeric exponent is emitted as `PowSIMD(base, <C double literal>)`.
+
+Claim evidence:
+- Claim: `expr_convert_to_simd_intrins()` registers `_Integer_1` for the reciprocal half-power and negative-integer-power rewrites, and wraps real non-rational numbers other than power exponents as `ConstSIMD(<C double literal>)`.
+- Role: descriptive behavior
+- Deciding authority: [nrpy/helpers/simd.py](../../../nrpy/helpers/simd.py), `expr_convert_to_simd_intrins`
+- Corroboration: `none available`; the named implementation decides this behavior.
+
+`PowSIMD`, `CbrtSIMD`, `LogSIMD`, and `SignSIMD` can be emitted but have no definitions in `simd_intrinsics.h`. Including that header alone is insufficient for those expressions; supply suitable definitions or use a supported expression form.
 
 Claim status: contested; contradiction: CONTR-0015. See [CONTR-0015](../../contradictions.md#contr-0015).
 
 Claim evidence:
-- Claim: Reciprocal half-powers can omit numerator registration, and emitted Pow/Cbrt/Log/Sign SIMD names lack definitions in the SIMD header.
+- Claim: Emitted Pow/Cbrt/Log/Sign SIMD names lack definitions in the SIMD header.
 - Role: descriptive behavior
-- Deciding authority: [nrpy/helpers/simd.py](../../../nrpy/helpers/simd.py), `expr_convert_to_simd_intrins`
-- Corroboration: `none available`; the named implementation decides this behavior.
-- Additional deciding authority: [nrpy/helpers/simd_intrinsics.h](../../../nrpy/helpers/simd_intrinsics.h), all instruction-set branches.
+- Deciding authority: [nrpy/helpers/simd.py](../../../nrpy/helpers/simd.py), `expr_convert_to_simd_intrins`; [nrpy/helpers/simd_intrinsics.h](../../../nrpy/helpers/simd_intrinsics.h), all instruction-set branches.
+- Corroboration: `none available`; the named implementation and header decide this behavior.
 
-Debug mode is an internal validation path for the symbolic rewrite. `_debug_eval_namespace()` builds an explicit namespace containing SymPy objects, free symbols, and `*_SIMD_check` functions such as `AbsSIMD_check`, `ConstSIMD_check`, `FusedMulAddSIMD_check`, and `NegFusedMulSubSIMD_check`. With `debug=True`, `expr_convert_to_simd_intrins()` evaluates the transformed spelling through that restricted namespace, back-substitutes rational symbols, compares against the original expression, and raises `ValueError` if simplification cannot prove the difference is zero. This documents the helper's own validation behavior, not a general recommendation to evaluate arbitrary expression strings.
+Debug mode is an internal validation path for the symbolic rewrite. `_debug_eval_namespace()` builds an explicit namespace containing SymPy objects, free symbols, and `*_SIMD_check` functions such as `AbsSIMD_check`, `ConstSIMD_check`, `FusedMulAddSIMD_check`, and `NegFusedMulSubSIMD_check`. With `debug=True`, `expr_convert_to_simd_intrins()` evaluates the transformed spelling through that restricted namespace, back-substitutes rational symbols, compares against the original expression, and raises `ValueError` if simplification cannot prove the difference is zero. Real constants such as `pi` or `sqrt(2)` enter the transformed expression as rounded `ConstSIMD` double literals, so debug mode reports their difference from the exact value as `ValueError`. This documents the helper's own validation behavior, not a general recommendation to evaluate arbitrary expression strings.
 
 `simd_intrinsics.h` defines vector types, widths, loads/stores, broadcasts, arithmetic, selected math functions, horizontal addition, and `UPWIND_ALG`. Compiler macros select AVX512F, AVX, SSE2/SSE3, or scalar fallback. The supported scalar macros use width one.
 

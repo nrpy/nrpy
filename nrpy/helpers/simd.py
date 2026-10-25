@@ -354,11 +354,6 @@ def expr_convert_to_simd_intrins(
     >>> convert(a + b, debug=True)
     AddSIMD(a, b)
     """
-    for item in sp.preorder_traversal(expr):
-        for arg in item.args:
-            if isinstance(arg, sp.Symbol):
-                sp.var(str(arg))
-
     if symbol_to_Rational_dict is None:
         cse_preprocessed_expr_list, symbol_to_Rational_dict = cse_preprocess(expr)
         expr = cse_preprocessed_expr_list[0]
@@ -377,6 +372,7 @@ def expr_convert_to_simd_intrins(
     NegFusedMulSubSIMD = sp.Function("NegFusedMulSubSIMD")
     DivSIMD = sp.Function("DivSIMD")
     SignSIMD = sp.Function("SignSIMD")
+    ConstSIMD = sp.Function("ConstSIMD")
 
     PowSIMD = sp.Function("PowSIMD")
     SqrtSIMD = sp.Function("SqrtSIMD")
@@ -385,6 +381,21 @@ def expr_convert_to_simd_intrins(
     LogSIMD = sp.Function("LogSIMD")
     SinSIMD = sp.Function("SinSIMD")
     CosSIMD = sp.Function("CosSIMD")
+
+    # Step 0: Broadcast real numbers that cse_preprocess leaves as scalars (Float,
+    #         pi, sqrt(2), ...) with ConstSIMD, spelled as a C double literal.
+    #   Note: Exponents of powers stay exact, so Step 1 can still select sqrt, cbrt, etc.
+    exponent_nodes: Dict[int, Any] = {}
+    for subtree in tree.preorder():
+        subexpr = subtree.expr
+        if id(subtree) in exponent_nodes:
+            continue
+        if subexpr.is_number and subexpr.is_real and not subexpr.is_Rational:
+            subtree.expr = ConstSIMD(sp.Symbol(repr(float(subexpr))))
+            tree.build(subtree)
+        elif subexpr.func == sp.Pow:
+            exponent_nodes[id(subtree.children[1])] = subtree.children[1]
+    tree.reconstruct()
 
     # Step 1: Replace transcendental functions, power functions, and division expressions.
     #   Note: SymPy does not represent fractional integers as rationals since
@@ -395,7 +406,7 @@ def expr_convert_to_simd_intrins(
     for subtree in tree.preorder():
         func = subtree.expr.func
         args = subtree.expr.args
-        if func == sp.Abs:
+        if func == sp.Abs or func.__name__ == "nrpyAbs":
             subtree.expr = AbsSIMD(args[0])
         elif func == sp.exp:
             subtree.expr = ExpSIMD(args[0])
@@ -409,6 +420,13 @@ def expr_convert_to_simd_intrins(
             subtree.expr = SignSIMD(args[0])
     tree.reconstruct()
 
+    def unity() -> sp.Symbol:
+        # Return the symbol for 1, registering it in symbol_to_Rational_dict if needed.
+        one = sp.Symbol(prefix + "_Integer_1")
+        if sp.S.One not in map_rat_to_sym:
+            symbol_to_Rational_dict[one], map_rat_to_sym[sp.S.One] = sp.S.One, one
+        return one
+
     def IntegerPowSIMD(a: sp.Basic, n: int) -> Any:
         # Recursive Helper Function: Construct Integer Powers
         if n == 2:
@@ -416,25 +434,9 @@ def expr_convert_to_simd_intrins(
         if n > 2:
             return MulSIMD(IntegerPowSIMD(a, n - 1), a)
         if n <= -2:
-            one = sp.Symbol(prefix + "_Integer_1")
-            try:
-                map_rat_to_sym[sp.sympify(1)]
-            except KeyError:
-                symbol_to_Rational_dict[one], map_rat_to_sym[sp.sympify(1)] = (
-                    sp.S.One,
-                    one,
-                )
-            return DivSIMD(one, IntegerPowSIMD(a, -n))
+            return DivSIMD(unity(), IntegerPowSIMD(a, -n))
         if n == -1:
-            one = sp.Symbol(prefix + "_Integer_1")
-            try:
-                map_rat_to_sym[sp.sympify(1)]
-            except KeyError:
-                symbol_to_Rational_dict[one], map_rat_to_sym[sp.sympify(1)] = (
-                    sp.S.One,
-                    one,
-                )
-            return DivSIMD(one, a)
+            return DivSIMD(unity(), a)
         if n == 1:
             return a
         # n == 0 case. Should never be called.
@@ -454,19 +456,18 @@ def expr_convert_to_simd_intrins(
         func = subtree.expr.func
         args = subtree.expr.args
         if func == sp.Pow:
-            one = sp.Symbol(prefix + "_Integer_1")
             exponent = lookup_rational(args[1])
             if exponent in (sp.Rational(1, 2), 0.5):
                 subtree.expr = SqrtSIMD(args[0])
                 subtree.children.pop(1)
             elif exponent in (-sp.Rational(1, 2), -0.5):
-                subtree.expr = DivSIMD(one, SqrtSIMD(args[0]))
+                subtree.expr = DivSIMD(unity(), SqrtSIMD(args[0]))
                 tree.build(subtree)
             elif exponent in (-sp.Rational(3, 2), -1.5):
-                subtree.expr = DivSIMD(one, SqrtSIMD(args[0]) * args[0])
+                subtree.expr = DivSIMD(unity(), SqrtSIMD(args[0]) * args[0])
                 tree.build(subtree)
             elif exponent in (-sp.Rational(5, 2), -2.5):
-                subtree.expr = DivSIMD(one, SqrtSIMD(args[0]) * args[0] * args[0])
+                subtree.expr = DivSIMD(unity(), SqrtSIMD(args[0]) * args[0] * args[0])
                 tree.build(subtree)
             elif exponent == sp.Rational(1, 3):
                 subtree.expr = CbrtSIMD(args[0])
@@ -475,7 +476,12 @@ def expr_convert_to_simd_intrins(
                 subtree.expr = IntegerPowSIMD(args[0], exponent)
                 tree.build(subtree)
             else:
-                subtree.expr = PowSIMD(*args)
+                if args[1].is_number and args[1].is_real:
+                    # Print the exponent as a C double, not as an integer division.
+                    subtree.expr = PowSIMD(args[0], sp.Symbol(repr(float(args[1]))))
+                    tree.build(subtree)
+                else:
+                    subtree.expr = PowSIMD(*args)
     tree.reconstruct()
 
     # Step 2: Replace subtraction expressions.
@@ -509,9 +515,7 @@ def expr_convert_to_simd_intrins(
                 subexpr = SubSIMD(
                     args_list[k], sp.Mul(*[cast(sp.Expr, a) for a in subargs])
                 )
-                args_list = [
-                    arg for arg in args_list if arg not in (args_list[i], args_list[k])
-                ]
+                args_list = [arg for n, arg in enumerate(args_list) if n not in (i, k)]
                 if len(args_list) > 0:
                     # FIX: Cast args_list to List[Expr]
                     subexpr = sp.Add(subexpr, *[cast(sp.Expr, a) for a in args_list])

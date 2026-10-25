@@ -262,9 +262,8 @@ The register columns are exactly:
 
 `ID | Claim | Claim status | Source A | Source B | Authority decision | Affected pages | Page-status rationale | Owner/trigger | Resolution test | Notes`
 
-IDs use immutable `CONTR-0001` form. Active claim status is `contested` or
-`stale`; closed rows use `resolved`. Every active affected
-page contains an exact marker outside code fences:
+IDs use immutable `CONTR-0001` form. Claim status is `contested` or `stale`.
+Every affected page contains an exact marker outside code fences:
 
 ```text
 Claim status: contested; contradiction: CONTR-0001.
@@ -273,9 +272,11 @@ Claim status: contested; contradiction: CONTR-0001.
 Use `stale` in the same form where applicable. The row links every affected
 page, each marker links back by ID, and catalog/page status follows the matrix
 above. Resolution needs an executable test or deterministic inspection and a
-nonempty owner/trigger. Before closure, inspect source-map reverse dependents,
-pages citing either source, catalog aliases/key symbols, current affected pages,
-typed neighbors, and targeted exact/key-phrase wiki hits.
+nonempty owner/trigger. Once resolved, delete the row, its `### CONTR-*`
+subsection, and every marker and pointer to its ID; commit history keeps the
+closed row. Before deleting, inspect source-map reverse dependents, pages citing
+either source, catalog aliases/key symbols, current affected pages, typed
+neighbors, and targeted exact/key-phrase wiki hits.
 
 ## Checker And Frozen Scope
 

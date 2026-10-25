@@ -174,7 +174,11 @@ class ExprTree:
         for subtree in self.postorder():
             if subtree.children:
                 expr_list = [node.expr for node in subtree.children]
-                subtree.expr = subtree.expr.func(*expr_list, evaluate=evaluate)
+                try:
+                    subtree.expr = subtree.expr.func(*expr_list, evaluate=evaluate)
+                except TypeError:
+                    # Piecewise, Integral, Sum, Indexed, ... take no `evaluate` keyword.
+                    subtree.expr = subtree.expr.func(*expr_list)
         return self.root.expr
 
     def __repr__(self) -> str:

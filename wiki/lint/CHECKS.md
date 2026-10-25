@@ -85,8 +85,8 @@ carry facts and sources, and excluded artifacts stay out of the KB.
 
 ## Contradiction Checks
 
-- Contradiction rows use unique `CONTR-0001` IDs and all schema columns. Active
-  rows use `contested`/`stale`, linked affected pages, nonempty rationale,
+- Contradiction rows use unique `CONTR-0001` IDs and all schema columns. Rows
+  use `contested`/`stale`, linked affected pages, nonempty rationale,
   owner, resolution test, and matching page markers/backlinks.
 
 ## NRPy Baseline

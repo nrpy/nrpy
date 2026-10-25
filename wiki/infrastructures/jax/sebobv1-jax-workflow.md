@@ -66,15 +66,13 @@ from the clamp of `1 - 4 nu` in the final mass, as a `jnp.maximum` call (see
 the generated module needs no imports beyond `jax`, `jax.numpy`, and
 `Commondata`. `py_codegen()` prints these expressions unexpanded; see
 [Python Codegen](../../core/python-codegen.md) for why that matters for float32
-inputs. The earlier
-mismatch between the return and the registered fields is recorded as resolved in
-[CONTR-0002](../../contradictions.md#contr-0002).
+inputs.
 
 Claim evidence:
 - Claim: The generated `SEOBNRv5_aligned_spin_coefficients` returns `Commondata(...)` using only keywords that `nrpy.examples.sebobv1_jax` registers as `Commondata` fields, including `a_f`. This does not claim that CI checks any returned value.
 - Role: descriptive behavior
 - Deciding authority: [SEOBNRv5_aligned_spin_coefficients.py](../../../nrpy/infrastructures/JAX/sebob/SEOBNRv5_aligned_spin_coefficients.py), `register_PyFunction_SEOBNRv5_aligned_spin_coefficients` emitted return; [sebobv1_jax.py](../../../nrpy/examples/sebobv1_jax.py), `register_commondata_params` call
-- Corroboration: [commondata.py](../../../nrpy/infrastructures/JAX/commondata.py), `register_commondata_params`, rejects unequal list lengths, so a dropped field fails generation; the CONTR-0002 resolution test in [Contradictions](../../contradictions.md#contr-0002) exercises the generated call.
+- Corroboration: [commondata.py](../../../nrpy/infrastructures/JAX/commondata.py), `register_commondata_params`, rejects unequal list lengths, so a dropped field fails generation.
 
 The symbolic source behind this narrow surface is
 `SEOBNR_aligned_spin_constants`. Its constructor defines symbolic masses and
@@ -100,8 +98,7 @@ the function returns without error. The call applies no JAX transformation such
 as `jax.jit`, so it does not check that the whole function can be traced; the
 generated function branches in Python on the value of `eta`. The jobs do not run
 the generated pytest, assert any returned field or numerical value, use a
-float32 input, or test an accelerator, and they do not run the full CONTR-0002
-resolution test.
+float32 input, or test an accelerator.
 
 Claim evidence:
 - Claim: Both `codegen-ubuntu` and `codegen-mac` generate `sebobv1_jax`, run `pip install .` in the generated project, import `SEOBNRv5_aligned_spin_coefficients`, call it once without a JAX transformation such as `jax.jit`, with the Python-scalar inputs `(1.5, 0.3, -0.2, 0.02, 2.4627455127717882e-05, 50.0)`, and print the returned `Commondata`. The step fails only if generation, installation, import, or the call raises; it asserts no returned field or value and does not run the generated pytest, a float32 input, a traced function, or an accelerator.

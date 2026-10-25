@@ -6,6 +6,7 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Ken Sible; ksible **at** outlook **dot* com
 """
 
+import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, cast
 
 import sympy as sp
@@ -700,6 +701,18 @@ def c_codegen(
                 varnames_excluding_SCALAR_TMPs.append(var_name)
                 sympyexprs_SCALAR_TMPs_are_sp_Eq.append(expr)
 
+        # Temporaries must not take a name that output_varname_str already uses.
+        reserved_names = {
+            name
+            for out in output_varname_str
+            for name in re.findall(r"[A-Za-z_]\w*", out)
+        }
+        cse_symbols = (
+            sym
+            for sym in sp.numbered_symbols(CCGParams.cse_varprefix + "tmp")
+            if sym.name not in reserved_names
+        )
+
         # Check sympy version and process the main group
         sympy_version = sp.__version__.replace("rc", "...").replace("b", "...")
         sympy_major_version = int(sympy_version.split(".")[0])
@@ -712,14 +725,14 @@ def c_codegen(
             )
             cse_results = sp.cse(
                 sympyexprs_SCALAR_TMPs_are_sp_Eq,
-                sp.numbered_symbols(CCGParams.cse_varprefix + "tmp"),
+                cse_symbols,
                 order=CCGParams.cse_sorting,
             )
         else:
             cse_results = cse_postprocess(
                 sp.cse(
                     sympyexprs_SCALAR_TMPs_are_sp_Eq,
-                    sp.numbered_symbols(CCGParams.cse_varprefix + "tmp"),
+                    cse_symbols,
                     order=CCGParams.cse_sorting,
                 )
             )
@@ -727,12 +740,14 @@ def c_codegen(
             cse_results = sort_cse_output_deterministically(
                 cse_results,
                 symbol_prefix=CCGParams.cse_varprefix,
+                reserved_names=reserved_names,
             )
 
         # Important: cse_postprocess() has just removed SCALAR_TMPs from the sympyexprs_SCALAR_TMPs_are_sp_Eq.
 
         # Processing common subexpressions and results from cse_postprocess
         # cse_results[0] contains common subexpression definitions, does not specify varnames.
+        temporaries_read_NegativeOne = False
         for common_subexpression in cse_results[0]:
             full_type_string = f"const {CCGParams.fp_type_alias} "
             if CCGParams.enable_simd:
@@ -743,6 +758,8 @@ def c_codegen(
                     CCGParams.simd_find_more_FMAsFMSs,
                     debug=CCGParams.simd_debug,
                 )
+                if sp.Symbol(f"{varprefix}_NegativeOne_") in simd_expr.free_symbols:
+                    temporaries_read_NegativeOne = True
                 outstring += (
                     f"{full_type_string}{common_subexpression[0]} = {simd_expr};\n"
                 )
@@ -780,7 +797,8 @@ def c_codegen(
                     CCGParams.symbol_to_Rational_dict,
                     varprefix,
                     CCGParams.simd_find_more_FMAsFMSs,
-                    clean_NegativeOnes_after_processing=CCGParams.simd_clean_NegativeOnes_after_processing,
+                    clean_NegativeOnes_after_processing=CCGParams.simd_clean_NegativeOnes_after_processing
+                    and not temporaries_read_NegativeOne,
                     debug=CCGParams.simd_debug,
                 )
                 outstring += f"{varnames_excluding_SCALAR_TMPs[i]} = {simd_expr};\n"

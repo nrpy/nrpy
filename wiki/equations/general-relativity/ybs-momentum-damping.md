@@ -199,8 +199,7 @@ Claim evidence:
 The preserved commissioned source records an earlier auxiliary-relaxation
 proposal. It remains frozen historical input, but it does not describe the
 implemented contract. The user-directed CAHD-style direct formulation and
-living code decide current behavior; [CONTR-0007](../../contradictions.md#contr-0007)
-records this resolved mismatch. A later maintainer decision multiplies the
+living code decide current behavior. A later maintainer decision multiplies the
 coefficient by `W`; it leaves the direct, stateless formulation unchanged.
 
 ### Dendro block spacing

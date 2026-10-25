@@ -38,14 +38,15 @@ def f2r(
     >>> f2r("2.0",zpad=2)
     2
     """
-    float_as_string = str(input_float)
+    # Split off any exponent so that the padding zeros extend only the mantissa.
+    mantissa, e, exponent = str(input_float).lower().partition("e")
 
-    # Ensure the string has a decimal point
-    if "." not in float_as_string:
-        float_as_string = f"{float_as_string}."
+    # Ensure the mantissa has a decimal point
+    if "." not in mantissa:
+        mantissa = f"{mantissa}."
 
     # Append zpad zeros after the decimal point to increase precision.
-    return cast(sp.Rational, sp.Rational(float_as_string + "0" * zpad))
+    return cast(sp.Rational, sp.Rational(mantissa + "0" * zpad + e + exponent))
 
 
 if __name__ == "__main__":

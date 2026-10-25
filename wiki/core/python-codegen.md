@@ -40,7 +40,6 @@ such as `jnp` or `abs`. Without this check, the later output would read the
 overwritten value and the generated code would return wrong numbers or fail at
 run time. An output name that no later right-hand side reads, such as a final
 output that reuses an input symbol's name, is accepted and printed unchanged.
-This check resolved [CONTR-0013](../contradictions.md#contr-0013).
 
 Claim evidence:
 - Claim: `py_codegen()` raises `ValueError` when an earlier output name is a Python name read by a later printed output right-hand side, with CSE enabled or disabled, and otherwise emits the same assignments as without the check. This claims nothing about two outputs sharing one name, or about `prestring` and `poststring`.
