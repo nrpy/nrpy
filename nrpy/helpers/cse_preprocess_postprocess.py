@@ -251,7 +251,7 @@ def cse_preprocess(
                 subexpr = subtree.expr
                 if subexpr.func == sp.Pow:
                     base, exponent = subexpr.args[0], subexpr.args[1]
-                    if base == _NegativeOne_ and exponent.is_Integer:
+                    if base == _NegativeOne_ and isinstance(exponent, sp.Integer):
                         if exponent % 2 == 0:
                             subtree.expr = _One_
                             if map_rat_to_sym.get(sp.S.One) is None:
@@ -735,7 +735,7 @@ def sort_cse_output_deterministically(
     taken = set(reserved_names)
     for expr in [*replaced_lookup.values(), *reduced]:
         taken.update(
-            free_sym.name
+            cast(sp.Symbol, free_sym).name
             for free_sym in expr.free_symbols
             if free_sym not in replaced_lookup
         )

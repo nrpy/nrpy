@@ -391,7 +391,7 @@ def expr_convert_to_simd_intrins(
         if id(subtree) in exponent_nodes:
             continue
         if subexpr.is_number and subexpr.is_real and not subexpr.is_Rational:
-            subtree.expr = ConstSIMD(sp.Symbol(repr(float(subexpr))))
+            subtree.expr = ConstSIMD(sp.Symbol(repr(float(cast(sp.Expr, subexpr)))))
             tree.build(subtree)
         elif subexpr.func == sp.Pow:
             exponent_nodes[id(subtree.children[1])] = subtree.children[1]
@@ -478,7 +478,9 @@ def expr_convert_to_simd_intrins(
             else:
                 if args[1].is_number and args[1].is_real:
                     # Print the exponent as a C double, not as an integer division.
-                    subtree.expr = PowSIMD(args[0], sp.Symbol(repr(float(args[1]))))
+                    subtree.expr = PowSIMD(
+                        args[0], sp.Symbol(repr(float(cast(sp.Expr, args[1]))))
+                    )
                     tree.build(subtree)
                 else:
                     subtree.expr = PowSIMD(*args)
