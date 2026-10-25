@@ -177,7 +177,7 @@ class ExprTree:
                 try:
                     subtree.expr = subtree.expr.func(*expr_list, evaluate=evaluate)
                 except TypeError:
-                    # Piecewise, Integral, Sum, Indexed, ... take no `evaluate` keyword.
+                    # ExprCondPair (each Piecewise branch), Integral, Sum, Indexed, ... take no `evaluate` keyword.
                     subtree.expr = subtree.expr.func(*expr_list)
         return self.root.expr
 

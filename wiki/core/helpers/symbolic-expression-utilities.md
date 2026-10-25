@@ -9,7 +9,7 @@ These helpers inspect and transform SymPy expressions without defining the equat
 
 ## Detail
 
-`ExprTree` wraps a SymPy expression in `ExprTree.Node` objects. Each node stores its expression and mutable children. `build()` puts the parent expression function in each child's `.func` field; the root field is `None`. `reconstruct()` instead calls each non-leaf node's current `expr.func` on its child expressions, optionally enabling SymPy evaluation; a function that rejects the `evaluate` keyword with `TypeError`, such as `Piecewise`, `Integral`, `Sum`, or `Indexed`, is called again without it. Changing the stored `.func` field therefore does not change reconstruction. `preorder()` and `postorder()` traverse the nodes.
+`ExprTree` wraps a SymPy expression in `ExprTree.Node` objects. Each node stores its expression and mutable children. `build()` puts the parent expression function in each child's `.func` field; the root field is `None`. `reconstruct()` instead calls each non-leaf node's current `expr.func` on its child expressions, optionally enabling SymPy evaluation; a function that rejects the `evaluate` keyword with `TypeError`, such as `ExprCondPair` (the pair holding each `Piecewise` branch), `Integral`, `Sum`, or `Indexed`, is called again without it. `Piecewise` itself accepts the keyword. Changing the stored `.func` field therefore does not change reconstruction. `preorder()` and `postorder()` traverse the nodes.
 
 Claim evidence:
 - Claim: Reconstruction uses `node.expr.func`, not the `.func` field assigned by `build()`, and retries a function without the `evaluate` keyword when that keyword raises `TypeError`.
