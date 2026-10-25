@@ -376,7 +376,6 @@ def c_codegen(
     selected first derivative is 14, its transverse derivative is 2, and the
     unselected field's first derivative is 24. The unused storage contains -999.
 
-    >>> import re
     >>> saved_gfs = gri.glb_gridfcs_dict.copy()
     >>> saved_fd = fin.FDFunctions_dict.copy()
     >>> saved_params = {name: par.parval_from_str(name) for name in ("Infrastructure", "parallelization", "finite_difference::fd_order")}
@@ -392,8 +391,9 @@ def c_codegen(
     ...     values = {"i0": 4, "i1": 5, "i2": 6, "invdxx0": 1, "invdxx1": 1, "UDD0GF": 0, "VDD0GF": 1, "VGF": 1, "IDX4": lambda gf, i, j, k: (gf, i, j, k)}
     ...     values["auxevol_gfs"] = {(gf, i, j, 6): i + 2*j if gf == 0 else -999 for gf in range(2) for i in range(3, 6) for j in range(4, 7)}
     ...     values["in_gfs"] = {(1, i, j, 6): 3*i*i for i in range(3, 6) for j in range(4, 7)}
-    ...     for name, rhs in re.findall(r"(?:const REAL )?([A-Za-z_0-9]+) = ([^;]+);", code):
-    ...         values[name] = sp.sympify(rhs, locals=values, rational=True)
+    ...     for statement in code.split(";")[:-1]:
+    ...         lhs, rhs = statement.strip().split(" = ", 1)
+    ...         values[lhs.split()[-1]] = sp.sympify(rhs, locals=values, rational=True)
     ...     print(values["result"])
     ... finally:
     ...     gri.glb_gridfcs_dict.clear(); gri.glb_gridfcs_dict.update(saved_gfs)

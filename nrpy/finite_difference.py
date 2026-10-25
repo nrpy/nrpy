@@ -1253,7 +1253,6 @@ class FDFunction:
         SIMD checks interpret one lane of each contiguous vector load.
 
         Doctests:
-        >>> import re
         >>> saved = {name: par.parval_from_str(name) for name in ("Infrastructure", "parallelization")}
         >>> try:
         ...     par.set_parval_from_str("Infrastructure", "BHaH")
@@ -1277,7 +1276,7 @@ class FDFunction:
         ...                 for statement in generated.body.split(";")[:-1]:
         ...                     if " = " in statement:
         ...                         lhs, rhs = statement.strip().split(" = ", 1)
-        ...                         rhs = re.sub(r"ReadSIMD\(&(.+)\)", r"\1", rhs)
+        ...                         rhs = rhs.replace("ReadSIMD(&", "(")
         ...                         values[lhs.split()[-1]] = sp.sympify(rhs, locals=values)
         ...                 residuals.append(sp.expand(values["FD_result"] - reference))
         ...         print(order, set(residuals))
