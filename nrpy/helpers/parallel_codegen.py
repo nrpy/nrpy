@@ -99,6 +99,8 @@ def deep_update(d: Dict[Any, Any], u: Dict[Any, Any]) -> None:
             d[k] = v
 
 
+# NRPyEnv_type fixes a value type per dictionary, but the two helpers below treat all six
+# dictionaries alike, so they use Dict[Any, Any].
 def pickle_environment(env: NRPyEnv_type) -> Tuple[Dict[Any, Any], ...]:
     """
     Record the current contents of the NRPy environment dictionaries as pickled bytes.
@@ -254,7 +256,7 @@ def parallel_function_call(PCG: Any) -> NRPyEnv_type:
         ) from ex
 
 
-def wrapper_func(args: Tuple[str, Any]) -> Tuple[str, NRPyEnv_type]:
+def wrapper_func(args: Tuple[str, ParallelCodeGen]) -> Tuple[str, NRPyEnv_type]:
     """
     Execute a given function in parallel, wrapping its call for error-handling and performance logging.
 

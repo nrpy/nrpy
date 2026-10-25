@@ -6,7 +6,6 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Ken Sible; ksible **at** outlook **dot* com
 """
 
-import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, cast
 
 import sympy as sp
@@ -705,7 +704,9 @@ def c_codegen(
         reserved_names = {
             name
             for out in output_varname_str
-            for name in re.findall(r"[A-Za-z_]\w*", out)
+            for name in "".join(
+                char if char.isalnum() or char == "_" else " " for char in out
+            ).split()
         }
         cse_symbols = (
             sym

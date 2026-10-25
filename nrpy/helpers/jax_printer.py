@@ -11,7 +11,7 @@ Author: Siddharth Mahesh
 """
 
 import math
-import re
+from itertools import groupby
 from typing import TYPE_CHECKING, Any, Dict, Tuple, Union, cast
 
 import sympy as sp
@@ -266,8 +266,14 @@ class NRPyJaxPrinter(Printer):
 
             # Parenthesize the injected array to preserve operator precedence.
             # Replace only the whole identifier, not a longer name containing it.
-            return re.sub(
-                rf"(?<!\w){re.escape(ph_str)}(?!\w)", lambda _: f"({arr_str})", body_str
+            tokens = (
+                "".join(chars)
+                for _, chars in groupby(
+                    body_str, lambda char: char.isalnum() or char == "_"
+                )
+            )
+            return "".join(
+                f"({arr_str})" if token == ph_str else token for token in tokens
             )
 
         # Non-Lambda case: print as a callable applied to the array.

@@ -385,7 +385,7 @@ def expr_convert_to_simd_intrins(
     # Step 0: Broadcast real numbers that cse_preprocess leaves as scalars (Float,
     #         pi, sqrt(2), ...) with ConstSIMD, spelled as a C double literal.
     #   Note: Exponents of powers stay exact, so Step 1 can still select sqrt, cbrt, etc.
-    exponent_nodes: Dict[int, Any] = {}
+    exponent_nodes: Dict[int, ExprTree.Node] = {}
     for subtree in tree.preorder():
         subexpr = subtree.expr
         if id(subtree) in exponent_nodes:
