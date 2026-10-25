@@ -82,7 +82,9 @@ Create the run directory with `RUN=$(mktemp -d /tmp/borda.XXXXXX); echo "$RUN"`.
 variables may not persist between commands, so write the literal path in every later
 command and agent message. All intermediate files live there and stay after the run. Use
 absolute paths in every agent message, because agents may not share your working
-directory. Write `$RUN/brief.md` holding:
+directory. If replacement of an existing OUTPUT is authorized, retain its original
+bytes and file type/mode under `$RUN` before launching agents, for the delivery check.
+Write `$RUN/brief.md` holding:
 
 - the task verbatim, without the recipe words (`use borda`, N, the output name);
 - the resolved subject (absolute paths, commit range);
@@ -115,8 +117,10 @@ unaccepted, and report which phase failed.
 Launch N agents together. Send each the same text, changing only its number `i`:
 
 > You are agent `i` of N working independently on one task. Read `$RUN/brief.md` for the
-> task, its subject, and the rules for running checks. Open no other file in `$RUN` except
-> your own report. Be skeptical of every claim, including your own, be meticulous, and go
+> task, its subject, and the rules for running checks. Within `$RUN`, read only the brief,
+> your own report, and files in your own `$RUN/agent_i/` copy. Do not read other agents'
+> reports or working directories during this phase. Be skeptical of every claim,
+> including your own, be meticulous, and go
 > deep. Work from primary evidence (the files, code, data, or sources the task names), not
 > from what a document says about itself, and run checks wherever checking is possible
 > under the brief's rules. Write only your report and, if you run a generator, build,
@@ -197,46 +201,78 @@ changed. Mark each `RESOLVED`, or `STILL OPEN` with a `NEW EVIDENCE:` line holdi
 line, command output, or argument not cited earlier in this exchange. Without new
 evidence, write `NEW EVIDENCE: none`."
 
-Read the first line of each objection file, and for `OBJECT` files the `STILL OPEN`
-entries. Fix a malformed `VERDICT:` line as in Phase 2. Then:
+Read each objection file completely. In round 1, collect every numbered objection.
+In later rounds, collect every newly numbered objection and every earlier objection
+marked `STILL OPEN`; remove earlier IDs only when their reviewer marks them `RESOLVED`.
+Clarify any missing disposition with that reviewer rather than assuming resolution.
+Count each unresolved ID once, including deadlocked objections. Fix a malformed
+`VERDICT:` line as in Phase 2. Then:
 
 1. List the open objections and print the round's progress line (the verdicts and the
    number of open objections). An objection the lead rebutted and the objector left with
-   `NEW EVIDENCE: none` is deadlocked and stops blocking. An `OBJECT` file whose
-   remaining objections are all deadlocked does not block.
-2. If every verdict is `ACCEPT` or non-blocking (an earlier `ACCEPT` stands when the draft
-   did not change), the loop ends; go to the deadlock step if any objection is deadlocked.
+   `NEW EVIDENCE: none` is deadlocked but remains unresolved and blocking. Previously
+   cited evidence can still establish a defect; lack of new evidence is not resolution.
+2. End as accepted only when every agent's verdict is `ACCEPT` and no objection remains
+   unresolved. An earlier `ACCEPT` stands only while the reviewed draft is unchanged.
 3. Otherwise, from round 2 on, if this round left no fewer open objections than the round
-   before (open means neither `RESOLVED` nor deadlocked), ask the user whether to
+   before (open means unresolved, including deadlocked), ask the user whether to
    continue; each further round costs at most N+1 agent turns. If you asked and the user
    declines, or you must ask and no one can be asked, stop here as unaccepted: leave
    `./OUTPUT` untouched, name `$RUN/draft.md` as unaccepted, and report the open and the
    deadlocked objections. In every other case message the lead: "Read `<objection files,
-   yours included>`. Verify each against the primary evidence. If valid, or if it is your
-   own, revise `$RUN/draft.md`. If not valid, rebut with evidence. Write
+   yours included>`. Verify each against the primary evidence. If valid, revise
+   `$RUN/draft.md`. If not valid, rebut with evidence, including your own invalid
+   objections. Apply the same validity rule regardless of authorship. Write
    `$RUN/round<r>_response.md` with one line per objection ID: `ADOPTED` or `REBUTTED`,
    plus the change or the evidence. Never rebut on authority or because the objector's
    report ranked lower. If a write is refused, return the complete text of that file
    instead; otherwise reply with the path only." Start round r+1; the whole panel
    re-reviews the new draft.
 
-Deadlock step: when the loop ends with deadlocked objections, ask the lead to append an
-`## Unresolved disagreements` section to `$RUN/draft.md`, quoting each deadlocked
-objection and the lead's response verbatim and stating both positions (if the write is
-refused, it returns the complete updated draft instead). There is no fixed round limit;
-the loop ends on acceptance, deadlock, or a stop at the step 3 check-in.
+Unaccepted stop: retain `$RUN/draft.md` and the objection/response files, report the
+unresolved IDs and disputed evidence, and leave `./OUTPUT` untouched. A deadlock never
+authorizes accepted delivery. There is no fixed round limit; the loop ends on actual
+unanimous acceptance or an unaccepted stop at the step 3 check-in.
 
 ## Phase 5: delivery
 
-A loop stopped as unaccepted (Phase 4 step 3) copies nothing; report it. Otherwise read
-`$RUN/draft.md`. If the loop ended with every verdict `ACCEPT`, check that
+A loop stopped as unaccepted (Phase 4 step 3) copies nothing to `./OUTPUT`; report it.
+Otherwise require every verdict to be `ACCEPT`, read `$RUN/draft.md`, and check that
 `cmp $RUN/draft.md $RUN/draft_r<last>.md` is clean (if it differs, the draft changed after
-the last review: run one more round); if it ended with deadlocked objections, the
-appended section was not reviewed, so say so in the report. If `AGENTS.md` has a wording
-rule for prose, check the final file against it. Copy without overwriting unless the user
-approved overwriting (`test ! -e ./OUTPUT && cp $RUN/draft.md ./OUTPUT`) and verify with
-`cmp`. If OUTPUT is at the repository root, run `python tools/kb_lint.py`; if it names the
-file, ask the user for another name, move the copy to it, and rerun. Report to the user:
+the last review: run one more round). If `AGENTS.md` has a wording rule for prose, check
+the final file against it. Check the destination's file type and any concurrent changes;
+do not follow output symlinks or overwrite concurrent work. Select the operation from
+the authorization already resolved for this exact destination:
+
+- Without replacement authorization, create the destination exclusively and write
+  through that open file. For example:
+
+  ```sh
+  python - "$RUN/draft.md" "./OUTPUT" <<'PY'
+  import sys
+  from pathlib import Path
+  data = Path(sys.argv[1]).read_bytes()
+  with open(sys.argv[2], "xb") as output:
+      output.write(data)
+  PY
+  ```
+
+  An existing path, including one created concurrently, makes creation fail without
+  changing its contents. Preserve the draft and resolve that conflict.
+- If replacement of this destination was already authorized, compare its current
+  bytes/type/mode with the saved original and resolve any overlapping changes before
+  writing. For an unchanged regular file, use
+  `cp -- "$RUN/draft.md" "./OUTPUT"`. Do not ask again for authorization already given.
+
+Verify either successful operation with `cmp "$RUN/draft.md" "./OUTPUT"`. On a failed
+write or comparison, retain the draft and report the destination's actual state;
+do not claim delivery. If OUTPUT is at the repository root, run
+`python tools/kb_lint.py`. If it names the file, ask the user for another name and apply
+the same destination checks and creation/authorized-replacement choice to that name.
+After verifying the new copy, remove the rejected copy only if you created it and it
+remains unchanged; if it replaced an existing file, restore the saved original instead.
+Preserve any intervening edits and report a conflict rather than removing or restoring
+over them. Rerun the checker. Report to the user:
 
 - the output path and its headline conclusions;
 - the Borda totals, the lead, and any tie-break; when N=2, that root's ranking alone
