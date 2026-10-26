@@ -70,8 +70,8 @@ Parallel codegen does not change the JAX package layout or the meaning of
 `pcg_registration_phase()` lets a registration function choose to record a
 deferred call instead of doing generation immediately, `do_parallel_codegen()`
 runs registered calls in workers, and `unpack_NRPy_environment_dict()` merges
-the returned environment dictionaries back into parent globals, including
-`PyFunction_dict`. After that merge, JAX project generation sees the same
+the environment entries that each call added or changed back into parent
+globals, including `PyFunction_dict`. After that merge, JAX project generation sees the same
 `PyFunction_dict` shape as it would after serial registration.
 
 ## Sources

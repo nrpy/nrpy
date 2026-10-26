@@ -19,7 +19,7 @@ Claim evidence:
 - Deciding authority: [nrpy/helpers/loop.py](../../../nrpy/helpers/loop.py), `loop`
 - Corroboration: `none available`; the named implementation decides this behavior.
 
-`GPUKernel` wraps a generated kernel body in a `CFunction`. Its constructor records the body, decorators, parameter dictionary, generated name, launch dictionary, optional stream parameter, CUDA error-check policy, and BHaH thread-tiling suffix. A launch dictionary is required only for the exact default decorator string `decorators == "__global__"`. If `streamid_param` is enabled and the decorator string does not contain `__host__`, `streamid` is prepended to the generated argument dictionary. This is a substring test, not semantic classification of a host-only function.
+`GPUKernel` wraps a generated kernel body in a `CFunction`. Its constructor records the body, decorators, parameter dictionary, generated name, launch dictionary, optional stream parameter, CUDA error-check policy, and BHaH thread-tiling suffix. A launch dictionary is required whenever the decorator string contains `__global__`; the constructor raises `ValueError` without one. If `streamid_param` is enabled and the decorator string does not contain `__host__`, `streamid` is prepended to the generated argument dictionary. This is a substring test, not semantic classification of a host-only function.
 
 `generate_launch_block()` derives CUDA launch setup only when a launch dictionary is present and the decorator string contains `__global__`. `threads_per_block` is padded to three dimensions or defaults to `32,1,1`. The launch dictionary must include `blocks_per_grid`: a nonempty list is padded to three dimensions and used directly, while an empty list requests computed grid dimensions from `params->Nxx_plus_2NGHOSTS*` and the thread counts. Optional `stream` and shared-memory (`sm`) entries add launch arguments, and the final launch settings string becomes the CUDA triple-chevron suffix used by `c_function_call()`.
 
@@ -31,12 +31,10 @@ Claim evidence:
 - Deciding authority: [nrpy/helpers/parallelization/gpu_kernel.py](../../../nrpy/helpers/parallelization/gpu_kernel.py), `GPUKernel.__init__`
 - Corroboration: `none available`; the named implementation decides this behavior.
 
-`c_function_call()` constructs an ordinary function call or a CUDA launch from stored parameters and launch settings. Global kernels with launch settings use triple chevrons; other device/helper functions use direct calls. CUDA error checking is appended when enabled and the decorators contain `__global__`. Empty argument dictionaries without an injected stream argument are unsupported: unconditional removal of the final two characters can turn `foo(` into `fo);`. This also affects an empty-argument host wrapper. `GPU_Kernel` remains an alias for `GPUKernel`.
-
-Claim status: contested; contradiction: CONTR-0019. See [CONTR-0019](../../contradictions.md#contr-0019).
+`c_function_call()` constructs an ordinary function call or a CUDA launch from stored parameters and launch settings. Global kernels with launch settings use triple chevrons; other device/helper functions use direct calls. CUDA error checking is appended when enabled and the decorators contain `__global__`. The call joins the parameter names with `, `, so an empty argument dictionary without an injected stream argument gives `foo();`, including for an empty-argument host wrapper. `GPU_Kernel` remains an alias for `GPUKernel`.
 
 Claim evidence:
-- Claim: Empty-argument calls are malformed because `c_function_call()` unconditionally trims two characters before closing the call.
+- Claim: `c_function_call()` joins the parameter names with `, `, so an empty argument dictionary without an injected stream argument produces a call with empty parentheses.
 - Role: descriptive behavior
 - Deciding authority: [nrpy/helpers/parallelization/gpu_kernel.py](../../../nrpy/helpers/parallelization/gpu_kernel.py), `GPUKernel.c_function_call`
 - Corroboration: `none available`; the named implementation decides this behavior.
@@ -44,6 +42,8 @@ Claim evidence:
 `parallelization.utilities` centralizes small host-versus-CUDA string choices. `get_params_access()` returns `d_params[streamid].` for CUDA and `params->` otherwise; `get_commondata_access()` returns `d_commondata.` for CUDA and `commondata->` otherwise. Allocation, free, device synchronization, and error-check helpers similarly choose `cudaMalloc`/`malloc`, `cudaFree`/`free`, `cudaDeviceSynchronize()`/empty string, and CUDA error-check strings only for the CUDA path.
 
 `generate_kernel_and_launch_code()` returns function-definition text and a call body. The CUDA path rewrites `params->` to `d_params[streamid].`, chooses the BHaH default launch dictionary when none is supplied, and constructs `<kernel_name>_gpu`. With custom launch settings, automatic stream-argument insertion depends on a `stream` entry and the decorator check in `GPUKernel`. If rewritten parameter accesses require `streamid`, ensure it is declared in the generated function. The CUDA path also ignores the supplied `cfunc_type`, using `GPUKernel`'s default `static void`; this argument cannot select a non-void device helper. The host path strips CUDA decorators, forwards `cfunc_type`, and returns a direct `<kernel_name>_host` call without CUDA error checks.
+
+Claim status: contested; contradiction: CONTR-0019. See [CONTR-0019](../../contradictions.md#contr-0019).
 
 Claim evidence:
 - Claim: CUDA parameter rewriting requires a declared `streamid`; CUDA ignores `cfunc_type`, whereas the host path forwards it.

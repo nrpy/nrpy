@@ -65,7 +65,7 @@ clause when it blocks completion, distinguishing it from your interpretation.
 | [Lint Checks](wiki/lint/CHECKS.md) | Mechanical and review checks for the KB. |
 | [Sources](raw/SOURCES.md) | Source manifest with provenance, status, and ingest state. |
 | [Source Map](wiki/source-map.md) | Source-to-page dependency seed map and drift follow-up. |
-| [Contradictions](wiki/contradictions.md) | Contested, stale, and reconciled claims. |
+| [Contradictions](wiki/contradictions.md) | Contested and stale claims. |
 | [Syntheses](wiki/syntheses/index.md) | Cross-branch filed syntheses. |
 | [KB Page Format](wiki/SCHEMA.md) | Required page layout, source use, and maintenance rules. |
 

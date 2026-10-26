@@ -29,9 +29,7 @@ the standard lapse but not the full BSSN state.
 `BSSN_quantities[...]` object for a coordinate system. It reconstructs
 `betaU`, `gammaDD`, `gammaDDdD`, `gammaDDdDD`, `gammaUU`, `detgamma`,
 `GammaUDD`, `KDD`, and `KDDdD`. The conformal-factor branch follows the global
-`EvolvedConformalFactor_cf` parameter for `phi`, `chi`, or `W`; see
-[CONTR-0005](../../contradictions.md#contr-0005) for the adopted `chi` and `W`
-signs. The spatial metric and extrinsic curvature follow by rearranging
+`EvolvedConformalFactor_cf` parameter for `phi`, `chi`, or `W`. The spatial metric and extrinsic curvature follow by rearranging
 [Mewes et al., Eqs. (7) and (10)](https://arxiv.org/pdf/2002.06225v2);
 derivative expressions use the chain and product rules.
 

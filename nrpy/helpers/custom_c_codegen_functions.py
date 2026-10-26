@@ -9,6 +9,10 @@ floating point type (float, double, long double), including support for
 double complex via the C99 complex math functions (e.g., csqrt, cpow, cabs).
 Note: there is no standard complex cbrt in C99, so cube roots of complex values
 fall back to cpow.
+Note: a negative integer power -n is printed as 1.0/(x*...*x) with n factors, so
+the product overflows for |x| above DBL_MAX^(1/n) (about 1.3e154 for n=2), and the
+quotient then returns 0 where the exact result is a representable number. The
+single-precision limit for n=2 is sqrt(FLT_MAX), about 1.8e19.
 
 Authors: Zachariah B. Etienne
          zachetie **at** gmail **dot* com
@@ -18,14 +22,25 @@ Authors: Zachariah B. Etienne
 
 import sympy as sp
 
+
+def _fits_c_int(b: sp.Basic) -> bool:
+    """
+    Return True if b is a SymPy Integer that fits in a 32-bit C int, the argument type of abs().
+
+    :param b: Argument of the absolute value.
+    :return: True if the C function abs() can take b without narrowing.
+    """
+    return isinstance(b, sp.Integer) and abs(b) < 2**31
+
+
 custom_functions_for_SymPy_ccode = {
     "double": {
         "nrpyAbs": [
-            (lambda b: isinstance(b, sp.Integer), lambda b: f"abs({b})"),
+            (_fits_c_int, lambda b: f"abs({b})"),
             (lambda b: True, lambda b: f"fabs({b})"),
         ],
         "fabs": [
-            (lambda b: isinstance(b, sp.Integer), lambda b: f"abs({b})"),
+            (_fits_c_int, lambda b: f"abs({b})"),
             (lambda b: True, lambda b: f"fabs({b})"),
         ],
         "Pow": [
@@ -57,11 +72,11 @@ custom_functions_for_SymPy_ccode = {
     },
     "float": {
         "nrpyAbs": [
-            (lambda b: isinstance(b, sp.Integer), lambda b: f"abs({b})"),
+            (_fits_c_int, lambda b: f"abs({b})"),
             (lambda b: True, lambda b: f"fabsf({b})"),
         ],
         "fabs": [
-            (lambda b: isinstance(b, sp.Integer), lambda b: f"abs({b})"),
+            (_fits_c_int, lambda b: f"abs({b})"),
             (lambda b: True, lambda b: f"fabsf({b})"),
         ],
         "Pow": [
@@ -88,11 +103,11 @@ custom_functions_for_SymPy_ccode = {
     },
     "long double": {
         "nrpyAbs": [
-            (lambda b: isinstance(b, sp.Integer), lambda b: f"abs({b})"),
+            (_fits_c_int, lambda b: f"abs({b})"),
             (lambda b: True, lambda b: f"fabsl({b})"),
         ],
         "fabs": [
-            (lambda b: isinstance(b, sp.Integer), lambda b: f"abs({b})"),
+            (_fits_c_int, lambda b: f"abs({b})"),
             (lambda b: True, lambda b: f"fabsl({b})"),
         ],
         "Pow": [
@@ -121,15 +136,21 @@ custom_functions_for_SymPy_ccode = {
         # magnitude for complex -> returns double
         "nrpyAbs": "cabs",
         "fabs": "cabs",
+        "Abs": "cabs",
         # unary transcendentals -> force complex variants
         "sin": "csin",
         "cos": "ccos",
         "tan": "ctan",
+        "asin": "casin",
+        "acos": "cacos",
+        "atan": "catan",
         "exp": "cexp",
         "log": "clog",
         "sinh": "csinh",
         "cosh": "ccosh",
         "tanh": "ctanh",
+        "asinh": "casinh",
+        "acosh": "cacosh",
         "atanh": "catanh",
         # powers (keep the predicate-list form only for Pow)
         "Pow": [

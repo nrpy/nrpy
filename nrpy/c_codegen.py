@@ -376,7 +376,6 @@ def c_codegen(
     selected first derivative is 14, its transverse derivative is 2, and the
     unselected field's first derivative is 24. The unused storage contains -999.
 
-    >>> import re
     >>> saved_gfs = gri.glb_gridfcs_dict.copy()
     >>> saved_fd = fin.FDFunctions_dict.copy()
     >>> saved_params = {name: par.parval_from_str(name) for name in ("Infrastructure", "parallelization", "finite_difference::fd_order")}
@@ -392,8 +391,9 @@ def c_codegen(
     ...     values = {"i0": 4, "i1": 5, "i2": 6, "invdxx0": 1, "invdxx1": 1, "UDD0GF": 0, "VDD0GF": 1, "VGF": 1, "IDX4": lambda gf, i, j, k: (gf, i, j, k)}
     ...     values["auxevol_gfs"] = {(gf, i, j, 6): i + 2*j if gf == 0 else -999 for gf in range(2) for i in range(3, 6) for j in range(4, 7)}
     ...     values["in_gfs"] = {(1, i, j, 6): 3*i*i for i in range(3, 6) for j in range(4, 7)}
-    ...     for name, rhs in re.findall(r"(?:const REAL )?([A-Za-z_0-9]+) = ([^;]+);", code):
-    ...         values[name] = sp.sympify(rhs, locals=values, rational=True)
+    ...     for statement in code.split(";")[:-1]:
+    ...         lhs, rhs = statement.strip().split(" = ", 1)
+    ...         values[lhs.split()[-1]] = sp.sympify(rhs, locals=values, rational=True)
     ...     print(values["result"])
     ... finally:
     ...     gri.glb_gridfcs_dict.clear(); gri.glb_gridfcs_dict.update(saved_gfs)
@@ -700,6 +700,20 @@ def c_codegen(
                 varnames_excluding_SCALAR_TMPs.append(var_name)
                 sympyexprs_SCALAR_TMPs_are_sp_Eq.append(expr)
 
+        # Temporaries must not take a name that output_varname_str already uses.
+        reserved_names = {
+            name
+            for out in output_varname_str
+            for name in "".join(
+                char if char.isalnum() or char == "_" else " " for char in out
+            ).split()
+        }
+        cse_symbols = (
+            sym
+            for sym in sp.numbered_symbols(CCGParams.cse_varprefix + "tmp")
+            if sym.name not in reserved_names
+        )
+
         # Check sympy version and process the main group
         sympy_version = sp.__version__.replace("rc", "...").replace("b", "...")
         sympy_major_version = int(sympy_version.split(".")[0])
@@ -712,14 +726,14 @@ def c_codegen(
             )
             cse_results = sp.cse(
                 sympyexprs_SCALAR_TMPs_are_sp_Eq,
-                sp.numbered_symbols(CCGParams.cse_varprefix + "tmp"),
+                cse_symbols,
                 order=CCGParams.cse_sorting,
             )
         else:
             cse_results = cse_postprocess(
                 sp.cse(
                     sympyexprs_SCALAR_TMPs_are_sp_Eq,
-                    sp.numbered_symbols(CCGParams.cse_varprefix + "tmp"),
+                    cse_symbols,
                     order=CCGParams.cse_sorting,
                 )
             )
@@ -727,12 +741,14 @@ def c_codegen(
             cse_results = sort_cse_output_deterministically(
                 cse_results,
                 symbol_prefix=CCGParams.cse_varprefix,
+                reserved_names=reserved_names,
             )
 
         # Important: cse_postprocess() has just removed SCALAR_TMPs from the sympyexprs_SCALAR_TMPs_are_sp_Eq.
 
         # Processing common subexpressions and results from cse_postprocess
         # cse_results[0] contains common subexpression definitions, does not specify varnames.
+        temporaries_read_NegativeOne = False
         for common_subexpression in cse_results[0]:
             full_type_string = f"const {CCGParams.fp_type_alias} "
             if CCGParams.enable_simd:
@@ -743,6 +759,8 @@ def c_codegen(
                     CCGParams.simd_find_more_FMAsFMSs,
                     debug=CCGParams.simd_debug,
                 )
+                if sp.Symbol(f"{varprefix}_NegativeOne_") in simd_expr.free_symbols:
+                    temporaries_read_NegativeOne = True
                 outstring += (
                     f"{full_type_string}{common_subexpression[0]} = {simd_expr};\n"
                 )
@@ -780,7 +798,8 @@ def c_codegen(
                     CCGParams.symbol_to_Rational_dict,
                     varprefix,
                     CCGParams.simd_find_more_FMAsFMSs,
-                    clean_NegativeOnes_after_processing=CCGParams.simd_clean_NegativeOnes_after_processing,
+                    clean_NegativeOnes_after_processing=CCGParams.simd_clean_NegativeOnes_after_processing
+                    and not temporaries_read_NegativeOne,
                     debug=CCGParams.simd_debug,
                 )
                 outstring += f"{varnames_excluding_SCALAR_TMPs[i]} = {simd_expr};\n"

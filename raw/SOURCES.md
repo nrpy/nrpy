@@ -25,7 +25,7 @@
 | --- | --- | --- | --- |
 | `raw/source-docs/original-agents.md` | Previous root agent instructions, preserved byte-for-byte before replacing `AGENTS.md`. Its root style-guide reference is superseded; see the source map row for current routing. | frozen | ingested |
 | `raw/source-docs/kb-instructions.md` | KB schema and governance source moved from the repository root. | frozen | ingested |
-| `raw/source-docs/ybs-momentum-damping-spec.md` | Superseded commissioned YBS-MOM auxiliary-relaxation proposal preserved as historical input. See CONTR-0007 and the current YBS-MOM page for governing behavior. | frozen | ingested |
+| `raw/source-docs/ybs-momentum-damping-spec.md` | Superseded commissioned YBS-MOM auxiliary-relaxation proposal preserved as historical input. See the current YBS-MOM page for governing behavior. | frozen | ingested |
 
 ## Cited Code And Config Sources
 
