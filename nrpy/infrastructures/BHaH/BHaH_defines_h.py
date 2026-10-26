@@ -481,6 +481,7 @@ def output_BHaH_defines_h(
 #define restrict __restrict__
 #endif // __cplusplus
 #ifdef __CUDACC__
+#include "BHaH_device_defines.h"
 #include <cooperative_groups.h>
 #define NUM_STREAMS 1
 #define THREADSPERBLOCK 64 

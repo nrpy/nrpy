@@ -53,7 +53,6 @@ use_cpp = args.cpp
 use_openmp = not args.no_openmp  # default: True if flag omitted
 
 par.set_parval_from_str("Infrastructure", "BHaH")
-
 #########################################################
 # STEP 1: Code-generation-time parameters
 project_name = "BHaHAHA"
@@ -221,6 +220,11 @@ par.adjust_CodeParam_default(
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
 BHaH.BHaH_defines_h.output_BHaH_defines_h(project_dir=project_dir)
+par.set_parval_from_str("parallelization", "cuda")
+BHaH.BHaH_device_defines_h.output_device_headers(
+  project_dir=project_dir, num_streams=1
+)
+par.set_parval_from_str("parallelization", "openmp")
 
 #########################################################
 # STEP 9: Copy files and construct Makefile
