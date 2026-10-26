@@ -175,7 +175,7 @@ def generate_kernel_and_launch_code(
             .replace("__host__", "")
         )
         if bhahaha:
-          host_cfunc_decorators = r"""
+            host_cfunc_decorators = r"""
 #ifdef __CUDACC__
 __device__
 #endif

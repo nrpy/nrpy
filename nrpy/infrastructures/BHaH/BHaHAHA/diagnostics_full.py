@@ -174,8 +174,8 @@ void bah_diagnostics_final(commondata_struct *restrict commondata, griddata_stru
           // Display spin_z based on (xz/xy, yz/xy) ratios
           display_spin("spin_z", bhahaha_diags->spin_a_z_from_xz_over_xy_prop_circumfs, bhahaha_diags->spin_a_z_from_yz_over_xy_prop_circumfs, //
                        "xz/xy", "yz/xy");
-        } // END IF verbosity level > 0
-      } // END display proper circumference diagnostics if verbosity is enabled.
+        } // END IF: verbosity level > 0
+      } // END IF display proper circumference diagnostics if verbosity is enabled.
     } // END compute, store, and (optionally) print final diagnostics
 #ifdef __CUDACC__
   } END_CUDA_ONE_THREAD;
@@ -194,9 +194,7 @@ iteration intervals, as well as a detailed final iteration diagnostic.
 @note This function updates the error_flag within commondata based on diagnostic outcomes."""
     cfunc_type = "void"
     name = "diagnostics_full"
-    params = (
-        "commondata_struct *restrict commondata, griddata_struct *restrict griddata, int compute_proper_circumferences"
-    )
+    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, int compute_proper_circumferences"
     # Removed the unused variable 'Th'
     _ = gri.register_gridfunctions(
         "Theta", group="AUX", gf_array_name="diagnostic_output_gfs"
@@ -227,16 +225,3 @@ __global__
         body=body,
     )
     return pcg.NRPyEnv()
-
-
-if __name__ == "__main__":
-    import doctest
-    import sys
-
-    results = doctest.testmod()
-
-    if results.failed > 0:
-        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-        sys.exit(1)
-    else:
-        print(f"Doctest passed: All {results.attempted} test(s) passed")

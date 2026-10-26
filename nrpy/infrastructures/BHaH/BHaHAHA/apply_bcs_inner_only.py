@@ -20,7 +20,7 @@ def register_CFunction_apply_bcs_inner_only() -> None:
 #ifdef __CUDACC__
 __device__
 #endif
-""" 
+"""
     prefunc += APPLY_PARITY_BRANCHLESS_PREFUNC
     desc = r"""
 Apply BCs to inner boundary points only,

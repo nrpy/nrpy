@@ -103,11 +103,15 @@ __device__
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
-        cuda_parallel_pair=True, 
+        cuda_parallel_pair=True,
     )
 
     cfc.register_CFunction(
-        prefunc=fin.construct_FD_functions_prefunc(cfunc_decorators) if enable_fd_functions else "",
+        prefunc=(
+            fin.construct_FD_functions_prefunc(cfunc_decorators)
+            if enable_fd_functions
+            else ""
+        ),
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
@@ -218,7 +222,11 @@ __device__
 
     cfc.register_CFunction(
         subdirectory="",
-        prefunc=fin.construct_FD_functions_prefunc(cfunc_decorators) if enable_fd_functions else "",
+        prefunc=(
+            fin.construct_FD_functions_prefunc(cfunc_decorators)
+            if enable_fd_functions
+            else ""
+        ),
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,

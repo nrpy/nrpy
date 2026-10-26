@@ -389,7 +389,6 @@ This function performs the following steps:
 @param[in] Ntheta Array containing the number of theta points for each resolution.
 @param[in] Nphi Array containing the number of phi points for each resolution.
 
-@return BHAHAHA_SUCCESS on successful setup, or an error code indicating the failure reason.
 """
     cfunc_type = "void"
     name = "numgrid__external_input_set_up"

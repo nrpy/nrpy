@@ -66,8 +66,8 @@ def register_CFunction_MoL_free_intermediate_levels(
     )
     body = ""
     free_macro = "BHAH_FREE_DEVICE" if parallelization == "cuda" else "BHAH_FREE"
-    if (bhahaha):
-      free_macro = "FREE"
+    if bhahaha:
+        free_macro = "FREE"
     for gridfunctions in intermediate_stage_gfs_gridfunctions_list:
         body += f"{free_macro}(gridfuncs->{gridfunctions});\n"
 

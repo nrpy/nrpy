@@ -150,9 +150,6 @@ to a set of arbitrary destination points using Lagrange interpolation of a speci
 @param[in] dst_pts              Array of destination points' coordinates, each consisting of (theta, phi).
 @param[out] dst_data            Output array to store interpolated values at each destination point.
 
-@return                         BHAHAHA_SUCCESS on successful interpolation.
-                                 Appropriate error code if an error is encountered.
-
 @note
 - Assumes that the source and destination grids are uniform in theta and phi directions.
 - Ensures that destination points lie within the bounds of the source grid to prevent memory access violations.

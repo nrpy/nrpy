@@ -70,7 +70,7 @@ __device__
 """
     body = r"""
   #ifdef __CUDACC__
-  // Set up cooperative gropu 
+  // Set up cooperative group 
   namespace cg = cooperative_groups;
   cg::grid_group gpu_grid = cg::this_grid();
 
@@ -140,7 +140,7 @@ __device__
       commondata->error_flag = FIND_HORIZON_HORIZON_TOO_SMALL;
       return;
     }
-  } // END IF output diagnostics
+  } // END IF: output diagnostics
 """
     cfc.register_CFunction(
         subdirectory="",

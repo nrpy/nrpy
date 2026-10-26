@@ -221,13 +221,15 @@ def write_CodeParameters_h_files(
                         CPsize = int(CPtype.split("[")[1].split("]")[0])
                         # Char arrays are never unused; we use them below.
                         Coutput = rf"""
+#ifdef __CUDACC__
+MAYBE_UNUSED
+#endif
+char {CPname}[{CPsize}]; {comment}
 {{
 #ifdef __CUDACC__
-  MAYBE_UNUSED char {CPname}[{CPsize}]; {comment}
   for (int i = 0; params->CoordSystemName[i] != '\0' && i<100; i++)
     CoordSystemName[i] = params->CoordSystemName[i];
 #else
-  char {CPname}[{CPsize}]; {comment}
   // Safely copy string with snprintf, which guarantees null termination
   snprintf({CPname}, sizeof({CPname}), "%s", {struct}{pointer}{CPname});
 #endif

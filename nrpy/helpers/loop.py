@@ -172,32 +172,34 @@ def loop(
     header = "".join(headers)
     footer = "".join(footers[::-1])
 
-    if (cuda_parallel_pair):
+    if cuda_parallel_pair:
         cuda_loop_header = "#ifdef __CUDACC__\n"
-        if (len(idx_var) == 1):
+        if len(idx_var) == 1:
             cuda_loop_header += "PARALLEL_1D_LOOP("
             cuda_loop_footer = "#else\n } END_PARALLEL_1D_LOOP\n#endif"
-        elif (len(idx_var) == 2):
+        elif len(idx_var) == 2:
             cuda_loop_header += "PARALLEL_2D_LOOP("
             cuda_loop_footer = "#else\n} END_PARALLEL_2D_LOOP\n#endif"
-        elif (len(idx_var) == 3):
+        elif len(idx_var) == 3:
             cuda_loop_header += "PARALLEL_LOOP("
             cuda_loop_footer = "#else\n} END_PARALLEL_LOOP\n#endif"
         else:
-            raise ValueError( 
+            raise ValueError(
                 f"A cuda PARALLEL_LOOP is only currently possible with 1,2 or 3 Dimensions but you have provided {len(idx_var)}"
             )
         for i, var in enumerate(idx_var[::1]):
-            if (i != 0):
+            if i != 0:
                 cuda_loop_header += ", "
-            cuda_loop_header += idx_var[i] + ", " + lower_bound[i] + ", " + upper_bound[i]
+            cuda_loop_header += (
+                idx_var[i] + ", " + lower_bound[i] + ", " + upper_bound[i]
+            )
         cuda_loop_header += ") {\n"
         for i, var in enumerate(idx_var[::-1]):
             if "#pragma" in pragma[i]:
-                lines_of_pragma = pragma[i].split('\n')
+                lines_of_pragma = pragma[i].split("\n")
                 for line in lines_of_pragma:
                     if "#pragma" not in line:
-                        cuda_loop_header += line + "\n"  
+                        cuda_loop_header += line + "\n"
             else:
                 cuda_loop_header += pragma[i] + "\n"
         cuda_loop_header += "#else\n"
@@ -206,7 +208,8 @@ def loop(
 
     return header + loop_body + footer if loop_body else (header, footer)
 
-if __name__ == "__main__": 
+
+if __name__ == "__main__":
     import doctest
     import sys
 

@@ -253,8 +253,8 @@ void initialize_and_interpolate(commondata_struct *restrict commondata)
 #else
     } END_PARALLEL_LOOP;
 #endif
-  } // END STEP 4: Transfer interpolated data to interpolation source grid functions.
-}
+  } // END BLOCK: Step 4 Transfer interpolated data to interpolation source grid functions.
+} // END FUNCTION: initialize_and_interpolate
 
 
 #ifdef __CUDACC__
@@ -368,7 +368,7 @@ void apply_bcs_interp_src(commondata_struct *restrict commondata, bc_struct *res
 #else
     } END_PARALLEL_2D_LOOP; // END LOOP over inner boundary points and gridfunctions
 #endif
-  } // END STEP 4: Enforce boundary conditions on all interpolation source grid functions.
+  } // END BLOCK: Step 4: Enforce boundary conditions on all interpolation source grid functions.
 } // END FUNCTION apply_bcs_interp_src
 
 """
@@ -383,7 +383,7 @@ and computes necessary spatial derivatives.
 
 @param[in,out] commondata Pointer to the common data structure containing simulation parameters and data.
 @param[in] Nx_evol_grid Array specifying the number of grid points in each dimension for the evolved grid.
-@return Returns BHAHAHA_SUCCESS on successful setup, or an error code if memory allocation fails."""
+"""
     cfunc_type = "void"
     name = "numgrid__interp_src_set_up"
     params = "commondata_struct *restrict commondata, const int Nx_evol_grid[3]"

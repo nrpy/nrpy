@@ -16,6 +16,7 @@ import nrpy.equations.general_relativity.bhahaha.area as bhahaha_area
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.infrastructures import BHaH
 
+
 def register_CFunction_diagnostics_proper_circumferences(
     enable_fd_functions: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
@@ -177,7 +178,6 @@ Computes proper circumferences along the equator and polar directions for appare
 
 @param[in,out] commondata Pointer to common data structure containing shared parameters and settings.
 @param[in,out] griddata Pointer to grid data structures for each grid, containing parameters and gridfunctions.
-@return Status code indicating success or type of error (e.g., BHAHAHA_SUCCESS or INITIAL_DATA_MALLOC_ERROR).
 @note This function uses OpenMP for parallel loops and performs interpolation and integration over grid data.
 """
     cfunc_type = "void"
@@ -185,7 +185,7 @@ Computes proper circumferences along the equator and polar directions for appare
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
-    cfunc_decorators= r"""
+    cfunc_decorators = r"""
 #ifdef __CUDACC__
 __device__
 #endif

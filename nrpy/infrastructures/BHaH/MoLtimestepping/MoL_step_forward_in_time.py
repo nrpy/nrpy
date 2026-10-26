@@ -151,8 +151,8 @@ __device__
     body = f"""
 // C code implementation of -={{ {MoL_method} }}=- Method of Lines timestepping.
 """
-    if (bhahaha):
-      body += """
+    if bhahaha:
+        body += """
 #ifdef __CUDACC__
 // Set up cooperative group
 namespace cg = cooperative_groups;
@@ -517,7 +517,7 @@ _Pragma("omp parallel for simd") \
 //       so that the time formula remains correct across dt changes.
 """
     if bhahaha:
-      body += """
+        body += """
 #ifdef __CUDACC__
 CUDA_ONE_THREAD(gpu_grid) {
 #endif
@@ -529,7 +529,7 @@ commondata->time = commondata->t_0 + (REAL)(commondata->nn - commondata->nn_0 + 
 commondata->nn++;
 """
     if bhahaha:
-      body += """
+        body += """
 #ifdef __CUDACC__
 } END_CUDA_ONE_THREAD;
 gpu_grid.sync();

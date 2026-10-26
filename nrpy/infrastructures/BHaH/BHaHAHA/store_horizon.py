@@ -4,7 +4,6 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-
 import nrpy.c_function as cfc
 from nrpy.infrastructures import BHaH
 
@@ -19,12 +18,11 @@ def register_CFunction_store_horizon() -> None:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     prefunc = r"""
 """
-    desc = """Stores a coarse horizon from y_n_gfs in commondata's coarse_horizon
+    desc = """This function stores a coarse horizon from y_n_gfs in commondata's coarse_horizon
 for use as the next resolutions initial guess.
-@param commondata - Pointer to the common data structure containing simulation parameters and data.   This function conducts various diagnostic checks and computations related to
-@param griddata - Pointer to the grid data structure containing grid-related parameters and functions.the apparent horizon in the BHaHAHA simulation. Diagnostics are performed
-at specified iteration intervals and may include interpolation, centroid
-calculations, norm evaluations."""
+@param commondata Pointer to the common data structure containing simulation parameters and data.   
+@param griddata - Pointer to the grid data structure containing grid-related parameters and functions.
+"""
     cfunc_type = "void"
     name = "store_horizon"
     params = (
@@ -76,16 +74,3 @@ __global__
         cfunc_decorators=cfunc_decorators,
         body=body,
     )
-
-
-if __name__ == "__main__":
-    import doctest
-    import sys
-
-    results = doctest.testmod()
-
-    if results.failed > 0:
-        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-        sys.exit(1)
-    else:
-        print(f"Doctest passed: All {results.attempted} test(s) passed")

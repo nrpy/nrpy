@@ -269,7 +269,7 @@ ALL_CFLAGS = $(CFLAGS) $(OMP_CFLAGS) $(PIC_CFLAGS)
 ALL_CXXFLAGS = $(CXXFLAGS) $(OMP_CXXFLAGS) $(PIC_CFLAGS)
 ALL_LDFLAGS = $(LDFLAGS) $(OMP_LDFLAGS)"""
         if bhahaha:
-          flags_block = f"""CFLAGS = {cflags}
+            flags_block = f"""CFLAGS = {cflags}
 CXXFLAGS = {cxxflags}
 NVCCFLAGS = 
 VALGRIND_CFLAGS = {valgrind_cflags}
@@ -280,8 +280,8 @@ ifeq ($(CC), nvcc)
   CFLAGS = $(NVCCFLAGS)
   FORCECUDA = -x cu
 endif"""
-        else: 
-          flags_block = f"""CFLAGS = {cflags}
+        else:
+            flags_block = f"""CFLAGS = {cflags}
 CXXFLAGS = {cxxflags}
 VALGRIND_CFLAGS = {valgrind_cflags}
 PIC_CFLAGS := {pic_cflags}"""
@@ -319,11 +319,11 @@ endef
                 else "$(CC) $(ALL_CPPFLAGS) $(ALL_CFLAGS)"
             )
         )
-        if (dual_compile and source_extension == "c"):
+        if dual_compile and source_extension == "c":
             compile_rules_list.append(f"""%.o: %.{source_extension}
 \t@mkdir -p $(dir $(DEPDIR)/$(@:.o=.d))
 \t{compiler_command} $(DEPFLAGS) $(FORCECUDA) -c $< -o $@""")
-        else: 
+        else:
             compile_rules_list.append(f"""%.o: %.{source_extension}
 \t@mkdir -p $(dir $(DEPDIR)/$(@:.o=.d))
 \t{compiler_command} $(DEPFLAGS) -c $< -o $@""")

@@ -175,9 +175,12 @@ class RKFunction:
         self.kernel_params["dt"] = "const REAL"
 
         if bhahaha:
-          kernel_body += self.loop_body.replace("commondata->dt", "dt") + "\n} END_LOOP_ALL_GFS_GPS\n"
+            kernel_body += (
+                self.loop_body.replace("commondata->dt", "dt")
+                + "\n} END_LOOP_ALL_GFS_GPS\n"
+            )
         else:
-          kernel_body += self.loop_body.replace("commondata->dt", "dt") + "\n}\n"
+            kernel_body += self.loop_body.replace("commondata->dt", "dt") + "\n}\n"
         self.kernel_params_lst = [f"{v} {k}" for k, v in self.kernel_params.items()]
 
         comments = f"Compute RK substep {self.rk_step}."

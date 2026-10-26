@@ -92,7 +92,7 @@ class ReferenceMetricPrecompute:
     on CUDA-enabled builds.
     """
 
-    def __init__(self, CoordSystem: str, dual_compile: bool=False) -> None:
+    def __init__(self, CoordSystem: str, dual_compile: bool = False) -> None:
         self._initialize_configuration(CoordSystem)
         self._initialize_properties()
 
@@ -193,7 +193,9 @@ class ReferenceMetricPrecompute:
         return " * ".join(size_terms) if size_terms else "(size_t)1"
 
     # --------------------------- per-symbol processing (single-pass emit) ---------------------------
-    def _process_expression(self, symbol: sp.Expr, expr: sp.Expr, dual_compile: bool = False) -> None:
+    def _process_expression(
+        self, symbol: sp.Expr, expr: sp.Expr, dual_compile: bool = False
+    ) -> None:
         # Dependency detection:
         dependencies = [expr.has(self.rfm.xx[i]) for i in range(self.N_DIMS)]
 
@@ -413,8 +415,9 @@ if (params->is_host) {{
 # --------------------------------------------------------------------------
 # Public entry: register malloc/defines/free for all CoordSystems
 # --------------------------------------------------------------------------
-def register_CFunctions_rfm_precompute(set_of_CoordSystems: Set[str],
-                                       dual_compile: bool = False) -> None:
+def register_CFunctions_rfm_precompute(
+    set_of_CoordSystems: Set[str], dual_compile: bool = False
+) -> None:
     """
     Register C functions for reference-metric precomputation.
 
@@ -441,8 +444,7 @@ def register_CFunctions_rfm_precompute(set_of_CoordSystems: Set[str],
         # --- malloc/free bodies from single member-spec list (host/device macro swap) ---
         if dual_compile:
             malloc_lines = "#ifdef __CUDACC__\nrfm_struct* tmp_rfmstruct = (rfm_struct *)malloc(sizeof(rfm_struct));\n#endif\n"
-            malloc_lines += "\n".join(
-                f"""
+            malloc_lines += "\n".join(f"""
 #ifdef __CUDACC__
 REAL* {m} = NULL;
 gpuErrchk( cudaMalloc((void**)&{m}, sizeof(REAL) * ({sz})) );
@@ -450,9 +452,7 @@ tmp_rfmstruct->{m} = {m};
 #else
 BHAH_MALLOC__PtrMember(rfmstruct, {m}, sizeof(REAL) * ({sz}));
 #endif
-"""
-                for m, sz in rfm_precompute.member_specs
-)
+""" for m, sz in rfm_precompute.member_specs)
             malloc_lines += "#ifdef __CUDACC__\ncudaMemcpy(rfmstruct, tmp_rfmstruct, sizeof(rfm_struct), cudaMemcpyHostToDevice);\nfree(tmp_rfmstruct);\n#endif\n"
             malloc_body = f"""
 {malloc_lines}"""
@@ -475,24 +475,21 @@ IFCUDARUN({{
 }});
 }} // END IF params->is_host
 """
-        
-        if dual_compile:  
+
+        if dual_compile:
             free_lines = """
 #ifdef __CUDACC__
   rfm_struct* tmp_rfmstruct = (rfm_struct *)malloc(sizeof(rfm_struct));
   cudaMemcpy(tmp_rfmstruct, rfmstruct, sizeof(rfmstruct), cudaMemcpyDeviceToHost);
 #endif
 """
-            free_lines += "\n".join(
-                f"""
+            free_lines += "\n".join(f"""
 #ifdef __CUDACC__
   cudaFree(tmp_rfmstruct->{m});
 #else
 BHAH_FREE__PtrMember(rfmstruct, {m});
 #endif
-"""
-                for m, _ in rfm_precompute.member_specs
-            )
+""" for m, _ in rfm_precompute.member_specs)
             free_body = f"""
 {free_lines}
 """
@@ -534,16 +531,16 @@ IFCUDARUN({{
         }
 
         # --- decorators ---
-        malloc_decorators = "" 
+        malloc_decorators = ""
         free_decorators = ""
         if dual_compile:
-            defines_decorators  = r"""
+            defines_decorators = r"""
 #ifdef __CUDACC__
 __device__
 #endif
-""" 
+"""
         else:
-            defines_decorators  = ""
+            defines_decorators = ""
 
         decorators_dict = {
             "malloc": malloc_decorators,

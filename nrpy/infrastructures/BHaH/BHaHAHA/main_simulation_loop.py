@@ -4,7 +4,6 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-
 import nrpy.c_function as cfc
 from nrpy.infrastructures import BHaH
 
@@ -35,12 +34,10 @@ integration.
 @params resolution - int labeling the resolution from coarse(0) to fine(n:default=3);
                                                                                                         
 @note this function updates the error_flag within commondata based on simulation outcomes. 
-@returns void"""
+"""
     cfunc_type = "void"
     name = "main_simulation_loop"
-    params = (
-        "commondata_struct *restrict commondata, griddata_struct *restrict griddata, int resolution"
-    )
+    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, int resolution"
     cfunc_decorators = r"""
 #ifdef __CUDACC__
 __global__
@@ -88,7 +85,7 @@ __global__
       #ifdef __CUDACC__
       gpu_grid.sync();
       #endif
-    } //End Reset horizon
+    } // END IF: Reset horizon
 
     // Step 1.c: Attempt over-relaxation every once in a while. If an
     //           over-relaxation is performed, the CFL timestep
@@ -128,7 +125,7 @@ __global__
       #ifdef __CUDACC__
       gpu_grid.sync();
       #endif
-    } // END time-varying eta prescription.
+    } // END IF: time-varying eta prescription.
 
     // Step 1.e: Output diagnostic information.  
     bah_diagnostics(commondata, griddata);
@@ -178,16 +175,3 @@ __global__
         cfunc_decorators=cfunc_decorators,
         body=body,
     )
-
-
-if __name__ == "__main__":
-    import doctest
-    import sys
-
-    results = doctest.testmod()
-
-    if results.failed > 0:
-        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-        sys.exit(1)
-    else:
-        print(f"Doctest passed: All {results.attempted} test(s) passed")

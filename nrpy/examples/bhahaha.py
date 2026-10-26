@@ -170,7 +170,7 @@ gpu_grid.sync();
 }
 """
 
-post_rhs_string= """
+post_rhs_string = """
 #ifdef __CUDACC__
 gpu_grid.sync();
 #endif
@@ -221,9 +221,7 @@ BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
 BHaH.BHaH_defines_h.output_BHaH_defines_h(project_dir=project_dir)
 par.set_parval_from_str("parallelization", "cuda")
-BHaH.BHaH_device_defines_h.output_device_headers(
-  project_dir=project_dir, num_streams=1
-)
+BHaH.BHaH_device_defines_h.output_device_headers(project_dir=project_dir, num_streams=1)
 par.set_parval_from_str("parallelization", "openmp")
 
 #########################################################
