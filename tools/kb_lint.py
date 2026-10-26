@@ -1444,7 +1444,7 @@ def _check_contradictions(failures: List[str]) -> None:
                     f"empty contradiction field: {field}",
                 )
         status = row[indexes["Claim status"]].strip().lower()
-        if status not in {"contested", "stale", "resolved"}:
+        if status not in {"contested", "stale"}:
             _fail(failures, CONTRADICTIONS, line, f"invalid Claim status: {status!r}")
         affected = set(_affected_page_links(row[indexes["Affected pages"]]))
         if not affected:
@@ -1481,7 +1481,7 @@ def _check_contradictions(failures: List[str]) -> None:
                     failures,
                     page,
                     _line_for_offset(text, match.start()),
-                    f"marker references missing or resolved contradiction: {identifier}",
+                    f"marker references missing contradiction: {identifier}",
                 )
             elif active[identifier][0] != status:
                 _fail(

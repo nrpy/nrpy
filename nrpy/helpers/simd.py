@@ -384,7 +384,9 @@ def expr_convert_to_simd_intrins(
 
     # Step 0: Broadcast real numbers that cse_preprocess leaves as scalars (Float,
     #         pi, sqrt(2), ...) with ConstSIMD, spelled as a C double literal.
-    #   Note: Exponents of powers stay exact, so Step 1 can still select sqrt, cbrt, etc.
+    #   Note: Step 0 skips the exponent of each power that is neither skipped nor
+    #         wrapped itself, so Step 1 can still select sqrt for a Float exponent
+    #         such as 0.5.
     exponent_nodes: Dict[int, ExprTree.Node] = {}
     for subtree in tree.preorder():
         subexpr = subtree.expr
@@ -397,7 +399,8 @@ def expr_convert_to_simd_intrins(
             exponent_nodes[id(subtree.children[1])] = subtree.children[1]
     tree.reconstruct()
 
-    # Step 1: Replace transcendental functions, power functions, and division expressions.
+    # Step 1: Replace Abs, nrpyAbs, exp, log, sin, cos, sign, and powers (roots,
+    #         reciprocals, integer powers, PowSIMD).
     #   Note: SymPy does not represent fractional integers as rationals since
     #         those are explicitly declared using the rational class, and hence
     #         the following algorithm does not affect fractional integers.

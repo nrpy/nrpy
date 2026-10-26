@@ -26,8 +26,8 @@ def f2r(
     conditions derived from the BOB model, where tiny float errors can leak
     into symbolic solves and generated C code.
 
-    :param input_float: Float-like input. Accepts float, mpmath.mpf or string.
-    :param zpad: Number of zeros to append after the decimal point (default is 60).
+    :param input_float: Float or decimal string; its decimal string form is converted.
+    :param zpad: Zeros appended after the decimal point; the value is unchanged (default 60).
     :return: A sympy Rational number with high precision.
 
     Doctests:
@@ -37,6 +37,8 @@ def f2r(
     3/2
     >>> f2r("2.0",zpad=2)
     2
+    >>> f2r("1.2e-7",zpad=1)
+    3/25000000
     """
     # Split off any exponent so that the padding zeros extend only the mantissa.
     mantissa, e, exponent = str(input_float).lower().partition("e")
@@ -45,7 +47,7 @@ def f2r(
     if "." not in mantissa:
         mantissa = f"{mantissa}."
 
-    # Append zpad zeros after the decimal point to increase precision.
+    # Append zpad zeros after the decimal point; they do not change the value.
     return cast(sp.Rational, sp.Rational(mantissa + "0" * zpad + e + exponent))
 
 
