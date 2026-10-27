@@ -411,6 +411,7 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     CoordSystem: str,
     relative_to: str = "local_grid_center",
     gridding_approach: str = "independent grid(s)",
+    use_numerical_spacetime_nghosts: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register a C function that maps Cartesian coordinates to xx and finds the nearest grid indices.
@@ -424,6 +425,7 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     :param relative_to: Whether the computation is relative to the "local_grid_center"
                         (default) or "global_grid_center".
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
+    :param use_numerical_spacetime_nghosts: Use the numerical file's ghost-zone count for nearest grid indices.
     :raises ValueError: If `gridding_approach` is invalid, a GeneralRFM provider is
                         unsupported or missing, or GeneralRFM conversion is requested
                         with CUDA parallelization.
@@ -527,6 +529,11 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
 
     namesuffix = f"_{relative_to}" if relative_to == "global_grid_center" else ""
     name = f"Cart_to_xx_and_nearest_i0i1i2_assume_valid{namesuffix}"
+    ghost_zone_count = (
+        "params->numerical_spacetime_nghosts"
+        if use_numerical_spacetime_nghosts
+        else "NGHOSTS"
+    )
     params = "const params_struct *restrict params, const REAL xCart[3], REAL xx[3], int Cart_to_i0i1i2[3]"
     cfunc_decorators = "__host__ __device__" if parallelization == "cuda" else ""
 
@@ -603,9 +610,8 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
             )
 
         core_body_list.append("""
-  // Next perform Newton-Raphson iterations as needed:
-  const REAL XX_TOLERANCE = 1e-12;  // that's 1 part in 1e12 dxxi.
-  const REAL F_OF_XX_TOLERANCE = 1e-12;  // tolerance of function for which we're finding the root.
+  // Next perform safeguarded Newton-Raphson iterations as needed:
+  const REAL F_OF_XX_TOLERANCE = 1e-12;  // Tolerance of function for which we're finding the root.
   const int ITER_MAX = 100;
   int iter;
 """)
@@ -624,42 +630,84 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
                 nr_codegen_output = ccg.c_codegen(
                     nr_processed_exprs,
                     [f"f_of_xx{i}", f"fprime_of_xx{i}"],
-                    include_braces=True,
+                    include_braces=False,
                     verbose=False,
                 )
                 core_body_list.append(f"""
   {{
   int tolerance_has_been_met = 0;
   iter = 0;
-  REAL xx{i} = (REAL)0.5 * (params->xxmin{i} + params->xxmax{i});
-  while(iter < ITER_MAX && !tolerance_has_been_met) {{
-    REAL f_of_xx{i}, fprime_of_xx{i};
+  REAL xx{i}_lo = params->xxmin{i};
+  REAL xx{i}_hi = params->xxmax{i};
+  REAL xx{i} = xx{i}_lo;
+  REAL f_of_xx{i}, fprime_of_xx{i};
 
+  {{
 {nr_codegen_output}
-    if(fprime_of_xx{i} == (REAL)0.0) {{
-      break;
-    }}
-    const REAL xx{i}_np1 = xx{i} - f_of_xx{i} / fprime_of_xx{i};
+  }} // END BLOCK: lower endpoint residual
+  REAL f_of_xx{i}_lo = f_of_xx{i};
 
-    if( fabs(xx{i} - xx{i}_np1) <= XX_TOLERANCE * params->dxx{i} && fabs(f_of_xx{i}) <= F_OF_XX_TOLERANCE ) {{
-      tolerance_has_been_met = 1;
-    }}
-    xx{i} = xx{i}_np1;
-    iter++;
-  }} // END Newton-Raphson iterations to compute xx{i}
-  if(iter >= ITER_MAX || !tolerance_has_been_met) {{
+  xx{i} = xx{i}_hi;
+
+  {{
+{nr_codegen_output}
+  }} // END BLOCK: upper endpoint residual
+  REAL f_of_xx{i}_hi = f_of_xx{i};
+
+  if(fabs(f_of_xx{i}_lo) <= F_OF_XX_TOLERANCE) {{
+    xx{i} = xx{i}_lo;
+    tolerance_has_been_met = 1;
+  }} // END IF: lower coordinate is inverse root
+  else if(fabs(f_of_xx{i}_hi) <= F_OF_XX_TOLERANCE) {{
+    xx{i} = xx{i}_hi;
+    tolerance_has_been_met = 1;
+  }} // END ELSE IF: upper coordinate is inverse root
+  else {{
+    xx{i} = (REAL)0.5 * (xx{i}_lo + xx{i}_hi);
+    while(iter < ITER_MAX && !tolerance_has_been_met) {{
+
+      {{
+{nr_codegen_output}
+      }} // END BLOCK: Newton residual
+      if(fabs(f_of_xx{i}) <= F_OF_XX_TOLERANCE) {{
+        tolerance_has_been_met = 1;
+      }} // END IF: Newton iterate is inverse root
+      else {{
+        if((f_of_xx{i}_lo < (REAL)0.0 && f_of_xx{i} < (REAL)0.0) ||
+           (f_of_xx{i}_lo > (REAL)0.0 && f_of_xx{i} > (REAL)0.0)) {{
+          xx{i}_lo = xx{i};
+          f_of_xx{i}_lo = f_of_xx{i};
+        }} // END IF: root lies above current iterate
+        else {{
+          xx{i}_hi = xx{i};
+          f_of_xx{i}_hi = f_of_xx{i};
+        }} // END ELSE: root lies below current iterate
+
+        REAL xx{i}_trial = (REAL)0.5 * (xx{i}_lo + xx{i}_hi);
+        if(fprime_of_xx{i} != (REAL)0.0) {{
+          const REAL xx{i}_newton = xx{i} - f_of_xx{i} / fprime_of_xx{i};
+          if(xx{i}_newton > xx{i}_lo && xx{i}_newton < xx{i}_hi)
+            xx{i}_trial = xx{i}_newton;
+        }} // END IF: Newton proposal has derivative
+
+        xx{i} = xx{i}_trial;
+      }} // END ELSE: update bracket and select trial
+      iter++;
+    }} // END WHILE: safeguarded Newton iterations for xx{i}
+  }} // END ELSE: safeguarded Newton-Raphson with bisection fallback
+  if(!tolerance_has_been_met) {{
 #ifdef __CUDA_ARCH__
-    printf("ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}=%.15e, x,y,z = %.15e %.15e %.15e\\n",
+    printf("ERROR: safeguarded Newton-Raphson failed for {CoordSystem}: xx{i}=%.15e, x,y,z = %.15e %.15e %.15e\\n",
            (double)xx{i}, (double)Cartx, (double)Carty, (double)Cartz);
     asm("trap;");
 #else
-    fprintf(stderr, "ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}=%.15e, x,y,z = %.15e %.15e %.15e\\n",
+    fprintf(stderr, "ERROR: safeguarded Newton-Raphson failed for {CoordSystem}: xx{i}=%.15e, x,y,z = %.15e %.15e %.15e\\n",
             (double)xx{i}, (double)Cartx, (double)Carty, (double)Cartz);
     exit(1);
 #endif
-  }}
+  }} // END IF: safeguarded Newton-Raphson failed
   xx[{i}] = xx{i};
-  }}
+  }} // END BLOCK: inverse coordinate xx{i}
 """)
     else:
         # Step 2.b: Handle purely analytical inversions.
@@ -684,20 +732,20 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
 
       // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
       // Assuming a cell-centered grid, which follows the pattern:
-      //   xx0[i0] = params->xxmin0 + ((REAL)(i0 - NGHOSTS) + 0.5) * params->dxx0
+      //   xx0[i0] = params->xxmin0 + ((REAL)(i0 - grid_ghost_zones) + 0.5) * params->dxx0
       // The index i0 can be derived as:
-      //   i0 = (xx0[i0] - params->xxmin0) / params->dxx0 - 0.5 + NGHOSTS
+      //   i0 = (xx0[i0] - params->xxmin0) / params->dxx0 - 0.5 + grid_ghost_zones
       // Now, including typecasts:
-      //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS)
+      //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)grid_ghost_zones)
       // C integer conversion truncates toward zero. For valid in-domain cell-centered
       // coordinates, adding 0.5 converts the center-based quantity to the nearest index:
-      //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS + 0.5)
+      //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)grid_ghost_zones + 0.5)
       // The 0.5 values cancel out:
-      //   i0 =           (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)NGHOSTS )
-      Cart_to_i0i1i2[0] = (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)NGHOSTS );
-      Cart_to_i0i1i2[1] = (int)( ( xx[1] - params->xxmin1 ) / params->dxx1 + (REAL)NGHOSTS );
-      Cart_to_i0i1i2[2] = (int)( ( xx[2] - params->xxmin2 ) / params->dxx2 + (REAL)NGHOSTS );
-""")
+      //   i0 =           (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)grid_ghost_zones )
+      Cart_to_i0i1i2[0] = (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)grid_ghost_zones );
+      Cart_to_i0i1i2[1] = (int)( ( xx[1] - params->xxmin1 ) / params->dxx1 + (REAL)grid_ghost_zones );
+      Cart_to_i0i1i2[2] = (int)( ( xx[2] - params->xxmin2 ) / params->dxx2 + (REAL)grid_ghost_zones );
+""".replace("grid_ghost_zones", ghost_zone_count))
     core_body = "".join(core_body_list)
 
     # Step 3: Assemble the full C function body.

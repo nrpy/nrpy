@@ -33,7 +33,7 @@ def ode_gsl_wrapper_massive(spacetime_name: str) -> None:
     desc = rf""" GSL-compatible wrapper for massive particle geodesics in {spacetime_name}.
 
     Unpacks the GSL parameters void pointer into the global commondata struct,
-    computes the local metric $g_{{\mu\nu}}$ and Christoffel symbols $\Gamma^\alpha_{{\mu\nu}}$
+    computes the local Christoffel symbols $\Gamma^\alpha_{{\mu\nu}}$
     using thread-local kernels, and calls the RHS calculation routine.
     Thread-local execution organizes memory access during ODE integration. Inline
     geometric evaluations prevent the need for pre-computed global memory grids.
@@ -59,21 +59,19 @@ def ode_gsl_wrapper_massive(spacetime_name: str) -> None:
 
     commondata_struct *commondata = (commondata_struct *)params; // Cast GSL void pointer to the global parameter struct.
 
-    double metric_local[10]; // Buffer for the 10 unique symmetric metric components $g_{{\mu\nu}}$.
     double conn_local[40]; // Buffer for the 40 unique Christoffel symbols $\Gamma^\alpha_{{\mu\nu}}$.
 
     //==========================================
     // GEOMETRIC EVALUATIONS
     //==========================================
-    // Evaluate $g_{{\mu\nu}}$ and $\Gamma^\alpha_{{\mu\nu}}$ at the current coordinate position.
-    g4DD_metric_{spacetime_name}(commondata, y, metric_local); // Evaluate the spacetime metric $g_{{\mu\nu}}$.
+    // Evaluate $\Gamma^\alpha_{{\mu\nu}}$ at the current coordinate position.
     connections_{spacetime_name}(commondata, y, conn_local); // Evaluate the connections $\Gamma^\alpha_{{\mu\nu}}$.
 
     //==========================================
     // RIGHT-HAND SIDE COMPUTATION
     //==========================================
     // Compute $dx^\mu/d\tau$ and $du^\mu/d\tau$.
-    calculate_ode_rhs_massive(y, metric_local, conn_local, f); // Evaluate the geodesic equations.
+    calculate_ode_rhs_massive(y, conn_local, f); // Evaluate the geodesic equations.
 
     return GSL_SUCCESS; // Signal successful evaluation to the GSL solver.
     """
