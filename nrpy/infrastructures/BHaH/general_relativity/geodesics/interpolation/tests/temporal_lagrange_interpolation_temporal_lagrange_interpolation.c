@@ -110,20 +110,33 @@ int temporal_lagrange_interpolation(const commondata_struct *restrict commondata
   } else {
     REAL barycentric_sum = 0.0;
     REAL barycentric_inverse_square_sum = 0.0;
+    int nearest_node = 0;
+    REAL nearest_distance = fabs(normalized_t_target - normalized_slice_times[0]);
 
     for (int i = 0; i < interp_order; i++) {
       const REAL target_diff = normalized_t_target - normalized_slice_times[i];
+      if (fabs(target_diff) < nearest_distance) {
+        nearest_node = i;
+        nearest_distance = fabs(target_diff);
+      } // END IF: closer temporal node found
       const REAL weighted_term = barycentric_weights[i] / target_diff;
       coeff_t[i] = weighted_term;
       barycentric_sum += weighted_term;
       barycentric_inverse_square_sum += weighted_term / target_diff;
     } // END LOOP: for i over temporal nodes
 
+    REAL other_derivative_sum = 0.0;
     for (int i = 0; i < interp_order; i++) {
       const REAL target_diff = normalized_t_target - normalized_slice_times[i];
       coeff_t[i] /= barycentric_sum;
-      coeff_dt_normalized[i] = coeff_t[i] * (barycentric_inverse_square_sum / barycentric_sum - 1.0 / target_diff);
+      if (i != nearest_node) {
+        coeff_dt_normalized[i] = coeff_t[i] * (barycentric_inverse_square_sum / barycentric_sum - 1.0 / target_diff);
+        other_derivative_sum += coeff_dt_normalized[i];
+      } // END IF: differentiate nonnearest temporal basis
     } // END LOOP: for i over normalized value
+    // The value basis sums to one, so its derivatives sum to zero.
+    // Avoid subtracting two large reciprocals at the nearest node.
+    coeff_dt_normalized[nearest_node] = -other_derivative_sum;
   } // END ELSE: target time required a full
 
   // Step 2: Interpolate each metric component and differentiate the same

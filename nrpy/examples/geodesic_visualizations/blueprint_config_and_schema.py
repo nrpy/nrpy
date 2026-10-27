@@ -10,7 +10,7 @@ Final blueprint records contain physical stop conditions and terminal failures,
 never the internal active or rejected RKF45 states.
 
 >>> FINAL_TERMINATION_TYPES
-(0, 1, 2, 3, 4, 5, 6, 9, 10, 11)
+(0, 1, 2, 3, 4, 5, 6, 9, 10)
 >>> ACTIVE in FINAL_TERMINATION_TYPES or REJECTED in FINAL_TERMINATION_TYPES
 False
 

@@ -132,89 +132,7 @@ def add_raytracing_cli(parser: argparse.ArgumentParser, example_name: str) -> No
     :param parser: Argument parser owned by the example.
     :param example_name: Supported example module name without ``.py``.
     """
-    _add_raytracing_arguments(parser, defaults=_defaults_for(example_name))
-    if example_name == "blackhole_spectroscopy":
-        parser.add_argument(
-            "--initial-sep",
-            type=float,
-            default=None,
-            help="Set the TwoPunctures separation in units of total mass.",
-        )
-        parser.add_argument(
-            "--initial-p-r",
-            type=float,
-            default=None,
-            help="Set radial puncture momentum; -1 is reserved for NRPyPN.",
-        )
-    else:
-        parser.add_argument(
-            "--raytracing-bhs",
-            nargs=4,
-            type=float,
-            default=None,
-            metavar=("Z_1", "Z_2", "M_1", "M_2"),
-            help="Set Brill-Lindquist puncture positions and masses.",
-        )
-
-
-def check_raytracing_cli(
-    args: argparse.Namespace, example_name: str
-) -> RaytracingOptions:
-    """
-    Validate CLI values and select evolution parameters for one example.
-
-    :param args: Parsed command-line arguments.
-    :param example_name: Supported example module name without ``.py``.
-    :return: Validated coordinate, grid, output, and initial-data values.
-    :raises ValueError: If CLI values conflict or contain invalid physical values.
-    """
-    options = _resolve_raytracing_options(
-        args,
-        defaults=_defaults_for(example_name),
-        parallelization="cuda" if args.cuda else "openmp",
-        fp_type=args.floating_point_precision.lower(),
-    )
-    if example_name == "blackhole_spectroscopy":
-        initial_sep = 0.5 if args.initial_sep is None else args.initial_sep
-        initial_p_r = 0.0 if args.initial_p_r is None else args.initial_p_r
-        if not math.isfinite(initial_sep) or initial_sep <= 0.0:
-            raise ValueError("--initial-sep must be finite and positive.")
-        if not math.isfinite(initial_p_r) or initial_p_r == -1.0:
-            raise ValueError("--initial-p-r must be finite and different from -1.")
-        return replace(
-            options,
-            example_name=example_name,
-            initial_sep=initial_sep,
-            initial_p_r=initial_p_r,
-            bh_positions=(0.5 * initial_sep, -0.5 * initial_sep),
-            formulation="fCCZ4" if args.fccz4 else "BSSN",
-        )
-    black_holes = (
-        (0.5, -0.5, 0.5, 0.5)
-        if args.raytracing_bhs is None
-        else tuple(args.raytracing_bhs)
-    )
-    if not all(math.isfinite(value) for value in black_holes):
-        raise ValueError("--raytracing-bhs values must be finite.")
-    if black_holes[2] <= 0.0 or black_holes[3] <= 0.0:
-        raise ValueError("--raytracing-bhs masses must be positive.")
-    return replace(
-        options,
-        example_name=example_name,
-        bh_positions=(black_holes[0], black_holes[1]),
-        bh_masses=(black_holes[2], black_holes[3]),
-    )
-
-
-def _add_raytracing_arguments(
-    parser: argparse.ArgumentParser, *, defaults: RaytracingDefaults
-) -> None:
-    """
-    Add shared raytracing options to an example's parser.
-
-    :param parser: Argument parser owned by the example.
-    :param defaults: Supported coordinate systems for this example.
-    """
+    defaults = _defaults_for(example_name)
     parser.add_argument(
         "--raytracing-time",
         nargs="*",
@@ -257,25 +175,44 @@ def _add_raytracing_arguments(
         metavar=("NXX0", "NXX1", "NXX2"),
         help="Set three base grid dimensions; cylindrical grids need NXX1=2.",
     )
+    if example_name == "blackhole_spectroscopy":
+        parser.add_argument(
+            "--initial-sep",
+            type=float,
+            default=None,
+            help="Set the TwoPunctures separation in units of total mass.",
+        )
+        parser.add_argument(
+            "--initial-p-r",
+            type=float,
+            default=None,
+            help="Set radial puncture momentum; -1 is reserved for NRPyPN.",
+        )
+    else:
+        parser.add_argument(
+            "--raytracing-bhs",
+            nargs=4,
+            type=float,
+            default=None,
+            metavar=("Z_1", "Z_2", "M_1", "M_2"),
+            help="Set Brill-Lindquist puncture positions and masses.",
+        )
 
 
-def _resolve_raytracing_options(
-    args: argparse.Namespace,
-    *,
-    defaults: RaytracingDefaults,
-    parallelization: str,
-    fp_type: str,
+def check_raytracing_cli(
+    args: argparse.Namespace, example_name: str
 ) -> RaytracingOptions:
     """
-    Resolve and validate raytracing values before C code generation.
+    Validate CLI values and select evolution parameters for one example.
 
-    :param args: Parsed example command-line arguments.
-    :param defaults: Normal and raytracing defaults for the example.
-    :param parallelization: Selected BHaH host or CUDA build.
-    :param fp_type: Selected floating-point type.
-    :return: Values to use for the grid, evolution time, and diagnostics.
-    :raises ValueError: If raytracing options or build settings are incompatible.
+    :param args: Parsed command-line arguments.
+    :param example_name: Supported example module name without ``.py``.
+    :return: Validated coordinate, grid, output, and initial-data values.
+    :raises ValueError: If CLI values conflict or contain invalid physical values.
     """
+    defaults = _defaults_for(example_name)
+    parallelization = "cuda" if args.cuda else "openmp"
+    fp_type = args.floating_point_precision.lower()
     if fp_type not in ("float", "double"):
         raise ValueError("--floating_point_precision must be float or double.")
     if parallelization not in ("openmp", "cuda"):
@@ -295,7 +232,7 @@ def _resolve_raytracing_options(
         for option_name, supplied in dependent_options:
             if supplied:
                 raise ValueError(f"{option_name} requires --raytracing-time.")
-        return RaytracingOptions(
+        options = RaytracingOptions(
             enabled=False,
             data_mode="g4DD",
             static_christoffels=False,
@@ -306,70 +243,104 @@ def _resolve_raytracing_options(
             nxx=None,
             domain=None,
         )
-
-    if parallelization != "openmp" or fp_type != "double":
-        raise ValueError("--raytracing-time requires OpenMP and double precision.")
-    if args.raytracing_static_christoffels and args.raytracing_data_mode not in (
-        "GammaUDD",
-        "all",
-    ):
-        raise ValueError("--raytracing-static-christoffels requires GammaUDD or all.")
-    if args.raytracing_time is None or len(args.raytracing_time) == 0:
-        t_final = defaults.raytracing_t_final
-        output_every = defaults.raytracing_output_every
-    elif len(args.raytracing_time) == 2:
-        t_final, output_every = args.raytracing_time
     else:
-        raise ValueError("--raytracing-time requires zero or two values.")
-    if not all(
-        math.isfinite(value) and value > 0.0 for value in (t_final, output_every)
-    ):
-        raise ValueError("--raytracing-time values must be finite and positive.")
+        if parallelization != "openmp" or fp_type != "double":
+            raise ValueError("--raytracing-time requires OpenMP and double precision.")
+        if args.raytracing_static_christoffels and args.raytracing_data_mode not in (
+            "GammaUDD",
+            "all",
+        ):
+            raise ValueError(
+                "--raytracing-static-christoffels requires GammaUDD or all."
+            )
+        if args.raytracing_time is None or len(args.raytracing_time) == 0:
+            t_final = defaults.raytracing_t_final
+            output_every = defaults.raytracing_output_every
+        elif len(args.raytracing_time) == 2:
+            t_final, output_every = args.raytracing_time
+        else:
+            raise ValueError("--raytracing-time requires zero or two values.")
+        if not all(
+            math.isfinite(value) and value > 0.0 for value in (t_final, output_every)
+        ):
+            raise ValueError("--raytracing-time values must be finite and positive.")
 
-    coord_system = args.raytracing_coord_system or defaults.raytracing_coord_system
-    if coord_system not in defaults.supported_coord_systems:
-        raise ValueError(f"Unsupported raytracing coordinate system: {coord_system}.")
-    if coord_system not in defaults.raytracing_domains:
-        raise ValueError(f"No --raytracing-domain default for {coord_system}.")
-    if coord_system not in defaults.raytracing_nxx:
-        raise ValueError(f"No --raytracing-Nxx default for {coord_system}.")
-    domain = tuple(
-        args.raytracing_domain
-        if args.raytracing_domain is not None
-        else defaults.raytracing_domains[coord_system]
-    )
-    expected_length = {
-        "Spherical": 1,
-        "SinhCylindrical": 3,
-        "SinhCylindricalv2n2": 5,
-    }.get(coord_system)
-    if expected_length is None:
-        raise ValueError(f"No raytracing domain layout for {coord_system}.")
-    if len(domain) != expected_length:
-        raise ValueError(
-            f"--raytracing-domain needs {expected_length} values for {coord_system}."
+        coord_system = args.raytracing_coord_system or defaults.raytracing_coord_system
+        if coord_system not in defaults.supported_coord_systems:
+            raise ValueError(
+                f"Unsupported raytracing coordinate system: {coord_system}."
+            )
+        if coord_system not in defaults.raytracing_domains:
+            raise ValueError(f"No --raytracing-domain default for {coord_system}.")
+        if coord_system not in defaults.raytracing_nxx:
+            raise ValueError(f"No --raytracing-Nxx default for {coord_system}.")
+        domain = tuple(
+            args.raytracing_domain
+            if args.raytracing_domain is not None
+            else defaults.raytracing_domains[coord_system]
         )
-    if not all(math.isfinite(value) and value > 0.0 for value in domain):
-        raise ValueError("--raytracing-domain values must be finite and positive.")
-    nxx = tuple(
-        args.raytracing_nxx
-        if args.raytracing_nxx is not None
-        else defaults.raytracing_nxx[coord_system]
+        expected_length = {
+            "Spherical": 1,
+            "SinhCylindrical": 3,
+            "SinhCylindricalv2n2": 5,
+        }.get(coord_system)
+        if expected_length is None:
+            raise ValueError(f"No raytracing domain layout for {coord_system}.")
+        if len(domain) != expected_length:
+            raise ValueError(
+                f"--raytracing-domain needs {expected_length} values for {coord_system}."
+            )
+        if not all(math.isfinite(value) and value > 0.0 for value in domain):
+            raise ValueError("--raytracing-domain values must be finite and positive.")
+        nxx = tuple(
+            args.raytracing_nxx
+            if args.raytracing_nxx is not None
+            else defaults.raytracing_nxx[coord_system]
+        )
+        if len(nxx) != 3 or any(value <= 0 for value in nxx):
+            raise ValueError("--raytracing-Nxx needs three positive values.")
+        if "Cylindrical" in coord_system and nxx[1] != 2:
+            raise ValueError("--raytracing-Nxx needs NXX1=2 for cylindrical grids.")
+        options = RaytracingOptions(
+            enabled=True,
+            data_mode=args.raytracing_data_mode,
+            static_christoffels=args.raytracing_static_christoffels,
+            coord_system=coord_system,
+            t_final=t_final,
+            output_every=output_every,
+            grid_physical_size=domain[0],
+            nxx=nxx,
+            domain=domain,
+        )
+    if example_name == "blackhole_spectroscopy":
+        initial_sep = 0.5 if args.initial_sep is None else args.initial_sep
+        initial_p_r = 0.0 if args.initial_p_r is None else args.initial_p_r
+        if not math.isfinite(initial_sep) or initial_sep <= 0.0:
+            raise ValueError("--initial-sep must be finite and positive.")
+        if not math.isfinite(initial_p_r) or initial_p_r == -1.0:
+            raise ValueError("--initial-p-r must be finite and different from -1.")
+        return replace(
+            options,
+            example_name=example_name,
+            initial_sep=initial_sep,
+            initial_p_r=initial_p_r,
+            bh_positions=(0.5 * initial_sep, -0.5 * initial_sep),
+            formulation="fCCZ4" if args.fccz4 else "BSSN",
+        )
+    black_holes = (
+        (0.5, -0.5, 0.5, 0.5)
+        if args.raytracing_bhs is None
+        else tuple(args.raytracing_bhs)
     )
-    if len(nxx) != 3 or any(value <= 0 for value in nxx):
-        raise ValueError("--raytracing-Nxx needs three positive values.")
-    if "Cylindrical" in coord_system and nxx[1] != 2:
-        raise ValueError("--raytracing-Nxx needs NXX1=2 for cylindrical grids.")
-    return RaytracingOptions(
-        enabled=True,
-        data_mode=args.raytracing_data_mode,
-        static_christoffels=args.raytracing_static_christoffels,
-        coord_system=coord_system,
-        t_final=t_final,
-        output_every=output_every,
-        grid_physical_size=domain[0],
-        nxx=nxx,
-        domain=domain,
+    if not all(math.isfinite(value) for value in black_holes):
+        raise ValueError("--raytracing-bhs values must be finite.")
+    if black_holes[2] <= 0.0 or black_holes[3] <= 0.0:
+        raise ValueError("--raytracing-bhs masses must be positive.")
+    return replace(
+        options,
+        example_name=example_name,
+        bh_positions=(black_holes[0], black_holes[1]),
+        bh_masses=(black_holes[2], black_holes[3]),
     )
 
 
@@ -393,32 +364,83 @@ def _name_token(value: NameValue) -> str:
     return token
 
 
-def _write_raytracing_run_files(
-    *,
-    project_dir: Union[str, Path],
-    project_name: str,
-    generator_script: str,
-    executable_name: str,
-    options: RaytracingOptions,
-    initial_data: Mapping[str, object],
-    name_values: Sequence[Tuple[str, NameValue]],
-) -> Optional[RunFiles]:
+def adjust_raytracing_code_parameters(options: RaytracingOptions) -> None:
     """
-    Write raytracing metadata and a build, run, and combine shell script.
+    Set reference-metric CodeParameters used by raytracing output.
 
-    :param project_dir: Generated BHaH project directory.
-    :param project_name: Name recorded in the combined-file metadata.
-    :param generator_script: Python example filename recorded in metadata.
-    :param executable_name: Generated C executable launched by the shell script.
-    :param options: Validated raytracing coordinate and output values.
-    :param initial_data: Example-specific initial-data values for JSON metadata.
-    :param name_values: Ordered initial-data values for combined-file names.
-    :return: Written file paths, or None when raytracing is disabled.
-    :raises ValueError: If a filename component or enabled option is invalid.
-    :raises FileNotFoundError: If the generated project directory is missing.
+    :param options: Validated raytracing coordinate and domain values.
     """
     if not options.enabled:
-        return None
+        return
+    assert options.domain is not None
+    if options.coord_system == "Spherical":
+        return
+    par.adjust_CodeParam_default("SINHWRHO", options.domain[1])
+    par.adjust_CodeParam_default("SINHWZ", options.domain[2])
+    if options.coord_system == "SinhCylindricalv2n2":
+        par.adjust_CodeParam_default("rho_slope", options.domain[3])
+        par.adjust_CodeParam_default("z_slope", options.domain[4])
+
+
+def shell_generator(options: RaytracingOptions, project_dir: Union[str, Path]) -> str:
+    """
+    Write the build, evolution, and slice-combination commands.
+
+    :param options: Validated values selected by ``check_raytracing_cli``.
+    :param project_dir: Generated BHaH project directory.
+    :return: Command to run from the generated project directory.
+    :raises ValueError: If raytracing options or a filename component is invalid.
+    :raises FileNotFoundError: If the generated project directory is missing.
+    """
+    example_name = options.example_name
+    _defaults_for(example_name)
+    normal_command = (
+        f"Finished! Now go into project/{example_name} and type `make` to build, "
+        f"then ./{example_name} to run."
+    )
+    if not options.enabled:
+        return normal_command
+    name_values: Sequence[Tuple[str, NameValue]]
+    if example_name == "blackhole_spectroscopy":
+        initial_data = {
+            "type": "TwoPunctures",
+            "orientation": "legacy_swap_xz",
+            "evolution_formulation": options.formulation,
+            "initial_sep": options.initial_sep,
+            "initial_p_r": options.initial_p_r,
+            "initial_p_t": 0.0,
+            "mass_ratio": 1.0,
+            "target_adm_mass_M": 0.5,
+            "target_adm_mass_m": 0.5,
+            "TP_npoints_A": 48,
+            "TP_npoints_B": 48,
+            "TP_npoints_phi": 4,
+            "bbhxy_BH_m_chix": 0.0,
+            "bbhxy_BH_M_chix": 0.0,
+        }
+        name_values = (
+            ("formulation", options.formulation),
+            ("TP_sep", options.initial_sep),
+            ("pr", options.initial_p_r),
+            ("q", 1.0),
+        )
+    else:
+        initial_data = {
+            "type": "BrillLindquist",
+            "BH1_mass": options.bh_masses[0],
+            "BH1_posn_z": options.bh_positions[0],
+            "BH2_mass": options.bh_masses[1],
+            "BH2_posn_z": options.bh_positions[1],
+        }
+        name_values = (
+            ("z1", options.bh_positions[0]),
+            ("z2", options.bh_positions[1]),
+            ("M1", options.bh_masses[0]),
+            ("M2", options.bh_masses[1]),
+        )
+    project_name = example_name
+    generator_script = f"{example_name}.py"
+    executable_name = example_name
     if options.domain is None or options.nxx is None:
         raise ValueError("Enabled raytracing output needs a domain and Nxx.")
     if options.data_mode not in (*RAYTRACING_MODES, "all"):
@@ -515,91 +537,7 @@ def _write_raytracing_run_files(
     shell_path = project_path / "run_raytracing_data_pipeline.sh"
     shell_path.write_text("\n".join(shell_lines) + "\n", encoding="utf-8")
     shell_path.chmod(0o755)
-    return RunFiles(combiner_path, metadata_path, shell_path, combined_paths)
-
-
-def adjust_raytracing_code_parameters(options: RaytracingOptions) -> None:
-    """
-    Set reference-metric CodeParameters used by raytracing output.
-
-    :param options: Validated raytracing coordinate and domain values.
-    """
-    if not options.enabled:
-        return
-    assert options.domain is not None
-    if options.coord_system == "Spherical":
-        return
-    par.adjust_CodeParam_default("SINHWRHO", options.domain[1])
-    par.adjust_CodeParam_default("SINHWZ", options.domain[2])
-    if options.coord_system == "SinhCylindricalv2n2":
-        par.adjust_CodeParam_default("rho_slope", options.domain[3])
-        par.adjust_CodeParam_default("z_slope", options.domain[4])
-
-
-def shell_generator(options: RaytracingOptions, project_dir: Union[str, Path]) -> str:
-    """
-    Write the build, evolution, and slice-combination commands.
-
-    :param options: Validated values selected by ``check_raytracing_cli``.
-    :param project_dir: Generated BHaH project directory.
-    :return: Command to run from the generated project directory.
-    """
-    example_name = options.example_name
-    _defaults_for(example_name)
-    normal_command = (
-        f"Finished! Now go into project/{example_name} and type `make` to build, "
-        f"then ./{example_name} to run."
-    )
-    if not options.enabled:
-        return normal_command
-    name_values: Sequence[Tuple[str, NameValue]]
-    if example_name == "blackhole_spectroscopy":
-        initial_data = {
-            "type": "TwoPunctures",
-            "orientation": "legacy_swap_xz",
-            "evolution_formulation": options.formulation,
-            "initial_sep": options.initial_sep,
-            "initial_p_r": options.initial_p_r,
-            "initial_p_t": 0.0,
-            "mass_ratio": 1.0,
-            "target_adm_mass_M": 0.5,
-            "target_adm_mass_m": 0.5,
-            "TP_npoints_A": 48,
-            "TP_npoints_B": 48,
-            "TP_npoints_phi": 4,
-            "bbhxy_BH_m_chix": 0.0,
-            "bbhxy_BH_M_chix": 0.0,
-        }
-        name_values = (
-            ("formulation", options.formulation),
-            ("TP_sep", options.initial_sep),
-            ("pr", options.initial_p_r),
-            ("q", 1.0),
-        )
-    else:
-        initial_data = {
-            "type": "BrillLindquist",
-            "BH1_mass": options.bh_masses[0],
-            "BH1_posn_z": options.bh_positions[0],
-            "BH2_mass": options.bh_masses[1],
-            "BH2_posn_z": options.bh_positions[1],
-        }
-        name_values = (
-            ("z1", options.bh_positions[0]),
-            ("z2", options.bh_positions[1]),
-            ("M1", options.bh_masses[0]),
-            ("M2", options.bh_masses[1]),
-        )
-    run_files = _write_raytracing_run_files(
-        project_dir=project_dir,
-        project_name=example_name,
-        generator_script=f"{example_name}.py",
-        executable_name=example_name,
-        options=options,
-        initial_data=initial_data,
-        name_values=name_values,
-    )
-    assert run_files is not None
+    run_files = RunFiles(combiner_path, metadata_path, shell_path, combined_paths)
     output_lines = [
         f"Finished! Go to {run_files.shell_path.parent} and run ./run_raytracing_data_pipeline.sh."
     ]

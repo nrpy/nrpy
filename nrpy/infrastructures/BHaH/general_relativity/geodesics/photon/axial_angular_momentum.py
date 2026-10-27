@@ -229,8 +229,8 @@ def axial_angular_momentum(normalized_eom: bool = False) -> None:
                 filename);
             fclose(angular_momentum_file);
             return 1;
-        }
-    }
+        } // END IF: photon record write failed
+    } // END LOOP: write photon angular momentum
 
     if (fclose(angular_momentum_file) != 0) {
         fprintf(
@@ -238,7 +238,7 @@ def axial_angular_momentum(normalized_eom: bool = False) -> None:
             "ERROR: Could not close axial-angular-momentum file '%s'.\n",
             filename);
         return 1;
-    }
+    } // END IF: angular momentum close failed
     return 0;
     """
     cfc.register_CFunction(

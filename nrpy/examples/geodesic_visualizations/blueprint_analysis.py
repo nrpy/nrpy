@@ -94,30 +94,6 @@ def _calculate_subsample_rate(total_expected_records: int, max_viz_points: int) 
     return max(1, (total_expected_records + max_viz_points - 1) // max_viz_points)
 
 
-def _has_nonterminal_diagnostic(data: npt.NDArray[np.void]) -> npt.NDArray[np.bool_]:
-    """
-    Identify records containing a nonterminal-plane crossing.
-
-    The current blueprint record has no separate nonterminal event flag. Its
-    ``non_terminal_plane_lambda`` field is initialized to zero and is written
-    only after a successful nonterminal crossing, so a nonzero finite value is
-    the serialized crossing marker.  This is independent of
-    ``termination_type``: a nonterminal crossing does not terminate a ray.
-
-    :param data: Structured blueprint records.
-    :return: Boolean mask for records with usable nonterminal diagnostics.
-    """
-    return cast(
-        npt.NDArray[np.bool_],
-        (
-            np.isfinite(data["non_terminal_plane_lambda"])
-            & (data["non_terminal_plane_lambda"] != 0.0)
-            & np.isfinite(data["y_nt"])
-            & np.isfinite(data["z_nt"])
-        ),
-    )
-
-
 def plot_heatmaps(
     data: npt.NDArray[np.void],
     nonterminal_crossing_mask: Optional[npt.NDArray[np.bool_]] = None,
@@ -141,8 +117,18 @@ def plot_heatmaps(
     import matplotlib.pyplot as plt
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    # A nonzero finite lambda marks a recorded nonterminal crossing. Its
+    # presence does not depend on the ray's final termination status.
     nonterminal_mask = (
-        _has_nonterminal_diagnostic(data)
+        cast(
+            npt.NDArray[np.bool_],
+            (
+                np.isfinite(data["non_terminal_plane_lambda"])
+                & (data["non_terminal_plane_lambda"] != 0.0)
+                & np.isfinite(data["y_nt"])
+                & np.isfinite(data["z_nt"])
+            ),
+        )
         if nonterminal_crossing_mask is None
         else nonterminal_crossing_mask
     )

@@ -1,6 +1,9 @@
-"""Register saved crossing steps and fixed-anchor RKF45 Brent refinement."""
+"""
+Register saved crossing steps and fixed-anchor RKF45 Brent refinement.
 
-import re
+Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
+"""
 
 import nrpy.c_function as cfc
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
@@ -192,15 +195,37 @@ def plane_crossing_brent_refine_candidate(
                 f"connections_{spacetime_name}",
             ):
                 generated = generated.replace("BHAH_HD_INLINE", "static inline")
-        generated = re.sub(
-            r"^\s*#pragma omp parallel for\s*$", "", generated, flags=re.M
+        generated = "".join(
+            (
+                line[len(line.rstrip("\r\n")) :]
+                if line.strip() == "#pragma omp parallel for"
+                else line
+            )
+            for line in generated.splitlines(keepends=True)
         )
         if function_name == "numerical_interpolation":
-            generated = re.sub(
-                r"\bnumerical_interpolation\b",
-                "plane_crossing_numerical_interpolation",
-                generated,
-            )
+            identifier = "numerical_interpolation"
+            renamed = []
+            start = 0
+            position = generated.find(identifier, start)
+            while position != -1:
+                before = generated[position - 1 : position]
+                after = generated[
+                    position + len(identifier) : position + len(identifier) + 1
+                ]
+                renamed.append(generated[start:position])
+                renamed.append(
+                    identifier
+                    if before.isalnum()
+                    or before == "_"
+                    or after.isalnum()
+                    or after == "_"
+                    else "plane_crossing_numerical_interpolation"
+                )
+                start = position + len(identifier)
+                position = generated.find(identifier, start)
+            renamed.append(generated[start:])
+            generated = "".join(renamed)
         elif function_name in ("calculate_ode_rhs_kernel", "rkf45_stage_update"):
             generated = generated.replace(
                 function_name, f"plane_crossing_{function_name}"
@@ -256,15 +281,6 @@ static double plane_crossing_signed_distance(
            normal[2] * (state[3] - center[2]);
 }}
 
-static double plane_crossing_inverse_quadratic_trial(
-    const double x0, const double f0,
-    const double x1, const double f1,
-    const double x2, const double f2) {{
-    return x0 * f1 * f2 / ((f0 - f1) * (f0 - f2)) +
-           x1 * f0 * f2 / ((f1 - f0) * (f1 - f2)) +
-           x2 * f0 * f1 / ((f2 - f0) * (f2 - f1));
-}}
-
 static bool plane_crossing_rk5_trial(
     const commondata_struct *commondata,
     {trial_geometry_params}
@@ -306,7 +322,7 @@ static bool plane_crossing_rk5_trial(
                 candidate->state_before, k, h, stage,
                 (int)chunk_size, stage_state, stream_idx);
         }}
-    }}
+    }} // END LOOP: evaluate RKF45 stages
     for (int component = 0; component < 9; ++component) {{
         const double update =
             (16.0 / 135.0) * k[component] +
@@ -317,9 +333,9 @@ static bool plane_crossing_rk5_trial(
         trial_state[component] = candidate->state_before[component] +
                                  h_value * update;
         if (!isfinite(trial_state[component])) return false;
-    }}
+    }} // END LOOP: update trial photon state
     return true;
-}}
+}} // END FUNCTION: plane_crossing_rk5_trial
 """
     body = r"""
     enum { MAX_BRENT_ITERATIONS = 75 };
@@ -434,9 +450,13 @@ static bool plane_crossing_rk5_trial(
         double trial_parameter = low + 0.5 * width;
         if (have_previous && f_low != f_high &&
             f_low != previous_distance && f_high != previous_distance) {
-            trial_parameter = plane_crossing_inverse_quadratic_trial(
-                low, f_low, high, f_high,
-                previous_parameter, previous_distance);
+            trial_parameter =
+                low * f_high * previous_distance /
+                    ((f_low - f_high) * (f_low - previous_distance)) +
+                high * f_low * previous_distance /
+                    ((f_high - f_low) * (f_high - previous_distance)) +
+                previous_parameter * f_low * f_high /
+                    ((previous_distance - f_low) * (previous_distance - f_high));
         } else if (f_low != f_high) {
             trial_parameter = high - f_high * width / (f_high - f_low);
         }

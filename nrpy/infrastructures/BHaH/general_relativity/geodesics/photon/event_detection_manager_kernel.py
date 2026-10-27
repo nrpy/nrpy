@@ -1,5 +1,10 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py
-"""Record accepted photon steps that cross either configured plane."""
+"""
+Record accepted photon steps that cross either configured plane.
+
+Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
+"""
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallelization.utilities as parallel_utils

@@ -2280,7 +2280,7 @@ static void write_plane_crossings(
                     non_terminal->coordinate_time;
                 results_buffer[ray].non_terminal_plane_signed_distance =
                     non_terminal->plane_distance;
-            }}
+            }} // END IF: nonterminal crossing found
             if (terminal->found) {{
                 terminal->trajectory_stop_reason = all_photons_host.status[ray];
                 all_photons_host.status[ray] = STOP_CONDITION_TERMINAL_PLANE;
@@ -2288,8 +2288,8 @@ static void write_plane_crossings(
                 results_buffer[ray].z_t = terminal->z_local;
                 results_buffer[ray].L_f = terminal->physical_lambda;
                 results_buffer[ray].t_f = terminal->coordinate_time;
-            }}
-        }} // END LOOP: copy refined plane positions and terminal time
+            }} // END IF: terminal crossing found
+        }} // END LOOP: copy refined plane crossings
 
 {terminal_diagnostics_block}
 
