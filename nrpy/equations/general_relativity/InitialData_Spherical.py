@@ -526,7 +526,7 @@ class InitialData_Spherical:
             gammaDD[0][0] = 1 + A_use * s**2 * P
             gammaDD[0][1] = gammaDD[1][0] = 2 * r * B_use * s * c * P
             gammaDD[0][2] = gammaDD[2][0] = -2 * r * B_use * s**2 * Q
-            gammaDD[1][1] = r**2 * (1 - A_use * s**2 * P / 2 - C_use * (1 + c**2) * P)
+            gammaDD[1][1] = r**2 * (1 - A_use * s**2 * P / 2 + C_use * (1 + c**2) * P)
             gammaDD[1][2] = gammaDD[2][1] = -2 * r**2 * C_use * s * c * Q
             gammaDD[2][2] = r**2 * s**2 * (1 - A_use * s**2 * P / 2 - C_use * (1 + c**2) * P)
 
