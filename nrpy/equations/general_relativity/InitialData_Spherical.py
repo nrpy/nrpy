@@ -343,8 +343,8 @@ class InitialData_Spherical:
         :raises ValueError: If the requested branch is unsupported.
         """
         # Validate the requested Teukolsky mode
-        if mode not in (20, 22):
-            raise ValueError("TeukolskyWave mode must be 20 or 22")
+        if mode not in (20, 21, 22):
+            raise ValueError("TeukolskyWave mode must be 20, 21 or 22")
         # Define math symbols
         self.r, self.th, self.ph = sp.symbols("r th ph", real=True)
         r, th = self.r, self.th
@@ -405,6 +405,10 @@ class InitialData_Spherical:
                 + (3 * F0 / r**5)
             )
         )
+
+        # Calculate out-going odd-parity components for mode 21
+        K_rad_OUT = -4 * Amp * (F2 / r**2 + 3 * F1 / r**3 + 3 * F0 / r**4)
+        L_rad_OUT = 2 * Amp * (F3 / r + 2 * F2 / r**2 + 3 * F1 / r**3 + 3 * F0 / r**4)
 
         # Calculate ingoing radial components
         A_IN = 24 * Amp * ((-p2 / r**3) + (3 * p1 / r**4) - (3 * p0 / r**5))
