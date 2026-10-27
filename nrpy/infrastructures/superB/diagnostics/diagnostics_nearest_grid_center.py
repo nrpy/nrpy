@@ -45,7 +45,11 @@ def get_center_index_exprs_for_coordsystem(CoordSystem: str) -> Tuple[str, str, 
         or ("SymTP" in CoordSystem)
     )
     is_cartesian = ("Cartesian" in CoordSystem) or CoordSystem.startswith(
-        ("GeneralRFM_fisheye", "GeneralRFM_spheroidal_fisheye")
+        (
+            "GeneralRFM_fisheye",
+            "GeneralRFM_spheroidal_fisheye",
+            "GeneralRFM_inverse_spheroidal_fisheyeN",
+        )
     )
 
     # Choose expressions for the nearest-to-center grid indices based on CoordSystem.

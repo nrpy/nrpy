@@ -70,6 +70,67 @@ boundary points ("inner maps to outer").
     )
 
 
+def _inverse_fisheye_local_boundaries() -> str:
+    """
+    Build only owned outer faces for the injective inverse fisheye map.
+
+    :return: C code constructing the chare-local outer boundary arrays.
+    """
+    return r"""
+  // This Cartesian-topology map has no inner coordinate boundaries.
+  // Intersect each global face with this chare's ownership box; never build
+  // or scan the global boundary list. Preserve ghost-layer and face ordering.
+  *bcstruct_chare = (bc_struct){0};
+  *nonlocalinnerbcstruct = (nonlocalinnerbc_struct){0};
+  const int nc[3] = {commondata->Nchare0, commondata->Nchare1, commondata->Nchare2};
+  const int n[3] = {params_chare->Nxx0, params_chare->Nxx1, params_chare->Nxx2};
+  const int nt[3] = {params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, params->Nxx_plus_2NGHOSTS2};
+  const int num_chares = nc[0]*nc[1]*nc[2];
+  // PUP serializes these lookup arrays even when there are no inner boundaries.
+  nonlocalinnerbcstruct->idx3chare_to_src_chare_id = (int *)malloc(sizeof(int)*num_chares);
+  nonlocalinnerbcstruct->idx3chare_to_dst_chare_id = (int *)malloc(sizeof(int)*num_chares);
+  for (int c=0; c<num_chares; c++) {
+    nonlocalinnerbcstruct->idx3chare_to_src_chare_id[c] = -1;
+    nonlocalinnerbcstruct->idx3chare_to_dst_chare_id[c] = -1;
+  }
+  for (int gz=0; gz<NGHOSTS; gz++) for (int dir=0; dir<3; dir++) {
+    int bounds[2][3][2], count=0;
+    for (int side=0; side<2; side++) {
+      int size=1;
+      for (int d=0; d<3; d++) {
+        int lo=NGHOSTS-gz-(d<dir), hi=nt[d]-NGHOSTS+gz+(d<dir);
+        if (d==dir) {
+          lo = side ? nt[d]-NGHOSTS+gz : NGHOSTS-1-gz;
+          hi = lo+1;
+        }
+        const int offset=chare_index[d]*n[d];
+        const int owned_lo = chare_index[d]==0 ? 0 : offset+NGHOSTS;
+        const int owned_hi = chare_index[d]==nc[d]-1 ? nt[d] : offset+n[d]+NGHOSTS;
+        lo=NRPYMAX(lo,owned_lo); hi=NRPYMIN(hi,owned_hi);
+        bounds[side][d][0]=lo-offset;
+        bounds[side][d][1]=hi-offset;
+        size *= NRPYMAX(0,hi-lo);
+      }
+      count += size;
+    }
+    bcstruct_chare->bc_info.num_pure_outer_boundary_points[gz][dir]=count;
+    outerpt_bc_struct *points = count ? (outerpt_bc_struct *)malloc(sizeof(outerpt_bc_struct)*count) : NULL;
+    bcstruct_chare->pure_outer_bc_array[3*gz+dir]=points;
+    int pt=0;
+    for (int side=0; side<2; side++)
+      for (int i2=bounds[side][2][0]; i2<bounds[side][2][1]; i2++)
+        for (int i1=bounds[side][1][0]; i1<bounds[side][1][1]; i1++)
+          for (int i0=bounds[side][0][0]; i0<bounds[side][0][1]; i0++) {
+            points[pt].i0=i0; points[pt].i1=i1; points[pt].i2=i2;
+            points[pt].FACEX0=(dir==0)*(1-2*side);
+            points[pt].FACEX1=(dir==1)*(1-2*side);
+            points[pt].FACEX2=(dir==2)*(1-2*side);
+            pt++;
+          }
+  }
+"""
+
+
 def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
     """
     Register C function for setting up bc_struct for the local chare grid.
@@ -323,6 +384,8 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
     }
   }
 """
+    if CoordSystem.startswith("GeneralRFM_inverse_spheroidal_fisheyeN"):
+        body = _inverse_fisheye_local_boundaries()
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -340,6 +403,7 @@ def CurviBoundaryConditions_register_C_functions(
     radiation_BC_fd_order: int = 2,
     set_parity_on_aux: bool = False,
     enable_RK3_accumulation: bool = False,
+    enable_xx_to_Cart_precompute: bool = False,
 ) -> None:
     """
     Register various C functions responsible for handling boundary conditions.
@@ -348,6 +412,8 @@ def CurviBoundaryConditions_register_C_functions(
     :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
     :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
     :param enable_RK3_accumulation: Register radiation BCs for the fused second RK3 stage.
+    :param enable_xx_to_Cart_precompute: Use inverse spheroidal Cartesian
+        positions cached in AUXEVOL for radiation boundary conditions.
     """
     for CoordSystem in set_of_CoordSystems:
         # Register C function to set up the boundary condition struct.
@@ -359,6 +425,7 @@ def CurviBoundaryConditions_register_C_functions(
         BHaH.CurviBoundaryConditions.apply_bcs_outerradiation_and_inner.register_CFunction_apply_bcs_outerradiation_and_inner(
             CoordSystem=CoordSystem,
             radiation_BC_fd_order=radiation_BC_fd_order,
+            enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
         )
         if enable_RK3_accumulation:
             BHaH.CurviBoundaryConditions.apply_bcs_outerradiation_and_inner.register_CFunction_apply_bcs_outerradiation_and_inner_accumulate(

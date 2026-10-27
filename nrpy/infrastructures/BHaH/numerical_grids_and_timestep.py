@@ -18,6 +18,7 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
+import nrpy.infrastructures.BHaH.inverse_spheroidal_fisheye as inverse_fisheye
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.helpers.expression_utils import (
@@ -120,6 +121,14 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
     for key, value in rfm.grid_physical_size_dict.items():
         body += f"params->{key} = {value};\n"
     body += "}\n"
+
+    if getattr(rfm, "general_rfm_provider_name", "") == "inverse_spheroidal_fisheye":
+        n = rfm.general_rfm_provider_meta["num_transitions"]
+        inverse_fisheye.register_CFunctions(n)
+        for key in ("a", "R", "Rz", "w"):
+            for j in range(1, n + 1):
+                body += f"params->inverse_fisheye_{key}{j} = commondata->inverse_fisheye_phys_{key}{j};\n"
+        body += f"inverse_fisheye_normalize__N{n}(params);\n"
 
     # Set grid_hole_radius
     if "Holey" in CoordSystem or "Wedge" in CoordSystem:
@@ -255,6 +264,21 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
     name = "ds_min_radial_like_dirns_single_pt"
     params = "const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min_radial_like_dirns"
     rfm = refmetric.reference_metric[CoordSystem]
+    if getattr(rfm, "general_rfm_provider_name", "") == "inverse_spheroidal_fisheye":
+        body = inverse_fisheye.spacing_body(
+            rfm.general_rfm_provider_meta["num_transitions"], "ds_min_radial_like_dirns"
+        )
+        cfc.register_CFunction(
+            includes=includes,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            CoordSystem_for_wrapper_func=CoordSystem,
+            name=name,
+            params=params,
+            include_CodeParameters_h=False,
+            body=body,
+        )
+        return
     body = "MAYBE_UNUSED REAL ds0=1e38, ds1=1e38, ds2=1e38;\n"
     ds_exprs = ds_min_single_pt_exprs(CoordSystem)
     if ds_exprs is None:
@@ -377,6 +401,22 @@ def register_CFunction_ds_min_single_pt(
     cfunc_type = "void"
     name = "ds_min_single_pt"
     params = "const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min"
+    rfm = refmetric.reference_metric[CoordSystem]
+    if getattr(rfm, "general_rfm_provider_name", "") == "inverse_spheroidal_fisheye":
+        body = inverse_fisheye.spacing_body(
+            rfm.general_rfm_provider_meta["num_transitions"], "ds_min"
+        )
+        cfc.register_CFunction(
+            includes=includes,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            CoordSystem_for_wrapper_func=CoordSystem,
+            name=name,
+            params=params,
+            include_CodeParameters_h=False,
+            body=body,
+        )
+        return
     expr_list = ds_min_single_pt_exprs(CoordSystem)
     if expr_list is None:
         body = (
@@ -766,6 +806,7 @@ def register_CFunctions(
     enable_CurviBCs: bool = False,
     enable_set_cfl_timestep: bool = True,
     enable_masks: bool = False,
+    use_inverse_fisheye_cfl_bound: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions related to coordinate systems and grid parameters.
@@ -778,6 +819,8 @@ def register_CFunctions(
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
     :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented later.
     :param enable_masks: If True, make bcstruct algorithm mask-aware.
+    :param use_inverse_fisheye_cfl_bound: Use a conservative analytic spacing bound
+        instead of scanning the grid; requires inverse spheroidal fisheye coordinates.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -807,7 +850,10 @@ def register_CFunctions(
             Nxx_dict=Nxx_dict,
         )
     if enable_set_cfl_timestep:
-        register_CFunction_cfl_limited_timestep()
+        if use_inverse_fisheye_cfl_bound:
+            inverse_fisheye.register_CFunction_cfl_limited_timestep(set_of_CoordSystems)
+        else:
+            register_CFunction_cfl_limited_timestep()
     register_CFunction_numerical_grids_and_timestep(
         set_of_CoordSystems=set_of_CoordSystems,
         list_of_grid_physical_sizes=list_of_grid_physical_sizes,

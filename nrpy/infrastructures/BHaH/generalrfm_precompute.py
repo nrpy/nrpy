@@ -2,8 +2,7 @@
 """
 Generate C functions that precompute GeneralRFM quantities into AUXEVOL gridfunctions.
 
-Supports GeneralRFM_fisheyeN* and GeneralRFM_spheroidal_fisheyeN* via
-nrpy/equations/generalrfm/fisheye.py.
+Supports forward fisheye and inverse spheroidal fisheye GeneralRFM providers.
 
 Design:
   * For GeneralRFM, ghat and derivatives are treated as fixed AUXEVOL gridfunctions.
@@ -31,6 +30,7 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
+import nrpy.infrastructures.BHaH.inverse_spheroidal_fisheye as inverse_fisheye
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.infrastructures.BHaH import generalrfm_cart_to_xx
@@ -62,12 +62,15 @@ def _unique_assignments(
 
 def register_CFunction_generalrfm_precompute(
     CoordSystem: str,
+    enable_xx_to_Cart_precompute: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register a C function that precomputes GeneralRFM quantities into AUXEVOL gridfunctions.
 
     :param CoordSystem: Coordinate system name. Must be a supported GeneralRFM
         system.
+    :param enable_xx_to_Cart_precompute: Cache Cartesian positions in AUXEVOL;
+        supported only for inverse spheroidal fisheye.
     :return: `None` during the parallel-codegen registration phase; otherwise
         the current NRPy environment.
     :raises ValueError: If CUDA parallelization is requested, if CoordSystem is
@@ -88,6 +91,15 @@ def register_CFunction_generalrfm_precompute(
     if not CoordSystem.startswith("GeneralRFM"):
         raise ValueError(f"{CoordSystem} is not a GeneralRFM coordinate system.")
     provider_name = getattr(rfm, "general_rfm_provider_name", "")
+    if provider_name == "inverse_spheroidal_fisheye":
+        inverse_fisheye.register_precompute(
+            CoordSystem,
+            rfm.general_rfm_provider_meta["num_transitions"],
+            enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
+        )
+        return pcg.NRPyEnv()
+    if enable_xx_to_Cart_precompute:
+        raise ValueError("Cartesian precompute requires inverse spheroidal fisheye.")
     if provider_name not in {"fisheye", "spheroidal_fisheye"}:
         raise ValueError(
             f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in generalrfm_precompute."
@@ -196,12 +208,15 @@ for (int i2 = 0; i2 < params->Nxx_plus_2NGHOSTS2; i2++) {{
 
 def register_CFunctions_generalrfm_support(
     CoordSystem: str,
+    enable_xx_to_Cart_precompute: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register all GeneralRFM support C functions (precompute and Cart_to_xx).
 
     :param CoordSystem: Coordinate system name for which GeneralRFM support
         functions should be registered.
+    :param enable_xx_to_Cart_precompute: Cache inverse spheroidal Cartesian
+        positions in AUXEVOL for radiation boundary conditions.
     :return: `None` during the parallel-codegen registration phase; otherwise
         the current NRPy environment.
     """
@@ -210,7 +225,9 @@ def register_CFunctions_generalrfm_support(
         return None
 
     # Precompute.
-    register_CFunction_generalrfm_precompute(CoordSystem)
+    register_CFunction_generalrfm_precompute(
+        CoordSystem, enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute
+    )
 
     # Cart_to_xx numeric inverse.
     generalrfm_cart_to_xx.register_CFunction_generalrfm_Cart_to_xx(CoordSystem)

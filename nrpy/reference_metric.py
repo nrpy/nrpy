@@ -18,6 +18,11 @@ import sympy as sp
 import nrpy.grid as gri
 import nrpy.indexedexp as ixp
 import nrpy.params as par
+from nrpy.equations.generalrfm.fisheye import GeneralRFMFisheye
+from nrpy.equations.generalrfm.inverse_spheroidal_fisheye import (
+    GeneralRFMInverseSpheroidalFisheye,
+    InverseFisheyeComponent,
+)
 from nrpy.helpers.cached_functions import cached_simplify
 from nrpy.helpers.generic import superfast_uniq
 
@@ -192,6 +197,27 @@ class ReferenceMetric:
         def compute_Jacobian_and_inverseJacobian_tofrom_Cartesian(
             self: ReferenceMetric,
         ) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]]]:
+            if (
+                getattr(self, "general_rfm_provider_name", "")
+                == "inverse_spheroidal_fisheye"
+            ):
+                n = self.general_rfm_provider_meta["num_transitions"]
+                return (
+                    [
+                        [
+                            InverseFisheyeComponent(n, 1, i, j, *self.xx)
+                            for j in range(3)
+                        ]
+                        for i in range(3)
+                    ],
+                    [
+                        [
+                            InverseFisheyeComponent(n, 2, i, j, *self.xx)
+                            for j in range(3)
+                        ]
+                        for i in range(3)
+                    ],
+                )
             # Step 2.a: First construct Jacobian matrix:
 
             provider_jac = None
@@ -230,6 +256,49 @@ class ReferenceMetric:
         def compute_Jacobian_and_inverseJacobian_tofrom_Spherical(
             self: ReferenceMetric,
         ) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]]]:
+            if (
+                getattr(self, "general_rfm_provider_name", "")
+                == "inverse_spheroidal_fisheye"
+            ):
+                x, y, z = sp.symbols("sph_x sph_y sph_z", real=True)
+                physical = [x, y, z]
+                spherical = [
+                    sp.sqrt(x * x + y * y + z * z),
+                    sp.acos(z / sp.sqrt(x * x + y * y + z * z)),
+                    sp.atan2(y, x),
+                ]
+                sub = dict(zip(physical, self.xx_to_Cart))
+                J = [
+                    [
+                        sum(
+                            sp.diff(spherical[i], physical[a]).xreplace(sub)
+                            * self.Jac_dUCart_dDrfmUD[a][j]
+                            for a in range(3)
+                        )
+                        for j in range(3)
+                    ]
+                    for i in range(3)
+                ]
+                # Compose the analytic spherical-to-Cartesian Jacobian with dq/dx.
+                r, theta, phi = sp.symbols("sph_r sph_theta sph_phi", real=True)
+                cartesian = [
+                    r * sp.sin(theta) * sp.cos(phi),
+                    r * sp.sin(theta) * sp.sin(phi),
+                    r * sp.cos(theta),
+                ]
+                sph_sub = dict(zip([r, theta, phi], self.xxSph))
+                K = [
+                    [
+                        sum(
+                            self.Jac_dUrfm_dDCartUD[i][a]
+                            * sp.diff(cartesian[a], coord).xreplace(sph_sub)
+                            for a in range(3)
+                        )
+                        for coord in [r, theta, phi]
+                    ]
+                    for i in range(3)
+                ]
+                return J, K
             # Step 2.a: First construct Jacobian matrix:
             #
             # GeneralRFM providers may define xx->Cart using stabilized helper
@@ -1811,8 +1880,8 @@ class ReferenceMetric:
 
         The coordinates xx^i are treated as Cartesian-labeled coordinates
         for the forward map xx->Cart. GeneralRFM providers define metric
-        tensors and potentially nonlinear forward maps; inverse maps are
-        handled numerically in infrastructure code.
+        tensors and potentially nonlinear maps. Infrastructure evaluates explicit
+        maps or solves implicit maps numerically, according to the provider.
 
         :raises ValueError: If the GeneralRFM coordinate-system suffix is malformed.
         """
@@ -1850,7 +1919,11 @@ class ReferenceMetric:
         # Provider metadata for downstream infrastructure.
         self.general_rfm_provider_name = "identity_placeholder"
         self.general_rfm_provider: Optional[
-            Union["GeneralRFMFisheye", "GeneralRFMSpheroidalFisheye"]
+            Union[
+                "GeneralRFMFisheye",
+                "GeneralRFMSpheroidalFisheye",
+                GeneralRFMInverseSpheroidalFisheye,
+            ]
         ] = None
         self.general_rfm_provider_meta: Dict[str, Any] = {}
 
@@ -1890,6 +1963,27 @@ class ReferenceMetric:
                 self.general_rfm_provider_name = "spheroidal_fisheye"
                 self.general_rfm_provider = spheroidal_provider
             self.general_rfm_provider_meta = {"num_transitions": num_transitions}
+
+        if self.CoordSystem.startswith("GeneralRFM_inverse_spheroidal_fisheyeN"):
+            suffix = self.CoordSystem[len("GeneralRFM_inverse_spheroidal_fisheyeN") :]
+            if not suffix.isdigit() or int(suffix) < 1:
+                raise ValueError(
+                    "Expected GeneralRFM_inverse_spheroidal_fisheyeN followed by a positive integer."
+                )
+            n = int(suffix)
+            inverse_provider = GeneralRFMInverseSpheroidalFisheye(n)
+            self.general_rfm_provider_name = "inverse_spheroidal_fisheye"
+            self.general_rfm_provider = inverse_provider
+            self.general_rfm_provider_meta = {"num_transitions": n}
+            for i in range(3):
+                self.xx_to_Cart[i] = InverseFisheyeComponent(n, 0, i, 0, *self.xx)
+                self.Cart_to_xx[i] = inverse_provider.Cart_to_xxU[i].xreplace(
+                    dict(
+                        zip(inverse_provider.Cart, [self.Cartx, self.Carty, self.Cartz])
+                    )
+                )
+            # Bounds and c are initialized together by the BHaH normalization helper.
+            self.grid_physical_size_dict = {}
 
         # Define spherical coordinates from the Cartesian map
         # (for ancillary purposes only; not used for metric construction).

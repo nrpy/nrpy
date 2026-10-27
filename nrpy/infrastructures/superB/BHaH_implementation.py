@@ -592,7 +592,18 @@ def generate_bssn_to_adm_codegen(CoordSystem: str) -> str:
         provider = getattr(rfm, "general_rfm_provider", None)
         if provider is None:
             raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
-        ghatDD = provider.ghatDD
+        if rfm.general_rfm_provider_name == "inverse_spheroidal_fisheye":
+            # The implicit map supplies numerical inverse-Jacobian components.
+            K = [
+                [sp.diff(rfm.xx_to_Cart[a], rfm.xx[i]) for i in range(3)]
+                for a in range(3)
+            ]
+            ghatDD = [
+                [sum(K[a][i] * K[a][j] for a in range(3)) for j in range(3)]
+                for i in range(3)
+            ]
+        else:
+            ghatDD = provider.ghatDD
     rfm_gammabarDD = ixp.zerorank2()
     rfm_AbarDD = ixp.zerorank2()
     for i in range(3):

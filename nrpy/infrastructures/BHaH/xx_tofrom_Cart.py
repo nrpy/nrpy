@@ -21,6 +21,7 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.infrastructures.BHaH.inverse_spheroidal_fisheye as inverse_fisheye
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.equations.generalrfm import fisheye as fisheye_eqs
@@ -610,7 +611,12 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     is_spheroidal_fisheye_provider = (
         is_generalrfm and provider_name == "spheroidal_fisheye"
     )
-    if is_generalrfm and not is_supported_fisheye_provider:
+    is_inverse_fisheye = provider_name == "inverse_spheroidal_fisheye"
+    if is_inverse_fisheye:
+        inverse_fisheye.register_CFunctions(
+            rfm.general_rfm_provider_meta["num_transitions"]
+        )
+    if is_generalrfm and not (is_supported_fisheye_provider or is_inverse_fisheye):
         raise ValueError(
             f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in Cart_to_xx_and_nearest_i0i1i2_assume_valid."
         )
@@ -636,7 +642,15 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
 
     # Step 2: Generate the core C-code for the coordinate transformation.
     core_body_list: List[str] = []
-    if is_fisheye_provider:
+    if is_inverse_fisheye:
+        n = rfm.general_rfm_provider_meta["num_transitions"]
+        core_body_list.append(f"""
+  const REAL physical[3]={{Cartx,Carty,Cartz}};
+  REAL lambda;
+  inverse_fisheye_scale__N{n}(params, physical, 0, &lambda, NULL, NULL, NULL);
+  xx[0]=lambda*Cartx; xx[1]=lambda*Carty; xx[2]=lambda*Cartz;
+""")
+    elif is_fisheye_provider:
         # ---------------------------------------------------------------------
         # Fisheye inverse map (Cart -> xx):
         #
@@ -851,7 +865,7 @@ if(params->grid_rotates) {
     cfc.register_CFunction(
         includes=(
             ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-            if gridding_approach == "multipatch"
+            if gridding_approach == "multipatch" or is_inverse_fisheye
             else ["BHaH_defines.h"]
         ),
         desc=desc,
@@ -980,7 +994,12 @@ def register_CFunction_xx_to_Cart(
     is_spheroidal_fisheye_provider = (
         is_generalrfm and provider_name == "spheroidal_fisheye"
     )
-    if is_generalrfm and not is_supported_fisheye_provider:
+    is_inverse_fisheye = provider_name == "inverse_spheroidal_fisheye"
+    if is_inverse_fisheye:
+        inverse_fisheye.register_CFunctions(
+            rfm.general_rfm_provider_meta["num_transitions"]
+        )
+    if is_generalrfm and not (is_supported_fisheye_provider or is_inverse_fisheye):
         raise ValueError(
             f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in xx_to_Cart."
         )
@@ -992,7 +1011,18 @@ def register_CFunction_xx_to_Cart(
     )
 
     # Step 2: Prepare SymPy expressions for C code generation.
-    if is_fisheye_provider:
+    if is_inverse_fisheye:
+        n = rfm.general_rfm_provider_meta["num_transitions"]
+        body = f"""
+REAL physical[3];
+if (inverse_fisheye_solve__N{n}(params, xx, physical)) {{
+  fprintf(stderr, "Inverse spheroidal fisheye coordinate solve failed.\\n"); exit(1);
+}}
+xCart[0]=physical[0]+params->Cart_originx;
+xCart[1]=physical[1]+params->Cart_originy;
+xCart[2]=physical[2]+params->Cart_originz;
+"""
+    elif is_fisheye_provider:
         if provider is None:
             raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
         r_local = sp.Symbol("r", real=True, nonnegative=True)
@@ -1106,7 +1136,7 @@ taking into account the possibility that the origin of this grid is off-center."
     cfc.register_CFunction(
         includes=(
             ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-            if gridding_approach == "multipatch"
+            if gridding_approach == "multipatch" or is_inverse_fisheye
             else ["BHaH_defines.h"]
         ),
         desc=desc,

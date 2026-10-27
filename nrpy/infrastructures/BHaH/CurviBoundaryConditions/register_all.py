@@ -33,6 +33,7 @@ def register_C_functions(
     set_parity_on_auxevol: bool = False,
     enable_masks: bool = False,
     enable_RK3_accumulation: bool = False,
+    enable_xx_to_Cart_precompute: bool = False,
 ) -> None:
     """
     Register various C functions responsible for handling boundary conditions.
@@ -43,6 +44,8 @@ def register_C_functions(
     :param set_parity_on_auxevol: If True, set parity on auxiliary evolution grid functions.
     :param enable_masks: If True, make bcstruct algorithm mask-aware.
     :param enable_RK3_accumulation: Register radiation BCs for an RHS accumulated into two RK arrays.
+    :param enable_xx_to_Cart_precompute: Use inverse spheroidal Cartesian
+        positions cached in AUXEVOL for radiation boundary conditions.
     """
     _ = par.CodeParameter(
         "char[50]", __name__, "outer_bc_type", "radiation", commondata=True
@@ -62,6 +65,7 @@ def register_C_functions(
         BHaH.CurviBoundaryConditions.apply_bcs_outerradiation_and_inner.register_CFunction_apply_bcs_outerradiation_and_inner(
             CoordSystem=CoordSystem,
             radiation_BC_fd_order=radiation_BC_fd_order,
+            enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
         )
         if enable_RK3_accumulation:
             BHaH.CurviBoundaryConditions.apply_bcs_outerradiation_and_inner.register_CFunction_apply_bcs_outerradiation_and_inner_accumulate(

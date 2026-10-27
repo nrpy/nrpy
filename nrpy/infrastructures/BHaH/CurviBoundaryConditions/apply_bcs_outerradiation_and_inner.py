@@ -29,6 +29,7 @@ import sympy.codegen.ast as sp_ast
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.finite_difference as fin  # NRPy: Finite-difference module
+import nrpy.grid as gri
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par  # NRPy: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
@@ -75,6 +76,8 @@ def _radiation_r_and_partials_exprs(CoordSystem: str) -> List[sp.Expr]:
 # r_and_partial_xi_partial_r_derivs(): Compute r(x0,x1,x2) and dx^i / dr
 def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
     CoordSystem: str,
+    cfunc_decorators: str = "",
+    enable_xx_to_Cart_precompute: bool = False,
 ) -> str:
     """
     Generate C code to compute the radial coordinate r(x0, x1, x2) and its derivatives.
@@ -85,6 +88,9 @@ def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
     it unconditionally takes a params_struct.
 
     :param CoordSystem: The coordinate system for which to compute r and its derivatives.
+    :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
+    :param enable_xx_to_Cart_precompute: Evaluate geometry from cached Cartesian
+        positions instead of solving the coordinate map at each boundary call.
     :return: A string containing the generated C code for the function.
     """
     desc = "Compute r(xx0,xx1,xx2) and partial_r x^i."
@@ -96,6 +102,26 @@ def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
     )
     body = ""
 
+    rfm = refmetric.reference_metric[CoordSystem]
+    if enable_xx_to_Cart_precompute:
+        n = rfm.general_rfm_provider_meta["num_transitions"]
+        return cfc.CFunction(
+            includes=[],
+            desc=desc,
+            cfunc_type=cfunc_type,
+            name=name,
+            params="const params_struct *restrict params, const REAL xCart[3], REAL *r, REAL *partial_x0_partial_r, REAL *partial_x1_partial_r, REAL *partial_x2_partial_r",
+            include_CodeParameters_h=False,
+            body=f"""
+const REAL x[3]={{xCart[0]-params->Cart_originx, xCart[1]-params->Cart_originy, xCart[2]-params->Cart_originz}};
+REAL J[3][3], K[3][3], g[3][3], dg[3][3][3], ddg[3][3][3][3];
+inverse_fisheye_geometry__N{n}(params, x, false, J, K, g, dg, ddg);
+*r = sqrt(x[0]*x[0]+x[1]*x[1]+x[2]*x[2]);
+*partial_x0_partial_r = (J[0][0]*x[0]+J[0][1]*x[1]+J[0][2]*x[2])/(*r);
+*partial_x1_partial_r = (J[1][0]*x[0]+J[1][1]*x[1]+J[1][2]*x[2])/(*r);
+*partial_x2_partial_r = (J[2][0]*x[0]+J[2][1]*x[1]+J[2][2]*x[2])/(*r);
+""",
+        ).full_function
     # sp.simplify(expr) is too slow here for SinhCylindrical, and for
     # spheroidal GeneralRFM fisheye the generic inverse spherical Jacobian
     # column is far more complicated than needed.
@@ -355,7 +381,13 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
 """
     for i in range(3):
         si = str(i)
-        if check_zero(partials_exprs[i + 1], fixed_mpfs_for_free_symbols=True):
+        # The implicit spheroidal map has radial dependence in all three directions;
+        # its numerical component calls cannot be evaluated by check_zero.
+        if getattr(
+            refmetric.reference_metric[CoordSystem], "general_rfm_provider_name", ""
+        ) != "inverse_spheroidal_fisheye" and check_zero(
+            partials_exprs[i + 1], fixed_mpfs_for_free_symbols=True
+        ):
             body += f"  const REAL partial_x{si}_f=0.0;\n"
         else:
             body += (
@@ -390,6 +422,7 @@ def setup_Cfunction_radiation_bcs(
     radiation_BC_fd_order: int = -1,
     rational_const_alias: str = "static const",
     rhs_is_scalar: bool = False,
+    enable_xx_to_Cart_precompute: bool = False,
 ) -> str:
     """
     Generate C code to apply radiation boundary conditions in a given coordinate system.
@@ -399,6 +432,8 @@ def setup_Cfunction_radiation_bcs(
     :param radiation_BC_fd_order: Finite differencing order to use. Default is -1.
     :param rational_const_alias: Alias for rational constants. Default is "static const".
     :param rhs_is_scalar: Receive the neighboring RHS as a scalar instead of reading an RHS array.
+    :param enable_xx_to_Cart_precompute: Receive geometry computed once per
+        boundary point from cached Cartesian positions.
     :return: A string containing the generated C code for the function.
     """
     includes: List[str] = []
@@ -409,14 +444,24 @@ def setup_Cfunction_radiation_bcs(
         cfunc_decorators += " __device__"
     for i in range(3):
         # Do not generate FD1_arbitrary_upwind_xj_dirn() if the symbolic expression for dxj/dr == 0!
-        if not check_zero(partials_exprs[i + 1], fixed_mpfs_for_free_symbols=True):
+        # Keep all three radial contributions for the implicit spheroidal map.
+        if getattr(
+            refmetric.reference_metric[CoordSystem], "general_rfm_provider_name", ""
+        ) == "inverse_spheroidal_fisheye" or not check_zero(
+            partials_exprs[i + 1], fixed_mpfs_for_free_symbols=True
+        ):
             prefunc += setup_Cfunction_FD1_arbitrary_upwind(
                 dirn=i,
                 cfunc_decorators=cfunc_decorators,
                 radiation_BC_fd_order=radiation_BC_fd_order,
                 rational_const_alias=rational_const_alias,
             )
-
+    if enable_xx_to_Cart_precompute:
+        prefunc += setup_Cfunction_r_and_partial_xi_partial_r_derivs(
+            CoordSystem=CoordSystem,
+            cfunc_decorators=cfunc_decorators,
+            enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
+        )
     prefunc += setup_Cfunction_compute_partial_r_f(
         CoordSystem=CoordSystem,
         cfunc_decorators=cfunc_decorators,
@@ -474,7 +519,10 @@ const REAL rinv = 1.0 / r;
 const REAL partial_t_f_outgoing_wave = -c * (partial_r_f + (f - f_infinity) * rinv);
 
 return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
-""".replace("params,", "streamid," if parallelization == "cuda" else "params,")
+"""
+    body = body.replace(
+        "params,", "streamid," if parallelization == "cuda" else "params,"
+    )
 
     if rhs_is_scalar:
         params = params.replace("REAL *restrict gfs_rhss", "const REAL partial_t_f_int")
@@ -503,13 +551,17 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
     return cf.full_function
 
 
-def setup_Cfunction_apply_bcs_pure_only() -> Tuple[str, str]:
+def setup_Cfunction_apply_bcs_pure_only(
+    enable_xx_to_Cart_precompute: bool = False,
+) -> Tuple[str, str]:
     """
     Generate the prefunction string for apply_bcs_pure_only.
 
     This requires a function that will launch the compute kernel as well
     as the compute kernel itself.
 
+    :param enable_xx_to_Cart_precompute: Read cached positions from AUXEVOL and
+        compute boundary geometry before the evolved-gridfunction loop.
     :return: A tuple containing the prefunction and the compute kernel.
     """
     # Header details for function that will launch the GPU kernel
@@ -524,6 +576,8 @@ def setup_Cfunction_apply_bcs_pure_only() -> Tuple[str, str]:
         "custom_wavespeed": "const REAL *",
         "custom_f_infinity": "const REAL *",
     }
+    if enable_xx_to_Cart_precompute:
+        params_dict["auxevol_gfs"] = "const REAL *restrict"
     name = "apply_bcs_pure_only"
     cfunc_type = "static void"
     parallelization = par.parval_from_str("parallelization")
@@ -548,7 +602,27 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
     const short FACEX2 = pure_outer_bc_array[idx2d].FACEX2;
     const int idx3 = IDX3(i0,i1,i2);
     REAL* xx[3] = {x0, x1, x2};
-    const REAL r = pure_outer_bc_array[idx2d].r;
+"""
+    if enable_xx_to_Cart_precompute:
+        cart = ", ".join(
+            gri.BHaHGridFunction.access_gf(
+                f"xCart{i}", 0, 0, 0, gf_array_name="auxevol_gfs"
+            )
+            for i in range(3)
+        )
+        cart_int = (
+            cart.replace("i0", "i0_int").replace("i1", "i1_int").replace("i2", "i2_int")
+        )
+        kernel_body += f"""
+    const int i0_int=i0+FACEX0, i1_int=i1+FACEX1, i2_int=i2+FACEX2;
+    const REAL xCart[3]={{{cart}}}, xCart_int[3]={{{cart_int}}};
+    REAL r, partial_x0_partial_r, partial_x1_partial_r, partial_x2_partial_r;
+    REAL r_int, partial_x0_partial_r_int, partial_x1_partial_r_int, partial_x2_partial_r_int;
+    r_and_partial_xi_partial_r_derivs(params, xCart, &r, &partial_x0_partial_r, &partial_x1_partial_r, &partial_x2_partial_r);
+    r_and_partial_xi_partial_r_derivs(params, xCart_int, &r_int, &partial_x0_partial_r_int, &partial_x1_partial_r_int, &partial_x2_partial_r_int);
+"""
+    else:
+        kernel_body += """    const REAL r = pure_outer_bc_array[idx2d].r;
     const REAL partial_x0_partial_r = pure_outer_bc_array[idx2d].partial_x0_partial_r;
     const REAL partial_x1_partial_r = pure_outer_bc_array[idx2d].partial_x1_partial_r;
     const REAL partial_x2_partial_r = pure_outer_bc_array[idx2d].partial_x2_partial_r;
@@ -556,7 +630,8 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
     const REAL partial_x0_partial_r_int = pure_outer_bc_array[idx2d].partial_x0_partial_r_int;
     const REAL partial_x1_partial_r_int = pure_outer_bc_array[idx2d].partial_x1_partial_r_int;
     const REAL partial_x2_partial_r_int = pure_outer_bc_array[idx2d].partial_x2_partial_r_int;
-    for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+"""
+    kernel_body += """    for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
         // *** Apply radiation BCs to all outer boundary points. ***
         rhs_gfs[IDX4pt(which_gf, idx3)] = radiation_bcs(params, xx, gfs, rhs_gfs, which_gf,
                                                         custom_wavespeed[which_gf], custom_f_infinity[which_gf],
@@ -565,9 +640,10 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
                                                         r_int, partial_x0_partial_r_int, partial_x1_partial_r_int, partial_x2_partial_r_int);
     }
   }
-""".replace("params,", "streamid," if parallelization == "cuda" else "params,").replace(
-        "custom_", "d_gridfunctions_" if parallelization == "cuda" else "custom_"
-    )
+"""
+    kernel_body = kernel_body.replace(
+        "params,", "streamid," if parallelization == "cuda" else "params,"
+    ).replace("custom_", "d_gridfunctions_" if parallelization == "cuda" else "custom_")
     comments = "Apply BCs to pure points."
     # Prepare the argument dicts
     arg_dict_cuda = {
@@ -587,6 +663,8 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
         "custom_wavespeed": "const REAL *",
         "custom_f_infinity": "const REAL *",
     }
+    if enable_xx_to_Cart_precompute:
+        arg_dict_host["auxevol_gfs"] = "const REAL *restrict"
     prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
         name,
         kernel_body,
@@ -645,6 +723,7 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     cfunc_decorators: str = "",
     radiation_BC_fd_order: int = 2,
     rational_const_alias: str = "static const",
+    enable_xx_to_Cart_precompute: bool = False,
 ) -> None:
     """
     Register a C function to apply boundary conditions to both pure outer and inner boundary points.
@@ -653,6 +732,11 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
     :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
     :param rational_const_alias: Alias for rational constants. Default is "static const".
+    :param enable_xx_to_Cart_precompute: Read fixed Cartesian positions from
+        AUXEVOL. Requires inverse spheroidal fisheye and matching precompute.
+
+    :raises ValueError: If Cartesian precompute is requested for another provider
+        or for CUDA.
 
     Doctests:
     >>> from nrpy.helpers.generic import validate_strings
@@ -674,15 +758,23 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     Setting up reference_metric[Cartesian]...
     Setting up reference_metric[SinhCylindricalv2n2]...
     """
+    if enable_xx_to_Cart_precompute and (
+        not CoordSystem.startswith("GeneralRFM_inverse_spheroidal_fisheyeN")
+        or par.parval_from_str("parallelization") == "cuda"
+    ):
+        raise ValueError(
+            "Cached radiation geometry requires inverse spheroidal fisheye on the CPU."
+        )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     prefunc = setup_Cfunction_radiation_bcs(
         CoordSystem=CoordSystem,
         cfunc_decorators=cfunc_decorators,
         radiation_BC_fd_order=radiation_BC_fd_order,
         rational_const_alias=rational_const_alias,
+        enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
     )
     apply_bcs_pure_only_prefuncs, apply_bcs_pure_only_function_call = (
-        setup_Cfunction_apply_bcs_pure_only()
+        setup_Cfunction_apply_bcs_pure_only(enable_xx_to_Cart_precompute)
     )
     prefunc += apply_bcs_pure_only_prefuncs
     desc = """This function is responsible for applying boundary conditions (BCs) to both pure outer and inner
@@ -697,6 +789,8 @@ applies BCs to the inner boundary points, which may map either to the grid inter
     const REAL custom_wavespeed[NUM_EVOL_GFS],
     const REAL custom_f_infinity[NUM_EVOL_GFS],
     REAL *restrict gfs, REAL *restrict rhs_gfs"""
+    if enable_xx_to_Cart_precompute:
+        params += ", const REAL *restrict auxevol_gfs"
 
     body: str = ""
     if par.parval_from_str("parallelization") == "cuda":
