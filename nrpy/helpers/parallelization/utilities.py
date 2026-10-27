@@ -139,6 +139,7 @@ def generate_kernel_and_launch_code(
     :param launchblock_with_braces: If True, wrap the launch block in braces.
     :param thread_tiling_macro_suffix: Suffix for thread macros.
     :param cfunc_decorators: Function decorators i.e. kernel type, templates, etc
+    :param bhahaha: Boolean that determines bhahaha unique code
 
     :return: (prefunc, body) code strings.
     """

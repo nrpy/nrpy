@@ -80,7 +80,7 @@ ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 1.0
 grid_physical_size = 7.5
 diagnostics_output_every = 0.25
-t_final = 0.01  # 1.0 * grid_physical_size
+t_final = 1.0 * grid_physical_size
 enable_raytracing_data_output = args.raytracing_outputs
 Nxx_dict = {
     "Spherical": [72, 12, 2],

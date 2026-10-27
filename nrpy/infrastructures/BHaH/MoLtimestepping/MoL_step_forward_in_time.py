@@ -60,6 +60,7 @@ def register_CFunction_MoL_step_forward_in_time(
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
     :param enable_intrinsics: A flag to specify if hardware instructions should be used.
     :param rational_const_alias: Overload const specifier for Rational definitions
+    :param bhahaha: Boolean that determines bhahaha unique code
     :raises ValueError: If unsupported Butcher table specified since adaptive RK steps are not implemented in MoL.
 
     Doctest:

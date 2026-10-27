@@ -40,6 +40,7 @@ def register_CFunction_MoL_malloc_intermediate_stage_gfs(
                          number of intermediate stages.
     :param MoL_method: Name of the Method of Lines scheme whose intermediate arrays should
                        be allocated (for example, "RK4", "RK3", or "RK2").
+    :param bhahaha: Boolean that determines bhahaha unique code
 
     Doctests:
     TBD

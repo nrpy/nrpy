@@ -15,10 +15,10 @@ import nrpy.c_function as cfc
 import nrpy.equations.general_relativity.bhahaha.area as bhahaha_area
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
-from nrpy.infrastructures import BHaH
 from nrpy.equations.general_relativity.bhahaha.ExpansionFunctionTheta import (
     ExpansionFunctionTheta,
 )
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_diagnostics_area_centroid_and_Theta_norms(

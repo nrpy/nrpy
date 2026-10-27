@@ -156,6 +156,7 @@ def simple_loop(
     :param OMP_custom_pragma: Enable loop parallelization using OpenMP with custom pragma
     :param OMP_collapse: Specifies the number of nested loops to collapse
     :param loop_bounds: Optional CPU loop minimums and exclusive maximums, in i2/i1/i0 order.
+    :param cuda_parallel_pair: Boolean to determine if CUDA "Loops" should also be generated
     :return: The complete loop code as a string.
     :raises ValueError: If the loop region or bounds are unsupported, or if both coordinate read modes are enabled.
 

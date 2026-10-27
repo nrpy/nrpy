@@ -295,6 +295,7 @@ def single_RK_substep_input_symbolic(
     :param gf_aliases: Additional aliases for grid functions.
     :param rational_const_alias: Provide additional/alternative alias to const for rational definitions
     :param rk_step: Optional integer representing the current RK step.
+    :param bhahaha: Boolean that determines bhahaha unique code
 
     :return: A string containing the generated C code.
     :raises ValueError: If substep_time_offset_dt cannot be extracted from the Butcher table.

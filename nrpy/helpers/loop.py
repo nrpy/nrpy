@@ -87,6 +87,7 @@ def loop(
     :param pragma: The OpenMP pragma (https://en.wikipedia.org/wiki/OpenMP).
     :param loop_body: The body of the loop.
     :param tile_size: The tile size for cache blocking.
+    :param cuda_parallel_pair: Bool to determine if CUDA "Loops" should also be generated
 
     :raises ValueError: If all list parameters do not have the same length, an error is thrown.
 

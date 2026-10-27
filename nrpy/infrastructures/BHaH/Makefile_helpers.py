@@ -197,6 +197,7 @@ def _construct_makefile_content(
     :param create_lib: Whether the target is a library.
     :param static_lib: Whether the target is a static library.
     :param use_openmp: If True, request OpenMP and use it when supported; if False, omit it.
+    :param bhahaha: Boolean that determines bhahaha unique code
     :return: The complete string content of the Makefile.
     """
     if cc == "nvcc":
@@ -471,6 +472,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param include_dirs: List of include directories.
     :param src_code_file_ext: Extension for C source files.
     :param use_openmp: If True, request OpenMP and use it when supported; if False, omit it.
+    :param bhahaha: Boolean that determines bhahaha unique code
     :raises TypeError: If 'addl_libraries' is not a list.
     """
     # Step 1: Validate inputs and initialize local state

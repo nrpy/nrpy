@@ -51,6 +51,7 @@ def register_CFunctions(
     :param enable_intrinsics: A flag to specify if hardware instructions should be used.
     :param register_MoL_step_forward_in_time: Whether to register the MoL step-forward function. Default is True.
     :param rational_const_alias: Overload const specifier for rational definitions
+    :param bhahaha: Boolean that determines bhahaha unique code
 
     Doctests:
     >>> from nrpy.helpers.generic import validate_strings

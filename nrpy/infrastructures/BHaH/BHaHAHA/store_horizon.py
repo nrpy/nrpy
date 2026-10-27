@@ -1,4 +1,5 @@
 """
+Register function for storing the coarse horizon from y_n_gfs into commondata for use as the next resolutions initial guess.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -10,9 +11,7 @@ from nrpy.infrastructures import BHaH
 
 def register_CFunction_store_horizon() -> None:
     """
-    Register the C function for diagnostics in the simulation.
-
-    :return: An NRPyEnv_type object if registration is successful, otherwise None.
+    Register the C function for storing the coarse horizon from y_n_gfs in commondata.
     """
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]

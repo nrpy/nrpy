@@ -1,4 +1,5 @@
 """
+Register function for the main simulation loop started from find horizon.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -11,8 +12,6 @@ from nrpy.infrastructures import BHaH
 def register_CFunction_main_simulation_loop() -> None:
     """
     Register the C function for the main simulation loop in find_horizon.
-
-    :return: An NRPyEnv_type object if registration is successful, otherwise None.
     """
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
