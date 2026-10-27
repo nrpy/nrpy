@@ -30,10 +30,13 @@ restrictions control; report incomplete handoffs and inaccessible storage honest
 
 Load relevant routes and skills only. Requested paired review uses
 `.agents/skills/dialectic/SKILL.md`; trialectic/three-seat review, including "engage
-tri", uses `.agents/skills/trialectic/SKILL.md`. Applicable policy may require them;
-merely mentioning, auditing, or editing them does not. Read the selected skill and
-`.agents/review-protocol.md`. Delegate when actual tools offer a concrete benefit;
-never simulate independent agents or duplicate trivial work.
+tri", uses `.agents/skills/trialectic/SKILL.md`; a requested Borda panel (N
+independent agents that rank each other's reports), including "use borda", uses
+`.agents/skills/borda/SKILL.md`, which asks the user for a missing task, N, or output
+name instead of inferring it. Applicable policy may require them; merely mentioning,
+auditing, or editing them does not. Read the selected skill and, for dialectic and
+trialectic, `.agents/review-protocol.md`. Delegate when actual tools offer a concrete
+benefit; never simulate independent agents or duplicate trivial work.
 
 Review subsequent deltas, unresolved findings, and affected code/docs dependencies,
 retaining valid decisions/checks. Mechanical cleanup needs focused verification;
