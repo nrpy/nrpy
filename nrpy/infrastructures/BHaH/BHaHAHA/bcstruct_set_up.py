@@ -868,9 +868,9 @@ __device__
     prefunc += """
 #ifdef __CUDACC__
 __global__
-void set_inner_pts(commondata_struct *restrict commondata, params_struct *restrict bc_params, REAL *restrict xx0, REAL *restrict xx1, REAL *restrict xx2, bc_struct *restrict bcstruct, int *restrict which_inner_s)
+void set_inner_pts(commondata_struct *restrict commondata, const params_struct *restrict bc_params, REAL *restrict xx0, REAL *restrict xx1, REAL *restrict xx2, bc_struct *restrict bcstruct, int *restrict which_inner_s)
 #else
-void set_inner_pts(commondata_struct *restrict commondata, params_struct *restrict bc_params, REAL *restrict xx[3], bc_struct *restrict bcstruct) 
+void set_inner_pts(commondata_struct *restrict commondata, const params_struct *restrict bc_params, REAL *restrict xx[3], bc_struct *restrict bcstruct) 
 #endif
 {
 #ifdef __CUDACC__
@@ -928,9 +928,9 @@ void set_inner_pts(commondata_struct *restrict commondata, params_struct *restri
 
 #ifdef __CUDACC__
 __global__
-void count_num_inner_pts(commondata_struct *restrict commondata, params_struct *restrict bc_params, REAL *restrict xx0, REAL *restrict xx1, REAL *restrict xx2, bc_struct *restrict bcstruct)
+void count_num_inner_pts(commondata_struct *restrict commondata, const params_struct *restrict bc_params, REAL *restrict xx0, REAL *restrict xx1, REAL *restrict xx2, bc_struct *restrict bcstruct)
 #else
-void count_num_inner_pts(commondata_struct *restrict commondata, params_struct *restrict bc_params, REAL *restrict xx[3], bc_struct *restrict bcstruct)
+void count_num_inner_pts(commondata_struct *restrict commondata, const params_struct *restrict bc_params, REAL *restrict xx[3], bc_struct *restrict bcstruct)
 #endif
 {
 #ifdef __CUDACC__
@@ -1003,9 +1003,9 @@ void count_num_inner_pts(commondata_struct *restrict commondata, params_struct *
 
 #ifdef __CUDACC__
 __global__
-void set_outer_pts(commondata_struct *restrict commondata, params_struct *restrict bc_params, REAL *restrict xx0, REAL *restrict xx1, REAL *restrict xx2, bc_struct *restrict bcstruct) {
+void set_outer_pts(commondata_struct *restrict commondata, const params_struct *restrict bc_params, REAL *restrict xx0, REAL *restrict xx1, REAL *restrict xx2, bc_struct *restrict bcstruct) {
 #else
-void set_outer_pts(commondata_struct *restrict commondata, params_struct *restrict bc_params, REAL *restrict xx[3], bc_struct *restrict bcstruct) {
+void set_outer_pts(commondata_struct *restrict commondata, const params_struct *restrict bc_params, REAL *restrict xx[3], bc_struct *restrict bcstruct) {
 #endif
   if (commondata->error_flag != BHAHAHA_SUCCESS)
     return;

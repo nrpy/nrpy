@@ -264,7 +264,7 @@ void bah_radial_grid_cell_centered_set_up(const int Nr_interp_max, const REAL ma
 #else
 void bah_radial_grid_cell_centered_set_up(const int Nr_interp_max, const REAL max_search_radius, const REAL input_r_min, const REAL input_r_max,
                                           int *restrict output_Nr_interp, REAL *restrict output_r_min, REAL *restrict output_dr,
-                                          REAL radii[Nr_interp_max]);
+                                          REAL *radii);
 #endif
 #ifdef __CUDACC__
 __host__ __device__
