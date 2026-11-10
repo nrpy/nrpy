@@ -1,8 +1,8 @@
 """
 Register trusted temporal Lagrange interpolation.
 
-This module emits the temporal stage of the numerical-spacetime interpolation
-pipeline used by the geodesic integrators. The generated C API consumes flat
+This module emits the temporal part of numerical-spacetime interpolation used
+by the geodesic integrators. The generated C API accepts flat
 per-slice spatial-interpolation outputs for Cartesian-basis `g4DD` and
 `Gamma4UDD` components at one fixed spatial point, plus the corresponding
 physical slice times, and interpolates all 50 serialized tensor components to
@@ -11,11 +11,11 @@ one target coordinate time.
 The helper deliberately assumes trusted inputs. In particular, callers must
 provide physical `slice_times` that are strictly increasing and uniformly
 spaced in time, and they must supply exactly the same number of per-slice
-tensor records as interpolation nodes. The metric bundle follows the same
-10-component upper-triangular ordering consumed by the geodesic interpolation
+tensor records as interpolation nodes. The metric array follows the same
+10-component upper-triangular ordering read by the geodesic interpolation
 kernels:
 `g4DD00, g4DD01, g4DD02, g4DD03, g4DD11, g4DD12, g4DD13, g4DD22, g4DD23,
-g4DD33`. The Christoffel bundle follows the same 40-component ordering used by
+g4DD33`. The Christoffel array follows the same 40-component ordering used by
 the geodesic kernels, with `alpha` outermost and `(mu, nu)` serialized in
 upper-triangular order:
 `Gamma4UDD000, Gamma4UDD001, ..., Gamma4UDD333`.
@@ -67,12 +67,12 @@ def register_CFunction_temporal_lagrange_interpolation(
     The generated C helper assumes the caller already ran the spatial
     interpolation stage for the desired temporal stencil and now wants a
     lightweight 1D interpolation in physical coordinate time. In the full
-    pipeline, this helper is called after the spatial helper has produced one
-    tensor bundle per mapped numerical time slice. It assumes the supplied
+    calculation, this helper is called after the spatial helper has produced one
+    tensor-component array per mapped numerical time slice. It assumes the supplied
     `slice_times` are trusted, strictly increasing, uniformly spaced, and
     contain exactly `2*n+1` entries, where `n` is
     `commondata->numerical_spacetime_temporal_interp_order`. The flat tensor
-    bundles must contain one entry per supplied time node, so no
+    arrays must contain one entry per supplied time node, so no
     cadence-validation or input-sanity logic is emitted.
 
     :param enable_simd: Whether SIMD helper headers are already available.
@@ -156,12 +156,12 @@ derives the actual number of time nodes from
 Lagrange basis in time, and interpolates each serialized `g4DD` and
 `Gamma4UDD` component independently to `t_target`.
 
-The metric bundle ordering matches the geodesic interpolation-kernel contract:
+The metric component order matches the geodesic interpolation kernel:
 `g4DD00, g4DD01, g4DD02, g4DD03, g4DD11, g4DD12, g4DD13, g4DD22, g4DD23,
 g4DD33`.
 
-The Christoffel bundle ordering also matches the geodesic interpolation-kernel
-contract: `Gamma4UDD<alpha><mu><nu>` with `alpha` outermost and `(mu, nu)` in
+The Christoffel component order also matches the geodesic interpolation kernel:
+`Gamma4UDD<alpha><mu><nu>` with `alpha` outermost and `(mu, nu)` in
 upper-triangular order, i.e.
 `Gamma4UDD000, Gamma4UDD001, Gamma4UDD002, Gamma4UDD003, Gamma4UDD011,
 Gamma4UDD012, ..., Gamma4UDD333`.

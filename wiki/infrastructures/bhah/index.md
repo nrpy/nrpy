@@ -6,7 +6,7 @@
 | --- | --- |
 | [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md) | You need the executable/library lifecycle, project assembly, Makefile helper path, or generated-output boundary. |
 | [Runtime Data, Parameters, Headers, And CLI](runtime-data-parameters-headers-and-cli.md) | You need generated structs, parameters, headers, default parfiles, command-line/parfile override flow, or CUDA host/device runtime data. |
-| [Grids, Coordinates, Reference Metrics, And Boundaries](grids-coordinates-reference-metrics-and-boundaries.md) | You need grid setup, coordinates, reference metrics, CFL timestep setup, or CurviBC registration. |
+| [Grids, Coordinates, Reference Metrics, And Boundaries](grids-coordinates-reference-metrics-and-boundaries.md) | You need grid setup, coordinates, reference metrics, CFL timestep setup, CurviBC registration, the prescribed angular bounds and which angular counts must be even, or inner ghost points in interpolation stencils. |
 | [MoL Time Integration](mol-time-integration.md) | You need Method of Lines storage, Runge-Kutta method selection, stage stepping, or time-integration hooks. |
 | [Diagnostics Output And Checkpointing](diagnostics-output-and-checkpointing.md) | You need diagnostics dispatch, output cadence, progress indicators, or checkpoint/restart flow. |
 | [GR Application Wiring](gr-application-wiring.md) | You need BHaH GR RHS, Ricci, constraints, TwoPunctures/TOVola initial data, basis transforms, Psi4, or spin-weighted special-function wiring. |

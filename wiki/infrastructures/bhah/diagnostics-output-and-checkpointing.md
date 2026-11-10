@@ -1,6 +1,6 @@
 # Diagnostics Output And Checkpointing
 
-> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed. Last reconciled: 08-28-2026
+> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed.
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -51,21 +51,20 @@ initializer handling through `DIAG_INIT`.
 
 `diagnostic_gfs_set` is the normal GR producer for diagnostic channels. It
 registers `DIAG_HAMILTONIAN`, `DIAG_M`, `DIAG_LAPSE`, `DIAG_W`,
-`DIAG_GRIDINDEX`, `DIAG_RBARDD`, `DIAG_LAMBDA_CONSTRAINT`, optional
-`DIAG_T4UU`, and optional `DIAG_PSI4_RE/IM`. At runtime it loops over grids,
-calls `Ricci_eval` or `Ricci_eval_host`, calls `constraints_eval`, optionally
-calls `psi4`, applies inner boundary conditions to interpolation-sensitive
-diagnostic channels, and copies lapse, conformal factor, and grid index into
-`diagnostic_gfs`. The interpolation inner-boundary list includes Hamiltonian,
-momentum magnitude, and Lambda-constraint magnitude.
+`DIAG_GRIDINDEX`, `DIAG_RBARDD`, `DIAG_LAMBDA_CONSTRAINT`, optional `DIAG_T4UU`,
+and optional `DIAG_PSI4_RE/IM`. At runtime it loops over grids, calls
+`Ricci_eval` or `Ricci_eval_host`, calls `constraints_eval`, optionally calls
+`psi4`, and copies lapse, conformal factor, and grid index into
+`diagnostic_gfs`. It applies `apply_bcs_inner_only_specific_gfs()` to
+`DIAG_PSI4_RE/IM` when Psi4 is enabled and to the Hamiltonian,
+momentum-magnitude, and Lambda-constraint-magnitude channels only when
+`enable_interp_diagnostics` is set; both fills are inner-only, as
+[Inner Ghost Points In Interpolation Stencils](grids-coordinates-reference-metrics-and-boundaries.md#inner-ghost-points-in-interpolation-stencils)
+describes. `register_all_diagnostics` emits a `diagnostics_interp()` call when
+interpolation diagnostics are enabled, but no NRPy generator defines
+`diagnostics_interp`.
 
-Claim evidence:
-- Claim: The generic BHaH diagnostic producer registers `DIAG_M` and `DIAG_LAMBDA_CONSTRAINT` and applies interpolation inner boundary conditions to Hamiltonian, momentum-magnitude, and Lambda-magnitude channels.
-- Role: descriptive behavior
-- Deciding authority: [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
-- Corroboration: [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`; [Kasner diagnostics.py](../../../nrpy/infrastructures/BHaH/general_relativity/Kasner/diagnostics.py), `register_CFunction_diagnostic_gfs_set`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=BHaH OpenMP registration; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=generic and Kasner diagnostic registration, interpolation enabled; date=08-28-2026`
+Evidence (descriptive behavior): [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`; corroboration: [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`; [Kasner diagnostics.py](../../../nrpy/infrastructures/BHaH/general_relativity/Kasner/diagnostics.py), `register_CFunction_diagnostic_gfs_set`; [diagnostics.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics.py), `register_all_diagnostics`
 
 Nearest diagnostics are a dispatcher plus three helper samplers. Users select
 `which_gfs_0d`, `which_gfs_1d`, and `which_gfs_2d` in the generated
@@ -84,13 +83,7 @@ constraint branch select Hamiltonian, momentum magnitude, and Lambda-constraint
 magnitude for every 0D, 1D, and 2D output. The Kasner dispatcher prepends those
 same three constraints to its Kasner-specific fields.
 
-Claim evidence:
-- Claim: Generic BHaH and Kasner nearest dispatchers include `DIAG_HAMILTONIANGF`, `DIAG_MGF`, and `DIAG_LAMBDA_CONSTRAINTGF` in each 0D, 1D, and 2D default selection; GRoovy includes the same three when its default-true `include_constraint_diagnostics` option is enabled, and Kasner retains its additional fields.
-- Role: descriptive behavior
-- Deciding authority: [generic diagnostics_nearest.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [GRoovy diagnostics_nearest.py](../../../nrpy/infrastructures/BHaH/GRoovy/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [Kasner diagnostics.py](../../../nrpy/infrastructures/BHaH/general_relativity/Kasner/diagnostics.py), `register_CFunction_diagnostics_nearest`
-- Corroboration: [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=BHaH and GRoovy C registration; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=generic, GRoovy constraint diagnostics enabled, and Kasner 0D/1D/2D selections; date=08-28-2026`
+Evidence (descriptive behavior): [generic diagnostics_nearest.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [GRoovy diagnostics_nearest.py](../../../nrpy/infrastructures/BHaH/GRoovy/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [Kasner diagnostics.py](../../../nrpy/infrastructures/BHaH/general_relativity/Kasner/diagnostics.py), `register_CFunction_diagnostics_nearest`; corroboration: [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
 
 `diagnostics_nearest_common.h` supplies the shared text-output contract: time
 comments use `# [time] = ...`, headers list coordinate columns plus diagnostic
@@ -116,13 +109,7 @@ proper volume. For `GeneralRFM` it is intentionally inert because the active
 integration path reads the `DETGAMMAHATGF`-backed volume element from the
 helper header.
 
-Claim evidence:
-- Claim: The two default BHaH GR volume recipes use `DIAG_HAMILTONIANGF`, `DIAG_MGF`, and `DIAG_LAMBDA_CONSTRAINTGF` with `is_squared=1`, so their reported L2/RMS numerators contain `H^2`, `gamma_ij M^i M^j`, and `gammabar_ij C^i C^j`, not a momentum fourth moment.
-- Role: descriptive behavior
-- Deciding authority: [diagnostics_volume_integration.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostics_volume_integration.py), `register_CFunction_diagnostics_volume_integration`; [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
-- Corroboration: [diagnostics_volume_integration_helpers.h](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics_volume_integration_helpers.h), `diags_integration_execute_recipes`; [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=BHaH OpenMP registration; precision=generated REAL arithmetic, runtime precision not exercised; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=whole-domain and outside-radius default GR recipes; date=08-28-2026`
+Evidence (descriptive behavior): [diagnostics_volume_integration.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostics_volume_integration.py), `register_CFunction_diagnostics_volume_integration`; [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`; corroboration: [diagnostics_volume_integration_helpers.h](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics_volume_integration_helpers.h), `diags_integration_execute_recipes`; [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`
 
 Raytracing output is an optional diagnostics-side stage-1 export.
 `output_raytracing_data` writes a time-stamped binary stage-1 payload through a
@@ -166,15 +153,9 @@ owned interiors, buffer-zone points, and outer-boundary points; otherwise every
 point is selected. MoL intermediate-stage storage is freed before compacting and
 reallocated after the grid payload is written.
 
-Current `BHaH` package aggregation and updated checkpoint-using examples use
-the split owners. The tracked `checkpointing.py` nevertheless remains directly
-importable and still defines its own older reader, writer, and combined
-`register_CFunctions` wrapper; that old writer independently registers another
-`checkpoint_every` owner. The module is not a forwarding or deprecation shim,
-and its reader lacks the split reader's checks described below. Explicit legacy
-submodule imports can therefore still reach a duplicate, less-hardened
-implementation; no equivalence, compatibility, or current-canonical guarantee
-applies to that direct-import path.
+The `BHaH` package aggregation and checkpoint-using examples use the split
+owners. The superseded combined `checkpointing.py` module has been removed, so
+the package exposes no duplicate legacy checkpoint registrar.
 
 `read_checkpoint()` returns `0` when the named checkpoint file does not exist.
 After reading `commondata`, it requires `NUMGRIDS` in `1..MAXNUMGRIDS`. With
@@ -219,24 +200,13 @@ still sanitize deserialized pointers, allocate present shape arrays, and refill
 them from the checkpoint, preserving horizon-history data without reusing old
 process pointer values.
 
-Claim evidence:
-- Claim: Package aggregation and updated examples use separate checkpoint reader/writer registrars, with split writer owning `checkpoint_every` for that path; split reader requires valid `NUMGRIDS`, BHaHAHA capacities and finest-resolution index, positive overflow-safe dimensions/products, representable evolved-gridfunction and allocation counts, bounded strictly increasing serialized point indices, checked ordinary host allocations, zero-count-safe reads, and `size_t` scatter offsets, while split writer provides no matching BHaHAHA validation-order, capacity, or overflow guarantee; direct import of retained `checkpointing.py` still reaches an older duplicate whose writer independently registers `checkpoint_every` and which has no forwarding, deprecation, equivalence, compatibility, or current-canonical guarantee.
-- Role: descriptive behavior
-- Deciding authority: registered primary code `nrpy/infrastructures/BHaH/read_checkpoint.py::register_CFunction_read_checkpoint`, `nrpy/infrastructures/BHaH/write_checkpoint.py::register_CFunction_write_checkpoint`, and `nrpy/infrastructures/BHaH/checkpointing.py::register_CFunctions`
-- Corroboration: `nrpy/infrastructures/BHaH/__init__.py` package import list and representative `nrpy/examples/blackhole_spectroscopy.py` split registrar calls; no independent registered test exercises malformed-input, allocation-failure, direct-import, or restart paths
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, clang-format 22.1.8; backend=OpenMP C and CUDA source; precision=not-applicable; GPU=not-run; restart=not-run; distributed=not-applicable; error_path=not-run; options=default reader source baselines plus BHaHAHA reader source inspection; date=07-20-2026`
+Evidence (descriptive behavior): [read_checkpoint.py](../../../nrpy/infrastructures/BHaH/read_checkpoint.py), `register_CFunction_read_checkpoint`; [write_checkpoint.py](../../../nrpy/infrastructures/BHaH/write_checkpoint.py), `register_CFunction_write_checkpoint`; [__init__.py](../../../nrpy/infrastructures/BHaH/__init__.py), package import list; corroboration: [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), split registrar calls (no independent registered test exercises malformed-input, allocation-failure, or restart paths)
 
 Validation here is source-inspection scoped. Current Ubuntu/macOS codegen jobs
 generate and build default BHaH examples without running a write/restart/read
-sequence. File integrity, restored values, CUDA restart, multipatch selection,
-malformed-input rejection, allocation failure, and BHaHAHA horizon-history
-restart are therefore `not-run` runtime outcomes in this KB audit. The two
-changed default reader `.c`/`.cu` baselines were regenerated in an isolated
-copy and passed a second fresh-process comparison; retained writer baselines
-were unchanged. That proves normalized emitted-source regression only; it does
-not establish compilation, restart, malformed-input behavior, BHaHAHA source
-variants, GPU execution, or runtime results.
+sequence. Configured automation therefore does not establish file integrity,
+restored values, CUDA restart, multipatch selection, malformed-input rejection,
+allocation failure, or BHaHAHA horizon-history restart behavior.
 
 ## Sources
 
@@ -260,7 +230,6 @@ variants, GPU execution, or runtime results.
 - [BHaH package initializer](../../../nrpy/infrastructures/BHaH/__init__.py) - package import list for `read_checkpoint` and `write_checkpoint`
 - [read_checkpoint.py](../../../nrpy/infrastructures/BHaH/read_checkpoint.py) - `register_CFunction_read_checkpoint`
 - [write_checkpoint.py](../../../nrpy/infrastructures/BHaH/write_checkpoint.py) - `register_CFunction_write_checkpoint`
-- [checkpointing.py](../../../nrpy/infrastructures/BHaH/checkpointing.py) - retained `register_CFunction_read_checkpoint`, `register_CFunction_write_checkpoint`, `register_CFunctions`
 - [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py) - `BHaH.read_checkpoint.register_CFunction_read_checkpoint`, `BHaH.write_checkpoint.register_CFunction_write_checkpoint`
 - [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py) - `BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create`, `BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator`
 - [SOURCES.md](../../../raw/SOURCES.md) - `infrastructure-modules-and-embedded-headers`

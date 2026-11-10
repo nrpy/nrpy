@@ -13,6 +13,7 @@ import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.finite_difference as fin
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
@@ -100,6 +101,7 @@ def register_CFunction_rhs_eval(
     )
 
     cfc.register_CFunction(
+        prefunc=fin.construct_FD_functions_prefunc() if enable_fd_functions else "",
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
@@ -203,6 +205,7 @@ def register_CFunction_KO_apply(
 
     cfc.register_CFunction(
         subdirectory="",
+        prefunc=fin.construct_FD_functions_prefunc() if enable_fd_functions else "",
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,

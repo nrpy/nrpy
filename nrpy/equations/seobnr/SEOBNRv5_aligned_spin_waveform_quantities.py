@@ -353,10 +353,11 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
         )
         self.fspinimag = (self.vh3) ** 2 * (
-            sp.Rational(7339, 540) * self.nu - sp.Rational(81, 20)
-        ) * self.chi_A * self.deltainv + (
-            sp.Rational(593, 108) * self.nu - sp.Rational(81, 20)
-        ) * self.chi_S
+            (sp.Rational(7339, 540) * self.nu - sp.Rational(81, 20))
+            * self.chi_A
+            * self.deltainv
+            + (sp.Rational(593, 108) * self.nu - sp.Rational(81, 20)) * self.chi_S
+        )
         self.fspin_limit["(3 , 3)"] = (
             self.vomega**3 * ((sp.Rational(19, 2) * self.nu - 2) * self.chi_A)
             + self.vomega**4 * ((3 - 12 * self.nu) * (self.chi_A * self.chi_S))
@@ -1287,7 +1288,7 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         ]
         self.c = sp.zeros(10)
         for k in range(2, 10):
-            self.c[k] = (m1 / M) ** (k - 1) + ((-1) ** k) * ((m2 / M) ** (k - 1))
+            self.c[k] = (m2 / M) ** (k - 1) + ((-1) ** k) * ((m1 / M) ** (k - 1))
         self.c[3] *= self.noneqcond
         self.c[3] += -1 * self.eqcond
         self.c[5] *= self.noneqcond
@@ -1364,6 +1365,20 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                     * pn_contribution_f
                 )
                 factorized_flux += m * m * strain_amplitude**2
+                if l == 3 and m == 3:
+                    # The (3,3) PN amplitude factor is the real correction plus
+                    # I * fspinimag, so |factor|^2 adds fspinimag^2 to the square
+                    # of the real correction.
+                    imag_strain_amplitude = (
+                        newtonian_strain_amplitude
+                        * self.effective_source[(l + m) % 2]
+                        * tail_term
+                        * (
+                            self.noneqcond * self.fspinimag
+                            + self.eqcond * self.fspinimag_limit
+                        )
+                    )
+                    factorized_flux += m * m * imag_strain_amplitude**2
         factorized_flux *= -(sp.Rational(1, 8) * self.Omega**2 / sp.pi)
         return cast(sp.Expr, factorized_flux / self.nu)
 
@@ -1401,6 +1416,11 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                         self.noneqcond
                         * (self.rho[f"({l} , {m})"] ** l + self.fspin[f"({l} , {m})"])
                         + self.eqcond * self.fspin_limit[f"({l} , {m})"]
+                    )
+                if l == 3 and m == 3:
+                    pn_contribution_f += sp.I * (
+                        self.noneqcond * self.fspinimag
+                        + self.eqcond * self.fspinimag_limit
                     )
             pn_contribution_delta = sp.exp(sp.I * self.deltalm[f"({l} , {m})"])
             pn_contribution = pn_contribution_f * pn_contribution_delta

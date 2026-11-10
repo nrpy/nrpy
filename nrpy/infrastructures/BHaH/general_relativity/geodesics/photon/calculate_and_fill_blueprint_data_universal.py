@@ -1,19 +1,15 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/calculate_and_fill_blueprint_data_universal.py
 """
-Defines a streaming bundle architecture to project escaped photon trajectories.
+Defines a chunked ray calculation to project escaped photon trajectories.
 
 This module unpacks the 3D Cartesian coordinates of escaped photons from a flattened
-Structure of Arrays (SoA) layout and mathematically maps them into spherical polar
-and azimuthal angles on the celestial sphere. It manages memory usage by processing
-photons in fixed batches, ensuring compliance with general hardware memory limits
-across various execution contexts. Execution buffers are allocated statically to map
-to the active memory hierarchy.
-
-The implementation relies on out-of-bounds execution guards to prevent invalid memory
-accesses for processing units that exceed the active chunk size. Final exit statuses
-are synchronized directly into a persistent blueprint array, and existing results are
-pre-loaded into staging buffers to prevent overwriting valid memory with uninitialized
-data during asynchronous transfers.
+Structure of Arrays (SoA) layout and maps them into spherical polar and azimuthal
+angles on the celestial sphere. It processes photons in chunks no larger than
+``BUNDLE_CAPACITY``. CUDA execution uses device arrays and guards excess launched
+threads, while OpenMP execution uses host arrays and a loop bounded by the chunk
+size. Existing result records are copied to the work array before calculation so
+fields unrelated to photon escape remain unchanged. Final exit statuses are copied
+to the persistent blueprint array.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -59,7 +55,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     else:
         loop_preamble = """
     //==========================================
-    // OPENMP LOOP ARCHITECTURE
+    // OPENMP PARALLEL LOOP
     //==========================================
     // Distribute photon rays across available CPU threads for parallel evaluation.
     #pragma omp parallel for
@@ -71,7 +67,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     //==========================================
     // MACRO DEFINITIONS
     //==========================================
-    // IDX_LOCAL maps a component to the flattened state bundle using SoA layout.
+    // IDX_LOCAL maps a component to the flattened state array using SoA layout.
     // Layout: [Component][RayID]
     #ifndef IDX_LOCAL
     #define IDX_LOCAL(c, ray_id, N) ((c) * (N) + (ray_id))
@@ -132,7 +128,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
         cfunc_decorators="__global__" if parallelization == "cuda" else "",
     )
 
-    # Determine correct memory transfer semantics based on the target architecture.
+    # Select memory transfers for CUDA or OpenMP.
     if parallelization == "cuda":
         memcpy_status = "cudaMemcpy(d_status_bundle, all_photons->status + start_idx, sizeof(termination_type_t) * current_chunk_size, cudaMemcpyHostToDevice);"
         memcpy_f = "cudaMemcpy(d_f_bundle + (m * BUNDLE_CAPACITY), all_photons->f + (m * num_rays) + start_idx, sizeof(double) * current_chunk_size, cudaMemcpyHostToDevice);"
@@ -145,18 +141,18 @@ def calculate_and_fill_blueprint_data_universal() -> None:
         memcpy_f = "memcpy(d_f_bundle + (m * BUNDLE_CAPACITY), all_photons->f + (m * num_rays) + start_idx, sizeof(double) * current_chunk_size);"
         memcpy_result_in = "memcpy(d_result_bundle, result + start_idx, sizeof(blueprint_data_t) * current_chunk_size);"
         memcpy_result_out = "memcpy(result + start_idx, d_result_bundle, sizeof(blueprint_data_t) * current_chunk_size);"
-        transfer_comment_in = "//==========================================\n        // MEMORY TRANSFER (HOST TO STAGING BUFFER)\n        //=========================================="
-        transfer_comment_out = "//==========================================\n        // MEMORY TRANSFER (STAGING BUFFER TO HOST)\n        //=========================================="
+        transfer_comment_in = "//==========================================\n        // MEMORY TRANSFER (HOST TO WORK ARRAY)\n        //=========================================="
+        transfer_comment_out = "//==========================================\n        // MEMORY TRANSFER (WORK ARRAY TO HOST)\n        //=========================================="
 
     loop_body = f"""
-    // Variable current_chunk_size defines the active range for the current streaming bundle.
+    // Variable current_chunk_size defines the active range for the current ray chunk.
     const long int current_chunk_size = NRPYMIN(num_rays - start_idx, BUNDLE_CAPACITY); // Active chunk size.
 
     {transfer_comment_in}
-    // Transfer the status array for the current bundle to supply the kernel with termination states.
+    // Transfer the status array for the current chunk to supply the kernel with termination states.
     {memcpy_status} // Transfer of status.
 
-    // Transfer the 9-component state vector $f^mu$ for the current bundle for coordinate unpacking.
+    // Transfer the 9-component state vector $f^mu$ for the current chunk for coordinate unpacking.
     for(int m=0; m<9; m++) {{ // Iterate over the 9 components of the $f^mu$ state vector.
         {memcpy_f} // Transfer of $f^mu$.
     }} // END LOOP: for m over 9 components of f^mu state vector
@@ -165,12 +161,12 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     {memcpy_result_in} // Transfer of previous results.
 
     //==========================================
-    // KERNEL LAUNCH
+    // PARALLEL FUNCTION CALL
     //==========================================
     {launch_body}
 
     {transfer_comment_out}
-    // Retrieve the calculated blueprint results for the current bundle to persist the final data.
+    // Retrieve the calculated blueprint results for the current chunk to persist the final data.
     {memcpy_result_out} // Transfer of final results.
     """
 
@@ -192,10 +188,10 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     @param all_photons The master Structure of Arrays containing the state vectors.
     @param num_rays The total number of photon trajectories.
     @param result The array of blueprint data structures to be populated.
-    @param stream_idx The stream index identifier for asynchronous scheduling.
+    @param stream_idx Work-array index; CUDA uses the corresponding stream.
 
     Detailed algorithm:
-    1. Allocates staging buffers for state vectors, status, and results.
+    1. Allocates temporary arrays for state vectors, status, and results.
     2. Iterates over the global dataset in chunks of BUNDLE_CAPACITY.
     3. Transfers data, computes projections, and transfers results back.
     4. Evaluates final 3D positions onto a celestial sphere $(\theta, \phi)$ for escaped rays."""
@@ -205,9 +201,9 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     include_CodeParameters_h = False
     body = f"""
     //==========================================
-    // STAGING ALLOCATION
+    // TEMPORARY ARRAY ALLOCATION
     //==========================================
-    // Pointers for the bundled data processing.
+    // Pointers used to process one ray chunk.
     double *d_f_bundle; // Buffer for state vector $f^mu$.
     termination_type_t *d_status_bundle; // Buffer for photon termination status.
     blueprint_data_t *d_result_bundle; // Buffer for calculated blueprint data.

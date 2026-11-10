@@ -170,6 +170,12 @@ typedef struct __outerpt_bc_struct__ {
   //                               FACEX0,FACEX1,FACEX2 =  0,-1, 0 if on the i1=i1max face,
   //                               FACEX0,FACEX1,FACEX2 =  0, 0,+1 if on the i2=i2min face, or
   //                               FACEX0,FACEX1,FACEX2 =  0, 0,-1 if on the i2=i2max face,
+  REAL r, partial_x0_partial_r, partial_x1_partial_r, partial_x2_partial_r;  // r and dx^i/dr at this outer
+  //                               boundary point. Grid-static, so precomputed once in bcstruct_set_up()
+  //                               instead of being recomputed for every gridfunction on every RK substep.
+  REAL r_int, partial_x0_partial_r_int, partial_x1_partial_r_int, partial_x2_partial_r_int;  // the same
+  //                               quantities at the nearest interior neighbour, (i0,i1,i2)+(FACEX0,FACEX1,FACEX2);
+  //                               "_int" abbreviates interior, not integer.
 } outerpt_bc_struct;
 
 typedef struct __bc_info_struct__ {

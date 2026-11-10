@@ -2,6 +2,9 @@
 Construct characteristic speeds at left and right interfaces of grid cells.
 These are to be fed into an approximate Riemann solver.
 
+The approximate MHD dispersion relation is Duez et al., Phys. Rev. D 72,
+024028 (2005), Eqs. (49)-(50), https://arxiv.org/abs/astro-ph/0503420v2.
+
 Author: Terrence Pierre Jacques
         terrencepierrej **at** gmail **dot* com
 """
@@ -19,17 +22,21 @@ def find_cp_cm(
     flux_dirn: int,
     g4UU: List[List[sp.Expr]],
     u4U: List[sp.Expr],
-    cs2: sp.Expr,
+    v02: sp.Expr,
 ) -> Tuple[sp.Expr, sp.Expr]:
     """
-    Compute the in-going and out-going characteristic speeds c_+ and c_-.
+    Return the smaller and larger roots c_- and c_+ of the characteristic quadratic.
+
+    The coefficients below come from expanding Duez et al. (2005),
+    Eqs. (49)-(50), for k_mu = (-omega, k_i) along flux_dirn and solving
+    for omega/k_i. They are derived forms, not equations printed there.
 
     :param flux_dirn: Direction for flux calculation.
     :param g4UU: contravariant form of the four-dimensional spacetime tensor g^{mu nu}
     :param u4U: four-velocity u^mu
-    :param cs2: sound speed squared
+    :param v02: Squared fluid-frame signal-speed estimate: c_s^2 for GRHD or v_0^2 for GRMHD.
 
-    :return: symbolic expressions of characteristic speeds c_+ and c_-, cminus and cplus
+    :return: Symbolic roots (cminus, cplus), ordered from smaller to larger.
 
     Note: Here we actually need to ensure that we're using rescaled quantities
     for the speeds and spatial metric. However, as discussed in the fluxes
@@ -37,7 +44,6 @@ def find_cp_cm(
     just using Cartesian coordinates.
 
     """
-    v02 = cs2
     a = (1 - v02) * (u4U[0] ** 2) - v02 * g4UU[0][0]
     b = 2 * v02 * g4UU[flux_dirn + 1][0] - 2 * u4U[flux_dirn + 1] * u4U[0] * (1 - v02)
     c = (1 - v02) * (u4U[flux_dirn + 1] ** 2) - v02 * g4UU[flux_dirn + 1][flux_dirn + 1]
@@ -71,35 +77,35 @@ def find_cmax_cmin(
     alpha_face: sp.Expr,
     u4U_r: List[sp.Expr],
     u4U_l: List[sp.Expr],
-    cs2_r: sp.Expr,
-    cs2_l: sp.Expr,
+    v02_r: sp.Expr,
+    v02_l: sp.Expr,
 ) -> Tuple[sp.Expr, sp.Expr]:
     """
-    Compute the maximum and minimum characteristic speeds c_max and c_min.
+    Compute nonnegative HLL speed bounds from two reconstructed face states.
+
+    The max/min prescription is Duez et al. (2005), Eq. (48) and the
+    definitions immediately preceding it.
 
     :param flux_dirn: Direction for flux calculation.
     :param gamma_faceDD: spatial metric at the cell interface.
     :param beta_faceU: shift vector at cell interface
     :param alpha_face: lapse function at cell interface
-    :param u4U_r: four-velocity u^mu at the right interface of a grid cell
-    :param u4U_l: four-velocity u^mu at the left interface of a grid cell
-    :param cs2_r: sound speed squared at the right interface of a grid cell
-    :param cs2_l: sound speed squared at the left interface of a grid cell
+    :param u4U_r: Four-velocity u^mu in the right reconstructed face state.
+    :param u4U_l: Four-velocity u^mu in the left reconstructed face state.
+    :param v02_r: Squared signal-speed estimate at the right face state.
+    :param v02_l: Squared signal-speed estimate at the left face state.
 
-    :return: symbolic expressions of the maximum and minimum
-             characteristic speeds c_max and c_min
+    :return: Nonnegative HLL bounds (cmin, cmax).
 
-    Note: We do not distinguish metric quantites between left and right
-    interfaces. This is because these quantities are usually smooth.
+    The face metric is shared by the right and left reconstructed states.
 
     """
     # First, we need to find the characteristic speeds on each face
     g4UU = ADM_to_g4UU(gamma_faceDD, beta_faceU, alpha_face)
 
-    # Original needed for GRMHD
-    cmr, cpr = find_cp_cm(flux_dirn, g4UU, u4U_r, cs2_r)
+    cmr, cpr = find_cp_cm(flux_dirn, g4UU, u4U_r, v02_r)
 
-    cml, cpl = find_cp_cm(flux_dirn, g4UU, u4U_l, cs2_l)
+    cml, cpl = find_cp_cm(flux_dirn, g4UU, u4U_l, v02_l)
 
     # The following algorithms have been verified with random floats:
 
@@ -219,6 +225,52 @@ if __name__ == "__main__":
 
     exprs_dict["cmin"] = cmin_tmp_test.subs(sp.Function("nrpyAbs"), sp.Abs)
     exprs_dict["cmax"] = cmax_tmp_test.subs(sp.Function("nrpyAbs"), sp.Abs)
+
+    # At the sample values above, every characteristic speed is negative, so
+    #   cmax = 0. Repeat on a flat face (alpha = 1, beta^i = 0, gamma_ij = delta_ij)
+    #   with a subsonic right state moving in +x and a subsonic left state moving
+    #   in -x: cmax then comes from the right state, cmin from the left state, and
+    #   the two differ. A second evaluation exchanges the face states, so the
+    #   other state sets each bound.
+    flat_gammaDD = ixp.zerorank2()
+    for i in range(3):
+        flat_gammaDD[i][i] = sp.sympify(1)
+    v_r, v_l = sp.Rational(1, 10), sp.Rational(-3, 10)
+    u4rU_subsonic: List[sp.Expr] = [
+        1 / sp.sqrt(1 - v_r**2),
+        v_r / sp.sqrt(1 - v_r**2),
+        sp.sympify(0),
+        sp.sympify(0),
+    ]
+    u4lU_subsonic: List[sp.Expr] = [
+        1 / sp.sqrt(1 - v_l**2),
+        v_l / sp.sqrt(1 - v_l**2),
+        sp.sympify(0),
+        sp.sympify(0),
+    ]
+    cs2_r_subsonic, cs2_l_subsonic = sp.Rational(1, 3), sp.Rational(1, 4)
+    for prefix, u4rU_sample, u4lU_sample, cs2_r_sample, cs2_l_sample in (
+        ("subsonic_", u4rU_subsonic, u4lU_subsonic, cs2_r_subsonic, cs2_l_subsonic),
+        (
+            "subsonic_exchanged_",
+            u4lU_subsonic,
+            u4rU_subsonic,
+            cs2_l_subsonic,
+            cs2_r_subsonic,
+        ),
+    ):
+        cmin_subsonic, cmax_subsonic = find_cmax_cmin(
+            0,
+            flat_gammaDD,
+            ixp.zerorank1(),
+            sp.sympify(1),
+            u4rU_sample,
+            u4lU_sample,
+            cs2_r_sample,
+            cs2_l_sample,
+        )
+        exprs_dict[prefix + "cmin"] = cmin_subsonic.subs(sp.Function("nrpyAbs"), sp.Abs)
+        exprs_dict[prefix + "cmax"] = cmax_subsonic.subs(sp.Function("nrpyAbs"), sp.Abs)
 
     results_dict = ve.process_dictionary_of_expressions(
         exprs_dict, fixed_mpfs_for_free_symbols=True

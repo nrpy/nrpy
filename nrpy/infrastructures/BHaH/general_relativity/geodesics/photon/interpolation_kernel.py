@@ -1,14 +1,14 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/interpolation_kernel.py
 r"""
-Provides the global memory kernel and orchestrator for the interpolation engine.
+Generates the CUDA/OpenMP function for tensor interpolation.
 
-This module registers a C function that orchestrates the parallel evaluation of the
-spacetime metric and Christoffel symbols for a batch of photons. It generates execution
-code for the active parallelization framework, launching threads or distributing
-tasks. The kernel maps data to the memory hierarchy by operating on Structure of
-Arrays (SoA) bundles. It unpacks photon state vectors from global memory into
-registers, invokes the numerical evaluators for the metric and connection components,
-and writes the computed tensor components back into their respective memory bundles.
+This module registers a C function that runs the parallel evaluation of the
+spacetime metric and Christoffel symbols for a photon chunk. It generates a CUDA
+kernel or an OpenMP loop for the selected parallelization target. Photon states,
+metric components, and connection components use flattened Structure-of-Arrays
+layouts. Each parallel iteration copies one photon state into a local array, invokes
+the metric and connection evaluators, and writes their tensor components to output
+arrays.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -21,11 +21,11 @@ import nrpy.params as par
 
 def interpolation_kernel(spacetime_name: str) -> None:
     r"""
-    Register the global kernel for tensor interpolation.
+    Register the CUDA/OpenMP function for tensor interpolation.
 
-    This kernel unpacks the photon state vector $f^{\mu}$ from global memory,
+    The generated parallel calculation reads the photon state vector $f^{\mu}$,
     evaluates the metric and connection components using the specified spacetime
-    evaluators, and writes the resulting tensors back to memory bundles.
+    evaluators, and writes the resulting tensors to output arrays.
 
     :param spacetime_name: The string identifier for the target numerical spacetime.
     :raises ValueError: If the provided spacetime_name string is empty.
@@ -55,7 +55,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
         "chunk_size": "const long int",
     }
 
-    # Pass commondata explicitly when not using CUDA's global memory
+    # Pass commondata explicitly to the OpenMP function.
     if parallelization != "cuda":
         arg_dict_cuda["commondata"] = "const commondata_struct *restrict"
         arg_dict_host["commondata"] = "const commondata_struct *restrict"
@@ -68,7 +68,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
     // The identifier $i$ represents the global thread index mapped to a specific photon ray.
     const long int i = blockIdx.x * blockDim.x + threadIdx.x;
 
-    // Guard prevents out-of-bounds VRAM access for threads exceeding the active chunk.
+    // Ignore CUDA threads beyond the active ray chunk.
     if (i >= chunk_size) return;
     """
         cd_ptr = "&d_commondata"
@@ -76,7 +76,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
     else:
         loop_preamble = """
     //==========================================
-    // OPENMP LOOP ARCHITECTURE
+    // OPENMP PARALLEL LOOP
     //==========================================
     // Distribute photon rays across available CPU threads for parallel evaluation.
     #pragma omp parallel for
@@ -87,37 +87,37 @@ def interpolation_kernel(spacetime_name: str) -> None:
 
     core_math = rf"""
     //==========================================
-    // MACRO DEFINITIONS FOR BUNDLE ACCESS
+    // MACRO DEFINITIONS FOR ARRAY ACCESS
     //==========================================
-    // IDX_F maps a component to the flattened state bundle using SoA layout.
+    // IDX_F maps a component to the flattened state array using SoA layout.
     #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
-    // IDX_METRIC maps a component to the flattened symmetric metric bundle.
+    // IDX_METRIC maps a component to the flattened symmetric metric array.
     #define IDX_METRIC(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
-    // IDX_CONN maps a component to the flattened Christoffel connection bundle.
+    // IDX_CONN maps a component to the flattened Christoffel connection array.
     #define IDX_CONN(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
 
     //==========================================
     // STATE UNPACKING
     //==========================================
-    double f_local[9]; // Local register array storing the 9-component state vector $f^{{\mu}}$.
+    double f_local[9]; // Local array storing the 9-component state vector $f^{{\mu}}$.
     int comp; // Loop index for iterating over the tensor components.
     for (comp = 0; comp < 9; ++comp) {{
-        // Load the state vector components from global memory into registers.
+        // Load one photon's state-vector components into a local array.
         f_local[comp] = d_f_bundle[IDX_F(comp, i)]; // Component of the photon state vector $f^{{\mu}}$.
     }} // END LOOP: for comp over 9 state vector components
 
     //==========================================
     // METRIC TENSOR EVALUATION
     //==========================================
-    double metric_local[10]; // Local register array storing the 10 upper-triangular components of $g_{{\mu\nu}}$.
+    double metric_local[10]; // Local array storing the 10 upper-triangular components of $g_{{\mu\nu}}$.
 
     // Evaluate the spacetime metric geometry.
     {metric_worker}({cd_ptr}, f_local, metric_local);
     //==========================================
-    // GLOBAL MEMORY WRITE (METRIC)
+    // METRIC OUTPUT
     //==========================================
     for (comp = 0; comp < 10; ++comp) {{
-        // Write the computed metric components $g_{{\mu\nu}}$ back to the global memory bundle.
+        // Write the computed metric components $g_{{\mu\nu}}$ to the output array.
         d_metric_bundle[IDX_METRIC(comp, i)] = metric_local[comp]; // Component of the spacetime metric $g_{{\mu\nu}}$.
     }} // END LOOP: for comp over 10 metric components
 
@@ -126,17 +126,17 @@ def interpolation_kernel(spacetime_name: str) -> None:
     //==========================================
     // Conditional logic skips connection calculation during the initialization phase if the pointer is NULL.
     if (d_connection_bundle != NULL) {{
-        // Local register array storing the 40 components of $\Gamma^{{\alpha}}_{{\beta\gamma}}$.
+        // Local array storing the 40 components of $\Gamma^{{\alpha}}_{{\beta\gamma}}$.
         double Gamma_local[40];
 
         // Evaluate the Christoffel symbols.
         {conn_worker}({cd_ptr}, f_local, Gamma_local);
 
         //==========================================
-        // GLOBAL MEMORY WRITE (CONNECTION)
+        // CONNECTION OUTPUT
         //==========================================
         for (comp = 0; comp < 40; ++comp) {{
-            // Write the computed connection components $\Gamma^{{\alpha}}_{{\beta\gamma}}$ to the global memory bundle.
+            // Write the computed connection components $\Gamma^{{\alpha}}_{{\beta\gamma}}$ to the output array.
             d_connection_bundle[IDX_CONN(comp, i)] = Gamma_local[comp];
         }} // END LOOP: for comp over 40 connection components
     }} // END IF: d_connection_bundle is not NULL
@@ -144,7 +144,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
     //==========================================
     // MACRO CLEANUP
     //==========================================
-    // Undefine macros to ensure hermetic compilation and prevent redefinition errors.
+    // Undefine local indexing macros before the next generated function.
     #undef IDX_F
     #undef IDX_METRIC
     #undef IDX_CONN
@@ -175,12 +175,14 @@ def interpolation_kernel(spacetime_name: str) -> None:
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
 
-    desc = rf""" Orchestrates the memory kernel for the {spacetime_name} interpolation engine.
+    desc = rf""" Evaluates the {spacetime_name} metric and connection for a photon chunk.
 
-    @param d_f_bundle Pointer to the state vector bundle $f^{{\mu}}$ in memory.
-    @param d_metric_bundle Pointer to the destination metric bundle $g_{{\mu\nu}}$ in memory.
-    @param d_connection_bundle Pointer to the destination connection bundle $\Gamma^{{\alpha}}_{{\beta\gamma}}$ in memory.
-    @param chunk_size The number of active rays in the current bundle batch.
+    @param commondata Pointer to spacetime parameters shared by all rays.
+    @param d_f_bundle Pointer to the state vector array $f^{{\mu}}$ in memory.
+    @param d_metric_bundle Pointer to the destination metric array $g_{{\mu\nu}}$ in memory.
+    @param d_connection_bundle Pointer to the destination connection array $\Gamma^{{\alpha}}_{{\beta\gamma}}$ in memory.
+    @param chunk_size The number of active rays in the current ray chunk.
+    @param stream_idx Work-array index; CUDA uses the corresponding stream.
     """
 
     cfunc_type = "void"

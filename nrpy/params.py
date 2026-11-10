@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 """
 
 import warnings
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import sympy as sp
 
@@ -77,6 +77,11 @@ def _parse_array_spec(cparam_type: str) -> Optional[int]:
     """
     Parse a C-style array type string like 'REAL[10]' to get its size.
 
+    This answers a narrower question than :func:`parse_cparam_type`: an integer
+    size for a ``REAL`` or ``int`` array only, ``None`` for anything else, and it
+    never raises.  ``parse_cparam_type`` accepts any base type, returns the base
+    and the size as strings, and raises on a non-numeric size.
+
     :param cparam_type: The C type string.
     :return: The integer size of the array if it's a valid array spec, otherwise None.
     """
@@ -94,6 +99,41 @@ def _parse_array_spec(cparam_type: str) -> Optional[int]:
             # If parsing fails (e.g., "REAL[]" or "REAL[abc]"), return None.
             return None
     return None
+
+
+def parse_cparam_type(cparam_type: str) -> Tuple[str, Optional[str], bool]:
+    """
+    Parse a cparam_type string into its base type, size, and array status.
+
+    :param cparam_type: The raw CParam type string, e.g., "REAL[8]".
+    :return: A tuple (base, size, is_array).
+    :raises ValueError: If the array size is not a numeric string.
+
+    Doctests:
+    >>> parse_cparam_type("int")
+    ('int', None, False)
+    >>> parse_cparam_type("REAL[8]")
+    ('REAL', '8', True)
+    >>> parse_cparam_type("char[100]")
+    ('char', '100', True)
+    >>> parse_cparam_type("  REAL[ 16 ] ")
+    ('REAL', '16', True)
+    >>> parse_cparam_type("char[NAME]")  # doctest: +IGNORE_EXCEPTION_DETAIL
+    Traceback (most recent call last):
+    ...
+    ValueError: Invalid array size 'NAME'
+    """
+    if "[" not in cparam_type or "]" not in cparam_type:
+        return cparam_type.strip(), None, False
+
+    base, after = cparam_type.split("[", 1)
+    size_str, _ = after.split("]", 1)
+    size = size_str.strip()
+
+    if not size.isdigit():
+        raise ValueError(f"Invalid array size '{size}'")
+
+    return base.strip(), size, True
 
 
 class CodeParameter:

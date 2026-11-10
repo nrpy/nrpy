@@ -75,9 +75,9 @@ static REAL norm_inf(REAL const *restrict const F, int const ntotal) {
 #pragma omp critical
     if (dmax1 > dmax)
       dmax = dmax1;
-  }
+  }  // END OMP PARALLEL: maximum residual reduction
   return dmax;
-}
+}  // END FUNCTION: norm_inf
 /* --------------------------------------------------------------------------*/
 /* UNUSED
    static void
@@ -130,22 +130,22 @@ static void LineRelax_al(REAL *restrict const dv, int const j, int const k, int 
             gsl_vector_set(diag, i, JFD[Ic][m]);
           if (col == Ip && i < n1 - 1)
             gsl_vector_set(e, i, JFD[Ic][m]);
-        }
-      }
-    }
+        }  // END ELSE: tridiagonal matrix entry
+      }  // END LOOP: for m: m < ncols[Ic]
+    }  // END LOOP: for i: i < n1
     gsl_linalg_solve_tridiag(diag, e, f, b, x);
     for (i = 0; i < n1; i++) {
       Ic = Index(ivar, i, j, k, nvar, n1, n2, n3);
       dv[Ic] = gsl_vector_get(x, i);
-    }
-  }
+    }  // END LOOP: for i: i < n1
+  }  // END LOOP: for ivar: ivar < nvar
 
   gsl_vector_free(diag);
   gsl_vector_free(e);
   gsl_vector_free(f);
   gsl_vector_free(b);
   gsl_vector_free(x);
-}
+}  // END FUNCTION: LineRelax_al
 
 /* --------------------------------------------------------------------------*/
 static void LineRelax_be(REAL *restrict const dv, int const i, int const k, int const nvar, int const n1, int const n2, int const n3, REAL const *restrict const rhs, int const *restrict const ncols,
@@ -178,21 +178,21 @@ static void LineRelax_be(REAL *restrict const dv, int const i, int const k, int 
             gsl_vector_set(diag, j, JFD[Ic][m]);
           if (col == Ip && j < n2 - 1)
             gsl_vector_set(e, j, JFD[Ic][m]);
-        }
-      }
-    }
+        }  // END ELSE: tridiagonal matrix entry
+      }  // END LOOP: for m: m < ncols[Ic]
+    }  // END LOOP: for j: j < n2
     gsl_linalg_solve_tridiag(diag, e, f, b, x);
     for (j = 0; j < n2; j++) {
       Ic = Index(ivar, i, j, k, nvar, n1, n2, n3);
       dv[Ic] = gsl_vector_get(x, j);
-    }
-  }
+    }  // END LOOP: for j: j < n2
+  }  // END LOOP: for ivar: ivar < nvar
   gsl_vector_free(diag);
   gsl_vector_free(e);
   gsl_vector_free(f);
   gsl_vector_free(b);
   gsl_vector_free(x);
-}
+}  // END FUNCTION: LineRelax_be
 
 /* --------------------------------------------------------------------------*/
 static void relax(REAL *restrict const dv, int const nvar, int const n1, int const n2, int const n3, REAL const *restrict const rhs, int const *restrict const ncols, int **cols, REAL **JFD) {
@@ -212,8 +212,8 @@ static void relax(REAL *restrict const dv, int const nvar, int const n1, int con
 #pragma omp parallel for schedule(dynamic)
       for (j = 0; j < n2; j = j + 2)
         LineRelax_al(dv, j, k, nvar, n1, n2, n3, rhs, ncols, cols, JFD);
-    }
-  }
+    }  // END LOOP: for n: n < N_PlaneRelax
+  }  // END LOOP: for k: k < n3
   for (k = 1; k < n3; k = k + 2) {
     for (n = 0; n < N_PlaneRelax; n++) {
 #pragma omp parallel for schedule(dynamic)
@@ -228,9 +228,9 @@ static void relax(REAL *restrict const dv, int const nvar, int const n1, int con
 #pragma omp parallel for schedule(dynamic)
       for (j = 0; j < n2; j = j + 2)
         LineRelax_al(dv, j, k, nvar, n1, n2, n3, rhs, ncols, cols, JFD);
-    }
-  }
-}
+    }  // END LOOP: for n: n < N_PlaneRelax
+  }  // END LOOP: for k: k < n3
+}  // END FUNCTION: relax
 
 /* --------------------------------------------------------------------------*/
 /* ZACH SAYS: THIS FUNCTION IS COMMENTED OUT WITHIN Newton(), SO WE COMMENT IT OUT HERE AS WELL.
@@ -325,7 +325,7 @@ static int bicgstab(ID_persist_struct par, int const nvar, int const n1, int con
   if (output == 1) {
     fprintf(stderr, "bicgstab:  itmax %d, tol %e\n", itmax, (double)tol);
     fflush(stdout);
-  }
+  }  // END IF: output == 1
 
   /* compute initial residual rt = r = F - J*dv */
   J_times_dv(par, nvar, n1, n2, n3, dv, r, u);
@@ -337,7 +337,7 @@ static int bicgstab(ID_persist_struct par, int const nvar, int const n1, int con
   if (output == 1) {
     fprintf(stderr, "bicgstab: %5d  %10.3e\n", 0, (double)*normres);
     fflush(stdout);
-  }
+  }  // END IF: output == 1
 
   if (*normres > tol) {
     /* cgs iteration */
@@ -351,12 +351,13 @@ static int bicgstab(ID_persist_struct par, int const nvar, int const n1, int con
 #pragma omp parallel for
         for (int j = 0; j < ntotal; j++)
           p[j] = r[j];
-      } else {
+      }  // END IF: ii == 0
+       else {
         beta = (rho / rho1) * (alpha / omega);
 #pragma omp parallel for
         for (int j = 0; j < ntotal; j++)
           p[j] = r[j] + beta * (p[j] - omega * vv[j]);
-      }
+      }  // END ELSE: update conjugate search direction
 
       /* compute direction adjusting vector ph and scalar alpha */
 #pragma omp parallel for
@@ -380,9 +381,9 @@ static int bicgstab(ID_persist_struct par, int const nvar, int const n1, int con
         if (output == 1) {
           fprintf(stderr, "bicgstab: %5d  %10.3e  %10.3e  %10.3e  %10.3e\n", ii + 1, (double)*normres, (double)alpha, (double)beta, (double)omega);
           fflush(stdout);
-        }
+        }  // END IF: output == 1
         break;
-      }
+      }  // END IF: *normres <= tol
 
       /* compute stabilizer vector sh and scalar omega */
 #pragma omp parallel for
@@ -399,20 +400,20 @@ static int bicgstab(ID_persist_struct par, int const nvar, int const n1, int con
       for (int j = 0; j < ntotal; j++) {
         dv.d0[j] += alpha * ph.d0[j] + omega * sh.d0[j];
         r[j] = s[j] - omega * t[j];
-      }
+      }  // END LOOP: for j: j < ntotal
       /* are we done? */
       *normres = norm2(r, ntotal);
       if (output == 1) {
         fprintf(stderr, "bicgstab: %5d  %10.3e  %10.3e  %10.3e  %10.3e\n", ii + 1, (double)*normres, (double)alpha, (double)beta, (double)omega);
         fflush(stdout);
-      }
+      }  // END IF: output == 1
       if (*normres <= tol)
         break;
       rho1 = rho;
       if (fabs(omega) < omegatol)
         break;
-    }
-  }
+    }  // END LOOP: for ii: ii < itmax
+  }  // END IF: *normres > tol
   /* free temporary storage */
   free_dvector(r, 0, ntotal - 1);
   free_dvector(p, 0, ntotal - 1);
@@ -447,7 +448,7 @@ static int bicgstab(ID_persist_struct par, int const nvar, int const n1, int con
 
   /* success! */
   return ii + 1;
-}
+}  // END FUNCTION: bicgstab
 
 /* -------------------------------------------------------------------*/
 """
@@ -473,7 +474,7 @@ static int bicgstab(ID_persist_struct par, int const nvar, int const n1, int con
     if (it == 0) {
       F_of_v(par, nvar, n1, n2, n3, v, F, u);
       dmax = norm_inf(F, ntotal);
-    }
+    }  // END IF: it == 0
 #pragma omp parallel for
     for (int j = 0; j < ntotal; j++)
       dv.d0[j] = 0;
@@ -481,7 +482,7 @@ static int bicgstab(ID_persist_struct par, int const nvar, int const n1, int con
     if (par.verbose == 1) {
       fprintf(stderr, "Newton: it=%d \t |F|=%e\n", it, (double)dmax);
       fprintf(stderr, "bare mass: mp=%g \t mm=%g\n", (double)par.par_m_plus, (double)par.par_m_minus);
-    }
+    }  // END IF: par.verbose == 1
 
     fflush(stdout);
     // ii =
@@ -492,11 +493,11 @@ static int bicgstab(ID_persist_struct par, int const nvar, int const n1, int con
     F_of_v(par, nvar, n1, n2, n3, v, F, u);
     dmax = norm_inf(F, ntotal);
     it += 1;
-  }
+  }  // END WHILE: Newton residual convergence
   if (itmax == 0) {
     F_of_v(par, nvar, n1, n2, n3, v, F, u);
     dmax = norm_inf(F, ntotal);
-  }
+  }  // END IF: itmax == 0
 
   if (par.verbose == 1)
     fprintf(stderr, "Newton: it=%d \t |F|=%e \n", it, (double)dmax);

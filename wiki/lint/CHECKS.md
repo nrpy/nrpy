@@ -1,119 +1,56 @@
 # Lint Checks
 
-> Mechanical and review checks for the Markdown KB. · Status: confirmed · Last reconciled: 07-20-2026
+> Mechanical and review checks for the Markdown KB. · Status: confirmed
 
 ## Summary
 
 Run these checks before considering KB work complete. The goal is a reachable,
 source-backed tree: root `AGENTS.md` routes, routers stay fact-light, leaves
-carry facts and sources, and excluded artifacts stay out of the KB.
+carry facts and sources, and excluded files stay out of the KB.
 
-## Mechanical Checks
+## Deterministic Checks
+
+- `python tools/kb_lint.py` prints `KB lint passed.` It checks Markdown links
+  and anchors, Obsidian-style links, router sections and edges, leaf section
+  order, `Up:` headers, `See Also` parents and neighbors, source registration,
+  reachability from `AGENTS.md`, one catalog row per normal leaf and catalog
+  status, a defining-page link or external/background marker for each glossary
+  term, status vocabularies, source-map columns and targets, contradiction rows
+  and markers, an `index.md` router in each content directory, non-Markdown or
+  maintenance files in `wiki/` and `raw/`, root-level maintenance files, and
+  volatile metadata.
+- `git diff --check` reports no whitespace errors.
+
+## Review Checks
 
 - `git status --short` shows only intended documentation/source-doc changes and
-  no generated artifacts.
-- `git diff --check` reports no whitespace errors.
-- `find wiki raw -type f ! -name '*.md' -print` returns no files.
-- `find . -maxdepth 1 -type f -name '*kb*instructions*.md' -print` returns no
-  root KB instruction file.
-- `rg -n '\[\[' AGENTS.md wiki raw/SOURCES.md` returns no Obsidian-style
-  links. Frozen `raw/source-docs/**/*.md` snapshots are immutable exemptions.
-- A marker scan returns no unfilled dates, to-do markers, or template text.
-- No removed source-tracking metadata appears in governed KB files, including
-  `raw/source-docs/**/*.md`: no hash digest values of any algorithm (`sha256`
-  or otherwise), no `Mtime`/`Hash` manifest table columns, and no `mtime`
-  values. Mentions of the removed metadata are allowed only in prohibition or
-  supersession statements.
-- No `YYYY-MM-DD` date literals remain; retained KB dates use `MM-DD-YYYY` or
-  approved placeholders such as `n/a`/`-`.
-- Agents are never told to compute, recompute, compare, or lint source-tracking
-  digests or timestamps; source drift is dependency-aware review per
-  [Workflows](../workflows.md).
-- Relative Markdown links from `AGENTS.md`, `wiki/**/*.md`, and
-  `raw/SOURCES.md` resolve within the repository. Frozen snapshots under
-  `raw/source-docs/` are preserved verbatim and exempt from link resolution;
-  their metadata checks still apply.
-- `python tools/kb_lint.py` runs all deterministic checks and prints `KB lint
-  passed.` on success. `--all` is an identical compatibility alias, not a
-  stronger mode.
-
-## Router Checks
-
-- Root `AGENTS.md` is the only root-level KB document.
-- Every content-bearing `wiki/` directory has an `index.md` router, except the
-  allowed `wiki/lint/` utility directory or another explicit schema exemption.
-- Every new `wiki/` directory with content pages has an `index.md` router in
-  the same change, unless explicitly exempted by [Schema](../SCHEMA.md).
-- No router has a `Detail` section.
-- Routers generally have no `Sources` section and carry no unique durable
-  implementation facts.
-- Routers link only to immediate children plus parent, root, or global hubs.
-- Root task shortcuts enter a top-level branch router instead of bypassing it.
-
-## Compounding Memory Checks
-
-- Every `wiki/**/*.md` page appears exactly once in [catalog.md](../catalog.md),
-  including routers, leaves, and governance/support pages.
-- Catalog targets equal the live wiki page set exactly. Catalog status/date
-  metadata agrees with page headers; router rows use `router` and `n/a`.
-- Catalog rows are one-line navigation aids only; they do not replace leaf
-  reading, leaf `Sources`, or source-backed detail.
-- Every glossary term has an owner page link, an explicit external/background
-  marker, or a matching concept-hub candidate row in `wiki/catalog.md`.
+  no generated files.
+- A marker scan returns no to-do markers or template text.
+- Every added or substantially revised passage has completed the review in
+  [Language For Computational Physicists](../computational-physics-language.md).
+- Routers carry no `Sources` section and no unique durable implementation facts.
+- Catalog rows are one-line navigation aids only.
 - [source-map.md](../source-map.md) covers seeded high-value dependencies,
   especially exact cited files and aggregate `partial` rows from
   [raw/SOURCES.md](../../raw/SOURCES.md).
-
-## Leaf Checks
-
-- Every non-router leaf has the required title, two-line header, and section
-  order: `Summary`, `Detail`, `Sources`, `See Also`.
-- Every leaf has non-empty sources and cites files by stable symbol or heading,
-  not generated line numbers.
-- Every leaf's `See Also` includes its parent router and at least one
-  neighboring wiki page.
-- Every cited file or symbol exists, and every cited authority is registered in
-  [raw/SOURCES.md](../../raw/SOURCES.md) directly or through a clearly named
-  aggregate row.
-- Literal source links in `Sources` resolve and their repository paths are
-  registered. Semantic truth, dynamic/generated symbols, and C/CUDA macros are
-  manual checks.
-
-## Contradiction Checks
-
-- Contradiction rows use unique `CONTR-0001` IDs and all schema columns. Active
-  rows use `contested`/`stale`, valid dates, linked affected pages, nonempty
-  rationale/owner/resolution test, and matching page markers/backlinks.
-
-## NRPy Baseline
-
-- No generated project output, binaries, images, archives, rendered artifacts,
-  scratch reports, token/latest reports, or planning/ranking artifacts are
-  added.
-- Root planning/task coordination artifacts that satisfy the
-  [Schema naming grammar](../SCHEMA.md#coordination-artifacts) remain outside KB
-  scope; matching alone does not authorize cataloging, routing, staging,
-  moving, or deletion.
+- Cited files are cited by stable symbol or heading, not generated line
+  numbers; cited symbols exist; semantic truth, dynamic or generated symbols,
+  and C/CUDA macros are checked by reading the source.
+- No generated project output, binaries, images, archives, rendered files,
+  scratch reports, or planning/ranking files are added. Root planning and task
+  files that follow the
+  [Schema naming grammar](../SCHEMA.md#coordination-artifacts) stay outside KB
+  scope.
 - Trusted-value files are source evidence, not hand-authored prose pages.
-- Handwritten Python edits, if any accidentally occur, require `black .` only
-  in an isolated, user-owned intended-change worktree or copy with no unrelated
-  modifications, plus the single-file static-analysis script for each modified
-  handwritten Python file. Before invoking that wrapper, apply the target-path
-  and execution-safety gate in [Static Analysis](../validation/static-analysis.md);
-  gate failure blocks completion pending separately authorized wrapper
-  hardening. A newly added handwritten file must report Pylint
-  **10.00/10.00**. An existing tracked handwritten file must not regress from
-  its pre-change score, including a grandfathered score at or below `9.5`.
-  Generated trusted `*/tests/*.py` data is exempt from per-file analysis, but
-  its handwritten owner is not.
+- Handwritten Python edits follow
+  [Static Analysis](../validation/static-analysis.md).
 
 ## Sources
 
 - [kb-instructions.md](../../raw/source-docs/kb-instructions.md) - section 7.8 for `wiki/lint/CHECKS.md`
-- [coding_style.md](../../coding_style.md) - `## Python Coding Style`, `### Formatting`
-- [original-agents.md](../../raw/source-docs/original-agents.md) - historical `## Required Checks`; current `coding_style.md` decides conflicts
 
 ## See Also
 
-- [Schema](../SCHEMA.md)
+- [KB Page Format](../SCHEMA.md)
 - [Workflows](../workflows.md)
+- [Language For Computational Physicists](../computational-physics-language.md)

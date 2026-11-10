@@ -1,6 +1,6 @@
 # Geodesics And Raytracing Runtime
 
-> BHaH runtime pieces for standalone geodesics and evolution-time raytracing export. · Status: confirmed · Last reconciled: 06-29-2026
+> BHaH runtime pieces for standalone geodesics and evolution-time raytracing export. · Status: confirmed
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -71,6 +71,37 @@ interpolation at the photon's coordinate time. The time-window manager owns the
 read-only mmap window over a combined numerical-spacetime container and widens
 each slot by temporal interpolation halo plus backward RKF45 lookahead.
 
+The spatial helper `azimuthal_symmetry_spatial_lagrange_interpolation` accepts
+only `Spherical` data on the angular lattice of
+[Hard Requirements For Angular Inner Boundaries](grids-coordinates-reference-metrics-and-boundaries.md#hard-requirements-for-angular-inner-boundaries)
+with exactly two stored phi planes: it returns
+`AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL` when
+`Nxx2 != 2` or when the stored azimuths do not differ by pi, so the pi shift is
+one plane, `Nphi/2`. It converts the photon position with
+`Cart_to_xx_and_nearest_i0i1i2_assume_valid`, places
+`2*numerical_spacetime_spatial_interp_order + 1` raw `(r, theta)` nodes around
+the unclamped nearest index on the extended logical grid, and keeps those raw
+node coordinates in the Lagrange weights.
+`azimuthal_symmetry_spatial_lagrange_map_extended_node` maps each raw node to a
+stored record through the origin reflection `r -> -r`, `theta -> pi - theta` and
+the polar reflections `theta -> -theta` or `2 pi - theta`, toggling the stored
+phi plane for each reflection. Because `output_raytracing_data` stores global
+Cartesian-basis `g4DD` and `Gamma4UDD`, the record found this way already holds
+the tensor at the raw node's Cartesian position. The helper nevertheless rotates
+each record taken from the toggled plane about z by `phi_ref - node_phi_ref`,
+that is by +/-pi, before weighted accumulation; this reverses every component
+with an odd number of x and y indices at reflected nodes.
+Claim status: contested; contradiction: CONTR-0023.
+See [CONTR-0023](../../contradictions.md#contr-0023).
+The final rotation by `target_phi - phi_ref`, from the stored reference azimuth
+to the target azimuth, is the correct use of axisymmetry, and targets whose
+`(r, theta)` stencil stays inside the stored interior are unaffected. No example
+generator calls `register_CFunction_numerical_interpolation`, and the error
+affects interpolated metric and connection samples along photon paths, not
+evolved fields.
+
+Evidence (descriptive behavior): [azimuthal_symmetry_spatial_lagrange_interpolation.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/azimuthal_symmetry_spatial_lagrange_interpolation.py), `register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation`; corroboration: [output_raytracing_data.py](../../../nrpy/infrastructures/BHaH/diagnostics/output_raytracing_data.py), module description of stored Cartesian tensor components (no test covers reflected stencil nodes)
+
 Evolution-time raytracing export lives under BHaH diagnostics. When enabled by
 `register_all_diagnostics`, the diagnostics function calls
 `output_raytracing_data` on scheduled output steps. The exporter requires a
@@ -102,7 +133,8 @@ and writes a read-only stacked container for downstream interpolation.
 - [calculate_ode_rhs_massive.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/massive/calculate_ode_rhs_massive.py) - `calculate_ode_rhs_massive`
 - [numerical_interpolation.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/numerical_interpolation.py) - `register_CFunction_numerical_interpolation`
 - [time_window_manager_numerical.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/time_window_manager_numerical.py) - `time_window_manager_numerical`, `NumericalTimeWindowManager`
-- [azimuthal_symmetry_spatial_lagrange_interpolation.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/azimuthal_symmetry_spatial_lagrange_interpolation.py) - `register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation`
+- [azimuthal_symmetry_spatial_lagrange_interpolation.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/azimuthal_symmetry_spatial_lagrange_interpolation.py) - `register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation`, `azimuthal_symmetry_spatial_lagrange_map_extended_node`
+- [xx_tofrom_Cart.py](../../../nrpy/infrastructures/BHaH/xx_tofrom_Cart.py) - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`
 - [output_raytracing_data.py](../../../nrpy/infrastructures/BHaH/diagnostics/output_raytracing_data.py) - `register_CFunction_output_raytracing_data`, `raytracing_data_point_index_from_logical_indices`
 - [combine_raytracing_time_slices.py](../../../nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py) - `Stage1Info`, `Layout`
 - [diagnostics.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics.py) - `register_all_diagnostics`, `enable_raytracing_data_output`
@@ -113,3 +145,4 @@ and writes a read-only stacked container for downstream interpolation.
 - [Diagnostics Output And Checkpointing](diagnostics-output-and-checkpointing.md)
 - [Geodesics](../../equations/general-relativity/geodesics.md)
 - [Black Hole Evolution](../../examples/black-hole-evolution.md)
+- Depends on: [Grids, Coordinates, Reference Metrics, And Boundaries](grids-coordinates-reference-metrics-and-boundaries.md)

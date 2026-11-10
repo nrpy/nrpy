@@ -1,6 +1,6 @@
 # BHaHAHA Public API And Input Contract
 
-> Define the BHaHAHA public C boundary, caller-owned inputs, generated-app controls, poisoning checks, and error vocabulary. · Status: confirmed · Last reconciled: 06-30-2026
+> Define the BHaHAHA public C boundary, caller-owned inputs, generated-app controls, poisoning checks, and error vocabulary. · Status: confirmed
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -110,7 +110,16 @@ feed BHaH orchestration and should not be described as public C ABI.
 The generated app checks that `bah_num_resolutions_multigrid` is positive and
 that active `bah_Ntheta_array_multigrid` and `bah_Nphi_array_multigrid`
 entries are positive before running; the current check does not enforce an
-upper bound against the generated array length or `MAX_RESOLUTIONS`.
+upper bound against the generated array length or `MAX_RESOLUTIONS`. Every
+active `bah_Nphi_array_multigrid` entry must also be even, as the
+[angular inner-boundary requirements](grids-coordinates-reference-metrics-and-boundaries.md#hard-requirements-for-angular-inner-boundaries)
+prescribe for the pole and origin identifications of BHaHAHA's spherical grids
+with theta in `[0, pi]` and phi in `[-pi, pi]`; `bah_Ntheta_array_multigrid`
+entries may be odd or even. The check does not test parity, and the default
+entries are even.
+
+Evidence (public/scientific contract): [numgrid__evol_set_up.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/numgrid__evol_set_up.py), `register_CFunction_numgrid__evol_set_up` theta and phi bounds; corroboration: [bcstruct_set_up.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/bcstruct_set_up.py), `Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt`; [BHaH_implementation.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/BHaH_implementation.py), `check_multigrid_resolution_inputs` (no test covers odd counts)
+
 BBH mode is also generated-app policy: when enabled, it requires exactly three
 horizons, requires valid non-overlapping individual/common horizon indices,
 starts the two individual horizons active, and starts the common horizon
@@ -121,6 +130,8 @@ public single-horizon `bah_find_horizon` call.
 
 - [BHaHAHA_header.h](../../../nrpy/infrastructures/BHaH/BHaHAHA/BHaHAHA_header.h) - `bhahaha_params_and_data_struct`, `bhahaha_diagnostics_struct`, `NUM_EXT_INPUT_CARTESIAN_GFS`, `IDX2`, `MAX_RESOLUTIONS`, public `bah_*` prototypes
 - [BHaH_implementation.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/BHaH_implementation.py) - `register_CFunction_bhahaha_find_horizons`, `check_multigrid_resolution_inputs`, `initialize_bhahaha_solver_params_and_shapes`, generated `CodeParameter` registrations and BHaH `commondata` arrays
+- [numgrid__evol_set_up.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/numgrid__evol_set_up.py) - `register_CFunction_numgrid__evol_set_up`
+- [bcstruct_set_up.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/bcstruct_set_up.py) - `Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt`
 - [poisoning_set_inputs.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/poisoning_set_inputs.py) - `register_CFunction_poisoning_set_inputs`, `poisoning_set_inputs`
 - [poisoning_check_inputs.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/poisoning_check_inputs.py) - `register_CFunction_poisoning_check_inputs`, `poisoning_check_inputs`
 - [error_message.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/error_message.py) - `error_code_msg_tuples_list`, `register_CFunction_error_message`

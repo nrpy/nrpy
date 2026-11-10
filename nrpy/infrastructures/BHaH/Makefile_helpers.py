@@ -341,7 +341,7 @@ endef
     if cc == "nvcc":
         if create_lib:
             valgrind_rule = """valgrind:
-\t@echo "Compute Sanitizer requires an executable test harness."
+\t@echo "Compute Sanitizer requires an executable test program."
 \t@false"""
         else:
             valgrind_rule = f"""valgrind:
@@ -408,7 +408,7 @@ $(OBJECTS): Makefile
 
 # Remove nested build products and root runtime output.
 clean:
-\t$(RM) -r {exec_or_library_name} $(DEPDIR) *.o */*.o */*/*.o *.d */*.d */*/*.d *.txt *.gp *.dat *.out *.avi *.png *.bin{recursive_clean}
+\t$(RM) -r {exec_or_library_name} $(DEPDIR) *.o */*.o */*/*.o *.d */*.d */*/*.d *.txt *.gp *.dat *.out *.log *.avi *.png *.bin{recursive_clean}
 
 -include $(DEPFILES)
 """

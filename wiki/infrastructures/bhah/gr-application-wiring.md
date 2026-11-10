@@ -1,6 +1,6 @@
 # GR Application Wiring
 
-> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 08-28-2026
+> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed.
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -20,8 +20,11 @@ and cleanup.
 
 ## Detail
 
+### RHS registration
+
 `register_CFunction_rhs_eval(..., enable_fCCZ4=False,
-enable_YBS_Gamma_constraint_adjustment=False)` generates the shared RHS
+enable_YBS_Gamma_constraint_adjustment=False,
+enable_YBS_momentum_constraint_adjustment=False)` generates the shared RHS
 CFunction and preserves BSSN as the public default. The fCCZ4 opt-in branch pulls
 non-gauge expressions from `fCCZ4_RHSs.get_rhs(...)` and gauge expressions from
 `fCCZ4_gauge_RHSs`; the default branch keeps `BSSN_RHSs[...]` and
@@ -37,42 +40,122 @@ signature changes with `enable_rfm_precompute`: it receives either
 damping, and slow-start lapse through code-generation flags and commondata
 parameters.
 
-The YBS option applies to either formulation. When enabled, the registrar
-leaves the coordinate/options cache string unchanged, registers the runtime
-`YBS_chi` parameter after the parallel-registration guard, and forwards the
-Boolean to the selected nongauge and gauge owners. BSSN defines the symbolic
-addition once; fCCZ4 reuses that adjusted base, with the connection slot
-interpreted as `LambdatildeU`. Each formulation keeps enabled expressions in a
-separate internal cache without encoding the Boolean in the coordinate name.
-The equation layer uses a plain real SymPy symbol, while this BHaH registrar
-owns the conditional runtime parameter. The standalone and superB black-hole
-generators expose no command-line switch for this option: each declares an
-explicit false source constant and forwards it to this shared registrar.
+Evidence (public/scientific contract): [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; corroboration: [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), formulation-selecting call
 
-Claim evidence:
-- Claim: `register_CFunction_rhs_eval` defaults to BSSN and accepts `enable_fCCZ4=True` to select the fCCZ4 non-gauge and gauge owners, while preserving the same generated CFunction boundary and applying optional local terms to a copied expression dictionary.
-- Role: public/scientific contract
-- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
-- Corroboration: [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), formulation-selecting call
-- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP; precision=double; GPU=not-run; restart=not-applicable; distributed=not-run; error_path=not-run; options=default BSSN generation/build, enable_fCCZ4=True generation/build and one-step startup; date=08-28-2026`
+### YBS options
 
-Claim evidence:
-- Claim: the shared registrar conditionally owns the runtime YBS parameter and forwards the opt-in flag to the selected BSSN or fCCZ4 equation and gauge owners; the four black-hole generators keep it explicitly false by default and share this registrar.
-- Role: descriptive behavior
-- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
-- Corroboration: [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py), and [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py), forwarded `enable_YBS_Gamma_constraint_adjustment` constants
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=BHaH and superB source wiring inspected only; precision=not-applicable; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=default-disabled callers plus enabled BSSN and fCCZ4 source branches; date=08-28-2026`
+The historical YBS Gamma option applies to either formulation. When enabled,
+the registrar leaves the coordinate/options cache string unchanged, registers
+the runtime `YBS_chi` parameter (default 0, which disables the term) after the
+parallel-registration guard, and
+forwards the Boolean to the selected nongauge and gauge owners. BSSN defines
+the symbolic addition once; fCCZ4 reuses that adjusted base, with the
+connection slot interpreted as `LambdatildeU`. Each formulation keeps enabled
+expressions in a separate internal cache without encoding the Boolean in the
+coordinate name. The equation layer uses a plain real SymPy symbol, while this
+BHaH registrar owns the conditional runtime parameter. The standalone and
+superB black-hole generators (`two_blackholes_collide.py`,
+`blackhole_spectroscopy.py`, `superB_two_blackholes_collide.py`, and
+`superB_blackhole_spectroscopy.py`) expose no command-line switch for this
+option: each declares an explicit false source constant and forwards it to this
+shared registrar.
+
+Evidence (descriptive behavior): [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; corroboration: [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py), and [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py), forwarded `enable_YBS_Gamma_constraint_adjustment` constants
+
+The separate `enable_YBS_momentum_constraint_adjustment` option controls the
+default-disabled timestep-scaled, `W`-weighted momentum adjustment for either
+formulation. When enabled, the registrar adds the shared raw-spacing `DSMINGF`
+auxiliary gridfunction and runtime `C_YBS_mom` parameter (default 0, which
+disables the term; recommended 1.75). The selected equation owner
+changes existing `a_rhsDD` outputs; no evolved cleaner state, cleaner RHS,
+initial-data path, boundary path, or KO route is added.
+`blackhole_spectroscopy.py` keeps a false source constant, forwards it only to
+RHS registration, and registers and schedules one generic local-spacing helper
+when either CAHD or YBS-MOM is enabled. CAHD consumes that same raw spacing in
+its RHS coefficient. The continuum equations and validation limits remain
+owned by [YBS-MOM Timestep-Scaled Momentum Adjustment](../../equations/general-relativity/ybs-momentum-damping.md).
+
+Evidence (descriptive behavior): [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; corroboration: [dsmin_gf.py](../../../nrpy/infrastructures/BHaH/general_relativity/dsmin_gf.py), `register_CFunction_dsmin_auxevol_gridfunction`; [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), shared CAHD/YBS-MOM registration and scheduling gate; [representative BHaH rhs_eval trusted output](../../../nrpy/infrastructures/BHaH/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_SinhSpherical_RbargfsFalse_T4munuFalse_ImprovementsFalse.py), `trusted_dict`
+
+### Ricci and stored hDD derivatives
 
 `register_CFunction_Ricci_eval` emits `Ricci_eval` from
-`BSSN_quantities[CoordSystem + "_rfm_precompute"].Ricci_exprs`. It always uses
+`BSSN_quantities[CoordSystem + "_rfm_precompute"].Ricci_exprs` by default. It always uses
 the rfm-precompute expression family, stores either ordinary `RBARDD*GF`
 auxiliary gridfunctions or `DIAG_RBARDD*GF` channels for the host-only
 diagnostics version, and wraps the interior loop with BHaH kernel/launch code.
 CUDA generation is rejected for `GeneralRFM`; `host_only_version=True`
 temporarily forces OpenMP generation so CUDA applications can still compute
 host-side diagnostic Ricci data as `Ricci_eval_host`.
+
+`register_CFunction_hDDdD_eval` (`hDDdD_eval.py`) stores the first derivatives of
+`hDD` as the `SCRATCH` gridfunctions `hDDdD`, each direction over the interior grown by
+`fd_order/2` points in the directions transverse to its own stencil, and
+`register_CFunction_Ricci_eval(..., enable_hDDdD_gridfunctions=True)` then reads them through
+an extra `scratch_gfs` argument, rebuilding every mixed second derivative of `hDD` as a single
+first derivative of the stored gridfunction. The registration helper returns the eligible
+gridfunction names, which Ricci passes as `stored_first_derivatives` to `c_codegen()`.
+Finite-difference lowering selects their reads and stencils while retaining the original
+mathematical derivative temporaries: centered first derivatives read the stored values,
+canonical mixed second derivatives apply a first-derivative stencil to them, and diagonal,
+upwind, and KO derivatives keep their own operators. Equation construction and cache keys are unchanged. No additional array is allocated during evolution for `hDDdD`: `blackhole_spectroscopy.py` calls
+`hDDdD_eval(params, RK_INPUT_GFS, RK_OUTPUT_GFS)` and
+`Ricci_eval(params, rfmstruct, RK_INPUT_GFS, RK_OUTPUT_GFS, auxevol_gfs)` before `rhs_eval`
+overwrites `RK_OUTPUT_GFS` in the same substep. It enables this only for CUDA double
+precision, where it was measured to help, and never with `RK3 Ralston` or `RK3 Heun`:
+their second stage keeps all three evolved-field arrays live, so none can hold the
+`hDDdD` values.
+
+Evidence (descriptive behavior): [finite_difference.py](../../../nrpy/finite_difference.py), `select_stored_first_derivatives`; [c_codegen.py](../../../nrpy/c_codegen.py), `gridfunction_management_and_FD_codegen`; corroboration: [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py) and [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), explicit consumer selections; owner doctests verify selection and polynomial evaluation
+
+### CPU tiling and diagnostic derivatives
+
+Both `register_CFunction_Ricci_eval` and `register_CFunction_rhs_eval` expose a
+default-false `enable_cpu_tiling` choice. Ordinary registrations therefore emit only
+the full-grid functions. In `blackhole_spectroscopy.py`, one eligibility predicate
+enables both tile producers, registers `rhs_eval_with_Ricci`, and replaces the
+separate full-grid calls with that coordinator; the predicate requires OpenMP,
+separate Ricci/RHS evaluation, reference-metric precompute, BSSN, and neither
+stored-derivative option. The full-grid functions remain registered for diagnostics
+and other callers.
+
+If explicitly enabled for OpenMP,
+`register_CFunction_diagnostic_gfs_set(..., enable_hDDdD_gridfunctions=True)` computes
+fresh derivatives from `y_n_gfs` in temporary scratch storage, passes that storage to
+Ricci, and frees it before evaluating constraints. CUDA diagnostics retain the
+unstored `Ricci_eval_host` path. The example registers the CPU tiled scheduler only
+when neither stored-derivative option is enabled, matching its call-site gate.
+Compilation of these paths does not establish runtime numerical correctness.
+
+Evidence (descriptive behavior): [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py), `register_CFunction_Ricci_eval`; [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` and `register_CFunction_rhs_eval_with_Ricci`; [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`; corroboration: [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), shared tile/coordinator predicate and call replacement; [hDDdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/hDDdD_eval.py), `register_CFunction_hDDdD_eval`, supplies fresh derivatives and stencil halos
+
+### Stored RHS derivatives
+
+`register_CFunction_cfdD_alphadD_vetUdD_eval` (`cfdD_alphadD_vetUdD_eval.py`) applies the
+same tensor-product identity to the right-hand sides. It stores the first derivatives of `cf`,
+`alpha` and `vetU` that their fifteen mixed second derivatives are built from as the `AUXEVOL`
+gridfunctions `cfdD`, `alphadD` and `vetUdD`, and
+`register_CFunction_rhs_eval(..., enable_cfdD_alphadD_vetUdD_gridfunctions=True)` selects
+the registered storage through the same `c_codegen()` option. BSSN/fCCZ4 RHSs,
+their gauge equations, and CAHD constraints retain their mathematical derivative
+symbols and ordinary cache entries. The producer gets its output expressions from
+`cfdD_alphadD_vetUdD_gridfunction_expressions()`, without rewriting completed equations.
+Unmixed and upwind derivatives keep their original stencils. Only the
+directions a mixed second derivative differentiates are stored, which is `partial_0` and
+`partial_1` with the index pair canonicalized to `j < k`, so ten gridfunctions are registered
+and each is produced over the interior grown by `fd_order/2` points in the directions that
+differentiate it. These cannot be `SCRATCH` gridfunctions like `hDDdD`: `rhs_eval` reads them
+with a stencil while writing the Method of Lines buffer, so a pointwise store would overwrite a
+neighbor's stencil point. They therefore cost memory: `NUM_AUXEVOL_GFS` goes 6 to 16, about 61 MB
+and 10% of the run's footprint on the standard grid, in device memory and again in the host
+mirror. The BHaH BSSN examples that build for CUDA (`blackhole_spectroscopy.py`,
+`two_blackholes_collide.py`, `spinning_blackhole.py`, `hydro_without_hydro.py`,
+`kasner_exact_evolution.py`) expose it as `enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU`
+next to their other options; it defaults to off because of the memory cost, requires `--cuda`,
+and when set calls `cfdD_alphadD_vetUdD_eval(params, RK_INPUT_GFS, auxevol_gfs)` before
+`rhs_eval` within each substep.
+
+### Constraint evaluation
 
 `register_CFunction_constraints_eval` emits the diagnostics-side Hamiltonian,
 momentum, and conformal connection-constraint evaluator. It temporarily forces
@@ -86,13 +169,9 @@ parallelization is CUDA, generated references to `RBARDD` and optional `T4UU`
 auxiliary gridfunctions are rewritten to diagnostic channels so host-side
 constraint evaluation consumes the diagnostic buffer filled for output.
 
-Claim evidence:
-- Claim: BHaH `register_CFunction_constraints_eval` writes Hamiltonian, `sqrt(BSSNconstraints.Msquared)`, and `BSSNconstraints.LambdaConstraintMagnitude` to `DIAG_HAMILTONIANGF`, `DIAG_MGF`, and `DIAG_LAMBDA_CONSTRAINTGF`; CUDA host-side generation retains the diagnostic-buffer input rewrites.
-- Role: descriptive behavior
-- Deciding authority: [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
-- Corroboration: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=BHaH OpenMP registration with CUDA rewrite path inspected; precision=symbolic code generation; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian registration contract plus source inspection of optional T4munu and CUDA rewrites; date=08-28-2026`
+Evidence (descriptive behavior): [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`; corroboration: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
+
+### Algebraic constraint projection
 
 `register_CFunction_enforce_detgbar_equals_detghat_trAzero` emits the combined
 algebraic-constraint CFunction. In one all-points loop it loads all independent
@@ -118,13 +197,9 @@ the same two projection hooks but remains explicitly BSSN-specific. Neither
 initial-data registration nor Method of Lines enables projection for every
 caller.
 
-Claim evidence:
-- Claim: BHaH preserves default-disabled `enable_conformal_projection` and `enable_fCCZ4` initial-data options; fresh fCCZ4 conversion initializes `Theta_fCCZ4` only after the checkpoint branch has declined to return, while checkpoint data are repaired/projected without fresh Theta overwrite; spectroscopy shares initial and post-RHS projection across BSSN and opt-in fCCZ4, while the separate collision example keeps its BSSN-specific projection wiring.
-- Role: public/scientific contract
-- Deciding authority: [initial_data.py](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [ADM_Initial_Data_Reader__BSSN_Converter.py](../../../nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py), `register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`; [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), formulation and projection registrations; [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), BSSN initial-data and Method of Lines registrations
-- Corroboration: [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
-- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP source registration; precision=double; GPU=not-run; restart=source-path-inspected only, no restart run; distributed=not-run; error_path=not-run; options=default BSSN generation/build, opt-in fCCZ4 generation/build and one-step startup, spectroscopy shared projection, collision path inspection only; date=08-28-2026`
+Evidence (public/scientific contract): [initial_data.py](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [ADM_Initial_Data_Reader__BSSN_Converter.py](../../../nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py), `register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`; [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), formulation and projection registrations; [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), BSSN initial-data and Method of Lines registrations; corroboration: [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
+
+### Initial-data assembly and ADM conversion
 
 `register_CFunction_initial_data` is the application-level initial-data
 assembler. For built-in exact data it instantiates `InitialData_Cartesian` or
@@ -149,11 +224,14 @@ converts Cartesian ADM data to Cartesian BSSN fields. `Cfunction_BSSN_Cart_to_re
 transforms those BSSN tensors/vectors to the destination reference-metric basis
 and applies BSSN rescalings. `build_initial_data_conversion_loop` writes
 `alpha`, `cf`, `trK`, `hDD`, `aDD`, `vetU`, `betU`, optional `T4UU`, and
-opt-in fresh-data `Theta_fCCZ4` into MoL gridfunction arrays.
+opt-in fresh-data `Theta_fCCZ4` into MoL gridfunction arrays. YBS-MOM adds no
+initial-data state.
 `build_lambdaU_zeroing_block` initializes `lambdaU`,
 `build_apply_inner_bcs_block` applies parity-sensitive inner boundary
 conditions, and `Cfunction_initial_data_lambdaU_grid_interior` computes
 `lambdaU` by finite differencing the initialized conformal metric.
+
+### Diagnostics
 
 `register_CFunction_diagnostic_gfs_set` bridges evolved GR state to diagnostics.
 It registers diagnostic gridfunctions, builds parity metadata for them, and
@@ -174,8 +252,10 @@ build recipes from diagnostic enum tokens and call
 coordinate-specialized by `register_CFunction_sqrt_detgammahat_d3xx_volume_element`
 when diagnostics are registered.
 
+### Basis transforms
+
 Basis transforms are registered through
-`basis_transforms.register_all.register_CFunctions`. The two production modules
+`basis_transforms.register_all.register_CFunctions`. The basis-transform modules
 emit private per-coordinate single-point kernels with coordinate-system suffixes.
 The public unsuffixed runtime dispatchers are emitted later by
 `rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs`. The
@@ -185,6 +265,8 @@ Cartesian, and writes Cartesian-basis storage. The Cartesian-to-rfm path reads
 Cartesian storage, transforms tensors/vectors into the destination basis,
 subtracts the destination reference metric where needed, rescales by `ReDD` and
 `ReU`, and writes native BSSN storage.
+
+### TwoPunctures and TOVola
 
 TwoPunctures is wired as an external compact-object initial-data family.
 `TwoPunctures_lib.register_C_functions_explicit` registers
@@ -197,7 +279,17 @@ defaults, copies or derives binary masses, separation, momenta, spin, center
 offset, spectral grid sizes, and orientation. The explicit orientation choices
 are `native_cartesian_xy_plane` and `legacy_swap_xz`; the older
 `register_C_functions(enable_xy_plane=...)` shim maps the boolean interface to
-those names. If TwoPunctures/TOVola setup detail grows beyond routing and
+those names. The shared initial-lapse default remains `psi^n`. `TP_Interp`
+also recognizes `W` and assigns `1 / (psi1 / static_psi)^2`, so the spectral
+correction `U` in `psi1` participates in that initial lapse. The top-level
+standalone and superB spectroscopy generators explicitly select `W` for SSL;
+callers without an override, including paper-reproduction examples, retain
+`psi^n`. Generation and compilation alone do not establish evolution behavior
+or scientific accuracy.
+
+Evidence (descriptive behavior): [ID_persist_struct.py](../../../nrpy/infrastructures/BHaH/general_relativity/TwoPunctures/ID_persist_struct.py), `register_CFunction_initialize_ID_persist_struct`; [TP_interp.py](../../../nrpy/infrastructures/BHaH/general_relativity/TwoPunctures/TP_interp.py), `register_CFunction_TP_Interp`; [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py) and [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py), `populate_ID_persist_struct_str`; corroboration: [superB_blackhole_spectroscopy_8Mseparation.py](../../../nrpy/examples/superb_paper2/superB_blackhole_spectroscopy_8Mseparation.py) and [superB_blackhole_spectroscopy_last_orbit.py](../../../nrpy/examples/superb_paper2/superB_blackhole_spectroscopy_last_orbit.py), unchanged shared-initializer calls without a lapse override
+
+If TwoPunctures/TOVola setup detail grows beyond routing and
 dataflow, split it into a future `compact-object-initial-data.md` leaf.
 
 TOVola is the corresponding single-star initial-data path. `TOVola.ID_persist_str`
@@ -213,9 +305,10 @@ zero extrinsic curvature, and stress-energy components. The GRHD TOV example
 uses this by registering `TOVola_interp`, `TOVola_solve`, and a spherical
 ADM-to-BSSN reader whose `ID_persist_struct_str` comes from TOVola.
 
+### Psi4 extraction
+
 Psi4 wiring has two layers. `psi4.register_CFunction_psi4` temporarily forces
-OpenMP generation, requires the grid origin to be zero, calls
-`generate_CFunction_psi4_tetrad` and
+OpenMP generation, calls `generate_CFunction_psi4_tetrad` and
 `generate_CFunction_psi4_metric_deriv_quantities` to create local helper
 kernels, then loops over interior points to write `DIAG_PSI4_REGF` and
 `DIAG_PSI4_IMGF`. The tetrad helper uses `Psi4Tetrads` to compute
@@ -225,7 +318,27 @@ symbolic `Psi4` expression. `psi4_spinweightm2_decomposition` then interpolates
 diagnostic Psi4 data from grid 0 onto spherical extraction shells, calls
 `spin_weight_minus2_sph_harmonics` for each `(l,m)`, numerically integrates
 over the shell, and appends `R_ext * psi4_{l,m}` time series to radius- and
-mode-tagged text files.
+mode-tagged text files. The tetrad is built from grid-local coordinates, while
+the extraction shells are centered on the global Cartesian origin, so the modes
+are correct only when `Cart_originx`, `Cart_originy`, and `Cart_originz` are
+zero. The generated code does not check this. The condition holds on every grid
+of the projects generated by the BHaH and superB spectroscopy generators,
+because these per-grid parameters default to zero, parameter files cannot set
+them, and no function registered by these generators changes them from that
+default. A zero origin is necessary but not sufficient, and it does not
+establish the accuracy of the extracted modes.
+
+Evidence (descriptive behavior): [psi4.py](../../../nrpy/infrastructures/BHaH/general_relativity/psi4/psi4.py), `register_CFunction_psi4`; [psi4_spinweightm2_decomposition.py](../../../nrpy/infrastructures/BHaH/general_relativity/psi4_spinweightm2_decomposition.py) and [superB psi4_spinweightm2_decomposition.py](../../../nrpy/infrastructures/superB/general_relativity/psi4_spinweightm2_decomposition.py), `register_CFunction_psi4_spinweightm2_decomposition`; [grid.py](../../../nrpy/grid.py), `Cart_origin`; [cmdline_input_and_parfiles.py](../../../nrpy/infrastructures/BHaH/cmdline_input_and_parfiles.py), `register_CFunction_cmdline_input_and_parfile_parser`; corroboration: [xx_tofrom_Cart.py](../../../nrpy/infrastructures/BHaH/xx_tofrom_Cart.py), `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, which subtracts `Cart_origin*` from the global Cartesian point before the inverse map
+
+Shell interpolation runs only when the unclamped nearest index of every shell
+point lies in the grid interior; otherwise every mode at that radius is written
+as zero. Its stencils read the `DIAG_PSI4_REGF` and `DIAG_PSI4_IMGF` inner ghost
+points filled by `apply_bcs_inner_only_specific_gfs()`; no outer fill reaches
+these channels, as
+[Inner Ghost Points In Interpolation Stencils](grids-coordinates-reference-metrics-and-boundaries.md#inner-ghost-points-in-interpolation-stencils)
+describes.
+
+Evidence (descriptive behavior): [psi4_spinweightm2_decomposition.py](../../../nrpy/infrastructures/BHaH/general_relativity/psi4_spinweightm2_decomposition.py), `register_CFunction_psi4_spinweightm2_decomposition`; corroboration: [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
 
 `spin_weight_minus2_sph_harmonics` is registered in the BHaH special-functions
 branch. It registers `swm2sh_maximum_l_mode_to_compute` in commondata and emits
@@ -239,7 +352,11 @@ does not remove `m=+l` cases from emitted BHaH C.
 ## Sources
 
 - [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py) - `register_CFunction_rhs_eval`
+- [dsmin_gf.py](../../../nrpy/infrastructures/BHaH/general_relativity/dsmin_gf.py) - `register_CFunction_dsmin_auxevol_gridfunction`
 - [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py) - `register_CFunction_Ricci_eval`
+- [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py) - `BSSNQuantities`, mathematical derivative construction
+- [hDDdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/hDDdD_eval.py) - `register_CFunction_hDDdD_eval`, `register_hDDdD_gridfunctions`
+- [cfdD_alphadD_vetUdD_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/cfdD_alphadD_vetUdD_eval.py) - `register_CFunction_cfdD_alphadD_vetUdD_eval`, `cfdD_alphadD_vetUdD_gridfunction_expressions`, `register_cfdD_alphadD_vetUdD_gridfunctions`
 - [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py) - `register_CFunction_constraints_eval`
 - [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - [initial_data.py](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py) - `register_CFunction_initial_data`
@@ -252,6 +369,7 @@ does not remove `m=+l` cases from emitted BHaH C.
 - [basis_transform_BSSN_Cartesian_to_rfm_single_point.py](../../../nrpy/infrastructures/BHaH/general_relativity/basis_transforms/basis_transform_BSSN_Cartesian_to_rfm_single_point.py) - `register_CFunction_basis_transform_BSSN_Cartesian_to_rfm_single_point`
 - [TwoPunctures_lib.py](../../../nrpy/infrastructures/BHaH/general_relativity/TwoPunctures/TwoPunctures_lib.py) - `register_C_functions_explicit`, `register_C_functions`
 - [ID_persist_struct.py](../../../nrpy/infrastructures/BHaH/general_relativity/TwoPunctures/ID_persist_struct.py) - `ID_persist_str`, `register_CFunction_initialize_ID_persist_struct`
+- [TP_interp.py](../../../nrpy/infrastructures/BHaH/general_relativity/TwoPunctures/TP_interp.py) - `register_CFunction_TP_Interp`
 - [TOVola/ID_persist_struct.py](../../../nrpy/infrastructures/BHaH/general_relativity/TOVola/ID_persist_struct.py) - `ID_persist_str`
 - [TOVola_solve.py](../../../nrpy/infrastructures/BHaH/general_relativity/TOVola/TOVola_solve.py) - `register_CFunction_TOVola_solve`
 - [TOVola_interp.py](../../../nrpy/infrastructures/BHaH/general_relativity/TOVola/TOVola_interp.py) - `register_CFunction_TOVola_interp`
@@ -259,6 +377,9 @@ does not remove `m=+l` cases from emitted BHaH C.
 - [compute_psi4_metric_deriv.py](../../../nrpy/infrastructures/BHaH/general_relativity/psi4/compute_psi4_metric_deriv.py) - `generate_CFunction_psi4_metric_deriv_quantities`
 - [compute_psi4_tetrad.py](../../../nrpy/infrastructures/BHaH/general_relativity/psi4/compute_psi4_tetrad.py) - `generate_CFunction_psi4_tetrad`
 - [psi4_spinweightm2_decomposition.py](../../../nrpy/infrastructures/BHaH/general_relativity/psi4_spinweightm2_decomposition.py) - `register_CFunction_psi4_spinweightm2_decomposition`, `lowlevel_decompose_psi4_into_swm2_modes`
+- [superB psi4_spinweightm2_decomposition.py](../../../nrpy/infrastructures/superB/general_relativity/psi4_spinweightm2_decomposition.py) - `register_CFunction_psi4_spinweightm2_decomposition`
+- [grid.py](../../../nrpy/grid.py) - `Cart_origin`, the per-grid `Cart_originx`, `Cart_originy`, `Cart_originz` parameters
+- [cmdline_input_and_parfiles.py](../../../nrpy/infrastructures/BHaH/cmdline_input_and_parfiles.py) - `register_CFunction_cmdline_input_and_parfile_parser`, which reads only commondata parameters
 - [spin_weight_minus2_spherical_harmonics.py](../../../nrpy/infrastructures/BHaH/special_functions/spin_weight_minus2_spherical_harmonics.py) - `register_CFunction_spin_weight_minus2_sph_harmonics`
 - [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py) - `BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval`, `BHaH.general_relativity.basis_transforms.register_all.register_CFunctions`
 - [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py) - `--fccz4`, formulation-selecting RHS/initial-data registration, shared projection hooks
@@ -271,6 +392,7 @@ does not remove `m=+l` cases from emitted BHaH C.
 
 - Parent: [BHaH](index.md)
 - Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)
+- Depends on: [YBS-MOM Timestep-Scaled Momentum Adjustment](../../equations/general-relativity/ybs-momentum-damping.md)
 - Depends on: [Initial Data](../../equations/general-relativity/initial-data.md)
 - Depends on: [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md)
 - Depends on: [Psi4 And Tetrads](../../equations/general-relativity/psi4-and-tetrads.md)

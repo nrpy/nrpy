@@ -48,9 +48,10 @@ def register_CFunction_TP_solve() -> None:
 
     if (par->use_sources) {
       fprintf(stderr, "Solving puncture equation for BH-NS/NS-NS system\n");
-    } else {
+    }  // END IF: par->use_sources
+     else {
       fprintf(stderr, "Solving puncture equation for BH-BH system\n");
-    }
+    }  // END ELSE: vacuum binary black holes
     fprintf(stderr, "b = %g\n", par->par_b);
 
     /* initialise to 0 */
@@ -75,7 +76,7 @@ def register_CFunction_TP_solve() -> None:
       par->v.d22[j] = 0.0;
       par->v.d23[j] = 0.0;
       par->v.d33[j] = 0.0;
-    }
+    }  // END LOOP: for j: j < ntotal
     /* call for external initial guess */
     // ZACH SAYS: DISABLED.
     /*
@@ -127,10 +128,10 @@ def register_CFunction_TP_solve() -> None:
         par->par_m_plus = par->mp;
         par->par_m_minus = par->mm;
 
-      } while ((mp_adm_err > par->adm_tol) || (mm_adm_err > par->adm_tol));
+      } while ((mp_adm_err > par->adm_tol) || (mm_adm_err > par->adm_tol));  // END DO-WHILE: solve for bare masses
 
       fprintf(stderr, "Found bare masses.\n");
-    }
+    }  // END IF: !(par->give_bare_mass)
 
     TP_Newton(*par, nvar, n1, n2, n3, par->v, par->Newton_tol, par->Newton_maxit);
 
@@ -180,7 +181,7 @@ def register_CFunction_TP_solve() -> None:
               par->center_offset[0] * par->par_P_plus[2] - par->par_b * par->par_P_plus[2] + par->par_S_minus[1] + par->par_S_plus[1];
     par->J3 = -(par->center_offset[1] * par->par_P_minus[0]) + par->center_offset[0] * par->par_P_minus[1] - par->par_b * par->par_P_minus[1] - par->center_offset[1] * par->par_P_plus[0] +
               par->center_offset[0] * par->par_P_plus[1] + par->par_b * par->par_P_plus[1] + par->par_S_minus[2] + par->par_S_plus[2];
-  }
+  }  // END IF: !F
 
   free_dvector(F, 0, ntotal - 1);
   free_derivs(&u, ntotal);

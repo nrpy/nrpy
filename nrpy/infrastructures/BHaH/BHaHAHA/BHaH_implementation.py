@@ -563,8 +563,8 @@ static void BHaHAHA_interpolate_metric_data_nrpy(const commondata_struct *restri
 """
 
     desc = r"""Main driver function for finding apparent horizons using the BHaHAHA library.
-It orchestrates initialization, BBH logic, extrapolation, interpolation, solving,
-and result updates for multiple horizons.
+It initializes horizon data, applies the binary-black-hole horizon-selection rules, extrapolates and interpolates the
+metric, solves for each horizon, and updates the results.
 
 - The function performs the following steps:
 - 1. Checks if a horizon find is scheduled for the current iteration based on
@@ -583,7 +583,8 @@ and result updates for multiple horizons.
 -          to re-initialize non-persistent solver params (shape arrays are not re-allocated).
 - 4. Populates current iteration metadata (iteration number `nn`, simulation `time`) into each
 -    horizon's `bhahaha_params_and_data_struct`.
-- 5. Applies BBH mode logic if `commondata->bah_enable_BBH_mode` is true:
+- 5. If `commondata->bah_enable_BBH_mode` is true, selects which individual and
+-    common horizon searches remain active:
 -    a. Deactivates individual inspiral BH searches if the common horizon was found previously and is active.
 -    b. Activates the common horizon search if both individual BHs are active, the common horizon is not yet active,
 -       and the individual BHs (based on their previous find's center and max radius) meet a proximity criterion

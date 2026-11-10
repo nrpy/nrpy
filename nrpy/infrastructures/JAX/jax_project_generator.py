@@ -9,8 +9,8 @@ Example:
     >>> from nrpy.infrastructures.JAX.jax_project_generator import output_PyFunction_files_and_construct_project
     >>> output_PyFunction_files_and_construct_project("project/blank_project", "blank_project")
 
-Author: Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+Author: Siddharth Mahesh
+        sm0193 **at** mix **dot* wvu **dot* edu
 """
 
 import logging
@@ -244,8 +244,6 @@ build-backend = "setuptools.build_meta"
     setup_cfg_content = """[metadata]
 name = {name}
 version = 0.1.0
-author = Your Name
-author_email = your.email@example.com
 description = JAX-accelerated numerical computations
 long_description = file: README.md
 long_description_content_type = text/markdown

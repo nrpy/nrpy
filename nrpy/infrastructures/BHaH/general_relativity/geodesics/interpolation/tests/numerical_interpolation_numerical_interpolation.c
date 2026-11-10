@@ -7,24 +7,24 @@
  * Interpolate numerical-spacetime tensors for one photon chunk.
  *
  * The caller supplies an active numerical time window, a spatial interpolation
- * context, and one chunk of photon states in the same Structure-of-Arrays bundle
+ * context, and one chunk of photon states in the same Structure-of-Arrays
  * layout used by the analytic geodesic interpolation kernel. This CPU wrapper
  * parallelizes over rays, selects each photon's mapped temporal stencil, performs
  * spatial interpolation on every stencil slice, performs temporal interpolation
  * at the photon coordinate time, and writes the final metric and optional
- * Christoffel bundles.
+ * Christoffel component arrays.
  *
  * The design goal is to let all photons in the chunk reuse the same mapped
- * numerical-spacetime payload window rather than loading numerical grids
+ * numerical-spacetime data window rather than loading numerical grids
  * independently ray-by-ray.
  *
  * @param[in] commondata Common runtime parameters.
  * @param[in] params Generated BHaH grid parameters for the mapped numerical data.
  * @param[in] spatial_context Trusted azimuthal-symmetry spatial interpolation context.
  * @param[in] numerical_window Active mapped numerical time-window manager.
- * @param[in] d_f_bundle Photon state bundle.
- * @param[out] d_metric_bundle Destination metric bundle.
- * @param[out] d_connection_bundle Destination Christoffel bundle, or NULL.
+ * @param[in] d_f_bundle Photon state array.
+ * @param[out] d_metric_bundle Destination metric array.
+ * @param[out] d_connection_bundle Destination Christoffel array, or NULL.
  * @param chunk_size Number of active rays in the chunk.
  * @param stream_idx Analytic-kernel compatibility argument; ignored on CPU.
  *
@@ -56,7 +56,7 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
         for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
           d_connection_bundle[IDX_CONN(comp, i)] = NAN;
         } // END LOOP: for comp over connection outputs after invalid temporal order
-      } // END IF: connection output bundle was requested
+      } // END IF: connection output array was requested
     } // END LOOP: for i over rays after invalid temporal order
 #undef IDX_F
 #undef IDX_METRIC
@@ -74,7 +74,7 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
         for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
           d_connection_bundle[IDX_CONN(comp, i)] = NAN;
         } // END LOOP: for comp over connection outputs after inconsistent temporal stencil size
-      } // END IF: connection output bundle was requested
+      } // END IF: connection output array was requested
     } // END LOOP: for i over rays after inconsistent temporal stencil size
 #undef IDX_F
 #undef IDX_METRIC
@@ -105,13 +105,13 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
       ray_failed = 1;
     } else {
       // Step 2: Interpolate each mapped time slice in space at the photon
-      // position, producing one tensor bundle per temporal node.
+      // position, producing one tensor array per temporal node.
       const int spatial_status = azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(
           spatial_context, commondata, params, x, y, z, temporal_num_points, slice_payloads, g4dd_slices, gamma4udd_slices);
       if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
         ray_failed = 1;
       } else {
-        // Step 3: Interpolate the per-slice tensor bundles in physical time to the
+        // Step 3: Interpolate the per-slice tensor arrays in physical time to the
         // photon coordinate time.
         const int temporal_status =
             temporal_lagrange_interpolation(commondata, slice_times, g4dd_slices, gamma4udd_slices, t, g4dd_local, gamma4udd_local);
@@ -129,7 +129,7 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
         for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
           d_connection_bundle[IDX_CONN(comp, i)] = NAN;
         } // END LOOP: for comp over connection failure outputs
-      } // END IF: connection output bundle was requested
+      } // END IF: connection output array was requested
       continue;
     } // END IF: at least one interpolation stage failed for this ray
 
@@ -140,7 +140,7 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
       for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
         d_connection_bundle[IDX_CONN(comp, i)] = (double)gamma4udd_local[comp];
       } // END LOOP: for comp over final Christoffel components
-    } // END IF: connection output bundle was requested
+    } // END IF: connection output array was requested
   } // END LOOP: for i over rays in chunk
 
 #undef IDX_F

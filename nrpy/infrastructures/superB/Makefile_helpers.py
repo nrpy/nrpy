@@ -212,31 +212,25 @@ timestepping.o: timestepping.cpp timestepping.h main.h timestepping.def.h
 timestepping.h: timestepping.decl.h
 main.h: timestepping.decl.h main.decl.h
 
-timestepping.decl.h timestepping.def.h: timestepping.ci
-	$(CC) $(CFLAGS) $(INCLUDEDIRS) timestepping.ci
+# One charmc run on X.ci writes both X.decl.h and X.def.h. A pattern rule tells make so;
+# an explicit two-target rule would let make -j run charmc twice and overwrite X.decl.h mid-compile.
+%.decl.h %.def.h: %.ci
+	$(CC) $(CFLAGS) $(INCLUDEDIRS) $<
 
 main.o: main.cpp main.h main.decl.h main.def.h timestepping.decl.h
 	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
-
-main.decl.h main.def.h: main.ci
-	$(CC) $(CFLAGS) $(INCLUDEDIRS) main.ci
 
 {exec_or_library_name}: $(OBJ_FILES) timestepping.o main.o
 """
     else:
         # Full build: add interpolator3d + horizon_finder
         Makefile_str += f"""
-timestepping.decl.h timestepping.def.h: timestepping.ci
-	$(CC) timestepping.ci
+# One charmc run on X.ci writes both X.decl.h and X.def.h. A pattern rule tells make so;
+# an explicit two-target rule would let make -j run charmc twice and overwrite X.decl.h mid-compile.
+%.decl.h %.def.h: %.ci
+	$(CC) $<
 
-interpolator3d.decl.h interpolator3d.def.h: interpolator3d.ci
-	$(CC) interpolator3d.ci
-
-horizon_finder.decl.h horizon_finder.def.h: horizon_finder.ci interpolator3d.decl.h
-	$(CC) horizon_finder.ci
-
-main.decl.h main.def.h: main.ci
-	$(CC) main.ci
+horizon_finder.decl.h: interpolator3d.decl.h
 
 timestepping.h: timestepping.decl.h
 interpolator3d.h: interpolator3d.decl.h

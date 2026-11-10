@@ -28,7 +28,8 @@ python -m nrpy.examples.sebobv1_jax
 
 Currently, the project initializes the SEOBNRv5 aligned spin coefficients.
 A basic installation test is available by running:
-python -m tests.test_basic
+pip install -e ".[test]"
+pytest
 from the generated project directory.
 
 Ongoing project goals:
@@ -95,8 +96,9 @@ JAX.commondata.register_commondata_params(
         "float",
         "float",
         "float",
+        "float",
     ],
-    defaults=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    defaults=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
     descriptions=[
         "Mass of the first object",
         "Mass of the second object",

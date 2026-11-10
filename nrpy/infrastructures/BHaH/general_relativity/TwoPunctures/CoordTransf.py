@@ -74,8 +74,8 @@ void AB_To_XR(int nvar, REAL A, REAL B, REAL *X, REAL *R, derivs U)
     U.d23[ivar] = B_R * U.d23[ivar];
     U.d1[ivar] = A_X * U.d1[ivar];
     U.d2[ivar] = B_R * U.d2[ivar];
-  }
-}
+  }  // END LOOP: for ivar: ivar < nvar
+}  // END FUNCTION: AB_To_XR
 
 /*-----------------------------------------------------------*/
 void C_To_c(ID_persist_struct par, int nvar, REAL X, REAL R, REAL *x, REAL *r, derivs U)
@@ -130,11 +130,11 @@ void C_To_c(ID_persist_struct par, int nvar, REAL X, REAL R, REAL *x, REAL *r, d
     U.d11[ivar] = 2 * (U_cb + GSL_REAL(U_cc));
     U.d22[ivar] = 2 * (U_cb - GSL_REAL(U_cc));
     U.d12[ivar] = -2 * GSL_IMAG(U_cc);
-  }
+  }  // END LOOP: for ivar: ivar < nvar
 
   *x = GSL_REAL(c);
   *r = GSL_IMAG(c);
-}
+}  // END FUNCTION: C_To_c
 
 /*-----------------------------------------------------------*/
 void rx3_To_xyz(int nvar, REAL x, REAL r, REAL phi, REAL *y, REAL *z, derivs U)
@@ -166,8 +166,8 @@ void rx3_To_xyz(int nvar, REAL x, REAL r, REAL phi, REAL *y, REAL *z, derivs U)
                   - cos_2phi * r_inv2 * (U_3 - r * U_r3);
     U.d33[jvar] = U_rr * sin2_phi + r_inv2 * cos2_phi * (U_33 + r * U_r) /* U_zz*/
                   - sin_2phi * r_inv2 * (U_3 - r * U_r3);
-  }
-}
+  }  // END LOOP: for jvar: jvar < nvar
+}  // END FUNCTION: rx3_To_xyz
 
 /*-----------------------------------------------------------*/
 """

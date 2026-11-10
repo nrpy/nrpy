@@ -58,7 +58,7 @@ if (x_result == NULL){
   fprintf(stderr, "In SEOBNRv5_aligned_spin_initial_conditions_conservative(), malloc() failed for x_result\\n");
   exit(1);
 }
-SEOBNRv5_aligned_multidimensional_root_wrapper(f,x_guess,n,x_result);
+SEOBNRv5_aligned_spin_multidimensional_root_wrapper(f,x_guess,n,x_result);
 commondata->r = x_result[0];
 commondata->pphi = x_result[1];
 free(x_result);

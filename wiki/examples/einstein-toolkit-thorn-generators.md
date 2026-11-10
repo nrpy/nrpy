@@ -1,11 +1,11 @@
 # Einstein Toolkit Thorn Generators
 
-> Explain NRPy's Einstein Toolkit thorn-generation examples and checked-in ET fixtures. · Status: confirmed · Last reconciled: 07-12-2026
+> Explain NRPy's Einstein Toolkit thorn-generation examples and checked-in ET fixtures. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
 
-NRPy has four Einstein Toolkit thorn generators. The ETLegacy/Carpet examples
+NRPy has Einstein Toolkit thorn generators. The ETLegacy/Carpet examples
 write classic Carpet thorns: `carpet_wavetoy_thorns.py` writes
 `WaveToyNRPy`, `IDWaveToyNRPy`, and `diagWaveToyNRPy` under
 `project/et_wavetoy/`, while `carpet_baikal_thorns.py` writes `Baikal` and
@@ -60,7 +60,7 @@ mirrors the Carpet Baikal generator. The CarpetX Baikal generator uses
 zero-RHS helpers, and the same BSSN/Ricci/RHS/constraints/poststep-repair
 registration family as the ETLegacy generator.
 
-WaveToy is split into three thorns in both output families. The ID thorn writes
+WaveToy is split into separate thorns in both output families. The ID thorn writes
 the spherical-Gaussian exact solution at `CCTK_INITIAL` and owns initial-data
 parameters such as `sigma` and `wavespeed`. The evolution thorn owns `uu` and
 `vv` evolution variables, registers RHS evaluation for the wave equation, and
@@ -95,10 +95,10 @@ an Apptainer ET image, symlinks `project/et_baikal/Baikal*` and
 `project/et_wavetoy/*` into the ET arrangements tree, symlinks the checked-in
 WaveToy tests into `WaveToyNRPy/`, builds ET, and runs the `Baikal`,
 `BaikalVacuum`, and `WaveToyNRPy` testsuites. The local full-CI script also
-runs all four generator scripts and deliberately skips compiling paths whose
+runs its listed generator scripts and deliberately skips compiling paths whose
 script name contains `carpet`, so the CarpetX examples have a checked local
 generation command route but no local ET build route in that script. Neither
-configuration proves a latest successful run. The GitHub job does not invoke
+configuration establishes an execution outcome. The GitHub job does not invoke
 either `carpetx_*` generator.
 
 Einstein Toolkit's own [Adding a test case](https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case)

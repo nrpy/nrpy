@@ -61,8 +61,6 @@ class SEOBNRv5_aligned_spin_merger_quantities:
             - 'wdot_t_attach' : the NR-fitted first time derivative of the angular frequency of the (l=2,m=2) mode
                                 at the NQC attachment time.
                                 (Equation C36 of https://arxiv.org/pdf/2303.18039)
-
-        :return None:
         """
         (
             m1,

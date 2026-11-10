@@ -1062,8 +1062,8 @@ def register_CFunction_bhahaha_find_horizons(
     )
 
     desc = r"""Main driver function for finding apparent horizons using the BHaHAHA library.
-It orchestrates initialization, extrapolation, spherical-target setup/staging, solving,
-and result updates for multiple horizons.
+It initializes horizon data, extrapolates and interpolates the metric on spherical
+targets, solves for each horizon, and updates the results.
 
 - The function performs the following steps:
 - 1. Checks if a horizon find is scheduled for the current iteration based on

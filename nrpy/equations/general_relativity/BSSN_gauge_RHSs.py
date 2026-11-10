@@ -13,7 +13,7 @@ Authors: Zachariah B. Etienne
 """
 
 # Step 1: Import all needed modules from NRPy:
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -37,6 +37,7 @@ def BSSN_gauge_RHSs(
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant",
     enable_YBS_Gamma_constraint_adjustment: bool = False,
+    evolved_connection_rhsU: Optional[List[sp.Expr]] = None,
 ) -> Tuple[sp.Expr, List[sp.Expr], List[sp.Expr]]:
     """
     Core gauge evolution equation right-hand-side expression generation function.
@@ -47,6 +48,8 @@ def BSSN_gauge_RHSs(
     :param LapseEvolutionOption: Specifies the lapse condition to use.
     :param ShiftEvolutionOption: Specifies the shift condition to use.
     :param enable_YBS_Gamma_constraint_adjustment: Whether to enable the YBS Gamma-constraint adjustment.
+    :param evolved_connection_rhsU: Connection RHS used by derivative-based
+        shift conditions; defaults to the complete BSSN connection RHS.
 
     :return: Returns a tuple of sympy expressions for the right-hand-side of the gauge evolution equations.
 
@@ -108,6 +111,8 @@ def BSSN_gauge_RHSs(
         + ("_T4munu" if enable_T4munu else ""),
         enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
     )
+    if evolved_connection_rhsU is None:
+        evolved_connection_rhsU = Brhs.Lambdabar_rhsU
 
     ########################################
     # Step 2: Lapse conditions
@@ -217,7 +222,7 @@ def BSSN_gauge_RHSs(
         # Step 3.a.iv: Compute \partial_0 \bar{\Lambda}^i = (\partial_t - \beta^i \partial_i) \bar{\Lambda}^j
         Lambdabar_partial0 = ixp.zerorank1()
         for i in range(3):
-            Lambdabar_partial0[i] = Brhs.Lambdabar_rhsU[i]
+            Lambdabar_partial0[i] = evolved_connection_rhsU[i]
         for i in range(3):
             for j in range(3):
                 Lambdabar_partial0[j] += -betaU[i] * Brhs.LambdabarU_dupD[j][i]
@@ -283,7 +288,7 @@ def BSSN_gauge_RHSs(
                     B_rhsU[i] += betaU[j] * ConnectionUDD[i][m][j] * BU[m]
         # Term 3: \frac{3}{4}\partial_t \bar{\Lambda}^{i}
         for i in range(3):
-            B_rhsU[i] += sp.Rational(3, 4) * Brhs.Lambdabar_rhsU[i]
+            B_rhsU[i] += sp.Rational(3, 4) * evolved_connection_rhsU[i]
         # Term 4: -\frac{3}{4}\beta^j \bar{\Lambda}^i_{,j}
         for i in range(3):
             for j in range(3):
@@ -348,7 +353,7 @@ def BSSN_gauge_RHSs(
         # *  \partial_t B^i     = 3/4 * \partial_t \Lambda^i - eta B^i
         # Step 3.c.iii: Evaluate RHS of B^i:
         for i in range(3):
-            B_rhsU[i] += sp.Rational(3, 4) * Brhs.Lambdabar_rhsU[i] - eta * BU[i]
+            B_rhsU[i] += sp.Rational(3, 4) * evolved_connection_rhsU[i] - eta * BU[i]
 
     # Step 4: Rescale the BSSN gauge RHS quantities so that the evolved
     #         variables may remain smooth across coord singularities
@@ -357,13 +362,6 @@ def BSSN_gauge_RHSs(
     for i in range(3):
         vet_rhsU[i] = beta_rhsU[i] / rfm.ReU[i]
         bet_rhsU[i] = B_rhsU[i] / rfm.ReU[i]
-    # Mathematica validation
-    # print(str(Abar_rhsDD[2][2]).replace("**","^").replace("_","").replace("xx","x").replace("sin(x2)","Sin[x2]").replace("sin(2*x2)","Sin[2*x2]").replace("cos(x2)","Cos[x2]").replace("detgbaroverdetghat","detg"))
-    # print(str(Dbarbetacontraction).replace("**","^").replace("_","").replace("xx","x").replace("sin(x2)","Sin[x2]").replace("detgbaroverdetghat","detg"))
-    # print(betaU_dD)
-    # print(str(trK_rhs).replace("xx2","xx3").replace("xx1","xx2").replace("xx0","xx1").replace("**","^").replace("_","").replace("sin(xx2)","Sinx2").replace("xx","x").replace("sin(2*x2)","Sin2x2").replace("cos(x2)","Cosx2").replace("detgbaroverdetghat","detg"))
-    # print(str(bet_rhsU[0]).replace("xx2","xx3").replace("xx1","xx2").replace("xx0","xx1").replace("**","^").replace("_","").replace("sin(xx2)","Sinx2").replace("xx","x").replace("sin(2*x2)","Sin2x2").replace("cos(x2)","Cosx2").replace("detgbaroverdetghat","detg"))
-
     return alpha_rhs, vet_rhsU, bet_rhsU
 
 

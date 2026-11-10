@@ -36,7 +36,7 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
-    :param fd_orders: Finite-difference orders of registered ADM-to-BSSN producers.
+    :param fd_orders: Finite-difference orders of registered ADM-to-BSSN functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
@@ -131,7 +131,7 @@ schedule FUNC_NAME in MoL_PseudoEvolution before {thorn_name}_BSSN_constraints
   LANG: C
   READS:  {reads}
   WRITES: {writes}
-}} "Project BSSN/fCCZ4 state before pseudo-evolution consumers"
+}} "Project BSSN/fCCZ4 state before pseudo-evolution routines"
 """,
     )
 

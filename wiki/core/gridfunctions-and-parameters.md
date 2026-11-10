@@ -1,6 +1,6 @@
 # Gridfunctions And Parameters
 
-> Core route for symbolic gridfunctions, NRPy parameters, code parameters, and generated data structs. · Status: confirmed · Last reconciled: 07-12-2026
+> Core route for symbolic gridfunctions, NRPy parameters, code parameters, and generated data structs. · Status: confirmed
 > Up: [Core APIs](index.md)
 
 ## Summary
@@ -27,7 +27,13 @@ A `CodeParameter` whose `cparam_type` is `#define` is treated as a C-preprocesso
 
 ### Array CodeParameters
 
-Array `CodeParameter` types are parsed only for C-style `REAL[N]` and `int[N]` strings. `_parse_array_spec()` extracts `N`; invalid or unsupported strings do not enter the array branch. Array parameters must use `add_to_set_CodeParameters_h=False`. If the default value is a list, its length must equal `N`; if the default is scalar, construction broadcasts that scalar to a list of length `N`. `adjust_CodeParam_default("name[i]", value)` updates one indexed default in an existing list-valued array parameter, and `adjust_CodeParam_default("name", value, new_cparam_type)` updates the whole default and optionally the C type.
+The intended array `CodeParameter` spellings are `REAL[N]` and `int[N]`. `_parse_array_spec()` recognizes strings beginning with `REAL` or `int`, containing `[`, ending in `]`, and having bracket contents accepted by `int()`. It does not require an exact base-type name or a positive size: for example, `integer[2]` and `REAL[-1]` enter the array branch. This helper is not a complete C-type validator. Array parameters must use `add_to_set_CodeParameters_h=False`. If the default value is a list, its length must equal `N`; if the default is scalar, construction uses Python list repetition `[defaultvalue] * N`. A positive size produces that many entries; a zero or negative size silently produces an empty list. `adjust_CodeParam_default("name[i]", value)` updates one indexed default in an existing list-valued array parameter, and `adjust_CodeParam_default("name", value, new_cparam_type)` updates the whole default and optionally the C type.
+
+Claim evidence:
+- Claim: `_parse_array_spec()` uses prefix and integer parsing checks, without validating an exact C base type or a positive array size; scalar defaults use list repetition, which yields an empty list for nonpositive sizes.
+- Role: descriptive behavior
+- Deciding authority: [params.py](../../nrpy/params.py), `_parse_array_spec` and `CodeParameter._process_parameter_type`
+- Corroboration: none available; the parsing conditions are defined in this module and no separate test establishes stricter validation.
 
 ### Batch Versus Single Registration
 
@@ -39,15 +45,21 @@ Array `CodeParameter` types are parsed only for C-style `REAL[N]` and `int[N]` s
 
 ### Registration Behavior
 
-`register_gridfunctions()` normalizes one name or a list of names, reads `Infrastructure`, selects the subclass from `GF_CLASS_MAP`, stores new gridfunctions in `glb_gridfcs_dict`, and returns real SymPy symbols. Supported infrastructure keys are `BHaH`, `ETLegacy`, and `CarpetX`; an unknown key raises `ValueError`. Duplicate registration prints `Warning: Gridfunction <name> is already registered.`, leaves the existing registry object unchanged, and still returns a real SymPy symbol for the requested name. Per-gridfunction list-valued `f_infinity` and `wavespeed` inputs are indexed by position during registration; the helper does not prevalidate those list lengths.
+`register_gridfunctions()` normalizes one name or a list of names, reads `Infrastructure`, selects the subclass from `GF_CLASS_MAP`, stores new gridfunctions in `glb_gridfcs_dict`, and returns real SymPy symbols. Supported infrastructure keys are `BHaH`, `ETLegacy`, `CarpetX`, and `Dendro`; an unknown key raises `ValueError`. Duplicate registration prints `Warning: Gridfunction <name> is already registered.`, leaves the existing registry object unchanged, and still returns a real SymPy symbol for the requested name. Per-gridfunction list-valued `f_infinity` and `wavespeed` inputs are indexed by position during registration; the helper does not prevalidate those list lengths.
 
 ### Parity
 
-`get_parity_type()` returns parity code `0` for rank-0 scalars. For rank-1 components, it reads the final component digit and returns component index plus one. For rank-2 components, it reads the final two component digits and consults fixed lookup tables for dimension 3 or dimension 4. `set_parity_types()` looks up each requested name in `glb_gridfcs_dict`, computes its parity from rank and dimension, and raises if a name is missing, rank or dimension is unsupported, or the resulting parity list length does not match the input list.
+`get_parity_type()` returns parity code `0` for rank-0 scalars. For rank-1 components, it reads the final component digit and returns component index plus one. For rank-2 components, it reads the final two component digits and consults fixed lookup tables for dimension 3 or dimension 4. Dimension is consulted only for rank-two lookup; scalar and vector cases ignore it. `set_parity_types()` looks up each requested name in `glb_gridfcs_dict`, computes the parity code, and raises when a code cannot be determined or the result length differs from the input length, including missing gridfunctions. It does not provide general dimension validation.
+
+Claim evidence:
+- Claim: Parity lookup checks dimension-specific tables for rank two only; scalar and vector parity computation does not validate dimension.
+- Role: descriptive behavior
+- Deciding authority: [grid.py](../../nrpy/grid.py), `GridFunction.get_parity_type` and `GridFunction.set_parity_types`
+- Corroboration: none available; the defining method's doctests exercise ordinary scalar, vector, and tensor cases but do not establish general dimension validation.
 
 ### BHaH Access
 
-`BHaHGridFunction` accepts groups `EVOL`, `AUXEVOL`, `DIAG`, and `AUX`, uses C type `REAL`, and maps default arrays by group: `EVOL` to `in_gfs`, `AUXEVOL` to `auxevol_gfs`, `DIAG` to `diagnostic_gfs`, and `AUX` to `aux_gfs`. Memory access has spelling `array[IDX4(<NAME>GF, i0+offset, i1+offset, i2+offset)]`, for example `in_gfs[IDX4(ABCGF, i0+1, i1+2, i2+3)]`; `enable_simd=True` wraps it as `ReadSIMD(&...)`. If `sync_gf_in_superB` is not supplied, it defaults to `True` for `EVOL` and `AUX`. `gridfunction_defines()` emits group `#define` blocks and, for evolved gridfunctions, `gridfunctions_f_infinity` and `gridfunctions_wavespeed` arrays.
+`BHaHGridFunction` accepts groups `EVOL`, `AUXEVOL`, `DIAG`, `AUX`, and `SCRATCH`, uses C type `REAL`, and maps default arrays by group: `EVOL` to `in_gfs`, `AUXEVOL` to `auxevol_gfs`, `DIAG` to `diagnostic_gfs`, `AUX` to `aux_gfs`, and `SCRATCH` to `scratch_gfs`. `SCRATCH` gridfunctions are intermediates produced and consumed within one right-hand-side evaluation: they receive `NUM_SCRATCH_GFS` and `<NAME>GF` indices like the other groups but no allocation, and the caller supplies storage that is dead across that window; only that caller can check capacity, so it guards it itself (the BSSN example stores them in the Method of Lines buffer that `rhs_eval` overwrites later in the same substep and emits `#if NUM_SCRATCH_GFS > NUM_EVOL_GFS #error`). Memory access has spelling `array[IDX4(<NAME>GF, i0+offset, i1+offset, i2+offset)]`, for example `in_gfs[IDX4(ABCGF, i0+1, i1+2, i2+3)]`; `enable_simd=True` wraps it as `ReadSIMD(&...)`. If `sync_gf_in_superB` is not supplied, it defaults to `True` for `EVOL` and `AUX`. `gridfunction_defines()` emits group `#define` blocks and, for evolved gridfunctions, `gridfunctions_f_infinity` and `gridfunctions_wavespeed` arrays.
 
 ### ETLegacy Access
 
@@ -56,6 +68,13 @@ Array `CodeParameter` types are parsed only for C-style `REAL[N]` and `int[N]` s
 ### CarpetX Access
 
 `CarpetXGridFunction` accepts groups `EVOL`, `AUX`, `AUXEVOL`, `EXTERNAL`, `CORE`, `TILE_TMP`, and `SCALAR_TMP`, uses C type `CCTK_REAL`, and validates centering as a three-character string containing only `C` or `V`. During construction it appends `_ext` for `EXTERNAL`, `_core` for `CORE`, and `_tile_tmp` for `TILE_TMP`; other groups keep the original name. Memory access calls the gridfunction with an index expression based on `p.I + offset*p.DI[...]`, for example `aaGF(p.I + 1*p.DI[0] + 2*p.DI[1] + 3*p.DI[2])` or `defgGF(p.I - 1*p.DI[1])`. `reuse_index=True` uses the provided `index_name` instead of recomputing the `p.I` expression, `use_GF_suffix=False` removes the `GF` suffix, and `enable_simd=True` wraps the access as `ReadSIMD(&...)`.
+
+### Dendro Access
+
+`DendroGridFunction` uses C type `DendroScalar` and role-prefixed pointers named
+after the exact NRPy gridfunction, such as `in_abc[pp - nx]`, within padded
+blocks. SIMD mode wraps each point read as `ReadSIMD(&in_abc[pp - nx])`; the
+Dendro kernel loops own the vector placement.
 
 ### Rank-N Registration
 
@@ -70,7 +89,8 @@ Split into separate parameter and gridfunction leaves is deferred unless this le
 ## Sources
 
 - [nrpy/params.py](../../nrpy/params.py) - `NRPyParameter`, `CodeParameter`, `_parse_array_spec`, `register_param`, `parval_from_str`, `set_parval_from_str`, `register_CodeParameters`, `register_CodeParameter`, `adjust_CodeParam_default`, `glb_params_dict`, `glb_code_params_dict`, `glb_extras_dict`
-- [nrpy/grid.py](../../nrpy/grid.py) - `GridFunction`, `BHaHGridFunction`, `ETLegacyGridFunction`, `CarpetXGridFunction`, `gridfunction_lists`, `get_parity_type`, `set_parity_types`, `define_gfs_group`, `gridfunction_defines`, `register_gridfunctions`, `register_gridfunctions_for_single_rankN`, `glb_gridfcs_dict`, `GF_CLASS_MAP`
+- [nrpy/params.py](../../nrpy/params.py) - `parse_cparam_type`, the public parser BHaH and superB both call
+- [nrpy/grid.py](../../nrpy/grid.py) - `GridFunction`, `BHaHGridFunction`, `ETLegacyGridFunction`, `CarpetXGridFunction`, `DendroGridFunction`, `gridfunction_lists`, `get_parity_type`, `set_parity_types`, `define_gfs_group`, `gridfunction_defines`, `register_gridfunctions`, `register_gridfunctions_for_single_rankN`, `glb_gridfcs_dict`, `GF_CLASS_MAP`
 - [nrpy/infrastructures/BHaH/griddata_commondata.py](../../nrpy/infrastructures/BHaH/griddata_commondata.py) - `GridCommonData`, `register_griddata_commondata`
 
 ## See Also

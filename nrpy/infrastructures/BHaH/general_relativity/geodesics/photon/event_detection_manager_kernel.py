@@ -1,16 +1,13 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py
 """
-Provides the C orchestrator for geometric event detection.
+Provides the C driver for geometric event detection.
 
-This module provides the high-level logic for detecting crossings of the observer
-window and the source emission plane. It generates a C kernel that reads the current
-and historical integration state bundles from global device memory into local arrays
-to evaluate temporal explosion limits and celestial escape bounds before verifying
-physical plane intersections. The geometric boundaries remain mathematically immutable
-across all rendered tiles, ensuring consistent hit detection depth. The kernel calls
-downstream interpolation routines to resolve precise boundary crossing coordinates
-and outputs the filtered physical intersections to persistent blueprint structures
-while shifting the valid trajectory history arrays to stage the next solver step.
+This module generates the CUDA or OpenMP function that detects crossings of the
+observer window and source emission plane. For each photon it reads the current and
+two preceding integration states, checks the momentum and escape-radius bounds, and
+then tests both planes. Interpolation determines the affine parameter and state at a
+crossing. The function writes each accepted intersection to that photon's result
+entry and shifts the state history for the next RKF45 step.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -22,7 +19,7 @@ import nrpy.params as par
 
 
 def event_detection_manager_kernel() -> None:
-    """Define the configuration and parameters for the event_detection_manager global kernel."""
+    """Register the CUDA or OpenMP function for geometric event detection."""
     par.register_CodeParameters(
         "REAL",
         __name__,
@@ -73,14 +70,14 @@ def event_detection_manager_kernel() -> None:
         "chunk_size": "const int",
     }
 
-    # Pass commondata explicitly when not using CUDA's global memory
+    # OpenMP receives commondata through an explicit function argument.
     if parallelization != "cuda":
         arg_dict_cuda["commondata"] = "const commondata_struct *restrict"
         arg_dict_host["commondata"] = "const commondata_struct *restrict"
 
     escape_statement = "return;" if parallelization == "cuda" else "continue;"
 
-    # Variables to handle architecture differences dynamically
+    # Select the CUDA or OpenMP arguments and loop directives.
     commondata_arg = "" if parallelization == "cuda" else ", commondata"
     pragma_unroll = "#pragma unroll" if parallelization == "cuda" else ""
 
@@ -89,7 +86,7 @@ def event_detection_manager_kernel() -> None:
     //==========================================
     // CUDA THREAD IDENTIFICATION
     //==========================================
-    // Thread ID maps to a unique photon index $i$ within the execution chunk.
+    // Thread ID maps to a unique photon index $i$ within the photon chunk.
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= chunk_size) return;
     """
@@ -97,7 +94,7 @@ def event_detection_manager_kernel() -> None:
     else:
         loop_preamble = """
     //==========================================
-    // OPENMP LOOP ARCHITECTURE
+    // OPENMP PARALLEL LOOP
     //==========================================
     // Distribute photon rays across available CPU threads for parallel evaluation.
     #pragma omp parallel for
@@ -106,20 +103,20 @@ def event_detection_manager_kernel() -> None:
         loop_postamble = "    } // END LOOP: for i over chunk_size rays"
 
     core_math = rf"""
-    // Resolves the absolute global memory index $m_{{idx}}$ of the trajectory to bypass local array overwriting.
+    // Ray index $m_{{idx}}$ selecting this photon's result entry.
     const long int master_idx = d_chunk_buffer[i];
 
     //==========================================
     // MACROS
     //==========================================
-    // IDX_F maps a component to the flattened state bundle using SoA layout.
+    // IDX_F maps a component to the flattened state array using SoA layout.
     // Memory Striding strictly uses BUNDLE_CAPACITY, preventing bounds failure on remainders.
     #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
 
     //==========================================
     // TEMPORAL EXPLOSION CHECK
     //==========================================
-    // Reads $p_t$ directly from global memory to terminate doomed rays before register hydration.
+    // Read $p_t$ before loading the remaining state components.
     const double p_t = ReadCUDA(&d_f_bundle[IDX_F(4, i)]);
 
     if (AbsCUDA(p_t) > {cd_access}p_t_max) {{
@@ -131,21 +128,21 @@ def event_detection_manager_kernel() -> None:
     if (d_status_bundle[i] != ACTIVE) {escape_statement}
 
     //==========================================
-    // LOCAL REGISTER HYDRATION
+    // LOAD LOCAL STATE
     //==========================================
-    // 1-Pass read from global memory bundles into thread-local arrays to respect hardware register limits.
-    double f_local[9], f_p_local[9], f_p_p_local[9]; // Thread-local arrays holding the state vector $f^\mu$ and its history.
+    // Copy the current and two preceding states into local arrays.
+    double f_local[9], f_p_local[9], f_p_p_local[9]; // Local arrays holding the state vector $f^\mu$ and its history.
     {pragma_unroll}
     for (int c = 0; c < 9; c++) {{ // Loops over the $9$ tensor components.
-        f_local[c] = ReadCUDA(&d_f_bundle[IDX_F(c, i)]); // Hydrates the current step state $f^\mu_n$.
-        f_p_local[c] = ReadCUDA(&d_f_prev_bundle[IDX_F(c, i)]); // Hydrates the previous step state $f^\mu_{{n-1}}$.
-        f_p_p_local[c] = ReadCUDA(&d_f_pre_prev_bundle[IDX_F(c, i)]); // Hydrates the pre-previous step state $f^\mu_{{n-2}}$.
+        f_local[c] = ReadCUDA(&d_f_bundle[IDX_F(c, i)]); // Copy the current state $f^\mu_n$.
+        f_p_local[c] = ReadCUDA(&d_f_prev_bundle[IDX_F(c, i)]); // Copy the preceding state $f^\mu_{{n-1}}$.
+        f_p_p_local[c] = ReadCUDA(&d_f_pre_prev_bundle[IDX_F(c, i)]); // Copy the state $f^\mu_{{n-2}}$.
     }} // END LOOP: for c over 9 tensor components
 
-    // Hydrates the affine parameter $\lambda$ dependencies directly from the discrete memory trackers.
-    const double lam_local = ReadCUDA(&d_affine[i]); // Hydrates the current affine parameter $\lambda_n$.
-    const double lam_p_local = ReadCUDA(&d_affine_prev[i]); // Hydrates the previous affine parameter $\lambda_{{n-1}}$.
-    const double lam_p_p_local = ReadCUDA(&d_affine_pre_prev[i]); // Hydrates the pre-previous affine parameter $\lambda_{{n-2}}$.
+    // Read the affine parameter at the current and two preceding RKF45 steps.
+    const double lam_local = ReadCUDA(&d_affine[i]); // Current affine parameter $\lambda_n$.
+    const double lam_p_local = ReadCUDA(&d_affine_prev[i]); // Preceding affine parameter $\lambda_{{n-1}}$.
+    const double lam_p_p_local = ReadCUDA(&d_affine_pre_prev[i]); // Affine parameter $\lambda_{{n-2}}$.
 
     const double x = f_local[1]; // Extracts the local Cartesian coordinate $x$.
     const double y = f_local[2]; // Extracts the local Cartesian coordinate $y$.
@@ -164,7 +161,7 @@ def event_detection_manager_kernel() -> None:
     //==========================================
     // EVENT DETECTION & TERMINATION CHECKS
     //==========================================
-    // Evaluates physical plane intersections strictly using localized variables.
+    // Evaluate physical plane intersections from the local state arrays.
 
     // Window plane logic is guarded to lock the intersection coordinates permanently.
     if (!d_window_event_found[i]) {{
@@ -196,9 +193,8 @@ def event_detection_manager_kernel() -> None:
             double lam_event; // Interpolated affine parameter $\lambda$ of the exact boundary crossing.
             find_event_time_and_state(f_local, f_p_local, f_p_p_local, lam_local, lam_p_local, lam_p_p_local, w_normal, w_dist, &lam_event, f_int); // Calculates the exact mathematical boundary crossing state.
 
-            // Writes the physical intersection to the persistent master index array slot via global mapping.
-            // The downstream function handle_window_plane_intersection safely handles mapping the global
-            // spatial coordinates to the local tile offsets.
+            // Write the intersection to the result entry for ray $master_idx$.
+            // handle_window_plane_intersection maps the spatial coordinates to local window coordinates.
             // Window plane function call to pass commondata conditionally.
             if (handle_window_plane_intersection(f_int, lam_event, &d_results_buffer[master_idx]{commondata_arg})) {{
                 d_window_event_found[i] = true;
@@ -220,7 +216,7 @@ def event_detection_manager_kernel() -> None:
             double f_int[9];  // Reconstructed $9$-component state vector $f^\mu$ at the intersection.
             double lam_event; // Interpolated affine parameter $\lambda$ of the exact boundary crossing.
             find_event_time_and_state(f_local, f_p_local, f_p_p_local, lam_local, lam_p_local, lam_p_p_local, s_normal, s_dist, &lam_event, f_int); // Calculates the exact mathematical boundary crossing state.
-            // Writes the physical intersection to the persistent master index array slot via global mapping.
+            // Write the intersection to the result entry for ray $master_idx$.
             if (handle_source_plane_intersection(f_int, lam_event, &d_results_buffer[master_idx]{commondata_arg})) {{
                 d_status_bundle[i] = TERMINATION_TYPE_SOURCE_PLANE; // Marks the ray as terminated upon striking the source plane.
                 d_source_event_found[i] = true; // Locks the source intersection to prevent future overwrites.
@@ -232,7 +228,7 @@ def event_detection_manager_kernel() -> None:
     //==========================================
     // HISTORY SHIFT
     //==========================================
-    // Memory bundles are updated only for active trajectories to stage the next RKF45 step.
+    // Memory arrays are updated only for active trajectories to stage the next RKF45 step.
     if (d_status_bundle[i] == ACTIVE) {{
         WriteCUDA(&d_affine_pre_prev[i], lam_p_local); // Shifts the previous affine parameter $\lambda_{{n-1}}$ to the pre-previous slot $\lambda_{{n-2}}$.
         WriteCUDA(&d_affine_prev[i], lam_local); // Shifts the current affine parameter $\lambda_n$ to the previous slot $\lambda_{{n-1}}$.
@@ -274,23 +270,24 @@ def event_detection_manager_kernel() -> None:
         includes.append("cuda_intrinsics.h")
         includes.append("BHaH_device_defines.h")
 
-    desc = r""" Optimized detection of plane crossings using consolidated blueprints.
+    desc = r""" Detect observer-window and source-plane crossings for a photon chunk.
 
+    @param commondata Pointer to detection geometry shared by all rays.
     @param d_f_bundle SoA pointer to the state array for step $f^\mu_{n}$.
     @param d_f_prev_bundle SoA pointer to the state array for step $f^\mu_{n-1}$.
     @param d_f_pre_prev_bundle SoA pointer to the state array for step $f^\mu_{n-2}$.
     @param d_affine Pointer to the current affine parameter $\lambda_n$.
     @param d_affine_prev Pointer to the history affine parameter $\lambda_{n-1}$.
     @param d_affine_pre_prev Pointer to the history affine parameter $\lambda_{n-2}$.
-    @param d_results_buffer Pointer to the flat array of blueprint data structures $b_i$.
+    @param d_results_buffer Flat array of photon-intersection results $b_i$.
     @param d_status_bundle Pointer to the array of termination statuses.
     @param d_on_pos_window_prev Array tracking the window plane side.
     @param d_on_pos_source_prev Array tracking the source plane side.
     @param d_window_event_found Array tracking if a window intersection has been locked.
     @param d_source_event_found Array tracking if a source intersection has been locked.
     @param d_chunk_buffer Array containing the absolute master mapping indices $m_{idx}$.
-    @param chunk_size The number of active rays in the current bundle batch.
-    @param stream_idx The hardware stream identifier."""
+    @param chunk_size The number of active rays in the current ray chunk.
+    @param stream_idx Work-array index; CUDA uses the corresponding stream."""
     cfunc_type = "void"
     name = "event_detection_manager_kernel"
     params = (

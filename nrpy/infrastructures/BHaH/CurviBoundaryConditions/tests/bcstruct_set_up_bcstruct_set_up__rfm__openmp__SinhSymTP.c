@@ -381,6 +381,42 @@ static void set_parity_for_inner_boundary_single_pt(const commondata_struct *res
   } // END for(int whichparity=0;whichparity<10;whichparity++)
 #undef EPS_REL
 } // END FUNCTION: set_parity_for_inner_boundary_single_pt
+/**
+ * Compute r(xx0,xx1,xx2) and partial_r x^i.
+ */
+static inline void r_and_partial_xi_partial_r_derivs(const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *r,
+                                                     REAL *partial_x0_partial_r, REAL *partial_x1_partial_r, REAL *partial_x2_partial_r) {
+  const REAL AMAX = params->AMAX;
+  const REAL SINHWAA = params->SINHWAA;
+  const REAL bScale = params->bScale;
+
+  const REAL tmp0 = sin(xx1);
+  const REAL tmp2 = (1.0 / (SINHWAA));
+  const REAL tmp9 = cos(xx1);
+  const REAL tmp7 = ((AMAX) * (AMAX)) / ((exp(tmp2) - exp(-tmp2)) * (exp(tmp2) - exp(-tmp2)));
+  const REAL tmp4 = exp(tmp2 * xx0);
+  const REAL tmp5 = exp(-tmp2 * xx0);
+  const REAL tmp6 = tmp4 - tmp5;
+  const REAL tmp8 = ((tmp6) * (tmp6)) * tmp7;
+  const REAL tmp23 = (1.0 / 2.0) * tmp6 * tmp7 * (2 * tmp2 * tmp4 + 2 * tmp2 * tmp5);
+  const REAL tmp11 = ((bScale) * (bScale)) + tmp8;
+  const REAL tmp24 = ((tmp0) * (tmp0)) * tmp23 + tmp23 * ((tmp9) * (tmp9));
+  const REAL tmp12 = tmp11 * ((tmp9) * (tmp9));
+  const REAL tmp15 = sqrt(tmp11);
+  const REAL tmp18 = -tmp0 * tmp11 * tmp9 + tmp0 * tmp8 * tmp9;
+  const REAL tmp13 = ((tmp0) * (tmp0)) * tmp8 + tmp12;
+  const REAL tmp14 = sqrt(tmp13);
+  const REAL tmp19 = pow(tmp13, -3.0 / 2.0);
+  const REAL tmp21 = (1.0 / sqrt(-tmp12 / tmp13 + 1));
+  const REAL tmp16 = (1.0 / (tmp14));
+  const REAL tmp20 = -tmp0 * tmp15 * tmp16 - tmp15 * tmp18 * tmp19 * tmp9;
+  const REAL tmp25 = -tmp15 * tmp19 * tmp24 * tmp9 + tmp16 * tmp23 * tmp9 / tmp15;
+  const REAL tmp26 = tmp21 / (tmp16 * tmp18 * tmp21 * tmp25 - tmp16 * tmp20 * tmp21 * tmp24);
+  *r = tmp14;
+  *partial_x0_partial_r = -tmp20 * tmp26;
+  *partial_x1_partial_r = tmp25 * tmp26;
+  *partial_x2_partial_r = 0;
+} // END FUNCTION: r_and_partial_xi_partial_r_derivs
 
 /**
  * At each coordinate point (x0,x1,x2) situated at grid index (i0,i1,i2):
@@ -404,17 +440,14 @@ static void set_parity_for_inner_boundary_single_pt(const commondata_struct *res
  *     If (i0,i1,i2) *is* the same as (i0_inbounds,i1_inbounds,i2_inbounds),
  *         then we are at an outer boundary point. Take care of outer BCs in Step 2.
  * Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][idx2d]:
- *   Recall that at each inner boundary point we must set outerpt_bc_struct:
- *     typedef struct __outerpt_bc_struct__ {
- *       short i0,i1,i2;  // the outer boundary point grid index (i0,i1,i2), on the 3D grid
- *       int8_t FACEX0,FACEX1,FACEX2;  // 1-byte integers that store
- *       //                               FACEX0,FACEX1,FACEX2 = +1, 0, 0 if on the i0=i0min face,
- *       //                               FACEX0,FACEX1,FACEX2 = -1, 0, 0 if on the i0=i0max face,
- *       //                               FACEX0,FACEX1,FACEX2 =  0,+1, 0 if on the i1=i2min face,
- *       //                               FACEX0,FACEX1,FACEX2 =  0,-1, 0 if on the i1=i1max face,
- *       //                               FACEX0,FACEX1,FACEX2 =  0, 0,+1 if on the i2=i2min face, or
- *       //                               FACEX0,FACEX1,FACEX2 =  0, 0,-1 if on the i2=i2max face,
- *     } outerpt_bc_struct;
+ *   Recall that at each outer boundary point, outerpt_bc_struct stores:
+ *     i0,i1,i2: the outer boundary point grid index on the 3D grid
+ *     FACEX0,FACEX1,FACEX2: face signs, e.g. +1,0,0 on the i0=i0min face and -1,0,0 on the i0=i0max face
+ *     r, partial_x{0,1,2}_partial_r: the radius and dx^i/dr at this point, precomputed here because they
+ *       are grid-static; the radiation BC would otherwise recompute them for every gridfunction on every
+ *       RK substep
+ *     r_int, partial_x{0,1,2}_partial_r_int: the same quantities at the nearest interior neighbour,
+ *       (i0,i1,i2)+(FACEX0,FACEX1,FACEX2)
  *   Outer boundary points are filled from the inside out, two faces at a time.
  *     E.g., consider a Cartesian coordinate grid that has 14 points in each direction,
  *     including the ghostzones, with NGHOSTS=2.
@@ -603,6 +636,18 @@ void bcstruct_set_up__rfm__SinhSymTP(const commondata_struct *restrict commondat
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX0 = FACEX0;
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX1 = FACEX1;
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX2 = FACEX2;
+            r_and_partial_xi_partial_r_derivs(params, xx[0][i0], xx[1][i1], xx[2][i2], &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].r,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x0_partial_r,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x1_partial_r,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x2_partial_r);
+            const int i0_int = i0 + FACEX0;
+            const int i1_int = i1 + FACEX1;
+            const int i2_int = i2 + FACEX2;
+            r_and_partial_xi_partial_r_derivs(params, xx[0][i0_int], xx[1][i1_int], xx[2][i2_int],
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].r_int,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x0_partial_r_int,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x1_partial_r_int,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x2_partial_r_int);
             idx2d++;
           } // END IF outer boundary point
         } // END LOOP over all boundary points on lower faces
@@ -626,6 +671,18 @@ void bcstruct_set_up__rfm__SinhSymTP(const commondata_struct *restrict commondat
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX0 = FACEX0;
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX1 = FACEX1;
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX2 = FACEX2;
+            r_and_partial_xi_partial_r_derivs(params, xx[0][i0], xx[1][i1], xx[2][i2], &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].r,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x0_partial_r,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x1_partial_r,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x2_partial_r);
+            const int i0_int = i0 + FACEX0;
+            const int i1_int = i1 + FACEX1;
+            const int i2_int = i2 + FACEX2;
+            r_and_partial_xi_partial_r_derivs(params, xx[0][i0_int], xx[1][i1_int], xx[2][i2_int],
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].r_int,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x0_partial_r_int,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x1_partial_r_int,
+                                              &bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].partial_x2_partial_r_int);
             idx2d++;
           } // END IF outer boundary point
         } // END LOOP over all boundary points on upper faces

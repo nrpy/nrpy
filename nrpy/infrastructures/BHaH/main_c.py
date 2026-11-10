@@ -2,11 +2,11 @@
 """
 Generates the main C `main()` function for simulations within the BHaH infrastructure.
 
-This module acts as the final assembler for a BHaH-based executable, creating
-the top-level `main()` function that orchestrates the entire simulation.
+This module creates the top-level `main()` function for a BHaH executable and
+orders initialization, evolution, diagnostics, and cleanup.
 
 The `register_CFunction_main_c` function constructs a standard simulation
-lifecycle, which includes:
+calculation sequence, which includes:
 - Parsing command-line arguments and parameter files.
 - Setting up numerical grids and the time step.
 - Allocating memory for all required gridfunctions.
@@ -190,7 +190,7 @@ def _generate_main_body(
         )
         metadata_only_checkpoint_read = f"""
 // If a checkpoint exists, load commondata first so the grid hierarchy can be
-// rebuilt from restart state before the full checkpoint payload is read.
+// rebuilt from restart state before the full checkpoint data are read.
 const int checkpoint_has_been_read = read_checkpoint({checkpoint_read_args});
 """
         calling_for_first_time_expr = "!checkpoint_has_been_read"

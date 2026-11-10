@@ -118,11 +118,19 @@ gsl_spline_init(spline_imag,times_old,h22_nophase_imag, nsteps_inspiral_old);
 commondata->nsteps_inspiral = nsteps_new;
 commondata->waveform_inspiral = (double complex *)realloc(commondata->waveform_inspiral,commondata->nsteps_inspiral * NUMMODES * sizeof(double complex));
 if (commondata->waveform_inspiral == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_modes(), malloc() failed to for waveform_inspiral\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_modes(), realloc() failed for waveform_inspiral\\n");
   exit(1);
 }
+// realloc() does not zero new memory; only TIME and the (2,2)-strain slot are
+// filled below, so higher-mode slots must be reset to zero here.
+memset(commondata->waveform_inspiral, 0, commondata->nsteps_inspiral * NUMMODES * sizeof(double complex));
+// nsteps_new - 1 is the floor of (t_last - tstart)/dT, so tstart + i * dT can exceed the
+// last spline time only by roundoff; set such a sample to the last spline time.
+const REAL t_last = times_old[nsteps_inspiral_old - 1];
 for (i = 0; i < commondata->nsteps_inspiral; i++){
   time = tstart + i * dT;
+  if (time > t_last)
+    time = t_last;
   commondata->waveform_inspiral[IDX_WF(i,TIME)] = time;
   orbital_phase = gsl_spline_eval(spline,time,acc);
   h22_real = gsl_spline_eval(spline_real,time,acc_real);

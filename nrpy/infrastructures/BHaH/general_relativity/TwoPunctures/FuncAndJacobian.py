@@ -48,7 +48,7 @@ def register_CFunction_TP_FuncAndJacobian() -> None:
 static inline REAL min (REAL const x, REAL const y)
 {
   return x<y ? x : y;
-}
+}  // END FUNCTION: min
 #endif
 
 /* --------------------------------------------------------------------------*/
@@ -73,7 +73,7 @@ Index (int ivar, int i, int j, int k, int nvar, int n1, int n2, int n3)
     k1 = k1 - n3;
 
   return ivar + nvar * (i1 + n1 * (j1 + n2 * k1));
-}
+}  // END FUNCTION: Index
 
 /* --------------------------------------------------------------------------*/
 void
@@ -90,7 +90,7 @@ allocate_derivs (derivs * v, int n)
   (*v).d22 = dvector (0, m);
   (*v).d23 = dvector (0, m);
   (*v).d33 = dvector (0, m);
-}
+}  // END FUNCTION: allocate_derivs
 
 /* --------------------------------------------------------------------------*/
 void
@@ -107,7 +107,7 @@ free_derivs (derivs * v, int n)
   free_dvector ((*v).d22, 0, m);
   free_dvector ((*v).d23, 0, m);
   free_dvector ((*v).d33, 0, m);
-}
+}  // END FUNCTION: free_derivs
 
 /* --------------------------------------------------------------------------*/
 void
@@ -136,7 +136,7 @@ Derivatives_AB3 (int nvar, int n1, int n2, int n3, derivs v)
                 {
                   indx[i] = Index (ivar, i, j, k, nvar, n1, n2, n3);
                   p[i] = v.d0[indx[i]];
-                }
+                }  // END LOOP: for i: i < n1
               chebft_Zeros (p, n1, 0);
               chder (p, dp, n1);
               chder (dp, d2p, n1);
@@ -146,9 +146,9 @@ Derivatives_AB3 (int nvar, int n1, int n2, int n3, derivs v)
                 {
                   v.d1[indx[i]] = dp[i];
                   v.d11[indx[i]] = d2p[i];
-                }
-            }
-        }
+                }  // END LOOP: for i: i < n1
+            }  // END LOOP: for j: j < n2
+        }  // END LOOP: for k: k < n3
       for (k = 0; k < n3; k++)
         {				/* Calculation of Derivatives w.r.t. B-Dir. */
           for (i = 0; i < n1; i++)
@@ -158,7 +158,7 @@ Derivatives_AB3 (int nvar, int n1, int n2, int n3, derivs v)
                   indx[j] = Index (ivar, i, j, k, nvar, n1, n2, n3);
                   p[j] = v.d0[indx[j]];
                   q[j] = v.d1[indx[j]];
-                }
+                }  // END LOOP: for j: j < n2
               chebft_Zeros (p, n2, 0);
               chebft_Zeros (q, n2, 0);
               chder (p, dp, n2);
@@ -172,9 +172,9 @@ Derivatives_AB3 (int nvar, int n1, int n2, int n3, derivs v)
                   v.d2[indx[j]] = dp[j];
                   v.d22[indx[j]] = d2p[j];
                   v.d12[indx[j]] = dq[j];
-                }
-            }
-        }
+                }  // END LOOP: for j: j < n2
+            }  // END LOOP: for i: i < n1
+        }  // END LOOP: for k: k < n3
       for (i = 0; i < n1; i++)
         {				/* Calculation of Derivatives w.r.t. phi-Dir. (Fourier)*/
           for (j = 0; j < n2; j++)
@@ -185,7 +185,7 @@ Derivatives_AB3 (int nvar, int n1, int n2, int n3, derivs v)
                   p[k] = v.d0[indx[k]];
                   q[k] = v.d1[indx[k]];
                   r[k] = v.d2[indx[k]];
-                }
+                }  // END LOOP: for k: k < n3
               fourft (p, n3, 0);
               fourder (p, dp, n3);
               fourder2 (p, d2p, n3);
@@ -203,10 +203,10 @@ Derivatives_AB3 (int nvar, int n1, int n2, int n3, derivs v)
                   v.d33[indx[k]] = d2p[k];
                   v.d13[indx[k]] = dq[k];
                   v.d23[indx[k]] = dr[k];
-                }
-            }
-        }
-    }
+                }  // END LOOP: for k: k < n3
+            }  // END LOOP: for j: j < n2
+        }  // END LOOP: for i: i < n1
+    }  // END LOOP: for ivar: ivar < nvar
   free_dvector (p, 0, N);
   free_dvector (dp, 0, N);
   free_dvector (d2p, 0, N);
@@ -215,7 +215,7 @@ Derivatives_AB3 (int nvar, int n1, int n2, int n3, derivs v)
   free_dvector (r, 0, N);
   free_dvector (dr, 0, N);
   free_ivector (indx, 0, N);
-}
+}  // END FUNCTION: Derivatives_AB3
 
 /* --------------------------------------------------------------------------*/
 void
@@ -301,7 +301,7 @@ F_of_v (ID_persist_struct par,
     {
       debugfile = fopen("res.dat", "w");
       assert(debugfile);
-    }
+    }  // END IF: par.do_residuum_debug_output
   for (i = 0; i < n1; i++)
     {
       for (j = 0; j < n2; j++)
@@ -329,7 +329,7 @@ F_of_v (ID_persist_struct par,
                   U.d22[ivar] = Am1 * v.d22[indx];        /* U_BB*/
                   U.d23[ivar] = Am1 * v.d23[indx];        /* U_B3*/
                   U.d33[ivar] = Am1 * v.d33[indx];        /* U_33*/
-                }
+                }  // END LOOP: for ivar: ivar < nvar
               /* Calculation of (X,R) and*/
               /* (U_X, U_R, U_3, U_XX, U_XR, U_X3, U_RR, U_R3, U_33)*/
               AB_To_XR (nvar, A, B, &X, &R, U);
@@ -357,7 +357,7 @@ F_of_v (ID_persist_struct par,
                   u.d22[indx] = U.d22[ivar];        /*      U_yy*/
                   u.d23[indx] = U.d23[ivar];        /*      U_yz*/
                   u.d33[indx] = U.d33[ivar];        /*      U_zz*/
-                }
+                }  // END LOOP: for ivar: ivar < nvar
               if (debugfile && (k==0))
                 {
                   indx = Index (ivar, i, j, k, nvar, n1, n2, n3);
@@ -385,18 +385,18 @@ F_of_v (ID_persist_struct par,
                           (double)sources[indx]
                           /*(double)F[indx]*/
                           );
-                }
-            }
-        }
-    }
+                }  // END IF: debugfile && (k==0)
+            }  // END LOOP: for k: k < n3
+        }  // END LOOP: for j: j < n2
+    }  // END LOOP: for i: i < n1
   if (debugfile)
     {
       fclose(debugfile);
-    }
+    }  // END IF: debugfile
   free(sources);
   free_dvector (values, 0, nvar - 1);
   free_derivs (&U, nvar);
-}
+}  // END FUNCTION: F_of_v
 
 /* --------------------------------------------------------------------------*/
 void
@@ -453,7 +453,7 @@ J_times_dv (ID_persist_struct par,int nvar, int n1, int n2, int n3, derivs dv,
                   U.d22[ivar] = u.d22[indx];	/* U_yy*/
                   U.d23[ivar] = u.d23[indx];	/* U_yz*/
                   U.d33[ivar] = u.d33[indx];	/* U_zz*/
-                }
+                }  // END LOOP: for ivar: ivar < nvar
               /* Calculation of (X,R) and*/
               /* (dU_X, dU_R, dU_3, dU_XX, dU_XR, dU_X3, dU_RR, dU_R3, dU_33)*/
               AB_To_XR (nvar, A, B, &X, &R, dU);
@@ -468,14 +468,14 @@ J_times_dv (ID_persist_struct par,int nvar, int n1, int n2, int n3, derivs dv,
                 {
                   indx = Index (ivar, i, j, k, nvar, n1, n2, n3);
                   Jdv[indx] = values[ivar] * FAC;
-                }
-            }
-        }
+                }  // END LOOP: for ivar: ivar < nvar
+            }  // END LOOP: for k: k < n3
+        }  // END LOOP: for j: j < n2
       free_dvector (values, 0, nvar - 1);
       free_derivs (&dU, nvar);
       free_derivs (&U, nvar);
-    }
-}
+    }  // END LOOP: for i: i < n1
+}  // END FUNCTION: J_times_dv
 
 /* --------------------------------------------------------------------------*/
 void
@@ -600,7 +600,7 @@ JFD_times_dv (ID_persist_struct par, int i, int j, int k, int nvar, int n1, int 
       U.d22[ivar] = u.d22[indx];	/* U_yy*/
       U.d23[ivar] = u.d23[indx];	/* U_yz*/
       U.d33[ivar] = u.d33[indx];	/* U_zz*/
-    }
+    }  // END LOOP: for ivar: ivar < nvar
   /* Calculation of (X,R) and*/
   /* (dU_X, dU_R, dU_3, dU_XX, dU_XR, dU_X3, dU_RR, dU_R3, dU_33)*/
   AB_To_XR (nvar, A, B, &X, &R, dU);
@@ -616,7 +616,7 @@ JFD_times_dv (ID_persist_struct par, int i, int j, int k, int nvar, int n1, int 
 
   free_derivs (&dU, nvar);
   free_derivs (&U, nvar);
-}
+}  // END FUNCTION: JFD_times_dv
 
 /* --------------------------------------------------------------------------*/
 void
@@ -648,10 +648,10 @@ SetMatrix_JFD (ID_persist_struct par, int nvar, int n1, int n2, int n3, derivs u
                   row = Index (ivar, i, j, k, nvar, n1, n2, n3);
                   ncols[row] = 0;
                   dv.d0[row] = 0;
-                }
-            }
-        }
-    }
+                }  // END LOOP: for ivar: ivar < nvar
+            }  // END LOOP: for k: k < n3
+        }  // END LOOP: for j: j < n2
+    }  // END LOOP: for i: i < n1
   for (i = 0; i < n1; i++)
     {
       for (j = 0; j < n2; j++)
@@ -693,20 +693,20 @@ SetMatrix_JFD (ID_persist_struct par, int nvar, int n1, int n2, int n3, derivs u
                                       cols[row][mcol] = column;
                                       Matrix[row][mcol] = values[ivar1];
                                       ncols[row] += 1;
-                                    }
-                                }
-                            }
-                        }
-                    }
+                                    }  // END IF: values[ivar1] != 0
+                                }  // END LOOP: for ivar1: ivar1 < nvar
+                            }  // END LOOP: for k1: k1 <= k_1
+                        }  // END LOOP: for j1: j1 <= j_1
+                    }  // END LOOP: for i1: i1 <= i_1
 
                   dv.d0[column] = 0;
-                }
-            }
-        }
-    }
+                }  // END LOOP: for ivar: ivar < nvar
+            }  // END LOOP: for k: k < n3
+        }  // END LOOP: for j: j < n2
+    }  // END LOOP: for i: i < n1
   free_derivs (&dv, ntotal);
   free_dvector (values, 0, nvar - 1);
-}
+}  // END FUNCTION: SetMatrix_JFD
 
 /* --------------------------------------------------------------------------*/
 /* Calculates the value of v at an arbitrary position (A,B,phi)*/
@@ -730,8 +730,8 @@ PunctEvalAtArbitPosition (REAL *v, int ivar, REAL A, REAL B, REAL phi,
             p[i] = v[ivar + nvar * (i + n1 * (j + n2 * k))];
           chebft_Zeros (p, n1, 0);
           values2[j][k] = chebev (-1, 1, p, n1, A);
-        }
-    }
+        }  // END LOOP: for j: j < n2
+    }  // END LOOP: for k: k < n3
 
   for (k = 0; k < n3; k++)
     {
@@ -739,7 +739,7 @@ PunctEvalAtArbitPosition (REAL *v, int ivar, REAL A, REAL B, REAL phi,
         p[j] = values2[j][k];
       chebft_Zeros (p, n2, 0);
       values1[k] = chebev (-1, 1, p, n2, B);
-    }
+    }  // END LOOP: for k: k < n3
 
   fourft (values1, n3, 0);
   result = fourev (values1, n3, phi);
@@ -749,7 +749,7 @@ PunctEvalAtArbitPosition (REAL *v, int ivar, REAL A, REAL B, REAL phi,
   free_dmatrix (values2, 0, N, 0, N);
 
   return result;
-}
+}  // END FUNCTION: PunctEvalAtArbitPosition
 
 /* --------------------------------------------------------------------------*/
 void
@@ -773,7 +773,7 @@ calculate_derivs (int i, int j, int k, int ivar, int nvar, int n1, int n2,
     + v.d2[Index (ivar, i, j, k, nvar, n1, n2, n3)] * cos_be;
   vv.d23[0] = v.d23[Index (ivar, i, j, k, nvar, n1, n2, n3)] * sin_be;
   vv.d33[0] = v.d33[Index (ivar, i, j, k, nvar, n1, n2, n3)];
-}
+}  // END FUNCTION: calculate_derivs
 
 /* --------------------------------------------------------------------------*/
 REAL
@@ -783,14 +783,14 @@ interpol (REAL a, REAL b, REAL c, derivs v)
     + a * v.d1[0] + b * v.d2[0] + c * v.d3[0]
     + 0.5 * a * a * v.d11[0] + a * b * v.d12[0] + a * c * v.d13[0]
     + 0.5 * b * b * v.d22[0] + b * c * v.d23[0] + 0.5 * c * c * v.d33[0];
-}
+}  // END FUNCTION: interpol
 
 /* --------------------------------------------------------------------------*/
 static REAL
 clamp_pm_one (REAL val)
 {
   return val < -1 ? -1 : val > 1 ? 1 : val;
-}
+}  // END FUNCTION: clamp_pm_one
 
 /* --------------------------------------------------------------------------*/
 /* Calculates the value of v at an arbitrary position (x,y,z)*/
@@ -847,7 +847,7 @@ PunctTaylorExpandAtArbitPosition (ID_persist_struct par,int ivar, int nvar, int 
   assert( isfinite( Ui ) );
 
   return Ui;
-}
+}  // END FUNCTION: PunctTaylorExpandAtArbitPosition
 
 /* --------------------------------------------------------------------------*/
 /* Calculates the value of v at an arbitrary position (x,y,z)*/
@@ -883,7 +883,7 @@ PunctIntPolAtArbitPosition (ID_persist_struct par,int ivar, int nvar, int n1,
   assert( isfinite( Ui ) );
 
   return Ui;
-}
+}  // END FUNCTION: PunctIntPolAtArbitPosition
 
 
 //////////////////////////////////////////////////////
@@ -912,15 +912,15 @@ PunctEvalAtArbitPositionFast (REAL *v, int ivar, REAL A, REAL B, REAL phi, int n
           for (i = 0; i < n1; i++) p[i] = v[ivar + nvar * (i + n1 * (j + n2 * k))];
           //      chebft_Zeros (p, n1, 0);
           values2[j][k] = chebev (-1, 1, p, n1, A);
-        }
-    }
+        }  // END LOOP: for j: j < n2
+    }  // END LOOP: for k: k < n3
 
   for (k = 0; k < n3; k++)
     {
       for (j = 0; j < n2; j++) p[j] = values2[j][k];
       //    chebft_Zeros (p, n2, 0);
       values1[k] = chebev (-1, 1, p, n2, B);
-    }
+    }  // END LOOP: for k: k < n3
 
   //  fourft (values1, n3, 0);
   result = fourev (values1, n3, phi);
@@ -932,7 +932,7 @@ PunctEvalAtArbitPositionFast (REAL *v, int ivar, REAL A, REAL B, REAL phi, int n
   return result;
   //  */
   //  return 0.;
-}
+}  // END FUNCTION: PunctEvalAtArbitPositionFast
 
 
 // --------------------------------------------------------------------------*/
@@ -969,7 +969,7 @@ PunctIntPolAtArbitPositionFast (ID_persist_struct par,int ivar, int nvar, int n1
   Ui = (A - 1) * result;
 
   return Ui;
-}
+}  // END FUNCTION: PunctIntPolAtArbitPositionFast
 
 // Evaluates the spectral expansion coefficients of v
 void SpecCoef(int n1, int n2, int n3, int ivar, REAL *v, REAL *cf)
@@ -995,9 +995,9 @@ void SpecCoef(int n1, int n2, int n3, int ivar, REAL *v, REAL *cf)
       chebft_Zeros(p,n1,0);
       for (n=0;n<n1;n++)	{
         values3[n][j][k] = p[n];
-      }
-    }
-  }
+      }  // END LOOP: for n: n<n1
+    }  // END LOOP: for j: j<n2
+  }  // END LOOP: for k: k<n3
 
   // Caclulate values4[n,l,k] = a_{n,l}^{k} = (sum_j^(n2-1) a_n^{j,k} Tn(B_j))/k_l , k_l = N/2 or N
 
@@ -1007,9 +1007,9 @@ void SpecCoef(int n1, int n2, int n3, int ivar, REAL *v, REAL *cf)
       chebft_Zeros(p,n2,0);
       for (l = 0; l < n2; l++){
         values4[n][l][k] = p[l];
-      }
-    }
-  }
+      }  // END LOOP: for l: l < n2
+    }  // END LOOP: for k: k<n3
+  }  // END LOOP: for n: n < n1
 
   // Caclulate coefficients  a_{n,l,m} = (sum_k^(n3-1) a_{n,m}^{k} fourier(phi_k))/k_m , k_m = N/2 or N
   for (i = 0; i < n1; i++){
@@ -1018,15 +1018,15 @@ void SpecCoef(int n1, int n2, int n3, int ivar, REAL *v, REAL *cf)
       fourft(p,n3,0);
       for (k = 0; k<n3; k++){
         cf[ivar + (i + n1 * (j + n2 * k))] = p[k];
-      }
-    }
-  }
+      }  // END LOOP: for k: k<n3
+    }  // END LOOP: for j: j < n2
+  }  // END LOOP: for i: i < n1
 
   free_dvector(p,0,N);
   free_d3tensor(values3,0,n1,0,n2,0,n3);
   free_d3tensor(values4,0,n1,0,n2,0,n3);
 
-}
+}  // END FUNCTION: SpecCoef
 """
 
     name = "TP_FuncAndJacobian"

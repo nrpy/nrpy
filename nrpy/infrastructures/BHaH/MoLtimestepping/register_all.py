@@ -37,6 +37,7 @@ def register_CFunctions(
     enable_intrinsics: bool = False,
     register_MoL_step_forward_in_time: bool = True,
     rational_const_alias: str = "const",
+    rhs_accumulation_string: str = "",
 ) -> None:
     r"""
     Register all MoL C functions and NRPy basic defines.
@@ -50,6 +51,9 @@ def register_CFunctions(
     :param enable_intrinsics: A flag to specify if hardware instructions should be used.
     :param register_MoL_step_forward_in_time: Whether to register the MoL step-forward function. Default is True.
     :param rational_const_alias: Overload const specifier for rational definitions
+    :param rhs_accumulation_string: Second-stage RHS evaluation for diagonal RK3,
+        accumulating into RK_STAGE_GFS and RK_ACCUM_GFS with multipliers
+        RK_STAGE_DT and RK_ACCUM_DT while keeping RK_INPUT_GFS unchanged.
 
     Doctests:
     >>> from nrpy.helpers.generic import validate_strings
@@ -156,6 +160,7 @@ def register_CFunctions(
             enable_curviBCs=enable_curviBCs,
             enable_intrinsics=enable_intrinsics,
             rational_const_alias=rational_const_alias,
+            rhs_accumulation_string=rhs_accumulation_string,
         )
 
     # Step 3: Register the struct in BHaH_defines_h:

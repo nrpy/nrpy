@@ -1,6 +1,6 @@
 # ETLegacy GR BSSN RHS, Ricci, Constraints, And Validation
 
-> ETLegacy registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 08-28-2026
+> ETLegacy registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed
 > Up: [ETLegacy](index.md)
 
 ## Summary
@@ -59,12 +59,12 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
 - Corroboration: [expression_utils.py](../../../nrpy/helpers/expression_utils.py), `get_params_commondata_symbols_from_expr_list`; [CodeParameters.py](../../../nrpy/infrastructures/ETLegacy/CodeParameters.py), `read_CodeParameters`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=ETLegacy; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian, fd_order 4, RHS KO enabled, reference-metric precompute disabled, T4munu False/True, SIMD False/True; date=08-18-2026`
 
 Reference-metric precompute is threaded through the BSSN and reference-metric
 lookup keys. Kreiss-Oliger
-dissipation adds `_dKOD` derivative terms to gauge and non-gauge RHSs; CAKO
+dissipation adds `_dKOD` derivative terms to the non-gauge RHSs and to each
+gauge RHS that is not exactly the SymPy zero, so a `Frozen` lapse or shift and
+the driver of the first-order shift options receive none; CAKO
 uses separate gauge and non-gauge strength parameters multiplied by the
 conformal-factor-derived `W`, while the non-CAKO path uses the shared
 `diss_strength` parameter name. CAHD builds the matching `BSSN_constraints`
@@ -73,6 +73,12 @@ object, registers `C_CAHD` and
 prefactor, and adds a conformal-factor-adjusted Hamiltonian-damping term to
 `cf_rhs`. SSL registers `SSL_h` and `SSL_sigma`, computes a time-dependent
 Gaussian prefactor, and modifies `alpha_rhs`.
+
+Claim evidence:
+- Claim: With `enable_KreissOliger_dissipation`, ETLegacy `register_CFunction_rhs_eval` adds `_dKOD` dissipation to every non-gauge RHS and to each gauge RHS entry (`alpha_rhs`, `vet_rhsU`, `bet_rhsU`) that is not exactly the SymPy zero before dissipation is added; `BSSN_gauge_RHSs` returns that zero for a `Frozen` lapse, a `Frozen` shift and its driver, and the driver of the first-order shift options, so those fields receive no dissipation, while the evolved `B^i` of `NonAdvectingGammaDriving` and of the second-order drivers is dissipated.
+- Role: descriptive behavior
+- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`
+- Corroboration: the `rhs_eval` trusted dictionaries listed in Sources, which sample only `OnePlusLog` with second-order shift drivers, where every gauge RHS entry is nonzero; no trusted file samples a zero gauge RHS entry
 
 After option handling, `register_CFunction_rhs_eval()` maps RHS expression
 names onto ETLegacy RHS gridfunction names and constructs the upwind control
@@ -106,14 +112,11 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
 - Corroboration: [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [interface_ccl.py](../../../nrpy/infrastructures/ETLegacy/interface_ccl.py), `construct_interface_ccl`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=ETLegacy registration; precision=symbolic code generation; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian, fd_order 4, T4munu False/True, SIMD registration exercised; date=08-28-2026`
 
-All three generated kernels replace the finite-difference helper prefunc text
-`NO_INLINE` with `CCTK_ATTRIBUTE_NOINLINE` before registration. The local
-comment says this avoids a higher-order finite-difference compile hang with
-some GCC versions without changing the shared finite-difference helper for
-other infrastructures.
+The Ricci, RHS, and constraints kernels register `construct_FD_functions_prefunc()` unchanged;
+the finite-difference helpers carry no inlining attribute (the former `NO_INLINE`
+rewrite to `CCTK_ATTRIBUTE_NOINLINE`, a workaround for a GCC 10 compile hang, was
+removed together with the macro).
 
 RHS validation remains part of this page because `rhs_eval.py` validates the
 ETLegacy-specific assembled RHS dictionary after ETLegacy option handling and
@@ -131,8 +134,8 @@ then calls `compare_or_generate_trusted_results()` itself, its generated
 basenames omit the `KO...` segment and use the local `enable_improvements`
 loop variable.
 
-ETLegacy has six backend-local RHS trusted baselines: four covariant cases span
-both `T4munu` states and both improvements states, while two noncovariant
+ETLegacy has backend-local RHS trusted baselines: the covariant cases span
+both `T4munu` states and both improvements states, while the noncovariant
 KO-enabled cases span both `T4munu` states with improvements disabled.
 
 ## Sources

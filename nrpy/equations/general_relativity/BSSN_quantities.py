@@ -55,9 +55,8 @@ class BSSNQuantities:
             self.lambdaU = ixp.declarerank1("lambdaU")
             self.vetU = ixp.declarerank1("vetU")
             self.betU = ixp.declarerank1("betU")
-            self.trK, self.cf, self.alpha = sp.symbols(
-                "trK cf alpha"
-            )  # , real=True)  # no tensor gridfunction is real=True. Do this for consistency.
+            # Match the real=True scalars returned by gri.register_gridfunctions().
+            self.trK, self.cf, self.alpha = sp.symbols("trK cf alpha", real=True)
         else:
             # Step 2.a: Register indexed quantities, using ixp.register_... functions
             self.hDD = gri.register_gridfunctions_for_single_rank2(

@@ -1,14 +1,16 @@
 """
-Custom JAX printer to handle custom power simplification.
+Custom JAX printer used by py_codegen to print SymPy expressions as JAX code.
 
-This module performs the same power simplification as
-custom_c_codegen_functions.py for double precision values.
+The printer performs the same power simplification as
+custom_c_codegen_functions.py for double precision values, prints integers and
+rationals that do not fit in a signed 32-bit integer as floats, and prints Max
+and Min as nested jnp.maximum and jnp.minimum calls.
 
 Author: Siddharth Mahesh
         sm0193 **at** mix **dot* wvu **dot* edu
 """
 
-from typing import TYPE_CHECKING, Any, Dict, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, Tuple, Union, cast
 
 import sympy as sp
 
@@ -26,6 +28,8 @@ if TYPE_CHECKING:
         def __init__(self, settings: Any = ...) -> None: ...
         def _print(self, expr: Any) -> Any: ...
         def _print_Pow(self, expr: sp.Basic, rational: bool = ...) -> Any: ...
+        def _print_Integer(self, expr: sp.Integer) -> str: ...
+        def _print_Rational(self, expr: sp.Rational) -> str: ...
         def doprint(
             self,
             expr: Any,
@@ -69,11 +73,34 @@ except ImportError:
     known_constants = {k: "jnp." + v for k, v in _known_constants_numpy.items()}
 
 
-# adding a type ignore as mypy does not let me inherit from JaxPrinter.
+# In operations with arrays, JAX rejects Python integers that do not fit in a
+# signed 32-bit integer (signed 64-bit with jax_enable_x64), so integers of
+# magnitude INT32_BOUND or larger are printed as floats.
+INT32_BOUND = 2**31
+
+
 # Disable specific pylint errors owing to sympy
 # pylint: disable=too-many-ancestors, abstract-method
 class NRPyJaxPrinter(Printer):
-    """Custom JAX printer to handle custom power simplification."""
+    """
+    Print SymPy expressions as JAX code, with NRPy power simplification, large integers as floats, and Max/Min as jnp calls.
+
+    Doctests:
+    >>> x, y = sp.symbols("x y", real=True)
+    >>> p = NRPyJaxPrinter()
+    >>> p.doprint(3*x + 2**40*y)
+    '3*x + 1099511627776.0*y'
+    >>> p.doprint(sp.Rational(10**30 + 1, 2)*x)
+    '(5e+29)*x'
+    >>> p.doprint(sp.Rational(1, 2**32)*x)
+    '(2.3283064365386963e-10)*x'
+    >>> p.doprint(sp.Rational(1, 3)*x)
+    '(1/3)*x'
+    >>> p.doprint(sp.Max(0, 1 - 4*x))
+    'jnp.maximum(0, 1 - 4*x)'
+    >>> p.doprint(sp.Min(x, y, 1))
+    'jnp.minimum(1, jnp.minimum(x, y))'
+    """
 
     _module = "jnp"
     _kf = known_functions
@@ -136,6 +163,54 @@ class NRPyJaxPrinter(Printer):
             return super()._print_Pow(expr, rational=rational)
         return retval
 
+    def _print_Integer(self, expr: sp.Integer) -> str:
+        """
+        Print an integer, as a float if it does not fit in a signed 32-bit integer.
+        :param expr: Integer to print.
+        :return: String representation of the integer.
+        """
+        if abs(expr.p) < INT32_BOUND:
+            return super()._print_Integer(expr)
+        return repr(float(expr.p))
+
+    def _print_Rational(self, expr: sp.Rational) -> str:
+        """
+        Print a rational number, as a float if its numerator or denominator does not fit in a signed 32-bit integer.
+        :param expr: Rational number to print.
+        :return: String representation of the rational number.
+        """
+        if abs(expr.p) < INT32_BOUND and expr.q < INT32_BOUND:
+            return super()._print_Rational(expr)
+        return repr(float(expr))
+
+    def _print_nested(self, func: str, args: Tuple[sp.Basic, ...]) -> str:
+        """
+        Print a function of several arguments as nested calls of a two-argument JAX function.
+        :param func: Name of the two-argument function in the jnp module, e.g., "maximum".
+        :param args: Arguments of the function.
+        :return: String representation of the nested calls.
+        """
+        result = self._print(args[-1])
+        for arg in reversed(args[:-1]):
+            result = f"{self._module}.{func}({self._print(arg)}, {result})"
+        return str(result)
+
+    def _print_Max(self, expr: sp.Basic) -> str:
+        """
+        Print Max as nested jnp.maximum calls, which need no import of functools.
+        :param expr: Max expression to print.
+        :return: String representation of the Max expression.
+        """
+        return self._print_nested("maximum", expr.args)
+
+    def _print_Min(self, expr: sp.Basic) -> str:
+        """
+        Print Min as nested jnp.minimum calls, which need no import of functools.
+        :param expr: Min expression to print.
+        :return: String representation of the Min expression.
+        """
+        return self._print_nested("minimum", expr.args)
+
     def _print_ArrayElementwiseApplyFunc(self, expr: sp.Basic) -> str:
         """
         Print a SymPy ArrayElementwiseApplyFunc expression by inlining the lambda body.
@@ -185,3 +260,16 @@ class NRPyJaxPrinter(Printer):
         # Non-Lambda case: print as a callable applied to the array.
         # Parentheses ensure correct precedence if `func` prints as an expression.
         return f"({self._print(func)})({arr_str})"
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

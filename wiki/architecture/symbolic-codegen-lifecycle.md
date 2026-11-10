@@ -1,6 +1,6 @@
 # Symbolic Codegen Lifecycle
 
-> Explain the path from symbolic expressions to registered C functions and generated projects. · Status: confirmed · Last reconciled: 06-29-2026
+> Explain the path from symbolic expressions to registered C functions and generated projects. · Status: confirmed
 > Up: [Architecture](index.md)
 
 ## Summary

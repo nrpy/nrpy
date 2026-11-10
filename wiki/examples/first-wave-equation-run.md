@@ -1,17 +1,27 @@
 # First Wave Equation Run
 
-> Describe the first standalone project generation, build, run, and output milestone. · Status: confirmed · Last reconciled: 07-12-2026
+> Describe the first standalone project generation, build, run, and output milestone. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
 
 The recommended first run is `python -m nrpy.examples.wave_equation_cartesian`.
-It needs Python, a C compiler, and `make`; it writes
+It needs Linux or macOS, Python, a C compiler, and `make`; it writes
 `project/wave_equation_cartesian/`, which can then be built with `make` and run
 as `./wave_equation_cartesian`. The generator deletes and recreates that fixed
 project directory, so preserve any wanted prior output first.
 
 ## Detail
+
+The BHaH Makefile writer rejects executable generation unless
+`platform.system()` is `Linux` or `Darwin`. The Cartesian wave example uses
+this executable-generation path.
+
+Claim evidence:
+- Claim: The Cartesian wave executable-generation workflow requires Linux or macOS.
+- Role: descriptive behavior
+- Deciding authority: [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_validate_inputs`
+- Corroboration: [wave_equation_cartesian.py](../../nrpy/examples/wave_equation_cartesian.py) calls `output_CFunctions_function_prototypes_and_construct_Makefile` with the default `create_lib=False`.
 
 For a package install, run the generator with:
 
@@ -31,8 +41,7 @@ make
 The generator creates a parameter file named `wave_equation_cartesian.par`.
 The important first milestone is that project generation succeeds, `make`
 succeeds, and the executable runs without manual edits inside the generated
-project. This is a user-run milestone, not a claim reproduced during this KB
-audit. Configured Ubuntu/macOS CI generates and builds the default project but
+project. Configured Ubuntu/macOS CI generates and builds the default project but
 does not run the executable or inspect its numerical output. The README also
 documents a simple command-line override:
 `./wave_equation_cartesian 2.0`, which uses `convergence_factor` and writes
@@ -54,6 +63,8 @@ For the broader Cartesian, curvilinear, and multicoordinate wave-equation
 family, use [Wave Equation Generators](wave-equation-generators.md).
 
 ## Sources
+
+- [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `_validate_inputs`
 
 - [README.md](../../README.md) - `Installation`, `First Successful Run`
 - [README.md](../../README.md) - `Prerequisites by Workflow`

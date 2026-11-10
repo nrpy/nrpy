@@ -166,6 +166,7 @@ def generate_prefunc_auxevol_gfs_single_point(
         verbose=False,
         include_braces=False,
         enable_simd=False,
+        enable_cse_preprocess=True,
     )
 
     prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(

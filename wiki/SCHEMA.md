@@ -1,6 +1,6 @@
 # Knowledge Base Schema
 
-> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: 07-20-2026
+> Rules for the self-maintaining markdown KB. · Status: confirmed
 
 ## Summary
 
@@ -40,46 +40,63 @@ or `ingested`. Exact seed rows in [source-map.md](source-map.md) may use the
 `exact seed` ingest state for exact cited files whose dependent-page coverage
 is seeded row-by-row rather than through a covering aggregate.
 
-## Source-Tracking Metadata And Dates
+## Volatile Information Policy
 
 A repository source-manifest row records source identity, provenance, status,
-and ingest state as its only source-tracking fields. Exact cited-file rows may
+and ingest state as its only source-tracking fields. Add an exact cited-file
+row only for a path that no aggregate row covers; `tools/kb_lint.py`
+`_source_registered` lists the aggregate path rules. Exact cited-file rows may
 abbreviate to source and status: the repository path is the provenance, and
-ingest state is tracked through covering aggregate rows and
-[source-map.md](source-map.md). External-source rows may also carry an
-accessed date (`MM-DD-YYYY`) and notes; those are ordinary KB metadata, not
-source-tracking metadata. Manifests and KB docs carry no source-tracking
-hash columns or values of any kind (`sha256` or any other digest algorithm)
-and no `mtime` columns or values; sources are never hashed for tracking.
-Technical, non-source-tracking hash facts (cache hashing, coordinate hash
-macros) remain allowed as reviewed domain facts, but never as stored digest
-values.
+any ingest state belongs in [source-map.md](source-map.md). External-source
+rows may add durable notes.
+
+Authored KB files contain no maintenance or runtime snapshots: no dates,
+times, timestamps, source revision values or digests, inventory, file, page,
+or job counts, source access/reconciliation/audit/resolution fields, or stored
+environment/result tuples. They also carry no fields for those values. A source
+may be identified by a stable repository, document, publication, path, symbol,
+heading, release label, canonical publication identifier, or complete stable
+source locator. Opaque URL components are source identity, not hash tracking.
+Do not duplicate a source revision value in prose when stable identity suffices.
+
+Stable domain facts remain valid. Examples include scientific constants,
+algorithmic cardinalities, interface version labels, canonical publication
+identifiers, and names such as `CoordSystem_hash`; the prohibition targets
+changing observations and stored fingerprints, not technical meaning. Frozen
+files below `raw/source-docs/` preserve imported evidence verbatim and are
+exempt from authored-content rewriting, while their registrations in
+`raw/SOURCES.md` must follow this policy.
 
 Source drift and staleness are resolved by dependency-aware reconciliation, not
 stored fingerprints: inspect the changed paths, the source's manifest row and
 status, [source-map.md](source-map.md) ownership rows, maintainer signals, and
-the affected compiled pages, then re-ingest and reconcile.
+the affected compiled pages, then re-ingest and reconcile. Git history and
+current check output supply operational evidence without copying it into the
+KB as a snapshot. Do not hash sources, or compute or compare source checksums,
+file counts, or timestamps, to track sources for the KB.
 
-All retained KB dates use the `MM-DD-YYYY` format. Approved placeholders such
-as `n/a` or `-` are allowed where no date applies.
+Do not write KB maintenance notes to a separate log file. This KB lives in a
+Git repository. Git history already records when content changed and what
+changed; duplicating that information as volatile snapshots creates
+drift-prone maintenance burden without adding authority.
 
 ## Support Pages
 
 Support pages keep the wiki compounding without changing router semantics:
 
-- `wiki/catalog.md` is the global content catalog. It lists pages with type,
-  one-line answer, route, query terms, status, reconciliation date, source
-  count, and concept-hub candidacy. It does not replace reading leaves.
+- `wiki/catalog.md` is the global content catalog. It lists each normal leaf
+  once with type, one-line answer, query terms, and status; routers and
+  governance pages need no row. It does not replace reading leaves.
 - `wiki/source-map.md` records source dependencies: source or aggregate,
   source authority tier, ingest status, dependent pages, covered subpaths,
-  known gaps, last check, and next action.
+  known gaps, and next action.
 - `wiki/contradictions.md` records contested or stale claims, competing
   sources, authority decisions, affected pages, and resolution state.
 
 `index.md` files remain router-only. Do not turn router indexes into global
 content catalogs.
 
-Every page add, move, or delete updates `wiki/catalog.md`. Every durable source
+Every leaf add, move, or delete updates `wiki/catalog.md`. Every durable source
 dependency change updates `wiki/source-map.md`. Durable rationale belongs in
 the changed governance text, source-map notes, contradiction rows, commit
 messages, or PR descriptions, as appropriate.
@@ -129,9 +146,8 @@ Apply status to page content, not merely to source age:
 
 A claim may accurately describe stale source-side messaging while its page
 remains `confirmed` under this matrix. Page status and claim status are distinct.
-Catalog status must equal page-header status; routers use catalog status
-`router` and date `n/a`. Status centrality remains arbiter review, not keyword
-lint.
+Catalog status must equal page-header status; a listed router uses catalog
+status `router`. Status centrality remains arbiter review, not keyword lint.
 
 ## Citation Rules
 
@@ -166,43 +182,36 @@ could plausibly be misread.
 
 ### Claim And Evidence Contract
 
-This contract applies to these high-risk claim classes: public APIs;
+These rules apply to the following high-risk claim classes: public APIs;
 public/scientific contracts; user-facing commands and interfaces;
 generated-output boundaries; CI guarantees; source-authority decisions;
 contradiction decisions; and claims whose nearby source paragraph could
 plausibly be misread.
 
-This contract takes prospective effect after its 07-13-2026 adoption change.
-High-risk claims that predate it, plus claims materially changed in that same
-adoption change, form the initial baseline. Unless an exact block is already
-present, those baseline claims remain uncovered; the adoption change asserts no
-completed claim-evidence-block coverage. Migrate a baseline claim when it or its
-deciding source is next materially changed after adoption.
-
-After that adoption boundary, place this exact block immediately after each new
-or materially changed high-risk claim in the owning leaf's `Detail` section.
-For an active contradiction, place the block in the matching `### CONTR-*`
-subsection of `wiki/contradictions.md`, never in the fixed 13-column register
-row:
+Place this one-line evidence statement immediately after each new or
+materially changed high-risk claim in the owning leaf's `Detail` section. For
+an active contradiction, place it in the matching `### CONTR-*` subsection of
+`wiki/contradictions.md`, never in the fixed-column register row:
 
 ```text
-Claim evidence:
-- Claim: exact qualified text, including conditions and non-guarantees
-- Role: descriptive behavior, normative rule, public/scientific contract, CI behavior, or generated evidence
-- Deciding authority: registered source plus stable symbol or heading
-- Corroboration: separate source plus stable locator, or `none available` plus a reason
+Evidence (<role>): <deciding source and symbol>; corroboration: <source>
 ```
 
-For a behavioral claim, append:
+The role is `descriptive behavior`, `normative rule`, `public/scientific
+contract`, `CI behavior`, or `generated evidence`. The deciding source is a
+registered source plus a stable symbol or heading; the corroboration is a
+separate source plus a stable locator. Omit the corroboration clause when no
+separate source exists. Where test coverage of the claim matters, add a short
+parenthetical such as "(doctests in the deciding module)" or "(no test covers
+this)". The claim's own prose states every condition, scope limit, and
+non-guarantee; the evidence statement does not restate the claim.
 
-```text
-- Validation: `inspected=<pass|fail|not-run>; generated=<pass|fail|not-run>; built=<pass|fail|not-run>; run=<pass|fail|not-run>; result_checked=<pass|fail|not-run>`
-- Dimensions: `platform=<value|not-run|not-applicable>; tool_version=<value|not-run|not-applicable>; backend=<value|not-run|not-applicable>; precision=<value|not-run|not-applicable>; GPU=<value|not-run|not-applicable>; restart=<value|not-run|not-applicable>; distributed=<value|not-run|not-applicable>; error_path=<value|not-run|not-applicable>; options=<value|not-run|not-applicable>; date=<MM-DD-YYYY|not-run|not-applicable>`
-```
+Existing claims gain an evidence statement when the claim or its deciding
+source next changes materially. An older multi-line `Claim evidence:` block
+converts to this form when its page is next edited. Do not claim evidence
+coverage for a claim that has no evidence statement.
 
-Do not claim completed block coverage before the exact block is present.
-
-Deciding authority depends on role:
+The deciding source depends on role:
 
 - descriptive current behavior: code decides; targeted tests corroborate only
   exercised conditions;
@@ -213,24 +222,18 @@ Deciding authority depends on role:
   contradiction;
 - CI behavior: workflow/configuration proves configured job shape, never a
   latest successful run;
-- generated evidence: proves only its pinned generation context;
+- generated evidence: proves only the context encoded by the evidence itself;
 - synthesis or neighboring-page agreement: never independent authority.
 
-Only a behavioral claim receives the validation and dimensions lines.
-Structural, navigation, normative, provenance, and symbolic claims use
-claim-appropriate evidence instead.
+Behavioral evidence names a durable validation route, test input, invariant,
+or oracle when available. It never stores a check result, execution environment,
+tool version, or run date in the KB; those observations belong in command
+output, CI, or active review evidence. Structural, navigation, normative,
+provenance, and symbolic claims use claim-appropriate evidence instead.
 
 ## Query Filing
 
-One-off answers do not need filing. File durable answers when they span three
-or more leaves, resolve recurring ambiguity, compare subsystems, record a
-gotcha, or change how future queries should route.
-
-File durable single-topic synthesis into the owning leaf. Create a new leaf
-only for a durable narrow topic with a clear owning branch, or for a
-cross-branch synthesis that cannot cleanly live under an existing branch. In
-all cases, update neighboring links, `wiki/catalog.md`, and `wiki/source-map.md`
-when source dependencies change.
+Filing criteria and targets are in [Workflows](workflows.md#query-filing).
 
 ## Router Rules
 
@@ -253,11 +256,11 @@ they do not bypass it.
 
 The register columns are exactly:
 
-`ID | Claim | Claim status | Source A | Source B | Authority decision | Affected pages | Page-status rationale | Owner/trigger | Resolution test | Opened | Resolved | Notes`
+`ID | Claim | Claim status | Source A | Source B | Authority decision | Affected pages | Page-status rationale | Owner/trigger | Resolution test | Notes`
 
 IDs use immutable `CONTR-0001` form. Active claim status is `contested` or
-`stale`; closed rows use `resolved` and a resolution date. Every active affected
-page contains an exact marker outside code fences:
+`stale`; closed rows use `resolved`. Every active affected page contains an
+exact marker outside code fences:
 
 ```text
 Claim status: contested; contradiction: CONTR-0001.
@@ -268,17 +271,22 @@ page, each marker links back by ID, and catalog/page status follows the matrix
 above. Resolution needs an executable test or deterministic inspection and a
 nonempty owner/trigger. Before closure, inspect source-map reverse dependents,
 pages citing either source, catalog aliases/key symbols, current affected pages,
-typed neighbors, and targeted exact/key-phrase wiki hits.
+typed neighbors, and targeted exact/key-phrase wiki hits. Remove active markers
+only after every affected page is reconciled and the resolution test passes.
+
+Remove a resolved row and its `### CONTR-*` subsection once the affected pages
+record the outcome and no page links to the row; git history keeps it. List its
+ID among the retired IDs in the [contradictions.md](contradictions.md)
+`## Rules` section. A retired ID is never reused.
 
 ## Checker And Frozen Scope
 
-Default `python tools/kb_lint.py` runs all deterministic checks. `--all` remains
-an identical compatibility alias and must not be described as stronger.
+Default `python tools/kb_lint.py` runs all deterministic checks.
 
-Link and Obsidian-wikilink checks govern `AGENTS.md`, `wiki/**/*.md`, and
-`raw/SOURCES.md`. Preserved `raw/source-docs/**/*.md` snapshots are immutable
-and exempt from link/wikilink rewriting; source-tracking metadata and date bans
-still govern them. Hard failures cover deterministic structure only. Dynamic
+Link, Obsidian-wikilink, and volatile-information checks govern `AGENTS.md`,
+`wiki/**/*.md`, and `raw/SOURCES.md`. Preserved
+`raw/source-docs/**/*.md` snapshots are immutable, verbatim exemptions. Hard
+failures cover deterministic structure only. Dynamic
 symbols, semantic truth, modal wording, generated names, and C/CUDA macros stay
 manual or report-only.
 
@@ -302,15 +310,7 @@ the name grants no authority to file, stage, move, or delete it as KB content.
 
 ## Safe Reproduction
 
-Never run generators, builds, or blanket formatters in the shared repository
-working tree. Inspect a command for hardcoded output, deletion, network,
-installation, and external-tool effects first. Use an isolated, user-owned
-intended-change worktree or copy with no unrelated modifications, apply only
-scoped changes, choose an owned output root, and impose timeouts/resource
-limits. Record the exact command, working directory,
-assertion, result, limits, cleanup, and behavioral tuple where behavior was
-tested. Network, installation, remote CI, and external toolchains need user
-authority. Never reset or delete shared generated output.
+Follow [Workflows](workflows.md#safe-reproduction).
 
 ## Canonical Terms
 

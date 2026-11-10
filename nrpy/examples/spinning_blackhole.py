@@ -79,9 +79,20 @@ default_BH_spin_chiU = [0.0, 0.0, 0.8]
 if sum(chi_component * chi_component for chi_component in default_BH_spin_chiU) >= 1.0:
     raise ValueError("default_BH_spin_chiU must satisfy |chi| < 1")
 MoL_method = "RK4"
+enable_RK3_accumulation = MoL_method in ("RK3 Ralston", "RK3 Heun")
 fd_order = 4
 radiation_BC_fd_order = 4
 separate_Ricci_and_BSSN_RHS = True
+# Store the first derivatives of cf, alpha and vetU that the fifteen mixed second derivatives in
+# the BSSN right-hand sides are built from, so that rhs_eval rebuilds each as a single
+# one-dimensional first-derivative stencil of a stored AUXEVOL gridfunction instead of the
+# two-dimensional tensor-product stencil. Ten gridfunctions, so it costs memory; off by default,
+# CUDA builds only. See nrpy/examples/blackhole_spectroscopy.py for the measurements (fd_order 8).
+enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU = False
+if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU and parallelization != "cuda":
+    raise ValueError(
+        "enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU requires --cuda."
+    )
 enable_parallel_codegen = True
 enable_rfm_precompute = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
 enable_intrinsics = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
@@ -206,6 +217,7 @@ if enable_rfm_precompute:
         set_of_CoordSystems=set_of_CoordSystems,
     )
 BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
+    enable_RK3_accumulation=enable_RK3_accumulation,
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -216,7 +228,15 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
     OMP_collapse=OMP_collapse,
+    enable_cfdD_alphadD_vetUdD_gridfunctions=enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU,
 )
+if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU:
+    BHaH.general_relativity.cfdD_alphadD_vetUdD_eval.register_CFunction_cfdD_alphadD_vetUdD_eval(
+        CoordSystem=CoordSystem,
+        enable_intrinsics=enable_intrinsics,
+        enable_fd_functions=enable_fd_functions,
+        OMP_collapse=OMP_collapse,
+    )
 if separate_Ricci_and_BSSN_RHS:
     BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
@@ -250,23 +270,24 @@ if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
 BHaH.CurviBoundaryConditions.register_all.register_C_functions(
-    set_of_CoordSystems=set_of_CoordSystems, radiation_BC_fd_order=radiation_BC_fd_order
+    enable_RK3_accumulation=enable_RK3_accumulation,
+    set_of_CoordSystems=set_of_CoordSystems,
+    radiation_BC_fd_order=radiation_BC_fd_order,
 )
 rhs_string = ""
 if separate_Ricci_and_BSSN_RHS:
     rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
-rhs_string += """
-rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
-if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
-  apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
-                                     gridfunctions_wavespeed,gridfunctions_f_infinity,
-                                     RK_INPUT_GFS, RK_OUTPUT_GFS);"""
-if not enable_rfm_precompute:
-    rhs_string = rhs_string.replace("rfmstruct", "xx")
+if enable_cfdD_alphadD_vetUdD_gridfunctions_for_GPU:
+    # Must precede rhs_eval, which reads these values within the substep.
+    rhs_string += "\ncfdD_alphadD_vetUdD_eval(params, RK_INPUT_GFS, auxevol_gfs);"
+rhs_string, rhs_accumulation_string = BHaH.general_relativity.rhs_eval.MoL_rhs_strings(
+    pre_rhs_string=rhs_string, enable_rfm_precompute=enable_rfm_precompute
+)
 
 BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
+    rhs_accumulation_string=rhs_accumulation_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
   enforce_detgbar_equals_detghat_trAzero(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",

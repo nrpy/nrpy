@@ -119,6 +119,7 @@ elif num_fisheye_transitions == 2:
     }
 enable_rfm_precompute = True
 MoL_method = "RK4" if not paper else "SSPRK33"
+enable_RK3_accumulation = MoL_method in ("RK3 Ralston", "RK3 Heun")
 fd_order = 8
 radiation_BC_fd_order = 4 if not paper else 8
 enable_intrinsics = True
@@ -203,9 +204,7 @@ if enable_BHaHAHA:
             ],
             check=True,
         )
-    from nrpy.infrastructures.superB import (
-        BHaH_implementation,
-    )
+    from nrpy.infrastructures.superB import BHaH_implementation
 
     BHaH_implementation.register_CFunction_bhahaha_find_horizons(
         CoordSystem=CoordSystem, max_horizons=3
@@ -231,6 +230,8 @@ superB.initial_data.register_CFunction_initial_data(
     ID_persist_struct_str=BHaH.general_relativity.TwoPunctures.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
+// SSL requires alpha=W=(psi+u)^-2 initially; see arXiv:2404.01137.
+snprintf(ID_persist.initial_lapse, 100, "W");
 TP_solve(&ID_persist);
 """,
     free_ID_persist_struct_str=r"""
@@ -284,9 +285,10 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     enable_SSL=enable_SSL,
     enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
     OMP_collapse=OMP_collapse,
+    enable_RK3_accumulation=enable_RK3_accumulation,
 )
 if enable_CAHD:
-    BHaH.general_relativity.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
+    BHaH.general_relativity.dsmin_gf.register_CFunction_dsmin_auxevol_gridfunction(
         {CoordSystem}
     )
 if separate_Ricci_and_BSSN_RHS:
@@ -344,6 +346,7 @@ superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems={CoordSystem},
     radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
+    enable_RK3_accumulation=enable_RK3_accumulation,
 )
 
 rhs_string = ""
@@ -354,18 +357,11 @@ commondata->SSL_Gaussian_prefactor = commondata->SSL_h * exp(-commondata->time *
 """
 if separate_Ricci_and_BSSN_RHS:
     rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
-if outer_bcs_type == "radiation":
-    rhs_string += """
-rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
-apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
-                                   gridfunctions_wavespeed,gridfunctions_f_infinity,
-                                   RK_INPUT_GFS, RK_OUTPUT_GFS);"""
-else:
-    rhs_string += """
-rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"""
-
-if not enable_rfm_precompute:
-    rhs_string = rhs_string.replace("rfmstruct", "xx")
+rhs_string, rhs_accumulation_string = BHaH.general_relativity.rhs_eval.MoL_rhs_strings(
+    pre_rhs_string=rhs_string,
+    enable_rfm_precompute=enable_rfm_precompute,
+    outer_bcs_type=outer_bcs_type,
+)
 
 post_rhs_bcs_str = ""
 if outer_bcs_type != "radiation":
@@ -380,6 +376,7 @@ superB.MoL.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
     enable_psi4=enable_psi4,
+    rhs_accumulation_string=rhs_accumulation_string,
 )
 BHaH.xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     CoordSystem
@@ -489,7 +486,7 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 post_non_y_n_auxevol_mallocs = ""
 if enable_CAHD:
     post_non_y_n_auxevol_mallocs = """for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-    cahdprefactor_auxevol_gridfunction(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx,  griddata_chare[grid].gridfuncs.auxevol_gfs);
+    dsmin_auxevol_gridfunction(&griddata_chare[grid].params, griddata_chare[grid].xx, griddata_chare[grid].gridfuncs.auxevol_gfs);
 }\n"""
 
 superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(

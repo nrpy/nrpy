@@ -1,5 +1,5 @@
 """
-C function registrations for staging GRHD primitive variable reconstruction routines.
+C function registrations for GRHD primitive-variable reconstruction routines.
 
 Author: Terrence Pierre Jacques
         terrencepierrej **at** gmail **dot** com

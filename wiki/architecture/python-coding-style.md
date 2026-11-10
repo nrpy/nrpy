@@ -1,6 +1,6 @@
 # Python Coding Style
 
-> Python formatting, naming, imports, docstrings, type hints, comments, and module-shape rules. · Status: provisional · Last reconciled: 07-20-2026
+> Python formatting, naming, imports, docstrings, type hints, comments, and module-shape rules. · Status: provisional
 > Up: [Architecture](index.md)
 
 ## Summary
@@ -57,6 +57,14 @@ Use triple double-quoted strings for docstrings. Function docstrings use
 Sphinx/reStructuredText fields: `:param name:`, `:return:`, and
 `:raises ExceptionType:`. Do not use Google-style `Args:`, `Returns:`, or
 `Raises:` headers. Use singular `:return:`, not `:returns:`.
+
+A function annotated `-> None` has no return field in its docstring: do not
+write `:return None:`, `:return None`, or `:return: None`. `:return None:` is
+also malformed reST, because it declares a field named `return None`. Describe
+side effects in the docstring body, and do not add `return None` or
+`# noqa: DAR202` to satisfy darglint. Functions annotated `Union[None, X]` or
+`Optional[X]` keep `:return:` and describe both the `None` case and the `X`
+case, as the parallel-codegen registration functions do.
 
 Do not embed redundant type information inside `:param` descriptions because
 types already live in function signatures. Describe meaning and behavior.
@@ -146,8 +154,24 @@ least two real call sites unless an external API, callback protocol, or test
 harness requires a named function. Do not keep single-use helpers for cosmetic
 string manipulation or local tidiness; inline them at the point of use.
 
+Regular expressions are forbidden in NRPy code. `coding_style.md`'s Prohibited
+Dependencies section states the rule: do not `import re` anywhere under `nrpy/`; use
+plain string methods, because regex is brittle and obscures what the code is doing.
+The legacy imports and doctests identified in `coding_style.md` are
+grandfathered rather than precedent; remove their regular-expression use when
+each file is next materially edited. Repository tooling outside the package,
+such as `tools/kb_lint.py`, is out of scope.
+
+Claim evidence:
+- Claim: new code under `nrpy/` does not import `re`; plain string methods are used instead, and the grandfathered sites identified in `coding_style.md` are legacy rather than precedent. Repository tooling outside the package is not covered by the rule.
+- Role: normative rule
+- Deciding authority: [coding_style.md](../../coding_style.md), `### Prohibited Dependencies`, the `import re` bullet
+- Corroboration: none available; the repository-wide dependency rule is the deciding authority.
+
 ## Sources
 
+- [coding_style.md](../../coding_style.md) - `### Prohibited Dependencies`, the `import re` bullet
+- [coding_style.md](../../coding_style.md) - `## Python Coding Style`, `### Docstring Style`, the `-> None` return-field bullet
 - [coding_style.md](../../coding_style.md) - `## Python Coding Style`, `### Module Docstring Format`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `## Python Style`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### Python String Literals`, `### Module Docstrings`, `### Type Hints`, `### Comments`

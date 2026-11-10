@@ -1,6 +1,6 @@
 # GRHD
 
-> Map NRPy's general relativistic hydrodynamics equation builders, flux helpers, and validation coverage. · Status: confirmed · Last reconciled: 07-12-2026
+> Map NRPy's general relativistic hydrodynamics equation builders, flux helpers, and validation coverage. · Status: confirmed
 > Up: [Equations](index.md)
 
 ## Summary
@@ -11,22 +11,32 @@ variables, stress-energy tensors, fluxes, source terms, connection terms, and
 reference-metric rescalings; companion modules compute characteristic speeds,
 HLL interface fluxes, and no-branch min/max expressions used by generated C
 code. This equation slice does not add magnetic-field terms or primitive-state
-recovery.
+recovery; `GRMHD_Equations` in [GRMHD](grmhd.md) subclasses `GRHD_Equations` to
+add magnetic stress-energy.
 
 ## Detail
 
 `GRHD_Equations` initializes a coordinate-system reference metric, imports the
 matching `BSSN_quantities` entry, converts BSSN quantities to ADM spatial metric
 and extrinsic curvature through `BSSN_to_ADM`, and declares primitive fluid
-symbols `u4Ut`, `rhob`, `P`, `h`, `Ye`, `S`, and `rescaledvU`. The physical
-three-velocity `VU` and spatial four-velocity components are reconstructed from
-`rescaledvU` with the reference-metric rescaling factors `ReU`.
+symbols `u4Ut`, `rhob`, `P`, `h`, `Ye`, `S`, and `rescaledvU`. The coordinate
+transport velocity is `VU[i] = u4U[i+1]/u4U[0] = ReU[i]*rescaledvU[i]`.
+The constructor uses it to form the spatial four-velocity components. This is
+the velocity transporting the fluid through the coordinates; the Eulerian
+three-velocity is `(VU[i] + betaU[i])/alpha`.
+
+Claim evidence:
+- Claim: `VU` denotes coordinate transport velocity, `u^i/u^0`, and `rescaledvU[i] = VU[i]/ReU[i]`.
+- Role: descriptive behavior
+- Deciding authority: [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py), `GRHD_Equations.__init__, compute_vU_from_u4U__no_speed_limit`
+- Corroboration: `none available`; the named implementation decides the stated behavior.
 
 The conserved variables are stored as object attributes. `compute_rho_star`,
 `compute_Ye_star`, `compute_S_star`, `compute_tau_tilde`, and
 `compute_S_tildeD` build densitized density, electron-fraction, entropy, energy,
-and momentum variables from the lapse, conformal volume factor, primitive fluid
-state, four-velocity, and stress-energy contractions.
+and momentum variables from the lapse, reference-metric volume factor
+`e6phi` (equal to `sqrt(gamma/gammahat)` when `det(gammabar) = det(gammahat)`),
+primitive fluid state, four-velocity, and stress-energy contractions.
 
 Stress-energy support is split between `compute_T4UU` and `compute_T4UD`.
 `compute_T4UU` uses `ADM_to_g4UU` and the perfect-fluid form of `T^{mu nu}`;
@@ -44,19 +54,53 @@ stores a rescaled form divided or transformed by `ReU` where needed.
 Source terms are separated from flux construction. `compute_tau_source_term`
 uses extrinsic curvature, shift, lapse derivatives, and `T4UU`.
 `compute_S_tilde_source_termD` combines lapse-gradient, shift-gradient, and
-covariant spatial-metric derivative terms. `compute_all_connection_terms` and
+covariant spatial-metric derivative terms; the reference covariant derivative
+of `gamma_ij` follows the metric split of
+[Jacques et al., Eqs. (2)-(3)](https://arxiv.org/pdf/2412.03659v2). `compute_all_connection_terms` and
 `compute_S_tilde_connection_termsD` add reference-Christoffel contributions
 from `GammahatUDD` to the density, electron-fraction, entropy, energy, and
 momentum equations. `construct_all_equations` runs the full setup order used by
 the trusted GRHD equation tests.
 
-`find_cp_cm` computes the two characteristic speeds in one flux direction from
-the contravariant four-metric, four-velocity, and sound speed squared. It uses
-the no-branch maximum helper to clamp the quadratic discriminant before taking
-the square root, then orders the two speeds with no-branch min/max. `find_cmax_cmin`
-builds the face-centered four-metric from ADM face data, evaluates the right
-and left speeds, and returns the nonnegative `cmin` and `cmax` values required
-by HLL fluxes.
+The perfect-fluid tensor is the fluid part of
+[Duez et al., Eq. (16)](https://arxiv.org/pdf/astro-ph/0503420v2).
+Their Eqs. (34)-(39) give mass, momentum, and energy variables, fluxes, and the
+energy source before reference-metric densitization.
+[Jacques et al., Eqs. (4)-(5) and (13)-(21)](https://arxiv.org/pdf/2412.03659v2)
+supply the reference volume factor, electron fraction, conserved system,
+geometric sources, and connection terms. Their Eqs. (22)-(24) define component
+rescaling. `compute_S_star` sets `S_star = alpha * e6phi * S * u^0`, and
+`compute_S_star_fluxU` transports `S_star` with `VU` and no source term. The
+caller supplies the primitive entropy variable `S` in the equation-of-state
+convention of the calling code. Neither the `S_star` definition nor its
+transport law comes from Duez et al. or Jacques et al.; Jacques et al.,
+Eq. (11), only rewrites the chosen current's divergence.
+
+Claim evidence:
+- Claim: The perfect-fluid tensor, conserved mass, momentum, and energy variables, fluxes, and energy source follow Duez et al. Eqs. (16) and (34)-(39), with reference-metric volume factor, electron fraction, conserved system, sources, connection terms, and component rescaling from Jacques et al. Eqs. (4)-(5) and (13)-(24). Neither paper defines `S_star` or its transport law.
+- Role: public/scientific contract
+- Deciding authority: [Duez et al. (2005)](https://arxiv.org/pdf/astro-ph/0503420v2), Eqs. (16) and (34)-(39); [Jacques et al.](https://arxiv.org/pdf/2412.03659v2), Eqs. (4)-(5), (11), and (13)-(24)
+- Corroboration: [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py), method docstrings including `compute_S_star`; [GRHD_equations_Cartesian.py](../../nrpy/equations/grhd/tests/GRHD_equations_Cartesian.py), `trusted_dict`
+
+`find_cp_cm` computes the smaller and larger roots of the characteristic
+quadratic in one flux direction from the contravariant four-metric,
+four-velocity, and squared fluid-frame signal speed `v02`. GRHD supplies the
+sound speed squared `c_s^2`; GRMHD supplies its estimate `v_0^2`. It uses the
+no-branch maximum helper to clamp the quadratic discriminant before taking
+the square root, then orders the roots with no-branch min/max.
+The quadratic is derived from
+[Duez et al., Eqs. (49)-(50)](https://arxiv.org/pdf/astro-ph/0503420v2);
+the paper does not print its expanded coefficients.
+`find_cmax_cmin` builds the face-centered four-metric from ADM face data,
+evaluates the right and left reconstructed states with their supplied `v02_r`
+and `v02_l`, and returns nonnegative `(cmin, cmax)` HLL bounds. See
+[GRMHD](grmhd.md) for its magnetic speed estimate.
+
+Claim evidence:
+- Claim: `find_cp_cm` uses one squared fluid-frame speed `v02` to return ordered roots; `find_cmax_cmin` uses the two face-state values `v02_r` and `v02_l` to return nonnegative HLL bounds. GRHD supplies sound speeds and GRMHD supplies magnetic speed estimates.
+- Role: descriptive behavior
+- Deciding authority: [characteristic_speeds.py](../../nrpy/equations/grhd/characteristic_speeds.py), `find_cp_cm` and `find_cmax_cmin`
+- Corroboration: [GRMHD characteristic_speeds.py](../../nrpy/equations/grmhd/characteristic_speeds.py), `find_cmax_cmin` caller
 
 These helpers assume caller-supplied physical states and usable denominators.
 `flux_dirn` is used as a spatial index and is not range-checked; intended values
@@ -64,18 +108,46 @@ are `0`, `1`, or `2`. `find_cp_cm` divides by its quadratic coefficient `a`, and
 `HLL_solver` divides by `cmax + cmin`; neither function supplies a zero-
 denominator fallback. `find_cmax_cmin` also uses one face metric for both
 reconstructed states, as stated in its source docstring.
+The HLL flux and its nonnegative speed bounds are
+[Duez et al., Eq. (48)](https://arxiv.org/pdf/astro-ph/0503420v2)
+and the definitions immediately before it.
 
-`calculate_GRHD_Tmunu_and_contractions` evaluates the conserved variables and
-physical fluxes for one reconstructed side of a cell face. `calculate_HLL_fluxes`
-does that for right and left states, obtains `cmin` and `cmax`, and applies
+`calculate_Tmunu_and_contractions_from_equations` overwrites the supplied
+Cartesian equation object's metric and fluid attributes, then computes its
+conserved variables and physical fluxes for one reconstructed face state.
+`grhd.HLL_fluxes.calculate_HLL_fluxes` passes a Cartesian `GRHD_Equations`
+object for each state. `grmhd.HLL_fluxes.calculate_HLL_fluxes` passes a
+Cartesian `GRMHD_Equations` object with its magnetic field assigned.
+The GRHD `calculate_HLL_fluxes` obtains `cmin` and `cmax` and applies
 `HLL_solver` to `rho_star`, `Ye_star`, `S_star`, `tau_tilde`, and each
 component of `S_tildeD`.
 
-`Min_Max_and_Piecewise_Expressions.py` provides symbolic branch-avoidance
-helpers. `min_noif` and `max_noif` express extrema through `nrpyAbs`, which
-later becomes a generated C absolute-value call. The coordinate-bound helpers
-register `TINYDOUBLE` on demand and return symbolic 0-or-1 masks for
-less-than, less-or-equal, greater-than, and greater-or-equal comparisons.
+Claim evidence:
+- Claim: `calculate_Tmunu_and_contractions_from_equations` replaces the Cartesian equation object's metric and fluid state and computes conserved variables and fluxes. The GRHD and GRMHD HLL functions pass their respective equation classes.
+- Role: descriptive behavior
+- Deciding authority: [HLL_fluxes.py](../../nrpy/equations/grhd/HLL_fluxes.py), `calculate_Tmunu_and_contractions_from_equations` and `calculate_HLL_fluxes`
+- Corroboration: [GRMHD HLL_fluxes.py](../../nrpy/equations/grmhd/HLL_fluxes.py), `calculate_HLL_fluxes` caller
+
+`Min_Max_and_Piecewise_Expressions.py` provides symbolic min/max expressions
+through `nrpyAbs`, which later becomes a generated C absolute-value call.
+The coordinate-bound helpers register `TINYDOUBLE` on demand and use shifted
+denominators. They do not implement exact Boolean comparisons near the shift.
+Let `d = x - xstar` and `epsilon = TINYDOUBLE > 0`, with `nrpyAbs` interpreted
+as absolute value. `coord_less_bound` gives `d/(d-epsilon)` for `d < 0`, so
+`d = -epsilon/2` gives `1/3`; `coord_greater_bound` has the analogous positive
+branch. The non-strict helpers shift the comparison thresholds to `epsilon`
+and `-epsilon`. Denominators vanish at `d = epsilon` for the less/less-or-equal
+helpers and at `d = -epsilon` for the greater/greater-or-equal helpers.
+Callers must account for these fractional values and singular points.
+
+Claim status: contested; contradiction: CONTR-0020.
+See [CONTR-0020](../contradictions.md#contr-0020).
+
+Claim evidence:
+- Claim: Coordinate-bound helpers use shifted quotients, so exact 0-or-1 comparison semantics are not guaranteed and denominators can vanish.
+- Role: descriptive behavior
+- Deciding authority: [Min_Max_and_Piecewise_Expressions.py](../../nrpy/equations/grhd/Min_Max_and_Piecewise_Expressions.py), `coord_leq_bound`, `coord_geq_bound`, `coord_less_bound`, `coord_greater_bound`
+- Corroboration: `none available`; the module's trusted-value path substitutes other functions for `nrpyAbs` and does not validate absolute-value comparison semantics.
 
 Representative trusted files cover both Cartesian-equivalent and curvilinear
 paths. `GRHD_equations_Cartesian.py`, `GRHD_equations_Spherical.py`, and
@@ -93,14 +165,32 @@ domains. All cited trusted files are sampled expression checks, not generated
 build, runtime, shock-tube, conservation, convergence, or numerical-accuracy
 tests.
 
+At the general-metric sample point shared by the speed and HLL checks, the
+characteristic speeds entering `cmax` are all negative, so `cmax = 0` there and
+the sampled HLL fluxes equal the right-state fluxes. Both modules therefore
+also evaluate a flat face (`alpha = 1`, `beta^i = 0`, `gamma_ij = delta_ij`)
+with a subsonic right state moving in `+x` and a subsonic left state moving in
+`-x`, which makes both speed bounds nonzero and distinct, and repeat that
+evaluation with the face states exchanged, so each state sets each bound in one
+of the two evaluations. The `HLL_test` entry samples `HLL_solver` with an
+independent symbol for every input.
+
+Claim evidence:
+- Claim: At the shared general-metric sample point the GRHD characteristic speeds entering `cmax` are all negative, so `cmax = 0` and the sampled HLL fluxes reduce to right-state fluxes; the speed and HLL modules also sample a flat-face pair of subsonic states and its exchange, which makes both speed bounds nonzero and lets each state set each bound in one of the two evaluations; `HLL_test` samples `HLL_solver` with independent symbols. These are sampled expression checks, not generated-code execution.
+- Role: descriptive behavior
+- Deciding authority: [characteristic_speeds.py](../../nrpy/equations/grhd/characteristic_speeds.py), module `__main__`; [HLL_fluxes.py](../../nrpy/equations/grhd/HLL_fluxes.py), module `__main__`
+- Corroboration: [characteristic_speeds.py](../../nrpy/equations/grhd/tests/characteristic_speeds.py) and [HLL_fluxes.py](../../nrpy/equations/grhd/tests/HLL_fluxes.py), `trusted_dict` entries with the `subsonic_` and `subsonic_exchanged_` prefixes
+
 ## Sources
 
+- [Duez et al. (2005)](https://arxiv.org/pdf/astro-ph/0503420v2) - Eqs. (16), (34)-(39), (48)-(50)
+- [Jacques et al.](https://arxiv.org/pdf/2412.03659v2) - Eqs. (2)-(5), (11), (13)-(24)
 - [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py) - `GRHD_Equations`, `construct_all_equations`
 - [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py) - `compute_rho_star`, `compute_Ye_star`, `compute_S_star`, `compute_tau_tilde`, `compute_S_tildeD`
 - [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py) - `compute_T4UU`, `compute_T4UD`, `compute_rho_star_fluxU`, `compute_tau_tilde_fluxU`, `compute_S_tilde_fluxUD`
 - [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py) - `compute_tau_source_term`, `compute_all_connection_terms`, `compute_S_tilde_source_termD`, `compute_S_tilde_connection_termsD`
 - [characteristic_speeds.py](../../nrpy/equations/grhd/characteristic_speeds.py) - `find_cp_cm`, `find_cmax_cmin`
-- [HLL_fluxes.py](../../nrpy/equations/grhd/HLL_fluxes.py) - `calculate_GRHD_Tmunu_and_contractions`, `HLL_solver`, `calculate_HLL_fluxes`
+- [HLL_fluxes.py](../../nrpy/equations/grhd/HLL_fluxes.py) - `calculate_Tmunu_and_contractions_from_equations`, `HLL_solver`, `calculate_HLL_fluxes`
 - [Min_Max_and_Piecewise_Expressions.py](../../nrpy/equations/grhd/Min_Max_and_Piecewise_Expressions.py) - `min_noif`, `max_noif`, `coord_leq_bound`, `coord_geq_bound`, `coord_less_bound`, `coord_greater_bound`
 - [GRHD_equations_Cartesian.py](../../nrpy/equations/grhd/tests/GRHD_equations_Cartesian.py) - `trusted_dict`
 - [GRHD_equations_Spherical.py](../../nrpy/equations/grhd/tests/GRHD_equations_Spherical.py) - `trusted_dict`
@@ -111,9 +201,10 @@ tests.
 
 ## See Also
 
-- [Equations](index.md)
-- [BSSN Family](general-relativity/bssn-family.md)
-- [Metric Conversions And Matter](general-relativity/metric-conversions-and-matter.md)
-- [Fishbone-Moncrief](general-relativity/fishbone-moncrief.md)
-- [Reference Metrics](../core/reference-metrics.md)
-- [Trusted Expression Pipeline](trusted-expression-pipeline.md)
+- Parent: [Equations](index.md)
+- Depends on: [BSSN Family](general-relativity/bssn-family.md)
+- Depends on: [Metric Conversions And Matter](general-relativity/metric-conversions-and-matter.md)
+- See also: [Fishbone-Moncrief](general-relativity/fishbone-moncrief.md)
+- Depends on: [Reference Metrics](../core/reference-metrics.md)
+- Validated by: [Trusted Expression Pipeline](trusted-expression-pipeline.md)
+- See also: [GRMHD](grmhd.md)

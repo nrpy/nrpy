@@ -63,7 +63,23 @@ def register_commondata_params(
     :param dtypes: A list of data types for the parameters.
     :param defaults: A list of default values for the parameters.
     :param descriptions: A list of descriptions for the parameters.
+
+    :raises ValueError: If the four lists do not have the same length.
+
+    Doctests:
+    >>> register_commondata_params(["p2", "p3"], ["float"], [0.0], ["", ""]) # doctest: +IGNORE_EXCEPTION_DETAIL
+    Traceback (most recent call last):
+        ...
+    ValueError: names, dtypes, defaults, and descriptions must have the same length; got 2, 1, 1, 2.
+    >>> "p2" in commondata_params_dict
+    False
     """
+    lengths = [len(names), len(dtypes), len(defaults), len(descriptions)]
+    if len(set(lengths)) != 1:
+        raise ValueError(
+            "names, dtypes, defaults, and descriptions must have the same length; "
+            f"got {', '.join(str(n) for n in lengths)}."
+        )
     for name, dtype, default, description in zip(names, dtypes, defaults, descriptions):
         register_commondata_param(name, dtype, default, description)
 
@@ -90,7 +106,7 @@ def generate_commondata_dataclass() -> str:
         """)
 
     if fields:
-        class_body += "\n".join(fields)
+        class_body += "\n".join(fields) + "\n"
     else:
         class_body += "    pass\n"
 

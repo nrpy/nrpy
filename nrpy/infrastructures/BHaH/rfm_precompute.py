@@ -79,7 +79,7 @@ def _emit_param_fragments(unique_params: List[str]) -> Tuple[str, str, str]:
 
 
 # --------------------------------------------------------------------------
-# Orchestrator: build per-symbol allocation/compute/free & CUDA kernels
+# Build each symbol's allocation, calculation, cleanup, and CUDA kernels
 # --------------------------------------------------------------------------
 class ReferenceMetricPrecompute:
     """
@@ -551,7 +551,7 @@ IFCUDARUN({{
 
 
 # --------------------------------------------------------------------------
-# doctest harness
+# Run doctests when invoked as a script
 # --------------------------------------------------------------------------
 if __name__ == "__main__":
     import doctest

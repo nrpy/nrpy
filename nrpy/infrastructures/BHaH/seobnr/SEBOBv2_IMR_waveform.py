@@ -111,9 +111,11 @@ for(i = 0; i < nsteps_ringdown; i++){
 
 // Step 5: Combine inspiral and ringdown into the IMR waveform.
 commondata->nsteps_IMR = idx_match + 1 + nsteps_ringdown;
-commondata->waveform_IMR = (double complex *)malloc(NUMMODES * commondata->nsteps_IMR*sizeof(double complex));
+// Zero-initialized: only the TIME and (2,2)-strain slots are filled below,
+// and higher-mode slots must read back as zero, not indeterminate memory.
+commondata->waveform_IMR = (double complex *)calloc(NUMMODES * commondata->nsteps_IMR,sizeof(double complex));
 if (commondata->waveform_IMR == NULL){
-  fprintf(stderr,"Error: in SEBOBv2_IMR_waveform(), malloc() failed to for commondata->waveform_IMR\\n");
+  fprintf(stderr,"Error: in SEBOBv2_IMR_waveform(), calloc() failed for commondata->waveform_IMR\\n");
   exit(1);
 }
 for (i = 0; i <= idx_match; i++){

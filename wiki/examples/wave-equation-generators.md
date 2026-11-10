@@ -1,6 +1,6 @@
 # Wave Equation Generators
 
-> Compare the Cartesian, curvilinear, and multicoordinate wave-equation example generators. · Status: confirmed · Last reconciled: 07-12-2026
+> Compare the Cartesian, curvilinear, and multicoordinate wave-equation example generators. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
@@ -23,7 +23,7 @@ generated project with several registered coordinate systems. It writes
 
 ## Detail
 
-All three examples are standalone BHaH generators. Each source file removes its
+All of these examples are standalone BHaH generators. Each source file removes its
 own `project/<project_name>/` directory before generation, writes a default
 `<project_name>.par`, registers `convergence_factor` as a generated executable
 command-line input, emits `BHaH_defines.h`, generated C or CUDA sources,
@@ -37,12 +37,12 @@ make
 ```
 
 Preserve any wanted prior project output before generation. Configured
-Ubuntu/macOS CI generates and builds all three default OpenMP projects, but
-does not run their executables or compare diagnostic errors. The local helper
+Ubuntu/macOS CI generates and builds the default OpenMP project of each example, but
+does not run those executables or compare diagnostic errors. The local helper
 also configures CUDA generation/build for curvilinear and multicoordinate
 projects only; it performs no GPU runtime or numerical check.
 
-For the other two workflows, replace `wave_equation_cartesian` with
+For the other workflows, replace `wave_equation_cartesian` with
 `wave_equation_curvilinear` or `wave_equation_multicoordinates`. From a
 checkout without editable install, follow [Build And Run](../architecture/build-and-run.md)
 and set `PYTHONPATH` from the repository root before invoking the modules.

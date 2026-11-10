@@ -8,7 +8,7 @@
 | [Build And Run](build-and-run.md) | You need install paths, package command entry points, direct-run setup, prerequisites, or the first standalone workflow. |
 | [Symbolic Codegen Lifecycle](symbolic-codegen-lifecycle.md) | You need the path from SymPy equations through C function registration into a generated project. |
 | [Generated Output Boundaries](generated-output-boundaries.md) | You need to tell handwritten source from generated projects, thorns, Charm++ output, JAX output, or artifacts. |
-| [Contribution Style And Static Analysis](contribution-style-and-static-analysis.md) | You need the practical style, artifact, trusted-value, and static-analysis rules for code changes. |
+| [Contribution Style And Static Analysis](contribution-style-and-static-analysis.md) | You need commit-message attribution, coordinate-admission, defensive-guard, compatibility-shim, or trusted-value rules for code changes. |
 | [Python Coding Style](python-coding-style.md) | You need Python formatting, naming, import, docstring, type-hint, comment, or helper-function conventions. |
 | [C And Embedded C Style](c-and-embedded-c-style.md) | You need C/H formatting, Doxygen, embedded-C string, or generated-C body conventions. |
 

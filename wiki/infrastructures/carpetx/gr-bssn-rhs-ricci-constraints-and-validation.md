@@ -1,6 +1,6 @@
 # CarpetX GR BSSN RHS, Ricci, Constraints, And Validation
 
-> CarpetX registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 08-28-2026
+> CarpetX registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed
 > Up: [CarpetX](index.md)
 
 ## Summary
@@ -22,8 +22,8 @@ magnitudes.
 
 ## Detail
 
-All three CarpetX GR registration functions use the same parallel-codegen
-entry pattern: during `pcg.pcg_registration_phase()` they record the call with
+The CarpetX Ricci, RHS, and constraints registration functions use the same
+parallel-codegen entry pattern: during `pcg.pcg_registration_phase()` they record the call with
 `parallel_codegen.register_func_call()` and return `None`; during codegen they
 temporarily replace the global `fd_order` parameter with the requested local
 order, register the CFunction, restore the old `fd_order`, and return
@@ -38,8 +38,8 @@ finite-difference helper functions and Golden Kernels inside an interior CarpetX
 requested, the current CarpetX `simple_loop(enable_simd=True)` path raises
 `ValueError`, so this registration path does not currently emit a usable SIMD
 CarpetX loop kernel. The registered
-prefunc rewrites finite-difference helper text from `NO_INLINE` to
-`CCTK_ATTRIBUTE_NOINLINE`. Its schedule is guarded by `if(fd_order == <order>)`
+prefunc is `construct_FD_functions_prefunc()` unchanged; the finite-difference
+helpers carry `CCTK_DEVICE CCTK_HOST` and no inlining attribute. Its schedule is guarded by `if(fd_order == <order>)`
 and places the function in `ODESolvers_RHS as <thorn>_Ricci before
 <thorn>_RHS`, reading `hDD*` and `lambdaU*` and writing `RbarDD*`.
 
@@ -55,7 +55,9 @@ The RHS options that change generated behavior are `enable_T4munu`,
 `enable_rfm_precompute`, `enable_simd`, `LapseEvolutionOption`, and
 `ShiftEvolutionOption`. `enable_T4munu` changes the BSSN RHS and gauge RHS
 lookup keys. `enable_KreissOliger_dissipation` adds `_dKOD` derivative terms to
-gauge and non-gauge RHSs; when `enable_CAKO` is true, separate gauge and
+the non-gauge RHSs and to each gauge RHS that is not exactly the SymPy zero, so
+a `Frozen` lapse or shift and the driver of the first-order shift options
+receive none; when `enable_CAKO` is true, separate gauge and
 non-gauge dissipation strengths are registered and multiplied by the evolved
 conformal-factor-derived `W`. `enable_CAHD` builds the matching
 `BSSN_constraints` object and adds a Hamiltonian-damping term to `cf_rhs`.
@@ -67,11 +69,17 @@ path then passes `enable_simd=True` into CarpetX `simple_loop()`, which raises
 `ValueError`; the current simple-loop-backed RHS kernel path is therefore not
 usable with `enable_simd=True`.
 
+Claim evidence:
+- Claim: With `enable_KreissOliger_dissipation`, CarpetX `register_CFunction_rhs_eval` adds `_dKOD` dissipation to every non-gauge RHS and to each gauge RHS entry (`alpha_rhs`, `vet_rhsU`, `bet_rhsU`) that is not exactly the SymPy zero before dissipation is added; `BSSN_gauge_RHSs` returns that zero for a `Frozen` lapse, a `Frozen` shift and its driver, and the driver of the first-order shift options, so those fields receive no dissipation, while the evolved `B^i` of `NonAdvectingGammaDriving` and of the second-order drivers is dissipated.
+- Role: descriptive behavior
+- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/CarpetX/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`
+- Corroboration: the `rhs_eval` trusted dictionaries listed in Sources, which sample only `OnePlusLog` with second-order shift drivers, where every gauge RHS entry is nonzero; no trusted file samples a zero gauge RHS entry
+
 After option handling, the RHS codegen constructs an upwind control vector
 `betaU[i] = vetU[i] * rfm.ReU[i]` and calls `c_codegen()` with finite-difference
 codegen, finite-difference helper functions, Golden Kernels, and
-`upwind_control_vec=betaU`. The registered prefunc uses the same
-`NO_INLINE` to `CCTK_ATTRIBUTE_NOINLINE` rewrite as Ricci. The schedule is
+`upwind_control_vec=betaU`. The registered prefunc is the same unmodified
+`construct_FD_functions_prefunc()` as Ricci. The schedule is
 guarded by the finite-difference order and places the function in
 `ODESolvers_RHS as <thorn>_RHS after <thorn>_Ricci`, reading
 `evol_variables(everywhere)` and `auxevol_variables(interior)` and writing
@@ -96,8 +104,7 @@ reference-metric precompute and `T4munu` suffixes, computes `H`, `MU0`, `MU1`,
 `MU2`, `M = sqrt(gamma_ij M^i M^j)`, and
 `LAMBDA_CONSTRAINT = sqrt(gammabar_ij C^i C^j)`, and writes them through
 CarpetX auxiliary gridfunction accesses. Its generated body uses the same
-finite-difference helper functions, Golden Kernels, and
-`CCTK_ATTRIBUTE_NOINLINE` helper rewrite. As with Ricci and RHS, SIMD-specific
+finite-difference helper functions and Golden Kernels. As with Ricci and RHS, SIMD-specific
 declarations begin when requested, but the downstream CarpetX
 `simple_loop(enable_simd=True)` call raises `ValueError`, so this registration
 path does not currently emit a usable SIMD CarpetX loop kernel. Its schedule is guarded by
@@ -110,8 +117,6 @@ Claim evidence:
 - Role: descriptive behavior
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/infrastructures/CarpetX/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
 - Corroboration: [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [interface_ccl.py](../../../nrpy/infrastructures/CarpetX/interface_ccl.py), `construct_interface_ccl`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=CarpetX registration; precision=symbolic code generation; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian, fd_order 4, scalar registration; SIMD limitation retained and inspected; date=08-28-2026`
 
 RHS trusted-expression validation belongs here because `rhs_eval.py` validates
 the CarpetX-specific assembled RHS dictionary after CarpetX option handling and
@@ -128,8 +133,8 @@ all-improvements states; because it performs the trusted comparison outside
 `register_CFunction_rhs_eval()`, those basenames omit the `KO...` segment and
 use the local `enable_improvements` loop variable.
 
-CarpetX has six backend-local RHS trusted baselines: four covariant cases span
-both `T4munu` states and both improvements states, while two noncovariant
+CarpetX has backend-local RHS trusted baselines: the covariant cases span
+both `T4munu` states and both improvements states, while the noncovariant
 KO-enabled cases span both `T4munu` states with improvements disabled.
 
 ## Sources

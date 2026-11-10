@@ -2,19 +2,19 @@
 Register chunk-based numerical-spacetime interpolation.
 
 This module emits the host-side numerical interpolation wrapper used by
-geodesic integrators. The generated C function mirrors the analytic
-interpolation-kernel bundle contract: it consumes one chunk of photon states,
-parallelizes over rays on the CPU, writes the 10-component metric bundle, and
-writes the 40-component Christoffel bundle only when requested.
+geodesic integrators. The generated C function accepts one chunk of photon
+states in the same array layout as the analytic interpolation kernel,
+parallelizes over rays on the CPU, writes the 10 metric components, and writes
+the 40 Christoffel components only when requested.
 
-Operationally, this wrapper is the bridge between the data-management layer
-and the two interpolation helpers. For each photon, it asks the numerical
+For each photon, this wrapper asks the numerical
 time-window manager for the mapped temporal stencil, runs the spatial helper on
 every slice in that stencil, and then runs the temporal helper once to recover
 the final tensors at the photon coordinate time.
 
-The wrapper does not own file or mmap lifetime. A NumericalTimeWindowManager
-must already have an active mapped time window for the slot being processed.
+The wrapper neither opens nor closes the file mapping. A
+NumericalTimeWindowManager must already have an active mapped time window for
+the slot being processed.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -49,8 +49,8 @@ def register_CFunction_numerical_interpolation(
     """
     Register the CPU numerical-spacetime interpolation wrapper.
 
-    This wrapper owns the per-photon orchestration of the numerical-spacetime
-    interpolation pipeline. It does not select or map the active numerical
+    This wrapper performs spatial and temporal interpolation for each photon.
+    It does not select or map the active numerical
     window itself; instead, it assumes a caller already mapped a conservative
     slot-based window and then interpolates every ray in one chunk against that
     shared mapped data.
@@ -122,24 +122,24 @@ def register_CFunction_numerical_interpolation(
     desc = r"""Interpolate numerical-spacetime tensors for one photon chunk.
 
 The caller supplies an active numerical time window, a spatial interpolation
-context, and one chunk of photon states in the same Structure-of-Arrays bundle
+context, and one chunk of photon states in the same Structure-of-Arrays
 layout used by the analytic geodesic interpolation kernel. This CPU wrapper
 parallelizes over rays, selects each photon's mapped temporal stencil, performs
 spatial interpolation on every stencil slice, performs temporal interpolation
 at the photon coordinate time, and writes the final metric and optional
-Christoffel bundles.
+Christoffel component arrays.
 
 The design goal is to let all photons in the chunk reuse the same mapped
-numerical-spacetime payload window rather than loading numerical grids
+numerical-spacetime data window rather than loading numerical grids
 independently ray-by-ray.
 
 @param[in] commondata Common runtime parameters.
 @param[in] params Generated BHaH grid parameters for the mapped numerical data.
 @param[in] spatial_context Trusted azimuthal-symmetry spatial interpolation context.
 @param[in] numerical_window Active mapped numerical time-window manager.
-@param[in] d_f_bundle Photon state bundle.
-@param[out] d_metric_bundle Destination metric bundle.
-@param[out] d_connection_bundle Destination Christoffel bundle, or NULL.
+@param[in] d_f_bundle Photon state array.
+@param[out] d_metric_bundle Destination metric array.
+@param[out] d_connection_bundle Destination Christoffel array, or NULL.
 @param chunk_size Number of active rays in the chunk.
 @param stream_idx Analytic-kernel compatibility argument; ignored on CPU.
 
@@ -180,7 +180,7 @@ independently ray-by-ray.
         for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
           d_connection_bundle[IDX_CONN(comp, i)] = NAN;
         } // END LOOP: for comp over connection outputs after invalid temporal order
-      } // END IF: connection output bundle was requested
+      } // END IF: connection output array was requested
     } // END LOOP: for i over rays after invalid temporal order
     #undef IDX_F
     #undef IDX_METRIC
@@ -198,7 +198,7 @@ independently ray-by-ray.
         for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
           d_connection_bundle[IDX_CONN(comp, i)] = NAN;
         } // END LOOP: for comp over connection outputs after inconsistent temporal stencil size
-      } // END IF: connection output bundle was requested
+      } // END IF: connection output array was requested
     } // END LOOP: for i over rays after inconsistent temporal stencil size
     #undef IDX_F
     #undef IDX_METRIC
@@ -230,7 +230,7 @@ independently ray-by-ray.
       ray_failed = 1;
     } else {
       // Step 2: Interpolate each mapped time slice in space at the photon
-      // position, producing one tensor bundle per temporal node.
+      // position, producing one tensor array per temporal node.
       const int spatial_status =
           azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(
               spatial_context, commondata, params, x, y, z, temporal_num_points,
@@ -238,7 +238,7 @@ independently ray-by-ray.
       if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
         ray_failed = 1;
       } else {
-        // Step 3: Interpolate the per-slice tensor bundles in physical time to the
+        // Step 3: Interpolate the per-slice tensor arrays in physical time to the
         // photon coordinate time.
         const int temporal_status = temporal_lagrange_interpolation(
             commondata, slice_times, g4dd_slices, gamma4udd_slices, t, g4dd_local,
@@ -257,7 +257,7 @@ independently ray-by-ray.
         for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
           d_connection_bundle[IDX_CONN(comp, i)] = NAN;
         } // END LOOP: for comp over connection failure outputs
-      } // END IF: connection output bundle was requested
+      } // END IF: connection output array was requested
       continue;
     } // END IF: at least one interpolation stage failed for this ray
 
@@ -268,7 +268,7 @@ independently ray-by-ray.
       for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
         d_connection_bundle[IDX_CONN(comp, i)] = (double)gamma4udd_local[comp];
       } // END LOOP: for comp over final Christoffel components
-    } // END IF: connection output bundle was requested
+    } // END IF: connection output array was requested
   } // END LOOP: for i over rays in chunk
 
   #undef IDX_F

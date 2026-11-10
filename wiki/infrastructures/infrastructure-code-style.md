@@ -1,6 +1,6 @@
 # Infrastructure Code Style
 
-> Infrastructure module structure, C-function registration, generated-code validation, and BHaH generator style rules. · Status: provisional · Last reconciled: 07-20-2026
+> Infrastructure module structure, C-function registration, generated-code validation, and BHaH generator style rules. · Status: provisional
 > Up: [Infrastructures](index.md)
 
 ## Summary
@@ -13,6 +13,16 @@ and prefer shared BHaH codegen helpers over hand-written emitted C for ordinary
 per-grid or per-point kernels.
 
 ## Detail
+
+### Patterns Match Existing Code
+
+Before writing a mechanism into an infrastructure, find its counterpart in
+`nrpy/infrastructures/{BHaH,ETLegacy,CarpetX,superB}`. Three or more instances
+is settled convention; a mechanism with no instance anywhere is an invention,
+and that absence is evidence against it. Conformance is one-way: a new
+infrastructure conforms to the established ones, never the reverse. [New
+Infrastructure Conformance](new-infrastructure-conformance.md) owns the
+individual rules, their right and wrong examples, and their mechanical tests.
 
 ### Module Organization
 
@@ -60,10 +70,17 @@ Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md) owns
 oracle mechanics, selection, focused assertions, variant coverage, state, and
 safe updates.
 
-BHaH `compile_Makefile()` contains a retained unsafe external-compilation
-doctest. It is not precedent. A substantive touch follows the scoped-CI
-migration rule, or the strictly bounded no-expansion fallback only when
-migration is outside authorized scope, in Test Oracles And Safe Updates.
+Size is part of that rule. A right-hand side, Ricci, constraint, initial-data,
+connection, or algebraic-projection kernel does not receive a trusted generated
+source file when its main content comes from symbolic lowering. Equation owners
+pin the symbolic expressions. Complete generated C++ application checks exercise
+Dendro lowering and numerical behavior.
+
+Claim evidence:
+- Claim: golden-output baselines are for small, largely structural emitted code; symbolically lowered numerical kernels are validated through equation-owner expressions and complete generated-application checks instead.
+- Role: normative rule
+- Deciding authority: [coding_style.md](../../coding_style.md), `#### validate_strings pattern`, its generated-kernel and size bullets
+- Corroboration: [ADM_to_BSSN.py](../../nrpy/infrastructures/Dendro/general_relativity/ADM_to_BSSN.py), the generated pointwise conversion kernel without a generated-source baseline.
 
 ### Parallel Codegen Registration
 
@@ -160,11 +177,13 @@ checks integer return codes immediately, and returns early when
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### Doctests`, `### Parallel Codegen Pattern`, `### Black Suppression`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### C Function Registration from Python`, `### BHaH Symbolic Codegen Rules`, `### Inlining Rules`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### Standard Struct Pointer Params`, `### Gridfunction Naming / Grouping`, `### Memory / Error Handling`
-- [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `compile_Makefile`
+- [coding_style.md](../../coding_style.md) - `#### validate_strings pattern`, its generated-kernel and size bullets
+- [ADM_to_BSSN.py](../../nrpy/infrastructures/Dendro/general_relativity/ADM_to_BSSN.py) - generated pointwise initial-data conversion.
 
 ## See Also
 
 - Parent: [Infrastructures](index.md)
+- Depends on: [New Infrastructure Conformance](new-infrastructure-conformance.md)
 - Depends on: [C Function Registry](../core/c-function-registry.md)
 - Depends on: [Gridfunctions And Parameters](../core/gridfunctions-and-parameters.md)
 - Depends on: [Parallel Codegen Orchestration](../core/helpers/parallel-codegen-orchestration.md)

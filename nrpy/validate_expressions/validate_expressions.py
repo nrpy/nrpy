@@ -95,7 +95,7 @@ def _nonfinite_values_match(
     False
     """
     # Normalize real and complex inputs so component placement remains part of
-    # the sentinel contract.
+    # the nonfinite-value comparison rule.
     value_1_mpc = mpc(value_1)
     value_2_mpc = mpc(value_2)
     # None tells callers to retain their existing finite tolerance comparison.
@@ -452,9 +452,17 @@ def convert_one_expression_to_mpfmpc(
             free_symbols_set,
             fixed_mpfs_for_free_symbols=fixed_mpfs_for_free_symbols,
         )
+        # SymPy caches results built from the sampled inputs (products, powers,
+        # and functions such as exp) at the original precision; the inputs are
+        # exact doubles that compare equal at both precisions, so the retry
+        # would reuse them. Clear the cache so they are recomputed, and clear
+        # it again afterward so later evaluations at the original precision do
+        # not reuse the doubled-precision results.
+        sp.core.cache.clear_cache()
         new_result_value = inject_mpfs_into_cse_expression(
             mpf_symbols_dict, replaced, reduced
         )
+        sp.core.cache.clear_cache()
         if mp.fabs(new_result_value) < 10 ** (-(4.0 / 5.0) * mp.dps):
             if verbose:
                 print(

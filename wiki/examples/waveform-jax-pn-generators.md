@@ -1,11 +1,11 @@
 # Waveform JAX PN Generators
 
-> Map SEOBNR/SEBOB waveform, JAX, and PN momentum example generators to generated project names, dependency classes, and example-owned consistency checks. · Status: confirmed · Last reconciled: 07-12-2026
+> Map SEOBNR/SEBOB waveform, JAX, and PN momentum example generators to generated project names, dependency classes, and example-owned consistency checks. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
 
-This example leaf covers four related generator families. The
+This example leaf covers related generator families. The
 `seobnrv5_aligned_spin_inspiral` route creates GSL-backed BHaH C waveform
 projects whose project name is selected from the SEOBNRv5 approximant flag and
 optional calibration suffix. `sebobv2` creates one GSL-backed BHaH C waveform
@@ -19,14 +19,21 @@ The SEOB/SEBOB consistency scripts are example-owned validation helpers. They
 build trusted and current generated executable directories, run matching
 waveform outputs, compute amplitude-plus-phase RMSE-style differences, and
 require the current-vs-trusted median error to stay within a perturbation-based
-roundoff baseline.
+roundoff baseline. For calibration-mode SEOBNRv5 approximants, the
+SEOBNRv5-family script additionally requires the trusted and current
+executables to succeed or fail consistently on each input; any asymmetry
+(one succeeds, the other crashes) fails the run independently of the median
+check.
 
 ## Detail
 
 `nrpy.examples.seobnrv5_aligned_spin_inspiral` is the flag-driven SEOBNRv5
 aligned-spin generator. If no approximant flag is supplied, it defaults to
 `-seobnrv5_bob`. Normal use chooses one approximant flag, then optionally adds
-one calibration flag:
+one of three mutually exclusive calibration/selector flags:
+`-calibration_no_spin`, `-calibration_spin`, or `-nrpy_calibrated`
+(`-nrpy_calibrated` selects the NRPy-calibrated `a6`/`Delta_t_NS` fit in
+production mode and cannot be combined with either calibration flag):
 
 | Flag family | Generated project name | NQC choice | Merger-ringdown choice | Dependency class |
 | --- | --- | --- | --- | --- |
@@ -34,15 +41,21 @@ one calibration flag:
 | `-seobnrv5_nrnqc_bob` | `seobnrv5_nrnqc_bob` | native numerical-relativity NQC | BOB-informed merger-ringdown | BHaH C project with GSL |
 | `-seobnrv5_nrpy` | `seobnrv5_nrpy` | native numerical-relativity NQC | native SEOBNRv5 merger-ringdown | BHaH C project with GSL |
 
+Evidence (descriptive behavior): [seobnrv5_aligned_spin_inspiral.py](../../nrpy/examples/seobnrv5_aligned_spin_inspiral.py), `argparse` flag block and the `project_name` base-name assignment in the module `__main__` body (no registered test exercises this generator's flag parsing or table-mapped output)
+
 Project-name expansion is string-based. The script starts from the approximant
-base name, then appends `_calibration_no_spin` for `-calibration_no_spin` or
-`_calibration_spin` for `-calibration_spin`. It rejects using both calibration
-flags at once. Thus `-seobnrv5_bob -calibration_no_spin` writes
-`project/seobnrv5_bob_calibration_no_spin/`, while
-`-seobnrv5_nrpy -calibration_spin` writes
-`project/seobnrv5_nrpy_calibration_spin/`. The calibration flags also flow into
-SEOBNRv5 aligned-spin coefficient registration, so they are not only naming
-suffixes.
+base name, then appends `_calibration_no_spin` for `-calibration_no_spin`,
+`_calibration_spin` for `-calibration_spin`, or `_nrpy_calibrated` for
+`-nrpy_calibrated`. It rejects combining the two calibration flags, and
+rejects combining `-nrpy_calibrated` with either calibration flag. Thus
+`-seobnrv5_bob -calibration_no_spin` writes
+`project/seobnrv5_bob_calibration_no_spin/`, `-seobnrv5_nrpy -calibration_spin`
+writes `project/seobnrv5_nrpy_calibration_spin/`, and
+`-seobnrv5_bob -nrpy_calibrated` writes
+`project/seobnrv5_bob_nrpy_calibrated/`. These flags also flow into SEOBNRv5
+aligned-spin coefficient registration, so they are not only naming suffixes.
+
+Evidence (descriptive behavior): [seobnrv5_aligned_spin_inspiral.py](../../nrpy/examples/seobnrv5_aligned_spin_inspiral.py), `project_name` string-assignment block and the `calibration_no_spin`/`calibration_spin`/`nrpy_calibrated` `ValueError` guards (no registered test exercises this generator's project-name string construction)
 
 The SEOBNRv5 waveform projects are GSL-backed C projects. The generator sets
 `Infrastructure` to `BHaH`, registers C functions for commondata I/O,
@@ -73,14 +86,19 @@ JAX work are roadmap items in the example source, not completed workflow
 features. Existing JAX infrastructure pages own the generated-package lifecycle
 and the narrower Commondata/PyFunction details.
 
-Claim status: contested; contradiction: CONTR-0002. The generator supplies 14
-Commondata names and descriptions but only 13 dtypes and defaults. Batch
-registration uses `zip()`, so generated `Commondata.py` omits `a_f`, while the
-emitted coefficient function constructs `Commondata(..., a_f=a_f)`. See
-[CONTR-0002](../contradictions.md#contr-0002). GitHub codegen invokes only
-generation; it does not install/import the package, run the generated basic
-test, call the coefficient function, or validate any JAX accelerator/numerical
-result. The generated metadata declares `jax`, `jaxlib>=0.4.0`, and
+The generator supplies 14 Commondata names, dtypes, defaults, and
+descriptions, and batch registration rejects lists of unequal length, so
+generated `Commondata.py` includes the `a_f` field that the emitted coefficient
+function passes to `Commondata(...)`. GitHub codegen generates and installs
+the package, imports the coefficient function, and calls it once with
+Python-scalar inputs; it does not run the generated basic test or check any
+returned value, JAX accelerator, or numerical result.
+
+[Generated Project
+CI](../validation/generated-project-ci.md#sebobv1_jax-install-and-call-step)
+gives the exact configured `sebobv1_jax` CI step and its evidence.
+
+The generated metadata declares `jax`, `jaxlib>=0.4.0`, and
 `numpy>=1.21.0`; official JAX [Installation](https://docs.jax.dev/en/latest/installation.html)
 under `Supported platforms` remains authority for current platform-specific JAX
 installation, not NRPy's workflow.
@@ -108,12 +126,27 @@ waveforms over the shared time interval, and compute normalized RMSE-style
 amplitude and phase errors. A run passes only when the median current-vs-trusted
 error is no larger than the median trusted-vs-perturbed baseline error.
 
+For calibration-mode approximants (`_calibration_no_spin`/`_calibration_spin`
+in the directory name), the SEOBNRv5-family script treats each input set's
+trusted/current executable run as its own success/failure outcome instead of
+letting a crash propagate: an input set where both executables succeed or
+both fail contributes no regression signal (a consistent failure is excluded
+from the median rather than aborting the script), but an input set where one
+succeeds and the other crashes is reported as a regression and fails the run
+regardless of the median comparison. This accounts for calibration-mode
+approximants depending on externally supplied calibration coefficients that
+this harness runs with placeholder parfile defaults. `sebobv2_consistency_check`
+has no calibration-mode variants and is unaffected by this behavior.
+
+Evidence (descriptive behavior): [sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py), `process_input_set`, `__main__` (asymmetric-failure and consistent-failure branches)
+
 These consistency scripts document the example workflow, not a new validation
 subsystem. The broader CI page is context for where generated projects are
 built and compared; this page stays scoped to what the example generators and
-their local helper scripts do. Workflow YAML configures all nine SEOBNRv5
-approximant/calibration projects plus `sebobv2` for trusted/current builds and
-executable comparisons. This is real run/result-check coverage for those stated
+their local helper scripts do. Workflow YAML configures every SEOBNRv5
+approximant in its production, `-calibration_no_spin`, and `-calibration_spin`
+variants, plus `sebobv2`, for trusted/current builds and executable comparisons;
+the `-nrpy_calibrated` variants are built only. This is real run/result-check coverage for those stated
 inputs, but no claim about latest CI success or general waveform accuracy.
 
 ## Sources

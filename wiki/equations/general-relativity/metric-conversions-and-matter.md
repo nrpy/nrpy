@@ -1,6 +1,6 @@
 # Metric Conversions And Matter
 
-> Track ADM, BSSN, four-metric, four-Christoffel, matter-source, and Lorentz-boost helpers. · Status: confirmed · Last reconciled: 06-29-2026
+> Track ADM, BSSN, four-metric, four-Christoffel, matter-source, and Lorentz-boost helpers. · Status: confirmed
 > Up: [General Relativity](index.md)
 
 ## Summary
@@ -29,7 +29,11 @@ the standard lapse but not the full BSSN state.
 `BSSN_quantities[...]` object for a coordinate system. It reconstructs
 `betaU`, `gammaDD`, `gammaDDdD`, `gammaDDdDD`, `gammaUU`, `detgamma`,
 `GammaUDD`, `KDD`, and `KDDdD`. The conformal-factor branch follows the global
-`EvolvedConformalFactor_cf` parameter for `phi`, `chi`, or `W`.
+`EvolvedConformalFactor_cf` parameter for `phi`, `chi`, or `W`; see
+[CONTR-0005](../../contradictions.md#contr-0005) for the adopted `chi` and `W`
+signs. The spatial metric and extrinsic curvature follow by rearranging
+[Mewes et al., Eqs. (7) and (10)](https://arxiv.org/pdf/2002.06225v2);
+derivative expressions use the chain and product rules.
 
 `g4munu_conversions.py` exposes function-level conversions rather than a state
 class. `ADM_to_g4DD` and `ADM_to_g4UU` build the covariant and contravariant
@@ -38,13 +42,31 @@ four-metric from ADM spatial metric, shift, and lapse. `BSSN_to_g4DD` and
 `gammaDD`, `alpha`, and `betaU` from a four-metric, and `g4DD_to_BSSN` returns
 `hDD`, `cf`, `vetU`, and `alpha` after an ADM-to-BSSN pass with dummy
 extrinsic curvature and shift-driver variables.
+The covariant ADM four-metric is
+[Mewes et al., Eqs. (5)-(6)](https://arxiv.org/pdf/2002.06225v2);
+the inverse and extraction formulas follow by matrix algebra.
+
+Claim evidence:
+- Claim: `BSSN_to_ADM` rearranges Mewes et al. Eqs. (7) and (10) for the spatial metric and extrinsic curvature, and `ADM_to_g4DD` builds the covariant four-metric of Mewes et al. Eqs. (5)-(6); derivative, inverse, and extraction formulas follow by the chain rule, product rule, and matrix algebra rather than from printed equations.
+- Role: public/scientific contract
+- Deciding authority: [Mewes et al.](https://arxiv.org/pdf/2002.06225v2), Eqs. (5)-(7) and (10)
+- Corroboration: [BSSN_to_ADM.py](../../../nrpy/equations/general_relativity/BSSN_to_ADM.py), `BSSN_to_ADM` docstring; [g4munu_conversions.py](../../../nrpy/equations/general_relativity/g4munu_conversions.py), `ADM_to_g4DD` docstring
 
 `BSSN_to_g4Christoffel` reconstructs enough ADM and gauge derivative data to
 build physical spacetime Christoffels from BSSN quantities. Its public state
 includes the four-metric `g4DD`, inverse four-metric `g4UU`, metric derivatives
 `g4DD_dD`, spatial-metric time derivative `gammaDDd0`, and `Gamma4UDD`. The
 class validates coordinate-system and precompute inputs before using reference
-metric caches.
+metric caches. It reconstructs `gammaDDd0` from ADM evolution, but leaves
+`alpha_d0` and `vetU_d0` as independent coordinate-time derivative symbols in
+the Christoffels. Callers must provide these gauge derivatives; spatial BSSN
+fields alone do not determine all returned expressions.
+
+Claim evidence:
+- Claim: `BSSN_to_g4Christoffel` leaves lapse and rescaled-shift coordinate-time derivatives as caller-supplied symbols while reconstructing the spatial-metric time derivative.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_to_g4Christoffel.py](../../../nrpy/equations/general_relativity/BSSN_to_g4Christoffel.py), `BSSN_to_g4Christoffel.__init__`
+- Corroboration: none available for a caller-independent gauge evolution; the class selects no lapse or shift evolution equation.
 
 `T4munu.py` declares symbolic `T4UU` and projects it into `SDD`, `SD`, `S`,
 and `rho` using either explicit ADM fields or BSSN fields converted through
@@ -56,15 +78,35 @@ module registers `PI` as a code parameter for those source terms.
 Cartesian boost velocity, then applies them to contravariant vectors, covariant
 vectors, and covariant rank-2 through rank-4 tensors. This helper is
 four-dimensional but deliberately Cartesian; it does not use NRPy reference
-metrics.
+metrics. Real boosts require `sum_i v_i^2<1`, which the constructor does not
+check. At direct zero velocity its spatial block evaluates `0/0` and yields
+`nan` instead of the identity; callers need separate identity handling until
+this is corrected. See [CONTR-0022](../../contradictions.md#contr-0022).
+Claim status: contested; contradiction: CONTR-0022.
+
+Claim evidence:
+- Claim: `LorentzBoost` does not validate subluminality, and direct zero velocity produces undefined spatial matrix entries because the implemented formula divides by the squared speed.
+- Role: descriptive behavior
+- Deciding authority: [LorentzBoost.py](../../../nrpy/equations/general_relativity/LorentzBoost.py), `LorentzBoost._compute_LorentzMatrix`
+- Corroboration: none available for a zero-input identity guarantee; substituting a zero vector in the constructor exposes the division by zero.
 
 The representative trusted files show the validation coverage shape: direct
 ADM-to-BSSN StaticTrumpet conversion, BSSN-to-ADM coordinate variants,
-four-metric round trips and BSSN four-metric variants, four-Christoffel
-variants, matter projections/source terms, and Lorentz-boost tensor outputs.
+separately sampled forward/inverse four-metric formulas and BSSN four-metric
+variants, four-Christoffel variants, matter projections/source terms, and
+Lorentz-boost tensor outputs. These trusted files do not compose a four-metric
+round trip. The separate `g4DD_to_ADM` doctest composes `ADM_to_g4DD` with
+`g4DD_to_ADM` for a concrete positive-lapse example.
+
+Claim evidence:
+- Claim: Four-metric trusted validation samples the forward and inverse formulas separately; the concrete round-trip check is the `g4DD_to_ADM` doctest.
+- Role: descriptive behavior
+- Deciding authority: [g4munu_conversions.py](../../../nrpy/equations/general_relativity/g4munu_conversions.py), `g4DD_to_ADM` doctest and module `__main__`
+- Corroboration: [g4munu_conversions.py trusted values](../../../nrpy/equations/general_relativity/tests/g4munu_conversions.py), separately named formula outputs.
 
 ## Sources
 
+- [Mewes et al.](https://arxiv.org/pdf/2002.06225v2) - Eqs. (5)-(7), (10)
 - [ADM_to_BSSN.py](../../../nrpy/equations/general_relativity/ADM_to_BSSN.py) - `ADM_to_BSSN`, `compute_cf_only`
 - [BSSN_to_ADM.py](../../../nrpy/equations/general_relativity/BSSN_to_ADM.py) - `BSSN_to_ADM`
 - [g4munu_conversions.py](../../../nrpy/equations/general_relativity/g4munu_conversions.py) - `ADM_to_g4DD`, `BSSN_to_g4DD`, `ADM_to_g4UU`, `BSSN_to_g4UU`, `g4DD_to_ADM`, `g4DD_to_BSSN`

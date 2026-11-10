@@ -1,6 +1,6 @@
 # BHaHAHA Grid, Interpolation, And Boundaries
 
-> Explain how BHaHAHA builds its spherical grids, moves metric data through interpolation layers, and applies local boundary metadata. · Status: confirmed · Last reconciled: 07-19-2026
+> Explain how BHaHAHA builds its spherical grids, moves metric data through interpolation layers, and applies local boundary metadata. · Status: confirmed
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -39,7 +39,13 @@ radial array already chosen for the horizon search. Each destination point is
 converted to the source reference-metric coordinates with
 `Cart_to_xx_and_nearest_i0i1i2_assume_valid`, then
 `interpolation_3d_general__uniform_src_grid` samples the selected BSSN
-gridfunctions from the generated BHaH evolution grid. These preconstructed
+gridfunctions from the generated BHaH evolution grid. That grid must satisfy
+[Hard Requirements For Angular Inner Boundaries](grids-coordinates-reference-metrics-and-boundaries.md#hard-requirements-for-angular-inner-boundaries),
+and the interpolator chooses stencil centers from the logical targets as
+[Inner Ghost Points In Interpolation Stencils](grids-coordinates-reference-metrics-and-boundaries.md#inner-ghost-points-in-interpolation-stencils)
+describes; `BHaHAHA_interpolate_metric_data_nrpy` does not inspect the
+interpolator's return code, so a destination reported out of bounds keeps an
+unset value. These preconstructed
 targets supply an `int[3]` index buffer to the converter even though the
 indices are not retained; this path neither uses the nullable index-output path
 nor adds converter-side runtime bounds validation. For each sampled point,

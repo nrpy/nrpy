@@ -145,7 +145,7 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
                 + self.prstar**4
                 * (
                     f2r(602.318540416564) * self.nu**3
-                    + self.nu**2 * (118.4 * sp.log(self.r) - f2r(1796.13660498019))
+                    + self.nu**2 * (f2r(118.4) * sp.log(self.r) - f2r(1796.13660498019))
                     + self.nu
                     * (f2r(452.542166996693) - f2r(51.6952380952381) * sp.log(self.r))
                 )
@@ -227,7 +227,8 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
                     - 138141470005001 * self.nu**2
                     - 4718592 * self.nu * (40950 * d5 + f2r(86207832.4415642))
                     + 450172889755120 * self.nu
-                    + f2r(86618264430493.3) * (1 - 0.496948781616935 * self.nu) ** 2
+                    + f2r(86618264430493.3)
+                    * (1 - f2r(0.496948781616935) * self.nu) ** 2
                     + 188440788778196
                 )
                 + 5787938193408 * self.r * sp.log(self.r) ** 2
@@ -418,23 +419,24 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
             1 + self.prstar**2 * (1 + self.Balignnp) / self.xi**2 + Qalign
         )
         self.dQalign_dprstar = sp.diff(Qalign, self.prstar)
-        self.r_dot = -self.xi * sp.diff(self.Hreal, self.prstar)
         Hbarodd = Hodd / self.pphi
         self.dHoddbar_dr = sp.diff(Hbarodd, self.r)
         # Terms needed for dynamics
         self.dHreal_dr = sp.diff(self.Hreal, self.r) / self.nu
         self.dHreal_dprstar = sp.diff(self.Hreal, self.prstar) / self.nu
         self.dHreal_dpphi = sp.diff(self.Hreal, self.pphi) / self.nu
+        # dHreal_dr_dr and dHreal_dr_dpphi differentiate the nu-normalized
+        # dHreal_dr and divide by nu again, so they carry 1/nu^2, while the
+        # *_circ second derivatives below carry 1/nu. The radial-momentum
+        # initial condition uses only their ratio, where the factor cancels.
         self.dHreal_dr_dr = sp.diff(self.dHreal_dr, self.r) / self.nu
         self.dHreal_dr_dpphi = sp.diff(self.dHreal_dr, self.pphi) / self.nu
         Hreal_circ = self.Hreal.subs(self.prstar, 0)
         self.dHreal_dr_circ = sp.diff(Hreal_circ, self.r) / self.nu
         self.dHreal_dpphi_circ = sp.diff(Hreal_circ, self.pphi) / self.nu
-        self.dHreal_dr_dr_circ = sp.diff(self.dHreal_dr_circ, self.r) / self.nu
-        self.dHreal_dr_dpphi_circ = sp.diff(self.dHreal_dr_circ, self.pphi) / self.nu
-        self.dHreal_dpphi_dpphi_circ = (
-            sp.diff(self.dHreal_dpphi_circ, self.pphi) / self.nu
-        )
+        self.dHreal_dr_dr_circ = sp.diff(self.dHreal_dr_circ, self.r)
+        self.dHreal_dr_dpphi_circ = sp.diff(self.dHreal_dr_circ, self.pphi)
+        self.dHreal_dpphi_dpphi_circ = sp.diff(self.dHreal_dpphi_circ, self.pphi)
 
 
 if __name__ == "__main__":

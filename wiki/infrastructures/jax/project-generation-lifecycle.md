@@ -1,6 +1,6 @@
 # Project Generation Lifecycle
 
-> Explain how the JAX project generator turns registered `PyFunction` objects into a generated Python package. · Status: confirmed · Last reconciled: 07-06-2026
+> Explain how the JAX project generator turns registered `PyFunction` objects into a generated Python package. · Status: confirmed
 > Up: [JAX](index.md)
 
 ## Summary
@@ -64,16 +64,23 @@ parameters and the SEOBNRv5 aligned-spin coefficient `PyFunction`, then calls
 `pcg.do_parallel_codegen()` and
 `JAX.jax_project_generator.output_PyFunction_files_and_construct_project()`
 when run as a module. README guidance lists this as JAX project generation, and
-the generated-project CI jobs run `python -m nrpy.examples.sebobv1_jax`; unlike
-the C examples in the same jobs, that JAX route is not followed by a generated
-`make` build.
+the generated-project CI jobs run `python -m nrpy.examples.sebobv1_jax`, then
+install the generated package with `pip install .` and call
+`SEOBNRv5_aligned_spin_coefficients` once with Python-scalar inputs. That call
+takes the place of the C examples' `make` build; it checks no returned value and
+does not run the generated `tests/test_basic.py`.
+
+[Generated Project
+CI](../../validation/generated-project-ci.md#sebobv1_jax-install-and-call-step)
+gives the exact configured `sebobv1_jax` CI step and its evidence.
 
 Generated files under `project/<name>/`, including generated JAX package files,
 are products of handwritten generators. Cite the source generator, registry,
 example, README, and CI workflow for behavior rather than citing transient
-generated project output. Printer-level JAX expression emission belongs to
-[CSE And Printer Support](../../core/helpers/cse-and-printer-support.md), which
-owns `py_codegen()` and `NRPyJaxPrinter`; this page only documents how the
+generated project output. Printing of JAX expressions belongs to
+[Python Codegen](../../core/python-codegen.md), which documents `py_codegen()`,
+and [CSE And Printer Support](../../core/helpers/cse-and-printer-support.md),
+which documents `NRPyJaxPrinter`; this page only documents how the
 already-registered Python functions are assembled into a package.
 
 ## Sources

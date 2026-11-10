@@ -21,7 +21,7 @@ def register_CFunction_grhd_rhs_eval(
     """
     Register function for complete GRHD right hand side evaluation.
 
-    This function orchestrates the evaluation of partial_t U = -partial_i F^i + S.
+    This function evaluates partial_t U = -partial_i F^i + S.
     It calculates source terms (S), then loops over spatial directions to:
     1. Interpolate metric terms to cell faces.
     2. Reconstruct primitive variables to cell faces (Left/Right states).

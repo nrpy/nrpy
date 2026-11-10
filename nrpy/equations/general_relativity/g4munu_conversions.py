@@ -2,6 +2,9 @@
 """
 Construct expressions for ADM or BSSN quantities in terms of the 4-metric g4DD, and g4DD/g4UU in terms of ADM/BSSN quantities.
 
+The ADM line element and covariant four-metric are Mewes et al.,
+https://arxiv.org/abs/2002.06225v2, Eqs. (5)-(6).
+
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
@@ -26,6 +29,8 @@ def ADM_to_g4DD(
     """
     Convert the 3+1 decomposed ADM variables to the 4-metric g_{mu nu}.
 
+    Mewes et al., Eqs. (5)-(6), print these metric components.
+
     :param gammaDD: 3x3 spatial metric tensor, gamma_{ij}.
     :param betaU: Shift vector, beta^i.
     :param alpha: Lapse function, alpha.
@@ -34,7 +39,7 @@ def ADM_to_g4DD(
     # Step 0: Initialize 4x4 tensor to store g_{mu nu}
     g4DD = ixp.zerorank2(dimension=4)
 
-    # Step 1: Compute beta_i via Eq. 2.121 in B&S
+    # Step 1: Lower beta^i using gamma_ij from Mewes et al., Eq. (6).
     betaD = ixp.zerorank1()
     for i in range(3):
         for j in range(3):
@@ -45,7 +50,7 @@ def ADM_to_g4DD(
     for i in range(3):
         beta2 += betaU[i] * betaD[i]
 
-    # Step 3: Construct g4DD via Eq. 2.122 in B&S
+    # Step 3: Construct g4DD from Mewes et al., Eq. (6).
     g4DD[0][0] = -(alpha**2) + beta2
     for mu in range(1, 4):
         g4DD[mu][0] = g4DD[0][mu] = betaD[mu - 1]
@@ -88,6 +93,9 @@ def ADM_to_g4UU(
 ) -> List[List[sp.Expr]]:
     """
     Construct the contravariant 4-metric tensor, g^{mu nu}, using ADM variables.
+
+    This is the matrix inverse of the covariant ADM metric in Mewes et al.,
+    Eqs. (5)-(6); the inverse components are derived here algebraically.
 
     :param gammaDD: 3x3 spatial metric tensor, gamma_{ij}.
     :param betaU: Shift vector, beta^i.

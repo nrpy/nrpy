@@ -5,16 +5,8 @@ This module implements the three-dimensional reference-metric formulation of
 Mewes et al. (2020), with the Lagrangian conformal-determinant condition and
 ``kappa1`` damping terms that contain no additional lapse factor.
 
-Mewes et al. appear to contain a convention error in the shift sector.  They
-define ``partial_0 = partial_t - L_beta``, whose full vector Lie derivative
-stretches the evolved connection by
-``-Lambdatilde^k Dhat_k beta^i``.  Since
-``Lambdatilde^i = DeltaGamma^i + C^i``, that stretch already contains
-``-C^k Dhat_k beta^i``, but the printed ``kappa3=1`` bracket adds this term
-again.  NRPy corrects that apparent paper error, not a discretionary
-formulation departure.  It retains ``+(2/3) C^i Dhat_k beta^k`` because the
-reused BSSN base divergence contains geometric ``DeltaGamma`` and needs
-promotion to evolved ``Lambdatilde``.
+The fCCZ4 equation reuses the BSSN base before Brown's BSSN-only connection
+adjustment, retaining one evolved-connection stretch.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -47,6 +39,7 @@ class FCCZ4RHSs:
         enable_RbarDD_gridfunctions: bool = False,
         enable_T4munu: bool = False,
         enable_YBS_Gamma_constraint_adjustment: bool = False,
+        enable_YBS_momentum_constraint_adjustment: bool = False,
     ) -> None:
         """
         Build fCCZ4 expressions for one reference-metric configuration.
@@ -59,6 +52,8 @@ class FCCZ4RHSs:
         :param enable_T4munu: Include stress-energy source terms.
         :param enable_YBS_Gamma_constraint_adjustment: Enable the YBS
             connection-constraint adjustment.
+        :param enable_YBS_momentum_constraint_adjustment: Enable the
+            Yo--Lin--Cao momentum-constraint adjustment.
         :raises ValueError: If existing ``Theta_fCCZ4`` storage is not evolved
             state or, for BHaH, is not backed by ``in_gfs``.
 
@@ -84,6 +79,9 @@ class FCCZ4RHSs:
             suffix + ("_T4munu" if enable_T4munu else ""),
             enable_YBS_Gamma_constraint_adjustment=(
                 enable_YBS_Gamma_constraint_adjustment
+            ),
+            enable_YBS_momentum_constraint_adjustment=(
+                enable_YBS_momentum_constraint_adjustment
             ),
         )
 
@@ -182,13 +180,7 @@ class FCCZ4RHSs:
             for ell in range(3):
                 Dhat_div_beta += rfm.GammahatUDD[k][ell][k] * Bq.betaU[ell]
 
-        # Brhs already applies the full vector Lie derivative to its evolved
-        # connection slot, which stores LambdatildeU here.  Mewes et al.
-        # define partial_0 = partial_t - L_beta but then print an additional
-        # -C^k Dhat_k beta^i in the kappa3=1 bracket, duplicating that stretch
-        # for C^i = LambdatildeU^i - DeltaGamma^i.  Omit the apparent paper
-        # error.  Keep +2 C^i Dhat_k beta^k/3 because the BSSN base divergence
-        # contains geometric DeltaGamma and needs promotion to LambdatildeU.
+        # Retain the divergence promotion; the reused base excludes Brown's term.
         self.Lambdatilde_rhsU_delta = ixp.zerorank1()
         for i in range(3):
             for j in range(3):
@@ -207,7 +199,8 @@ class FCCZ4RHSs:
         self.lambda_rhsU = ixp.zerorank1()
         for i in range(3):
             self.Lambdatilde_rhsU[i] = (
-                Brhs.Lambdabar_rhsU[i] + self.Lambdatilde_rhsU_delta[i]
+                Brhs.Lambdabar_rhsU_without_Brown_constraint_term[i]
+                + self.Lambdatilde_rhsU_delta[i]
             )
             self.lambda_rhsU[i] = self.Lambdatilde_rhsU[i] / rfm.ReU[i]
 
@@ -238,9 +231,9 @@ class FCCZ4RHSsDict(Dict[str, FCCZ4RHSs]):
         """Initialize empty expression cache and parameter metadata."""
         super().__init__()
         self._construction_parameters: Dict[str, Tuple[str, bool]] = {}
-        self._YBS_Gamma_constraint_adjustment_cache: Dict[str, FCCZ4RHSs] = {}
-        self._YBS_Gamma_constraint_adjustment_construction_parameters: Dict[
-            str, Tuple[str, bool]
+        self._YBS_adjustment_cache: Dict[Tuple[str, bool, bool], FCCZ4RHSs] = {}
+        self._YBS_adjustment_construction_parameters: Dict[
+            Tuple[str, bool, bool], Tuple[str, bool]
         ] = {}
 
     def __getitem__(self, CoordSystem_in: str) -> FCCZ4RHSs:
@@ -258,6 +251,7 @@ class FCCZ4RHSsDict(Dict[str, FCCZ4RHSs]):
         CoordSystem_in: str,
         *,
         enable_YBS_Gamma_constraint_adjustment: bool = False,
+        enable_YBS_momentum_constraint_adjustment: bool = False,
     ) -> FCCZ4RHSs:
         """
         Return cached expressions for an unchanged key and YBS choice.
@@ -265,27 +259,33 @@ class FCCZ4RHSsDict(Dict[str, FCCZ4RHSs]):
         :param CoordSystem_in: Coordinate-system and option cache key.
         :param enable_YBS_Gamma_constraint_adjustment: Enable the YBS
             connection-constraint adjustment.
+        :param enable_YBS_momentum_constraint_adjustment: Enable the
+            Yo--Lin--Cao momentum-constraint adjustment.
         :return: Cached or newly built fCCZ4 expressions.
         """
         construction_parameters = (
             par.parval_from_str("EvolvedConformalFactor_cf"),
             par.parval_from_str("detgbarOverdetghat_equals_one"),
         )
-        cache = (
-            self._YBS_Gamma_constraint_adjustment_cache
-            if enable_YBS_Gamma_constraint_adjustment
-            else self
+        adjustment_key = (
+            CoordSystem_in,
+            enable_YBS_Gamma_constraint_adjustment,
+            enable_YBS_momentum_constraint_adjustment,
         )
-        cache_construction_parameters = (
-            self._YBS_Gamma_constraint_adjustment_construction_parameters
-            if enable_YBS_Gamma_constraint_adjustment
-            else self._construction_parameters
+        adjustments_enabled = (
+            enable_YBS_Gamma_constraint_adjustment
+            or enable_YBS_momentum_constraint_adjustment
         )
-        if (
-            CoordSystem_in not in cache
-            or cache_construction_parameters.get(CoordSystem_in)
+        rebuild = (
+            adjustment_key not in self._YBS_adjustment_cache
+            or self._YBS_adjustment_construction_parameters.get(adjustment_key)
             != construction_parameters
-        ):
+            if adjustments_enabled
+            else CoordSystem_in not in self
+            or self._construction_parameters.get(CoordSystem_in)
+            != construction_parameters
+        )
+        if rebuild:
             CoordSystem = (
                 CoordSystem_in.replace("_rfm_precompute", "")
                 .replace("_RbarDD_gridfunctions", "")
@@ -300,13 +300,20 @@ class FCCZ4RHSsDict(Dict[str, FCCZ4RHSs]):
                 enable_YBS_Gamma_constraint_adjustment=(
                     enable_YBS_Gamma_constraint_adjustment
                 ),
+                enable_YBS_momentum_constraint_adjustment=(
+                    enable_YBS_momentum_constraint_adjustment
+                ),
             )
-            if enable_YBS_Gamma_constraint_adjustment:
-                cache[CoordSystem_in] = rhs
-                cache_construction_parameters[CoordSystem_in] = construction_parameters
+            if adjustments_enabled:
+                self._YBS_adjustment_cache[adjustment_key] = rhs
+                self._YBS_adjustment_construction_parameters[adjustment_key] = (
+                    construction_parameters
+                )
             else:
                 self.__setitem__(CoordSystem_in, rhs)
-        return dict.__getitem__(cache, CoordSystem_in)
+        if adjustments_enabled:
+            return self._YBS_adjustment_cache[adjustment_key]
+        return dict.__getitem__(self, CoordSystem_in)
 
     def __setitem__(self, CoordSystem: str, value: FCCZ4RHSs) -> None:
         """
@@ -329,17 +336,20 @@ class FCCZ4RHSsDict(Dict[str, FCCZ4RHSs]):
         """
         dict.__delitem__(self, CoordSystem)
         self._construction_parameters.pop(CoordSystem, None)
-        self._YBS_Gamma_constraint_adjustment_cache.pop(CoordSystem, None)
-        self._YBS_Gamma_constraint_adjustment_construction_parameters.pop(
-            CoordSystem, None
-        )
+        for key in (
+            (CoordSystem, False, True),
+            (CoordSystem, True, False),
+            (CoordSystem, True, True),
+        ):
+            self._YBS_adjustment_cache.pop(key, None)
+            self._YBS_adjustment_construction_parameters.pop(key, None)
 
     def clear(self) -> None:
         """Remove all cached expressions and construction metadata."""
         dict.clear(self)
         self._construction_parameters.clear()
-        self._YBS_Gamma_constraint_adjustment_cache.clear()
-        self._YBS_Gamma_constraint_adjustment_construction_parameters.clear()
+        self._YBS_adjustment_cache.clear()
+        self._YBS_adjustment_construction_parameters.clear()
 
 
 fCCZ4_RHSs = FCCZ4RHSsDict()
@@ -397,6 +407,8 @@ if __name__ == "__main__":
             enable_rfm_precompute=case_enable_rfm_precompute,
             enable_RbarDD_gridfunctions=case_enable_RbarDD_gridfunctions,
             enable_T4munu=case_enable_T4munu,
+            enable_YBS_Gamma_constraint_adjustment=True,
+            enable_YBS_momentum_constraint_adjustment=True,
         )
         processed = ve.process_dictionary_of_expressions(
             rhs.fCCZ4_RHSs_varname_to_expr_dict, fixed_mpfs_for_free_symbols=True
