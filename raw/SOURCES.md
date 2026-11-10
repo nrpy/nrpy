@@ -291,6 +291,9 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/equations/general_relativity/tests/InitialData_Cartesian_Kasner.py` | living |
 | `nrpy/equations/general_relativity/tests/InitialData_Spherical_OffsetKerrSchild.py` | living |
 | `nrpy/equations/general_relativity/tests/InitialData_Spherical_StaticTrumpet.py` | living |
+| `nrpy/equations/general_relativity/tests/InitialData_Spherical_TeukolskyWave.py` | living |
+| `nrpy/equations/general_relativity/tests/InitialData_Spherical_TeukolskyWave21.py` | living |
+| `nrpy/equations/general_relativity/tests/InitialData_Spherical_TeukolskyWave22.py` | living |
 | `nrpy/equations/general_relativity/tests/InitialData_Spherical_UIUCBlackHole.py` | living |
 | `nrpy/equations/general_relativity/tests/LorentzBoost.py` | living |
 | `nrpy/equations/general_relativity/tests/T4munu.py` | living |

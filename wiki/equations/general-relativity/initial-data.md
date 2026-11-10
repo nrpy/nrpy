@@ -1,6 +1,6 @@
 # Initial Data
 
-> Map Cartesian and spherical ADM initial-data providers used by GR equation consumers. · Status: confirmed · Last reconciled: 08-25-2026
+> Map Cartesian and spherical ADM initial-data providers used by GR equation consumers. · Status: confirmed · Last reconciled: 11-09-2026
 > Up: [General Relativity](index.md)
 
 ## Summary
@@ -11,7 +11,9 @@ and `BU`, plus the coordinate symbols used by the data. Downstream consumers can
 feed these ADM fields into `ADM_to_BSSN` or generated application setup code.
 
 The Cartesian provider supports `BrillLindquist` and `Kasner`. The spherical
-provider supports `UIUCBlackHole`, `StaticTrumpet`, and `OffsetKerrSchild`.
+provider supports `UIUCBlackHole`, `StaticTrumpet`, `OffsetKerrSchild`, and the
+linearized Teukolsky-wave modes `TeukolskyWave`, `TeukolskyWave21`, and
+`TeukolskyWave22`.
 
 ## Detail
 
@@ -49,13 +51,24 @@ quantities, or if `override_gauge_with_standard=True`, the provider sets
 `EvolvedConformalFactor_cf`: `phi` uses `exp(-2*cf)`, `chi` uses `sqrt(cf)`,
 and `W` uses `cf`.
 
-**Teukolsky-wave exception:** The `TeukolskyWave` initial-data family uses unit lapse (`alpha = 1`), zero shift (`betaU = 0`), and zero shift time derivative (`BU = 0`). Unlike the other supported families, it rejects `override_gauge_with_standard=True`. Calling `InitialData_Spherical("TeukolskyWave", override_gauge_with_standard=True)` raises a `ValueError` because the wave requires its prescribed gauge.
+The Teukolsky-wave families (`TeukolskyWave`, `TeukolskyWave21`, and
+`TeukolskyWave22`) are the exception: they define their own gauge, with unit
+lapse, zero shift, and zero `BU`, and reject
+`override_gauge_with_standard=True` with a `ValueError`.
+
+Claim evidence:
+- Claim: `InitialData_Spherical` with `IDtype` `TeukolskyWave`, `TeukolskyWave21`, or `TeukolskyWave22` sets `alpha=1`, `betaU=0`, and `BU=0`, and raises `ValueError` when `override_gauge_with_standard=True`.
+- Role: descriptive behavior
+- Deciding authority: [InitialData_Spherical.py](../../../nrpy/equations/general_relativity/InitialData_Spherical.py), `InitialData_Spherical.__init__` and `TeukolskyWave`
+- Corroboration: same module's `__main__` validation (gauge and override-rejection checks for all three modes); `tests/InitialData_Spherical_TeukolskyWave*.py` trusted files for the gauge values
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=linux; tool_version=python-3.13; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=override_gauge_with_standard=True; options=not-applicable; date=11-09-2026`
 
 The trusted files validate the public object state for each supported family:
 Cartesian Brill-Lindquist and Kasner, plus spherical UIUCBlackHole,
-StaticTrumpet, and OffsetKerrSchild. The separate `ADM_to_BSSN_StaticTrumpet`
-trusted file covers the handoff from spherical ADM initial data into BSSN
-variables.
+StaticTrumpet, OffsetKerrSchild, and the three Teukolsky-wave modes. The
+separate `ADM_to_BSSN_StaticTrumpet` trusted file covers the handoff from
+spherical ADM initial data into BSSN variables.
 
 Two similarly named binary-puncture paths are outside these two provider
 classes. [Conformally Flat Elliptic](../conformally-flat-elliptic.md) owns the
