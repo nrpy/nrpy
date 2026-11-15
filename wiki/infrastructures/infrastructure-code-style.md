@@ -1,193 +1,37 @@
 # Infrastructure Code Style
 
-> Infrastructure module structure, C-function registration, generated-code validation, and BHaH generator style rules. · Status: provisional
+> `register_CFunction_*` structure, `CodeParameter` registration scope, parallel-codegen guards, `validate_strings` size limits, and BHaH loop/codegen conventions. · Status: provisional
 > Up: [Infrastructures](index.md)
 
 ## Summary
 
-Infrastructure code centers on explicit C-function registration routines that
-read in generated execution order. Registration functions own their
-`CodeParameter` registration, avoid import-time registry mutation, use standard
-doctest and trusted-string patterns only when they assert meaningful behavior,
-and prefer shared BHaH codegen helpers over hand-written emitted C for ordinary
-per-grid or per-point kernels.
+Infrastructure modules under `nrpy/infrastructures/` center on `register_CFunction_<name>()` functions written in generated execution order: they register `CodeParameter` entries inside one setup function (never at import time), use `pcg_registration_phase()` guards when parallel codegen applies, limit `validate_strings()` baselines to small structural C/C++/CUDA files rather than large symbolic kernels, and prefer `simple_loop()` + `c_codegen(..., automatically_read_gf_data_from_memory=True)` over handwritten memory-load boilerplate.
 
 ## Detail
 
-### Patterns Match Existing Code
+### Existing-Backend Conformance, Module Layout, And `CodeParameter` Scope
 
-Before writing a mechanism into an infrastructure, find its counterpart in
-`nrpy/infrastructures/{BHaH,ETLegacy,CarpetX,superB}`. Three or more instances
-is settled convention; a mechanism with no instance anywhere is an invention,
-and that absence is evidence against it. Conformance is one-way: a new
-infrastructure conforms to the established ones, never the reverse. [New
-Infrastructure Conformance](new-infrastructure-conformance.md) owns the
-individual rules, their right and wrong examples, and their mechanical tests.
+New infrastructure code conforms one-way to patterns already established in `>= 3` sites across `nrpy/infrastructures/{BHaH,ETLegacy,CarpetX,superB}` ([New Infrastructure Conformance](new-infrastructure-conformance.md)), following [Python Coding Style](../architecture/python-coding-style.md) and [Code Test Policy](../validation/code-test-policy.md). Each module normally defines `register_CFunction_<name>()` declaring `subdirectory`, `includes`, optional `prefunc` (only for C helpers called `>= 2` times or exceeding `~10–15` logic lines), `desc`, `cfunc_type`, `name`, `params`, `include_CodeParameters_h`, `body`, and optional `postfunc` linearly before `cfc.register_CFunction()`, using `# fmt: off`/`# fmt: on` sparingly (e.g., aligned `CodeParameter` tables).
 
-### Module Organization
+Because `CodeParameter` registration mutates global header/parfile registries, never register `CodeParameter` objects at import time or redundantly across modules: register each parameter in one central setup/registration function and document downstream dependencies. Functions participating in `nrpy.helpers.parallel_codegen` return `Union[None, pcg.NRPyEnv_type]` and guard entry with `if pcg.pcg_registration_phase(): pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals()); return None` (non-PCG registrars return `None`).
 
-Generic Python module, import, header, and helper rules follow [Python Coding
-Style](../architecture/python-coding-style.md); generic test placement, runner,
-and meaningfulness rules follow [Code Test
-Policy](../validation/code-test-policy.md).
+### `Doctests:`, `validate_strings()` Size Rule, And BHaH Codegen Idioms
 
-An infrastructure Python file usually registers one primary C function through
-`register_CFunction_<name>()`.
+Place `Doctests:` immediately before `>>>` prompts. Reserve `clang_format()` + `validate_strings()` baselines for small (`~1–80` KB), predominantly structural C/C++/CUDA functions, headers, or parfiles; never golden-test symbolically lowered RHS, Ricci, constraint, initial-data conversion (`Dendro/general_relativity/ADM_to_BSSN.py`), connection, or algebraic-projection kernels, which are validated via `nrpy/equations/` `trusted_dict` suites and compiled CI runs ([Test Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md)).
 
-Registration functions should imitate the C function they register. Declare
-`desc`, `cfunc_type`, `name`, `params`, `body`, and related values on separate
-lines before calling `cfc.register_CFunction()`. Keep one-off symbolic setup
-linear inside the registration routine instead of pushing it into single-use
-private helpers.
+In new BHaH per-grid/per-point kernels:
+- Use `BHaH.simple_loop.simple_loop()` and `ccg.c_codegen(..., automatically_read_gf_data_from_memory=True)` (`in_gfs`, etc.) rather than handwritten C loops, string replacements on generated C, post-registration `CFunction_dict` mutation, or body-internal `#include "set_CodeParameters.h"` (use `get_params_commondata_symbols_from_expr_list()` + `generate_definition_header()` when needed), assembling `body += ...` top-to-bottom.
+- Standard C structs and macros: `commondata_struct *restrict commondata`, `griddata_struct *restrict griddata`, `params_struct *restrict params`, `bc_struct *restrict bcstruct`; groups `EVOL`, `AUXEVOL`, `AUX`, `DIAG` with uppercase `*GF` tokens (`TRKGF`, `CFGF`, `HDD00GF`, `ADD00GF`); `IDX3`, `IDX4`, `IDX4pt`, `IDX2` (plus local `SRC_IDX4`/`DST_IDX4`); and BHaHAHA-style enum return codes (`BHAHAHA_SUCCESS`, `bah_error_message()`, `#pragma omp critical` shared `error_flag`).
 
-### CodeParameter Registration Scope
-
-`CodeParameter` registration mutates the global code-parameter registry used
-for generated headers, parameter files, and trusted-string tests. Do not
-register `CodeParameter`s at module import time. Register each code parameter
-inside exactly one core registration or setup function that owns the generated
-code needing that parameter.
-
-Do not register the same `CodeParameter` redundantly in multiple modules. If
-several C functions need the same parameter, choose one central registration
-function and document that downstream registration depends on it. Do not rely
-on package imports or `__init__.py` aggregation imports to register parameters
-as side effects.
-
-### Doctest And Trusted String Patterns
-
-Infrastructure registration functions use `Doctests:` as the final docstring
-section label immediately before `>>>` lines. Older variants such as
-`Doctest:` and `DocTests:` exist; use `Doctests:` in new code.
-Placeholder handling is owned by [Code Test
-Policy](../validation/code-test-policy.md).
-
-Golden-output doctests fit stable, predominantly handwritten generated C text
-owned by a public infrastructure registration, header, or file generator. For
-large SymPy/codegen-dominated kernels, prefer upstream symbolic or semantic
-validation rather than exact generated text or incidental substrings. [Test
-Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md) owns
-oracle mechanics, selection, focused assertions, variant coverage, state, and
-safe updates.
-
-Size is part of that rule. A right-hand side, Ricci, constraint, initial-data,
-connection, or algebraic-projection kernel does not receive a trusted generated
-source file when its main content comes from symbolic lowering. Equation owners
-pin the symbolic expressions. Complete generated C++ application checks exercise
-Dendro lowering and numerical behavior.
-
-Claim evidence:
-- Claim: golden-output baselines are for small, largely structural emitted code; symbolically lowered numerical kernels are validated through equation-owner expressions and complete generated-application checks instead.
-- Role: normative rule
-- Deciding authority: [coding_style.md](../../coding_style.md), `#### validate_strings pattern`, its generated-kernel and size bullets
-- Corroboration: [ADM_to_BSSN.py](../../nrpy/infrastructures/Dendro/general_relativity/ADM_to_BSSN.py), the generated pointwise conversion kernel without a generated-source baseline.
-
-### Parallel Codegen Registration
-
-Registration functions that participate in `nrpy.helpers.parallel_codegen`
-discovery use the standard early-return guard. During the registration phase,
-they call `pcg.register_func_call(...)` with the fully qualified function name
-and locals, return `None`, and only perform actual C registration outside that
-guard. These functions return `Union[None, pcg.NRPyEnv_type]`; registration
-functions that do not support parallel/discovery codegen omit the pattern and
-return `None`.
-
-### Black Suppression
-
-Use `# fmt: off` and `# fmt: on` sparingly, only when Black would destroy
-intentional alignment. One accepted use is a compact group of `CodeParameter`
-registrations inside the single registration function that owns those
-parameters.
-
-### C Function Registration And Helper Functions
-
-Register C functions through `cfc.register_CFunction()` with explicit standard
-fields: `subdirectory`, `includes`, optional `prefunc`, `desc`, `cfunc_type`,
-`name`, `params`, `include_CodeParameters_h`, `body`, and optional `postfunc`.
-Helper C functions emitted before the main function are generated as strings
-and concatenated into `prefunc`.
-
-Separate C helper functions only when they are called from multiple locations
-or have more than roughly 10-15 lines of actual logic.
-
-### BHaH Symbolic Codegen Rules
-
-For new BHaH infrastructure generators that emit ordinary per-grid or
-per-point kernels, prefer infrastructure helpers over handwritten emitted C.
-Use `BHaH.simple_loop.simple_loop()` for standard grid loops. When symbolic
-expressions depend on registered gridfunctions, prefer `ccg.c_codegen(...,
-automatically_read_gf_data_from_memory=True)` with expected array aliases such
-as `in_gfs` instead of writing repetitive memory loads by hand.
-
-Keep transformations symbolic until `c_codegen()` whenever practical. Avoid
-string-based replacement of symbolic expressions or generated C when the same
-result can be represented symbolically. Do not introduce new
-`#include "set_CodeParameters.h"` lines inside generated function bodies for
-this class of infrastructure code; derive needed `params` and `commondata`
-locals from symbolic expressions using
-`get_params_commondata_symbols_from_expr_list()` and
-`generate_definition_header()`.
-
-Avoid routine post-registration mutation of `cfc.CFunction_dict[...]` bodies.
-Prefer explicit extension hooks or parameters in the shared registration helper
-that owns the emitted C. Build symbolic expressions, `expr_list`, `lhs_list`,
-tensor declarations, and registration-time metadata near the `c_codegen()` or
-`simple_loop()` call that consumes them. Append emitted C bodies top-to-bottom
-with `body += ...` so Python assembly order matches generated execution order.
-
-Add short comments at jarring transitions, such as registering diagnostic
-gridfunctions before parity tables or constructing a symbolic kernel
-immediately before `c_codegen()`.
-
-### Runtime Data, Gridfunctions, And Generated C Idioms
-
-Common generated C parameter structs are `commondata_struct *restrict
-commondata`, `griddata_struct *restrict griddata`, `params_struct *restrict
-params`, and `bc_struct *restrict bcstruct`.
-
-BHaH gridfunction names encode tensor type and indices. Examples include scalar
-names such as `HHGF`, `VVGF`, `WWGF`, `TRKGF`, and `CFGF`; symmetric rank-2
-names such as `HDD00GF`, `HDD01GF`, and `HDD11GF`; traceless extrinsic
-curvature names such as `ADD00GF`; and derivative names such as
-`SRC_PARTIAL_D_HDD000GF` and `SRC_PARTIAL_D_WW0GF`.
-
-Standard groups are `EVOL` for time-evolved quantities, `AUXEVOL` for
-auxiliary evolution quantities, and `AUX` for diagnostics. BHaH also uses the
-core `DIAG` group in generated gridfunction registration.
-
-Indexing macros include `IDX3(i0, i1, i2)`, `IDX4(gf, i0, i1, i2)`,
-`IDX4pt(gf, idx3)`, and `IDX2(i1, i2)`. Function-local custom macros such as
-`SRC_IDX4`, `DST_IDX4`, and `EX_IDX4` adapt indexing to source, destination,
-or external data layouts.
-
-SymPy integration for generated code uses `ccg.c_codegen()` to turn symbolic
-expressions into C assignments, including finite-difference codegen when
-enabled. Tensor derivatives are declared with `ixp.declarerankN()` before being
-passed to codegen.
-
-BHaHAHA-style error handling uses enum error codes such as `BHAHAHA_SUCCESS`
-and module-specific names, exposes messages through `bah_error_message()`,
-checks integer return codes immediately, and returns early when
-`commondata->error_flag != BHAHAHA_SUCCESS`. Parallel regions use
-`#pragma omp critical` to set shared error flags.
+Evidence (normative rule): `coding_style.md` (`## Infrastructure Code Patterns`, `### CodeParameter Registration Scope`, `#### validate_strings pattern`); `Dendro/general_relativity/ADM_to_BSSN.py`.
 
 ## Sources
 
-- [original-agents.md](../../raw/source-docs/original-agents.md) - `## Infrastructure Code Rules`
-- [original-agents.md](../../raw/source-docs/original-agents.md) - `### Doctests`, `### Parallel Codegen Pattern`, `### Black Suppression`
-- [original-agents.md](../../raw/source-docs/original-agents.md) - `### C Function Registration from Python`, `### BHaH Symbolic Codegen Rules`, `### Inlining Rules`
-- [original-agents.md](../../raw/source-docs/original-agents.md) - `### Standard Struct Pointer Params`, `### Gridfunction Naming / Grouping`, `### Memory / Error Handling`
-- [coding_style.md](../../coding_style.md) - `#### validate_strings pattern`, its generated-kernel and size bullets
-- [ADM_to_BSSN.py](../../nrpy/infrastructures/Dendro/general_relativity/ADM_to_BSSN.py) - generated pointwise initial-data conversion.
+- [coding_style.md](../../coding_style.md) - `## Infrastructure Code Patterns`, `### CodeParameter Registration Scope`, `#### validate_strings pattern`
+- [ADM_to_BSSN.py](../../nrpy/infrastructures/Dendro/general_relativity/ADM_to_BSSN.py) - symbolic pointwise kernel without generated-source baseline
 
 ## See Also
 
-- Parent: [Infrastructures](index.md)
 - Depends on: [New Infrastructure Conformance](new-infrastructure-conformance.md)
 - Depends on: [C Function Registry](../core/c-function-registry.md)
 - Depends on: [Gridfunctions And Parameters](../core/gridfunctions-and-parameters.md)
-- Depends on: [Parallel Codegen Orchestration](../core/helpers/parallel-codegen-orchestration.md)
-- Depends on: [Code Test Policy](../validation/code-test-policy.md)
-- Depends on: [Test Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md)
-- Depends on: [Python Coding Style](../architecture/python-coding-style.md)
-- See also: [C And Embedded C Style](../architecture/c-and-embedded-c-style.md)

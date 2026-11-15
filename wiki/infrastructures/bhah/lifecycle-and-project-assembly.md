@@ -1,4 +1,4 @@
-# Lifecycle And Project Assembly
+# Project Assembly, main.c, And Makefile Emission
 
 > Explain how BHaH standalone applications register runtime functions, assemble generated projects, and split executable and library entrypoints. · Status: confirmed
 > Up: [BHaH](index.md)
@@ -8,11 +8,13 @@
 BHaH is NRPy's standalone generated-application infrastructure. Generators
 register C functions into the global `CFunction` registry, assemble generated
 source, headers, prototypes, and a dependency-aware Makefile under the generated
-project directory, then build an executable lifecycle around
+project directory, then build an executable driver around
 `register_CFunction_main_c` or a library-facing API around
 `register_CFunctions_bhah_lib`.
 
 ## Detail
+
+### Executable And Library Entry Points
 
 `register_CFunction_main_c` is the final assembler for normal BHaH
 executables. Before registering generated `main`, it checks that required
@@ -22,7 +24,7 @@ Method of Lines allocation/free/step functions, diagnostics, and initial data.
 Detailed parameter, header, default-parfile, and CLI behavior belongs in
 [Runtime Data, Parameters, Headers, And CLI](runtime-data-parameters-headers-and-cli.md).
 
-The generated `main` owns the high-level standalone lifecycle. It initializes
+The generated `main` runs the standalone initialization, evolution, and cleanup sequence. It initializes
 `commondata`, parses inputs, optionally reads checkpoint metadata before full
 grid allocation, allocates `griddata` for `MAXNUMGRIDS`, defaults grid-local
 parameters, calls `numerical_grids_and_timestep`, allocates evolved and
@@ -42,7 +44,7 @@ description with each declaration. `register_CFunction_griddata_free` emits the
 host cleanup routine for per-grid allocations; in CUDA mode it also registers
 the device cleanup companion.
 
-`register_CFunctions_bhah_lib` registers a smaller library surface:
+`register_CFunctions_bhah_lib` registers four library entry points:
 `bhah_initialize`, `bhah_evolve`, `bhah_diagnostics`, and `bhah_finalize`.
 The supplemental defines introduce `BHaH_struct`, which wraps pointers to
 `commondata_struct` and `griddata_struct`. This library path initializes the
@@ -61,7 +63,9 @@ registration is commented out, and it does not call the default-parfile writer.
 Claim status: stale; contradiction: CONTR-0001.
 See [CONTR-0001](../../contradictions.md#contr-0001) for authority, affected
 pages, validation limits, and the executable resolution test; that contradiction
-record owns the claim evidence.
+record supplies the claim evidence.
+
+### Makefile Generation, Compiler Probing, And Sanitizer Targets
 
 `output_CFunctions_function_prototypes_and_construct_Makefile` turns the
 registered `CFunction_dict` into a buildable generated project. It validates
@@ -97,11 +101,9 @@ runtime-suffix files below the root, and `.o`/`.d` files at depth three or
 deeper. Cleanup uses explicit globs rather than `find`, recursive wildcards, a
 filename manifest, or source-discovery logic.
 
-Claim evidence:
-- Claim: Generated BHaH Makefiles use one explicit `ADD_SOURCE` record per registered C-function source, derive object and dependency inventories without source-discovery commands, make resolved registered project-local headers immediate prerequisites, and use compiler dependency files under `.deps/`; generated `clean` prints one root `rm` command while removing the exact target, root dependency directory, `.o`/`.d` files only through depth two, and seven runtime suffix families only at the project root, delegates silent cleanup to registered subprojects, and preserves `.par`, unrelated suffixes, nested runtime files, and depth-three-or-deeper `.o`/`.d` files.
-- Role: descriptive behavior
-- Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_generate_c_files_and_header`, `_construct_makefile_content`, and `output_CFunctions_function_prototypes_and_construct_Makefile`
-- Corroboration: none available; no test asserts the emitted Makefile text
+Evidence (descriptive behavior): `BHaH/Makefile_helpers.py::_generate_c_files_and_header`, `_construct_makefile_content`, and `output_CFunctions_function_prototypes_and_construct_Makefile`.
+
+### Compiler Selection, OpenMP Probing, And Sanitizer Targets
 
 Compiler selection replaces GNU Make's built-in `cc` only when that default is
 active, preserving environment and command-line choices; CUDA Makefiles select
@@ -127,11 +129,7 @@ NVCC. Additional generated projects are rechecked before dependent object
 builds and the final link. Static archives are removed before recreation so
 deleted object members cannot survive.
 
-Claim evidence:
-- Claim: Generated BHaH Makefiles preserve CPU origin-aware compiler selection and CUDA command-line `CC` overrides, separate build-flag roles; for CPU `OPENMP=1`, compile and link a test program with `-fopenmp` for each C or C++ source language present, add `-fopenmp` to C, C++, and link flags only if every test passes, and otherwise build serially with `-Wno-unknown-pragmas` and no warning, where the test does not run the program and so does not show multithreaded execution; for CUDA `OPENMP=1`, add `-Xcompiler -fopenmp` to the NVCC and link flags and `-fopenmp` to the host C++ flags without a test; retain explicit `OPENMP=0` opt-out behavior with no tests and serial flags, choose the linker from live source records, recheck additional projects before dependent builds, and recreate static archives without stale members.
-- Role: descriptive behavior
-- Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_generate_c_files_and_header`, `_construct_makefile_content`, and `output_CFunctions_function_prototypes_and_construct_Makefile`
-- Corroboration: none available; no test asserts the emitted Makefile text or the OpenMP test result, and no configured CI job checks which OpenMP flags were selected
+Evidence (descriptive behavior): `BHaH/Makefile_helpers.py::_generate_c_files_and_header`, `_construct_makefile_content`, and `output_CFunctions_function_prototypes_and_construct_Makefile`.
 
 The generated `make valgrind` target is executable-oriented. For a CPU
 executable it cleans, rebuilds with the debug C flags and `OPENMP=0`, then runs
@@ -148,14 +146,10 @@ mixed host `.cc`, `.cpp`, or `.cxx` compilation continues to use `CXXFLAGS`.
 The pre-clean guard checks only the injection library, not the
 `compute-sanitizer` executable, so a missing executable can still fail after
 cleaning and rebuilding. CUDA library targets reject `make valgrind` because
-they have no executable harness; CPU library targets only perform the debug
+they have no executable entry point; CPU library targets only perform the debug
 rebuild and do not invoke Valgrind.
 
-Claim evidence:
-- Claim: Generated CPU executable `make valgrind` rebuilds without OpenMP and runs Valgrind, while generated CUDA executable `make valgrind` checks only the configurable injection-library directory before cleaning, adds `-lineinfo` to NVCC `.cu` compilation and final linking, and runs Compute Sanitizer; CUDA libraries reject the target for lack of an executable harness, and CPU libraries rebuild without running Valgrind.
-- Role: descriptive behavior
-- Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_construct_makefile_content`
-- Corroboration: none available; no test asserts the emitted Makefile text
+Evidence (descriptive behavior): `BHaH/Makefile_helpers.py::_construct_makefile_content`.
 
 `compile_Makefile` is the programmatic build wrapper. It autodetects a compiler
 when requested, regenerates the prototype/header/Makefile assets through
@@ -169,7 +163,7 @@ Generated `project/**` files are products of these Python generators, not KB
 source evidence. Documentation should cite generator modules and stable symbols
 such as `register_CFunction_main_c`,
 `output_CFunctions_function_prototypes_and_construct_Makefile`, and
-`BHaH_struct`, unless maintainers deliberately register a generated artifact as
+`BHaH_struct`, unless maintainers deliberately register a generated file as
 frozen evidence.
 
 ## Sources
@@ -183,9 +177,6 @@ frozen evidence.
 
 ## See Also
 
-- Parent: [BHaH](index.md)
 - Depends on: [Runtime Data, Parameters, Headers, And CLI](runtime-data-parameters-headers-and-cli.md)
 - Depends on: [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)
-- See also: [Build And Run](../../architecture/build-and-run.md)
 - Depends on: [C Function Registry](../../core/c-function-registry.md)
-- Depends on: [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)

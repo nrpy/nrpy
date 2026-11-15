@@ -1,252 +1,67 @@
 # Code Test Policy
 
-> Prospective placement, meaningfulness, and proof rules for tests of NRPy code. · Status: provisional
+> Prospective placement, regression-value criteria, integration boundaries, and proof-scope rules for tests of `nrpy/**` code. · Status: provisional
 > Up: [Validation](index.md)
 
 ## Summary
 
-New or modified code under `nrpy/**` uses the cheapest validation layer that
-can fail on a plausible production regression and prove a durable contract.
-Ordinary Python, symbolic-expression, and emitted-source checks stay with their
-owning production module; compiler, build, runtime, and numerical-product
-integration belongs in scoped CI. No meaningful contract means no behavioral
-test, while required static quality gates still apply.
-
-This page sets prospective policy. Its provisional status reflects incomplete
-durable support for the commissioned norms; it does not claim that every legacy
-test shape or current automation path conforms.
+New or modified code under `nrpy/**` uses the lowest-cost validation layer that fails on a realistic regression and verifies an explicit mathematical, API, or output requirement. In-process Python, symbolic-expression, and structural C/C++/CUDA checks live in the defining module's docstrings and `__main__` block, whereas compiler, build, and runtime checks belong in CI. When no nontrivial behavioral assertion exists, add no behavioral test while still running static analysis.
 
 ## Detail
 
-### Scope And Authority
+### Module-Local Placement And Integration Boundary
 
-This policy governs new and modified code under `nrpy/**`. **Must**, **must
-not**, and **only** state requirements. **Should** states the default and needs
-a concrete documented reason to override. Explicit requirements for a task
-control that task, followed by current coding-style and routed KB governance,
-executable local or CI configuration, and repeated source practice. A legacy
-outlier is evidence about current repository contents, not precedent for new
-work.
+In `nrpy/**`, place Python API, symbolic-expression, and `validate_strings()` checks in the defining module's docstrings executed via `if __name__ == "__main__":` (`doctest.testmod()` failure runner; infrastructure modules place `Doctests:` immediately before `>>>` prompts and keep test-only imports local). `static-analysis` in `.github/workflows/main.yml` skips `*/tests/*` and executes non-example modules directly. Never add `pytest`/`unittest` dependencies, standalone test runners, executable sibling test modules, `# FIXME` doctest placeholders, or wrapper tests duplicating defining-module checks.
 
-### Owner-Local Architecture
+External compilers, build systems, and runtimes belong in CI workflows rather than module doctests (`clang-format` remains permitted for `validate_strings()`). The sole standalone C/C++ exception is `coding_style.md` `### External-Host Test Harnesses` (`tests_infra/`, such as `Dendro/tests_infra/dendrolib_capability_test.cpp`), built and run manually to verify external-host layout assumptions absent from NRPy CI without recording volatile run snapshots; legacy compile doctests follow [Known Gaps And Non-Precedents](test-oracles-and-safe-updates.md#known-gaps-and-non-precedents).
 
-For ordinary in-process Python API behavior, symbolic-expression checks, and
-emitted-source checks, put the smallest meaningful assertion in the production
-module that owns the contract. Use its function, class, or module docstring and
-run it through the owner's `__main__` validation path. Runnable equation
-modules use the canonical `doctest.testmod()` failure runner; runnable
-infrastructure modules should use that shape and place the final `Doctests:`
-label immediately before prompts. Keep test-only imports inside the doctest or
-`__main__` block.
+Evidence (normative rule): `coding_style.md` (`### if __name__ == "__main__": Block`, `### Doctest Conventions`, `### External-Host Test Harnesses`); `.github/workflows/main.yml`.
 
-The configured `static-analysis` job excludes every `*/tests/*` path and
-directly executes selected non-example source modules; this describes job
-configuration, not execution outcomes.
+### Meaningful Assertion Requirements
 
-Evidence (CI behavior): [main.yml](../../.github/workflows/main.yml), `static-analysis`; corroboration: [single_file_static_analysis.sh](../../.github/single_file_static_analysis.sh), `run_test_step`, corroborates direct per-file execution but not CI exclusions
+Every behavioral or regression test must fail on a plausible bug and verify a concrete requirement: a return value or state transition, a documented exception, a mathematical/symbolic identity, exact registration metadata (required names, fields, or relations—never bare registration success), small handwritten emitted control code, or an explicit CI numerical tolerance ([Generation Check Requirements](test-oracles-and-safe-updates.md#generation-check-requirements)). Symbolic equations are validated under `nrpy/equations/`, never via kernel-scale infrastructure expression files.
 
-New core code must not add pytest or unittest dependencies, configuration,
-collectors, fixtures, test classes, executable sibling test modules, standalone
-runners, test-only abstractions, or wrapper tests that duplicate the owner
-doctest. A runner is useful only when the module contains prompts or performs
-meaningful subsequent owner validation, such as an established trusted-
-expression comparison. A new runner with neither is prohibited. Zero attempted
-doctests is not coverage.
+Prohibited low-signal tests: import-only, call-only, bare registry-presence, generation-completed, file-count/existence, generic exit-status, incidental codegen assignment substrings, and generated `__version__` import checks.
 
-`# FIXME` doctest placeholders are legacy scaffolding, not coverage. Never add
-new placeholders; complete or remove existing ones only when that cleanup is in
-scope.
+### Status-Only Build Or Crash Conditions
 
-### Meaningful Contract Gate
+A compile, link, or crash test asserting only exit `0` is permitted only when all six conditions hold: (1) a concrete compile/link compatibility requirement or crash bug is documented, (2) target/configuration/input are minimal, (3) the pre-fix revision fails to build or crashes while the fix succeeds identically, (4) compiler/runtime versions are named, (5) no stronger numerical output exists, and (6) claims are restricted to that exact build or crash check. New standalone CLI helpers under `nrpy/examples/**` additionally require all twelve conditions in [Narrow Examples Product Exception](examples-product-exception.md).
 
-Every behavioral or regression test must fail for a plausible production
-regression and assert a durable contract. Valid contracts include:
+### Validation Layers, Legacy Outliers, And Decision Sequence
 
-- returned value or documented state transition;
-- documented error type or condition;
-- nontrivial mathematical or semantic property;
-- exact documented registration metadata, such as required names, fields,
-  values, or relationships, whose mismatch would violate a durable contract;
-  bare registration success or presence of some registry entry is not a
-  meaningful contract;
-- stable, predominantly handwritten emitted control logic; or
-- explicit build, runtime, or numerical criterion in scoped integration CI.
-
-A generation check must assert independently documented product structure,
-schema, content, metadata, meaningful artifact content, or a bug-specific
-invariant. That contract may predate the change or be introduced independently
-in the same reviewed API, docstring, specification, or acceptance criteria.
-Candidate or golden output cannot define its own contract; see [Test Oracles And
-Safe Updates](test-oracles-and-safe-updates.md#generation-contract).
-
-Prohibited coverage includes import-only, call-only, bare registration-success
-or unqualified registry-presence-only, generation-completed-only, generic exit-
-status, file-existence, and file-count assertions; tests added only because a
-function exists; empty runners and placeholder doctests; duplicate owner-plus-
-wrapper coverage; lint, discovery, fixture, or baseline plumbing tested without
-a production contract; incidental SymPy/codegen assignment substrings; and
-downstream smoke scaffolds that only import a package or inspect `__version__`.
-A narrow status-only compile, link, or crash regression is allowed only under
-the next gate. If no cheap meaningful assertion exists, add no behavioral test.
-Static quality gates remain mandatory and separate.
-
-Doctests do not relax this gate. Do not use incidental substring, shape,
-existence, returned-without-error, or setup-did-not-throw checks merely to
-manufacture coverage, whether as bare Boolean prompts or bundled Python
-`assert` statements. Each prompt must prove a durable API or semantic contract.
-When compilation or full-product execution is the contract, prove it there
-instead of mirroring generated fragments in a doctest.
-
-Trusted validation of symbolic equations belongs under `nrpy/equations/`, where
-the validation machinery supplies values for free symbols. Scientific or
-numerical infrastructure tests must exercise complete generated C or C++
-products. If a generated finite-difference kernel is too large for such an
-oracle, validate its upstream expressions in the owning equation module rather
-than creating an infrastructure-local expression oracle.
-
-### Integration Boundary
-
-External compiler, build, runtime, and numerical-product validation belongs in
-scoped CI, not ordinary owner doctests. Repository-configured `clang-format`
-remains an allowed dependency for owner emitted-source normalization. New core
-standalone harnesses and compile doctests are prohibited. The one carve-out is a
-harness that measures an external host's behavior, which no owner doctest and no
-NRPy-side CI job can observe, because the host is present in neither. The rule
-is `coding_style.md`, `### External-Host Test Harnesses`: the harness is tracked
-beside the infrastructure that depends on the host, under `tests_infra/`, is
-built and run by hand against that host, and records only durable setup, scope,
-assertions, and reproduction instructions. It does not preserve host revisions,
-dates, environment snapshots, or run results. It is not a route for ordinary
-compile or build coverage, which stays in scoped CI. A substantive change to an
-existing compile doctest must follow the migration or tightly bounded fallback
-in [Test Oracles And Safe Updates](test-oracles-and-safe-updates.md#known-gaps-and-non-precedents).
-
-Evidence (normative rule): [coding_style.md](../../coding_style.md), `### External-Host Test Harnesses`; corroboration: [README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md), its durable scope and build/run instructions
-
-### Status-Only Build Or Crash Gate
-
-Generic status-only coverage is prohibited. A compile, link, or crash
-regression whose only assertion is success is allowed only when every condition
-holds:
-
-1. A production compile/link compatibility contract or crash bug is documented.
-2. Target, configuration, and input are minimal and exact.
-3. The old revision demonstrably fails to compile/link or crashes, while the
-   new revision succeeds under the same setup.
-4. Compiler, build, or runtime toolchain and resolved version are named.
-5. No stronger semantic result is available from the run.
-6. The claim is limited to the named compile/link compatibility or crash
-   regression.
-
-### Validation Layers And Claims
-
-Use the cheapest layer that proves the contract and name it accurately:
-
-| Layer | What it may establish |
+| Layer | What it establishes (and never establishes later layers) |
 | --- | --- |
-| Doctest | Python/API value, state, error, or small semantic invariant. |
-| Sampled expression | Numerical agreement at named substitutions; not formal identity. |
-| Trusted source | Exact normalized emitted-text agreement with a reviewed oracle; not compilation or execution. |
-| Generation | Independently documented output structure, schema, content, metadata, or bug-specific artifact invariant. Completion alone does not pass. |
-| Build | Compile/link compatibility for a named generated product and toolchain. |
-| Runtime compatibility/crash | Start or completion for a named input only when the six-condition status gate applies; otherwise runtime needs concrete output, state, or semantic assertion. |
-| Regression/numerical | Parsed result satisfies an explicit reference and tolerance. |
-| Scientific/convergence | Dedicated evidence designed for the named scientific claim. |
+| Doctest | In-process Python return value, state, exception, or small algebraic identity. |
+| Sampled expression | High-precision numerical agreement at fixed `mpf`/`mpc` points (not formal proof). |
+| Emitted source (`validate_strings`) | Exact `clang-format` text match on small structural code (neither compiles nor runs). |
+| Generation | Independently specified file layout, metadata, or output invariant. |
+| Build / Runtime crash | Toolchain compile/link or non-crashing execution under the 6-condition check above. |
+| Regression / Convergence | Output matches reference within tolerance, or multi-resolution error scales at expected order. |
 
-An earlier layer proves nothing about a later one. In particular,
-`validate_strings()` neither compiles nor executes emitted code. A generated-
-project matrix can establish only named generation and named toolchain
-compile/link compatibility unless it runs and checks a stronger result. CI
-configuration proves configured commands and assertions, not a latest pass. A
-named successful run proves only the commands, assertions, inputs, platforms,
-versions, backends, and options it actually exercised; it does not establish
-omitted backends, general convergence, or broad scientific correctness.
+Decision order: (1) Python/API -> module doctest; (2) symbolic equation -> exact identity or `trusted_dict` in `nrpy/equations/`; (3) small structural emitter -> `validate_strings()`; (4) large FD kernel -> upstream symbolic check; (5) compiler/toolchain -> CI; (6) standalone example numerical test -> 12-condition [examples exception](examples-product-exception.md); (7) no nontrivial invariant -> no behavioral test; (8) edited handwritten Python -> [Static Analysis](static-analysis.md).
 
-### Narrow Examples Product Exception
+Retained nonprecedential outliers: `nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py` (standalone sampled cross-representation script) and `JAX/jax_project_generator.py`'s emitted downstream `pytest` `__version__` file (unrun in CI).
 
-A new command-line helper under `nrpy/examples/**` that tests an NRPy-generated
-standalone product is allowed only when all twelve conditions in [Narrow
-Examples Product Exception](examples-product-exception.md) hold; otherwise it
-is prohibited. Outside that exception, examples are not ordinary policy
-evidence, and the exception never authorizes general pytest or unittest
-adoption in examples.
-
-### Static Summary
-
-Every modified handwritten Python file follows [Static
-Analysis](static-analysis.md), which owns formatter, target-safety, cache,
-classification, threshold, and enforcement-gap details. Generated trusted
-`*/tests/*.py` data is exempt from per-file analysis, but its handwritten owner
-is not.
-
-### Decision Tree And Legacy Shapes
-
-1. Ordinary Python/API behavior or error: use an owner doctest.
-2. Symbolic property: prefer an exact invariant; otherwise use a fixed sampled
-   owner comparison with explicit dictionary-structure checks.
-3. Stable handwritten emitted function, header, or file: normalize complete
-   public-generator output and compare it with `validate_strings()`.
-4. Large generated kernel: validate expressions or semantics upstream; do not
-   use a full-text golden or incidental substrings.
-5. Required build/toolchain: use scoped CI; add no compile doctest.
-6. Runtime or numerical standalone generated example product: use the
-   [examples exception](examples-product-exception.md) only when all twelve
-   gates apply; status-only cases also need all six status conditions.
-7. No meaningful contract: add no behavioral test.
-8. Handwritten Python changed: follow [Static Analysis](static-analysis.md).
-
-The checked-in shapes described here are retained facts, not templates. This policy treats
-the NRPyLaTeX BSSN file as a unique retained direct-execution sampled cross-
-representation harness. The JAX
-project generator emits a downstream pytest import/`__version__` scaffold that
-configured generated-project CI does not execute; it is low-signal and its
-removal or replacement needs a separate JAX decision.
-
-Evidence (descriptive behavior): [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`; [jax_project_generator.py](../../nrpy/infrastructures/JAX/jax_project_generator.py), `_generate_project_metadata` and `output_PyFunction_files_and_construct_project`; corroboration: [main.yml](../../.github/workflows/main.yml), `codegen-ubuntu` and `codegen-mac`, corroborates that JAX output is generated without executing its scaffold; no independent corroboration for the other outlier
-
-Do not expand any of those shapes. Whether an unrelated touch must remove a
-legacy empty runner remains maintainer judgment. Meaningful doctest-only
-equation modules remain valid exceptions to broad historical wording about
-trusted dictionaries; meaningful validation wins over adding a golden merely
-for test count.
+Evidence (descriptive behavior): `nrpylatex/test_parse_BSSN.py::test_example_BSSN`; `JAX/jax_project_generator.py::output_PyFunction_files_and_construct_project`; `.github/workflows/main.yml`.
 
 ### Contributor Checklist
 
-- [ ] Identify owner, durable contract, validation layer, and old-behavior
-      failure.
-- [ ] Use owner doctest for ordinary in-process behavior; count meaningful
-      subsequent owner validation separately from attempted prompts.
-- [ ] Add no core standalone runner, pytest/unittest surface, test-only
-      abstraction, or duplicate wrapper.
-- [ ] Add no test when no meaningful behavioral contract can be asserted.
-- [ ] Keep compiler/build/runtime integration in scoped CI; add no compile
-      doctest.
-- [ ] Apply all six status-only conditions before making a narrow compile/link
-      or crash claim.
-- [ ] Apply all twelve examples-product gates, including same-change CI,
-      concrete result, subprocess bounds, access authority, and exact claim.
-- [ ] State only what configuration or a named successful run establishes.
-- [ ] For every handwritten Python change, follow [Static
-      Analysis](static-analysis.md).
-- [ ] Follow the separate [oracle checklist](test-oracles-and-safe-updates.md#contributor-checklist)
-      for stored evidence, variants, updates, and mutable state.
+- [ ] Name the defining module, mathematical/API requirement, validation layer, and pre-fix failure mode before writing a test; add no test when no nontrivial invariant exists.
+- [ ] Keep ordinary checks inside defining-module docstrings/`__main__`; add no `pytest`/`unittest`, `# FIXME` placeholders, compile doctests, or duplicate wrapper tests.
+- [ ] Satisfy all 6 conditions above for any status-only build/crash check and all 12 conditions in [Narrow Examples Product Exception](examples-product-exception.md) for any `nrpy/examples/**` test script.
+- [ ] Run [Static Analysis](static-analysis.md) on every edited handwritten Python file and follow the [reference-update checklist](test-oracles-and-safe-updates.md#contributor-checklist).
 
 ## Sources
 
-- [coding_style.md](../../coding_style.md) - `### if __name__ == "__main__": Block`, `### Doctest Conventions`, `#### Doctest placeholders`, `### External-Host Test Harnesses`, `## Static Analysis Configuration`
-- [README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md) - durable scope and build/run instructions
+- [coding_style.md](../../coding_style.md) - `### if __name__ == "__main__": Block`, `### Doctest Conventions`, `### External-Host Test Harnesses`, `## Static Analysis Configuration`
+- [README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md) - external-host `dendrolib_capability_test.cpp` scope
 - [main.yml](../../.github/workflows/main.yml) - `static-analysis`, `codegen-ubuntu`, `codegen-mac`
-- [single_file_static_analysis.sh](../../.github/single_file_static_analysis.sh) - `run_test_step`
-- [.pylintrc](../../.pylintrc) - `[MASTER]`; [.pylintrc_python36](../../.pylintrc_python36) - `[MASTER]`
 - [generic.py](../../nrpy/helpers/generic.py) - `validate_strings`
 - [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py) - `test_example_BSSN`
 - [jax_project_generator.py](../../nrpy/infrastructures/JAX/jax_project_generator.py) - `_generate_project_metadata`, `output_PyFunction_files_and_construct_project`
 
 ## See Also
 
-- Parent: [Validation](index.md)
 - Depends on: [Test Oracles And Safe Updates](test-oracles-and-safe-updates.md)
-- See also: [Narrow Examples Product Exception](examples-product-exception.md)
 - Validated by: [Static Analysis](static-analysis.md)
-- See also: [Expression Validation Helpers](expression-validation-helpers.md)
-- See also: [Generated Project CI](generated-project-ci.md)
+- See also: [Narrow Examples Product Exception](examples-product-exception.md)

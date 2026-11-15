@@ -43,11 +43,7 @@ RHSs and normalization expressions declare generic `conn_Gamma4UDD`,
 connection, and tangent values; coordinates alone do not evaluate the returned
 RHSs.
 
-Claim evidence:
-- Claim: Geodesic initialization selects a positive massive root and a negative photon root in its documented `g_00<0` domain, without a zero-coefficient fallback; the photon distance RHS is signed `alpha*p^0`. Generic RHS and normalization symbols require caller-supplied geometry and tangent values.
-- Role: descriptive behavior
-- Deciding authority: [geodesics.py](../../../nrpy/equations/general_relativity/geodesics/geodesics.py), `hamiltonian_constraint_massive`, `hamiltonian_constraint_photon`, `geodesic_eom_rhs_massive`, `geodesic_eom_rhs_photon`, and `normalization_constraint`
-- Corroboration: none available for the complete initialization domain; substituting the Minkowski metric in the displayed quadratic roots checks their time orientation directly.
+Evidence (descriptive behavior): `general_relativity/geodesics/geodesics.py::hamiltonian_constraint_massive`, `hamiltonian_constraint_photon`, `geodesic_eom_rhs_massive`, `geodesic_eom_rhs_photon`, and `normalization_constraint`.
 
 The same module also exposes reusable recipes for numerical spacetime data:
 `symbolic_numerical_christoffel_recipe`,
@@ -83,9 +79,6 @@ cases before emitting trusted expressions.
 
 ## See Also
 
-- [General Relativity](index.md)
-- [BSSN Family](bssn-family.md)
-- [Metric Conversions And Matter](metric-conversions-and-matter.md)
-- [Psi4 And Tetrads](psi4-and-tetrads.md)
-- [Reference Metrics](../../core/reference-metrics.md)
-- [Trusted Expression Pipeline](../trusted-expression-pipeline.md)
+- See also: [BSSN Family](bssn-family.md)
+- Depends on: [Reference Metrics](../../core/reference-metrics.md)
+- Validated by: [Expression Validation Helpers](../../validation/expression-validation-helpers.md)

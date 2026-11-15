@@ -10,14 +10,16 @@ standalone product only when all twelve conditions below hold. They include
 that the tested behavior is observable only at the generated program's process
 boundary, that no cheaper module-level check proves the same regression,
 same-change CI wiring, and `shell=False` subprocesses with timeouts and bounded
-output. The page also records how the checked-in SEOB and Dendro application
-helpers compare with these conditions.
+output. Checked-in SEOB and Dendro application helpers under
+`nrpy/examples/tests/` are audited below against these twelve conditions.
 
-Like [Code Test Policy](code-test-policy.md), this page sets prospective
-policy. Its provisional status reflects incomplete durable support for the
-commissioned norms; the checked-in SEOB helpers do not meet every condition.
+Like [Code Test Policy](code-test-policy.md), these twelve conditions govern new
+generated-application tests prospectively; existing checked-in SEOB helpers
+predate several of the twelve requirements (`Status: provisional`).
 
 ## Detail
+
+### Twelve Required Conditions
 
 Outside this exception, examples are not ordinary policy evidence. A new
 command-line helper under `nrpy/examples/**` is allowed only when all twelve
@@ -44,8 +46,8 @@ conditions hold:
    limits, checked failure, and bounded or capped captured output. The CI job
    has `timeout-minutes` or equivalent.
 8. Cwd and environment restoration and output cleanup are unconditional.
-9. Inputs and randomness are deterministic; generated output is CI-owned or
-   temporary.
+9. Inputs and randomness are deterministic; generated output is written to a CI-dedicated or
+   temporary directory.
 10. Network, installation, and external access are explicitly authorized.
     Controllable dependencies use an exact pin, tag, or commit; otherwise
     record resolved version and reason and label evidence non-reproducible
@@ -53,13 +55,14 @@ conditions hold:
 11. The helper asserts concrete output, state, semantic property, or numerical
     criterion beyond status, file existence, file count, or import success. A
     status-only build or crash assertion on the generated program must also
-    satisfy all six conditions of the [Status-Only Build Or Crash
-    Gate](code-test-policy.md#status-only-build-or-crash-gate) and keep the
+    satisfy all six conditions of the [Status-Only Build Or Crash Conditions](code-test-policy.md#status-only-build-or-crash-conditions) and keep the
     narrow compatibility/crash claim.
 12. The assertion names the exact validation layer proved.
 
 If any condition fails, the helper is prohibited. This exception never
 authorizes general pytest or unittest adoption in examples.
+
+### Checked-In SEOB And Dendro Precedents
 
 The checked-in SEOB helpers are finite-input numerical-and-argument precedents:
 they use deterministic samples, argument-vector subprocesses with checked
@@ -69,7 +72,7 @@ capped output capture, unconditional cwd restoration and cleanup, and parts of
 the current resource-limit policy; their CI jobs also lack `timeout-minutes`.
 None of those gaps may be copied.
 
-Evidence (descriptive behavior): [sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py), `run_sebob`, `process_input_set`; [sebobv2_consistency_check.py](../../nrpy/examples/tests/sebobv2_consistency_check.py), `run_sebobv2`, `process_input_set`; [main.yml](../../.github/workflows/main.yml), `sebob-consistency-test` and `sebobv2-consistency-test`
+Evidence (descriptive behavior): `tests/sebob_consistency_check.py::run_sebob`, `process_input_set`; `tests/sebobv2_consistency_check.py::run_sebobv2`, `process_input_set`; `.github/workflows/main.yml::sebob-consistency-test` and `sebobv2-consistency-test`.
 
 The Dendro application helper passes argument vectors with `shell=False`,
 gives every generation, configure, build, run, and rejection subprocess an
@@ -81,7 +84,7 @@ work directory in `finally`, records the resolved tool and package versions,
 and prints each assertion with its validation layer and numerical bound. Its
 workflow job sets `timeout-minutes`.
 
-Evidence (descriptive behavior): [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py), `run_logged`, `run_checked`, `tail`, `Report.check`, `Leg.record_versions`, `Leg.generate_and_build`, `Leg.run`, `main`; [main.yml](../../.github/workflows/main.yml), `dendro-validation`
+Evidence (descriptive behavior): `tests/dendro_application_check.py::run_logged`, `run_checked`, `tail`, `Report.check`, `Leg.record_versions`, `Leg.generate_and_build`, `Leg.run`, `main`; `.github/workflows/main.yml::dendro-validation`.
 
 ## Sources
 
@@ -92,6 +95,5 @@ Evidence (descriptive behavior): [dendro_application_check.py](../../nrpy/exampl
 
 ## See Also
 
-- Parent: [Validation](index.md)
 - Depends on: [Code Test Policy](code-test-policy.md)
 - See also: [Generated Project CI](generated-project-ci.md)

@@ -9,6 +9,8 @@
 
 ## Detail
 
+### `CFunction` Structure And `generate_full_function`
+
 `CFunction` stores the output subdirectory, SIMD flag, includes, optional `prefunc` and `postfunc` text, Doxygen-style description, optional decorators, return type, function name, parameter string, body, optional code-parameter include behavior, coordinate-system wrapper metadata, and Einstein Toolkit metadata. Construction requires `name`, `desc`, and `body`; missing any of those fields raises a `ValueError`. A truthy non-list `includes` value raises `ValueError`, and passing `griddata_struct` into coordinate-specific wrapper-function parameters is forbidden. Empty falsey values bypass the constructor's includes-type check.
 
 Include handling preserves the caller's intent. During `generate_full_function()`, include entries containing `<` are emitted as angle-bracket includes such as `#include <math.h>`, while all other include strings become quoted includes such as `#include "set_CodeParameters.h"`. Non-string include entries raise a `TypeError`.
@@ -19,29 +21,25 @@ When `include_CodeParameters_h` is true, the generated body begins with a code-p
 
 `generate_full_function()` returns a tuple containing `function_prototype`, `raw_function`, and clang-formatted `full_function`. The constructor stores those strings on the object. A later call returns regenerated strings without updating the stored attributes; callers that need to replace them must assign the returned tuple. The prototype includes decorators, return type, generated name, and parameters. The raw function assembles includes, optional prefunc text, Doxygen comment, signature, optional code-parameter include, stripped body, an `// END FUNCTION: <name>` marker, and optional postfunc text. `full_function` is `clang_format(raw_function)`.
 
-Claim evidence:
-- Claim: `CFunction.generate_full_function()` returns the prototype, raw function, and formatted function; it does not update the corresponding stored attributes. The constructor and callers that refresh stored text assign the returned tuple explicitly.
-- Role: descriptive behavior
-- Deciding authority: [c_function.py](../../nrpy/c_function.py), `CFunction.__init__` and `CFunction.generate_full_function`
-- Corroboration: [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_generate_c_files_and_header`, assigns regenerated strings before writing the function.
+Evidence (descriptive behavior): `c_function.py::CFunction.__init__` and `CFunction.generate_full_function`; corroboration: `BHaH/Makefile_helpers.py::_generate_c_files_and_header`, assigns regenerated strings before writing the function.
+
+### Coordinate-System Wrappers, ET Metadata, And `register_CFunction`
 
 Coordinate-system wrappers use `function_name_and_subdir_with_CoordSystem()`. When `CoordSystem_for_wrapper_func` is set, the generated function goes under `subdirectory/<CoordSystem>` and its actual registered name becomes `<name>__rfm__<CoordSystem>`; otherwise the original subdirectory and name are used. Constructor validation rejects coordinate-specific wrapper parameters that contain `griddata_struct`.
 
-Einstein Toolkit metadata is stored directly on the `CFunction`: `ET_thorn_name`, `ET_schedule_bins_entries`, `ET_current_thorn_CodeParams_used`, and `ET_other_thorn_CodeParams_used`. These fields let ET infrastructure code later know which thorn owns the function, which schedule.ccl entries it needs, which CodeParameters belong to the current thorn's param.ccl, and which referenced CodeParameters belong to other thorns.
+Einstein Toolkit metadata is stored directly on the `CFunction`: `ET_thorn_name`, `ET_schedule_bins_entries`, `ET_current_thorn_CodeParams_used`, and `ET_other_thorn_CodeParams_used`. These fields let ET infrastructure code later know which thorn defines the function, which schedule.ccl entries it needs, which CodeParameters belong to the current thorn's param.ccl, and which referenced CodeParameters belong to other thorns.
 
 `register_CFunction()` computes the actual name and subdirectory, including any `__rfm__<CoordSystem>` suffix, rejects duplicate actual names already present in `CFunction_dict`, constructs the `CFunction`, and stores it under the actual generated name. BHaH shows the registry in normal use: `register_CFunction_main_c()` checks that required functions are already present in `CFunction_dict`, then registers the generated `main` function; `register_CFunctions_bhah_lib()` registers library-facing initialization, evolution, diagnostics, and finalization functions through the same registration mechanism.
 
 Import registry objects from `nrpy.c_function`. The empty `nrpy/__init__.py` does not re-export `CFunction`, `CFunction_dict`, or `register_CFunction`.
 
-`GPUKernel` is a helper-side producer of `CFunction` text and launch calls. Use [Loop Kernel And Device Helpers](helpers/loop-kernel-and-device-helpers.md) for CUDA launch dictionaries, host/device wrapper choices, and GPU-kernel call-string behavior; this page remains the owner of the registry contract itself.
+`GPUKernel` produces `CFunction` text and launch calls; see [Loop Kernel And Device Helpers](helpers/loop-kernel-and-device-helpers.md) for CUDA launch dictionaries, host/device wrapper choices, and GPU-kernel call-string behavior.
 
-For interface-change and compatibility-shim rules, use [Contribution Style And
-Static Analysis](../architecture/contribution-style-and-static-analysis.md).
+For interface-change and compatibility-shim rules, use [Contribution Style And Static Analysis](../architecture/contribution-style-and-static-analysis.md).
 
 ## Sources
 
 - [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `_generate_c_files_and_header`
-
 - [nrpy/c_function.py](../../nrpy/c_function.py) - `CFunction`, `CFunction_dict`, `prefix_with_star`, `generate_full_function`, `register_CFunction`, `function_name_and_subdir_with_CoordSystem`
 - [nrpy/infrastructures/BHaH/main_c.py](../../nrpy/infrastructures/BHaH/main_c.py) - `register_CFunction_main_c`
 - [nrpy/infrastructures/BHaH/bhah_lib.py](../../nrpy/infrastructures/BHaH/bhah_lib.py) - `register_CFunctions_bhah_lib`
@@ -49,9 +47,6 @@ Static Analysis](../architecture/contribution-style-and-static-analysis.md).
 
 ## See Also
 
-- Parent: [Core APIs](index.md)
 - Depends on: [Contribution Style And Static Analysis](../architecture/contribution-style-and-static-analysis.md)
 - Depends on: [C Codegen](c-codegen.md)
 - Depends on: [Gridfunctions And Parameters](gridfunctions-and-parameters.md)
-- See also: [Loop Kernel And Device Helpers](helpers/loop-kernel-and-device-helpers.md)
-- See also: [Parallel Codegen Orchestration](helpers/parallel-codegen-orchestration.md)

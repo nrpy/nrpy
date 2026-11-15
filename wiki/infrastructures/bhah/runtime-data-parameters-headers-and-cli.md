@@ -9,10 +9,12 @@ BHaH runtime state is assembled from NRPy `CodeParameter` registrations, extra
 struct contributions, generated headers, default-setter C functions, and a
 parameter-file parser. `commondata_struct` stores simulation-wide runtime data,
 `params_struct` stores per-grid parameters, and `griddata_struct` stores per-grid
-pointers and module-owned substructures such as MoL, reference-metric
+pointers and module-registered substructures such as MoL, reference-metric
 precompute, and curvilinear boundary data.
 
 ## Detail
+
+### Runtime Structs, Default Setters, And Parameter Headers
 
 `output_BHaH_defines_h()` builds `BHaH_defines.h`. It registers general includes
 and macros, emits `REAL` and `DOUBLE`, converts `#define`-typed CodeParameters
@@ -27,7 +29,7 @@ non-`#define` parameters with `commondata=True` become members of
 per-grid declarations from `griddata_commondata`. The BHaH core registers
 `params_struct params`; optional modules register their own entries, such as
 `rfm_struct* rfmstruct`, `bc_struct bcstruct`, and
-`MoL_gridfunctions_struct gridfuncs`. `griddata_commondata` also owns
+`MoL_gridfunctions_struct gridfuncs`. `griddata_commondata` also defines
 `griddata_free()` and, for non-OpenMP builds, `griddata_free_device()`, freeing
 reference-metric tables, curvilinear boundary arrays, MoL gridfunction storage,
 auxevol storage, coordinate arrays, and the `griddata` array according to enabled
@@ -43,6 +45,8 @@ parameter-access fragments: `set_CodeParameters.h`,
 BHaH source-backed parameter include files used by generated C functions; the
 local source does not show a separate BHaH writer for a literal
 `CodeParameters.h` file.
+
+### Parfile Parser, CLI Overrides, And CUDA Device Headers
 
 `cmdline_input_and_parfiles.py` generates the runtime parser
 `cmdline_input_and_parfile_parser(commondata, argc, argv)`. The parser considers
@@ -93,8 +97,8 @@ CUDA build or runtime result. Source inspection of `_C_PARSE_VALUE_FUNC` shows
 that the array bound is checked before
 `values[count]` is written. The registration-function doctest is configured to
 format generated C and compare it through `validate_strings` against caller-
-relative golden text; configuration alone does not prove execution. The owner
-route does not establish compiled-C oversized-array behavior.
+relative golden text; configuration alone does not prove execution. `cmdline_input_and_parfiles.py`
+does not establish compiled-C oversized-array behavior.
 
 ## Sources
 
@@ -105,11 +109,9 @@ route does not establish compiled-C oversized-array behavior.
 - [generic.py](../../../nrpy/helpers/generic.py) - `clang_format`, `validate_strings`
 - [griddata_commondata.py](../../../nrpy/infrastructures/BHaH/griddata_commondata.py) - `GridCommonData`, `register_griddata_commondata`, `register_CFunction_griddata_free`, `register_CFunction_griddata_free__device`
 - [cuda_utilities.py](../../../nrpy/infrastructures/BHaH/parallelization/cuda_utilities.py) - `register_CFunctions_HostDevice__operations`, `register_CFunction_cpyHosttoDevice_commondata__constant`, `register_CFunction_cpyHosttoDevice_params__constant`, `register_CFunction_cpyHosttoDevice_bc_struct`, `register_CFunction_cpyDevicetoHost__grid`, `register_CFunction_cpyDevicetoHost__gf`, `register_CFunction_cpyHosttoDevice__gf`
-- [c_function.py](../../../nrpy/c_function.py) - `CFunction`, `generate_full_function`
 - [main.yml](../../../.github/workflows/main.yml) - `codegen-ubuntu`, `codegen-mac` configured default example commands
 
 ## See Also
 
-- [BHaH](index.md)
-- [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md)
-- [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
+- See also: [Project Assembly, main.c, And Makefile Emission](lifecycle-and-project-assembly.md)
+- Depends on: [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)

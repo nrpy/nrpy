@@ -15,13 +15,13 @@ stores peak-news fits, and exposes attachment quantities for the implemented
 
 Current class symbols decide implemented outputs. The unversioned SEBOB and
 BOBv2 paper landing pages are model background; they do not decide the intended
-scientific contract without immutable publication locators and cited-equation
+scientific equations without immutable publication locators and cited-equation
 mappings. Their model-level accuracy claims are not inherited by these
 sampled symbolic transcriptions.
 
 ## Detail
 
-`BOB_aligned_spin_waveform_quantities` owns the aligned-spin BOB `(2,2)`
+`BOB_aligned_spin_waveform_quantities` constructs the aligned-spin BOB `(2,2)`
 merger-ringdown path. Its constructor declares masses `m1` and `m2`, aligned
 spins `chi1` and `chi2`, QNM symbols `omega_qnm` and `tau_qnm`, attachment time
 `t_0`, and time `t`. It computes mass ratio and effective spin combinations,
@@ -43,7 +43,7 @@ attachment construction to the mode set `(2,2)`, `(3,3)`, `(4,4)`, `(5,5)`,
 entry point flattens these dictionaries into keys such as `h_22`, `phi_33`,
 `hddot_t_attach_44`, and `wdot_t_attach55`.
 
-`BOB_v2_waveform_quantities` owns the current BOBv2 path. The constructor stores
+`BOB_v2_waveform_quantities` constructs the current BOBv2 path. The constructor stores
 input and derived binary parameters `m1`, `m2`, `chi1`, `chi2`, `M`, `nu`,
 `chi_s`, `chi_a`, `delta`, and `chi_eob`. It initializes `newsNR`, evaluates
 peak-news fit helpers `news_Ap_22`, `news_Ap_33`, `news_Ap_21`, `news_Ap_44`,
@@ -59,7 +59,7 @@ BOBv2 implementation whose ideal attachment point still requires calibration.
 Stored attachment quantities therefore must not be described as a calibrated
 BOBv2 waveform result.
 
-All of these modules validate through the trusted-expression pipeline. The BOB
+All of these modules validate against their trusted dictionaries. The BOB
 `(2,2)` trusted dictionary pins `h`, `phi`, and attachment outputs. The
 higher-mode trusted dictionary pins flattened mode keys for the supported mode
 set. The BOBv2 trusted dictionary removes the raw `newsNR` dictionary before
@@ -86,8 +86,6 @@ its other peak-news fits are stored inputs, not implemented BOBv2 strain modes.
 
 ## See Also
 
-- [SEOBNR And BOB](index.md)
-- [Aligned-Spin Waveforms](aligned-spin-waveforms.md)
-- [Precessing Dynamics](precessing-dynamics.md)
-- [Precessing Rotations And Ringdown](precessing-rotations-and-ringdown.md)
-- [Trusted Expression Pipeline](../trusted-expression-pipeline.md)
+- See also: [Aligned-Spin Waveforms](aligned-spin-waveforms.md)
+- See also: [Precessing Dynamics](precessing-dynamics.md)
+- Validated by: [Expression Validation Helpers](../../validation/expression-validation-helpers.md)

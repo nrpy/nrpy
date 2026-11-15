@@ -5,16 +5,15 @@
 
 ## Summary
 
-This leaf owns ETLegacy runtime glue around the symbolic GR equation modules.
-It covers conversion between Einstein Toolkit ADMBase variables and NRPy BSSN
-evolved variables, the startup slicing registration hook, and the TmunuBase
-stress-energy raise used before matter-coupled RHS and constraint kernels.
+The `ETLegacy/general_relativity/` registrars wrap NRPy's symbolic GR equations
+for Einstein Toolkit thorns: converting between ADMBase and BSSN variables,
+registering startup slicing, and raising TmunuBase `T_{mu nu}` before
+matter-coupled RHS and constraint kernels.
 
-Symbolic ADM/BSSN and matter formulas remain owned by
+Symbolic ADM/BSSN and stress-energy formulas live in
 [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md)
-and [BSSN Family](../../equations/general-relativity/bssn-family.md). This
-page documents where ETLegacy schedules those formulas and which Cactus
-gridfunction groups they read or write.
+and [BSSN Family](../../equations/general-relativity/bssn-family.md); the
+ETLegacy registrars bind Cactus schedule bins and gridfunction read/write groups.
 
 ## Detail
 
@@ -69,8 +68,6 @@ generated thorn as a 3+1 slicing provider before later schedule bins run.
 
 ## See Also
 
-- [ETLegacy](index.md)
-- [GR BSSN RHS, Ricci, Constraints, And Validation](gr-bssn-rhs-ricci-constraints-and-validation.md)
-- [GR Poststep Repairs](gr-poststep-repairs.md)
-- [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md)
-- [BSSN Family](../../equations/general-relativity/bssn-family.md)
+- See also: [GR BSSN RHS, Ricci, Constraints, And Validation](gr-bssn-rhs-ricci-constraints-and-validation.md)
+- Depends on: [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md)
+- Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)

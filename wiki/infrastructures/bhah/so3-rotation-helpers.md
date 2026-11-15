@@ -39,11 +39,7 @@ decorator. The other SO(3) helpers remain host-only in both modes. This
 narrow device closure lets the coordinate converters call the required matrix
 and vector operations from a CUDA kernel without changing unrelated helpers.
 
-Claim evidence:
-- Claim: Exactly the matrix builder and the `R`/`R^T` vector helpers emit CUDA host/device definitions and prototypes; the other helpers remain host-only, and OpenMP forms remain undecorated.
-- Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/BHaH/rotation/so3_build_R_from_hats.py`, `so3_apply_R_to_vector.py`, and `so3_apply_RT_to_vector.py` - their public registrars
-- Corroboration: none available; owner doctests and emitted-source inspection are not independent evidence.
+Evidence (descriptive behavior): `BHaH/rotation/so3_build_R_from_hats.py::register_CFunction_so3_build_R_from_hats`, `so3_apply_R_to_vector.py`, and `so3_apply_RT_to_vector.py`.
 
 The common convention is that `R` maps rotating-frame components to fixed-frame
 components. Thus `v_fixed = R v_rot`, while `R^T` maps fixed-frame components
@@ -102,8 +98,6 @@ file under `nrpy/infrastructures/BHaH/rotation/tests/`.
 
 ## See Also
 
-- Parent: [BHaH](index.md)
 - Depends on: [Geometry And Special-Function Support](../../equations/geometry-and-special-function-support.md)
 - Depends on: [C Function Registry](../../core/c-function-registry.md)
-- See also: [GR Application Wiring](gr-application-wiring.md)
-- See also: [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md)
+- See also: [GR Initial Data And Psi4](gr-initial-data-and-psi4.md)

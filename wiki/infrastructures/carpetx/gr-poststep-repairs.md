@@ -5,11 +5,11 @@
 
 ## Summary
 
-This leaf owns the CarpetX lapse floor and combined conformal
+This leaf covers the CarpetX lapse floor and combined conformal
 determinant/trace projection. Registration emits entries in `CCTK_INITIAL` and
 `ODESolvers_PostStep`. At poststep, lapse flooring comes first; emitted ADM
 BSSN-constraint schedule text names projection as a predecessor. ADM export
-ordering is owned by [GR ADM/BSSN And Matter Coupling](gr-adm-bssn-and-matter-coupling.md).
+ordering is documented in [GR ADM/BSSN And Matter Coupling](gr-adm-bssn-and-matter-coupling.md).
 
 ## Detail
 
@@ -36,11 +36,7 @@ Schedule metadata reads and writes all twelve gridfunctions everywhere. SIMD
 is disabled for the cube-root, all-points kernel. CarpetX schedules BSSN
 constraint diagnostics after poststep projection.
 
-Claim evidence:
-- Claim: CarpetX registers the combined projection in `CCTK_INITIAL` and `ODESolvers_PostStep`, with poststep schedule text after lapse flooring and before BSSN constraints; source registration does not prove fresh-data, recovery, or restart execution.
-- Role: generated evidence
-- Deciding authority: [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/CarpetX/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
-- Corroboration: [floor_the_lapse.py](../../../nrpy/infrastructures/CarpetX/general_relativity/floor_the_lapse.py), `register_CFunction_floor_the_lapse`
+Evidence (generated evidence): `CarpetX/general_relativity/enforce_detgbar_equals_detghat_trAzero.py::register_CFunction_enforce_detgbar_equals_detghat_trAzero`; corroboration: `CarpetX/general_relativity/floor_the_lapse.py::register_CFunction_floor_the_lapse`.
 
 ## Sources
 
@@ -49,8 +45,6 @@ Claim evidence:
 
 ## See Also
 
-- [CarpetX](index.md)
-- [GR ADM/BSSN And Matter Coupling](gr-adm-bssn-and-matter-coupling.md)
-- [GR BSSN RHS, Ricci, Constraints, And Validation](gr-bssn-rhs-ricci-constraints-and-validation.md)
+- See also: [GR ADM/BSSN And Matter Coupling](gr-adm-bssn-and-matter-coupling.md)
 - Contrasts with: [ETLegacy GR Poststep Repairs](../etlegacy/gr-poststep-repairs.md)
 - Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)

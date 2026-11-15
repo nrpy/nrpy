@@ -16,6 +16,8 @@ It is separate from the YBS-MOM momentum-gradient adjustment.
 
 ## Detail
 
+### Incremental RHS Term And Coefficient Mapping
+
 `BSSNRHSs(..., enable_YBS_Gamma_constraint_adjustment=True)` adds
 
 ```text
@@ -45,9 +47,9 @@ restrict explicit timesteps. For example, classical RK4 applied to
 despite continuum decay. Larger parameter values have no supporting bound
 here, and negative values amplify `C^i` wherever `Dbar_j beta^j > 0`.
 
-Evidence (descriptive behavior): [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (47); corroboration: [Dendro rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS Gamma branch
+Evidence (descriptive behavior): `BHaH/general_relativity/rhs_eval.py::register_CFunction_rhs_eval`; `Dendro/general_relativity/rhs_eval.py::register_CFunction_rhs_eval`; `BSSN_RHSs.py::BSSNRHSs.__init__`; `rk_butcher_table_dictionary.py::generate_Butcher_tables`; `arXiv:1205.5111v2` Eq. (47).
 
-Evidence (descriptive behavior): [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS Gamma addition; [rk_butcher_table_dictionary.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/rk_butcher_table_dictionary.py), `generate_Butcher_tables`, classical RK4 coefficients; corroboration: the classical RK4 polynomial `R(z)=1+z+z^2/2+z^3/6+z^4/24` gives the displayed amplification directly
+### Parameter Registration, Gauge Forwarding, And Constraint Propagation
 
 The equation layer uses a plain real SymPy symbol for `YBS_chi`; constructing
 enabled symbolic RHSs does not register a global `CodeParameter`. The BHaH
@@ -71,7 +73,7 @@ connection RHS; forwarding the Boolean alone does not adjust a replacement
 vector. `Frozen` and both first-order covariant variants do not consume that
 RHS and remain unchanged.
 
-Evidence (descriptive behavior): [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`; corroboration: [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), `fCCZ4_gauge_RHSs`, supplies the fCCZ4 connection RHS
+Evidence (descriptive behavior): `BSSN_gauge_RHSs.py::BSSN_gauge_RHSs`; corroboration: `fCCZ4_gauge_RHSs.py::fCCZ4_gauge_RHSs`.
 
 With `Theta = Dbar_j beta^j`, the corresponding constraint propagation has
 the lower-order addition `-YBS_chi*Theta*C^i`:
@@ -89,7 +91,7 @@ so a globally positive `YBS_chi` is not a uniform damping guarantee when
 the current second-order system's principal symbol or high-frequency
 characteristic speeds; it can still change finite-frequency growth.
 
-Evidence (public/scientific contract): [Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066v2](https://arxiv.org/pdf/gr-qc/0209066v2), Eq. (45); [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (47); corroboration: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`; [BSSN_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py), representative jointly enabled `trusted_dict`
+Evidence (scientific/interface requirement): `arXiv:gr-qc/0209066v2`, Eq. (45); `arXiv:1205.5111v2`, Eq. (47); corroboration: `general_relativity/BSSN_RHSs.py::BSSNRHSs`; `general_relativity/BSSN_gauge_RHSs.py::BSSN_gauge_RHSs`.
 
 ## Sources
 
@@ -105,7 +107,6 @@ Evidence (public/scientific contract): [Yo, Baumgarte, and Shapiro, arXiv:gr-qc/
 
 ## See Also
 
-- Parent: [General Relativity](index.md)
 - Depends on: [BSSN Family](bssn-family.md)
 - Contrasts with: [YBS-MOM Timestep-Scaled Momentum Adjustment](ybs-momentum-damping.md)
-- See also: [Fully Covariant Conformal Z4](fccz4.md)
+- See also: [fCCZ4 Formulation](fccz4-formulation.md)

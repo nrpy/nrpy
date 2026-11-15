@@ -20,7 +20,9 @@ function, and asks `Interpolator3d` to handle Psi4 shell interpolation when
 
 ## Detail
 
-The examples gate these services explicitly. `superB_two_blackholes_collide.py`
+### BHaHAHA Horizon Service And Adapter Phases
+
+The examples enable these services explicitly. `superB_two_blackholes_collide.py`
 sets `enable_BHaHAHA`, builds or imports the BHaHAHA library path, registers
 `bhahaha_find_horizons`, registers the uniform-grid interpolator, and emits the
 `Interpolator3d` and `Horizon_finder` service files. The spectroscopy example
@@ -54,15 +56,17 @@ its horizon index, which computes guesses, radial interpolation points, and the
 destination coordinate array. It then waits for `ready_for_interpolation` and
 asks the `Interpolator3d` array to interpolate `BHAHAHA_NUM_INTERP_GFS` values
 with request type `INTERP_REQUEST_BHAHAHA`. After an `InterpBufMsg` returns,
-`process_interpolation_results` unpacks the concatenated point-indexed payload
+`process_interpolation_results` unpacks the concatenated point-indexed sample buffer
 into `dst_data_ptrs`, and the second `bhahaha_find_horizons` phase transforms
 the returned BSSN samples to ADM, calls `bah_find_horizon`, writes BHaHAHA
 diagnostics on success, records failure state when needed, and frees temporary
 metric data.
 
+### Distributed 3D Interpolation And Psi4 Shell Extraction
+
 Distributed interpolation uses the following transport pattern:
 
-| Flow | Broadcast or point-to-point | Payload/ownership |
+| Flow | Broadcast or point-to-point | Message buffer and memory ownership |
 | --- | --- | --- |
 | same-index gridfunctions | point-to-point from `Timestepping[thisIndex]` to `Interpolator3d[thisIndex]` | parameter-marshaled gridfunction arrays |
 | `start_interpolation` coordinates | full `Interpolator3d` broadcast | parameter-marshaled coordinate/request data |
@@ -86,8 +90,8 @@ decomposed.
 `InterpBufMsg` is the only explicit variable-size message in this path. The
 `.ci` message declares `char buf[]`, while the generated C++ class carries
 `char *buf`. Senders allocate it with placement syntax `new(total_bytes)`,
-fill request metadata and bytes, and pass ownership with the entry-method call.
-The root interpolator copies every received buffer into owned storage and then
+fill request metadata and bytes, and pass memory ownership with the entry-method call.
+The root interpolator copies every received buffer into chare-allocated storage and then
 deletes each incoming message. Once all chares report, root manually
 concatenates the copied buffers into a new `InterpBufMsg`. BHaHAHA transfers
 that aggregate to `Horizon_finder[request_id]`, whose receiver unpacks it and
@@ -109,7 +113,7 @@ zero-data completion reduction to `Timestepping(0,0,0)`, which calls
 `mainProxy.timestepping_done()`. When BHaHAHA is enabled, `Main` exits only
 after both completion flags are set.
 
-`register_CFunction_psi4_spinweightm2_decomposition` owns the non-chare C
+`register_CFunction_psi4_spinweightm2_decomposition` registers the non-chare C
 function for shell extraction and mode output. It registers angular shell sizes,
 the number of extraction radii, and the extraction-radius array; initializes a
 `psi4_shell_angular_grid_t`; fills shell points through
@@ -122,15 +126,16 @@ uses request type `INTERP_REQUEST_PSI4`, loops over
 zero, distributes interpolation across the array, unpacks two gridfunctions, and
 calls the same shell decomposition helper.
 
-This page intentionally treats BHaHAHA and Psi4 equations as neighboring
-context only. The equation-side horizon page owns apparent-horizon geometry and
-spin diagnostics; the Psi4 page owns the Weyl scalar and tetrad construction;
-this superB page owns how generated services schedule, transport, unpack, and
-adapt those quantities at runtime.
+[Horizon Diagnostics](../../equations/general-relativity/horizon-diagnostics.md)
+defines apparent-horizon geometry and spin diagnostics, and
+[Psi4 And Tetrads](../../equations/general-relativity/psi4-and-tetrads.md)
+defines the Weyl scalar and quasi-Kinnersley tetrad; the `superB` registrars
+schedule, transport, unpack, and evaluate those quantities across chares at
+runtime.
 
 Validation is asymmetric. Configured CI runs the default collision project,
 which exercises a distributed superB/BHaHAHA program path, but does not assert
-horizon files or interpolation payload values. It builds but does not run the
+horizon files or interpolation buffer values. It builds but does not run the
 spectroscopy project, so Psi4 shell interpolation and decomposition are not
 runtime-proven there. Workflow configuration defines coverage but does not
 establish execution outcomes.
@@ -150,11 +155,6 @@ establish execution outcomes.
 
 ## See Also
 
-- [superB](index.md)
-- [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md)
-- [Chare Entrypoints And Runtime](chare-entrypoints-and-runtime.md)
-- [Diagnostics And Observables](diagnostics-and-observables.md)
-- [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md)
-- [Psi4 And Tetrads](../../equations/general-relativity/psi4-and-tetrads.md)
-- [Horizon Diagnostics](../../equations/general-relativity/horizon-diagnostics.md)
-- [Geometry And Special-Function Support](../../equations/geometry-and-special-function-support.md)
+- Depends on: [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md)
+- Depends on: [Psi4 And Tetrads](../../equations/general-relativity/psi4-and-tetrads.md)
+- Depends on: [Horizon Diagnostics](../../equations/general-relativity/horizon-diagnostics.md)

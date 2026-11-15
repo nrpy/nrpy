@@ -1,212 +1,87 @@
 # Workflows
 
-> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed
+> Procedures for querying, ingesting, reconciling, and checking the NRPy KB. · Status: confirmed
 
 ## Summary
 
-Start from `AGENTS.md`, follow catalog and router paths to compiled leaves, and
-answer from sourced pages. Durable answers are filed back into the wiki when
-they should compound. Maintenance work registers sources first, updates the
-owning leaf, then fixes nearby links, catalog entries, source-map rows, and
-glossary terms.
-Every passage added or revised during that work follows [Language For
-Computational Physicists](computational-physics-language.md) and names the
-equation, quantity, numerical method, file, result, or required behavior
-directly.
+Start at [AGENTS.md](../AGENTS.md), jump directly to the relevant branch or sub-branch `index.md` router, and read only the needed leaf or `###` subsection. State each repository fact in one defining leaf, compute reverse dependencies dynamically with `rg -l -F`, and verify changes with `tools/kb_lint.py` and [Language For Computational Physicists](computational-physics-language.md).
 
 ## Search Order
 
-Use this order for agent navigation:
-
-1. Read [AGENTS.md](../AGENTS.md) for root routes and governance pointers.
-2. Follow branch `index.md` routers from root to the leaf that holds the answer.
-3. For ambiguous or cross-branch queries, search [catalog.md](catalog.md) with
-   `rg -n -i '<term>' wiki/catalog.md` and read only the matching rows.
-4. Read that leaf. In a long leaf, list its headings with
-   `rg -n '^#{2,3} ' <page>` and read only the needed subsection. Open a
-   `See Also` neighbor only when the leaf does not answer the question and the
-   neighbor's label names the missing fact.
-5. Use `rg` over `wiki/` only when catalog and router paths fail.
-6. Use `rg` over source code only to verify or update sourced facts.
-
-Look up rows in [catalog.md](catalog.md), [glossary.md](glossary.md),
-[source-map.md](source-map.md), [contradictions.md](contradictions.md), and
-[raw/SOURCES.md](../raw/SOURCES.md) with
-`rg -n -i -F '<term, path, or CONTR ID>' <file>`; read or edit only the matching
-rows and sections.
+1. Read [AGENTS.md](../AGENTS.md) and follow the direct branch or sub-router link to the target `index.md` (or top-level leaf).
+2. For ambiguous or cross-branch topics, run `rg -n -i -F '<term>' wiki/catalog.md` and read only matching rows.
+3. Read compact leaves (`< 8,000` B) directly in one `read_file` call. On leaves `>= 8,000` B, run `rg -n '^### ' <page>` first and read only the needed `###` line range. Follow a `## See Also` link only when its relation prefix (`Depends on:`, `Implements:`, `Validated by:`, `Example:`, `Contrasts with:`, `See also:`) identifies a missing prerequisite or check.
+4. Search support tables selectively without reading whole files:
+   - Reverse file citations: `rg -l -F '<path>' wiki/`
+   - Exact source or aggregate keys: ``rg -n -F '| `<key>` |' raw/SOURCES.md`` or ``rg -n -F '| `<aggregate>` |' wiki/source-map.md``
+   - Contradiction entries: `rg -n -F '| <CONTR-ID> |' wiki/contradictions.md` plus the matching `### CONTR-XXXX` subsection
+   - Canonical term spellings: `rg -n -i -F '<term>' wiki/glossary.md`
+5. Search `nrpy/` source files directly when verifying or updating code-backed claims.
 
 ## Ingest
 
-1. Register the source in [raw/SOURCES.md](../raw/SOURCES.md) with provenance,
-   `frozen` or `living` status, and ingest state. Add an exact cited-file row
-   only for a path that no aggregate row covers; `tools/kb_lint.py`
-   `_source_registered` lists the aggregate path rules. Exact cited-file rows
-   may abbreviate to source and status per [SCHEMA.md](SCHEMA.md);
-   external-source rows may also carry notes.
-   Do not record checksums, hashes, digests, mtimes, maintenance dates, timestamps,
-   inventory counts, environment tuples, or recorded run and audit results.
-2. Decide which branch owns the compiled facts.
-3. Update the owning leaf in synthesized prose and cite exact files plus stable
-   symbols or headings.
-4. From glossary entities touched by the source, follow existing links one hop
-   and update affected neighbors.
-5. Update a router only when a new leaf or route exists.
-6. Run the checks in [lint/CHECKS.md](lint/CHECKS.md) on the touched subgraph.
-
-## Query
-
-Start with the search order above. Answer from compiled pages whenever they are
-current and sufficiently sourced. If a normal question requires broad tree
-search, repair the relevant router, catalog row, or focused sourced leaf instead
-of making broad search the permanent workflow.
+1. Confirm the source is covered in [raw/SOURCES.md](../raw/SOURCES.md) via an aggregate rule in `tools/kb_lint.py` `_source_registered`, an exact local row (`Source | Status`), or an external row (`Source | Tier | Provenance | Status | Ingest | Notes`, `Notes <= 80` B). Never store hashes, dates, timestamps, `mtime` values, file/page/job counts, or run results.
+2. Select the single defining leaf for the topic under the appropriate branch router.
+3. Synthesize durable facts in direct computational-physics prose, add `<= 300` B `Evidence (<role>):` lines using shortest-unambiguous `` `subpath.py::symbol` `` tags for high-risk claims, and list each cited file or URL once in `## Sources`.
+4. Partition `## Detail` with descriptive `###` headings whenever `## Detail` exceeds `4,000` B (`<= 6,000` B per chunk, `<= 20,000` B per leaf) and keep `1` to `6` prefixed non-parent `## See Also` bullets.
+5. Update the immediate parent `index.md` and [catalog.md](catalog.md) only when adding, moving, renaming, or deleting a leaf; update [source-map.md](source-map.md) only when an aggregate's scope changes.
 
 ## Query Filing
 
-Do not file one-off answers.
+Do not file one-off answers. File durable syntheses only when they resolve recurring cross-module questions, record non-obvious numerical or build constraints, or fix missing router paths:
 
-File durable answers when they span three or more leaves, resolve recurring
-ambiguity, compare subsystems, record a gotcha, or change how future queries
-should route.
-
-Use this filing target:
-
-1. Durable single-topic synthesis updates the existing owning leaf.
-2. Durable narrow new topic creates a leaf under the owning branch.
-3. Durable cross-branch synthesis goes under an existing branch when one branch
-   owns it cleanly.
-4. Durable cross-branch synthesis with no clean owner creates
-   `wiki/syntheses/index.md` plus the first `wiki/syntheses/*.md` leaf in the
-   same change.
-
-When filing, update [catalog.md](catalog.md), source dependencies in
-[source-map.md](source-map.md) when they change, and typed neighbor links. Use
-plain markdown; do not require Obsidian metadata or frontmatter.
+1. Single-topic updates go into the existing defining leaf (splitting into two focused leaves if the leaf would exceed `20,000` B).
+2. Narrow new topics add a leaf under the branch router (`2` to `14` children per `index.md`).
+3. Cross-branch comparisons with a single leaf sit directly under `wiki/` (`> Up: [NRPy Knowledge Base](../AGENTS.md)`, such as [Generated Backend Comparison](generated-backend-comparison.md)); create `wiki/syntheses/index.md` only when `>= 2` cross-branch synthesis leaves exist.
 
 ## Living-Source Change
 
-Review the change dependency-aware: inspect the changed paths, confirm the
-source's [raw/SOURCES.md](../raw/SOURCES.md) row (provenance, status, ingest
-state) still describes it, find the citing pages with
-`rg -l -F '<path>' wiki/` and the [source-map.md](source-map.md) rows with
-`rg -n -F '<path>' wiki/source-map.md`, follow those rows and maintainer
-signals to the affected compiled pages, then re-ingest affected leaves and
-update one-hop neighbors that share changed glossary entities. Mark a page
-`stale` only when it cannot be reconciled immediately. Record durable
-source drift and reconciliation decisions in the affected pages,
-[source-map.md](source-map.md), [contradictions.md](contradictions.md), commit
-messages, or PR descriptions as appropriate.
+1. Inspect the changed code or configuration diff and verify its [raw/SOURCES.md](../raw/SOURCES.md) coverage.
+2. Locate citing wiki pages dynamically with `rg -l -F '<changed_path>' wiki/`.
+3. Run `rg -l -F '<changed_symbol>' wiki/` across other wiki pages **only** when a public function signature, `CodeParameter`, gridfunction group, or mathematical convention changed—never expand 1-hop across generic [glossary.md](glossary.md) terms.
+4. Reconcile the defining leaf; if a neighboring page duplicates the changed claim instead of linking to the defining leaf, replace the duplicate prose with a 1-sentence link. Mark a leaf `stale` (with a `CONTR-XXXX` entry) only when immediate reconciliation is blocked.
 
-## External Source Trust Change
+## External Source And Contradiction Updates
 
-Classify external sources as `background` unless a durable KB claim depends on
-them. Promote an external source to `external-spec` only when the claim needs
-the source as authority and one of these is true:
+Classify external URLs in [raw/SOURCES.md](../raw/SOURCES.md) as `background` unless a durable KB claim depends on a version-pinned paper, tag, or frozen excerpt (`external-spec`). Repository code, tests, generated evidence, and repository docs still take precedence per [SCHEMA.md](SCHEMA.md#citation-rules).
 
-1. A frozen markdown excerpt or version note exists under `raw/source-docs/`.
-2. The upstream source is stable by release/tag or immutable URL without a
-   stored commit hash.
-3. A documented exception explains why the live external source is acceptable.
-
-Any external source trust change requires updates to
-[source-map.md](source-map.md). If the change affects a contested or stale
-claim, also update [contradictions.md](contradictions.md). Repository facts
-still follow the authority order in [SCHEMA.md](SCHEMA.md): code, tests,
-generated evidence, docs, external specs, then background sources.
-
-## Contradiction And Stale Claims
-
-When sources disagree, create or update a structured
-`CONTR-0001`-form row in [contradictions.md](contradictions.md) before changing
-the affected claim's status to `contested`. Record exact claim/status,
-competing sources, authority decision, complete affected-page links,
-page-status rationale, owner/trigger, resolution test, and notes. Put `Claim
-status: contested; contradiction: CONTR-0001.` on every
-active affected page; use `stale` in the same form when applicable.
-
-When a living source has moved and reconciliation cannot finish in the same
-change, mark affected pages `stale`, add or update the contradiction/staleness
-row, and record the blocked reconciliation reason there. When a claim is
-reconciled, update affected pages and close or revise the row in
-[contradictions.md](contradictions.md).
-
-Before closing or removing a row, follow the closure checks in
-[SCHEMA.md](SCHEMA.md#contradiction-contract).
-
-## Claim Adjudication
-
-Follow the [Claim And Evidence Contract](SCHEMA.md#claim-and-evidence-contract).
+When sources conflict or living-source drift cannot be reconciled in the same change, add a 4-column row (`<= 220` B) and `### CONTR-XXXX` subsection in [contradictions.md](contradictions.md) and place `Claim status: contested; contradiction: CONTR-0001.` (or `stale`) with a `#contr-0001` link on every affected leaf. When resolved and verified by its resolution check, reconcile affected leaves, remove all `#contr-*` links, delete the row and subsection, and append the ID to `Retired IDs:`.
 
 ## Safe Reproduction
 
-In the shared repository working tree, run only demonstrably side-effect-free
-scoped checks. Run generators, builds, oracle creation or update, and blanket
-formatters only in an isolated user-owned intended-change worktree or copy with
-no unrelated changes.
-Inspect each command for hardcoded output, deletion, network, installation,
-and external-tool effects first, apply only scoped changes, choose an owned
-output root, use owned disposable cache and output, and impose time/resource
-limits. Retain no incidental output and never clear or overwrite ambient or
-shared cache. No coordination exception permits mutation in the shared working
-tree. Keep commands, working directories, observed assertions, results, limits,
-and cleanup in active review or CI evidence, not as KB snapshots. Network,
-installs, remote CI, and external toolchains need user authority. Never reset
-or clean shared `project/` output.
-
-## Deterministic Checks
-
-Run:
-
-```bash
-python tools/kb_lint.py
-git diff --check
-```
-
-Expected success is exit 0; the linter prints `KB lint passed.` Inventory
-commands are diagnostics, never semantic completeness proof.
-
-## Page Move Or Delete
-
-Move a leaf only when its owning route changes or it is promoted into a router.
-Update parent routers, `Up:` headers, `See Also` links, and glossary references
-in the same change. Delete a page only after no router or leaf links to it.
+In the shared `/work/` checkout, run only side-effect-free scoped checks (`PYTHONDONTWRITEBYTECODE=1 python3 -B tools/kb_lint.py`, `git diff --check`). Run code generators, C/CUDA/Fortran/Charm++ builds, test-oracle updates, and static-analysis wrappers (`Black`, `isort`, `mypy`, `Pylint`, `pydocstyle`, `darglint`) inside an isolated copy with redirected cache and output directories (`HOME`, `XDG_CACHE_HOME`, `PYLINTHOME`, `MYPY_CACHE_DIR`). Inspect scripts for hardcoded paths, deletions, network calls, or package installs before execution; never clean or overwrite shared `project/` outputs or modify `.github/workflows/main.yml` without explicit user authorization.
 
 ## Evidence-First Debugging
 
-Do not propose a root cause or patch for runtime failures until the failure is
-reproduced or explicitly marked unreproduced. If a fix depends on cached,
-optimized, approximate, or generated helpers matching runtime behavior,
-instrument the reproduced case and compare runtime-visible quantities first.
-Durable evidence belongs under `raw/source-docs/` as a frozen source; the wiki
-keeps only the durable lesson.
+Follow the runtime failure inspection rule in [AGENTS.md](../AGENTS.md#agent-working-rules), then record only the durable mathematical or implementation lesson in `wiki/`.
 
-## NRPy Workflow Notes
+## Deterministic And Review Checks
 
-For direct example runs without an editable install, append `.` to
-`PYTHONPATH`. For modified handwritten Python, follow [Static
-Analysis](validation/static-analysis.md), including its isolation, target-safety,
-cache, and classification requirements. Generated trusted `*/tests/*.py` data
-is exempt from per-file analysis, but its handwritten owner is not. [Code Test
-Policy](validation/code-test-policy.md) owns test selection; [Test Oracles And
-Safe Updates](validation/test-oracles-and-safe-updates.md) owns oracle format
-and the two-process update procedure.
-Generated C/CUDA projects, generated thorns, generated Charm++
-projects, and generated JAX projects are normally products of Python
-generators; cite the generator unless a generated artifact is deliberately
-registered as frozen evidence.
+Run before completing KB or Python edits:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -B tools/kb_lint.py
+git diff --check
+```
+
+`tools/kb_lint.py` must exit `0` and print `KB lint passed.` For modified handwritten Python files (including `tools/kb_lint.py`; generated `*/tests/*.py` trusted dictionaries are exempt, though their handwritten callers are not), run `.github/single_file_static_analysis.sh <file.py>` in an isolated copy per [Static Analysis](validation/static-analysis.md), [Code Test Policy](validation/code-test-policy.md), and [Test Oracles And Safe Updates](validation/test-oracles-and-safe-updates.md).
+
+Semantic review checklist:
+- `git status --short` shows only intended changes, with `raw/source-docs/*.md` untouched and no generated `project/`, cache, or scratch report files added.
+- Every added or revised passage satisfies [Language For Computational Physicists](computational-physics-language.md) with zero vague metaphors, no prose restating adjacent table cells, and no template/to-do markers.
+- Cited symbols, headings, and equations exist in the cited files, and each fact lives on a single defining leaf.
 
 ## Sources
 
-- [kb-instructions.md](../raw/source-docs/kb-instructions.md) - section 7.6 for `wiki/workflows.md`
-- [coding_style.md](../coding_style.md) - `## Python Coding Style`, `### Formatting`
-- [original-agents.md](../raw/source-docs/original-agents.md) - historical `## Required Checks`; current `coding_style.md` decides conflicts
+- [AGENTS.md](../AGENTS.md) - root navigation, command conventions, runtime debugging rule, and protected workflow scope
+- [tools/kb_lint.py](../tools/kb_lint.py) - deterministic KB lint checks
+- [coding_style.md](../coding_style.md) - `## Python Coding Style`, `## Static Analysis Configuration`
 - [README.md](../README.md) - `## Contributor Setup`
 
 ## See Also
 
-- Depends on: [KB Page Format](SCHEMA.md)
+- Depends on: [KB Rules](SCHEMA.md)
 - Depends on: [Language For Computational Physicists](computational-physics-language.md)
-- See also: [Lint Checks](lint/CHECKS.md)
-- See also: [Contribution Style And Static Analysis](architecture/contribution-style-and-static-analysis.md)
-- See also: [Static Analysis](validation/static-analysis.md)
+- Validated by: [Static Analysis](validation/static-analysis.md)
 - See also: [Code Test Policy](validation/code-test-policy.md)
 - See also: [Test Oracles And Safe Updates](validation/test-oracles-and-safe-updates.md)

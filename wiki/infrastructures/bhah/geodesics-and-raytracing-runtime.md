@@ -15,6 +15,8 @@ for later numerical-spacetime interpolation.
 
 ## Detail
 
+### Standalone Batched Photon And Massive Geodesic Kernels
+
 The standalone photon entrypoint is `main` in the photon geodesics package. It
 registers window tiling parameters, initializes `commondata`, parses command
 line and parfile input, computes a camera basis with fallback logic for
@@ -28,13 +30,13 @@ diagnostics emitted by an evolving BHaH spacetime.
 registers integration limits and RKF45 controls in `commondata`, allocates the
 Structure-of-Arrays photon state, history, step-size, status, event-lock, and
 result buffers, sets up CUDA streams or CPU equivalents, and uses the
-TimeSlotManager to process active rays by coordinate-time slots. The split
-pipeline stages exchange flat bundles for state, metric, connection, derivative
+TimeSlotManager to process active rays by coordinate-time slots. The split-pipeline
+stages exchange Structure-of-Arrays buffers for state, metric, connection, derivative
 stages, affine parameter, retries, and termination state.
 
 The RKF45 kernels are deliberately split. `interpolation_kernel` evaluates
 spacetime-specialized `g4DD_metric` and `connections` helpers for each ray and
-writes 10 metric and 40 connection components into bundles. `calculate_ode_rhs_kernel`
+writes 10 metric and 40 connection components into Structure-of-Arrays buffers. `calculate_ode_rhs_kernel`
 unpacks coordinates, momenta, metric entries, and Christoffels, evaluates the
 nine photon RHS expressions, and writes the selected RK stage into
 `d_k_bundle`. `rkf45_stage_update` reads the base state, stage derivatives, and
@@ -43,7 +45,7 @@ stage 6, and writes the temporary state for the next stage. The finalization and
 control kernel, event manager, and time-slot helpers then decide which rays
 remain active and which step sizes advance.
 
-`event_detection_manager_kernel` owns geometric termination and result capture.
+`event_detection_manager_kernel` handles geometric termination and result capture.
 It rejects rays whose temporal momentum exceeds `p_t_max`, marks rays outside
 `r_escape`, checks crossings of the immutable global window plane and source
 plane using current and two historical states, calls
@@ -62,18 +64,20 @@ the spacetime-specialized massive-geodesic GSL wrapper casts the GSL parameter
 pointer to `commondata_struct`, evaluates metric and connection locally, calls
 `calculate_ode_rhs_massive`, and returns `GSL_SUCCESS`.
 
+### Numerical-Spacetime Interpolation And Evolution-Time Export
+
 Numerical-spacetime interpolation is separate from analytic metric evaluation.
 `register_CFunction_numerical_interpolation` emits a CPU wrapper that assumes a
 mapped `NumericalTimeWindowManager`; for every ray in a chunk it asks the time
 window for the temporal stencil, performs spherical azimuthal-symmetry spatial
 Lagrange interpolation on every mapped slice, then calls temporal Lagrange
-interpolation at the photon's coordinate time. The time-window manager owns the
+interpolation at the photon's coordinate time. The time-window manager maintains the
 read-only mmap window over a combined numerical-spacetime container and widens
 each slot by temporal interpolation halo plus backward RKF45 lookahead.
 
 The spatial helper `azimuthal_symmetry_spatial_lagrange_interpolation` accepts
 only `Spherical` data on the angular lattice of
-[Hard Requirements For Angular Inner Boundaries](grids-coordinates-reference-metrics-and-boundaries.md#hard-requirements-for-angular-inner-boundaries)
+[Hard Requirements For Angular Inner Boundaries](curvilinear-boundaries-and-stencils.md#hard-requirements-for-angular-inner-boundaries)
 with exactly two stored phi planes: it returns
 `AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL` when
 `Nxx2 != 2` or when the stored azimuths do not differ by pi, so the pi shift is
@@ -100,7 +104,7 @@ generator calls `register_CFunction_numerical_interpolation`, and the error
 affects interpolated metric and connection samples along photon paths, not
 evolved fields.
 
-Evidence (descriptive behavior): [azimuthal_symmetry_spatial_lagrange_interpolation.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/azimuthal_symmetry_spatial_lagrange_interpolation.py), `register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation`; corroboration: [output_raytracing_data.py](../../../nrpy/infrastructures/BHaH/diagnostics/output_raytracing_data.py), module description of stored Cartesian tensor components (no test covers reflected stencil nodes)
+Evidence (descriptive behavior): `BHaH/general_relativity/geodesics/interpolation/azimuthal_symmetry_spatial_lagrange_interpolation.py::register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation`.
 
 Evolution-time raytracing export lives under BHaH diagnostics. When enabled by
 `register_all_diagnostics`, the diagnostics function calls
@@ -134,15 +138,12 @@ and writes a read-only stacked container for downstream interpolation.
 - [numerical_interpolation.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/numerical_interpolation.py) - `register_CFunction_numerical_interpolation`
 - [time_window_manager_numerical.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/time_window_manager_numerical.py) - `time_window_manager_numerical`, `NumericalTimeWindowManager`
 - [azimuthal_symmetry_spatial_lagrange_interpolation.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/azimuthal_symmetry_spatial_lagrange_interpolation.py) - `register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation`, `azimuthal_symmetry_spatial_lagrange_map_extended_node`
-- [xx_tofrom_Cart.py](../../../nrpy/infrastructures/BHaH/xx_tofrom_Cart.py) - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`
 - [output_raytracing_data.py](../../../nrpy/infrastructures/BHaH/diagnostics/output_raytracing_data.py) - `register_CFunction_output_raytracing_data`, `raytracing_data_point_index_from_logical_indices`
 - [combine_raytracing_time_slices.py](../../../nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py) - `Stage1Info`, `Layout`
 - [diagnostics.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics.py) - `register_all_diagnostics`, `enable_raytracing_data_output`
 
 ## See Also
 
-- [BHaH](index.md)
-- [Diagnostics Output And Checkpointing](diagnostics-output-and-checkpointing.md)
-- [Geodesics](../../equations/general-relativity/geodesics.md)
-- [Black Hole Evolution](../../examples/black-hole-evolution.md)
-- Depends on: [Grids, Coordinates, Reference Metrics, And Boundaries](grids-coordinates-reference-metrics-and-boundaries.md)
+- Depends on: [Geodesics](../../equations/general-relativity/geodesics.md)
+- Example: [Standalone GR/BHaH](../../examples/standalone-gr-bhah.md)
+- Depends on: [Curvilinear Boundaries And Stencils](curvilinear-boundaries-and-stencils.md)

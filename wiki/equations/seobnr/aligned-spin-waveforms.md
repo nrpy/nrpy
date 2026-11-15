@@ -5,17 +5,16 @@
 
 ## Summary
 
-This page owns the aligned-spin SEOBNR waveform side: factorized-resummed mode
-ingredients, flux construction, strain-mode construction, and the native
-`(l=2,m=2)` merger-ringdown attachment quantities. It depends on conservative
-Hamiltonian outputs and calibration/remnant quantities but does not own those
-fits.
+The aligned-spin SEOBNR waveform modules build factorized-resummed mode
+ingredients, radiation-reaction flux, strain modes, and native `(l=2,m=2)`
+merger-ringdown attachment quantities from conservative Hamiltonian outputs and
+calibration/remnant fits.
 
 These are current symbolic ingredients associated with the quasi-circular,
 spinning, nonprecessing binary-black-hole SEOBNRv5HM model. The unversioned paper
 landing page is model background; model-wide calibration and accuracy claims
 neither decide this transcription's
-contract nor validate every generated consumer.
+equations nor validate every generated C caller.
 
 ## Detail
 
@@ -49,18 +48,10 @@ the `(3,3)` term adds `fspinimag**2` to the square of the real correction,
 which is the squared magnitude of that complex factor. No other mode has an
 imaginary spin correction.
 
-Claim evidence:
-- Claim: The `(3,3)` mode's PN amplitude factor is the real correction plus
-  `I * fspinimag` (with the equal-mass limit `fspinimag_limit`); `strain()`
-  returns that complex factor directly, and `flux()` adds `fspinimag**2` to the
-  square of the real correction as the squared magnitude of the complex
-  factor. No other mode has an imaginary spin correction.
-- Role: descriptive behavior
-- Deciding authority: [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_waveform_quantities.py), `flux`, `strain`
-- Corroboration: [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_waveform_quantities.py), `trusted_dict`, pins the sampled `fspinimag`/`fspinimag_limit` symbolic values; it does not corroborate the full generated-waveform numerical output (see the [SEOBNR BOB Generated Library](../../infrastructures/bhah/seobnr-bob-generated-library.md) generated-executable consistency check for that separate boundary)
+Evidence (descriptive behavior): `seobnr/SEOBNRv5_aligned_spin_waveform_quantities.py::flux`, `strain`; corroboration: `seobnr/tests/SEOBNRv5_aligned_spin_waveform_quantities.py::trusted_dict`, pins the sampled `fspinimag`/`fspinimag_limit` symbolic values.
 
-`SEOBNRv5_aligned_spin_merger_quantities` owns the native aligned-spin
-merger-ringdown attachment surface for the `(2,2)` mode. It builds symbolic
+`SEOBNRv5_aligned_spin_merger_quantities` constructs the native aligned-spin
+merger-ringdown attachment expressions for the `(2,2)` mode. It builds symbolic
 amplitude and phase outputs `h` and `phi`, then exposes attachment quantities
 `h_t_attach`, `hdot_t_attach`, `hddot_t_attach`, `w_t_attach`, and
 `wdot_t_attach` from NR-fitted expressions and the quasi-normal-mode inputs.
@@ -83,8 +74,7 @@ build generated code, integrate dynamics, or measure waveform accuracy.
 
 ## Sources
 
-- [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_waveform_quantities.py) - `SEOBNRv5_aligned_spin_waveform_quantities`
-- [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_waveform_quantities.py) - `flux`, `strain`
+- [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_waveform_quantities.py) - `SEOBNRv5_aligned_spin_waveform_quantities`; `flux`, `strain`
 - [SEOBNRv5_aligned_spin_merger_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_merger_quantities.py) - `SEOBNRv5_aligned_spin_merger_quantities`
 - [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_waveform_quantities.py) - `trusted_dict`
 - [SEOBNRv5_aligned_spin_merger_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_merger_quantities.py) - `trusted_dict`
@@ -92,9 +82,6 @@ build generated code, integrate dynamics, or measure waveform accuracy.
 
 ## See Also
 
-- [SEOBNR And BOB](index.md)
-- [Aligned-Spin Hamiltonian](aligned-spin-hamiltonian.md)
-- [Aligned-Spin Calibration And Remnant](aligned-spin-calibration-and-remnant.md)
-- [BOB Waveforms](bob-waveforms.md)
-- [Precessing Rotations And Ringdown](precessing-rotations-and-ringdown.md)
-- [Trusted Expression Pipeline](../trusted-expression-pipeline.md)
+- See also: [Aligned-Spin Hamiltonian](aligned-spin-hamiltonian.md)
+- See also: [Aligned-Spin Calibration And Remnant](aligned-spin-calibration-and-remnant.md)
+- Validated by: [Expression Validation Helpers](../../validation/expression-validation-helpers.md)

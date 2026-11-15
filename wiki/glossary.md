@@ -4,136 +4,94 @@
 
 ## Summary
 
-Use these spellings when routing, citing, or adding leaves. Terms link to owning
-pages where a first-pass owner exists.
+Use these spellings when routing, citing, or writing leaves. Terms link to their defining pages where NRPy defines them.
 
 ## Terms
 
 | Term | Meaning |
 | --- | --- |
-| NRPy | Python/SymPy-based symbolic code generation toolkit for numerical relativity and relativistic astrophysics; see [Architecture Overview](architecture/overview.md). |
-| SymPy | Python symbolic algebra package used to build expressions before C generation; see [Symbolic Codegen Lifecycle](architecture/symbolic-codegen-lifecycle.md). |
-| generated C | C emitted by NRPy generators and infrastructure rather than handwritten source; see [Generated Output Boundaries](architecture/generated-output-boundaries.md). |
-| BHaH | NRPy's standalone generated-application infrastructure for BH@H-style workflows; see [BHaH](infrastructures/bhah/index.md). |
-| BH@H | BlackHoles@Home, the single-patch numerical relativity workflow represented by current BHaH examples; see [Black Hole Evolution](examples/black-hole-evolution.md). |
-| BHaHAHA | Apparent-horizon finding library integrated by BHaH black-hole workflows; see [BHaHAHA Horizon Runtime](infrastructures/bhah/bhahaha-horizon-runtime.md). |
+| NRPy | Python/SymPy symbolic code-generation package for numerical relativity and relativistic astrophysics; see [Architecture Overview](architecture/overview.md). |
+| SymPy | Python symbolic algebra package used to build expressions before code emission; see [Architecture Overview](architecture/overview.md). |
+| generated C | C emitted by NRPy codegen and infrastructure modules rather than handwritten source; see [Generated Output Boundaries](architecture/generated-output-boundaries.md). |
+| BHaH | NRPy's standalone generated-application infrastructure for BH@H-style executables and libraries; see [BHaH](infrastructures/bhah/index.md). |
+| BH@H | BlackHoles@Home single- and multi-patch numerical-relativity workflows represented by BHaH examples; see [Standalone GR/BHaH](examples/standalone-gr-bhah.md). |
+| BHaHAHA | Apparent-horizon finding library integrated into BHaH, superB, and Dendro black-hole workflows; see [BHaHAHA](infrastructures/bhah/bhahaha/index.md). |
 | CFunction | Python representation of a generated C function; see [C Function Registry](core/c-function-registry.md). |
 | CFunction_dict | Global registry mapping generated function names to `CFunction` objects; see [C Function Registry](core/c-function-registry.md). |
-| register_CFunction | API that registers generated C functions; see [C Function Registry](core/c-function-registry.md). |
+| register_CFunction | Function that registers generated C functions in `CFunction_dict`; see [C Function Registry](core/c-function-registry.md). |
 | c_codegen | Main SymPy-to-C emission function; see [C Codegen](core/c-codegen.md). |
-| CCodeGen | Codegen class that backs lower-level C code emission; see [C Codegen](core/c-codegen.md). |
-| PyCodeGen | Option object behind JAX-compatible Python assignment emission; see [Python Codegen](core/python-codegen.md). |
+| CCodeGen | Option class configuring lower-level C code emission; see [C Codegen](core/c-codegen.md). |
+| PyCodeGen | Option class configuring JAX-compatible Python assignment emission; see [Python Codegen](core/python-codegen.md). |
 | py_codegen | Main SymPy-to-JAX-compatible Python assignment emission function; see [Python Codegen](core/python-codegen.md). |
 | PyFunction | Python representation of generated Python/JAX-compatible function text; see [Python Function Registry](core/python-function-registry.md). |
 | PyFunction_dict | Global registry mapping generated Python function names to `PyFunction` objects; see [Python Function Registry](core/python-function-registry.md). |
-| CSE | Common-subexpression elimination; NRPy helper pages use this spelling for SymPy CSE preprocessing, postprocessing, and deterministic temporary ordering; see [CSE And Printer Support](core/helpers/cse-and-printer-support.md). |
-| SIMD | Single instruction, multiple data; NRPy helper pages use this spelling for symbolic `*SIMD` rewrites and handwritten SIMD intrinsic macro headers; see [SIMD And Intrinsic Support](core/helpers/simd-and-intrinsic-support.md). |
-| CUDA | NVIDIA GPU programming target used by NRPy helper and infrastructure code for generated kernels, launch calls, and device-oriented macro headers; see [Loop Kernel And Device Helpers](core/helpers/loop-kernel-and-device-helpers.md). |
-| intrinsics | Low-level operation spellings exposed through NRPy's SIMD and CUDA helper headers, not generated project copies; see [SIMD And Intrinsic Support](core/helpers/simd-and-intrinsic-support.md). |
-| clang-format | External formatter invoked by NRPy helper code when formatting generated C-like text; see [Maintenance And Validation Helpers](core/helpers/maintenance-and-validation-helpers.md). |
-| NRPyParameter | Runtime-independent NRPy parameter object; see [Gridfunctions And Parameters](core/gridfunctions-and-parameters.md). |
-| CodeParameter | Code parameter emitted into generated projects; see [Gridfunctions And Parameters](core/gridfunctions-and-parameters.md). |
+| CSE | Common-subexpression elimination preprocessing, postprocessing, and deterministic temporary ordering; see [CSE And Printer Support](core/helpers/cse-and-printer-support.md). |
+| SIMD | Single instruction, multiple data symbolic `*SIMD` rewrites and handwritten intrinsic macro headers; see [SIMD And Intrinsic Support](core/helpers/simd-and-intrinsic-support.md). |
+| CUDA | NVIDIA GPU target for generated kernels, launches, and device intrinsics; see [Loop Kernel And Device Helpers](core/helpers/loop-kernel-and-device-helpers.md). |
+| intrinsics | Low-level vector/device operation macros in NRPy's SIMD and CUDA helper headers; see [SIMD And Intrinsic Support](core/helpers/simd-and-intrinsic-support.md). |
+| clang-format | External C/C++ formatter invoked by `nrpy.helpers.generic.clang_format`; see [Maintenance And Validation Helpers](core/helpers/maintenance-and-validation-helpers.md). |
+| NRPyParameter | Generation-time NRPy parameter object; see [Gridfunctions And Parameters](core/gridfunctions-and-parameters.md). |
+| CodeParameter | Runtime parameter emitted into generated project structs and parfiles; see [Gridfunctions And Parameters](core/gridfunctions-and-parameters.md). |
 | GridFunction | Registered evolved, auxiliary, or diagnostic grid quantity; see [Gridfunctions And Parameters](core/gridfunctions-and-parameters.md). |
-| commondata | Generated data that is common across grids, usually represented through `commondata_struct`; see [Gridfunctions And Parameters](core/gridfunctions-and-parameters.md). |
-| reference metric | Coordinate-system-aware metric context used by symbolic equations and infrastructures; see [Reference Metrics](core/reference-metrics.md). |
-| inner boundary point | Ghost point that `bcstruct_set_up()` maps to a different stored src point; `apply_bcs_inner_only()` and `apply_bcs_inner_only_specific_gfs()` copy the src value with its parity sign (informal names: `apply_inner_bcs`, `apply_inner_boundaries`; `build_apply_inner_bcs_block()` emits an `apply_bcs_inner_only()` call in the ADM initial-data reader); see [Grids, Coordinates, Reference Metrics, And Boundaries](infrastructures/bhah/grids-coordinates-reference-metrics-and-boundaries.md). |
-| indexed expression | Tensor or vector structure built with `nrpy.indexedexp`; see [Indexed Expressions](core/indexed-expressions.md). |
-| ADM | Arnowitt-Deser-Misner 3+1 quantities used by GR conversions and initial-data pages; see [Metric Conversions And Matter](equations/general-relativity/metric-conversions-and-matter.md). |
-| BSSN | Baumgarte-Shapiro-Shibata-Nakamura formulation family implemented by NRPy equation modules; see [BSSN Family](equations/general-relativity/bssn-family.md). |
-| YBS-MOM | Default-disabled direct Yo--Lin--Cao momentum-gradient adjustment shared by BSSN and fCCZ4, with CAHD-style local timestep scaling, a conformal-factor weight `W`, and no new evolved state; distinct from the historical YBS Gamma adjustment. See [YBS-MOM Timestep-Scaled Momentum Adjustment](equations/general-relativity/ybs-momentum-damping.md). |
-| GRHD | General relativistic hydrodynamics equation family for conserved variables, fluxes, sources, speeds, and HLL helpers; see [GRHD](equations/grhd.md). |
+| commondata | Grid-shared runtime data emitted in `commondata_struct` or `Commondata`; see [Gridfunctions And Parameters](core/gridfunctions-and-parameters.md). |
+| reference metric | Coordinate-system metric, scale-factor, and Jacobian quantities in `rfm_dict`; see [Reference Metrics](core/reference-metrics.md). |
+| inner boundary point | Ghost point mapped by `bcstruct_set_up()` to an interior source point with parity sign; see [Curvilinear Boundaries](infrastructures/bhah/curvilinear-boundaries-and-stencils.md). |
+| indexed expression | Tensor or vector array built with `nrpy.indexedexp`; see [Indexed Expressions](core/indexed-expressions.md). |
+| ADM | Arnowitt-Deser-Misner 3+1 spatial metric and extrinsic curvature quantities; see [Metric Conversions And Matter](equations/general-relativity/metric-conversions-and-matter.md). |
+| BSSN | Baumgarte-Shapiro-Shibata-Nakamura reference-metric evolution formulation; see [BSSN Family](equations/general-relativity/bssn-family.md). |
+| YBS-MOM | Opt-in Yo--Lin--Cao momentum-gradient term (`C_YBS_mom`, `W` weight, timestep-scaled); see [YBS-MOM Adjustment](equations/general-relativity/ybs-momentum-damping.md). |
+| GRHD | General relativistic hydrodynamics conserved variables, fluxes, sources, speeds, and HLL helpers; see [GRHD](equations/grhd.md). |
 | TOV | Tolman-Oppenheimer-Volkoff stellar-equilibrium ODE system; see [TOV Equations](equations/tov-equations.md). |
-| Psi4 | Weyl radiation scalar implementation and tetrad construction path; see [Psi4 And Tetrads](equations/general-relativity/psi4-and-tetrads.md). |
-| SEOBNR | Effective-One-Body binary-black-hole dynamics and waveform family under `nrpy/equations/seobnr`; see [SEOBNR And BOB](equations/seobnr/index.md). |
-| BOB | Backwards-One-Body waveform and attachment quantity family; see [BOB Waveforms](equations/seobnr/bob-waveforms.md). |
-| GeneralRFM | General reference-metric support including fisheye coordinate maps; see [Geometry And Special-Function Support](equations/geometry-and-special-function-support.md). |
-| Fishbone-Moncrief | Relativistic torus initial-data model implemented under GR equation modules; see [Fishbone-Moncrief](equations/general-relativity/fishbone-moncrief.md). |
-| spin-weighted spherical harmonic | Special-function helper implemented with the Goldberg formula; see [Geometry And Special-Function Support](equations/geometry-and-special-function-support.md). |
-| Method of Lines | Timestepping pattern used by NRPy infrastructures; ETLegacy registers evolved and RHS groups with the Einstein Toolkit MoL thorn, while BHaH examples use MoL infrastructure for standalone workflows; see [MoL Time Integration](infrastructures/bhah/mol-time-integration.md). |
-| test oracle | Reviewed data or expected artifact used by an executable owner validation path; presence or missing-file creation is not executable coverage; see [Test Oracles And Safe Updates](validation/test-oracles-and-safe-updates.md) and [Code Test Policy](validation/code-test-policy.md). |
-| executable test | Executed assertion or comparison path that checks a durable production contract, distinct from stored oracle data; see [Code Test Policy](validation/code-test-policy.md) and [Test Oracles And Safe Updates](validation/test-oracles-and-safe-updates.md). |
-| trusted values | Generated reference dictionaries used to validate symbolic expressions; see [Trusted Expression Pipeline](equations/trusted-expression-pipeline.md). |
-| trusted string files | Caller-derived text files written or compared by `validate_strings()` for generated string output; see [Maintenance And Validation Helpers](core/helpers/maintenance-and-validation-helpers.md). |
-| trusted expression dictionaries | Generated symbolic-expression dictionaries processed by `validate_expressions`, distinct from trusted string files; see [Trusted Expression Pipeline](equations/trusted-expression-pipeline.md). |
-| Expression validation helpers | Functions that process, compare, generate, or numerically check trusted symbolic-expression dictionaries; see [Expression Validation Helpers](validation/expression-validation-helpers.md). |
-| validate_expressions | Module that processes and compares symbolic-expression validation dictionaries; see [Trusted Expression Pipeline](equations/trusted-expression-pipeline.md). |
-| user cache directory | Platform-specific cache directory used by `cached_functions.py` for `.nrpycache` pickle files; see [Maintenance And Validation Helpers](core/helpers/maintenance-and-validation-helpers.md). |
-| .nrpycache | Hashed pickle cache file suffix used by `cached_functions.py`; see [Maintenance And Validation Helpers](core/helpers/maintenance-and-validation-helpers.md). |
-| PYTHONPATH | Environment variable that can include `.` for direct source-tree example runs; see [Build And Run](architecture/build-and-run.md). |
-| nrpyinline | Installed console script backed by `bin/nrpyinline.py`; it executes trusted embedded Python snippets from a file in one shared namespace and provides no sandbox; see [Build And Run](architecture/build-and-run.md). |
-| Einstein Toolkit | External toolkit targeted by NRPy ETLegacy and CarpetX generators. |
-| ETLegacy | Classic Einstein Toolkit / Carpet-style generated thorn target; see [ETLegacy](infrastructures/etlegacy/index.md). |
-| CarpetX | Newer Einstein Toolkit driver-stack target generated by NRPy examples; see [CarpetX](infrastructures/carpetx/index.md). |
-| superB | Charm++-based distributed-memory infrastructure generated by NRPy examples; see [superB](infrastructures/superb/index.md). |
-| Charm++ | Runtime/toolchain used by superB workflows; see [superB](infrastructures/superb/index.md). |
-| .ci | Charm++ interface file emitted by superB generators; see [Lifecycle And Project Assembly](infrastructures/superb/lifecycle-and-project-assembly.md). |
-| mainchare | Charm++ startup chare role used by superB's generated `Main`; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
-| chare | Charm++ object type used by superB generated runtime components; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
-| readonly | Charm++ startup-published global or handle used by superB for proxy publication; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
-| CProxy_* | Generated Charm++ proxy-handle class family used to invoke chare entry methods; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
-| CkIndex_* | Generated Charm++ entry-point index family used in callbacks and reduction targets; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
-| CkArrayIndex3D | Charm++ three-dimensional array-coordinate wrapper used to address superB `Timestepping` and `Interpolator3d` elements; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
-| CkReduction | Charm++ reduction API namespace/type family used by superB volume data and completion reductions; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
-| CkReductionMsg | Charm++ callback message used for reduction payloads and CkIO completion callbacks; see [Diagnostics And Observables](infrastructures/superb/diagnostics-and-observables.md). |
-| CkCallback | Charm++ callback wrapper used by superB reductions, checkpoint coordination, and CkIO completion paths; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
-| InterpBufMsg | superB variable-size interpolation message carrying packed BHaHAHA or Psi4 interpolation buffers; see [GR, BHaHAHA, Psi4, And Interpolation](infrastructures/superb/gr-bhahaha-psi4-and-interpolation.md). |
-| CkArrayMap | Charm++ array-placement map abstraction used by superB's optional `RRMap_with_offset`; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
-| PUP | Charm++ pack/unpack serialization mechanism used for migration, checkpointing, and restart contracts; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
-| SDAG | Charm++ structured dagger notation for coordinating asynchronous entry-method control flow; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
-| CkIO | Charm++ parallel I/O library used by superB diagnostic output paths; see [Diagnostics And Observables](infrastructures/superb/diagnostics-and-observables.md). |
-| JAX | Generated Python/JAX infrastructure target used by `sebobv1_jax`; see [JAX](infrastructures/jax/index.md). |
-| Dendro | Generated-application infrastructure for standalone Dendrolib applications. Dendrolib represents spatial AMR with balanced octants and decomposes them into padded `ot::Block` regions for stencil evaluation. NRPy emits complete applications `Dendro_NRPy_BSSN` and `Dendro_NRPy_fCCZ4`; see [Dendro](infrastructures/dendro/index.md) and [Octree Grid, AMR, And Time Stepping](infrastructures/dendro/grid-amr-and-time-stepping.md). |
-| NRPyElliptic | Hyperbolic-relaxation elliptic initial-data solver family spanning equation modules, BHaH workflows, and superB examples; see [NRPyElliptic Workflow](infrastructures/bhah/nrpyelliptic-workflow.md). |
-| SEBOB | SEOBNR-plus-BOB waveform example family (SEBOBv1, SEBOBv2) spanning generated C library and JAX routes; see [SEOBNR BOB Generated Library](infrastructures/bhah/seobnr-bob-generated-library.md). |
-| Kreiss-Oliger | Numerical dissipation scheme applied through `dKOD` finite-difference operators in evolution RHS wiring; see [Finite Difference](core/finite-difference.md) for the stencils and [BSSN Family](equations/general-relativity/bssn-family.md) for the fields dissipated by the shared equation-level helper used by BHaH, Dendro, and fCCZ4. |
-| GRoovy | GRHD evolution code family generated through BHaH matter workflows; see [GRoovy GRHD Runtime](infrastructures/bhah/groovy-grhd-runtime.md). |
-| TOVola | TOV initial-data solver used by matter workflow examples; see [Matter TOV Workflows](examples/matter-tov-workflows.md). |
-| GRHayL | External GRHD library that is a hard generated-project build dependency for GRoovy examples; see [GRoovy GRHD Runtime](infrastructures/bhah/groovy-grhd-runtime.md). |
-| SO(3) | Canonical spelling for the rotation-group helpers (`SO3_rotations.py` symbolic expressions and generated BHaH helper CFunctions); prefer `SO(3)` in prose, `SO3` only in code symbols; see [SO(3) Rotation Helpers](infrastructures/bhah/so3-rotation-helpers.md). |
-
-## Sources
-
-- [README.md](../README.md) - `# NRPy`
-- [README.md](../README.md) - `## Project Families and Example Generators`
-- [README.md](../README.md) - `## What Gets Generated?`
-- [CITATION.md](../CITATION.md) - `# How to Cite NRPy`
-- [CITATION.md](../CITATION.md) - `## Quick reference`
-- [c_function.py](../nrpy/c_function.py) - `CFunction`, `CFunction_dict`, `register_CFunction`.
-- [c_codegen.py](../nrpy/c_codegen.py) - `CCodeGen`, `c_codegen`.
-- [py_codegen.py](../nrpy/py_codegen.py) - `PyCodeGen`, `py_codegen`.
-- [py_function.py](../nrpy/py_function.py) - `PyFunction`, `PyFunction_dict`, `register_PyFunction`.
-- [cse_preprocess_postprocess.py](../nrpy/helpers/cse_preprocess_postprocess.py) - `cse_preprocess`, `cse_postprocess`, `sort_cse_output_deterministically`.
-- [simd.py](../nrpy/helpers/simd.py) - `expr_convert_to_simd_intrins`.
-- [simd_intrinsics.h](../nrpy/helpers/simd_intrinsics.h) - `REAL_SIMD_ARRAY`, `SIMD_WIDTH`.
-- [cuda_intrinsics.h](../nrpy/helpers/cuda_intrinsics.h) - `REAL_CUDA_ARRAY`, `CUDA_WIDTH`.
-- [generic.py](../nrpy/helpers/generic.py) - `clang_format`, `validate_strings`.
-- [cached_functions.py](../nrpy/helpers/cached_functions.py) - `cache_file`, `cached_simplify`.
-- [grid.py](../nrpy/grid.py) - `GridFunction`.
-- [params.py](../nrpy/params.py) - `NRPyParameter`, `CodeParameter`.
-- [reference_metric.py](../nrpy/reference_metric.py) - `ReferenceMetric`.
-- [indexedexp.py](../nrpy/indexedexp.py) - `declarerank1`
-- [validate_expressions.py](../nrpy/validate_expressions/validate_expressions.py) - `process_dictionary_of_expressions`
-- [validate_expressions.py](../nrpy/validate_expressions/validate_expressions.py) - `compare_or_generate_trusted_results`
-- [ADM_to_BSSN.py](../nrpy/equations/general_relativity/ADM_to_BSSN.py) - `ADM_to_BSSN`
-- [GRHD_equations.py](../nrpy/equations/grhd/GRHD_equations.py) - `GRHD_Equations`
-- [TOV_equations.py](../nrpy/equations/tov/TOV_equations.py) - `TOV_Equations`
-- [psi4.py](../nrpy/equations/general_relativity/psi4.py) - `Psi4`
-- [SEOBNRv5_aligned_spin_Hamiltonian.py](../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py) - `SEOBNRv5_aligned_spin_Hamiltonian_quantities`
-- [BOB_aligned_spin_waveform_quantities.py](../nrpy/equations/seobnr/BOB_aligned_spin_waveform_quantities.py) - `BOB_aligned_spin_waveform_quantities`
-- [fisheye.py](../nrpy/equations/generalrfm/fisheye.py) - `GeneralRFMFisheye`
-- [fishbone_moncrief.py](../nrpy/equations/general_relativity/fishbone_moncrief/fishbone_moncrief.py) - `FishboneMoncriefID`
-- [spin_weighted_spherical_harmonics.py](../nrpy/equations/special_functions/spin_weighted_spherical_harmonics.py) - `Y`
-- [main_chare.py](../nrpy/infrastructures/superB/main_chare.py) - `mainchare Main`, readonly proxies, `RRMap_with_offset`.
-- [timestepping_chare.py](../nrpy/infrastructures/superB/timestepping_chare.py) - `CkIndex_Timestepping::report_sums_for_volume`, `CkReduction::sum_double`, CkIO callbacks.
-- [interpolator3d_chare.py](../nrpy/infrastructures/superB/interpolator3d_chare.py) - `InterpBufMsg`, `CkArrayIndex3D`.
-- [CMakeLists.py](../nrpy/infrastructures/Dendro/CMakeLists.py) - explicit generated application source list.
-- [Dendro block.h](https://github.com/paralab/Dendro-5.01/blob/master/include/block.h) - `ot::Block` and balanced-octree decomposition.
-- [Dendro mesh.h](https://github.com/paralab/Dendro-5.01/blob/master/include/mesh.h) - `ot::Mesh` and mesh refinement flags.
-- [Charm++ language manual](https://charm.readthedocs.io/en/v8.0.0/charm%2B%2B/manual.html) - `Charm++ Interface (.ci) Files`, `Execution Model`, readonly variables, reductions, array maps, structured dagger, PUP.
-- [Charm++ and Converse libraries manual](https://charm.readthedocs.io/en/v8.0.0/libraries/manual.html) - `CkIO`, `Using CkIO`, `Parallel Output API`
+| Psi4 | Weyl gravitational-radiation scalar and tetrad construction modules; see [Psi4 And Tetrads](equations/general-relativity/psi4-and-tetrads.md). |
+| SEOBNR | Effective-One-Body binary-black-hole dynamics and waveform modules under `nrpy/equations/seobnr`; see [SEOBNR And BOB](equations/seobnr/index.md). |
+| BOB | Backwards-One-Body merger-ringdown waveform and attachment quantities; see [BOB Waveforms](equations/seobnr/bob-waveforms.md). |
+| GeneralRFM | General reference-metric coordinate maps including fisheye stretching; see [Geometry And Special-Function Support](equations/geometry-and-special-function-support.md). |
+| Fishbone-Moncrief | Relativistic equilibrium torus initial-data model; see [Fishbone-Moncrief](equations/general-relativity/fishbone-moncrief.md). |
+| spin-weighted spherical harmonic | Special-function helper `_s Y_{lm}` implemented via the Goldberg formula; see [Geometry And Special-Function Support](equations/geometry-and-special-function-support.md). |
+| Method of Lines | Spatial-discretization plus ODE-integrator time stepping across BHaH, ETLegacy, superB, and Dendro; see [MoL Time Integration](infrastructures/bhah/mol-time-integration.md). |
+| test oracle | Reviewed reference values or expected generated output checked by an executable test; see [Test Oracles And Safe Updates](validation/test-oracles-and-safe-updates.md). |
+| executable test | Executed assertion or numerical comparison verifying required module behavior; see [Code Test Policy](validation/code-test-policy.md). |
+| trusted values | Reference numerical dictionaries (`trusted_dict`) validating symbolic expressions; see [Expression Validation Helpers](validation/expression-validation-helpers.md). |
+| trusted string files | Caller-named reference text files compared or updated by `validate_strings()`; see [Maintenance And Validation Helpers](core/helpers/maintenance-and-validation-helpers.md). |
+| trusted expression dictionaries | Symbolic-expression reference dictionaries processed by `validate_expressions`; see [Expression Validation Helpers](validation/expression-validation-helpers.md). |
+| Expression validation helpers | Numerical comparison, zero-check, and `trusted_dict` comparison utilities; see [Expression Validation Helpers](validation/expression-validation-helpers.md). |
+| validate_expressions | Module that evaluates and compares symbolic-expression validation dictionaries; see [Expression Validation Helpers](validation/expression-validation-helpers.md). |
+| user cache directory | Platform directory storing `.nrpycache` pickle files for `cached_functions.py`; see [Maintenance And Validation Helpers](core/helpers/maintenance-and-validation-helpers.md). |
+| .nrpycache | Hashed pickle cache file suffix written by `cached_functions.py`; see [Maintenance And Validation Helpers](core/helpers/maintenance-and-validation-helpers.md). |
+| PYTHONPATH | Environment variable (`PYTHONPATH=.`) enabling direct repository module execution; see [Build And Run](architecture/build-and-run.md). |
+| nrpyinline | Console script (`bin/nrpyinline.py`) executing trusted embedded Python blocks in one shared namespace; see [Build And Run](architecture/build-and-run.md). |
+| Einstein Toolkit | External numerical-relativity framework targeted by NRPy ETLegacy and CarpetX thorn generators. |
+| ETLegacy | Classic Einstein Toolkit / Carpet generated-thorn backend; see [ETLegacy](infrastructures/etlegacy/index.md). |
+| CarpetX | AMReX-based Einstein Toolkit generated-thorn backend; see [CarpetX](infrastructures/carpetx/index.md). |
+| superB | Charm++-based distributed-memory multi-patch infrastructure; see [superB](infrastructures/superb/index.md). |
+| Charm++ | Parallel C++ runtime and compiler toolchain used by superB applications; see [superB](infrastructures/superb/index.md). |
+| .ci | Charm++ interface definition file emitted by superB generators; see [superB Project Assembly](infrastructures/superb/lifecycle-and-project-assembly.md). |
+| mainchare | Charm++ startup chare class (`Main`) in superB executables; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
+| chare | Charm++ message-driven object class in superB executables; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
+| readonly | Charm++ startup-broadcast global handle used for proxy publication in superB; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
+| CProxy_* | Generated Charm++ proxy handle class invoking chare entry methods; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
+| CkIndex_* | Generated Charm++ entry-method index namespace used in callbacks and reductions; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
+| CkArrayIndex3D | Charm++ 3D chare-array index addressing `Timestepping` and `Interpolator3d` elements; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
+| CkReduction | Charm++ reduction namespace for volume integrals and completion barriers; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
+| CkReductionMsg | Charm++ message delivering reduced scalar arrays and CkIO callbacks; see [Diagnostics And Observables](infrastructures/superb/diagnostics-and-observables.md). |
+| CkCallback | Charm++ callback descriptor for reductions, checkpoints, and CkIO sessions; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
+| InterpBufMsg | superB Charm++ message carrying BHaHAHA or `Psi4` interpolation buffers; see [GR, BHaHAHA, Psi4, And Interpolation](infrastructures/superb/gr-bhahaha-psi4-and-interpolation.md). |
+| CkArrayMap | Charm++ chare-placement base class used by superB's `RRMap_with_offset`; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
+| PUP | Charm++ pack/unpack serialization interface for migration, checkpointing, and restart; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
+| SDAG | Charm++ structured dagger control-flow blocks inside `.ci` entry methods; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
+| CkIO | Charm++ parallel file-output library used by superB 1D/2D diagnostics; see [Diagnostics And Observables](infrastructures/superb/diagnostics-and-observables.md). |
+| JAX | Python array/JIT library targeted by `nrpy/infrastructures/JAX`; see [JAX](infrastructures/jax/index.md). |
+| Dendro | Standalone octree-AMR C++/MPI backend emitting `Dendro_NRPy_BSSN` and `Dendro_NRPy_fCCZ4` on Dendrolib; see [Dendro](infrastructures/dendro/index.md). |
+| NRPyElliptic | Hyperbolic-relaxation conformally flat elliptic initial-data solver across equations, BHaH, and superB; see [NRPyElliptic Workflow](infrastructures/bhah/nrpyelliptic-workflow.md). |
+| SEBOB | SEOBNR-plus-BOB binary-black-hole waveform generators across BHaH C libraries and JAX; see [SEOBNR BOB Generated Library](infrastructures/bhah/seobnr-bob-generated-library.md). |
+| Kreiss-Oliger | Artificial dissipation via `dKOD` stencils in evolution RHSs; see [Finite Difference](core/finite-difference.md) and [BSSN Family](equations/general-relativity/bssn-family.md). |
+| GRoovy | GRHD evolution executables generated through BHaH matter modules; see [GRoovy GRHD Runtime](infrastructures/bhah/groovy-grhd-runtime.md). |
+| TOVola | Neutron-star TOV initial-data solver integrated into BHaH matter examples; see [Matter TOV Workflows](examples/matter-tov-workflows.md). |
+| GRHayL | External C GRHD library required to build generated GRoovy executables; see [GRoovy GRHD Runtime](infrastructures/bhah/groovy-grhd-runtime.md). |
+| SO(3) | 3D rotation helpers (`SO3_rotations.py`, `BHaH/rotation/`); `SO(3)` in prose, `SO3` in code; see [SO(3) Rotation Helpers](infrastructures/bhah/so3-rotation-helpers.md). |
 
 ## See Also
 
-- [Schema](SCHEMA.md)
-- [Workflows](workflows.md)
-- [Architecture Overview](architecture/overview.md)
+- See also: [KB Rules](SCHEMA.md)
+- See also: [Workflows](workflows.md)
+- See also: [Architecture Overview](architecture/overview.md)

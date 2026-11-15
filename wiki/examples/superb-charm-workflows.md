@@ -20,6 +20,8 @@ project directory; preserve prior output before rerunning.
 
 ## Detail
 
+### Generator Matrix And Chare Decomposition
+
 | Example | Generate | Project | Prerequisites | Build/run shape | Validation status |
 | --- | --- | --- | --- | --- | --- |
 | Two black holes collide | `python -m nrpy.examples.superB_two_blackholes_collide` | `project/superB_two_blackholes_collide/` | Python, Charm++ toolchain, `make`; BHaHAHA library is generated under the project because `enable_BHaHAHA = True` | `make`, then `./charmrun +p4 ./superB_two_blackholes_collide` | CI generates, builds with `make -j2`, and runs `./charmrun +p2 ./superB_two_blackholes_collide` |
@@ -50,20 +52,22 @@ example defaults to spherical coordinates with chares `18 x 2 x 1`. The
 spectroscopy example defaults to `SinhCylindrical` with chares `4 x 1 x 4`.
 The elliptic example defaults to `SinhSpherical` with chares `16 x 2 x 2`.
 
-Communication-map and runtime internals are owned by the superB infrastructure
+Communication-map and runtime internals are documented by the superB infrastructure
 pages. At example level, the important facts are that each generator registers
 `chare_comm_register_C_functions`, CurviBC chare routines, superB MoL routines,
 and `register_CFunction_superB_pup_routines`; copies `superB.h` and
 `superB_pup_function_prototypes.h`; links `-module CkIO`; and emits the
 project Makefile with `CC="charmc"`. These are Charm++ projects, so run them
 through `charmrun` rather than executing a plain standalone binary directly.
-Low-level ownership stays in the infrastructure leaves: build and interface
-rules belong to [superB Lifecycle And Project Assembly](../infrastructures/superb/lifecycle-and-project-assembly.md),
+Low-level details stay in the infrastructure leaves: build and interface
+rules belong to [superB Project Assembly, .ci, And Makefile Emission](../infrastructures/superb/lifecycle-and-project-assembly.md),
 runtime chare/proxy details belong to
 [superB Chare Entry Points And Runtime](../infrastructures/superb/chare-entrypoints-and-runtime.md),
 CkIO and volume-output behavior belongs to
 [superB Diagnostics And Observables](../infrastructures/superb/diagnostics-and-observables.md),
 and CI coverage belongs to [Generated Project CI](../validation/generated-project-ci.md).
+
+### Per-Example Physics And Dependencies
 
 `superB_two_blackholes_collide` is the Charm++ analog of the lightweight
 standalone black-hole evolution example. It evolves Brill-Lindquist initial
@@ -82,8 +86,8 @@ Kreiss-Oliger dissipation, CAKO, SSL, BHaHAHA, and Psi4, and enables Charm++
 checkpointing with `checkpoint_every = 20.0`. Because it registers
 TwoPunctures support, its generated Makefile uses `gsl-config --cflags` and
 `gsl-config --libs`; this is the GSL-backed superB example. It overrides the
-shared `psi^n` initial lapse with `W` for SSL; option semantics are owned by
-[BHaH GR Application Wiring](../infrastructures/bhah/gr-application-wiring.md).
+shared `psi^n` initial lapse with `W` for SSL; option semantics are documented in
+[BHaH GR Evolution And Constraints](../infrastructures/bhah/gr-evolution-and-constraints.md).
 
 `superB_nrpyelliptic_conformally_flat` is the Charm++ analog of the standalone
 NRPyElliptic conformally flat workflow. It uses `SinhSpherical` coordinates,
@@ -112,25 +116,15 @@ infrastructure leaves.
 
 ## Sources
 
-- [superB_two_blackholes_collide.py](../../nrpy/examples/superB_two_blackholes_collide.py) - `project_name`, `CoordSystem`, `Nchare0`, `enable_BHaHAHA`
-- [superB_two_blackholes_collide.py](../../nrpy/examples/superB_two_blackholes_collide.py) - `bhahaha.py`, `register_CFunction_superB_pup_routines`, `output_CFunctions_function_prototypes_and_construct_Makefile`
-- [superB_blackhole_spectroscopy.py](../../nrpy/examples/superB_blackhole_spectroscopy.py) - `--paper`, `project_name`, `enable_charm_checkpointing`, `enable_psi4`, `addl_CFLAGS`
-- [superB_blackhole_spectroscopy.py](../../nrpy/examples/superB_blackhole_spectroscopy.py) - `TwoPunctures`, `BHaHAHA`, `BHaH.read_checkpoint.register_CFunction_read_checkpoint`, `BHaH.write_checkpoint.register_CFunction_write_checkpoint`, `output_CFunctions_function_prototypes_and_construct_Makefile`
-- [superB_nrpyelliptic_conformally_flat.py](../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `project_name`, `--floating_point_precision`, `Nchare0`, `nrpyelliptic_project=True`
-- [superB_nrpyelliptic_conformally_flat.py](../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `get_log10_residual_tolerance`, `post_MoL_step_forward_in_time`, `addl_libraries=["-module CkIO"]`
-- [README.md](../../README.md) - `Prerequisites by Workflow`, `superB / Charm++ Generators`, `What Gets Generated?`; official [Charm++ Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html) - `Compiling the Example`, `Running the Example`
+- [superB_two_blackholes_collide.py](../../nrpy/examples/superB_two_blackholes_collide.py) - `project_name`, `CoordSystem`, `Nchare0`, `enable_BHaHAHA`; `bhahaha.py`, `register_CFunction_superB_pup_routines`, `output_CFunctions_function_prototypes_and_construct_Makefile`
+- [superB_blackhole_spectroscopy.py](../../nrpy/examples/superB_blackhole_spectroscopy.py) - `--paper`, `project_name`, `enable_charm_checkpointing`, `enable_psi4`, `addl_CFLAGS`; `TwoPunctures`, `BHaHAHA`, `BHaH.read_checkpoint.register_CFunction_read_checkpoint`, `BHaH.write_checkpoint.register_CFunction_write_checkpoint`, `output_CFunctions_function_prototypes_and_construct_Makefile`
+- [superB_nrpyelliptic_conformally_flat.py](../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `project_name`, `--floating_point_precision`, `Nchare0`, `nrpyelliptic_project=True`; `get_log10_residual_tolerance`, `post_MoL_step_forward_in_time`, `addl_libraries=["-module CkIO"]`
+- [README.md](../../README.md) - `Prerequisites by Workflow`, `superB / Charm++ Generators`, `What Gets Generated?`
+- [Charm++ Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html) - `Compiling the Example`, `Running the Example`
 - [.github/workflows/main.yml](../../.github/workflows/main.yml) - `charmpp-validation`
 
 ## See Also
 
-- [Examples](index.md)
-- [Elliptic Initial Data](elliptic-initial-data.md)
-- [Black Hole Evolution](black-hole-evolution.md)
-- [superB](../infrastructures/superb/index.md)
-- [Generated Output Boundaries](../architecture/generated-output-boundaries.md)
-- [Generated Project CI](../validation/generated-project-ci.md)
-- Depends on: [superB Lifecycle And Project Assembly](../infrastructures/superb/lifecycle-and-project-assembly.md) - compiled superB assembly summary.
-- Depends on: [superB Chare Entry Points And Runtime](../infrastructures/superb/chare-entrypoints-and-runtime.md) - compiled chare and runtime handle summary.
-- Depends on: [superB Diagnostics And Observables](../infrastructures/superb/diagnostics-and-observables.md) - compiled CkIO and volume-output summary.
-- Depends on: [superB Grids, Boundaries, MoL, And Initial Data](../infrastructures/superb/grids-boundaries-mol-and-initial-data.md) - compiled chare-grid and MoL summary.
-- Depends on: [superB GR, BHaHAHA, Psi4, And Interpolation](../infrastructures/superb/gr-bhahaha-psi4-and-interpolation.md) - compiled service-chare summary.
+- Depends on: [superB](../infrastructures/superb/index.md)
+- Validated by: [Generated Project CI](../validation/generated-project-ci.md)
+- Depends on: [superB Project Assembly, .ci, And Makefile Emission](../infrastructures/superb/lifecycle-and-project-assembly.md) - compiled superB assembly summary.
