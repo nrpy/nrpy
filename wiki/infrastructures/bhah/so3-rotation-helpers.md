@@ -39,11 +39,7 @@ decorator. The other SO(3) helpers remain host-only in both modes. This
 narrow device closure lets the coordinate converters call the required matrix
 and vector operations from a CUDA kernel without changing unrelated helpers.
 
-Claim evidence:
-- Claim: Exactly the matrix builder and the `R`/`R^T` vector helpers emit CUDA host/device definitions and prototypes; the other helpers remain host-only, and OpenMP forms remain undecorated.
-- Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/BHaH/rotation/so3_build_R_from_hats.py`, `so3_apply_R_to_vector.py`, and `so3_apply_RT_to_vector.py` - their public registrars
-- Corroboration: none available; owner doctests and emitted-source inspection are not independent evidence.
+Evidence (descriptive behavior): `nrpy/infrastructures/BHaH/rotation/so3_build_R_from_hats.py`, `so3_apply_R_to_vector.py`, and `so3_apply_RT_to_vector.py`, their public registration functions (owner doctests compare the generated definitions; no compilation or GPU execution is established).
 
 The common convention is that `R` maps rotating-frame components to fixed-frame
 components. Thus `v_fixed = R v_rot`, while `R^T` maps fixed-frame components
@@ -72,12 +68,20 @@ components into destination rotating-basis components.
 
 Each helper registration passes `subdirectory="rotation"` to
 `register_CFunction`, so generated project output places these C functions
-under the generated rotation helper directory. The individual modules validate
-their generated OpenMP strings through `validate_strings` against trusted
-`so3_*__openmp.c` files. The aggregate `register_all.py` script also clears
-`CFunction_dict`, sets `parallelization` to `openmp`, registers all
-helpers, and directly compares each generated `full_function` with its trusted
-file under `nrpy/infrastructures/BHaH/rotation/tests/`.
+under the generated rotation helper directory. Each module validates its
+complete generated OpenMP function against a trusted C file. The aggregate
+`register_all.py` script clears `CFunction_dict`, sets `parallelization` to
+`openmp`, registers all helpers, and compares each complete generated function
+with its trusted file under `nrpy/infrastructures/BHaH/rotation/tests/`.
+
+The axis-angle matrix and unit-vector axis-angle helpers select expected C
+files according to the SymPy printer: SymPy versions before 1.15 use the
+unsuffixed files, while 1.15 and later use `__sympy_1_15.c` files. Both forms
+retain the complete normalization, identity, parallel, and antiparallel
+branches. Exact C comparisons detect changes to those branches; they do not
+compile or execute the functions.
+
+Evidence (descriptive behavior): [register_all.py](../../../nrpy/infrastructures/BHaH/rotation/register_all.py), `__main__`; [so3_axis_angle_to_R.py](../../../nrpy/infrastructures/BHaH/rotation/so3_axis_angle_to_R.py) and [so3_find_nU_and_dphi_from_unit_vectors.py](../../../nrpy/infrastructures/BHaH/rotation/so3_find_nU_and_dphi_from_unit_vectors.py), their `__main__` comparisons against the corresponding complete trusted C files.
 
 ## Sources
 
@@ -92,13 +96,15 @@ file under `nrpy/infrastructures/BHaH/rotation/tests/`.
 - [so3_left_multiply_hats_with_R.py](../../../nrpy/infrastructures/BHaH/rotation/so3_left_multiply_hats_with_R.py) - `register_CFunction_so3_left_multiply_hats_with_R`
 - [so3_find_nU_and_dphi_from_unit_vectors.py](../../../nrpy/infrastructures/BHaH/rotation/so3_find_nU_and_dphi_from_unit_vectors.py) - `register_CFunction_so3_find_nU_and_dphi_from_unit_vectors`
 - [so3_build_R_from_hats_so3_build_R_from_hats__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_build_R_from_hats_so3_build_R_from_hats__openmp.c) - `so3_build_R_from_hats`
-- [so3_axis_angle_to_R_so3_axis_angle_to_R__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_axis_angle_to_R_so3_axis_angle_to_R__openmp.c) - `so3_axis_angle_to_R`
 - [so3_apply_R_to_vector_so3_apply_R_to_vector__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_apply_R_to_vector_so3_apply_R_to_vector__openmp.c) - `so3_apply_R_to_vector`
 - [so3_apply_RT_to_vector_so3_apply_RT_to_vector__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_apply_RT_to_vector_so3_apply_RT_to_vector__openmp.c) - `so3_apply_RT_to_vector`
 - [so3_apply_R_to_tensorDD_so3_apply_R_to_tensorDD__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_apply_R_to_tensorDD_so3_apply_R_to_tensorDD__openmp.c) - `so3_apply_R_to_tensorDD`
 - [so3_relative_R_dst_from_src_so3_relative_R_dst_from_src__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_relative_R_dst_from_src_so3_relative_R_dst_from_src__openmp.c) - `so3_relative_R_dst_from_src`
 - [so3_left_multiply_hats_with_R_so3_left_multiply_hats_with_R__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_left_multiply_hats_with_R_so3_left_multiply_hats_with_R__openmp.c) - `so3_left_multiply_hats_with_R`
+- [so3_axis_angle_to_R_so3_axis_angle_to_R__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_axis_angle_to_R_so3_axis_angle_to_R__openmp.c) - `so3_axis_angle_to_R`
+- [so3_axis_angle_to_R_so3_axis_angle_to_R__openmp__sympy_1_15.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_axis_angle_to_R_so3_axis_angle_to_R__openmp__sympy_1_15.c) - `so3_axis_angle_to_R`
 - [so3_find_nU_and_dphi_from_unit_vectors_so3_find_nU_and_dphi_from_unit_vectors__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_find_nU_and_dphi_from_unit_vectors_so3_find_nU_and_dphi_from_unit_vectors__openmp.c) - `so3_find_nU_and_dphi_from_unit_vectors`
+- [so3_find_nU_and_dphi_from_unit_vectors_so3_find_nU_and_dphi_from_unit_vectors__openmp__sympy_1_15.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_find_nU_and_dphi_from_unit_vectors_so3_find_nU_and_dphi_from_unit_vectors__openmp__sympy_1_15.c) - `so3_find_nU_and_dphi_from_unit_vectors`
 
 ## See Also
 

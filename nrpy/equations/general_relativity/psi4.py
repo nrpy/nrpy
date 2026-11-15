@@ -167,7 +167,7 @@ class Psi4:
                     KUD[p][l] += gammaUU[p][i] * KDD[i][l]
 
         # Step 5.3: Construct trK = gamma^{ij} K_{ij}
-        trK = sp.sympify(0)
+        trK: sp.Expr = sp.sympify(0)
         for i in range(3):
             for j in range(3):
                 trK += gammaUU[i][j] * KDD[i][j]
@@ -218,7 +218,8 @@ class Psi4:
             )
 
         # We split psi_4 into three pieces, to expedite & possibly parallelize C code generation.
-        self.psi4_re = self.psi4_im = sp.sympify(0)
+        self.psi4_re: sp.Expr = sp.sympify(0)
+        self.psi4_im: sp.Expr = sp.sympify(0)
         # First piece:
         for i in range(3):
             for j in range(3):

@@ -19,6 +19,8 @@ of generated modes constrained to match the available NRPy inspiral implementati
 """
 
 # Step P1: Import needed modules:
+from typing import Any, Dict
+
 import sympy as sp
 
 from nrpy.equations.grhd.Min_Max_and_Piecewise_Expressions import (
@@ -67,12 +69,13 @@ class SEOBNRv5_MergerRingdown_Quantities:
         omega_prec_prograde = self.omega_QNM_J_l2_m2 - self.omega_QNM_J_l2_m1
         omega_prec_retrograde = self.omega_QNM_J_l2_mn1 - self.omega_QNM_J_l2_mn2
 
+        nrpyAbs_to_Abs: Dict[Any, Any] = {sp.Function("nrpyAbs"): sp.Abs}
         prograde_part = omega_prec_prograde * coord_greater_bound(
             self.chi_f_dot_L_f, sp.sympify(0)
-        ).subs(sp.Function("nrpyAbs"), sp.Abs)
+        ).subs(nrpyAbs_to_Abs)
         retrograde_part = omega_prec_retrograde * coord_less_bound(
             self.chi_f_dot_L_f, sp.sympify(0)
-        ).subs(sp.Function("nrpyAbs"), sp.Abs)
+        ).subs(nrpyAbs_to_Abs)
         self.omega_prec = prograde_part + retrograde_part
 
         # Step 5: Implement post-merger Euler angles (Eqs. 18-20)

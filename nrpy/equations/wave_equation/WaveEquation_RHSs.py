@@ -66,7 +66,7 @@ class WaveEquation_RHSs:
         else:
             vv = sp.Symbol("vv", real=True)
         self.uu_rhs = vv
-        self.vv_rhs = sp.sympify(0)
+        self.vv_rhs: sp.Expr = sp.sympify(0)
         for i in range(3):
             self.vv_rhs += wavespeed * wavespeed * uu_dDD[i][i]
 

@@ -19,7 +19,7 @@ It is also used in the SEBOB formalism described in Mahesh, McWilliams, and Etie
 """
 
 # Step P1: Import needed modules:
-from typing import Dict, cast
+from typing import Any, Dict, cast
 
 import sympy as sp
 
@@ -107,8 +107,9 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         M = m1 + m2
         self.nu = m1 * m2 / (M**2)
         self.delta = (m1 - m2) / M
+        nrpyAbs_to_Abs: Dict[Any, Any] = {sp.Function("nrpyAbs"): sp.Abs}
         self.noneqcond = coord_greater_bound(self.delta, sp.sympify(1e-14)).subs(
-            sp.Function("nrpyAbs"), sp.Abs
+            nrpyAbs_to_Abs
         )
         self.eqcond = 1 - self.noneqcond
         self.deltainvertible = self.delta * self.noneqcond + 1 * self.eqcond

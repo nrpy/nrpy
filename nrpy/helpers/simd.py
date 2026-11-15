@@ -141,7 +141,7 @@ def DivSIMD_check(a: sp.Symbol, b: sp.Symbol) -> Any:
     return a / b
 
 
-def PowSIMD_check(a: sp.Basic, b: sp.Basic) -> Any:
+def PowSIMD_check(a: sp.Expr, b: sp.Expr) -> Any:
     """
     Perform power operation for sympy expressions.
 
@@ -162,7 +162,7 @@ def SqrtSIMD_check(a: sp.Basic) -> Any:
     return sp.sqrt(a)
 
 
-def CbrtSIMD_check(a: sp.Basic) -> Any:
+def CbrtSIMD_check(a: sp.Expr) -> Any:
     """
     Find the cube root of a sympy expression.
 
@@ -182,7 +182,7 @@ def ExpSIMD_check(a: sp.Basic) -> Any:
     return sp.exp(a)
 
 
-def LogSIMD_check(a: sp.Basic) -> Any:
+def LogSIMD_check(a: sp.Expr) -> Any:
     """
     Find the natural logarithm of a sympy expression.
 
@@ -456,6 +456,7 @@ def expr_convert_to_simd_intrins(
         if func == sp.Pow:
             one = sp.Symbol(prefix + "_Integer_1")
             exponent = lookup_rational(args[1])
+            base = cast(sp.Expr, args[0])
             if exponent in (sp.Rational(1, 2), 0.5):
                 subtree.expr = SqrtSIMD(args[0])
                 subtree.children.pop(1)
@@ -463,16 +464,16 @@ def expr_convert_to_simd_intrins(
                 subtree.expr = DivSIMD(one, SqrtSIMD(args[0]))
                 tree.build(subtree)
             elif exponent in (-sp.Rational(3, 2), -1.5):
-                subtree.expr = DivSIMD(one, SqrtSIMD(args[0]) * args[0])
+                subtree.expr = DivSIMD(one, SqrtSIMD(base) * base)
                 tree.build(subtree)
             elif exponent in (-sp.Rational(5, 2), -2.5):
-                subtree.expr = DivSIMD(one, SqrtSIMD(args[0]) * args[0] * args[0])
+                subtree.expr = DivSIMD(one, SqrtSIMD(base) * base * base)
                 tree.build(subtree)
             elif exponent == sp.Rational(1, 3):
                 subtree.expr = CbrtSIMD(args[0])
                 subtree.children.pop(1)
             elif isinstance(exponent, (sp.Integer, int)):
-                subtree.expr = IntegerPowSIMD(args[0], exponent)
+                subtree.expr = IntegerPowSIMD(args[0], int(exponent))
                 tree.build(subtree)
             else:
                 subtree.expr = PowSIMD(*args)
@@ -870,11 +871,9 @@ def expr_convert_to_simd_intrins(
         )
         tree_diff = ExprTree(expr_diff)
         for subtree in tree_diff.preorder():
-            subexpr = subtree.expr
+            subexpr = cast(sp.Expr, subtree.expr)
             if subexpr.func == sp.Float:
-                if abs(subexpr - sp.Integer(subexpr)) < 1.0e-14 * cast(
-                    sp.Expr, subexpr
-                ):
+                if abs(subexpr - sp.Integer(subexpr)) < 1.0e-14 * subexpr:
                     subtree.expr = sp.Integer(subexpr)
         expr_diff = tree_diff.reconstruct()
 

@@ -46,7 +46,7 @@ def compute_smallb4U(
     :return: Comoving magnetic four-vector.
     """
     g4DD = ADM_to_g4DD(gammaDD, betaU, alpha)
-    u_dot_B = sp.sympify(0)
+    u_dot_B: sp.Expr = sp.sympify(0)
     for i in range(3):
         for mu in range(4):
             u_dot_B += g4DD[i + 1][mu] * u4U[mu] * BmagU[i]
@@ -76,7 +76,7 @@ def compute_smallb2(
     :return: Magnetic scalar b^mu b_mu.
     """
     g4DD = ADM_to_g4DD(gammaDD, betaU, alpha)
-    smallb2 = sp.sympify(0)
+    smallb2: sp.Expr = sp.sympify(0)
     for mu in range(4):
         for nu in range(4):
             smallb2 += g4DD[mu][nu] * smallb4U[mu] * smallb4U[nu]

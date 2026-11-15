@@ -213,7 +213,7 @@ def cse_preprocess(
             for subtree in tree.preorder():
                 subexpr = subtree.expr
                 if subexpr.func == sp.Pow:
-                    base, exponent = subexpr.args[0], subexpr.args[1]
+                    base, exponent = subexpr.args[0], cast(sp.Expr, subexpr.args[1])
                     if base == _NegativeOne_:
                         subtree.expr = (
                             _One_ if sp.Integer(exponent) % 2 == 0 else _NegativeOne_

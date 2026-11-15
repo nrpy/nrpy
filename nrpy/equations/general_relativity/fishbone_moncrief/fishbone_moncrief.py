@@ -293,7 +293,7 @@ class FishboneMoncriefID:
             for j in range(3):
                 betaD[i] += gammaDD[i][j] * betaU[j]
 
-        beta2 = sp.sympify(0)
+        beta2: sp.Expr = sp.sympify(0)
         for i in range(3):
             beta2 += betaU[i] * betaD[i]
 
@@ -330,7 +330,7 @@ class FishboneMoncriefID:
             for j in range(4):
                 smallbD[i] += gPhys4DD[i][j] * smallbU[j]
 
-        smallb2 = sp.sympify(0)
+        smallb2: sp.Expr = sp.sympify(0)
         for i in range(4):
             smallb2 += smallbU[i] * smallbD[i]
 

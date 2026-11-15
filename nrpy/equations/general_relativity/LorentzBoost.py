@@ -46,7 +46,7 @@ class LorentzBoost:
         :return: A 4x4 Lorentz transformation matrix in Cartesian coordinates.
         """
         # Step 1: Compute Lorentz factor from 3-velocity
-        vBoost2 = sp.sympify(0)
+        vBoost2: sp.Expr = sp.sympify(0)
         for i in range(3):
             vBoost2 += vBoost[i] ** 2
         gamma_lorentz = 1 / sp.sqrt(1 - vBoost2)

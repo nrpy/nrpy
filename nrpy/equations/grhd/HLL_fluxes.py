@@ -525,7 +525,7 @@ if __name__ == "__main__":
         cs2_l_subsonic,
         cs2_r_subsonic,
     )
-    nrpyAbs = sp.Function("nrpyAbs")
+    nrpyAbs_to_Abs: Dict[Any, Any] = {sp.Function("nrpyAbs"): sp.Abs}
     for prefix, fluxes in (
         ("subsonic_", subsonic_fluxes),
         ("subsonic_exchanged_", exchanged_subsonic_fluxes),
@@ -539,9 +539,9 @@ if __name__ == "__main__":
             ),
             fluxes[:4],
         ):
-            exprs_dict[prefix + name] = flux.subs(nrpyAbs, sp.Abs)
+            exprs_dict[prefix + name] = flux.subs(nrpyAbs_to_Abs)
         exprs_dict[prefix + "Stilde_flux_HLLD"] = [
-            component.subs(nrpyAbs, sp.Abs) for component in fluxes[4]
+            component.subs(nrpyAbs_to_Abs) for component in fluxes[4]
         ]
 
     results_dict = ve.process_dictionary_of_expressions(

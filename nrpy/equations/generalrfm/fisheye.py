@@ -444,10 +444,7 @@ def _G_kernel(r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:
     logcosh_difference = 2 * scaled_min + log1p(
         tail * expm1(-4 * scaled_min) / (sp.Integer(1) + tail)
     )
-    return cast(
-        sp.Expr,
-        (s / (2 * sp.tanh(R / s))) * logcosh_difference,
-    )
+    return (s / (2 * sp.tanh(R / s))) * logcosh_difference
 
 
 def _radius_map_unscaled(
@@ -560,8 +557,8 @@ def _radius_map_unscaled_and_derivs_closed_form(
     aN = a_list[-1]
     rb0 = aN * r
     rb1 = aN
-    rb2 = sp.Integer(0)
-    rb3 = sp.Integer(0)
+    rb2: sp.Expr = sp.Integer(0)
+    rb3: sp.Expr = sp.Integer(0)
 
     for i, (R_i, s_i) in enumerate(zip(R_list, s_list)):
         # delta_a = a[i] - a[i+1]

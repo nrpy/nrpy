@@ -107,7 +107,7 @@ def SphericalGaussian(
     )
 
     # Step 3: Compute r
-    r = sp.sympify(0)
+    r: sp.Expr = sp.sympify(0)
     for i in range(3):
         r += xCart[i] ** 2
     r = sp.sqrt(r)
@@ -178,7 +178,7 @@ def PlaneWave(
     kk_norm_factor = sp.sqrt(kk[0] ** 2 + kk[1] ** 2 + kk[2] ** 2)
 
     # Step 4: Compute k_norm.x
-    dot_product = sp.sympify(0)
+    dot_product: sp.Expr = sp.sympify(0)
     for i in range(3):
         dot_product += kk[i] * xCart[i]
     dot_product /= kk_norm_factor

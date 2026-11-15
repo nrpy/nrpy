@@ -206,8 +206,9 @@ if __name__ == "__main__":
         cplus_tmp_test,
     ) = find_cp_cm(1, g4_faceUU, u4lU, cs2_r_test)
 
-    exprs_dict["cminus"] = cminus_tmp_test.subs(sp.Function("nrpyAbs"), sp.Abs)
-    exprs_dict["cplus"] = cplus_tmp_test.subs(sp.Function("nrpyAbs"), sp.Abs)
+    nrpyAbs_to_Abs: Dict[Any, Any] = {sp.Function("nrpyAbs"): sp.Abs}
+    exprs_dict["cminus"] = cminus_tmp_test.subs(nrpyAbs_to_Abs)
+    exprs_dict["cplus"] = cplus_tmp_test.subs(nrpyAbs_to_Abs)
 
     (
         cmin_tmp_test,
@@ -223,8 +224,8 @@ if __name__ == "__main__":
         cs2_l_test,
     )
 
-    exprs_dict["cmin"] = cmin_tmp_test.subs(sp.Function("nrpyAbs"), sp.Abs)
-    exprs_dict["cmax"] = cmax_tmp_test.subs(sp.Function("nrpyAbs"), sp.Abs)
+    exprs_dict["cmin"] = cmin_tmp_test.subs(nrpyAbs_to_Abs)
+    exprs_dict["cmax"] = cmax_tmp_test.subs(nrpyAbs_to_Abs)
 
     # At the sample values above, every characteristic speed is negative, so
     #   cmax = 0. Repeat on a flat face (alpha = 1, beta^i = 0, gamma_ij = delta_ij)
@@ -269,8 +270,8 @@ if __name__ == "__main__":
             cs2_r_sample,
             cs2_l_sample,
         )
-        exprs_dict[prefix + "cmin"] = cmin_subsonic.subs(sp.Function("nrpyAbs"), sp.Abs)
-        exprs_dict[prefix + "cmax"] = cmax_subsonic.subs(sp.Function("nrpyAbs"), sp.Abs)
+        exprs_dict[prefix + "cmin"] = cmin_subsonic.subs(nrpyAbs_to_Abs)
+        exprs_dict[prefix + "cmax"] = cmax_subsonic.subs(nrpyAbs_to_Abs)
 
     results_dict = ve.process_dictionary_of_expressions(
         exprs_dict, fixed_mpfs_for_free_symbols=True
