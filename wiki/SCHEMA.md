@@ -8,7 +8,7 @@ The NRPy knowledge base separates authoritative sources (`nrpy/`, `coding_style.
 
 ## Volatile Information Policy
 
-Source-manifest rows in [raw/SOURCES.md](../raw/SOURCES.md) record source identity, provenance, status (`living`, `frozen`, or `frozen-historical`), ingest state (`registered`, `partial`, or `ingested`), and—for external URLs—authority tier (`external-spec` or `background`) plus concise notes (`<= 80` B). Add an exact local file row only when no aggregate rule in `tools/kb_lint.py` `_source_registered` covers that path.
+Source-manifest rows in [raw/SOURCES.md](../raw/SOURCES.md) record source identity, provenance, status (`living`, `frozen`, or `frozen-historical`), ingest state (`registered`, `partial`, or `ingested`), and—for external URLs—authority tier (`external-spec` or `background`) plus concise notes (`<= 80` B). Add an exact local file row only when no aggregate row in that file covers the path.
 
 Authored KB files (`AGENTS.md`, `wiki/**/*.md`, and `raw/SOURCES.md`) forbid maintenance or runtime snapshots: no dates, times, timestamps, `mtime` values, commit or file hashes/digests, inventory/file/page/source/job counts, audit/reconciliation/resolution fields, environment tuples, recorded run results, or separate maintenance logs (`wiki/log.md` is retired; Git history records changes). Stable scientific constants, stencil orders, tensor component counts, versioned specification URLs, arXiv identifiers, and code identifiers such as `CoordSystem_hash` remain valid. Preserved files under `raw/source-docs/` remain untouched verbatim snapshots on disk, while their `raw/SOURCES.md` rows obey this policy.
 
@@ -26,7 +26,7 @@ Every table row across `catalog.md`, `examples/example-generator-catalog.md`, `g
 
 ## Page Layout
 
-Normal leaves stay `<= 20,000` B (`MAX_LEAF_BYTES`) and use this exact structure: `# Title`, two-line blockquote (`> One-line scope. · Status: <confirmed|provisional|contested|stale>` and `> Up: [Parent](...)`), `## Summary`, `## Detail`, `## Sources`, and `## See Also`.
+Normal leaves stay `<= 20,000` B and use this exact structure: `# Title`, two-line blockquote (`> One-line scope. · Status: <confirmed|provisional|contested|stale>` and `> Up: [Parent](...)`), `## Summary`, `## Detail`, `## Sources`, and `## See Also`.
 
 - **Subsection partitioning and line bounds**: Whenever `## Detail` exceeds `4,000` B, partition it with one or more `###` headings naming concrete functions, structs, parameters, or equations so no contiguous `## Detail` or `###` chunk exceeds `6,000` B (measured on raw UTF-8 text excluding HTML comments). Keep every `wiki/` line `<= 1,000` B, avoid double blank lines (`\n\n\n`), and never restate table cells in adjacent prose paragraphs.
 - **Parent and neighbor links**: Header `> Up:` is the sole parent-router link (`../AGENTS.md` for leaves directly in `wiki/`, otherwise `index.md`). `## See Also` must hold `1` to `6` non-parent neighbor `- ` bullets (targeting `<= 3` high-signal links, `1` unique link per bullet, no self-links), never duplicating `> Up:`, and every bullet must start with `Depends on:`, `Implements:`, `Validated by:`, `Example:`, `Contrasts with:`, or `See also:`.
@@ -51,7 +51,7 @@ Allowed roles are `descriptive behavior`, `normative rule`, `scientific/interfac
 
 ## Router Rules
 
-Routers (`AGENTS.md` and `wiki/**/index.md`) contain only a title, one-line blockquote, `Page | Go here when...` table, and parent/root links—never `## Detail`, `## Sources`, or standalone implementation facts. Every `wiki/**/index.md` router must link `2` to `14` immediate children (leaves or child `index.md` routers); single-child padding directories are prohibited. `AGENTS.md` may link directly to `wiki/*.md` leaves, branch `wiki/*/index.md` routers, interior `wiki/**/index.md` sub-routers, and support pages, while every normal leaf and `index.md` sub-router must also be linked from its immediate parent router.
+Routers (`AGENTS.md` and `wiki/**/index.md`) contain only a title, one-line blockquote, `Page | Go here when...` table, and parent/root links—never `## Detail`, `## Sources`, or standalone implementation facts. `AGENTS.md` stays `<= 4,800` B. Every `wiki/**/index.md` router must link `2` to `14` immediate children (leaves or child `index.md` routers); single-child padding directories are prohibited. `AGENTS.md` may link directly to `wiki/*.md` leaves, branch `wiki/*/index.md` routers, interior `wiki/**/index.md` sub-routers, and support pages, while every normal leaf and `index.md` sub-router must also be linked from its immediate parent router.
 
 ## Contradiction Rules
 
@@ -63,7 +63,7 @@ Rows stay `<= 220` B with `ID` in `CONTR-0001` form and `Claim status` in `{"con
 
 ## Checker And Frozen Scope
 
-`PYTHONDONTWRITEBYTECODE=1 python3 -B tools/kb_lint.py` (`--all` compatibility alias) enforces links, anchors, router tables/child counts/parent edges, leaf size (`<= 20,000` B), line width (`<= 1,000` B), single blank lines, `###` partitioning (`> 4,000` B `Detail`, `<= 6,000` B raw chunks), `Evidence` roles/syntax/symbol resolution (`<= 300` B, non-consecutive, no local links), unique local and external `Sources` registration, typed non-parent `See Also` bounds (`1..6`), table row and cell widths (`<= 450` B; `<= 240` B `catalog.md` and `example-generator-catalog.md`, `<= 220` B `contradictions.md`, `Meaning <= 180` B `glossary.md`, `<= 80` B external `Notes`), non-duplicate `catalog.md` query words, active-only contradictions (`Retired IDs:`, `<= 1` `confirmed` marker), root `tmp/` exclusion, volatile-data bans, and computational-physics vocabulary across `AGENTS.md`, `wiki/**/*.md`, and `raw/SOURCES.md`. Files under `raw/source-docs/**/*.md` remain immutable verbatim snapshots.
+`PYTHONDONTWRITEBYTECODE=1 python3 -B tools/kb_lint.py` checks only that local links and heading anchors resolve in `AGENTS.md`, `wiki/**/*.md`, and `raw/SOURCES.md` (no wikilinks), that every wiki page is reachable from `AGENTS.md`, and that each backticked source file in an `Evidence (...)` line or `(Ev: ...)` span names exactly one git-tracked file present on disk (the page's `## Sources` links break ties) whose cited `::` symbols appear in it; stage new source files with `git add` before citing them. Every other rule on this page and in [Language For Computational Physicists](computational-physics-language.md) is checked in review, not by the lint. Files under `raw/source-docs/**/*.md` remain immutable verbatim snapshots.
 
 ### Root Planning And Task Files
 
@@ -76,7 +76,7 @@ Generated directories (`project/`, `build/`, `dist/`), caches, binaries, images,
 ## Sources
 
 - [AGENTS.md](../AGENTS.md) - root router, computational-physics prose mandate, and protected-file scope
-- [tools/kb_lint.py](../tools/kb_lint.py) - deterministic structure, size, provenance, volatile-data, and vocabulary checks
+- [tools/kb_lint.py](../tools/kb_lint.py) - link, reachability, and Evidence-citation checks
 
 ## See Also
 

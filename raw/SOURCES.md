@@ -23,7 +23,7 @@
 
 ## Cited Code And Config Sources
 
-Add an exact local path here only when no aggregate rule in `tools/kb_lint.py` `_source_registered` covers it.
+Add an exact local path here only when no aggregate row above covers it.
 
 | Source | Status |
 | --- | --- |

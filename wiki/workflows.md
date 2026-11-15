@@ -20,7 +20,7 @@ Start at [AGENTS.md](../AGENTS.md), jump directly to the relevant branch or sub-
 
 ## Ingest
 
-1. Confirm the source is covered in [raw/SOURCES.md](../raw/SOURCES.md) via an aggregate rule in `tools/kb_lint.py` `_source_registered`, an exact local row (`Source | Status`), or an external row (`Source | Tier | Provenance | Status | Ingest | Notes`, `Notes <= 80` B). Never store hashes, dates, timestamps, `mtime` values, file/page/job counts, or run results.
+1. Confirm the source is covered in [raw/SOURCES.md](../raw/SOURCES.md) via an aggregate row, an exact local row (`Source | Status`), or an external row (`Source | Tier | Provenance | Status | Ingest | Notes`, `Notes <= 80` B). Never store hashes, dates, timestamps, `mtime` values, file/page/job counts, or run results.
 2. Select the single defining leaf for the topic under the appropriate branch router.
 3. Synthesize durable facts in direct computational-physics prose, add `<= 300` B `Evidence (<role>):` lines using shortest-unambiguous `` `subpath.py::symbol` `` tags for high-risk claims, and list each cited file or URL once in `## Sources`.
 4. Partition `## Detail` with descriptive `###` headings whenever `## Detail` exceeds `4,000` B (`<= 6,000` B per chunk, `<= 20,000` B per leaf) and keep `1` to `6` prefixed non-parent `## See Also` bullets.
@@ -68,13 +68,13 @@ git diff --check
 
 Semantic review checklist:
 - `git status --short` shows only intended changes, with `raw/source-docs/*.md` untouched and no generated `project/`, cache, or scratch report files added.
-- Every added or revised passage satisfies [Language For Computational Physicists](computational-physics-language.md) with zero vague metaphors, no prose restating adjacent table cells, and no template/to-do markers.
+- Every added or revised passage satisfies [KB Rules](SCHEMA.md) and [Language For Computational Physicists](computational-physics-language.md) with zero vague metaphors, no prose restating adjacent table cells, and no template/to-do markers.
 - Cited symbols, headings, and equations exist in the cited files, and each fact lives on a single defining leaf.
 
 ## Sources
 
 - [AGENTS.md](../AGENTS.md) - root navigation, command conventions, runtime debugging rule, and protected workflow scope
-- [tools/kb_lint.py](../tools/kb_lint.py) - deterministic KB lint checks
+- [tools/kb_lint.py](../tools/kb_lint.py) - KB link, reachability, and Evidence-citation checks
 - [coding_style.md](../coding_style.md) - `## Python Coding Style`, `## Static Analysis Configuration`
 - [README.md](../README.md) - `## Contributor Setup`
 

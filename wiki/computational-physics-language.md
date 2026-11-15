@@ -17,7 +17,7 @@ State directly what is differentiated, contracted, substituted, registered, gene
 
 ### Translation Table
 
-Choose the specific physical, numerical, or file-level noun that matches the computation (`tools/kb_lint.py` `_check_computational_physics_language` rejects unquoted left-column metaphors in governed prose):
+Choose the specific physical, numerical, or file-level noun that matches the computation:
 
 | Avoid in explanatory prose | Prefer |
 | --- | --- |
@@ -52,12 +52,11 @@ For every new or revised passage:
 3. Omit repeated generic symbolic-versus-runtime disclaimers already covered by [KB Rules](SCHEMA.md#volatile-information-policy); state only module-specific untested paths or failure modes.
 4. Compare recurring terminology with [Glossary](glossary.md) and review meaning rather than performing blind global word replacements.
 
-Evidence (normative rule): `AGENTS.md::Human-Facing Language` and `tools/kb_lint.py::_check_computational_physics_language`; corroboration: NRPy+ scalar-wave and 10-minute overview tutorials.
+Evidence (normative rule): `AGENTS.md::Human-Facing Language`; corroboration: NRPy+ scalar-wave and 10-minute overview tutorials.
 
 ## Sources
 
 - [AGENTS.md](../AGENTS.md) - `## Human-Facing Language`
-- [tools/kb_lint.py](../tools/kb_lint.py) - `_check_computational_physics_language`
 - [NRPy+ 10-Minute Overview](https://github.com/zachetienne/nrpytutorial/blob/master/Tutorial-NRPyPlus_10_Minute_Overview.ipynb) - problem statements, symbolic expressions, tensors, gridfunctions, finite differences, and generated C code
 - [Start-to-Finish Scalar Wave](https://github.com/zachetienne/nrpytutorial/blob/master/Tutorial-Start_to_Finish-ScalarWave.ipynb) - equations, initial data, numerical methods, exact-solution comparison, and convergence validation
 
