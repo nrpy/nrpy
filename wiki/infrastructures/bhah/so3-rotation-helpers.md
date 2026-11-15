@@ -68,12 +68,21 @@ components into destination rotating-basis components.
 
 Each helper registration passes `subdirectory="rotation"` to
 `register_CFunction`, so generated project output places these C functions
-under the generated rotation helper directory. The individual modules validate
-their generated OpenMP strings through `validate_strings` against trusted
-`so3_*__openmp.c` files. The aggregate `register_all.py` script also clears
-`CFunction_dict`, sets `parallelization` to `openmp`, registers all
-helpers, and directly compares each generated `full_function` with its trusted
-file under `nrpy/infrastructures/BHaH/rotation/tests/`.
+under the generated rotation helper directory. Each helper module's `__main__`
+block compares its complete generated OpenMP function with a trusted C file
+through `validate_strings`. The aggregate `register_all.py` script clears
+`CFunction_dict`, sets `parallelization` to `openmp`, registers all helpers,
+and compares each generated `full_function` with its trusted file under
+`nrpy/infrastructures/BHaH/rotation/tests/`.
+
+`so3_axis_angle_to_R` and `so3_find_nU_and_dphi_from_unit_vectors` select their
+trusted C file by the installed SymPy version, because SymPy 1.15 changes the
+term ordering in the printed C expressions: SymPy versions before 1.15 compare
+against the unsuffixed `__openmp.c` files, and SymPy 1.15 and later compare
+against the `__openmp__sympy_1_15.c` files. Both trusted forms contain the
+normalization, identity, parallel, and antiparallel branches described above.
+
+Evidence (descriptive behavior): `register_all.py::sympy_suffix`, `so3_axis_angle_to_R.py::sympy_1_15`, `so3_find_nU_and_dphi_from_unit_vectors.py::sympy_1_15`
 
 ## Sources
 
@@ -88,13 +97,15 @@ file under `nrpy/infrastructures/BHaH/rotation/tests/`.
 - [so3_left_multiply_hats_with_R.py](../../../nrpy/infrastructures/BHaH/rotation/so3_left_multiply_hats_with_R.py) - `register_CFunction_so3_left_multiply_hats_with_R`
 - [so3_find_nU_and_dphi_from_unit_vectors.py](../../../nrpy/infrastructures/BHaH/rotation/so3_find_nU_and_dphi_from_unit_vectors.py) - `register_CFunction_so3_find_nU_and_dphi_from_unit_vectors`
 - [so3_build_R_from_hats_so3_build_R_from_hats__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_build_R_from_hats_so3_build_R_from_hats__openmp.c) - `so3_build_R_from_hats`
-- [so3_axis_angle_to_R_so3_axis_angle_to_R__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_axis_angle_to_R_so3_axis_angle_to_R__openmp.c) - `so3_axis_angle_to_R`
 - [so3_apply_R_to_vector_so3_apply_R_to_vector__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_apply_R_to_vector_so3_apply_R_to_vector__openmp.c) - `so3_apply_R_to_vector`
 - [so3_apply_RT_to_vector_so3_apply_RT_to_vector__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_apply_RT_to_vector_so3_apply_RT_to_vector__openmp.c) - `so3_apply_RT_to_vector`
 - [so3_apply_R_to_tensorDD_so3_apply_R_to_tensorDD__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_apply_R_to_tensorDD_so3_apply_R_to_tensorDD__openmp.c) - `so3_apply_R_to_tensorDD`
 - [so3_relative_R_dst_from_src_so3_relative_R_dst_from_src__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_relative_R_dst_from_src_so3_relative_R_dst_from_src__openmp.c) - `so3_relative_R_dst_from_src`
 - [so3_left_multiply_hats_with_R_so3_left_multiply_hats_with_R__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_left_multiply_hats_with_R_so3_left_multiply_hats_with_R__openmp.c) - `so3_left_multiply_hats_with_R`
+- [so3_axis_angle_to_R_so3_axis_angle_to_R__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_axis_angle_to_R_so3_axis_angle_to_R__openmp.c) - `so3_axis_angle_to_R`
+- [so3_axis_angle_to_R_so3_axis_angle_to_R__openmp__sympy_1_15.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_axis_angle_to_R_so3_axis_angle_to_R__openmp__sympy_1_15.c) - `so3_axis_angle_to_R`
 - [so3_find_nU_and_dphi_from_unit_vectors_so3_find_nU_and_dphi_from_unit_vectors__openmp.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_find_nU_and_dphi_from_unit_vectors_so3_find_nU_and_dphi_from_unit_vectors__openmp.c) - `so3_find_nU_and_dphi_from_unit_vectors`
+- [so3_find_nU_and_dphi_from_unit_vectors_so3_find_nU_and_dphi_from_unit_vectors__openmp__sympy_1_15.c](../../../nrpy/infrastructures/BHaH/rotation/tests/so3_find_nU_and_dphi_from_unit_vectors_so3_find_nU_and_dphi_from_unit_vectors__openmp__sympy_1_15.c) - `so3_find_nU_and_dphi_from_unit_vectors`
 
 ## See Also
 

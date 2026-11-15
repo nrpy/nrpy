@@ -207,7 +207,7 @@ class SO3Expressions:
         :param bU: Second vector.
         :return: Dot product a dot b.
         """
-        out = sp.sympify(0)
+        out: sp.Expr = sp.sympify(0)
         for i in range(3):
             out += aU[i] * bU[i]
         return out

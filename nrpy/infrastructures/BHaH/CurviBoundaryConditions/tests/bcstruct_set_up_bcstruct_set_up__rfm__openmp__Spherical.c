@@ -51,7 +51,7 @@ static void EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(const comm
   //         original coordinate and the eigencoordinate.
   DOUBLE xCart[3]; // where (x,y,z) is output
   {
-    // xx_to_Cart for EigenCoordinate SymTP (orig coord = SinhSymTP):
+    // xx_to_Cart for EigenCoordinate Spherical (orig coord = Spherical):
     DOUBLE xx0 = xx[0][i0];
     DOUBLE xx1 = xx[1][i1];
     DOUBLE xx2 = xx[2][i2];
@@ -59,13 +59,13 @@ static void EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(const comm
      *  Original SymPy expressions:
      *  "[xCart[0] = xx0*sin(xx1)*cos(xx2)]"
      *  "[xCart[1] = xx0*sin(xx1)*sin(xx2)]"
-     *  "[xCart[2] = sqrt(bScale**2 + xx0**2)*cos(xx1)]"
+     *  "[xCart[2] = xx0*cos(xx1)]"
      */
     {
       const REAL tmp0 = xx0 * sin(xx1);
       xCart[0] = tmp0 * cos(xx2);
       xCart[1] = tmp0 * sin(xx2);
-      xCart[2] = sqrt(((bScale) * (bScale)) + ((xx0) * (xx0))) * cos(xx1);
+      xCart[2] = xx0 * cos(xx1);
     }
   }
   DOUBLE Cartx = xCart[0];
@@ -87,22 +87,17 @@ static void EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(const comm
   //                   multiplied by the appropriate parity condition (+1 or -1).
   DOUBLE Cart_to_xx0_inbounds, Cart_to_xx1_inbounds, Cart_to_xx2_inbounds;
 
-  // Cart_to_xx for EigenCoordinate SymTP (orig coord = SinhSymTP)
+  // Cart_to_xx for EigenCoordinate Spherical (orig coord = Spherical)
   /*
    *  Original SymPy expressions:
-   *  "[Cart_to_xx0_inbounds = SQRT1_2*sqrt(Cartx**2 + Carty**2 + Cartz**2 - bScale**2 + sqrt(-4*Cartz**2*bScale**2 + bScale**4 +
-   * 2*bScale**2*(Cartx**2 + Carty**2 + Cartz**2) + (Cartx**2 + Carty**2 + Cartz**2)**2))]"
-   *  "[Cart_to_xx1_inbounds = acos(SQRT1_2*sqrt(1 + (Cartx**2 + Carty**2 + Cartz**2)/bScale**2 - sqrt(-4*Cartz**2*bScale**2 + bScale**4 +
-   * 2*bScale**2*(Cartx**2 + Carty**2 + Cartz**2) + (Cartx**2 + Carty**2 + Cartz**2)**2)/bScale**2)*sign(Cartz))]"
+   *  "[Cart_to_xx0_inbounds = sqrt(Cartx**2 + Carty**2 + Cartz**2)]"
+   *  "[Cart_to_xx1_inbounds = acos(Cartz/sqrt(Cartx**2 + Carty**2 + Cartz**2))]"
    *  "[Cart_to_xx2_inbounds = atan2(Carty, Cartx)]"
    */
   {
-    const REAL tmp1 = ((bScale) * (bScale));
-    const REAL tmp2 = ((Cartx) * (Cartx)) + ((Carty) * (Carty)) + ((Cartz) * (Cartz));
-    const REAL tmp4 = (1.0 / (tmp1));
-    const REAL tmp3 = sqrt(-4 * ((Cartz) * (Cartz)) * tmp1 + ((bScale) * (bScale) * (bScale) * (bScale)) + 2 * tmp1 * tmp2 + ((tmp2) * (tmp2)));
-    Cart_to_xx0_inbounds = SQRT1_2 * sqrt(-tmp1 + tmp2 + tmp3);
-    Cart_to_xx1_inbounds = acos(SQRT1_2 * sqrt(tmp2 * tmp4 - tmp3 * tmp4 + 1) * (((Cartz) > 0) - ((Cartz) < 0)));
+    const REAL tmp0 = sqrt(((Cartx) * (Cartx)) + ((Carty) * (Carty)) + ((Cartz) * (Cartz)));
+    Cart_to_xx0_inbounds = tmp0;
+    Cart_to_xx1_inbounds = acos(Cartz / tmp0);
     Cart_to_xx2_inbounds = atan2(Carty, Cartx);
   }
 
@@ -127,47 +122,40 @@ static void EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(const comm
   // Step 3.a: Compute {x,y,z}Cart_from_xx, as a function of i0,i1,i2
   DOUBLE xCart_from_xx, yCart_from_xx, zCart_from_xx;
   {
-    // xx_to_Cart for Coordinate SinhSymTP):
+    // xx_to_Cart for Coordinate Spherical):
     DOUBLE xx0 = xx[0][i0];
     DOUBLE xx1 = xx[1][i1];
     DOUBLE xx2 = xx[2][i2];
     /*
      *  Original SymPy expressions:
-     *  "[xCart_from_xx = AMAX*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*sin(xx1)*cos(xx2)/(exp(1/SINHWAA) - exp(-1/SINHWAA))]"
-     *  "[yCart_from_xx = AMAX*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*sin(xx1)*sin(xx2)/(exp(1/SINHWAA) - exp(-1/SINHWAA))]"
-     *  "[zCart_from_xx = sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2)*cos(xx1)]"
+     *  "[xCart_from_xx = xx0*sin(xx1)*cos(xx2)]"
+     *  "[yCart_from_xx = xx0*sin(xx1)*sin(xx2)]"
+     *  "[zCart_from_xx = xx0*cos(xx1)]"
      */
-    const REAL tmp0 = (1.0 / (SINHWAA));
-    const REAL tmp1 = exp(tmp0) - exp(-tmp0);
-    const REAL tmp3 = exp(tmp0 * xx0) - exp(-tmp0 * xx0);
-    const REAL tmp4 = AMAX * tmp3 * sin(xx1) / tmp1;
-    xCart_from_xx = tmp4 * cos(xx2);
-    yCart_from_xx = tmp4 * sin(xx2);
-    zCart_from_xx = sqrt(((AMAX) * (AMAX)) * ((tmp3) * (tmp3)) / ((tmp1) * (tmp1)) + ((bScale) * (bScale))) * cos(xx1);
+    const REAL tmp0 = xx0 * sin(xx1);
+    xCart_from_xx = tmp0 * cos(xx2);
+    yCart_from_xx = tmp0 * sin(xx2);
+    zCart_from_xx = xx0 * cos(xx1);
   }
 
   // Step 3.b: Compute {x,y,z}Cart_from_xx_inbounds, as a
   //           function of i0_inbounds,i1_inbounds,i2_inbounds
   DOUBLE xCart_from_xx_inbounds, yCart_from_xx_inbounds, zCart_from_xx_inbounds;
   {
-    // xx_to_Cart_inbounds for Coordinate SinhSymTP):
+    // xx_to_Cart_inbounds for Coordinate Spherical):
     DOUBLE xx0 = xx[0][i0_inbounds];
     DOUBLE xx1 = xx[1][i1_inbounds];
     DOUBLE xx2 = xx[2][i2_inbounds];
     /*
      *  Original SymPy expressions:
-     *  "[xCart_from_xx_inbounds = AMAX*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*sin(xx1)*cos(xx2)/(exp(1/SINHWAA) - exp(-1/SINHWAA))]"
-     *  "[yCart_from_xx_inbounds = AMAX*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*sin(xx1)*sin(xx2)/(exp(1/SINHWAA) - exp(-1/SINHWAA))]"
-     *  "[zCart_from_xx_inbounds = sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2)*cos(xx1)]"
+     *  "[xCart_from_xx_inbounds = xx0*sin(xx1)*cos(xx2)]"
+     *  "[yCart_from_xx_inbounds = xx0*sin(xx1)*sin(xx2)]"
+     *  "[zCart_from_xx_inbounds = xx0*cos(xx1)]"
      */
-    const REAL tmp0 = (1.0 / (SINHWAA));
-    const REAL tmp1 = exp(tmp0) - exp(-tmp0);
-    const REAL tmp3 = exp(tmp0 * xx0) - exp(-tmp0 * xx0);
-    const REAL tmp4 = AMAX * tmp3 * sin(xx1) / tmp1;
-    xCart_from_xx_inbounds = tmp4 * cos(xx2);
-    yCart_from_xx_inbounds = tmp4 * sin(xx2);
-    zCart_from_xx_inbounds = sqrt(((AMAX) * (AMAX)) * ((tmp3) * (tmp3)) / ((tmp1) * (tmp1)) + ((bScale) * (bScale))) * cos(xx1);
+    const REAL tmp0 = xx0 * sin(xx1);
+    xCart_from_xx_inbounds = tmp0 * cos(xx2);
+    yCart_from_xx_inbounds = tmp0 * sin(xx2);
+    zCart_from_xx_inbounds = xx0 * cos(xx1);
   }
 
   // Step 3.c: Compare xCart_from_xx to xCart_from_xx_inbounds;
@@ -178,7 +166,7 @@ static void EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(const comm
       fabs((DOUBLE)(yCart_from_xx - yCart_from_xx_inbounds)) > EPS_REL * norm_factor ||
       fabs((DOUBLE)(zCart_from_xx - zCart_from_xx_inbounds)) > EPS_REL * norm_factor) {
     fprintf(stderr,
-            "Error in SinhSymTP coordinate system: Inner boundary point does not map to grid interior point: ( %.15e %.15e %.15e ) != ( %.15e %.15e "
+            "Error in Spherical coordinate system: Inner boundary point does not map to grid interior point: ( %.15e %.15e %.15e ) != ( %.15e %.15e "
             "%.15e ) | xx: %e %e %e -> %e %e %e | %d %d %d\n",
             (DOUBLE)xCart_from_xx, (DOUBLE)yCart_from_xx, (DOUBLE)zCart_from_xx, (DOUBLE)xCart_from_xx_inbounds, (DOUBLE)yCart_from_xx_inbounds,
             (DOUBLE)zCart_from_xx_inbounds, xx[0][i0], xx[1][i1], xx[2][i2], xx[0][i0_inbounds], xx[1][i1_inbounds], xx[2][i2_inbounds],
@@ -228,141 +216,42 @@ static void set_parity_for_inner_boundary_single_pt(const commondata_struct *res
     /*
      *  Original SymPy expressions:
      *  "[REAL_parity_array[0] = 1]"
-     *  "[REAL_parity_array[1] = AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))*cos(xx1)*cos(xx1_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)*(exp(1/SINHWAA) - exp(-1/SINHWAA))**2) + sqrt(AMAX**2*(exp(xx0/SINHWAA) -
-     * exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2)*sin(xx1)*sin(xx1_inbounds)*sin(xx2)*sin(xx2_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)) + sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2
-     * + bScale**2)*sin(xx1)*sin(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2))]"
-     *  "[REAL_parity_array[2] = AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))*sin(xx2)*sin(xx2_inbounds)*cos(xx1)*cos(xx1_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) -
-     * exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)*(exp(1/SINHWAA) - exp(-1/SINHWAA))**2) +
-     * AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))*cos(xx1)*cos(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) -
-     * exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)*(exp(1/SINHWAA) - exp(-1/SINHWAA))**2) +
-     * sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2)*sin(xx1)*sin(xx1_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2*sin(xx1_inbounds)**2))]"
+     *  "[REAL_parity_array[1] = sin(xx1)*sin(xx1_inbounds)*sin(xx2)*sin(xx2_inbounds) + sin(xx1)*sin(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds) +
+     * cos(xx1)*cos(xx1_inbounds)]"
+     *  "[REAL_parity_array[2] = sin(xx1)*sin(xx1_inbounds) + sin(xx2)*sin(xx2_inbounds)*cos(xx1)*cos(xx1_inbounds) +
+     * cos(xx1)*cos(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds)]"
      *  "[REAL_parity_array[3] = sin(xx2)*sin(xx2_inbounds) + cos(xx2)*cos(xx2_inbounds)]"
-     *  "[REAL_parity_array[4] = (AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))*cos(xx1)*cos(xx1_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)*(exp(1/SINHWAA) - exp(-1/SINHWAA))**2) + sqrt(AMAX**2*(exp(xx0/SINHWAA) -
-     * exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2)*sin(xx1)*sin(xx1_inbounds)*sin(xx2)*sin(xx2_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)) + sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2
-     * + bScale**2)*sin(xx1)*sin(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)))**2]"
-     *  "[REAL_parity_array[5] = (AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))*cos(xx1)*cos(xx1_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)*(exp(1/SINHWAA) - exp(-1/SINHWAA))**2) + sqrt(AMAX**2*(exp(xx0/SINHWAA) -
-     * exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2)*sin(xx1)*sin(xx1_inbounds)*sin(xx2)*sin(xx2_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)) + sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2
-     * + bScale**2)*sin(xx1)*sin(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)))*(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))*sin(xx2)*sin(xx2_inbounds)*cos(xx1)*cos(xx1_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) -
-     * exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)*(exp(1/SINHWAA) - exp(-1/SINHWAA))**2) +
-     * AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))*cos(xx1)*cos(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) -
-     * exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)*(exp(1/SINHWAA) - exp(-1/SINHWAA))**2) +
-     * sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2)*sin(xx1)*sin(xx1_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2*sin(xx1_inbounds)**2)))]"
-     *  "[REAL_parity_array[6] = (sin(xx2)*sin(xx2_inbounds) + cos(xx2)*cos(xx2_inbounds))*(AMAX**2*(exp(xx0/SINHWAA) -
-     * exp(-xx0/SINHWAA))*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))*cos(xx1)*cos(xx1_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) -
-     * exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)*(exp(1/SINHWAA) - exp(-1/SINHWAA))**2) +
-     * sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2)*sin(xx1)*sin(xx1_inbounds)*sin(xx2)*sin(xx2_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)) + sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2
-     * + bScale**2)*sin(xx1)*sin(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) -
-     * exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)))]"
-     *  "[REAL_parity_array[7] = (AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))*sin(xx2)*sin(xx2_inbounds)*cos(xx1)*cos(xx1_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) -
-     * exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)*(exp(1/SINHWAA) - exp(-1/SINHWAA))**2) +
-     * AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))*cos(xx1)*cos(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) -
-     * exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)*(exp(1/SINHWAA) - exp(-1/SINHWAA))**2) +
-     * sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2)*sin(xx1)*sin(xx1_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2*sin(xx1_inbounds)**2)))**2]"
-     *  "[REAL_parity_array[8] = (sin(xx2)*sin(xx2_inbounds) + cos(xx2)*cos(xx2_inbounds))*(AMAX**2*(exp(xx0/SINHWAA) -
-     * exp(-xx0/SINHWAA))*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))*sin(xx2)*sin(xx2_inbounds)*cos(xx1)*cos(xx1_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) -
-     * exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)*(exp(1/SINHWAA) - exp(-1/SINHWAA))**2) +
-     * AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))*cos(xx1)*cos(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) -
-     * exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) -
-     * exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1_inbounds)**2)*(exp(1/SINHWAA) - exp(-1/SINHWAA))**2) +
-     * sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2)*sin(xx1)*sin(xx1_inbounds)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2*sin(xx1)**2)*sqrt(AMAX**2*(exp(xx0_inbounds/SINHWAA) - exp(-xx0_inbounds/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
-     * bScale**2*sin(xx1_inbounds)**2)))]"
+     *  "[REAL_parity_array[4] = (sin(xx1)*sin(xx1_inbounds)*sin(xx2)*sin(xx2_inbounds) + sin(xx1)*sin(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds) +
+     * cos(xx1)*cos(xx1_inbounds))**2]"
+     *  "[REAL_parity_array[5] = (sin(xx1)*sin(xx1_inbounds) + sin(xx2)*sin(xx2_inbounds)*cos(xx1)*cos(xx1_inbounds) +
+     * cos(xx1)*cos(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds))*(sin(xx1)*sin(xx1_inbounds)*sin(xx2)*sin(xx2_inbounds) +
+     * sin(xx1)*sin(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds) + cos(xx1)*cos(xx1_inbounds))]"
+     *  "[REAL_parity_array[6] = (sin(xx2)*sin(xx2_inbounds) + cos(xx2)*cos(xx2_inbounds))*(sin(xx1)*sin(xx1_inbounds)*sin(xx2)*sin(xx2_inbounds) +
+     * sin(xx1)*sin(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds) + cos(xx1)*cos(xx1_inbounds))]"
+     *  "[REAL_parity_array[7] = (sin(xx1)*sin(xx1_inbounds) + sin(xx2)*sin(xx2_inbounds)*cos(xx1)*cos(xx1_inbounds) +
+     * cos(xx1)*cos(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds))**2]"
+     *  "[REAL_parity_array[8] = (sin(xx2)*sin(xx2_inbounds) + cos(xx2)*cos(xx2_inbounds))*(sin(xx1)*sin(xx1_inbounds) +
+     * sin(xx2)*sin(xx2_inbounds)*cos(xx1)*cos(xx1_inbounds) + cos(xx1)*cos(xx1_inbounds)*cos(xx2)*cos(xx2_inbounds))]"
      *  "[REAL_parity_array[9] = (sin(xx2)*sin(xx2_inbounds) + cos(xx2)*cos(xx2_inbounds))**2]"
      */
     {
-      const REAL tmp0 = (1.0 / (SINHWAA));
-      const REAL tmp6 = ((bScale) * (bScale));
-      const REAL tmp7 = sin(xx1);
-      const REAL tmp9 = sin(xx1_inbounds);
-      const REAL tmp13 = sin(xx2) * sin(xx2_inbounds);
-      const REAL tmp15 = cos(xx2) * cos(xx2_inbounds);
-      const REAL tmp5 = ((AMAX) * (AMAX)) / ((exp(tmp0) - exp(-tmp0)) * (exp(tmp0) - exp(-tmp0)));
-      const REAL tmp18 = tmp13 + tmp15;
-      const REAL tmp2 = exp(tmp0 * xx0) - exp(-tmp0 * xx0);
-      const REAL tmp4 = exp(tmp0 * xx0_inbounds) - exp(-tmp0 * xx0_inbounds);
-      const REAL tmp8 = ((tmp2) * (tmp2)) * tmp5;
-      const REAL tmp10 = ((tmp4) * (tmp4)) * tmp5;
-      const REAL tmp11 = 1 / (sqrt(tmp10 + tmp6 * ((tmp9) * (tmp9))) * sqrt(tmp6 * ((tmp7) * (tmp7)) + tmp8));
-      const REAL tmp12 = tmp11 * tmp2 * tmp4 * tmp5 * cos(xx1) * cos(xx1_inbounds);
-      const REAL tmp14 = tmp11 * tmp7 * tmp9 * sqrt(tmp10 + tmp6) * sqrt(tmp6 + tmp8);
-      const REAL tmp16 = tmp12 + tmp13 * tmp14 + tmp14 * tmp15;
-      const REAL tmp17 = tmp12 * tmp13 + tmp12 * tmp15 + tmp14;
+      const REAL tmp0 = cos(xx1) * cos(xx1_inbounds);
+      const REAL tmp1 = sin(xx1) * sin(xx1_inbounds);
+      const REAL tmp2 = sin(xx2) * sin(xx2_inbounds);
+      const REAL tmp3 = cos(xx2) * cos(xx2_inbounds);
+      const REAL tmp4 = tmp0 + tmp1 * tmp2 + tmp1 * tmp3;
+      const REAL tmp5 = tmp0 * tmp2 + tmp0 * tmp3 + tmp1;
+      const REAL tmp6 = tmp2 + tmp3;
       REAL_parity_array[0] = 1;
-      REAL_parity_array[1] = tmp16;
-      REAL_parity_array[2] = tmp17;
-      REAL_parity_array[3] = tmp18;
-      REAL_parity_array[4] = ((tmp16) * (tmp16));
-      REAL_parity_array[5] = tmp16 * tmp17;
-      REAL_parity_array[6] = tmp16 * tmp18;
-      REAL_parity_array[7] = ((tmp17) * (tmp17));
-      REAL_parity_array[8] = tmp17 * tmp18;
-      REAL_parity_array[9] = ((tmp18) * (tmp18));
+      REAL_parity_array[1] = tmp4;
+      REAL_parity_array[2] = tmp5;
+      REAL_parity_array[3] = tmp6;
+      REAL_parity_array[4] = ((tmp4) * (tmp4));
+      REAL_parity_array[5] = tmp4 * tmp5;
+      REAL_parity_array[6] = tmp4 * tmp6;
+      REAL_parity_array[7] = ((tmp5) * (tmp5));
+      REAL_parity_array[8] = tmp5 * tmp6;
+      REAL_parity_array[9] = ((tmp6) * (tmp6));
     }
   }
 
@@ -386,35 +275,9 @@ static void set_parity_for_inner_boundary_single_pt(const commondata_struct *res
  */
 static inline void r_and_partial_xi_partial_r_derivs(const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *r,
                                                      REAL *partial_x0_partial_r, REAL *partial_x1_partial_r, REAL *partial_x2_partial_r) {
-  const REAL AMAX = params->AMAX;
-  const REAL SINHWAA = params->SINHWAA;
-  const REAL bScale = params->bScale;
-
-  const REAL tmp0 = sin(xx1);
-  const REAL tmp2 = (1.0 / (SINHWAA));
-  const REAL tmp9 = cos(xx1);
-  const REAL tmp7 = ((AMAX) * (AMAX)) / ((exp(tmp2) - exp(-tmp2)) * (exp(tmp2) - exp(-tmp2)));
-  const REAL tmp4 = exp(tmp2 * xx0);
-  const REAL tmp5 = exp(-tmp2 * xx0);
-  const REAL tmp6 = tmp4 - tmp5;
-  const REAL tmp8 = ((tmp6) * (tmp6)) * tmp7;
-  const REAL tmp23 = (1.0 / 2.0) * tmp6 * tmp7 * (2 * tmp2 * tmp4 + 2 * tmp2 * tmp5);
-  const REAL tmp11 = ((bScale) * (bScale)) + tmp8;
-  const REAL tmp24 = ((tmp0) * (tmp0)) * tmp23 + tmp23 * ((tmp9) * (tmp9));
-  const REAL tmp12 = tmp11 * ((tmp9) * (tmp9));
-  const REAL tmp15 = sqrt(tmp11);
-  const REAL tmp18 = -tmp0 * tmp11 * tmp9 + tmp0 * tmp8 * tmp9;
-  const REAL tmp13 = ((tmp0) * (tmp0)) * tmp8 + tmp12;
-  const REAL tmp14 = sqrt(tmp13);
-  const REAL tmp19 = pow(tmp13, -3.0 / 2.0);
-  const REAL tmp21 = (1.0 / sqrt(-tmp12 / tmp13 + 1));
-  const REAL tmp16 = (1.0 / (tmp14));
-  const REAL tmp20 = -tmp0 * tmp15 * tmp16 - tmp15 * tmp18 * tmp19 * tmp9;
-  const REAL tmp25 = -tmp15 * tmp19 * tmp24 * tmp9 + tmp16 * tmp23 * tmp9 / tmp15;
-  const REAL tmp26 = tmp21 / (tmp16 * tmp18 * tmp21 * tmp25 - tmp16 * tmp20 * tmp21 * tmp24);
-  *r = tmp14;
-  *partial_x0_partial_r = -tmp20 * tmp26;
-  *partial_x1_partial_r = tmp25 * tmp26;
+  *r = xx0;
+  *partial_x0_partial_r = 1;
+  *partial_x1_partial_r = 0;
   *partial_x2_partial_r = 0;
 } // END FUNCTION: r_and_partial_xi_partial_r_derivs
 
@@ -472,7 +335,7 @@ static inline void r_and_partial_xi_partial_r_derivs(const params_struct *restri
  *     the struct is set only at outer boundary points. This is slightly
  *     wasteful, but only in memory, not in CPU.
  */
-void bcstruct_set_up__rfm__SinhSymTP(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],
+void bcstruct_set_up__rfm__Spherical(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],
                                      bc_struct *restrict bcstruct) {
 #include "set_CodeParameters.h"
   ////////////////////////////////////////
@@ -690,4 +553,4 @@ void bcstruct_set_up__rfm__SinhSymTP(const commondata_struct *restrict commondat
       bcstruct->bc_info.num_pure_outer_boundary_points[which_gz][dirn] = idx2d;
     } // END LOOP over three directions
   } // END LOOP over NGHOSTS ghost zones, from innermost to outermost ghost zones
-} // END FUNCTION: bcstruct_set_up__rfm__SinhSymTP
+} // END FUNCTION: bcstruct_set_up__rfm__Spherical
