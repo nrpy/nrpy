@@ -129,7 +129,9 @@ MATH_IDIOM_EXEMPT_RE = re.compile(
     r"\b(?:apparent-horizon\s+surfaces?|horizon\s+surfaces?|adm\s+surfaces?|"
     r"two-surfaces?|2-surfaces?|coordinate\s+surfaces?|null\s+surfaces?|"
     r"caustic\s+surfaces?|spatial\s+hypersurfaces?|normal\s+bundles?|"
-    r"tangent\s+bundles?|fiber\s+bundles?|tensor\s+contractions?|split-pipelines?|"
+    r"tangent\s+bundles?|fiber\s+bundles?|split-pipelines?|"
+    r"contracts?\s+(?:over\s+)?(?:the|an?|its|both|all|each|every|repeated|paired)\s+"
+    r"(?:[\w-]+\s+){0,2}ind(?:ex(?:es)?|ices)|"
     r"memory\s+owners?(?:hip)?|posix\s+file\s+owners?(?:hip)?|file\s+owners?(?:hip)?|"
     r"distributed\s+subdomain\s+owners?(?:hip)?|subdomain\s+owners?(?:hip)?|"
     r"patch\s+owners?(?:hip)?)\b",
@@ -292,14 +294,6 @@ _LINKS_CACHE: Dict[Path, List[_Link]] = {}
 _REPO_FILES_CACHE: List[str] = []
 
 
-def _clear_file_caches() -> None:
-    """Reset per-run Markdown text, masked-prose, and extracted-link caches."""
-    _READ_CACHE.clear()
-    _PROSE_CACHE.clear()
-    _LINKS_CACHE.clear()
-    _REPO_FILES_CACHE.clear()
-
-
 def _rel(path: Path) -> str:
     """
     Return a repository-relative POSIX path.
@@ -406,6 +400,14 @@ def _line_for_offset(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
+FENCE_OR_HTML_COMMENT_RE = re.compile(
+    r"^[ ]{0,3}`{3,}[^\n]*\n.*?^[ ]{0,3}`{3,}[ \t]*$"
+    r"|^[ ]{0,3}~{3,}[^\n]*\n.*?^[ ]{0,3}~{3,}[ \t]*$"
+    r"|<!--.*?-->",
+    re.DOTALL | re.MULTILINE,
+)
+
+
 def _has_prose_double_blank_line(text: str) -> bool:
     r"""
     Return whether prose outside fenced code blocks and HTML comments has two blank lines.
@@ -419,12 +421,7 @@ def _has_prose_double_blank_line(text: str) -> bool:
     :param text: Raw Markdown text.
     :return: True when prose contains ``\n\n\n``.
     """
-    pattern = (
-        r"^[ ]{0,3}`{3,}[^\n]*\n.*?^[ ]{0,3}`{3,}[ \t]*$"
-        r"|^[ ]{0,3}~{3,}[^\n]*\n.*?^[ ]{0,3}~{3,}[ \t]*$"
-        r"|<!--.*?-->"
-    )
-    without_fences = re.sub(pattern, "X", text, flags=re.DOTALL | re.MULTILINE)
+    without_fences = FENCE_OR_HTML_COMMENT_RE.sub("X", text)
     normalized = re.sub(r"[ \t]+\n", "\n", without_fences)
     return "\n\n\n" in normalized
 
@@ -443,12 +440,7 @@ def _mask_nonprose(text: str) -> str:
     def repl(match: Match[str]) -> str:
         return mask_value(match.group(0))
 
-    pattern = (
-        r"^[ ]{0,3}`{3,}[^\n]*\n.*?^[ ]{0,3}`{3,}[ \t]*$"
-        r"|^[ ]{0,3}~{3,}[^\n]*\n.*?^[ ]{0,3}~{3,}[ \t]*$"
-        r"|<!--.*?-->"
-    )
-    masked = re.sub(pattern, repl, text, flags=re.DOTALL | re.MULTILINE)
+    masked = FENCE_OR_HTML_COMMENT_RE.sub(repl, text)
     result: List[str] = []
     list_contexts: List[Tuple[int, int]] = []
     list_marker_re = re.compile(r"^([ \t]*)(?:[-+*]|\d{1,9}[.)])([ \t]+)")
@@ -569,20 +561,6 @@ def _section_body(text: str, section: str) -> str:
     return text[start:end].strip()
 
 
-def _mask_html_comments(text: str) -> str:
-    """
-    Mask HTML comments with spaces while preserving line breaks and offsets.
-
-    :param text: Raw Markdown text.
-    :return: Text with HTML comments replaced by spaces and newlines.
-    """
-
-    def repl(match: Match[str]) -> str:
-        return "".join("\n" if ch == "\n" else " " for ch in match.group(0))
-
-    return re.sub(r"<!--.*?-->", repl, text, flags=re.DOTALL)
-
-
 def _raw_detail_and_chunks(raw: str, prose: str) -> Tuple[str, List[str]]:
     """
     Return unmasked Detail text (excluding HTML comments) and H3 chunks.
@@ -597,16 +575,18 @@ def _raw_detail_and_chunks(raw: str, prose: str) -> Tuple[str, List[str]]:
     start = match.end()
     next_match = re.search(r"^##\s+", prose[start:], re.MULTILINE)
     end = start + next_match.start() if next_match else len(prose)
-    uncommented = _mask_html_comments(raw)[start:end]
     prose_slice = prose[start:end]
     cuts = [0] + [m.start() for m in re.finditer(r"^###\s+", prose_slice, re.MULTILINE)]
     cuts.append(len(prose_slice))
+    # H3 cuts come from masked prose, so no fence or comment crosses a chunk boundary.
     chunks = [
-        uncommented[cuts[i] : cuts[i + 1]]
-        for i in range(len(cuts) - 1)
-        if uncommented[cuts[i] : cuts[i + 1]].strip()
+        FENCE_OR_HTML_COMMENT_RE.sub(
+            lambda m: "" if m.group(0).startswith("<!--") else m.group(0),
+            raw[start + a : start + b],
+        )
+        for a, b in zip(cuts, cuts[1:])
     ]
-    return uncommented.strip("\n"), chunks
+    return "".join(chunks).strip("\n"), [chunk for chunk in chunks if chunk.strip()]
 
 
 def _path_from_link(source: Path, target: str) -> Tuple[Optional[Path], str]:
@@ -1623,18 +1603,27 @@ def _check_computational_physics_language(
             label = match.group(1).strip()
             return " " if FILENAME_LABEL_RE.fullmatch(label) else label
 
-        masked = _mask_inline_code(_read_prose(path))
-        for line_no, ln in enumerate(masked.splitlines(), start=1):
-            cleaned = re.sub(r"(?<!!)\[([^\]\n]+)\]\(([^)\n]+)\)", keep_prose_label, ln)
-            cleaned = re.sub(r'(?:"[^"\n]+"|\u201c[^\u201d\n]+\u201d)', " ", cleaned)
-            cleaned = MATH_IDIOM_EXEMPT_RE.sub(" ", cleaned)
-            for match in BANNED_METAPHOR_RE.finditer(cleaned):
-                _fail(
-                    failures,
-                    path,
-                    line_no,
-                    f"banned prose metaphor {match.group(0)!r}",
-                )
+        cleaned = _mask_inline_code(_read_prose(path))
+        cleaned = re.sub(
+            r"(?<!!)\[([^\]\n]+)\]\(([^)\n]+)\)", keep_prose_label, cleaned
+        )
+        cleaned = re.sub(r'(?:"[^"\n]+"|\u201c[^\u201d\n]+\u201d)', " ", cleaned)
+        # Exempt phrases may wrap within a paragraph; blank them but keep newlines.
+        cleaned = MATH_IDIOM_EXEMPT_RE.sub(
+            lambda m: (
+                m.group(0)
+                if re.search(r"\n[ \t]*\n", m.group(0))
+                else re.sub(r"[^\n]", " ", m.group(0))
+            ),
+            cleaned,
+        )
+        for match in BANNED_METAPHOR_RE.finditer(cleaned):
+            _fail(
+                failures,
+                path,
+                _line_for_offset(cleaned, match.start()),
+                f"banned prose metaphor {match.group(0)!r}",
+            )
 
 
 def _check_reachability(
@@ -2695,7 +2684,6 @@ def _main() -> int:
     )
     parser.parse_args()
 
-    _clear_file_caches()
     failures: List[str] = []
     files = _iter_md_files()
     pages = _wiki_pages()

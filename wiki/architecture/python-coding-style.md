@@ -23,7 +23,7 @@ Prefer `"""..."""` for multiline text (`r"""..."""` for literal backslashes, `rf
 
 ### `__main__` Runners And Prohibited `import re`
 
-Runnable non-`__init__.py` modules start `if __name__ == "__main__":` with `doctest.testmod()` exiting `1` on failure (followed in equation modules by optional `trusted_dict` checks, keeping test-only imports inside doctests or `__main__`; see [Code Test Policy](../validation/code-test-policy.md)). Raise `ValueError` on invalid inputs and `warnings.warn()` on non-fatal diagnostics.
+Runnable non-test, non-`__init__.py` modules under `nrpy/equations/` should start `if __name__ == "__main__":` with `doctest.testmod()`, printing pass/fail and exiting `1` on failure (followed by optional `trusted_dict` checks); this runner is strongly encouraged in runnable `nrpy/infrastructures/*/*.py` modules and recommended in other runnable modules when useful. Keep test-only imports inside doctests or `__main__` (see [Code Test Policy](../validation/code-test-policy.md)). Raise `ValueError` on invalid inputs and `warnings.warn()` on non-fatal diagnostics.
 
 `import re` is prohibited anywhere under `nrpy/`: use plain `str` methods instead (`coding_style.md` grandfathers named legacy sites until their next substantive edit; repository tools outside `nrpy/` such as `tools/kb_lint.py` are exempt).
 
