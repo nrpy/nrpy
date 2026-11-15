@@ -65,7 +65,7 @@ See [CONTR-0001](../../contradictions.md#contr-0001) for authority, affected
 pages, validation limits, and the executable resolution test; that contradiction
 record supplies the claim evidence.
 
-### Makefile Generation, Compiler Probing, And Sanitizer Targets
+### Makefile Emission, `ADD_SOURCE` Dependencies, And `clean` Rules
 
 `output_CFunctions_function_prototypes_and_construct_Makefile` turns the
 registered `CFunction_dict` into a buildable generated project. It validates

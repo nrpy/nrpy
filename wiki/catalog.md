@@ -6,7 +6,7 @@ Search this table with `rg -n -i -F '<term>' wiki/catalog.md` when router titles
 
 | Page | Scope | Query terms |
 | --- | --- | --- |
-| [Build And Run](architecture/build-and-run.md) | Install, pytest, direct-run setup, and nrpyinline execution. | PYTHONPATH, requirements-dev.txt, nvcc, --cuda, Makefile |
+| [Build And Run](architecture/build-and-run.md) | Install, direct-run setup, backend toolchains, and nrpyinline execution. | PYTHONPATH, requirements-dev.txt, nvcc, --cuda, Makefile |
 | [C And Embedded C Style](architecture/c-and-embedded-c-style.md) | Handwritten C/CUDA/H formatting, Doxygen, and END markers. | clang-format, snake_case, UPPER_SNAKE_CASE, restrict |
 | [Contribution Style And Static Analysis](architecture/contribution-style-and-static-analysis.md) | Commit attribution, coordinate admission, and guard rules. | coding_style.md, Co-authored-by:, single_file_static_analysis.sh |
 | [Generated Output Boundaries](architecture/generated-output-boundaries.md) | Boundary between handwritten NRPy code and generated files. | project/, Makefile, .par, dendro_bssn.py |

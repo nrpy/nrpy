@@ -89,9 +89,10 @@ a save, commit, or rejected draft is not accepted coverage.
 
 Record changed hunks/sections, additions/deletions/renames/metadata, changed evidence,
 open findings, invalidated criteria/checks, and dependencies. Trace callers, imports,
-shared state, generators/products, tests/oracles, docs/links, and KB claims/source-map
-dependents (`rg -l -F '<path>' wiki/`, `rg -n -F '<path>' wiki/source-map.md`)
-until unchanged contracts bound transitive effects. A one-line sign, tolerance,
+shared state, generators/products, tests/oracles, docs/links, and citing KB leaves
+(`rg -l -F '<path>' wiki/`); check aggregate ingest scope with
+``rg -n -F '| `<aggregate>` |' wiki/source-map.md``. Stop where unchanged interfaces
+and required behavior bound further effects. A one-line sign, tolerance,
 claim, prompt rule, or authority change is semantic.
 
 | Change | Follow-up |

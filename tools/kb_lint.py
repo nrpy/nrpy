@@ -189,6 +189,8 @@ def _evidence_tokens(span: str) -> List[Tuple[str, bool]]:
     ...     "Evidence (descriptive behavior): `solver.py::run` (`Ctx::out`); `bad_py::fn`."
     ... )
     [('solver.py::run', False), ('Ctx::out', True), ('bad_py::fn', False)]
+    >>> _evidence_tokens("(Ev: `solver.py::run` (`Ctx::out`); `bad_py::fn`) | `ignored.py`")
+    [('solver.py::run', False), ('Ctx::out', True), ('bad_py::fn', False)]
 
     :param span: Evidence line or ``(Ev: ...)`` substring.
     :return: Tokens in order, flagged when nested inside parentheses.
@@ -207,8 +209,11 @@ def _evidence_tokens(span: str) -> List[Tuple[str, bool]]:
             idx = end
         elif body[idx] == "(":
             depth += 1
-        elif body[idx] == ")" and depth > 0:
-            depth -= 1
+        elif body[idx] == ")":
+            if depth > 0:
+                depth -= 1
+            elif span.startswith("(Ev:"):
+                break
         idx += 1
     return tokens
 
@@ -238,12 +243,34 @@ def _symbol_problem(symbol: str, code_rel: str) -> Optional[str]:
 
 
 def _check_evidence(pages: List[Path], failures: List[str]) -> None:
-    """
+    r"""
     Check that Evidence citations name one git-tracked file and existing symbols.
 
     :param pages: Wiki pages.
     :param failures: Mutable failure list.
     :raises RuntimeError: If ``git ls-files`` fails.
+
+    Doctests:
+    >>> citations = (
+    ...     "| (Ev: `Dendro/solver_context.py` (`Ctx::write_vtu`); `nrpy/missing_file.py::bad_fn`) | `ignored.py` |\n"
+    ...     "| (Ev: `Dendro/solver_context.py` (`Ctx::write_vtu`) and (`Ctx::nonexistent_method`)) |\n"
+    ...     "| (Ev: Eq. (56); `nrpy/c_codegen.py::missing_symbol`) | (Ev: [Paper](https://example.org); `nrpy/missing_file.py`) |\n"
+    ...     "| (Ev: Eq. (56); `nrpy/missing_file.py` |\n"
+    ...     "| ``(Ev: `ignored.py`)`` | (Ev: `nrpy/c_codegen.py::c_codegen`) | `ignored.py` |"
+    ... )
+    >>> class CitationPage(type(WIKI)):
+    ...     def read_text(self, encoding="utf-8"):
+    ...         return citations
+    >>> failures = []
+    >>> _check_evidence([CitationPage(WIKI / "citations.md")], failures)
+    >>> [failure.split(": ", 1)[1] for failure in failures] == [
+    ...     "Evidence file 'nrpy/missing_file.py' is not a git-tracked file on disk",
+    ...     "Evidence symbol 'nonexistent_method' not found in nrpy/infrastructures/Dendro/solver_context.py",
+    ...     "Evidence symbol 'missing_symbol' not found in nrpy/c_codegen.py",
+    ...     "Evidence file 'nrpy/missing_file.py' is not a git-tracked file on disk",
+    ...     "Evidence file 'nrpy/missing_file.py' is not a git-tracked file on disk",
+    ... ]
+    True
     """
     listing = subprocess.run(
         ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, text=True, check=False
@@ -268,10 +295,8 @@ def _check_evidence(pages: List[Path], failures: List[str]) -> None:
                 [stripped]
                 if re.match(r"^Evidence \(", stripped)
                 else [
-                    stripped[m.start() : m.end()]
-                    for m in re.finditer(
-                        r"\(Ev:[^)\n]+\)", _without_inline_code(stripped)
-                    )
+                    stripped[m.start() :]
+                    for m in re.finditer(r"\(Ev:", _without_inline_code(stripped))
                 ]
             )
             for span in spans:

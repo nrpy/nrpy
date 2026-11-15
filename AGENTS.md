@@ -12,7 +12,7 @@ Map outputs early and verify `/work/` paths. Plans request documents, not code; 
 
 Load needed skills only (requested or required by policy): paired review -> `.agents/skills/dialectic/SKILL.md`, three-seat ("engage tri") -> `.agents/skills/trialectic/SKILL.md` (both with `.agents/review-protocol.md`), Borda ("use borda") -> `.agents/skills/borda/SKILL.md` (ask missing task/`N`; infer filename; no naming restrictions). Mentioning, auditing, or editing a skill never activates it; never simulate agents.
 
-Review deltas, open findings, and dependencies, reusing passes while inputs/environment hold. Commands: `PYTHONPATH=. python3 <module.py>` (doctests/trusted checks), `pytest`, `.github/single_file_static_analysis.sh <file.py>` (edited handwritten Python), `PYTHONDONTWRITEBYTECODE=1 python3 -B tools/kb_lint.py` (KB links, reachability, and citations; [Validation](wiki/validation/index.md), [Workflows](wiki/workflows.md)). On runtime failures, reproduce—or state why not—and inspect runtime-visible quantities before proposing a cause or patch. Cite exact rule and clause when blocked, distinguishing rule from interpretation.
+Review deltas, open findings, and dependencies, reusing passes while inputs/environment hold. Commands: `PYTHONPATH=. python3 <module.py>` (doctests/trusted checks), `.github/single_file_static_analysis.sh <file.py>` (edited handwritten Python), `PYTHONDONTWRITEBYTECODE=1 python3 -B tools/kb_lint.py` (KB links, reachability, and citations; [Validation](wiki/validation/index.md), [Workflows](wiki/workflows.md)). On runtime failures, reproduce—or state why not—and inspect runtime-visible quantities before proposing a cause or patch. Cite exact rule and clause when blocked, distinguishing rule from interpretation.
 
 ## Router
 

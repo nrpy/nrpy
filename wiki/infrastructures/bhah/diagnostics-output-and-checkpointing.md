@@ -21,7 +21,7 @@ serialized point indices before reallocating and restoring `y_n_gfs`.
 
 ## Detail
 
-### Diagnostics Scheduling And Nearest/Volume Samplers
+### Diagnostics Scheduling, `diagnostic_gfs.h`, And `diagnostic_gfs_set`
 
 `register_all_diagnostics` stages helper headers, validates optional
 raytracing-data export, registers the top-level `_register_CFunction_diagnostics`
