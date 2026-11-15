@@ -11,7 +11,9 @@ and `BU`, plus the coordinate symbols used by the data. Downstream consumers can
 feed these ADM fields into `ADM_to_BSSN` or generated application setup code.
 
 The Cartesian provider supports `BrillLindquist` and `Kasner`. The spherical
-provider supports `UIUCBlackHole`, `StaticTrumpet`, and `OffsetKerrSchild`.
+provider supports `UIUCBlackHole`, `StaticTrumpet`, `OffsetKerrSchild`, and the
+linearized Teukolsky-wave modes `TeukolskyWave`, `TeukolskyWave21`, and
+`TeukolskyWave22`.
 
 ## Detail
 
@@ -26,11 +28,7 @@ powers require positive time. The helper does not enforce these conditions.
 For arbitrary exponents its vacuum Hamiltonian residual is
 `((sum_i p_i)^2-sum_i p_i^2)/t^2`.
 
-Claim evidence:
-- Claim: `kasner_adm_quantities` constructs power-law ADM fields without checking positive time or the usual vacuum Kasner exponent conditions; arbitrary exponents need not solve the vacuum equations.
-- Role: descriptive behavior
-- Deciding authority: [InitialData_Cartesian.py](../../../nrpy/equations/general_relativity/InitialData_Cartesian.py), `kasner_adm_quantities`
-- Corroboration: direct contraction of the returned diagonal `gammaDD` and `KDD` gives the displayed Hamiltonian residual; trusted expression samples do not enforce physical parameter conditions.
+Evidence (descriptive behavior): [InitialData_Cartesian.py](../../../nrpy/equations/general_relativity/InitialData_Cartesian.py), `kasner_adm_quantities`; corroboration: direct contraction of the returned diagonal `gammaDD` and `KDD` gives the displayed Hamiltonian residual (trusted expression samples do not enforce physical parameter conditions)
 
 `InitialData_Spherical` initializes the same ADM outputs with spherical symbols
 `r`, `th`, and `ph`. `UIUCBlackHole` registers `M` and `chi` and returns the
@@ -38,11 +36,7 @@ spinning-black-hole spatial metric and extrinsic curvature in the UIUC slicing.
 Its `a=M*chi` and `sqrt(M^2-a^2)` require `M^2-a^2>=0` for real horizon radii,
 or `abs(chi)<=1` for positive mass; the provider does not validate this input.
 
-Claim evidence:
-- Claim: `UIUCBlackHole` forms `sqrt(M^2-a^2)` with `a=M*chi` without checking the real-valued spin domain.
-- Role: descriptive behavior
-- Deciding authority: [InitialData_Spherical.py](../../../nrpy/equations/general_relativity/InitialData_Spherical.py), `UIUCBlackHole`
-- Corroboration: none available for invalid-input rejection; the constructor contains no such check.
+Evidence (descriptive behavior): [InitialData_Spherical.py](../../../nrpy/equations/general_relativity/InitialData_Spherical.py), `UIUCBlackHole` (no test covers invalid-input rejection; the constructor contains no such check)
 
 `StaticTrumpet` returns spherical trumpet data with its own lapse and radial
 shift. `OffsetKerrSchild` registers `M`, `a`, and `r0`, uses the offset
@@ -55,11 +49,7 @@ with `partial_0(alpha)=-alpha*(1-alpha)*K`, a lapse condition they describe
 as consistent with staticity. [BSSN Family](bssn-family.md) owns the current
 NRPy option-name mapping and its distinction from `BHSHarmonicSlicing`.
 
-Claim evidence:
-- Claim: The `R0=M` StaticTrumpet solution has `alpha=r/(r+M)=exp(-2*phi)=W`, and Ruchlin, Etienne, and Baumgarte pair these data with `partial_0(alpha)=-alpha*(1-alpha)*K`, which they describe as consistent with staticity.
-- Role: public/scientific contract
-- Deciding authority: [Ruchlin, Etienne, and Baumgarte, arXiv:1712.07658v2](https://arxiv.org/pdf/1712.07658v2), Eqs. (65), (67), and (69)
-- Corroboration: [InitialData_Spherical.py](../../../nrpy/equations/general_relativity/InitialData_Spherical.py), `StaticTrumpet`, for the lapse/conformal-factor identity only; none separate for the paper-defined evolution pairing
+Evidence (public/scientific contract): [Ruchlin, Etienne, and Baumgarte, arXiv:1712.07658v2](https://arxiv.org/pdf/1712.07658v2), Eqs. (65), (67), and (69); corroboration: [InitialData_Spherical.py](../../../nrpy/equations/general_relativity/InitialData_Spherical.py), `StaticTrumpet`, for the lapse/conformal-factor identity only
 
 Gauge handling is explicit. If an initial-data family does not define gauge
 quantities, or if `override_gauge_with_standard=True`, the provider sets
@@ -68,11 +58,18 @@ quantities, or if `override_gauge_with_standard=True`, the provider sets
 `EvolvedConformalFactor_cf`: `phi` uses `exp(-2*cf)`, `chi` uses `sqrt(cf)`,
 and `W` uses `cf`.
 
+The Teukolsky-wave families (`TeukolskyWave`, `TeukolskyWave21`, and
+`TeukolskyWave22`) are the exception: they define their own gauge, with unit
+lapse, zero shift, and zero `BU`, and reject
+`override_gauge_with_standard=True` with a `ValueError`.
+
+Evidence (descriptive behavior): [InitialData_Spherical.py](../../../nrpy/equations/general_relativity/InitialData_Spherical.py), `InitialData_Spherical.__init__` and `TeukolskyWave`; corroboration: the same module's `__main__` gauge and override-rejection checks for all three modes, and the `InitialData_Spherical_TeukolskyWave*` trusted files
+
 The trusted files validate the public object state for each supported family:
 Cartesian Brill-Lindquist and Kasner, plus spherical UIUCBlackHole,
-StaticTrumpet, and OffsetKerrSchild. The separate `ADM_to_BSSN_StaticTrumpet`
-trusted file covers the handoff from spherical ADM initial data into BSSN
-variables.
+StaticTrumpet, OffsetKerrSchild, and the three Teukolsky-wave modes. The
+separate `ADM_to_BSSN_StaticTrumpet` trusted file covers the handoff from
+spherical ADM initial data into BSSN variables.
 
 Two similarly named binary-puncture paths are outside these two provider
 classes. [Conformally Flat Elliptic](../conformally-flat-elliptic.md) owns the
@@ -88,13 +85,16 @@ TwoPunctures data.
 
 - [Ruchlin, Etienne, and Baumgarte, arXiv:1712.07658v2](https://arxiv.org/pdf/1712.07658v2) - Eqs. (65), (67), and (69), StaticTrumpet conformal factor, staticity-compatible lapse evolution, lapse, and shift
 - [InitialData_Cartesian.py](../../../nrpy/equations/general_relativity/InitialData_Cartesian.py) - `InitialData_Cartesian`, `BrillLindquist`, `Kasner`, `kasner_adm_quantities`
-- [InitialData_Spherical.py](../../../nrpy/equations/general_relativity/InitialData_Spherical.py) - `InitialData_Spherical`, `UIUCBlackHole`, `StaticTrumpet`, `OffsetKerrSchild`
+- [InitialData_Spherical.py](../../../nrpy/equations/general_relativity/InitialData_Spherical.py) - `InitialData_Spherical`, `UIUCBlackHole`, `StaticTrumpet`, `OffsetKerrSchild`, `TeukolskyWave`
 - [ADM_to_BSSN.py](../../../nrpy/equations/general_relativity/ADM_to_BSSN.py) - `ADM_to_BSSN`, `compute_cf_only`
 - [InitialData_Cartesian_BrillLindquist.py](../../../nrpy/equations/general_relativity/tests/InitialData_Cartesian_BrillLindquist.py) - `trusted_dict`
 - [InitialData_Cartesian_Kasner.py](../../../nrpy/equations/general_relativity/tests/InitialData_Cartesian_Kasner.py) - `trusted_dict`
 - [InitialData_Spherical_UIUCBlackHole.py](../../../nrpy/equations/general_relativity/tests/InitialData_Spherical_UIUCBlackHole.py) - `trusted_dict`
 - [InitialData_Spherical_StaticTrumpet.py](../../../nrpy/equations/general_relativity/tests/InitialData_Spherical_StaticTrumpet.py) - `trusted_dict`
 - [InitialData_Spherical_OffsetKerrSchild.py](../../../nrpy/equations/general_relativity/tests/InitialData_Spherical_OffsetKerrSchild.py) - `trusted_dict`
+- [InitialData_Spherical_TeukolskyWave.py](../../../nrpy/equations/general_relativity/tests/InitialData_Spherical_TeukolskyWave.py) - `trusted_dict`
+- [InitialData_Spherical_TeukolskyWave21.py](../../../nrpy/equations/general_relativity/tests/InitialData_Spherical_TeukolskyWave21.py) - `trusted_dict`
+- [InitialData_Spherical_TeukolskyWave22.py](../../../nrpy/equations/general_relativity/tests/InitialData_Spherical_TeukolskyWave22.py) - `trusted_dict`
 - [ADM_to_BSSN_StaticTrumpet.py](../../../nrpy/equations/general_relativity/tests/ADM_to_BSSN_StaticTrumpet.py) - `trusted_dict`
 
 ## See Also

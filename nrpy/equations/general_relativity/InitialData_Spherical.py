@@ -54,6 +54,19 @@ class InitialData_Spherical:
                 self.betaU,
                 self.BU,
             ) = self.OffsetKerrSchild()
+        elif IDtype in ("TeukolskyWave", "TeukolskyWave21", "TeukolskyWave22"):
+            # Teukolsky waves are defined in the alpha=1, beta^i=0 gauge; overriding it is an error.
+            if override_gauge_with_standard:
+                raise ValueError(f"{IDtype} requires alpha=1 and betaU=0")
+            ID_defines_gauge_quantities = True
+            mode = 20 if IDtype == "TeukolskyWave" else int(IDtype[-2:])
+            (
+                self.gammaDD,
+                self.KDD,
+                self.alpha,
+                self.betaU,
+                self.BU,
+            ) = self.TeukolskyWave(mode=mode)
         else:
             raise ValueError(f"IDtype = {IDtype} is not supported.")
 
@@ -307,6 +320,149 @@ class InitialData_Spherical:
 
     # fmt: on
 
+    def TeukolskyWave(
+        self, branch: str = "regular", mode: int = 20
+    ) -> Tuple[
+        List[List[sp.Expr]], List[List[sp.Expr]], sp.Expr, List[sp.Expr], List[sp.Expr]
+    ]:
+        """
+        Set ADM quantities for a linearized (l=2) Teukolsky wave in flat space, Teukolsky (1982) https://doi.org/10.1103/PhysRevD.26.745.
+        Explicit formulas follow Rinne (2009) https://arxiv.org/pdf/0809.1761.pdf, with pulse F(q) = q exp(-lambda q^2).
+
+        Conventions: gamma_{ij} = eta_{ij} + h_{ij}, where eta_{ij} = diag(1, r^2, r^2 sin^2 theta) is the flat
+        spherical metric, with both indices down in (r, theta, phi) order. K_{ij} = -1/2 partial_t gamma_{ij} in the
+        gauge alpha = 1, beta^i = 0, B^i = 0. Angular functions are Rinne's unnormalized real functions (cosine
+        branch for m > 0). The outgoing wave depends on u = t - r, the ingoing wave on v = t + r.
+
+        Note: near r = 0 the regular branch stays finite only through cancellation between large terms, so
+        evaluating these expressions at very small r loses floating-point precision. A grid kernel that samples
+        r -> 0 needs a series expansion there.
+
+        :param branch: Wave branch: "outgoing", "ingoing", or "regular" (outgoing + ingoing; regular at the origin).
+        :param mode: Teukolsky-wave mode: 20 for even-parity (2,0), 21 for odd-parity (2,1), or 22 for even-parity (2,2).
+        :return: A tuple containing the 3-metric (gammaDD), the extrinsic curvature (KDD), the lapse function (alpha), the shift vector (betaU), and its time derivative (BU).
+        :raises ValueError: If the requested mode or branch is unsupported.
+        """
+        if mode not in (20, 21, 22):
+            raise ValueError("TeukolskyWave mode must be 20, 21 or 22")
+        if branch not in ("outgoing", "ingoing", "regular"):
+            raise ValueError("branch must be 'outgoing', 'ingoing', or 'regular'")
+
+        Amp, lam, t0 = par.register_CodeParameters(
+            "REAL", __name__, ["TW_Amp", "TW_lambda", "TW_t0"], [1.0e-6, 1.0, 0.0]
+        )
+        r = self.r
+        th = self.th
+        ph = self.ph
+
+        # Step 1: Set the pulse derivatives Fn = d^n F/dq^n at the retarded time
+        #         u = t - r (outgoing) and pn = Fn(v) at the advanced time v = t + r
+        #         (ingoing). Since du/dt = dv/dt = 1, d^n/dt^n gives the n-th derivative.
+        #         t stays symbolic until Step 4.
+        t = sp.symbols("t", real=True)
+        u = t - r
+        v = t + r
+        F = [sp.diff(u * sp.exp(-lam * u**2), t, n) for n in range(5)]
+        p = [sp.diff(v * sp.exp(-lam * v**2), t, n) for n in range(5)]
+
+        # Step 2: Set the radial coefficients: A, B, C (even parity; modes 20, 22) and
+        #         K_rad, L_rad (odd parity; mode 21; not the extrinsic curvature K_{ij}).
+        # Step 2.a: Outgoing wave.
+        A_out = 24 * Amp * (F[2] / r**3 + 3 * F[1] / r**4 + 3 * F[0] / r**5)
+        B_out = (
+            -4
+            * Amp
+            * (F[3] / r**2 + 3 * F[2] / r**3 + 6 * F[1] / r**4 + 6 * F[0] / r**5)
+        )
+        C_out = (
+            2
+            * Amp
+            * (
+                F[4] / r
+                + 2 * F[3] / r**2
+                + 3 * F[2] / r**3
+                + 3 * F[1] / r**4
+                + 3 * F[0] / r**5
+            )
+        )
+        K_rad_out = -4 * Amp * (F[2] / r**2 + 3 * F[1] / r**3 + 3 * F[0] / r**4)
+        L_rad_out = (
+            2 * Amp * (F[3] / r + 2 * F[2] / r**2 + 3 * F[1] / r**3 + 3 * F[0] / r**4)
+        )
+        # Step 2.b: Ingoing wave.
+        A_in = 24 * Amp * (-p[2] / r**3 + 3 * p[1] / r**4 - 3 * p[0] / r**5)
+        B_in = (
+            4
+            * Amp
+            * (-p[3] / r**2 + 3 * p[2] / r**3 - 6 * p[1] / r**4 + 6 * p[0] / r**5)
+        )
+        C_in = (
+            2
+            * Amp
+            * (
+                -p[4] / r
+                + 2 * p[3] / r**2
+                - 3 * p[2] / r**3
+                + 3 * p[1] / r**4
+                - 3 * p[0] / r**5
+            )
+        )
+        K_rad_in = 4 * Amp * (p[2] / r**2 - 3 * p[1] / r**3 + 3 * p[0] / r**4)
+        L_rad_in = (
+            2 * Amp * (p[3] / r - 2 * p[2] / r**2 + 3 * p[1] / r**3 - 3 * p[0] / r**4)
+        )
+        # Step 2.c: Select the branch; the regular wave is outgoing + ingoing.
+        if branch == "outgoing":
+            A, B, C, K_rad, L_rad = A_out, B_out, C_out, K_rad_out, L_rad_out
+        elif branch == "ingoing":
+            A, B, C, K_rad, L_rad = A_in, B_in, C_in, K_rad_in, L_rad_in
+        else:
+            A, B, C = A_out + A_in, B_out + B_in, C_out + C_in
+            K_rad, L_rad = K_rad_out + K_rad_in, L_rad_out + L_rad_in
+
+        # Step 3: Set the 3-metric gamma_{ij} = eta_{ij} + h_{ij},
+        #         where eta_{ij} = diag(1, r^2, r^2 sin^2 theta).
+        s = sp.sin(th)
+        c = sp.cos(th)
+        gammaDD = ixp.zerorank2()
+        if mode == 20:
+            # Step 3.a: Mode 20, even parity, axisymmetric: Y = 3 cos^2 theta - 1
+            Y = 3 * c**2 - 1
+            gammaDD[0][0] = 1 + A * Y
+            gammaDD[0][1] = gammaDD[1][0] = -6 * r * B * s * c
+            gammaDD[1][1] = r**2 * (1 - A * Y / 2 + 3 * C * s**2)
+            gammaDD[2][2] = r**2 * s**2 * (1 - A * Y / 2 - 3 * C * s**2)
+        elif mode == 22:
+            # Step 3.b: Mode 22, even parity: P = cos(2 phi), Q = sin(2 phi)
+            P = sp.cos(2 * ph)
+            Q = sp.sin(2 * ph)
+            gammaDD[0][0] = 1 + A * s**2 * P
+            gammaDD[0][1] = gammaDD[1][0] = 2 * r * B * s * c * P
+            gammaDD[0][2] = gammaDD[2][0] = -2 * r * B * s**2 * Q
+            gammaDD[1][1] = r**2 * (1 - A * s**2 * P / 2 + C * (1 + c**2) * P)
+            gammaDD[1][2] = gammaDD[2][1] = -2 * r**2 * C * s * c * Q
+            gammaDD[2][2] = r**2 * s**2 * (1 - A * s**2 * P / 2 - C * (1 + c**2) * P)
+        else:
+            # Step 3.c: Mode 21, odd parity
+            gammaDD[0][0] = sp.sympify(1)
+            gammaDD[0][1] = gammaDD[1][0] = r * K_rad * c * sp.sin(ph)
+            gammaDD[0][2] = gammaDD[2][0] = r * s * K_rad * (c**2 - s**2) * sp.cos(ph)
+            gammaDD[1][1] = r**2 * (1 - L_rad * s * sp.sin(ph))
+            gammaDD[1][2] = gammaDD[2][1] = -(r**2) * L_rad * s**2 * c * sp.cos(ph)
+            gammaDD[2][2] = r**2 * s**2 * (1 + L_rad * s * sp.sin(ph))
+
+        # Step 4: Set the extrinsic curvature K_{ij} = -1/2 partial_t gamma_{ij}
+        #         (alpha = 1, beta^i = 0), then evaluate both on the slice t = t0.
+        KDD = [[(-sp.diff(g, t) / 2).subs(t, t0) for g in row] for row in gammaDD]
+        gammaDD = [[g.subs(t, t0) for g in row] for row in gammaDD]
+
+        # Step 5: Set the gauge: unit lapse, zero shift, zero shift time derivative.
+        alpha = sp.sympify(1)
+        betaU = ixp.zerorank1()
+        BU = ixp.zerorank1()
+
+        return gammaDD, KDD, alpha, betaU, BU
+
 
 if __name__ == "__main__":
     import doctest
@@ -326,6 +482,9 @@ if __name__ == "__main__":
         "UIUCBlackHole",
         "StaticTrumpet",
         "OffsetKerrSchild",
+        "TeukolskyWave",
+        "TeukolskyWave21",
+        "TeukolskyWave22",
     ]:
         ID = InitialData_Spherical(ID_type)
         results_dict = ve.process_dictionary_of_expressions(
@@ -339,3 +498,162 @@ if __name__ == "__main__":
             f"{os.path.splitext(os.path.basename(__file__))[0]}_{ID_type}",
             results_dict,
         )
+
+    # Step 1: Validate the Teukolsky-wave data against the companion equation packet
+    #         (packet sections in parentheses).
+    TW = InitialData_Spherical("TeukolskyWave")
+    xx = [TW.r, TW.th, TW.ph]
+    TW_Amp, TW_lambda, TW_t0 = sp.symbols("TW_Amp TW_lambda TW_t0", real=True)
+    etaDD = ixp.zerorank2()
+    etaDD[0][0] = sp.sympify(1)
+    etaDD[1][1] = xx[0] ** 2
+    etaDD[2][2] = xx[0] ** 2 * sp.sin(xx[1]) ** 2
+
+    # Step 1.a: External benchmark (Sec. 13): outgoing mode 20 at t0 = r = 1,
+    #           theta = pi/4, phi = pi/6, lambda = 1, Amp = 10^-6; compared exactly.
+    point = {
+        xx[0]: 1,
+        xx[1]: sp.pi / 4,
+        xx[2]: sp.pi / 6,
+        TW_lambda: 1,
+        TW_t0: 1,
+        TW_Amp: sp.Rational(1, 10**6),
+    }
+    gammaDD_bench = ixp.zerorank2()
+    gammaDD_bench[0][0] = sp.Rational(250009, 250000)
+    gammaDD_bench[1][1] = sp.Rational(199991, 200000)
+    gammaDD_bench[2][2] = sp.Rational(1000009, 2000000)
+    KDD_bench = ixp.zerorank2()
+    KDD_bench[0][0] = sp.Rational(18, 10**6)
+    KDD_bench[0][1] = KDD_bench[1][0] = sp.Rational(72, 10**6)
+    KDD_bench[1][1] = sp.Rational(-765, 10**7)
+    KDD_bench[2][2] = sp.Rational(2925, 10**8)
+    gammaDD_out, KDD_out, _, _, _ = TW.TeukolskyWave(branch="outgoing", mode=20)
+    for i in range(3):
+        for j in range(3):
+            assert sp.simplify(gammaDD_out[i][j].subs(point) - gammaDD_bench[i][j]) == 0
+            assert sp.simplify(KDD_out[i][j].subs(point) - KDD_bench[i][j]) == 0
+
+    # Step 1.b: Structural checks for each mode, regular branch, evaluated with the same fixed
+    #           numerical inputs as the trusted results (randomly sampled inputs can lose
+    #           too much precision to these expressions' 1/r^5 terms). With
+    #           h_{ij} = gamma_{ij} - eta_{ij} and the parity matrix P = diag(1, -1, 1):
+    #           gauge (Sec. 4), symmetry, zero amplitude and amplitude linearity (Sec. 15),
+    #           regular = outgoing + ingoing and K_{ij}(t0 = 0) = 0 (Sec. 8),
+    #           trace-free eta^{ij} h_{ij} = 0 (Sec. 9), and the mode's angular symmetry:
+    #           mode 20 independent of phi (Sec. 10); mode 22 unchanged under
+    #           phi -> phi + pi and odd under phi -> phi + pi/2 (Sec. 11); tensor parity
+    #           P h(r, pi - theta, phi + pi) P = +h (modes 20, 22) or -h (mode 21) (Sec. 12).
+    # Christoffel symbols of the diagonal eta_{ij}, used in Step 1.c:
+    # Gamma^i_{jk} = 1/2 eta^{ii} (eta_{ij,k} + eta_{ik,j} - eta_{jk,i}).
+    GammaUDD = ixp.zerorank3()
+    for i in range(3):
+        for j in range(3):
+            for k in range(3):
+                GammaUDD[i][j][k] = (
+                    sp.diff(etaDD[i][j], xx[k])
+                    + sp.diff(etaDD[i][k], xx[j])
+                    - sp.diff(etaDD[j][k], xx[i])
+                ) / (2 * etaDD[i][i])
+    div_point = {
+        xx[0]: sp.Rational(13, 10),
+        xx[1]: sp.Rational(7, 10),
+        xx[2]: sp.Rational(11, 10),
+        TW_lambda: sp.Rational(9, 10),
+        TW_t0: sp.Rational(3, 10),
+        TW_Amp: 1,
+    }
+    parity = [1, -1, 1]
+    flip = {xx[1]: sp.pi - xx[1], xx[2]: xx[2] + sp.pi}
+    for mode_TW in (20, 21, 22):
+        gammaDD_reg, KDD_reg, alpha_TW, betaU_TW, BU_TW = TW.TeukolskyWave(mode=mode_TW)
+        assert alpha_TW == 1 and betaU_TW == [0, 0, 0] and BU_TW == [0, 0, 0]
+        gammaDD_out, KDD_out, _, _, _ = TW.TeukolskyWave(
+            branch="outgoing", mode=mode_TW
+        )
+        gammaDD_in, KDD_in, _, _, _ = TW.TeukolskyWave(branch="ingoing", mode=mode_TW)
+        parity_sign = -1 if mode_TW == 21 else 1
+        trace_h = sp.sympify(0)
+        for i in range(3):
+            trace_h += (gammaDD_reg[i][i] - etaDD[i][i]) / etaDD[i][i]
+            for j in range(3):
+                hDD_ij = gammaDD_reg[i][j] - etaDD[i][j]
+                KDD_ij = KDD_reg[i][j]
+                assert ve.check_zero(
+                    hDD_ij - (gammaDD_reg[j][i] - etaDD[j][i]),
+                    fixed_mpfs_for_free_symbols=True,
+                )
+                assert ve.check_zero(
+                    KDD_ij - KDD_reg[j][i], fixed_mpfs_for_free_symbols=True
+                )
+                for expr in (hDD_ij, KDD_ij):
+                    assert ve.check_zero(
+                        expr.subs(TW_Amp, 0), fixed_mpfs_for_free_symbols=True
+                    )
+                    assert ve.check_zero(
+                        expr.subs(TW_Amp, 2 * TW_Amp) - 2 * expr,
+                        fixed_mpfs_for_free_symbols=True,
+                    )
+                    assert ve.check_zero(
+                        parity[i] * parity[j] * expr.subs(flip, simultaneous=True)
+                        - parity_sign * expr,
+                        fixed_mpfs_for_free_symbols=True,
+                    )
+                    if mode_TW == 20:
+                        assert ve.check_zero(
+                            sp.diff(expr, xx[2]), fixed_mpfs_for_free_symbols=True
+                        )
+                    if mode_TW == 22:
+                        assert ve.check_zero(
+                            expr.subs(xx[2], xx[2] + sp.pi) - expr,
+                            fixed_mpfs_for_free_symbols=True,
+                        )
+                        assert ve.check_zero(
+                            expr.subs(xx[2], xx[2] + sp.pi / 2) + expr,
+                            fixed_mpfs_for_free_symbols=True,
+                        )
+                assert ve.check_zero(
+                    gammaDD_reg[i][j]
+                    - gammaDD_out[i][j]
+                    - gammaDD_in[i][j]
+                    + etaDD[i][j],
+                    fixed_mpfs_for_free_symbols=True,
+                )
+                assert ve.check_zero(
+                    KDD_ij - KDD_out[i][j] - KDD_in[i][j],
+                    fixed_mpfs_for_free_symbols=True,
+                )
+                assert ve.check_zero(
+                    KDD_ij.subs(TW_t0, 0), fixed_mpfs_for_free_symbols=True
+                )
+        assert ve.check_zero(trace_h, fixed_mpfs_for_free_symbols=True)
+
+        # Step 1.c: Check that h_{ij} is divergence-free, eta^{jj} D_j h_{ij} = 0 (Sec. 20).
+        #           Check the outgoing and ingoing branches separately (their sum is the
+        #           regular branch), at an exact rational point with 50 significant digits;
+        #           ve.check_zero() cannot resolve these derivative-heavy expressions to zero.
+        for gammaDD_branch in (gammaDD_out, gammaDD_in):
+            for i in range(3):
+                div_hD = sp.sympify(0)
+                for j in range(3):
+                    # D_j h_{ij} = h_{ij,j} - Gamma^l_{ji} h_{lj} - Gamma^l_{jj} h_{il}
+                    hDD_covdD = sp.diff(gammaDD_branch[i][j] - etaDD[i][j], xx[j])
+                    for l in range(3):
+                        hDD_covdD -= GammaUDD[l][j][i] * (
+                            gammaDD_branch[l][j] - etaDD[l][j]
+                        ) + GammaUDD[l][j][j] * (gammaDD_branch[i][l] - etaDD[i][l])
+                    div_hD += hDD_covdD / etaDD[j][j]
+                assert abs(sp.N(div_hD.subs(div_point), 50)) < 1e-40
+
+    # Step 2: Check that the standard-gauge override is rejected for every mode.
+    for ID_type in ["TeukolskyWave", "TeukolskyWave21", "TeukolskyWave22"]:
+        try:
+            InitialData_Spherical(ID_type, override_gauge_with_standard=True)
+        except ValueError as exc:
+            assert f"{ID_type} requires alpha=1 and betaU=0" in str(exc)
+        else:
+            raise AssertionError(f"{ID_type} must reject the standard-gauge override.")
+
+    print(
+        "*** PASS *** TeukolskyWave packet benchmark and analytic identities validated."
+    )
