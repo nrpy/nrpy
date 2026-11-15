@@ -9,7 +9,7 @@
 | `core-top-level-package-modules` | Top-level package files matching `nrpy/*.py`, `nrpy/*.txt`, and `nrpy/py.typed`. | living | partial |
 | `helpers-validation-and-reference-metric-tests` | Helper modules, validation utilities, and reference-metric tests under `nrpy/helpers`, `nrpy/validate_expressions`, and `nrpy/tests`. | living | partial |
 | `equation-modules-and-trusted-values` | Equation modules, generated trusted-value dictionaries, and BOB fit metadata under `nrpy/equations`. | living | partial |
-| `infrastructure-modules-and-embedded-headers` | Infrastructure Python modules, embedded C/C++/CUDA headers, C/C++ test drivers, and package notes under `nrpy/infrastructures`. | living | partial |
+| `infrastructure-modules-and-embedded-headers` | Infrastructure Python modules, embedded C/C++/CUDA headers, C/C++ test drivers, generated C/CUDA trusted files, and package notes under `nrpy/infrastructures`. | living | partial |
 | `example-generators-and-companion-scripts` | Example generators and companion scripts under `nrpy/examples`. | living | partial |
 | `ci-and-local-automation` | CI workflows and local static-analysis/validation scripts under `.github`. | living | partial |
 

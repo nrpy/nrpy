@@ -75,11 +75,11 @@ through `validate_strings`. The aggregate `register_all.py` script clears
 and compares each generated `full_function` with its trusted file under
 `nrpy/infrastructures/BHaH/rotation/tests/`.
 
-`so3_axis_angle_to_R` and `so3_find_nU_and_dphi_from_unit_vectors` select their
-trusted C file by the installed SymPy version, because SymPy 1.15 changes the
-term ordering in the printed C expressions: SymPy versions before 1.15 compare
-against the unsuffixed `__openmp.c` files, and SymPy 1.15 and later compare
-against the `__openmp__sympy_1_15.c` files. Both trusted forms contain the
+`so3_axis_angle_to_R` and `so3_find_nU_and_dphi_from_unit_vectors` each have
+two trusted C files, because SymPy 1.15 changes the term order in the printed C
+expressions: their `__main__` blocks and `register_all.py` compare against the
+unsuffixed `__openmp.c` file under SymPy versions before 1.15 and against the
+`__openmp__sympy_1_15.c` file under SymPy 1.15 and later. Both trusted forms contain the
 normalization, identity, parallel, and antiparallel branches described above.
 
 Evidence (descriptive behavior): `register_all.py::sympy_suffix`, `so3_axis_angle_to_R.py::sympy_1_15`, `so3_find_nU_and_dphi_from_unit_vectors.py::sympy_1_15`
