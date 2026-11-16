@@ -337,12 +337,9 @@ def _generate_spheroidal_fisheye_inverse_body(
 
     return rf"""
   const REAL rCart = sqrt(({cartx}) * ({cartx}) + ({carty}) * ({carty}) + ({cartz}) * ({cartz}));
-  if (!(isfinite(rCart))) {{
-{failure_body}
-  }} // END IF: invalid radius
-  else if (rCart <= (REAL)0.0) {{
+  if (rCart <= (REAL)0.0) {{
 {origin_body}
-  }} // END ELSE IF: handle origin
+  }} // END IF: handle origin
   else {{
     const REAL inverse_relative_tol =
         (sizeof(REAL) == sizeof(float)) ? (REAL)1.0e-5 : (REAL)1.0e-12;
@@ -408,16 +405,12 @@ def _generate_spheroidal_fisheye_inverse_body(
       }} // END IF: inverse converged
       radial_seed = trial_seed;
     }} // END LOOP: for iter over inverse
-    if (!converged || !isfinite(radial_seed) || radial_seed < (REAL)0.0) {{
+    if (!converged) {{
 {failure_body}
     }} // END IF: inverse failed
     REAL lam_xy;
     REAL lam_z;
 {final_lam_codegen}
-    if (!(isfinite(lam_xy)) || !(isfinite(lam_z)) ||
-        fabs(lam_xy) <= (REAL)0.0 || fabs(lam_z) <= (REAL)0.0) {{
-{failure_body}
-    }} // END IF: invalid final scaling
 {success_body}
   }} // END ELSE: invert spheroidal fisheye radius
 """
