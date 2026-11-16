@@ -129,7 +129,7 @@ calls the same shell decomposition helper.
 [Horizon Diagnostics](../../equations/general-relativity/horizon-diagnostics.md)
 defines apparent-horizon geometry and spin diagnostics, and
 [Psi4 And Tetrads](../../equations/general-relativity/psi4-and-tetrads.md)
-defines the Weyl scalar and quasi-Kinnersley tetrad; the `superB` registrars
+defines the Weyl scalar and Baker-Campanelli-Lousto tetrad; the `superB` registrars
 schedule, transport, unpack, and evaluate those quantities across chares at
 runtime.
 

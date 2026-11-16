@@ -87,7 +87,7 @@ checkpointing with `checkpoint_every = 20.0`. Because it registers
 TwoPunctures support, its generated Makefile uses `gsl-config --cflags` and
 `gsl-config --libs`; this is the GSL-backed superB example. It overrides the
 shared `psi^n` initial lapse with `W` for SSL; option semantics are documented in
-[BHaH GR Evolution And Constraints](../infrastructures/bhah/gr-evolution-and-constraints.md).
+[BHaH GR Initial Data And Psi4](../infrastructures/bhah/gr-initial-data-and-psi4.md#twopunctures-and-tovola-solvers).
 
 `superB_nrpyelliptic_conformally_flat` is the Charm++ analog of the standalone
 NRPyElliptic conformally flat workflow. It uses `SinhSpherical` coordinates,

@@ -11,7 +11,7 @@
 | [YBS-MOM Timestep-Scaled Momentum Adjustment](ybs-momentum-damping.md) | You need the direct Yo--Lin--Cao momentum-gradient term, CAHD-style timestep scaling, conformal-factor weight `W`, or BSSN/fCCZ4 options. |
 | [Metric Conversions And Matter](metric-conversions-and-matter.md) | You need ADM/BSSN/four-metric conversions, stress-energy projections, or Cartesian Lorentz boosts. |
 | [Initial Data](initial-data.md) | You need Cartesian or spherical ADM initial-data classes or their division with TwoPunctures and NRPyElliptic solvers. |
-| [Psi4 And Tetrads](psi4-and-tetrads.md) | You need Weyl scalar `Psi4` construction or quasi-Kinnersley/MGS tetrad options. |
+| [Psi4 And Tetrads](psi4-and-tetrads.md) | You need Weyl scalar `Psi4` construction or Baker-Campanelli-Lousto or symbolic tetrad options. |
 | [Geodesics](geodesics.md) | You need analytic spacetime metrics, geodesic RHSs, or conserved orbital quantities. |
 | [Horizon Diagnostics](horizon-diagnostics.md) | You need apparent-horizon area, expansion `Theta`, or horizon spin diagnostics. |
 | [Fishbone-Moncrief](fishbone-moncrief.md) | You need Fishbone-Moncrief relativistic torus initial-data expressions. |

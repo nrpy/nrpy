@@ -14,7 +14,7 @@ Use these spellings when routing, citing, or writing leaves. Terms link to their
 | SymPy | Python symbolic algebra package used to build expressions before code emission; see [Architecture Overview](architecture/overview.md). |
 | generated C | C emitted by NRPy codegen and infrastructure modules rather than handwritten source; see [Generated Output Boundaries](architecture/generated-output-boundaries.md). |
 | BHaH | NRPy's standalone generated-application infrastructure for BH@H-style executables and libraries; see [BHaH](infrastructures/bhah/index.md). |
-| BH@H | BlackHoles@Home single- and multi-patch numerical-relativity workflows represented by BHaH examples; see [Standalone GR/BHaH](examples/standalone-gr-bhah.md). |
+| BH@H | BlackHoles@Home single-patch numerical-relativity workflows represented by BHaH examples; see [Standalone GR/BHaH](examples/standalone-gr-bhah.md). |
 | BHaHAHA | Apparent-horizon finding library integrated into BHaH, superB, and Dendro black-hole workflows; see [BHaHAHA](infrastructures/bhah/bhahaha/index.md). |
 | CFunction | Python representation of a generated C function; see [C Function Registry](core/c-function-registry.md). |
 | CFunction_dict | Global registry mapping generated function names to `CFunction` objects; see [C Function Registry](core/c-function-registry.md). |

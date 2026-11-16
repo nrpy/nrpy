@@ -36,7 +36,7 @@ Search this table with `rg -n -i -F '<term>' wiki/catalog.md` when router titles
 | [Horizon Diagnostics](equations/general-relativity/horizon-diagnostics.md) | Apparent-horizon expansion Theta, area, centroid, and spin. | ExpansionFunctionThetaClass, SpECTRESpinEstimateClass, spin_NewtonRaphson |
 | [Initial Data](equations/general-relativity/initial-data.md) | Analytic Cartesian and spherical ADM initial-data builders. | InitialData_Cartesian, InitialData_Spherical, BrillLindquist, UIUCBlackHole |
 | [Metric Conversions And Matter](equations/general-relativity/metric-conversions-and-matter.md) | ADM/BSSN/4-metric conversions, T4munu projections, and boosts. | ADM_to_BSSN, BSSN_to_ADM, g4DD, LorentzBoost |
-| [Psi4 And Tetrads](equations/general-relativity/psi4-and-tetrads.md) | Weyl scalar Psi4 evaluation and quasi-Kinnersley/MGS tetrads. | Psi4Tetrads, psi4_re, psi4_im, leave_symbolic |
+| [Psi4 And Tetrads](equations/general-relativity/psi4-and-tetrads.md) | Weyl scalar Psi4 evaluation and BCL or symbolic tetrads. | Psi4Tetrads, psi4_re, psi4_im, leave_symbolic |
 | [YBS Gamma-Constraint Adjustment](equations/general-relativity/ybs-gamma-constraint-adjustment.md) | Opt-in YBS_chi Gamma-constraint term in BSSN LambdaBar RHS. | enable_YBS_Gamma_constraint_adjustment, xi, BSSN_RHSs |
 | [YBS-MOM Timestep-Scaled Momentum Adjustment](equations/general-relativity/ybs-momentum-damping.md) | Yo-Lin-Cao momentum-gradient adjustment with CAHD scaling. | C_YBS_mom, enable_YBS_momentum_constraint_adjustment, DSMINGF, dsmin |
 | [Geometry And Special-Function Support](equations/geometry-and-special-function-support.md) | Basis transforms, fisheye maps, SO(3) rotations, and _s Y_{lm}. | BasisTransforms, GeneralRFMFisheye, SO3_rotations, spherical harmonics |
@@ -56,7 +56,7 @@ Search this table with `rg -n -i -F '<term>' wiki/catalog.md` when router titles
 | [Example Generator Catalog](examples/example-generator-catalog.md) | Table of runnable nrpy/examples/*.py scripts and dependencies. | project/, main.yml, sebob_consistency_check.py |
 | [Geodesic Raytracing](examples/geodesic-raytracing.md) | Standalone massive/photon geodesic integrators and raytracer. | mass_geodesic_integrator, photon_geodesic_integrator, photon_geodesic_batch_integrator |
 | [Matter TOV Workflows](examples/matter-tov-workflows.md) | TOVola star, Cowling hydro, GRoovy TOV, and MANGA C library. | tovola_neutron_star, hydro_without_hydro, groovy_TOV_BSSN, manga_bhah_lib |
-| [Standalone GR/BHaH](examples/standalone-gr-bhah.md) | Single-patch spectroscopy and BHaH TwoPunctures/multipatch GR. | blackhole_spectroscopy, two_blackholes_collide, spinning_blackhole, fisheye |
+| [Standalone GR/BHaH](examples/standalone-gr-bhah.md) | Single-patch BHaH GR generators, initial data, diagnostics, and build modes. | blackhole_spectroscopy, two_blackholes_collide, spinning_blackhole, fisheye |
 | [superB Charm++ Workflows](examples/superb-charm-workflows.md) | Charm++ superB BBH, spectroscopy, and NRPyElliptic examples. | superB_two_blackholes_collide, superB_blackhole_spectroscopy, charmrun |
 | [Wave Equation Generators](examples/wave-equation-generators.md) | First-run Cartesian wave walkthrough and curvilinear wave codes. | wave_equation_cartesian, wave_equation_curvilinear, wave_equation_multicoordinates |
 | [Waveform JAX PN Generators](examples/waveform-jax-pn-generators.md) | SEOBNRv5, SEBOB, sebobv1_jax, and Post-Newtonian generators. | seobnrv5_aligned_spin_inspiral, sebobv2, nrpypn_quasicircular_momenta |
@@ -87,7 +87,7 @@ Search this table with `rg -n -i -F '<term>' wiki/catalog.md` when router titles
 | [Constraints And Diagnostic Norms](infrastructures/dendro/constraints-and-diagnostic-norms.md) | Dendro covariant M^i, H_Z4/M/Lambda norms, and node RMS. | M_CONSTRAINT, LAMBDA_CONSTRAINT, Ctx::diagnostic_output |
 | [fCCZ4 Application Wiring](infrastructures/dendro/fccz4-application-wiring.md) | Dendro fCCZ4 W/chi generation, CAHD, lambdaU init, and DIAG. | Dendro_NRPy_fCCZ4, initial_data_lambdaU, kappa1, kappa2 |
 | [FD Profiles And Conformance](infrastructures/dendro/finite-difference-profiles-and-dendro-conformance.md) | Centered advection, KO order, padding, and BSSN_ELE_ORDER. | KO_FD_ORDER, REQUIRED_PADDING, NGHOSTS |
-| [Octree Grid, AMR, And Time Stepping](infrastructures/dendro/grid-amr-and-time-stepping.md) | Dendro zip/unzip, ghosts, WAMR/BH_AMR remeshing, and RK4. | ot::Block, Ctx::rhs, physical_boundary_ghosts, BH_WAMR |
+| [Octree Grid, AMR, And Time Stepping](infrastructures/dendro/grid-amr-and-time-stepping.md) | Dendro zip/unzip, ghosts, BH_WAMR remeshing, and RK4. | ot::Block, Ctx::rhs, physical_boundary_ghosts, BH_WAMR |
 | [Gridfunctions, Naming, And Loops](infrastructures/dendro/gridfunctions-naming-and-loops.md) | DendroGridFunction ordering, pointer prefixes, and block loops. | cf_W_or_chi, state_h.dendro_state_name, in_, rhs_ |
 | [Initial Data And Wave Diagnostics](infrastructures/dendro/initial-data-and-wave-diagnostics.md) | Dendro TwoPunctures setup, ADM integrals, and Psi4 modes. | --tpid, _ADM.dat, Ctx::adm_output, BSSN_GW_RADAII |
 | [Production Validation And Checks](infrastructures/dendro/production-validation-and-deferred-checks.md) | Dendro MPI remesh/restart checks and dendro-validation CI. | dendro_application_check, dendrolib_capability_test, dendrolib-canary |

@@ -19,8 +19,7 @@ Reciprocal half-power rewrites for exponents `-1/2`, `-3/2`, and `-5/2` introduc
 
 Claim status: contested; contradiction: CONTR-0015. See [CONTR-0015](../../contradictions.md#contr-0015).
 
-Evidence (descriptive behavior): `simd.py::expr_convert_to_simd_intrins`.
-- Additional deciding authority: [nrpy/helpers/simd_intrinsics.h](../../../nrpy/helpers/simd_intrinsics.h), all instruction-set branches.
+Evidence (descriptive behavior): `simd.py::expr_convert_to_simd_intrins`; `simd_intrinsics.h` (all instruction-set branches).
 
 Debug mode is an internal validation path for the symbolic rewrite. `_debug_eval_namespace()` builds an explicit namespace containing SymPy objects, free symbols, and `*_SIMD_check` functions such as `AbsSIMD_check`, `ConstSIMD_check`, `FusedMulAddSIMD_check`, and `NegFusedMulSubSIMD_check`. With `debug=True`, `expr_convert_to_simd_intrins()` evaluates the transformed spelling through that restricted namespace, back-substitutes rational symbols, compares against the original expression, and raises `ValueError` if simplification cannot prove the difference is zero. This documents the helper's own validation behavior, not a general recommendation to evaluate arbitrary expression strings.
 
