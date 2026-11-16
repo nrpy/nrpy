@@ -122,30 +122,9 @@ class Psi4Tetrads:
         provider = getattr(rfm, "general_rfm_provider", None)
         provider_kind = getattr(provider, "provider_kind", None)
         if provider is not None and provider_kind == "spheroidal_fisheye":
-            raw_x, raw_y, raw_z = rfm.xx
-            r = provider.r
-            lam_xy, lam_z, dlam_xy, dlam_z, _ = provider.axis_maps_for_inverse(r)
-            dlam_xy_over_r = dlam_xy / r
-            dlam_z_over_r = dlam_z / r
-            rho2 = raw_x**2 + raw_y**2
-            z2 = raw_z**2
-            denom = (
-                dlam_xy_over_r * lam_z * rho2
-                + dlam_z_over_r * lam_xy * z2
-                + lam_xy * lam_z
-            )
-            u = (
-                -dlam_xy_over_r * lam_z * z2
-                + dlam_z_over_r * lam_xy * z2
-                + lam_xy * lam_z
-            ) / denom
-            v = (
-                dlam_xy_over_r * lam_z * rho2
-                - dlam_z_over_r * lam_xy * rho2
-                + lam_xy * lam_z
-            ) / denom
+            raw_x, raw_y, _ = rfm.xx
             v1U = [-raw_y, raw_x, sp.sympify(0)]
-            v2U = [u * raw_x, u * raw_y, v * raw_z]
+            v2U = provider.cartesian_radial_vector_in_raw_coordinates()
         else:
             # Step 2.d: Construct the Jacobian d x_Cart^i / d xx^j
             # Step 2.e: Invert above Jacobian to get needed d xx^j / d x_Cart^i

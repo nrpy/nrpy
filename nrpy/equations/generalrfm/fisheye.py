@@ -723,6 +723,31 @@ class GeneralRFMSpheroidalFisheye:
         )
         return lam_xy, lam_z, dlam_xy, dlam_z, asymptotic_scale
 
+    def cartesian_radial_vector_in_raw_coordinates(self) -> List[sp.Expr]:
+        """
+        Return the raw-coordinate vector mapped to physical Cart by dCart/dxx.
+
+        :return: Three raw-coordinate components of the Cartesian radial vector.
+        """
+        x, y, z = self.xx
+        lam_xy, lam_z, dlam_xy, dlam_z, _ = self.axis_maps_for_inverse(self.r)
+        dlam_xy_over_r = dlam_xy / self.r
+        dlam_z_over_r = dlam_z / self.r
+        rho2 = x**2 + y**2
+        z2 = z**2
+        denom = (
+            dlam_xy_over_r * lam_z * rho2 + dlam_z_over_r * lam_xy * z2 + lam_xy * lam_z
+        )
+        u = (
+            -dlam_xy_over_r * lam_z * z2 + dlam_z_over_r * lam_xy * z2 + lam_xy * lam_z
+        ) / denom
+        v = (
+            dlam_xy_over_r * lam_z * rho2
+            - dlam_z_over_r * lam_xy * rho2
+            + lam_xy * lam_z
+        ) / denom
+        return [u * x, u * y, v * z]
+
 
 def build_fisheye(num_transitions: int) -> GeneralRFMFisheye:
     """

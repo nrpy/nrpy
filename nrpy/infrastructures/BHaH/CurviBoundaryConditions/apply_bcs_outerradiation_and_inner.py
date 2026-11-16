@@ -54,30 +54,10 @@ def _radiation_r_and_partials_exprs(CoordSystem: str) -> List[sp.Expr]:
 
     if provider is not None and provider_kind == "spheroidal_fisheye":
         raw_x, raw_y, raw_z = rfm.xx
-        raw_r = provider.r
-        lam_xy, lam_z, dlam_xy, dlam_z, _ = provider.axis_maps_for_inverse(raw_r)
-        rho2 = raw_x**2 + raw_y**2
-        z2 = raw_z**2
-        phys_r = sp.sqrt(lam_xy**2 * rho2 + lam_z**2 * z2)
-        dlam_xy_over_r = dlam_xy / raw_r
-        dlam_z_over_r = dlam_z / raw_r
-        denom = (
-            dlam_xy_over_r * lam_z * rho2 + dlam_z_over_r * lam_xy * z2 + lam_xy * lam_z
-        )
-        u = (
-            -dlam_xy_over_r * lam_z * z2 + dlam_z_over_r * lam_xy * z2 + lam_xy * lam_z
-        ) / denom
-        v = (
-            dlam_xy_over_r * lam_z * rho2
-            - dlam_z_over_r * lam_xy * rho2
-            + lam_xy * lam_z
-        ) / denom
-        return [
-            phys_r,
-            u * raw_x / phys_r,
-            u * raw_y / phys_r,
-            v * raw_z / phys_r,
-        ]
+        lam_xy, lam_z, _, _, _ = provider.axis_maps_for_inverse(provider.r)
+        phys_r = sp.sqrt(lam_xy**2 * (raw_x**2 + raw_y**2) + lam_z**2 * raw_z**2)
+        radial_vector = provider.cartesian_radial_vector_in_raw_coordinates()
+        return [phys_r] + [component / phys_r for component in radial_vector]
 
     return [
         rfm.xxSph[0],
