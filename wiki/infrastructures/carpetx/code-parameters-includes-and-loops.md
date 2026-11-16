@@ -61,11 +61,6 @@ raises `ValueError` and asks callers to generate with `enable_simd=False`.
 
 ## See Also
 
-- [CarpetX](index.md)
-- [Thorn Assembly, Configuration, And CCL Files](thorn-assembly-configuration-and-ccl-files.md)
-- [Boundaries And RHS Initialization](boundaries-and-rhs-initialization.md)
-- [C Codegen](../../core/c-codegen.md)
-- [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
-- [Loop Kernel And Device Helpers](../../core/helpers/loop-kernel-and-device-helpers.md)
-- [SIMD And Intrinsic Support](../../core/helpers/simd-and-intrinsic-support.md)
-- [ETLegacy Code Parameters, Includes, And Loops](../etlegacy/code-parameters-includes-and-loops.md)
+- Depends on: [C Codegen](../../core/c-codegen.md)
+- Depends on: [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
+- Depends on: [Loop Kernel And Device Helpers](../../core/helpers/loop-kernel-and-device-helpers.md)

@@ -7,7 +7,7 @@
 
 The wave-equation modules provide a compact first-order-in-time scalar wave
 system for code generation. Cartesian and reference-metric curvilinear RHS
-builders own the evolution expressions, while the initial-data module owns
+builders construct the evolution expressions, while the initial-data module constructs
 Cartesian exact solutions for plane-wave and spherical-Gaussian tests.
 
 ## Detail
@@ -20,7 +20,7 @@ and sets `vv_rhs` to the Cartesian Laplacian of `uu` multiplied by
 
 `WaveEquationCurvilinear_RHSs` generalizes the RHS path to any named NRPy
 reference metric accepted by the constructor. It selects either the ordinary
-reference metric or its `_rfm_precompute` variant, contracts
+reference metric or its `_rfm_precompute` variant, forms the tensor contraction of
 `GammahatUDD` with `ghatUU`, declares `uu_dD` and symmetric `uu_dDD`, and forms
 `vv_rhs` from the reference-metric Laplacian and contracted-Christoffel term
 before multiplying by `wavespeed**2`.
@@ -41,13 +41,9 @@ curvilinear RHS calls `register_CodeParameter` for `wavespeed` unconditionally.
 Claim status: contested; contradiction: CONTR-0021.
 See [CONTR-0021](../contradictions.md#contr-0021).
 
-Claim evidence:
-- Claim: Wave constructors guard paired gridfunction registration with `uu` alone; Cartesian RHS and initial-data parameter guards inspect the NRPy-parameter dictionary instead of the CodeParameter dictionary.
-- Role: descriptive behavior
-- Deciding authority: [WaveEquation_RHSs.py](../../nrpy/equations/wave_equation/WaveEquation_RHSs.py), `WaveEquation_RHSs.__init__`; [WaveEquationCurvilinear_RHSs.py](../../nrpy/equations/wave_equation/WaveEquationCurvilinear_RHSs.py), `WaveEquationCurvilinear_RHSs.__init__`; [WaveEquation_Solutions_InitialData.py](../../nrpy/equations/wave_equation/WaveEquation_Solutions_InitialData.py), `WaveEquation_solution_Cartesian.__init__`
-- Corroboration: [params.py](../../nrpy/params.py), `CodeParameter._register_globally`, stores CodeParameters in `glb_code_params_dict`.
+Evidence (descriptive behavior): `wave_equation/WaveEquation_RHSs.py::WaveEquation_RHSs.__init__`; `wave_equation/WaveEquationCurvilinear_RHSs.py::WaveEquationCurvilinear_RHSs.__init__`; `wave_equation/WaveEquation_Solutions_InitialData.py::WaveEquation_solution_Cartesian.__init__`.
 
-`WaveEquation_solution_Cartesian` owns the exact-solution and initial-data
+`WaveEquation_solution_Cartesian` constructs the exact-solution and initial-data
 expressions. Subject to those guards, it registers `wavespeed` and `time`;
 `time` uses the local module or the BHaH Method-of-Lines module when
 `Infrastructure` is `BHaH`. The constructor dispatches by `WaveType`. `PlaneWave` registers `kk0`, `kk1`, and `kk2`,
@@ -61,26 +57,16 @@ width `sigma` must be nonzero. The primary Gaussian expressions divide by
 `r=0`. Those expressions are not equivalent replacements for the primary
 solution away from the origin.
 
-Claim evidence:
-- Claim: Exact wave solutions require nonzero wave-vector norm or Gaussian width; the Gaussian origin requires explicit use of the separate origin expressions.
-- Role: descriptive behavior
-- Deciding authority: [WaveEquation_Solutions_InitialData.py](../../nrpy/equations/wave_equation/WaveEquation_Solutions_InitialData.py), `PlaneWave, SphericalGaussian`
-- Corroboration: `none available`; the named implementation decides the stated behavior.
+Evidence (descriptive behavior): `wave_equation/WaveEquation_Solutions_InitialData.py::WaveEquation_solution_Cartesian`.
 
-Validation follows the trusted-expression pipeline in each module's
+Validation compares trusted-expression dictionaries in each module's
 `__main__` block. The Cartesian RHS has a single trusted variant; the
 curvilinear RHS checks Cartesian, Spherical, SinhSpherical, SinhCylindrical,
 and SinhSymTP variants, all with `enable_rfm_precompute=False`; the
 initial-data module checks both `PlaneWave` and `SphericalGaussian` exact
 solutions. Thus the implemented precompute branch has no wave-module trusted
-variant in this entry point.
-
-These trusted files sample symbolic outputs at one deterministic free-symbol
-assignment. They do not prove that the continuous expressions satisfy the PDE
-for all coordinates, that finite-difference generated code builds or runs, or
-that a numerical evolution converges. Build/run and numerical-result evidence
-belongs to [First Wave Equation Run](../examples/first-wave-equation-run.md) and
-the relevant infrastructure and validation owners.
+variant in this entry point; for standalone C/CUDA build and execution see
+[Wave Equation Generators](../examples/wave-equation-generators.md).
 
 ## Sources
 
@@ -95,9 +81,6 @@ the relevant infrastructure and validation owners.
 
 ## See Also
 
-- Parent: [Equations](index.md)
 - See also: [Conformally Flat Elliptic](conformally-flat-elliptic.md)
 - See also: [Geometry And Special-Function Support](geometry-and-special-function-support.md)
-- See also: [Trusted Expression Pipeline](trusted-expression-pipeline.md)
-- See also: [First Wave Equation Run](../examples/first-wave-equation-run.md)
-- See also: [Reference Metrics](../core/reference-metrics.md)
+- See also: [Expression Validation Helpers](../validation/expression-validation-helpers.md)

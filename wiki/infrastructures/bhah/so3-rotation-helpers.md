@@ -39,7 +39,7 @@ decorator. The other SO(3) helpers remain host-only in both modes. This
 narrow device closure lets the coordinate converters call the required matrix
 and vector operations from a CUDA kernel without changing unrelated helpers.
 
-Evidence (descriptive behavior): `nrpy/infrastructures/BHaH/rotation/so3_build_R_from_hats.py`, `so3_apply_R_to_vector.py`, and `so3_apply_RT_to_vector.py`, their public registration functions (owner doctests compare the generated definitions; no compilation or GPU execution is established).
+Evidence (descriptive behavior): `BHaH/rotation/so3_build_R_from_hats.py::register_CFunction_so3_build_R_from_hats`, `so3_apply_R_to_vector.py`, and `so3_apply_RT_to_vector.py`.
 
 The common convention is that `R` maps rotating-frame components to fixed-frame
 components. Thus `v_fixed = R v_rot`, while `R^T` maps fixed-frame components
@@ -68,20 +68,21 @@ components into destination rotating-basis components.
 
 Each helper registration passes `subdirectory="rotation"` to
 `register_CFunction`, so generated project output places these C functions
-under the generated rotation helper directory. Each module validates its
-complete generated OpenMP function against a trusted C file. The aggregate
-`register_all.py` script clears `CFunction_dict`, sets `parallelization` to
-`openmp`, registers all helpers, and compares each complete generated function
-with its trusted file under `nrpy/infrastructures/BHaH/rotation/tests/`.
+under the generated rotation helper directory. Each helper module's `__main__`
+block compares its complete generated OpenMP function with a trusted C file
+through `validate_strings`. The aggregate `register_all.py` script clears
+`CFunction_dict`, sets `parallelization` to `openmp`, registers all helpers,
+and compares each generated `full_function` with its trusted file under
+`nrpy/infrastructures/BHaH/rotation/tests/`.
 
-The axis-angle matrix and unit-vector axis-angle helpers select expected C
-files according to the SymPy printer: SymPy versions before 1.15 use the
-unsuffixed files, while 1.15 and later use `__sympy_1_15.c` files. Both forms
-retain the complete normalization, identity, parallel, and antiparallel
-branches. Exact C comparisons detect changes to those branches; they do not
-compile or execute the functions.
+`so3_axis_angle_to_R` and `so3_find_nU_and_dphi_from_unit_vectors` each have
+two trusted C files, because SymPy 1.15 changes the term order in the printed C
+expressions: their `__main__` blocks and `register_all.py` compare against the
+unsuffixed `__openmp.c` file under SymPy versions before 1.15 and against the
+`__openmp__sympy_1_15.c` file under SymPy 1.15 and later. Both trusted forms contain the
+normalization, identity, parallel, and antiparallel branches described above.
 
-Evidence (descriptive behavior): [register_all.py](../../../nrpy/infrastructures/BHaH/rotation/register_all.py), `__main__`; [so3_axis_angle_to_R.py](../../../nrpy/infrastructures/BHaH/rotation/so3_axis_angle_to_R.py) and [so3_find_nU_and_dphi_from_unit_vectors.py](../../../nrpy/infrastructures/BHaH/rotation/so3_find_nU_and_dphi_from_unit_vectors.py), their `__main__` comparisons against the corresponding complete trusted C files.
+Evidence (descriptive behavior): `register_all.py::sympy_suffix`, `so3_axis_angle_to_R.py::sympy_1_15`, `so3_find_nU_and_dphi_from_unit_vectors.py::sympy_1_15`
 
 ## Sources
 
@@ -108,8 +109,6 @@ Evidence (descriptive behavior): [register_all.py](../../../nrpy/infrastructures
 
 ## See Also
 
-- Parent: [BHaH](index.md)
 - Depends on: [Geometry And Special-Function Support](../../equations/geometry-and-special-function-support.md)
 - Depends on: [C Function Registry](../../core/c-function-registry.md)
-- See also: [GR Application Wiring](gr-application-wiring.md)
-- See also: [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md)
+- See also: [GR Initial Data And Psi4](gr-initial-data-and-psi4.md)

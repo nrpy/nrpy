@@ -12,15 +12,16 @@ GRHD applications, then emits C kernels that connect NRPy's symbolic GRHD
 expressions to GRHayL primitive recovery, EOS calls, reconstruction, and
 interface flux routines.
 
-This page covers orchestration and generated runtime plumbing. The Valencia
-equations, characteristic speeds, and HLL expressions themselves belong to the
-equation-side GRHD page; GRoovy consumes them to generate BHaH kernels.
+Symbolic Valencia equations, characteristic speeds, and HLL flux formulas live
+in `nrpy.equations.grhd`; GRoovy evaluates them to register BHaH C kernels.
 GRHayL and EOS algorithms are an external dependency boundary: GRoovy passes
 `ghl_parameters`, `ghl_eos_parameters`, `ghl_primitive_quantities`,
 `ghl_conservative_quantities`, and `ghl_metric_quantities` to `ghl_*` calls but
 does not define GRHayL recovery or EOS internals.
 
 ## Detail
+
+### Gridfunctions, Source Terms, Reconstruction, And HLL Fluxes
 
 `register_all_grhd_gridfunctions` is the usual first GRoovy registration call.
 When `evolving_spacetime=True`, it imports the full BSSN set through
@@ -88,6 +89,8 @@ expressions needed for the divergence formula, then combines those with
 neighboring HLL flux gridfunctions at `index` and `indexp1`. Momentum RHSs are
 rescaled back into the evolved `rescaledstildeD` basis.
 
+### Primitive/Conservative Conversions, Basis Transforms, And Boundaries
+
 The primitive/conservative conversion path is split by direction of data
 movement. `primitives_to_conservatives_routine` initializes GRHayL primitive
 states from `rhob`, `P`, velocity, and optional temperature/entropy fields,
@@ -104,11 +107,11 @@ recoveries, compares recomputed-conservative mismatch after primitive limiting,
 and falls back to atmosphere values when all methods fail.
 
 `basis_transform_rfm_basis_to_Cartesian` and
-`basis_transform_rfm_basis_to_Cartesian__read_cons_only` are the inbound GRHayL
-bridge: they read NRPy gridfunctions in the current reference-metric basis,
+`basis_transform_rfm_basis_to_Cartesian__read_cons_only` form the inbound GRHayL
+conversion routines: they read NRPy gridfunctions in the current reference-metric basis,
 transform velocities and conserved momentum into Cartesian components, and
 initialize GRHayL metric/conservative/primitive structs. The
-`basis_transform_Cartesian_to_rfm_basis` bridge writes GRHayL primitive and
+`basis_transform_Cartesian_to_rfm_basis` routine writes GRHayL primitive and
 conservative data back into the NRPy reference-metric basis. These helpers mark
 the boundary between generated NRPy storage conventions and GRHayL's Cartesian
 struct API.
@@ -121,7 +124,7 @@ updated `u^0` after initial metric data are available. `compute_entropy`
 recomputes entropy from tabulated temperature data or from hybrid EOS density
 and pressure, depending on the selected thermodynamics mode.
 
-`apply_copy_and_outflow_bcs` owns hydrodynamic primitive boundary conditions.
+`apply_copy_and_outflow_bcs` implements hydrodynamic primitive boundary conditions.
 Outer ghost zones copy scalar primitive data from the nearest interior point,
 zero optional leakage variables, project the velocity against the outward
 radial unit vector to remove inflow, and recompute `u^0`. Inner boundary points
@@ -161,7 +164,6 @@ arrays.
 
 ## See Also
 
-- [BHaH](index.md)
-- [GR Application Wiring](gr-application-wiring.md)
-- [GRHD](../../equations/grhd.md)
-- [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md)
+- See also: [GR Evolution And Constraints](gr-evolution-and-constraints.md)
+- Depends on: [GRHD](../../equations/grhd.md)
+- Depends on: [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md)

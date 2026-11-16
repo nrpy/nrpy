@@ -1,18 +1,19 @@
 # General Relativity
 
-> Router for GR-specific symbolic equation families and diagnostics.
+> Router for GR symbolic formulations, metric conversions, initial data, and diagnostics.
 
 | Page | Go here when... |
 | --- | --- |
-| [BSSN Family](bssn-family.md) | You need the high-level shape of the BSSN quantities, RHSs, gauge RHSs, constraints, Kreiss-Oliger dissipation terms, trusted variants, or NRPyLaTeX cross-check. |
-| [YBS Gamma-Constraint Adjustment](ybs-gamma-constraint-adjustment.md) | You need the opt-in `YBS_chi` Gamma-constraint term in the BSSN connection RHS, its mapping to the Yo-Baumgarte-Shapiro and Yo-Lin-Cao coefficients, its default, timestep effect, parameter registration, or shift-driver forwarding. |
-| [Fully Covariant Conformal Z4](fccz4.md) | You need the reference-metric fCCZ4 variables, evolution and gauge equations, implementation mapping, or validation boundary. |
-| [YBS-MOM Timestep-Scaled Momentum Adjustment](ybs-momentum-damping.md) | You need the direct Yo--Lin--Cao momentum-gradient term, CAHD-style timestep scaling, its conformal-factor weight, BSSN/fCCZ4 implementation mapping, or validation limits. |
-| [Metric Conversions And Matter](metric-conversions-and-matter.md) | You need ADM/BSSN/four-metric conversions, stress-energy projections, source terms, or Lorentz boosts. |
-| [Initial Data](initial-data.md) | You need Cartesian or spherical ADM providers, or the boundary with TwoPunctures and NRPyElliptic initial data. |
-| [Psi4 And Tetrads](psi4-and-tetrads.md) | You need Psi4 radiation-scalar construction or tetrad options. |
-| [Geodesics](geodesics.md) | You need analytic spacetime metrics, geodesic RHSs, or conserved diagnostics. |
-| [Horizon Diagnostics](horizon-diagnostics.md) | You need equation-side apparent-horizon area, expansion, or spin diagnostics. |
-| [Fishbone-Moncrief](fishbone-moncrief.md) | You need Fishbone-Moncrief torus initial-data expressions. |
+| [BSSN Family](bssn-family.md) | You need BSSN quantities, RHSs, gauge RHSs, constraints, Kreiss-Oliger dissipation terms, trusted variants, or NRPyLaTeX checks. |
+| [YBS Gamma-Constraint Adjustment](ybs-gamma-constraint-adjustment.md) | You need the opt-in `YBS_chi` Gamma-constraint term in the BSSN connection RHS, coefficient mappings, timestep effect, or shift forwarding. |
+| [fCCZ4 Formulation](fccz4-formulation.md) | You need reference-metric fCCZ4 variables, Z4 damping, the corrected one-stretch connection RHS, algebraic projections, or gauge conditions. |
+| [fCCZ4 Implementation And Validation](fccz4-implementation-and-validation.md) | You need `fCCZ4_*.py` classes, `build_fccz4_expression_bundle`, YBS-MOM coupling, backend wiring, or fCCZ4 expression tests. |
+| [YBS-MOM Timestep-Scaled Momentum Adjustment](ybs-momentum-damping.md) | You need the direct Yo--Lin--Cao momentum-gradient term, CAHD-style timestep scaling, conformal-factor weight `W`, or BSSN/fCCZ4 options. |
+| [Metric Conversions And Matter](metric-conversions-and-matter.md) | You need ADM/BSSN/four-metric conversions, stress-energy projections, or Cartesian Lorentz boosts. |
+| [Initial Data](initial-data.md) | You need Cartesian or spherical ADM initial-data classes or their division with TwoPunctures and NRPyElliptic solvers. |
+| [Psi4 And Tetrads](psi4-and-tetrads.md) | You need Weyl scalar `Psi4` construction or Baker-Campanelli-Lousto or symbolic tetrad options. |
+| [Geodesics](geodesics.md) | You need analytic spacetime metrics, geodesic RHSs, or conserved orbital quantities. |
+| [Horizon Diagnostics](horizon-diagnostics.md) | You need apparent-horizon area, expansion `Theta`, or horizon spin diagnostics. |
+| [Fishbone-Moncrief](fishbone-moncrief.md) | You need Fishbone-Moncrief relativistic torus initial-data expressions. |
 
 Up to [Equations](../index.md). Back to [AGENTS.md](../../../AGENTS.md).

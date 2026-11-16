@@ -5,17 +5,17 @@
 
 ## Summary
 
-This leaf owns CarpetX runtime handoff between external Einstein Toolkit
+This leaf covers CarpetX runtime transfers between external Einstein Toolkit
 interfaces and NRPy BSSN variables. `ADM_to_BSSN` imports ADMBaseX initial data
 into CarpetX `evol_variables`, `BSSN_to_ADM` exports poststep BSSN state back
 to ADMBaseX, and `T4DD_to_T4UU` raises TmunuBaseX covariant stress-energy data
 for matter-coupled RHS and constraint kernels.
 
-Symbolic ADM/BSSN and stress-energy formulas remain owned by
+Symbolic ADM/BSSN and stress-energy formulas are defined in
 [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md)
-and [BSSN Family](../../equations/general-relativity/bssn-family.md). This page
-documents CarpetX scheduling, read/write groups, and source-observed handoff
-contracts.
+and [BSSN Family](../../equations/general-relativity/bssn-family.md); the
+`CarpetX/general_relativity/` registrars add ODESolvers schedule bins,
+read/write group declarations, and tile/subgrid loop transfers.
 
 ## Detail
 
@@ -44,11 +44,7 @@ everywhere. Its schedule runs in `ODESolvers_PostStep` after
 `ADMBaseX_SetADMVars`, so exported ADM data consumes both the determinant- and
 trace-projected conformal tensors.
 
-Claim evidence:
-- Claim: CarpetX emits `BSSN_to_ADM` schedule text placing ADM export after the combined determinant/trace projection in `ODESolvers_PostStep`; source registration alone does not establish generated-thorn build or runtime behavior.
-- Role: generated evidence
-- Deciding authority: [BSSN_to_ADM.py](../../../nrpy/infrastructures/CarpetX/general_relativity/BSSN_to_ADM.py), `register_CFunction_BSSN_to_ADM`
-- Corroboration: [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/CarpetX/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
+Evidence (generated evidence): `CarpetX/general_relativity/BSSN_to_ADM.py::register_CFunction_BSSN_to_ADM`; corroboration: `CarpetX/general_relativity/enforce_detgbar_equals_detghat_trAzero.py::register_CFunction_enforce_detgbar_equals_detghat_trAzero`.
 
 `register_CFunction_T4DD_to_T4UU()` emits `<thorn>_T4DD_to_T4UU`. It builds
 `g4UU` from BSSN variables through the symbolic BSSN-to-four-metric conversion,
@@ -65,24 +61,19 @@ source disables SIMD in both `c_codegen` and the all-points loop because
 `cctk_lsh[0]*cctk_lsh[1]*cctk_lsh[2]` is not guaranteed to be a multiple of
 `SIMD_width`.
 
-Reconciliation note: the current `T4DD_to_T4UU.py` schedule tuple keys are
-`ODESolvers_CalcRHS` and `ODESolvers_PseudoEvolution`, while the schedule text
-inside those tuples schedules in `ODESolvers_RHS` and `ODESolvers_PostStep`.
-This page follows the source text for runtime-bin names and records the tuple
-name mismatch as observed source behavior only.
+In `T4DD_to_T4UU.py`, the Python tuple keys are `ODESolvers_CalcRHS` and
+`ODESolvers_PseudoEvolution`, whereas the emitted `schedule.ccl` strings place
+the routines in `ODESolvers_RHS` and `ODESolvers_PostStep`.
 
 ## Sources
 
 - [ADM_to_BSSN.py](../../../nrpy/infrastructures/CarpetX/general_relativity/ADM_to_BSSN.py) - `register_CFunction_ADM_to_BSSN`
 - [BSSN_to_ADM.py](../../../nrpy/infrastructures/CarpetX/general_relativity/BSSN_to_ADM.py) - `register_CFunction_BSSN_to_ADM`
 - [T4DD_to_T4UU.py](../../../nrpy/infrastructures/CarpetX/general_relativity/T4DD_to_T4UU.py) - `register_CFunction_T4DD_to_T4UU`
+- [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/CarpetX/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 
 ## See Also
 
-- [CarpetX](index.md)
-- [GR BSSN RHS, Ricci, Constraints, And Validation](gr-bssn-rhs-ricci-constraints-and-validation.md)
-- [GR Poststep Repairs](gr-poststep-repairs.md)
-- [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md)
-- [BSSN Family](../../equations/general-relativity/bssn-family.md)
-- [Reference Metrics](../../core/reference-metrics.md)
-- [ETLegacy GR ADM/BSSN, Slicing, And Matter Coupling](../etlegacy/gr-adm-bssn-slicing-and-matter-coupling.md)
+- Depends on: [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md)
+- Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)
+- Depends on: [Reference Metrics](../../core/reference-metrics.md)

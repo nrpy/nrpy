@@ -1,161 +1,41 @@
 # Equation Setup Style
 
-> Symbolic equation construction, naming, validation, and dependency rules for NRPy equation modules. · Status: provisional
+> SymPy construction rules, `nrpy.indexedexp` loops, tensor/derivative suffix conventions, `trusted_dict` key stability, and prohibited dependencies in `nrpy/equations/`. · Status: provisional
 > Up: [Equations](index.md)
 
 ## Summary
 
-Equation modules build symbolic expressions explicitly with SymPy and
-`nrpy.indexedexp`, avoid broad simplification and pattern substitution, use
-standard tensor and derivative suffixes, and validate outputs through trusted
-numerical dictionaries only when sampled regression is meaningful. The style
-contract favors explicit loops, exact fractions, stable result-key names, and
-exact or semantic invariants before sampled golden data.
+NRPy equation modules construct symbolic expressions with explicit nested loops over `nrpy.indexedexp` (`ixp`) arrays, exact `sp.Rational` fractions, `real=True` scalars, and standard tensor/derivative suffixes (`U`, `D`, `DD`, `dD`, `dDD`, `dupD`, `rhs`), avoiding `sp.simplify()`, general `.subs()`, `import re`, and `numpy`. Modules validate exact algebraic identities first and use `validate_expressions.py` `trusted_dict` checks when sampled high-precision regression adds signal.
 
 ## Detail
 
-### SymPy Usage
+### SymPy Rules, `nrpy.indexedexp` Loops, And Suffix Conventions
 
-Avoid `sp.simplify()` in equation-building code. It is acceptable in
-test/validation code or explicit identity checks, and some modules document
-"No SymPy .subs() or simplify() calls" as a local enforcement rule.
+Avoid `sp.simplify()` in equation builders (permitted in tests/identity checks; `nrpy.helpers.cached_functions.cached_simplify()` is reserved for small local subexpressions that materially improve GR symbolic tractability, never whole tensors or assembled RHSs). Avoid pattern-based `sp.subs()` / `sp.replace()`; permitted `.subs()` uses are elliptic coordinate substitution, GRHD face-value substitution, `nrpyABS -> sp.Abs`, horizon radius substitution, and evaluating waveform expressions at an attachment point. Initialize accumulators with `sp.sympify(0)`/`sp.sympify(1)`, fractions with `sp.Rational()`, and scalars with `sp.symbols(..., real=True)`.
 
-`nrpy.helpers.cached_functions.cached_simplify()` is a narrow exception for
-small local subexpressions when simplification materially improves downstream
-symbolic tractability, code-generation stability, or expression readability,
-especially in general-relativity equations. Do not use it as blanket
-permission to simplify whole tensors or large assembled RHS expressions. Add a
-short comment when the need is not obvious.
+Import `nrpy.indexedexp as ixp` (`zerorank1..4`, `declarerank1..4`, `2x2..4x4` symmetric inversions, 3D Levi-Civita helpers; symmetries `sym01`, `sym12`, `sym01_sym23`, `nosym`) and accumulate contractions with explicit Python `for` loops—never Einstein summation strings or matrix `@` operators.
 
-Do not use `sp.subs()` or `sp.replace()` for pattern-based expression
-transformation in core equation building. Allowed `.subs()` cases are
-coordinate substitution in elliptic source terms, face-value substitution in
-GRHD fluxes, systematic `nrpyABS` to `sp.Abs` conversion, surface-radius
-substitution in horizon modules, and evaluating an expression at a specific
-parameter value, such as waveform attachment-point calculations.
+Standard suffixes: `U` (contravariant), `D` (covariant), `DD`/`UU` (rank-2), `dD`/`dDD` (centered 1st/2nd partial derivatives), `dupD` (upwinded 1st derivative, explicitly permitted alongside `dD`/`dDD` by `coding_style.md` and `finite_difference.py::C_CODEGEN_DERIVATIVE_FAMILIES`), `dBarD`/`dHatD` (conformal/reference covariant derivatives), and `rhs` (time-evolution RHS); see [Finite Difference](../core/finite-difference.md).
 
-Use `sp.sympify(0)` or `sp.sympify(1)` for accumulator initialization,
-`sp.Rational()` for exact fractions, and `sp.symbols(..., real=True)` for
-scalar quantities.
+Evidence (normative rule): `coding_style.md` (`## Equation Setup Patterns`, `### Derivative Variable Naming Conventions`); `finite_difference.py::C_CODEGEN_DERIVATIVE_FAMILIES`.
 
-### Indexed Expressions And Explicit Accumulation
+### `trusted_dict` Validation Keys And Prohibited Dependencies
 
-Use `nrpy.indexedexp` imported as `ixp` for tensor-like symbolic arrays.
-Standard helpers include `ixp.zerorank1()` through `ixp.zerorank4()`,
-`ixp.declarerank1()` through `ixp.declarerank4()`, symmetric matrix inversions
-for 2x2 through 4x4 matrices, and 3D Levi-Civita symbol/tensor helpers.
+Prefer exact identities first; when sampled regression is appropriate, map stable keys to SymPy expressions, call `ve.process_dictionary_of_expressions(..., fixed_mpfs_for_free_symbols=True)`, and compare via `ve.compare_or_generate_trusted_results(...)` ([Expression Validation Helpers](../validation/expression-validation-helpers.md)). Because list entries flatten to `<name>_<idx>`, `funcform` and unsupported types are skipped, and duplicate processed keys overwrite silently, choose distinct names matching `tests/<module>*.py` (`trusted_dict` files hold only `mpf`/`mpc` `# type: ignore` imports + `trusted_dict` and are updated only via the two-process procedure in [Test Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md); doctest-only modules such as `quaternion_rotations/tensor_rotation.py` need no artificial `trusted_dict`).
 
-Use supported symmetry strings such as `sym01`, `sym12`, `sym01_sym23`, and
-`nosym`. Build tensor expressions with explicit nested loops and component
-accumulation. Do not use Einstein summation notation or matrix multiplication
-operators for equation construction.
+Core equation modules must not `import numpy` (reserved for post-processing/visualization scripts) or `import re` (grandfathered legacy sites in `coding_style.md` are removed only when substantively edited; repo tools outside `nrpy/` are exempt).
 
-### Naming Conventions
-
-Tensor and derivative suffixes encode meaning:
-
-- `U` means contravariant, as in `betaU`, `sU`, and `LambdabarU`.
-- `D` means covariant or first derivative context, as in `alpha_dD`, `sD`, and
-  `SD`.
-- `DD` and `UU` mean rank-2 covariant or contravariant tensors, such as
-  `gammaDD` and `AbarUU`.
-- `dD` and `dDD` mean first and second partial derivatives, such as `cf_dD`
-  and `cf_dDD`.
-- `dupD` means upwinded derivative, as in `trK_dupD`.
-- `dBarD` and `dHatD` mean conformal or reference-metric covariant derivative.
-- `rhs` means evolution-equation right-hand side, as in `alpha_rhs` and
-  `gammabar_rhsDD`.
-
-Use `dD` and `dDD` for centered first and second partial derivatives, and
-`dupD` for upwinded derivatives as explicitly allowed by `coding_style.md`.
-The guide's specific upwind convention qualifies its broader `dD`/`dDD`
-wording; valid `dupD` names must not be renamed to satisfy that broader
-sentence. Consult [Finite Difference](../core/finite-difference.md) for the
-recognized derivative families and which can generate C code. Use
-`nrpy.indexedexp` declaration helpers for the suffix and component encoding.
-
-Claim evidence:
-- Claim: The explicit `dupD` upwind naming rule qualifies the style guide's blanket `dD`/`dDD` sentence.
-- Role: normative rule
-- Deciding authority: [coding_style.md](../../coding_style.md), `### Derivative Variable Naming Conventions`, the explicit upwind bullet
-- Corroboration: [finite_difference.py](../../nrpy/finite_difference.py), `C_CODEGEN_DERIVATIVE_FAMILIES`, recognizes `_dupD` for generated derivatives.
-
-### Trusted Expression Validation
-
-Prefer an exact analytic, symbolic, or semantic invariant. When sampled
-trusted-result regression is appropriate, equation modules build a dictionary
-that maps stable descriptive names to SymPy expressions, process it with
-`ve.process_dictionary_of_expressions(...)` using fixed substitutions for free
-symbols, and pass the processed results to
-`ve.compare_or_generate_trusted_results(...)`. Direct dictionary comparisons
-must also use stable descriptive keys. [Expression Validation
-Helpers](../validation/expression-validation-helpers.md) owns helper behavior
-and limitations.
-
-Processed result keys must match the corresponding `trusted_dict` keys in
-`tests/<module>*.py`. List entries become `<name>_<flat_index>`; `funcform`
-keys and unsupported values are skipped, and colliding processed names silently
-overwrite earlier entries. Choose names so every intended numerical output
-survives processing with a distinct key. Use established names such as `*_rhs`,
-`*_expr_list_*`, or the owning family's convention, and align any intentional
-name changes with the trusted files.
-
-Claim evidence:
-- Claim: Trusted dictionaries compare processed names; list flattening, skipped values, and collisions can remove intended input outputs before comparison.
-- Role: descriptive behavior
-- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `process_dictionary_of_expressions`
-- Corroboration: `none available`; the named implementation decides the stated behavior.
-
-Trusted-value files under `*/tests/` are generated artifacts. They contain only
-the needed `mpf` or `mpc` import with `# type: ignore` and a `trusted_dict`
-mapping keys to high-precision values. They have no module docstrings,
-functions, or classes. Do not hand-edit trusted values. For legitimate
-algorithm changes, follow the isolated, independently reviewed two-process
-procedure in [Test Oracles And Safe
-Updates](../validation/test-oracles-and-safe-updates.md). That page owns store
-admission, format, and update safety.
-
-Do not add golden data merely to satisfy a test count. A meaningful doctest-only
-equation module, including quaternion tensor rotation, is valid when no sampled
-oracle is needed. [Code Test Policy](../validation/code-test-policy.md) owns
-owner-runner placement and the meaningful-contract gate.
-
-### Dependencies
-
-Do not add `import re` anywhere under `nrpy/`; use plain string methods instead.
-The legacy uses identified in `coding_style.md` are grandfathered rather than
-precedent. Remove their regular-expression use when each file is next materially
-edited; do not attach that removal to unrelated changes elsewhere. Repository
-tooling outside `nrpy/`, such as `tools/kb_lint.py`, is outside this restriction.
-
-Claim evidence:
-- Claim: New code under `nrpy/` does not import `re`; the legacy sites named in `coding_style.md` are grandfathered until their next material edit and do not authorize new uses. Repository tooling outside `nrpy/` is excluded.
-- Role: normative rule
-- Deciding authority: [coding_style.md](../../coding_style.md), `### Prohibited Dependencies`, the `import re` bullet
-- Corroboration: none available; the current style guide supersedes the frozen historical dependency guidance.
-
-Core NRPy code must not depend on numpy. The core workflow is symbolic
-expression to generated C, with computation done through SymPy and code
-generation. Visualization and post-processing scripts may use numpy for image
-handling, plotting, binary parsing, or similar non-core analysis.
+Evidence (normative rule): `coding_style.md` (`### Expression Validation via Trusted Dictionaries`, `### Prohibited Dependencies`); `validate_expressions.py::process_dictionary_of_expressions`.
 
 ## Sources
 
-- [coding_style.md](../../coding_style.md) - `### Prohibited Dependencies`, `### Derivative Variable Naming Conventions`
+- [coding_style.md](../../coding_style.md) - `## Equation Setup Patterns`, `### Derivative Variable Naming Conventions`, `### Expression Validation via Trusted Dictionaries`, `### Prohibited Dependencies`
 - [finite_difference.py](../../nrpy/finite_difference.py) - `C_CODEGEN_DERIVATIVE_FAMILIES`
-
-- [original-agents.md](../../raw/source-docs/original-agents.md) - `## Equation Setup Rules`
-- [original-agents.md](../../raw/source-docs/original-agents.md) - `### SymPy`, `### Indexed Expressions`, `### Expression Construction`
-- [original-agents.md](../../raw/source-docs/original-agents.md) - `### Expression Validation`, `### Prohibited / Restricted Dependencies`
 - [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `process_dictionary_of_expressions`, `assert_equal`, `compare_or_generate_trusted_results`
-- [tensor_rotation.py](../../nrpy/equations/quaternion_rotations/tensor_rotation.py) - `rotate`, module `__main__` path
+- [tensor_rotation.py](../../nrpy/equations/quaternion_rotations/tensor_rotation.py) - `rotate`, doctest-only `__main__`
 
 ## See Also
 
-- Parent: [Equations](index.md)
 - Depends on: [Indexed Expressions](../core/indexed-expressions.md)
-- Validated by: [Trusted Expression Pipeline](trusted-expression-pipeline.md)
-- Validated by: [Expression Validation Helpers](../validation/expression-validation-helpers.md)
+- Depends on: [Finite Difference](../core/finite-difference.md)
 - Depends on: [Test Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md)
-- Depends on: [Code Test Policy](../validation/code-test-policy.md)
-- See also: [Contribution Style And Static Analysis](../architecture/contribution-style-and-static-analysis.md)

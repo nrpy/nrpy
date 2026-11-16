@@ -15,6 +15,8 @@ copy-paste commands that build and run the application inside its own directory.
 
 ## Detail
 
+### Parallel Codegen Wave And File Emitters
+
 Each example registers the complete canonical state before parallel work. It
 then queues every expensive Ricci, RHS, constraint, conversion, initial-data,
 and runtime-service registrar for finite-difference orders 4, 6, and 8. One
@@ -64,21 +66,19 @@ restores `Dendro`. Each example sets `parallelization` to `openmp` only while it
 writes `BHaH_defines.h`, which it wraps and packages as
 `twopunctures/include/BHaH_defines.h` beside `BHaH_function_prototypes.h`,
 `TP_utilities.h`, and `TwoPunctures.h`. The TwoPunctures input behavior in
-[BSSN Application Wiring](bssn-application-wiring.md#twopunctures-inputs) is
+[Initial Data And Wave Diagnostics](initial-data-and-wave-diagnostics.md#twopunctures-inputs) is
 therefore decided in BHaH's `ID_persist_struct.py`, and a change to these BHaH
 modules changes the Dendro applications.
 
-Claim evidence:
-- Claim: `state_h.validate_registered_state` checks only that the registered EVOL names equal the canonical state and the AUXEVOL names equal the six Ricci scratch components; the parallel merge is a last-writer `dict.update`; each emitting function named in the table writes the listed generated path; the two parameter CFunctions are registered after `do_parallel_codegen()`; the examples reuse BHaH's TwoPunctures, `ID_persist_struct`, initial-data reader, and `BHaH_defines_h` modules and toggle `Infrastructure` and `parallelization` around them.
-- Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/state_h.py`, `validate_registered_state`; `nrpy/helpers/parallel_codegen.py`, `unpack_NRPy_environment_dict`; `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `main`; `nrpy/infrastructures/Dendro/CMakeLists.py`, `output_CFunctions_function_prototypes_and_construct_CMakeLists`; `nrpy/infrastructures/Dendro/CodeParameters.py`, `register_CFunctions_parameters`; `nrpy/infrastructures/Dendro/general_relativity/twopunctures.py`, `register_CFunction_twopunctures`.
-- Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.generate_and_build`, the two-generation tree comparison at `--fd-order 6`.
+Evidence (descriptive behavior): `Dendro/state_h.py::validate_registered_state`; `parallel_codegen.py::unpack_NRPy_environment_dict`; `dendro_bssn.py` and `dendro_fccz4.py::main`; corroboration: `tests/dendro_application_check.py::Leg.generate_and_build`.
 
-One Python module owns each generated numerical operation. Python basename,
+### CMake Build, SIMD Intrinsics, And Startup Validation
+
+One Python module defines each generated numerical operation. Python basename,
 registrar suffix, CFunction name, and C++ basename correspond directly. Thus
 `Ricci_eval.py` registers `Ricci_eval_order_6` and emits
 `Ricci_eval_order_6.cpp`; `ADM_to_BSSN.py` emits order-specific
-`ADM_to_BSSN` sources; `initial_data_lambdaU.py` owns only the separate
+`ADM_to_BSSN` sources; `initial_data_lambdaU.py` defines only the separate
 connection-initialization pass.
 
 `CMakeLists.py` writes an explicit source list. It includes the generated
@@ -93,19 +93,14 @@ applies to the solver and the fetched libraries; `generic_avx2` selects `-mavx2
 through `znver4`, `haswell`, `broadwell`, `skylake-avx512`, `cascadelake`, and
 `icelake-server`; any other value is a fatal CMake error. The examples emit intrinsic-based Ricci and RHS kernels and package
 NRPy's `simd_intrinsics.h` under `generated/include`. The option `--fd-order`
-sets only the default run-time order; see [Finite-Difference Profiles And Dendro
-Conformance](finite-difference-profiles-and-dendro-conformance.md).
+sets only the default run-time order; see [Finite-Difference Profiles And Dendro Conformance](finite-difference-profiles-and-dendro-conformance.md).
 
 `register_CFunction_Ricci_eval` and `register_CFunction_rhs_eval` take a
 required `enable_intrinsics` argument. `True` generates SIMD-intrinsic kernels
 and is accepted only with `CoordSystem = "Cartesian"`; `False` generates
 scalar kernels. Both examples pass `True`.
 
-Claim evidence:
-- Claim: `register_CFunction_Ricci_eval` and `register_CFunction_rhs_eval` take a required keyword argument `enable_intrinsics`; `True` emits SIMD-intrinsic kernels and raises `ValueError` unless `CoordSystem` is `Cartesian`, `False` emits scalar kernels, and both examples pass `True`.
-- Role: descriptive behavior
-- Deciding authority: [Ricci_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/Ricci_eval.py), `register_CFunction_Ricci_eval`; [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
-- Corroboration: [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py), `main`, `enable_intrinsics`
+Evidence (descriptive behavior): `Dendro/general_relativity/Ricci_eval.py::register_CFunction_Ricci_eval`; `Dendro/general_relativity/rhs_eval.py::register_CFunction_rhs_eval`; corroboration: `dendro_bssn.py` and `dendro_fccz4.py::main`, `enable_intrinsics`.
 
 The slow-start
 lapse exponential is evaluated once per block kernel call in either mode, while
@@ -113,6 +108,8 @@ its runtime coefficient `SSL_sigma` (key `BSSN_SSL_SIGMA`) remains available to 
 does not clear the unzipped RHS or Ricci buffers: both kernels write every
 interior value, the RHS kernel reads Ricci only at points that the Ricci kernel
 wrote with the same loop, and `Mesh::zip` reads only interior values.
+
+### TwoPunctures Precomputation And Run Sequence
 
 Run `nrpyBssnSolver --tpid PARFILE` or `nrpyFccz4Solver --tpid PARFILE`
 with one MPI task before starting a fresh evolution. This computes the
@@ -147,17 +144,7 @@ maximum absolute lapse with a NaN counted as infinity, and the solver stops with
 does not disable this check. [Runtime Parameter Keys](runtime-parameters.md)
 lists every key with its fallback and the values the solver rejects.
 
-Claim evidence:
-- Claim: The generated solver reads every host parameter before the TwoPunctures data are loaded, stops on a present parameter of the wrong TOML type, warns on rank 0 about every parameter-file key or table member it never read, requires `BSSN_ID_TYPE = 0` and `TPID_REPLACE_LAPSE_WITH_SQRT_CHI = true`, and stops when the per-step maximum absolute lapse, with NaN counted as infinity, is not finite.
-- Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp` (`ParameterFile`, startup checks, unread-parameter report, evolution loop); `nrpy/infrastructures/Dendro/solver_context.py`, `Ctx::terminal_output`.
-- Corroboration: `nrpy/infrastructures/Dendro/CodeParameters.py`, `output_toml_bindings`; `nrpy/infrastructures/Dendro/param_toml.py`, `generate_default_parfile`; `nrpy/examples/tests/dendro_application_check.py`, `Leg.universal_checks` (S1) and `Leg.run_negatives` (N1 lapse, type, and blow-up cases; N2).
-
-Claim evidence:
-- Claim: Single-rank `--tpid` precomputes reusable spectral coefficients for both generated formulations; fresh evolution loads matching coefficients, while checkpoint restoration needs no TwoPunctures file.
-- Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`.
-- Corroboration: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, calls to `output_main_cpp`; `nrpy/infrastructures/Dendro/param_toml.py`, `generate_default_parfile`.
+Evidence (descriptive behavior): `Dendro/main_cpp.py::output_main_cpp`; `Dendro/solver_context.py::output_solver_context_cpp`; `Dendro/CodeParameters.py::output_toml_bindings`; `Dendro/param_toml.py::generate_default_parfile`; `dendro_application_check.py::Leg.universal_checks`.
 
 After generating, each example prints the prerequisites (CMake 3.18 or newer,
 because Dendrolib's default BLAS and LAPACK path links the imported targets
@@ -170,51 +157,37 @@ application directory, configure with `cmake -S . -B build
 the TwoPunctures data with `mpiexec -n 1 build/<executable> --tpid
 pars/q1.par.lowres.toml`, and evolve with `mpiexec -n 4 build/<executable>
 pars/q1.par.lowres.toml`, noting that the default parameter file is a production binary-black-hole
-run whose values differ from the generated defaults (see [BSSN Application
-Wiring](bssn-application-wiring.md#q1-versus-generated-defaults)). For a short test, add `BSSN_MAX_ITERATIONS = 100` to the parameter file above its first `[table]` header: a line below a `[table]` header belongs to that table and is not read as `BSSN_MAX_ITERATIONS`, and the packaged q1 file ends inside `[AEH_PARAMS]`, so a line appended at its end has no effect.
+run whose values differ from the generated defaults (see [BSSN Application Wiring](bssn-application-wiring.md#q1-versus-generated-defaults)). For a short test, add `BSSN_MAX_ITERATIONS = 100` to the parameter file above its first `[table]` header: a line below a `[table]` header belongs to that table and is not read as `BSSN_MAX_ITERATIONS`, and the packaged q1 file ends inside `[AEH_PARAMS]`, so a line appended at its end has no effect.
 The solver's default output prefixes are relative, so a run from the application
 directory writes `dat/` diagnostics, the TwoPunctures file, `vtu/`, and `cp/`
 there, and `bah/` when `AEH_SOLVER_FREQ` is positive.
+
+Evidence (descriptive behavior): `Dendro/CMakeLists.py::output_CFunctions_function_prototypes_and_construct_CMakeLists`; `Dendro/CMakeLists.py::build_and_run_instructions`; `dendro_bssn.py::parse_args`; `dendro_fccz4.py::parse_args`; `dendro_application_check.py::Leg.generate_and_build`.
+
 Both examples copy `nrpy/examples/q1.par.lowres.toml` next to their generated
 `pars/bssn.toml` or `pars/fccz4.toml`. The q1 file is included in the Python
 package by `setup.py`, so installed generators have the same input file.
 
-Claim evidence:
-- Claim: `setup.py` adds `q1.par.lowres.toml` to the package data of `nrpy.examples`, and both Dendro examples read that file from the package directory and write it as `pars/q1.par.lowres.toml` in the generated application.
-- Role: descriptive behavior
-- Deciding authority: [setup.py](../../../setup.py), `setup` (the `nrpy.examples` package-data entry); [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py), `main`
-- Corroboration: none available; no CI job installs the package and generates from the installed copy
-
-Claim evidence:
-- Claim: The generated CMake project is standalone: it declares its own project and CMake minimum 3.18, fetches Dendrolib from `master` and toml11, and applies the selected CPU architecture to the solver and the fetched libraries, where `CPU_ARCH` accepts only `native`, `generic_avx2`, `x86-64-v3`, `znver1` through `znver4`, `haswell`, `broadwell`, `skylake-avx512`, `cascadelake`, and `icelake-server` and any other value is a fatal CMake error. The minimum matches the imported targets `BLAS::BLAS` and `LAPACK::LAPACK` that Dendrolib's default `WITH_BLAS_LAPACK` path links; the KB records no configure on an older CMake.
-- Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/CMakeLists.py`, `output_CFunctions_function_prototypes_and_construct_CMakeLists`.
-- Corroboration: `nrpy/examples/tests/dendro_application_check.py`, `Leg.generate_and_build`, configures and builds each generated tree on its own; Dendrolib `CMakeLists.txt` (`paralab/Dendro-5.01`), the `WITH_BLAS_LAPACK` option and its `target_link_libraries` line.
-
-Claim evidence:
-- Claim: Each Dendro example writes its application to `<project-dir>/<SOLVER_NAME>/` (default `project`) and prints the prerequisites and the copy-paste commands that configure, build, solve the TwoPunctures data, and evolve inside that directory, followed by a short-test hint to set `BSSN_MAX_ITERATIONS = 100` above the first `[table]` header of the parameter file.
-- Role: descriptive behavior
-- Deciding authority: `nrpy/examples/dendro_bssn.py` and `nrpy/examples/dendro_fccz4.py`, `parse_args` and `main`; `nrpy/infrastructures/Dendro/CMakeLists.py`, `build_and_run_instructions`.
-- Corroboration: `nrpy/infrastructures/Dendro/main_cpp.py`, `output_main_cpp`, relative default output prefixes and the `--tpid` requirement; `nrpy/infrastructures/Dendro/param_toml.py`, `generate_default_parfile`.
+Evidence (descriptive behavior): `setup.py::setup`; `dendro_bssn.py::main`; `dendro_fccz4.py::main`.
 
 ## Sources
 
-- [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) - BSSN registration wave and file emission.
-- [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - fCCZ4 registration wave and file emission.
-- [parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py) - worker execution and registry merge.
-- [state_h.py](../../../nrpy/infrastructures/Dendro/state_h.py) - `validate_registered_state` and the canonical state lists.
-- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) and [Ricci_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/Ricci_eval.py) - the `enable_intrinsics` kernels.
-- [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py) - the generation and run checks that corroborate this page.
-- [param_toml.py](../../../nrpy/infrastructures/Dendro/param_toml.py) - the generated `pars/<stem>.toml`.
-- [twopunctures.py](../../../nrpy/infrastructures/Dendro/general_relativity/twopunctures.py) - the TwoPunctures registrar and its `Infrastructure` toggle.
-- [setup.py](../../../setup.py) - package data that ships the packaged q1 parameter file.
-- [CMakeLists.py](../../../nrpy/infrastructures/Dendro/CMakeLists.py) - prototype and explicit CMake source emission, standalone project, and build/run instructions.
-- [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - application entry point, parameter-file reading, and startup checks.
-- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `output_toml_bindings`, CodeParameter key binding.
-- [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - generated Dendro runtime context.
+- [dendro_bssn.py](../../../nrpy/examples/dendro_bssn.py) - BSSN registration wave and file emission
+- [dendro_fccz4.py](../../../nrpy/examples/dendro_fccz4.py) - fCCZ4 registration wave and file emission
+- [parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py) - worker execution and registry merge
+- [state_h.py](../../../nrpy/infrastructures/Dendro/state_h.py) - `validate_registered_state` and the canonical state lists
+- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - `enable_intrinsics` RHS kernels
+- [Ricci_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/Ricci_eval.py) - `enable_intrinsics` Ricci kernels
+- [dendro_application_check.py](../../../nrpy/examples/tests/dendro_application_check.py) - generation, CMake build, and MPI checks
+- [param_toml.py](../../../nrpy/infrastructures/Dendro/param_toml.py) - the generated `pars/<stem>.toml`
+- [twopunctures.py](../../../nrpy/infrastructures/Dendro/general_relativity/twopunctures.py) - the TwoPunctures registrar and its `Infrastructure` toggle
+- [setup.py](../../../setup.py) - package data that ships the packaged q1 parameter file
+- [CMakeLists.py](../../../nrpy/infrastructures/Dendro/CMakeLists.py) - prototype and explicit CMake source emission, standalone project, and build/run instructions
+- [main_cpp.py](../../../nrpy/infrastructures/Dendro/main_cpp.py) - application entry point, parameter-file reading, and startup checks
+- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `output_toml_bindings`, CodeParameter key binding
+- [solver_context.py](../../../nrpy/infrastructures/Dendro/solver_context.py) - generated Dendro runtime context
 
 ## See Also
 
-- Parent: [Dendro](index.md)
 - Depends on: [Gridfunctions, Naming, And Loops](gridfunctions-naming-and-loops.md)
 - Validated by: [Production Validation And Deferred Checks](production-validation-and-deferred-checks.md)

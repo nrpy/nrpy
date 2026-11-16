@@ -15,6 +15,8 @@ the configured log residual tolerance is reached.
 
 ## Detail
 
+### Initial Guess, Auxiliary Wavespeeds, And Relaxation RHS
+
 `register_CFunction_initial_guess_single_point` emits the pointwise initial
 guess and currently sets both `uu_ID` and `vv_ID` to zero.
 `register_CFunction_initial_guess_all_points` registers the generated
@@ -34,7 +36,7 @@ reference metric's orthogonal scale factors and local `dxx*` values to store
 allocation through `post_non_y_n_auxevol_mallocs`; CUDA builds copy the
 auxiliary data back to the host after synchronizing the per-grid stream.
 
-`register_CFunction_rhs_eval` is the evolved-system RHS bridge. It constructs
+`register_CFunction_rhs_eval` generates the evolved-system RHS kernel. It constructs
 `HyperbolicRelaxationCurvilinearRHSs` with reference-metric precompute enabled,
 generates C for `uu_rhs` and `vv_rhs`, and emits an interior-point BHaH loop
 whose signature consumes `commondata`, `params`, `rfmstruct`, `auxevol_gfs`,
@@ -43,7 +45,9 @@ the MoL registration and then applies radiation boundary conditions with a
 custom per-grid wavespeed read from `VARIABLE_WAVESPEEDGF`; extrapolation
 boundaries are applied in the post-RHS hook.
 
-Residual evaluation uses the same symbolic owner but a separate generated
+### Residual Diagnostics And Stopping Criteria
+
+Residual evaluation uses the same symbolic builder (`HyperbolicRelaxationCurvilinearRHSs`) with a separate generated
 diagnostic function. `register_CFunction_residual_H_compute_all_points`
 registers `residual_H_compute_all_points` under `diagnostics/`, loops over the
 interior, and writes the `residual` expression into a caller-supplied
@@ -62,7 +66,7 @@ one over the whole domain and one inside `sphere_R_80`, both using the squared
 `DIAG_RESIDUALGF` integrand. After executing the recipes, it extracts the RMS
 for `sphere_R_80` and updates `commondata->log10_current_residual`.
 
-`register_CFunction_stop_conditions_check` owns the relaxation exit policy. It
+`register_CFunction_stop_conditions_check` implements the relaxation exit check. It
 registers `stop_relaxation`, `nn_max`, `log10_residual_tolerance`, and
 `log10_current_residual` in `commondata`, then sets `stop_relaxation` when the
 iteration count reaches `nn_max` or when the current log residual drops below
@@ -92,7 +96,6 @@ not KB sources.
 
 ## See Also
 
-- [BHaH](index.md)
-- [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md)
-- [Conformally Flat Elliptic](../../equations/conformally-flat-elliptic.md)
-- [Generated Project CI](../../validation/generated-project-ci.md)
+- See also: [Project Assembly, main.c, And Makefile Emission](lifecycle-and-project-assembly.md)
+- Depends on: [Conformally Flat Elliptic](../../equations/conformally-flat-elliptic.md)
+- Validated by: [Generated Project CI](../../validation/generated-project-ci.md)
