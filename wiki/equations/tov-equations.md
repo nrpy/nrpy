@@ -30,8 +30,8 @@ Evidence (descriptive behavior): `tov/TOV_equations.py::TOV_Equations.__init__`.
 
 `TOV_Equations` defines only the symbolic stellar-equilibrium ODE RHSs and their
 trusted-value checks; equation-of-state closures, radial integration steppers,
-outer-boundary detection, interpolation, and generated C files live in
-`nrpy/infrastructures/BHaH/general_relativity/TOV/`.
+outer-boundary detection, interpolation, and `CFunction` registration modules live in
+`nrpy/infrastructures/BHaH/general_relativity/TOVola/` (see [GR Initial Data, Diagnostics, And Psi4](../infrastructures/bhah/gr-initial-data-and-psi4.md#twopunctures-and-tovola-solvers)).
 
 The expressions divide by `r_Schw`, by `1 - 2*M/r_Schw`, and, for the isotropic
 radius equation, by its square root. The class performs no origin expansion,

@@ -15,8 +15,8 @@ code, HTML comments, and inline code:
    and wiki pages.
 3. Every backticked source file in a wiki ``Evidence (...)`` line or
    ``(Ev: ...)`` span names exactly one git-tracked file present on disk
-   (``## Sources`` links break ties), and every cited
-   ``file.py::Class.member`` symbol appears in that file.
+   (``## Sources`` links break ties), and every cited ``file::symbol``
+   target appears in that file.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -218,27 +218,40 @@ def _evidence_tokens(span: str) -> List[Tuple[str, bool]]:
     return tokens
 
 
-def _symbol_problem(symbol: str, code_rel: str) -> Optional[str]:
+def _symbol_problem(symbol: str, source_rel: str) -> Optional[str]:
     """
-    Return why a cited ``Class.member`` or ``Class::member`` symbol fails, if it does.
+    Return why a cited ``::`` or ``Class.member`` symbol fails, if it does.
 
     Doctests:
     >>> _symbol_problem("c_codegen", "nrpy/c_codegen.py") is None
     True
     >>> _symbol_problem("MissingClass.c_codegen", "nrpy/c_codegen.py")
     "Evidence symbol 'MissingClass' not found in nrpy/c_codegen.py"
+    >>> _symbol_problem("Human-Facing Language::Router", "AGENTS.md") is None
+    True
+    >>> _symbol_problem("Human-Facing Language::", "AGENTS.md")
+    "invalid Evidence symbol syntax 'Human-Facing Language::' in AGENTS.md"
+    >>> _symbol_problem("c_codegen()::", "nrpy/c_codegen.py")
+    "invalid Evidence symbol syntax 'c_codegen()::' in nrpy/c_codegen.py"
 
     :param symbol: Symbol text after ``::`` or the whole parenthesized token.
-    :param code_rel: Repository-relative path of the cited code file.
-    :return: Failure message, or None when every identifier segment is in the file.
+    :param source_rel: Repository-relative path of the cited tracked source file.
+    :return: Failure message, or None when every cited segment is in the file.
     """
-    base = symbol.split("(", 1)[0].strip()
-    if not re.fullmatch(r"[A-Za-z_]\w*(?:(?:\.|::)[A-Za-z_]\w*)*", base):
-        return f"invalid Evidence symbol syntax {symbol!r} in {code_rel}"
-    source_text = (ROOT / code_rel).read_text(encoding="utf-8")
-    missing = [seg for seg in re.split(r"::|\.", base) if seg not in source_text]
+    segments = [seg.strip() for seg in symbol.split("::")]
+    valid = all(segments)
+    if source_rel.endswith(CODE_SUFFIXES):
+        base = symbol.split("(", 1)[0].strip()
+        valid = valid and bool(
+            re.fullmatch(r"[A-Za-z_]\w*(?:(?:\.|::)[A-Za-z_]\w*)*", base)
+        )
+        segments = re.split(r"::|\.", base)
+    if not valid:
+        return f"invalid Evidence symbol syntax {symbol!r} in {source_rel}"
+    source_text = (ROOT / source_rel).read_text(encoding="utf-8")
+    missing = [seg for seg in segments if seg not in source_text]
     return (
-        f"Evidence symbol {missing[0]!r} not found in {code_rel}" if missing else None
+        f"Evidence symbol {missing[0]!r} not found in {source_rel}" if missing else None
     )
 
 
@@ -256,7 +269,13 @@ def _check_evidence(pages: List[Path], failures: List[str]) -> None:
     ...     "| (Ev: `Dendro/solver_context.py` (`Ctx::write_vtu`) and (`Ctx::nonexistent_method`)) |\n"
     ...     "| (Ev: Eq. (56); `nrpy/c_codegen.py::missing_symbol`) | (Ev: [Paper](https://example.org); `nrpy/missing_file.py`) |\n"
     ...     "| (Ev: Eq. (56); `nrpy/missing_file.py` |\n"
-    ...     "| ``(Ev: `ignored.py`)`` | (Ev: `nrpy/c_codegen.py::c_codegen`) | `ignored.py` |"
+    ...     "| ``(Ev: `ignored.py`)`` | (Ev: `nrpy/c_codegen.py::c_codegen`) | `ignored.py` |\n"
+    ...     "Evidence (CI behavior): `.github/workflows/main.yml::nonexistent-job`; `.github/single_file_static_analysis.sh::nonexistent_step`; `coding_style.md::Nonexistent Heading`; `nrpy/c_codegen.py::`.\n"
+    ...     "| (Ev: `.github/workflows/main.yml::static-analysis`; `.github/single_file_static_analysis.sh::run_test_step`; `AGENTS.md::Human-Facing Language`; `AGENTS.md::`) |\n"
+    ...     "| (Ev: `Dendro/solver_context.py` (`Ctx::`); `NotAFile::`; `nrpy/c_codegen.py::c_codegen::`) |\n"
+    ...     "| (Ev: `.github/workflows/main.yml::static-analysis::`; `.github/workflows/main.yml::::static-analysis`) |\n"
+    ...     "| (Ev: `nrpy/c_codegen.py`; `AGENTS.md::Human-Facing Language` (`MissingClass::c_codegen`)) |\n"
+    ...     "| (Ev: `raw/source-docs/ybs-momentum-damping-spec.md`; `ybs-momentum-damping-spec.md`; `raw/SOURCES.md`; `wiki/SCHEMA.md`) |\n"
     ... )
     >>> class CitationPage(type(WIKI)):
     ...     def read_text(self, encoding="utf-8"):
@@ -269,6 +288,19 @@ def _check_evidence(pages: List[Path], failures: List[str]) -> None:
     ...     "Evidence symbol 'missing_symbol' not found in nrpy/c_codegen.py",
     ...     "Evidence file 'nrpy/missing_file.py' is not a git-tracked file on disk",
     ...     "Evidence file 'nrpy/missing_file.py' is not a git-tracked file on disk",
+    ...     "Evidence symbol 'nonexistent-job' not found in .github/workflows/main.yml",
+    ...     "Evidence symbol 'nonexistent_step' not found in .github/single_file_static_analysis.sh",
+    ...     "Evidence symbol 'Nonexistent Heading' not found in coding_style.md",
+    ...     "invalid Evidence symbol syntax '' in nrpy/c_codegen.py",
+    ...     "invalid Evidence symbol syntax '' in AGENTS.md",
+    ...     "invalid Evidence symbol syntax 'Ctx::' in nrpy/infrastructures/Dendro/solver_context.py",
+    ...     "Evidence :: token must start with a source file path: NotAFile::",
+    ...     "invalid Evidence symbol syntax 'c_codegen::' in nrpy/c_codegen.py",
+    ...     "invalid Evidence symbol syntax 'static-analysis::' in .github/workflows/main.yml",
+    ...     "invalid Evidence symbol syntax '::static-analysis' in .github/workflows/main.yml",
+    ...     "Evidence :: token must start with a source file path: MissingClass::c_codegen",
+    ...     "Evidence file 'raw/SOURCES.md' is not a git-tracked file on disk",
+    ...     "Evidence file 'wiki/SCHEMA.md' is not a git-tracked file on disk",
     ... ]
     True
     """
@@ -280,7 +312,10 @@ def _check_evidence(pages: List[Path], failures: List[str]) -> None:
     tracked = [
         p
         for p in listing.stdout.split("\0")
-        if p and not p.startswith(("wiki/", "raw/")) and (ROOT / p).is_file()
+        if p
+        and not p.startswith("wiki/")
+        and p != "raw/SOURCES.md"
+        and (ROOT / p).is_file()
     ]
     for page in pages:
         text = _prose(page)
@@ -302,14 +337,14 @@ def _check_evidence(pages: List[Path], failures: List[str]) -> None:
             for span in spans:
                 prev_code: Optional[str] = None
                 for token, in_parens in _evidence_tokens(span):
-                    head, _, symbol = (part.strip() for part in token.partition("::"))
+                    head, sep, symbol = (part.strip() for part in token.partition("::"))
                     problem: Optional[str] = None
                     if any(
                         ch in head for ch in " *<{"
                     ) or not EVIDENCE_FILE_SUFFIX_RE.search(head):
-                        if symbol and in_parens and prev_code:
+                        if sep and in_parens and prev_code:
                             problem = _symbol_problem(token, prev_code)
-                        elif symbol:
+                        elif sep:
                             problem = f"Evidence :: token must start with a source file path: {token}"
                     else:
                         matches = [t for t in tracked if t == head] or [
@@ -323,10 +358,11 @@ def _check_evidence(pages: List[Path], failures: List[str]) -> None:
                                 if matches
                                 else f"Evidence file {head!r} is not a git-tracked file on disk"
                             )
-                        elif matches[0].endswith(CODE_SUFFIXES):
-                            prev_code = matches[0]
-                            if symbol:
-                                problem = _symbol_problem(symbol, prev_code)
+                        else:
+                            if matches[0].endswith(CODE_SUFFIXES):
+                                prev_code = matches[0]
+                            if sep:
+                                problem = _symbol_problem(symbol, matches[0])
                     if problem:
                         _fail(failures, page, line_no, problem)
 

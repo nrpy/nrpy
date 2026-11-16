@@ -28,7 +28,7 @@ export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}."
 Older Python cells in `.github/workflows/main.yml` strip version pins from `requirements-dev.txt`; do not use unpinned fallback installs for local contributor work.
 
 Toolchain requirements depend on the target backend:
-- **Standalone BHaH C/CUDA**: C compiler (plus `nvcc` for `--cuda`), `make`, Linux or macOS for executable `Makefile` generation (`create_lib=False` rejects other `platform.system()` values; see [Wave Equation Generators](../examples/wave-equation-generators.md)), and GSL for TwoPunctures, TOVola, SEOBNR, PN, and massive-geodesic examples.
+- **Standalone BHaH C/CUDA**: C compiler (plus `nvcc` for `--cuda`), `make`, Linux or macOS for executable `Makefile` generation (`create_lib=False` rejects other `platform.system()` values; see [Wave Equation Generators](../examples/wave-equation-generators.md)), and GSL for TwoPunctures, TOVola, SEOBNR, and massive-geodesic examples.
 - **Einstein Toolkit & CarpetX / superB / JAX**: Python generates thorn, chare, or `PyFunction` trees; compiling/running requires an Einstein Toolkit checkout, Charm++ (`charmc`/`charmrun`), or `jax`/`jaxlib`/`numpy`.
 - **Dendro**: CMake `>= 3.18`, GNU C/C++17/Fortran, MPI (C/C++/Fortran), OpenMP, GSL, BLAS/LAPACK, Git, and network access on first configure for `Dendrolib`/`toml11`/`spdlog` ([Dendro Project Assembly](../infrastructures/dendro/project-assembly-and-emitters.md)).
 
