@@ -36,6 +36,9 @@ WIKI = ROOT / "wiki"
 AGENTS = ROOT / "AGENTS.md"
 SOURCES = ROOT / "raw" / "SOURCES.md"
 LINK_RE = re.compile(r"(?<!!)\[([^\]\[]+)\]\(([^)\n]+)\)")
+INLINE_CODE_RE = re.compile(
+    r"(?<!`)(?P<ticks>`+)(?!`)(?P<body>.*?)(?<!`)(?P=ticks)(?!`)", re.DOTALL
+)
 FENCE_OR_HTML_COMMENT_RE = re.compile(
     r"^[ ]{0,3}`{3,}[^\n]*\n.*?^[ ]{0,3}`{3,}[ \t]*$"
     r"|^[ ]{0,3}~{3,}[^\n]*\n.*?^[ ]{0,3}~{3,}[ \t]*$"
@@ -94,8 +97,7 @@ def _without_inline_code(text: str) -> str:
     :param text: Masked Markdown text.
     :return: Text with inline-code spans blanked.
     """
-    pattern = r"(?<!`)(?P<ticks>`+)(?!`)(?P<body>.*?)(?<!`)(?P=ticks)(?!`)"
-    return re.sub(pattern, _blank, text, flags=re.DOTALL)
+    return INLINE_CODE_RE.sub(_blank, text)
 
 
 def _heading_anchors(path: Path) -> Set[str]:
@@ -191,6 +193,16 @@ def _evidence_tokens(span: str) -> List[Tuple[str, bool]]:
     [('solver.py::run', False), ('Ctx::out', True), ('bad_py::fn', False)]
     >>> _evidence_tokens("(Ev: `solver.py::run` (`Ctx::out`); `bad_py::fn`) | `ignored.py`")
     [('solver.py::run', False), ('Ctx::out', True), ('bad_py::fn', False)]
+    >>> _evidence_tokens("Evidence (normative rule): ``coding_style.md::### `__init__.py` Files``.")
+    [('coding_style.md::### `__init__.py` Files', False)]
+    >>> _evidence_tokens("(Ev: ```a`b``c```; `solver.py::run`) | `ignored.py`")
+    [('a`b``c', False), ('solver.py::run', False)]
+    >>> _evidence_tokens("(Ev: `solver.py` (``literal )``); ``missing.py``) `ignored.py`")
+    [('solver.py', False), ('literal )', True), ('missing.py', False)]
+    >>> _evidence_tokens("`` `name` ``; `  symbol  `; `   `; ` left`; `right `")
+    [('`name`', False), (' symbol ', False), ('   ', False), (' left', False), ('right ', False)]
+    >>> _evidence_tokens("```unclosed; ``solver.py::run``; `other.py`")
+    [('solver.py::run', False), ('other.py', False)]
 
     :param span: Evidence line or ``(Ev: ...)`` substring.
     :return: Tokens in order, flagged when nested inside parentheses.
@@ -202,11 +214,15 @@ def _evidence_tokens(span: str) -> List[Tuple[str, bool]]:
     idx = 0
     while idx < len(body):
         if body[idx] == "`":
-            end = body.find("`", idx + 1)
-            if end == -1:
-                break
-            tokens.append((body[idx + 1 : end], depth > 0))
-            idx = end
+            code_match = INLINE_CODE_RE.match(body, idx)
+            if code_match:
+                raw = code_match.group("body")
+                if raw.startswith(" ") and raw.endswith(" ") and raw.strip(" "):
+                    raw = raw[1:-1]
+                tokens.append((raw, depth > 0))
+                idx = code_match.end() - 1
+            else:
+                idx += len(body[idx:]) - len(body[idx:].lstrip("`")) - 1
         elif body[idx] == "(":
             depth += 1
         elif body[idx] == ")":
@@ -303,6 +319,30 @@ def _check_evidence(pages: List[Path], failures: List[str]) -> None:
     ...     "Evidence file 'wiki/SCHEMA.md' is not a git-tracked file on disk",
     ... ]
     True
+    >>> citations = (
+    ...     "Evidence (normative rule): ``coding_style.md::### `__init__.py` Files``.\n"
+    ...     "Evidence (normative rule): ``coding_style.md::`nonexistent_heading` pattern``.\n"
+    ...     "Evidence (descriptive behavior): ``nrpy/missing_file.py::bad_fn``.\n"
+    ...     "| (Ev: `nrpy/c_codegen.py` (``literal )``); ``nrpy/missing_file.py``) |\n"
+    ...     "Evidence (descriptive behavior): `README.md::CAPTEST_ORDERS`.\n"
+    ...     "Evidence (descriptive behavior): `README.md::Project Families and Example Generators`.\n"
+    ...     "## Sources\n"
+    ...     "- [README.md](../nrpy/infrastructures/Dendro/tests_infra/README.md)\n"
+    ... )
+    >>> failures = []
+    >>> _check_evidence([CitationPage(WIKI / "citations.md")], failures)
+    >>> [failure.split(": ", 1)[1] for failure in failures] == [
+    ...     "Evidence symbol '`nonexistent_heading` pattern' not found in coding_style.md",
+    ...     "Evidence file 'nrpy/missing_file.py' is not a git-tracked file on disk",
+    ...     "Evidence file 'nrpy/missing_file.py' is not a git-tracked file on disk",
+    ...     "Evidence symbol 'Project Families and Example Generators' not found in nrpy/infrastructures/Dendro/tests_infra/README.md",
+    ... ]
+    True
+    >>> citations = "Evidence (descriptive behavior): `README.md::Project Families and Example Generators`.\n"
+    >>> failures = []
+    >>> _check_evidence([CitationPage(WIKI / "citations.md")], failures)
+    >>> failures
+    []
     """
     listing = subprocess.run(
         ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, text=True, check=False
@@ -347,10 +387,14 @@ def _check_evidence(pages: List[Path], failures: List[str]) -> None:
                         elif sep:
                             problem = f"Evidence :: token must start with a source file path: {token}"
                     else:
-                        matches = [t for t in tracked if t == head] or [
-                            t for t in tracked if t.endswith("/" + head)
+                        matches = [
+                            t for t in tracked if t == head or t.endswith("/" + head)
                         ]
-                        matches = [t for t in matches if ROOT / t in sources] or matches
+                        matches = (
+                            [t for t in matches if ROOT / t in sources]
+                            or [t for t in matches if t == head]
+                            or matches
+                        )
                         prev_code = None
                         if len(matches) != 1:
                             problem = (

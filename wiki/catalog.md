@@ -39,7 +39,7 @@ Search this table with `rg -n -i -F '<term>' wiki/catalog.md` when router titles
 | [Psi4 And Tetrads](equations/general-relativity/psi4-and-tetrads.md) | Weyl scalar Psi4 evaluation and BCL or symbolic tetrads. | Psi4Tetrads, psi4_re, psi4_im, leave_symbolic |
 | [YBS Gamma-Constraint Adjustment](equations/general-relativity/ybs-gamma-constraint-adjustment.md) | Opt-in YBS_chi Gamma-constraint term in BSSN LambdaBar RHS. | enable_YBS_Gamma_constraint_adjustment, xi, BSSN_RHSs |
 | [YBS-MOM Timestep-Scaled Momentum Adjustment](equations/general-relativity/ybs-momentum-damping.md) | Yo-Lin-Cao momentum-gradient adjustment with CAHD scaling. | C_YBS_mom, enable_YBS_momentum_constraint_adjustment, DSMINGF, dsmin |
-| [Geometry And Special-Function Support](equations/geometry-and-special-function-support.md) | Basis transforms, fisheye maps, SO(3) rotations, and _s Y_{lm}. | BasisTransforms, GeneralRFMFisheye, SO3_rotations, spherical harmonics |
+| [Geometry And Special-Function Support](equations/geometry-and-special-function-support.md) | Basis transforms, fisheye, SO(3)/quaternion rotations, _s Y_{lm}. | BasisTransforms, GeneralRFMFisheye, SO3_rotations, spherical harmonics |
 | [GRHD](equations/grhd.md) | Reference-metric Valencia GRHD conservatives, fluxes, and speeds. | GRHD_Equations, T4UU, u4U, HLL_fluxes |
 | [GRMHD](equations/grmhd.md) | Magnetic stress-energy in GRHD, magnetosonic bounds, HLL fluxes. | GRMHD_Equations, BmagU, smallb4U, Alfven, cmin, cmax |
 | [Aligned-Spin Calibration And Remnant](equations/seobnr/aligned-spin-calibration-and-remnant.md) | SEOBNRv5 calibration constants, ISCO helpers, and remnant fits. | SEOBNRv5_aligned_spin_constants, HBR2016, UIB2016 |
@@ -47,7 +47,7 @@ Search this table with `rg -n -i -F '<term>' wiki/catalog.md` when router titles
 | [Aligned-Spin Waveforms](equations/seobnr/aligned-spin-waveforms.md) | SEOBNRv5 factorized modes, radiation flux, strain, and NQC. | SEOBNRv5_aligned_spin_waveform_quantities, hlm, Omega_circ, vphi |
 | [BOB Waveforms](equations/seobnr/bob-waveforms.md) | Backwards-One-Body merger-ringdown strain, NQC, and BOBv2 modes. | BOB_aligned_spin_waveform_quantities, BOB_v2_waveform_quantities, QNM |
 | [SEOBNR Precessing Dynamics](equations/seobnr/precessing-dynamics.md) | Quasi-precessing SEOBNRv5 Hamiltonian and spin/orbital RHSs. | SEOBNRv5_quasi_precessing_spin_Hamiltonian, spin_evolution, ln_dot |
-| [SEOBNR Precessing Rotations And Ringdown](equations/seobnr/precessing-rotations-and-ringdown.md) | Co-precessing quaternions, J-frame strain, and omega_prec. | SEOBNRv5_Coprecessing_Rotations, wigner_d_small, J_f |
+| [SEOBNR Precessing Rotations And Ringdown](equations/seobnr/precessing-rotations-and-ringdown.md) | Co-precessing Euler/Wigner rotations, inertial polarizations, omega_prec. | SEOBNRv5_Coprecessing_Rotations, wigner_d_small, J_f |
 | [TOV Equations](equations/tov-equations.md) | Tolman-Oppenheimer-Volkoff stellar-equilibrium ODE RHSs. | TOV_Equations, r_Schw, rho_energy, dP_dr, dM_dr |
 | [Wave Equation](equations/wave-equation.md) | Cartesian/curvilinear scalar wave RHSs and analytic solutions. | WaveEquation_RHSs, WaveEquationCurvilinear_RHSs, initial data |
 | [Apparent Horizon Library](examples/apparent-horizon-library.md) | Standalone libBHaHAHA.a generator and horizon-enabled examples. | bhahaha.py, BHaHAHA_header.h, find_horizons, bah_find_horizon |
@@ -84,7 +84,7 @@ Search this table with `rg -n -i -F '<term>' wiki/catalog.md` when router titles
 | [CarpetX GR Poststep Repairs](infrastructures/carpetx/gr-poststep-repairs.md) | CarpetX lapse floor and determinant/trace-free Abar repair. | enforce_detgbar_equals_detghat_trAzero, floor_the_lapse |
 | [CarpetX Thorn Assembly And CCL](infrastructures/carpetx/thorn-assembly-configuration-and-ccl-files.md) | CarpetX CCL files, configuration.ccl, and make.code.defn. | USES_INCLUDEs, evol_variables, ET_thorn_name |
 | [BSSN Application Wiring](infrastructures/dendro/bssn-application-wiring.md) | Dendro BSSN W/chi evolution, SSL, CAHD, Brown Lambda, and q1. | Dendro_NRPy_BSSN, C_CAHD, YBS_chi, C_YBS_mom, lambdaU |
-| [Constraints And Diagnostic Norms](infrastructures/dendro/constraints-and-diagnostic-norms.md) | Dendro covariant M^i, H_Z4/M/Lambda norms, and node RMS. | M_CONSTRAINT, LAMBDA_CONSTRAINT, Ctx::diagnostic_output |
+| [Constraints And Diagnostic Norms](infrastructures/dendro/constraints-and-diagnostic-norms.md) | Dendro covariant M_i, H_Z4/M/Lambda norms, and node RMS. | M_CONSTRAINT, LAMBDA_CONSTRAINT, Ctx::diagnostic_output |
 | [fCCZ4 Application Wiring](infrastructures/dendro/fccz4-application-wiring.md) | Dendro fCCZ4 W/chi generation, CAHD, lambdaU init, and DIAG. | Dendro_NRPy_fCCZ4, initial_data_lambdaU, kappa1, kappa2 |
 | [FD Profiles And Conformance](infrastructures/dendro/finite-difference-profiles-and-dendro-conformance.md) | Centered advection, KO order, padding, and BSSN_ELE_ORDER. | KO_FD_ORDER, REQUIRED_PADDING, NGHOSTS |
 | [Octree Grid, AMR, And Time Stepping](infrastructures/dendro/grid-amr-and-time-stepping.md) | Dendro zip/unzip, ghosts, BH_WAMR remeshing, and RK4. | ot::Block, Ctx::rhs, physical_boundary_ghosts, BH_WAMR |
@@ -92,7 +92,7 @@ Search this table with `rg -n -i -F '<term>' wiki/catalog.md` when router titles
 | [Initial Data And Wave Diagnostics](infrastructures/dendro/initial-data-and-wave-diagnostics.md) | Dendro TwoPunctures setup, ADM integrals, and Psi4 modes. | --tpid, _ADM.dat, Ctx::adm_output, BSSN_GW_RADAII |
 | [Production Validation And Checks](infrastructures/dendro/production-validation-and-deferred-checks.md) | Dendro MPI remesh/restart checks and dendro-validation CI. | dendro_application_check, dendrolib_capability_test, dendrolib-canary |
 | [Project Assembly And Emitters](infrastructures/dendro/project-assembly-and-emitters.md) | Dendro generated C++ layout, CMake sources, and TOML parser. | CMakeLists.py, FetchContent, Dendrolib |
-| [Runtime Parameter Keys](infrastructures/dendro/runtime-parameters.md) | Dendro TOML/JSON parameter keys, fallbacks, q1, and guards. | BSSN_CAHD_C, KO_DISS_SIGMA, ETA_CONST, AEH_SOLVER_FREQ |
+| [Runtime Parameter Keys](infrastructures/dendro/runtime-parameters.md) | Dendro TOML parameter keys, fallbacks, q1, and guards. | BSSN_CAHD_C, KO_DISS_SIGMA, ETA_CONST, AEH_SOLVER_FREQ |
 | [ETLegacy Code Params And Loops](infrastructures/etlegacy/code-parameters-includes-and-loops.md) | ETLegacy Cactus parameter reads, symbols, and CCTK loops. | DECLARE_CCTK_PARAMETERS, CCTK_ParameterGet, cctk_lsh, cctk_nghostzones, SIMD |
 | [GR ADM/BSSN, Slicing, And Matter](infrastructures/etlegacy/gr-adm-bssn-slicing-and-matter-coupling.md) | ETLegacy ADMBase import/export, slicing, and TmunuBase. | Baikal, ADM_to_BSSN, CCTK_INITIAL, ADMBase_PostInitial |
 | [ETLegacy GR BSSN RHS And Constraints](infrastructures/etlegacy/gr-bssn-rhs-ricci-constraints-and-validation.md) | ETLegacy BSSN Ricci, RHS, constraints, and trusted dicts. | MoL_CalcRHS, MoL_PseudoEvolution, RbarDD |
