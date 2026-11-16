@@ -822,6 +822,11 @@ Compute spheroidal fisheye internal parameters from physical xy and z axis input
 This function intentionally reuses fisheye_params_from_physical_N* for each axis
 so the nonlinear radial parameter solve remains single-source.
 """
+    cfunc_type = "int"
+    name = f"spheroidal_fisheye_params_from_physical_N{num_transitions}"
+    params = (
+        "const commondata_struct *restrict commondata, params_struct *restrict params"
+    )
     body = rf"""
   commondata_struct xy_commondata = *commondata;
   params_struct xy_params = *params;
@@ -843,9 +848,9 @@ so the nonlinear radial parameter solve remains single-source.
         subdirectory="fisheye",
         includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
         desc=desc,
-        cfunc_type="int",
-        name=f"spheroidal_fisheye_params_from_physical_N{num_transitions}",
-        params="const commondata_struct *restrict commondata, params_struct *restrict params",
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
         include_CodeParameters_h=False,
         body=body,
     )
