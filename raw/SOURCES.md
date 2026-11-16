@@ -50,6 +50,7 @@ aggregate rows and `wiki/source-map.md`.
 | `.darglint` | living |
 | `.github/workflows/main.yml` | living |
 | `.github/workflows/dendrolib-canary.yml` | living |
+| `.github/workflows/spheroidal_fisheye_roundtrip.yml` | living |
 | `.github/single_file_static_analysis.sh` | living |
 | `.github/full_nrpy_local_ci.sh` | living |
 | `bin/nrpyinline.py` | living |
@@ -84,6 +85,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/helpers/colorize_text.py` | living |
 | `nrpy/helpers/type_annotation_utilities.py` | living |
 | `nrpy/validate_expressions/validate_expressions.py` | living |
+| `nrpy/examples/tests/spheroidal_fisheye_roundtrip_check.py` | living |
 | `nrpy/equations/general_relativity/BSSN_RHSs.py` | living |
 | `nrpy/equations/general_relativity/BSSN_quantities.py` | living |
 | `nrpy/equations/general_relativity/BSSN_gauge_RHSs.py` | living |

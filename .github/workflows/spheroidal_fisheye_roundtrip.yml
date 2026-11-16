@@ -1,0 +1,27 @@
+name: Spheroidal fisheye coordinate inversion
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  generated-bhah-roundtrip:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        precision: [float, double]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install NRPy
+        run: python -m pip install .
+      - name: Report Python, SymPy, clang-format, and GCC versions
+        run: |
+          python --version
+          python -m pip show sympy clang-format
+          gcc --version | head -1
+      - name: Check generated BHaH coordinate inversion
+        run: python nrpy/examples/tests/spheroidal_fisheye_roundtrip_check.py --precision ${{ matrix.precision }}
