@@ -2875,6 +2875,9 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
 @DIAGNOSTIC_COMMONDATA_DEFINITIONS@
 
   bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
+  bhahaha_diags->BHAHAHA_SPIN_AXIS_X = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  bhahaha_diags->BHAHAHA_SPIN_AXIS_Y = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  bhahaha_diags->BHAHAHA_SPIN_AXIS_Z = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
   bhahaha_diags->spin_chi_x_akv_poles = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
   bhahaha_diags->spin_chi_y_akv_poles = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
   bhahaha_diags->spin_chi_z_akv_poles = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
@@ -3080,6 +3083,8 @@ REAL chi_U[3] = {0.0, 0.0, 0.0};
 REAL S_Gram_U[3] = {0.0, 0.0, 0.0};
 REAL chi_Gram_U[3] = {0.0, 0.0, 0.0};
 REAL chi_AKV_U[3] = {0.0, 0.0, 0.0};
+REAL spin_axis_U[3] = {0.0, 0.0, 0.0};
+int spin_axis_is_valid = 0;
 int akv_spin_is_valid = 0;
 
 if (!(A > spin_norm_tolerance) || !isfinite(A) || !isfinite(R0) || !isfinite(O0) ||
@@ -3176,21 +3181,29 @@ S_Gram_squared = fmax(0.0, S_Gram_squared);
 const REAL S_Gram = sqrt(S_Gram_squared);
 
 if (Oabs > spin_norm_tolerance && normI > spin_norm_tolerance) {
-    for (int i = 0; i < 3; i++) {
-        S_U[i] = S * IU[i] / normI;
-        S_Gram_U[i] = S_Gram * IU[i] / normI;
-    } // END LOOP: for i over vorticity-direction components
+    for (int i = 0; i < 3; i++)
+        spin_axis_U[i] = IU[i] / normI;
+    spin_axis_is_valid = 1;
 } // END IF: vorticity-based spin direction is available
 else if (Salpha_norm > spin_norm_tolerance) {
-    for (int i = 0; i < 3; i++) {
-        S_U[i] = S * SalphaU[i] / Salpha_norm;
-        S_Gram_U[i] = S_Gram * SalphaU[i] / Salpha_norm;
-    } // END LOOP: for i over AKV-fallback components
+    for (int i = 0; i < 3; i++)
+        spin_axis_U[i] = SalphaU[i] / Salpha_norm;
+    spin_axis_is_valid = 1;
 } // END ELSE IF: vorticity unavailable; AKV integrals nonzero
 else if (Oabs > spin_norm_tolerance) {
     free(spectre_spin_gfs);
     return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
 } // END ELSE IF: nonzero vorticity lacks usable direction
+if (spin_axis_is_valid) {
+    for (int i = 0; i < 3; i++) {
+        if (!isfinite(spin_axis_U[i])) {
+            free(spectre_spin_gfs);
+            return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
+        } // END IF: selected spin-axis component is non-finite
+        S_U[i] = S * spin_axis_U[i];
+        S_Gram_U[i] = S_Gram * spin_axis_U[i];
+    } // END LOOP: construct spin vectors along the selected direction
+} // END IF: a physically usable SpECTRE direction exists
 
 if (commondata->bhahaha_params_and_data != NULL &&
     commondata->bhahaha_params_and_data->verbosity_level >= 2)
@@ -3252,6 +3265,11 @@ if (akv_spin_is_valid) {
     bhahaha_diags->spin_chi_y_akv_poles = chi_AKV_U[1];
     bhahaha_diags->spin_chi_z_akv_poles = chi_AKV_U[2];
 } // END IF: finite AKV-pole spin and mass
+if (spin_axis_is_valid) {
+    bhahaha_diags->BHAHAHA_SPIN_AXIS_X = spin_axis_U[0];
+    bhahaha_diags->BHAHAHA_SPIN_AXIS_Y = spin_axis_U[1];
+    bhahaha_diags->BHAHAHA_SPIN_AXIS_Z = spin_axis_U[2];
+} // END IF: persist the direction shared by SpECTRE and circumference diagnostics
 
 free(spectre_spin_gfs);
 return BHAHAHA_SUCCESS;

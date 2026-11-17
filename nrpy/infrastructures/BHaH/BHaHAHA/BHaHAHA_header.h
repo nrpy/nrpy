@@ -232,10 +232,16 @@ typedef struct {
   REAL spin_a_z_from_yz_over_xy_prop_circumfs;
 
   //==========================
-  // Used in general circumference ratio calculation
+  // Unit spin direction selected by the SpECTRE diagnostic and reused by the
+  // generalized proper-circumference diagnostic.
   REAL BHAHAHA_SPIN_AXIS_X, BHAHAHA_SPIN_AXIS_Y, BHAHAHA_SPIN_AXIS_Z;
+  // Proper circumferences and dimensionless spin magnitude about that axis.
   REAL BHAHAHA_CIRC_GENERAL_POLAR, BHAHAHA_CIRC_GENERAL_EQUATOR;
   REAL BHAHAHA_CIRC_GENERAL_SPIN;
+  // Circumference-derived dimensionless spin vector along the same axis.
+  REAL spin_chi_x_circumference;
+  REAL spin_chi_y_circumference;
+  REAL spin_chi_z_circumference;
 
   // Benchmarking: Counts number of points where Theta is evaluated.
   long Theta_eval_points_counter;
@@ -256,6 +262,15 @@ typedef struct {
 } bhahaha_diagnostics_struct;
 
 static inline void bah_initialize_diagnostics_struct(bhahaha_diagnostics_struct *restrict diags) {
+  diags->BHAHAHA_SPIN_AXIS_X = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->BHAHAHA_SPIN_AXIS_Y = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->BHAHAHA_SPIN_AXIS_Z = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->BHAHAHA_CIRC_GENERAL_POLAR = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->BHAHAHA_CIRC_GENERAL_EQUATOR = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->BHAHAHA_CIRC_GENERAL_SPIN = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->spin_chi_x_circumference = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->spin_chi_y_circumference = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->spin_chi_z_circumference = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
   diags->spin_chi_x_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
   diags->spin_chi_y_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
   diags->spin_chi_z_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;

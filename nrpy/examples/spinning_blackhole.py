@@ -114,15 +114,15 @@ if fd_order != 6:
 uses_axisymmetric_coordinate_setup = False
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
-    par.set_parval_from_str("symmetry_axes", "2")
-    uses_axisymmetric_coordinate_setup = True
-    OMP_collapse = 2  # about 2x faster
+   par.set_parval_from_str("symmetry_axes", "2")
+   uses_axisymmetric_coordinate_setup = True
+   OMP_collapse = 2  # about 2x faster
 if "Cylindrical" in CoordSystem:
-    par.set_parval_from_str("symmetry_axes", "1")
-    uses_axisymmetric_coordinate_setup = True
-    OMP_collapse = 2  # might be slightly faster
+   par.set_parval_from_str("symmetry_axes", "1")
+   uses_axisymmetric_coordinate_setup = True
+   OMP_collapse = 2  # might be slightly faster
 if uses_axisymmetric_coordinate_setup and 2 not in Nxx_dict[CoordSystem]:
-    raise ValueError("Axisymmetric coordinate setup requires a reduced grid direction.")
+   raise ValueError("Axisymmetric coordinate setup requires a reduced grid direction.")
 project_dir = os.path.join("project", project_name)
 
 # First clean the project directory, if it exists.

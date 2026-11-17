@@ -114,6 +114,10 @@ Operations performed:
     fprintf(fileptr, "# column 28 = Dimensionless spin x-component (lowest-shear AKV pole axis)\n");
     fprintf(fileptr, "# column 29 = Dimensionless spin y-component (lowest-shear AKV pole axis)\n");
     fprintf(fileptr, "# column 30 = Dimensionless spin z-component (lowest-shear AKV pole axis)\n");
+    fprintf(fileptr, "# column 31 = Dimensionless spin magnitude (proper circumferences about SpECTRE direction)\n");
+    fprintf(fileptr, "# column 32 = Dimensionless spin x-component (proper circumferences about SpECTRE direction)\n");
+    fprintf(fileptr, "# column 33 = Dimensionless spin y-component (proper circumferences about SpECTRE direction)\n");
+    fprintf(fileptr, "# column 34 = Dimensionless spin z-component (proper circumferences about SpECTRE direction)\n");
     fflush(fileptr);
   } // END IF: file size zero -> need to write header
 
@@ -136,13 +140,21 @@ Operations performed:
   const REAL spin_chi_x_akv_poles = (diags->spin_chi_x_akv_poles != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_chi_x_akv_poles : NAN;
   const REAL spin_chi_y_akv_poles = (diags->spin_chi_y_akv_poles != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_chi_y_akv_poles : NAN;
   const REAL spin_chi_z_akv_poles = (diags->spin_chi_z_akv_poles != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_chi_z_akv_poles : NAN;
+  const REAL spin_chi_circumference =
+      (diags->BHAHAHA_CIRC_GENERAL_SPIN != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->BHAHAHA_CIRC_GENERAL_SPIN : NAN;
+  const REAL spin_chi_x_circumference =
+      (diags->spin_chi_x_circumference != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_chi_x_circumference : NAN;
+  const REAL spin_chi_y_circumference =
+      (diags->spin_chi_y_circumference != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_chi_y_circumference : NAN;
+  const REAL spin_chi_z_circumference =
+      (diags->spin_chi_z_circumference != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_chi_z_circumference : NAN;
 
   // Output diagnostic metrics to the diagnostics file.
   fprintf(fileptr,
           "%d\t%.3f\t%f\t%f\t%f\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t"
           "%#.10g\t%.15e\t%.15e\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t"
           "%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t"
-          "%#.10g\t%#.10g\t%#.10g\n",
+          "%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\n",
           bhahaha_params_and_data->iteration_external_input, // (1) iteration
           bhahaha_params_and_data->time_external_input,      // (2) time
           bhahaha_params_and_data->x_center_m1,              // (3) centroid x
@@ -172,7 +184,11 @@ Operations performed:
           spin_chi_z_gram_matrix,                             // (27) Dimensionless spin z (Gram matrix)
           spin_chi_x_akv_poles,                               // (28) Dimensionless spin x (AKV poles)
           spin_chi_y_akv_poles,                               // (29) Dimensionless spin y (AKV poles)
-          spin_chi_z_akv_poles                                // (30) Dimensionless spin z (AKV poles)
+          spin_chi_z_akv_poles,                               // (30) Dimensionless spin z (AKV poles)
+          spin_chi_circumference,                             // (31) Circumference-derived dimensionless spin magnitude
+          spin_chi_x_circumference,                           // (32) Circumference-derived dimensionless spin x
+          spin_chi_y_circumference,                           // (33) Circumference-derived dimensionless spin y
+          spin_chi_z_circumference                            // (34) Circumference-derived dimensionless spin z
   );
 
   fflush(fileptr);
