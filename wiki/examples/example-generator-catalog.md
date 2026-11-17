@@ -55,6 +55,10 @@ Evidence (CI behavior): `.github/workflows/main.yml`; `.github/workflows/dendrol
 | `nrpy/examples/geodesic_visualizations/*.py` | `visualize_{trajectory,lensed_image}.py`, `render_lensed_image.py`, `blueprint_*.py` | PNGs, `trajectory.txt`, ZIPs disposable | [Geodesic Raytracing](geodesic-raytracing.md) |
 | `nrpy/examples/tests/*.py` | `sebob*_consistency_check.py`, `sebobv2_projected_attachment_check.py`, `dendro_application_check*.py` | Temp worktrees disposable | [Generated Project CI](../validation/generated-project-ci.md) |
 | `nrpy/examples/superb_paper2/*.py` | `superB_blackhole_spectroscopy_{8Mseparation,last_orbit}.py` | Generated Charm++ `project/**` disposable | [superB Charm++ Workflows](superb-charm-workflows.md) |
+
+`superB_blackhole_spectroscopy_8Mseparation.py` generates a radial fisheye grid by
+default. Pass `--spheroidal` to generate the spheroidal fisheye grid with
+separate xy and z transition parameters.
 | `nrpy/examples/q1.par.lowres.toml` | Checked-in low-res Dendro BSSN/fCCZ4 TOML parameter file | Copied into generated `pars/` alongside `<stem>.toml` | [Dendro Parameters](../infrastructures/dendro/runtime-parameters.md) |
 
 See [SEBOBv1 JAX Workflow](../infrastructures/jax/sebobv1-jax-workflow.md) for `SEOBNRv5_aligned_spin_coefficients` and `Commondata` fields.

@@ -17,9 +17,14 @@ Note: This is the superB version.
 
 """
 
+import argparse
 import os
+import selectors
 import shutil
+import signal
 import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Callable, Dict, cast
 
@@ -48,8 +53,17 @@ register_CFunction_xx_to_Cart = xx_tofrom_Cart.register_CFunction_xx_to_Cart
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument(
+    "--spheroidal", action="store_true", help="Generate the spheroidal fisheye grid."
+)
+spheroidal = parser.parse_args().spheroidal
 project_name = "superB_blackhole_spectroscopy_8Mseparation"
-CoordSystem = "GeneralRFM_fisheyeN8"
+if spheroidal:
+    project_name += "_spheroidal_fisheye"
+CoordSystem = (
+    "GeneralRFM_spheroidal_fisheyeN8" if spheroidal else "GeneralRFM_fisheyeN8"
+)
 set_of_CoordSystems = {CoordSystem}
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
@@ -88,7 +102,7 @@ if enable_psi4:
     list_of_psi4_extraction_radii = [60.0, 90.0, 120.0, 150.0]
     num_psi4_extraction_radii = len(list_of_psi4_extraction_radii)
 Nxx_dict = {
-    "GeneralRFM_fisheyeN8": [1392, 1392, 1392],
+    CoordSystem: [1392, 1392, 1152 if spheroidal else 1392],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_x_posn = +4.0
@@ -106,23 +120,65 @@ fisheye_param_defaults = {
     "fisheye_phys_a7": 128.0,
     "fisheye_phys_a8": 256.0,
     "fisheye_phys_L": grid_physical_size,
-    "fisheye_phys_r_trans1": 4.75,
-    "fisheye_phys_w_trans1": 1.0,
-    "fisheye_phys_r_trans2": 5.5,
-    "fisheye_phys_w_trans2": 1.0,
-    "fisheye_phys_r_trans3": 9.0,
-    "fisheye_phys_w_trans3": 2.0,
-    "fisheye_phys_r_trans4": 16.0,
-    "fisheye_phys_w_trans4": 4.0,
-    "fisheye_phys_r_trans5": 34.0,
-    "fisheye_phys_w_trans5": 12.0,
-    "fisheye_phys_r_trans6": 60.0,
-    "fisheye_phys_w_trans6": 20.0,
-    "fisheye_phys_r_trans7": 115.0,
-    "fisheye_phys_w_trans7": 40.0,
-    "fisheye_phys_r_trans8": 208.0,
-    "fisheye_phys_w_trans8": 80.0,
 }
+if spheroidal:
+    fisheye_param_defaults.update(
+        {
+            "fisheye_phys_xy_r_trans1": 4.75,
+            "fisheye_phys_xy_w_trans1": 1.0,
+            "fisheye_phys_xy_r_trans2": 5.5,
+            "fisheye_phys_xy_w_trans2": 1.0,
+            "fisheye_phys_xy_r_trans3": 9.0,
+            "fisheye_phys_xy_w_trans3": 2.0,
+            "fisheye_phys_xy_r_trans4": 16.0,
+            "fisheye_phys_xy_w_trans4": 4.0,
+            "fisheye_phys_xy_r_trans5": 34.0,
+            "fisheye_phys_xy_w_trans5": 12.0,
+            "fisheye_phys_xy_r_trans6": 60.0,
+            "fisheye_phys_xy_w_trans6": 20.0,
+            "fisheye_phys_xy_r_trans7": 115.0,
+            "fisheye_phys_xy_w_trans7": 40.0,
+            "fisheye_phys_xy_r_trans8": 208.0,
+            "fisheye_phys_xy_w_trans8": 80.0,
+            "fisheye_phys_z_r_trans1": 4.75,
+            "fisheye_phys_z_w_trans1": 1.0,
+            "fisheye_phys_z_r_trans2": 5.5,
+            "fisheye_phys_z_w_trans2": 1.0,
+            "fisheye_phys_z_r_trans3": 5.832,
+            "fisheye_phys_z_w_trans3": 1.296,
+            "fisheye_phys_z_r_trans4": 10.368,
+            "fisheye_phys_z_w_trans4": 2.592,
+            "fisheye_phys_z_r_trans5": 22.032,
+            "fisheye_phys_z_w_trans5": 7.776,
+            "fisheye_phys_z_r_trans6": 43.2,
+            "fisheye_phys_z_w_trans6": 14.4,
+            "fisheye_phys_z_r_trans7": 82.8,
+            "fisheye_phys_z_w_trans7": 28.8,
+            "fisheye_phys_z_r_trans8": 149.76,
+            "fisheye_phys_z_w_trans8": 57.6,
+        }
+    )
+else:
+    fisheye_param_defaults.update(
+        {
+            "fisheye_phys_r_trans1": 4.75,
+            "fisheye_phys_w_trans1": 1.0,
+            "fisheye_phys_r_trans2": 5.5,
+            "fisheye_phys_w_trans2": 1.0,
+            "fisheye_phys_r_trans3": 9.0,
+            "fisheye_phys_w_trans3": 2.0,
+            "fisheye_phys_r_trans4": 16.0,
+            "fisheye_phys_w_trans4": 4.0,
+            "fisheye_phys_r_trans5": 34.0,
+            "fisheye_phys_w_trans5": 12.0,
+            "fisheye_phys_r_trans6": 60.0,
+            "fisheye_phys_w_trans6": 20.0,
+            "fisheye_phys_r_trans7": 115.0,
+            "fisheye_phys_w_trans7": 40.0,
+            "fisheye_phys_r_trans8": 208.0,
+            "fisheye_phys_w_trans8": 80.0,
+        }
+    )
 enable_rfm_precompute = True
 MoL_method = "RK4"
 enable_RK3_accumulation = MoL_method in ("RK3 Ralston", "RK3 Heun")
@@ -161,37 +217,72 @@ if enable_BHaHAHA:
     #########################################################
     # Step 2: Declare core C functions & register each to
     #         cfc.CFunction_dict["function_name"]
-    try:
-        # Attempt to run as a script path
-        subprocess.run(
-            [
-                "python",
-                "nrpy/examples/bhahaha.py",
-                "--fdorder",
-                str(fd_order),
-                "--outrootdir",
-                project_dir,
-                "--cpp",
-                "--no-openmp",
-            ],
-            check=True,
-        )
-    except subprocess.CalledProcessError:
-        # If it fails (e.g., from a pip install), try running as a module
-        subprocess.run(
-            [
-                "python",
-                "-m",
-                "nrpy.examples.bhahaha",
-                "--fdorder",
-                str(fd_order),
-                "--outrootdir",
-                project_dir,
-                "--cpp",
-                "--no-openmp",
-            ],
-            check=True,
-        )
+    # Allow each finite-difference-order-8 BHaHAHA generation attempt 15 minutes.
+    bhahaha_timeout_seconds = 900
+    bhahaha_args = [
+        "--fdorder",
+        str(fd_order),
+        "--outrootdir",
+        project_dir,
+        "--cpp",
+        "--no-openmp",
+    ]
+    if spheroidal:
+        bhahaha_args.append("--sequential-codegen")
+    for invocation in (
+        [sys.executable, "nrpy/examples/bhahaha.py"],
+        [sys.executable, "-m", "nrpy.examples.bhahaha"],
+    ):
+        command = [*invocation, *bhahaha_args]
+        with subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        ) as process:
+            output_tail = b""
+            deadline = time.monotonic() + bhahaha_timeout_seconds
+            try:
+                assert process.stdout is not None
+                with selectors.DefaultSelector() as selector:
+                    selector.register(process.stdout, selectors.EVENT_READ)
+                    while True:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0 or not selector.select(timeout=remaining):
+                            raise subprocess.TimeoutExpired(
+                                command, bhahaha_timeout_seconds
+                            )
+                        chunk = os.read(process.stdout.fileno(), 4096)
+                        if not chunk:
+                            break
+                        # Drain continuously, retaining only the last 4 KiB in memory.
+                        output_tail = (output_tail + chunk)[-4096:]
+                returncode = process.wait(timeout=max(0, deadline - time.monotonic()))
+                if returncode:
+                    raise subprocess.CalledProcessError(returncode, command)
+            except (
+                subprocess.TimeoutExpired,
+                subprocess.CalledProcessError,
+            ) as error:
+                diagnostics = output_tail.decode("utf-8", errors="replace")
+                if isinstance(error, subprocess.TimeoutExpired):
+                    raise RuntimeError(
+                        f"BHaHAHA C-code generation exceeded {bhahaha_timeout_seconds} seconds.\n{diagnostics}"
+                    ) from error
+                if invocation[1] == "-m":
+                    raise RuntimeError(
+                        f"BHaHAHA C-code generation failed with exit code {error.returncode}.\n{diagnostics}"
+                    ) from error
+                # A missing script path can still be run from an installed module.
+            else:
+                break
+            finally:
+                # Also stop forked workers before retrying or propagating a failure.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait()
     from nrpy.infrastructures.superB import BHaH_implementation
 
     BHaH_implementation.register_CFunction_bhahaha_find_horizons(
@@ -270,7 +361,7 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     enable_CAHD=enable_CAHD,
     enable_SSL=enable_SSL,
     OMP_collapse=OMP_collapse,
-    enable_RK3_accumulation=enable_RK3_accumulation,
+    enable_RK3_accumulation=not spheroidal and enable_RK3_accumulation,
 )
 if enable_CAHD:
     BHaH.general_relativity.dsmin_gf.register_CFunction_dsmin_auxevol_gridfunction(
@@ -308,9 +399,14 @@ if enable_psi4:
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
-    num_transitions=num_fisheye_transitions
-)
+if spheroidal:
+    phys_params_to_fisheye.register_CFunction_spheroidal_fisheye_params_from_physical_N(
+        num_transitions=num_fisheye_transitions
+    )
+else:
+    phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
+        num_transitions=num_fisheye_transitions
+    )
 if enable_psi4:
     superB.general_relativity.psi4_spinweightm2_decomposition.register_CFunction_psi4_spinweightm2_decomposition()
 
@@ -330,7 +426,7 @@ superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems={CoordSystem},
     radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
-    enable_RK3_accumulation=enable_RK3_accumulation,
+    enable_RK3_accumulation=not spheroidal and enable_RK3_accumulation,
 )
 
 rhs_string = ""
@@ -344,11 +440,27 @@ commondata->SSL_Gaussian_prefactor =
 """
 if separate_Ricci_and_BSSN_RHS:
     rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
-rhs_string, rhs_accumulation_string = BHaH.general_relativity.rhs_eval.MoL_rhs_strings(
-    pre_rhs_string=rhs_string,
-    enable_rfm_precompute=enable_rfm_precompute,
-    outer_bcs_type=outer_bcs_type,
-)
+if spheroidal:
+    if outer_bcs_type == "radiation":
+        rhs_string += r"""
+    rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
+    apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
+                                       gridfunctions_wavespeed, gridfunctions_f_infinity,
+                                       RK_INPUT_GFS, RK_OUTPUT_GFS);"""
+    else:
+        rhs_string += r"""
+    rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"""
+
+    if not enable_rfm_precompute:
+        rhs_string = rhs_string.replace("rfmstruct", "xx")
+else:
+    rhs_string, rhs_accumulation_string = (
+        BHaH.general_relativity.rhs_eval.MoL_rhs_strings(
+            pre_rhs_string=rhs_string,
+            enable_rfm_precompute=enable_rfm_precompute,
+            outer_bcs_type=outer_bcs_type,
+        )
+    )
 
 post_rhs_bcs_str = ""
 if outer_bcs_type != "radiation":
@@ -363,7 +475,7 @@ superB.MoL.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
     enable_psi4=enable_psi4,
-    rhs_accumulation_string=rhs_accumulation_string,
+    rhs_accumulation_string="" if spheroidal else rhs_accumulation_string,
 )
 register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(CoordSystem)
 register_CFunction_xx_to_Cart(CoordSystem)
@@ -422,7 +534,9 @@ if enable_BHaHAHA:
         "bah_initial_grid_x_center",
         [default_BH1_x_posn, default_BH2_x_posn, 0.0],
     )
-    par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
+    par.adjust_CodeParam_default("bah_Nr_interp_max", 44 if spheroidal else 40)
+    if spheroidal:
+        par.adjust_CodeParam_default("bah_cfl_factor", [0.80, 0.80, 0.90])
     par.adjust_CodeParam_default(
         "bah_M_scale",
         [default_BH1_mass, default_BH2_mass, default_BH1_mass + default_BH2_mass],
@@ -430,8 +544,8 @@ if enable_BHaHAHA:
     par.adjust_CodeParam_default(
         "bah_max_search_radius",
         [
-            1.2 * default_BH1_mass,
-            1.2 * default_BH2_mass,
+            (1.3 if spheroidal else 1.2) * default_BH1_mass,
+            (1.3 if spheroidal else 1.2) * default_BH2_mass,
             1.3 * (default_BH1_mass + default_BH2_mass),
         ],
     )
@@ -479,13 +593,19 @@ if enable_CAHD:
       griddata_chare[grid].gridfuncs.auxevol_gfs);
 """
 
+post_params_hook = (
+    phys_params_to_fisheye.build_spheroidal_post_params_struct_set_to_default_hook
+    if spheroidal
+    else phys_params_to_fisheye.build_post_params_struct_set_to_default_hook
+)
+
 timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     post_params_struct_set_to_default=(
-        BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+        post_params_hook(
             num_transitions=num_fisheye_transitions,
             compute_griddata="griddata",
         )
-        + BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+        + post_params_hook(
             num_transitions=num_fisheye_transitions,
             compute_griddata="griddata_chare",
         )
