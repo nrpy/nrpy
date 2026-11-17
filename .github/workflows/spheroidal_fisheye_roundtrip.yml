@@ -17,7 +17,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install NRPy
-        run: python -m pip install .
+        run: python -m pip install . -r requirements-dev.txt
+      - name: Check round-trip script static analysis
+        run: .github/single_file_static_analysis.sh nrpy/examples/tests/spheroidal_fisheye_roundtrip_check.py
       - name: Report Python, SymPy, clang-format, and GCC versions
         run: |
           python --version

@@ -1,7 +1,12 @@
-"""Generate and run a BHaH project checking spheroidal fisheye inversion."""
+"""
+Generate and run a BHaH project checking spheroidal fisheye inversion.
+
+Author: Nishita Jadoo
+"""
 
 import argparse
 import contextlib
+import doctest
 import io
 import subprocess
 import sys
@@ -120,34 +125,69 @@ N8_PARAMETERS: Dict[str, List[float]] = {
 }
 
 
-def _parameter_assignments(values: Dict[str, List[float]]) -> str:
+def _run(command: List[str], cwd: Path, log_path: Path, timeout: int) -> None:
     """
-    Write C assignments for the published N8 coordinate-map parameters.
+    Run a generated-project command with bounded resources and output.
 
-    :param values: Parameter names and their successive values.
-    :return: C assignments to ``params``.
+    :param command: Command and arguments.
+    :param cwd: Generated project directory.
+    :param log_path: File receiving command output.
+    :param timeout: Maximum duration in seconds.
+    :raises RuntimeError: If the command fails.
     """
-    lines = []
-    for prefix, entries in values.items():
+    with log_path.open("w", encoding="utf-8") as log_file:
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            timeout=timeout,
+            check=False,
+        )
+    if result.returncode != 0:
+        with log_path.open("rb") as log_file:
+            log_file.seek(0, 2)
+            log_file.seek(max(0, log_file.tell() - 4000))
+            tail = log_file.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"{' '.join(command)} failed with exit status {result.returncode}:\n{tail}"
+        )
+
+
+def main() -> None:
+    """Build and run the generated BHaH coordinate check for one precision."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--precision", choices=("float", "double"), required=True)
+    precision = parser.parse_args().precision
+
+    par.set_parval_from_str("Infrastructure", "BHaH")
+    par.set_parval_from_str("parallelization", "openmp")
+    par.set_parval_from_str("fp_type", precision)
+    cfc.CFunction_dict.clear()
+    with contextlib.redirect_stdout(io.StringIO()):
+        for transitions in (1, 8):
+            coord = f"GeneralRFM_spheroidal_fisheyeN{transitions}"
+            register_CFunction_xx_to_Cart(coord)
+            register_CFunction_generalrfm_Cart_to_xx(coord)
+    assignment_lines = []
+    for prefix, entries in N8_PARAMETERS.items():
         for index, value in enumerate(entries):
             if prefix.endswith("_c"):
-                name = prefix
+                parameter_name = prefix
             elif prefix == "fisheye_a":
-                name = f"{prefix}{index}"
+                parameter_name = f"{prefix}{index}"
             else:
-                name = f"{prefix}{index + 1}"
-            lines.append(f"params.{name} = (REAL){value!r};")
-    return "\n".join(lines)
+                parameter_name = f"{prefix}{index + 1}"
+            assignment_lines.append(f"params.{parameter_name} = (REAL){value!r};")
+    n8_assignments = "\n".join(assignment_lines)
+    desc = """Check spheroidal fisheye inverse coordinates.
 
-
-def _main_body() -> str:
+    @return 0 if all coordinate round trips pass; nonzero test-case code on failure.
     """
-    Return C checks for N1 scaling, unequal axis maps, and the N8 example.
-
-    :return: Body of the generated C ``main`` function.
-    """
-    n8_assignments = _parameter_assignments(N8_PARAMETERS)
-    return (
+    cfunc_type = "int"
+    name = "main"
+    params = "void"
+    body = (
         r"""
 params_struct params = {0};
 params.fisheye_a0 = (REAL)1.0;
@@ -276,61 +316,15 @@ if (sizeof(REAL) == sizeof(double)) {
 return 0;
 """
     )
-
-
-def _run(command: List[str], cwd: Path, log_path: Path, timeout: int) -> None:
-    """
-    Run a generated-project command with bounded resources and output.
-
-    :param command: Command and arguments.
-    :param cwd: Generated project directory.
-    :param log_path: File receiving command output.
-    :param timeout: Maximum duration in seconds.
-    :raises RuntimeError: If the command fails.
-    """
-    with log_path.open("w", encoding="utf-8") as log_file:
-        result = subprocess.run(
-            command,
-            cwd=cwd,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            timeout=timeout,
-            check=False,
-        )
-    if result.returncode != 0:
-        with log_path.open("rb") as log_file:
-            log_file.seek(0, 2)
-            log_file.seek(max(0, log_file.tell() - 4000))
-            tail = log_file.read().decode("utf-8", errors="replace")
-        raise RuntimeError(
-            f"{' '.join(command)} failed with exit status {result.returncode}:\n{tail}"
-        )
-
-
-def main() -> None:
-    """Build and run the generated BHaH coordinate check for one precision."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--precision", choices=("float", "double"), required=True)
-    precision = parser.parse_args().precision
-
-    par.set_parval_from_str("Infrastructure", "BHaH")
-    par.set_parval_from_str("parallelization", "openmp")
-    par.set_parval_from_str("fp_type", precision)
-    cfc.CFunction_dict.clear()
-    with contextlib.redirect_stdout(io.StringIO()):
-        for transitions in (1, 8):
-            coord = f"GeneralRFM_spheroidal_fisheyeN{transitions}"
-            register_CFunction_xx_to_Cart(coord)
-            register_CFunction_generalrfm_Cart_to_xx(coord)
     cfc.register_CFunction(
         includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
         prefunc=VECTOR_CHECK,
-        desc="Check spheroidal fisheye inverse coordinates.",
-        cfunc_type="int",
-        name="main",
-        params="void",
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
         include_CodeParameters_h=False,
-        body=_main_body(),
+        body=body,
     )
 
     with TemporaryDirectory(prefix="nrpy-spheroidal-roundtrip-") as directory:
@@ -353,8 +347,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except (RuntimeError, subprocess.TimeoutExpired) as error:
-        print(error, file=sys.stderr)
-        sys.exit(1)
+    if len(sys.argv) == 1:
+        if doctest.testmod().failed:
+            sys.exit(1)
+    else:
+        try:
+            main()
+        except (RuntimeError, subprocess.TimeoutExpired) as error:
+            print(error, file=sys.stderr)
+            sys.exit(1)
