@@ -1,7 +1,8 @@
 """
 Register a C helper that numerically inverts GeneralRFM xx->Cart maps.
 
-Currently supports GeneralRFM_fisheyeN* via equations/generalrfm/fisheye.py.
+Supports GeneralRFM_fisheyeN* and GeneralRFM_spheroidal_fisheyeN* via
+nrpy/equations/generalrfm/fisheye.py.
 
 Author: Nishita Jadoo
         njadoo@uidaho.edu

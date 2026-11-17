@@ -15,7 +15,7 @@ Run `python -m nrpy.examples.<module> [flags]` from the repository root ([Build 
 
 | Generator | Key CLI flags | CI check | Detail leaf |
 | --- | --- | --- | --- |
-| `bhahaha.py` | `[--fdorder N] [--outrootdir DIR] [--cpp] [--no-openmp]` | Ubuntu/macOS C static-library `make` build only | [Apparent Horizon Library](apparent-horizon-library.md) |
+| `bhahaha.py` | `[--fdorder N] [--outrootdir DIR] [--cpp] [--no-openmp] [--sequential-codegen]` | Ubuntu/macOS C static-library `make` build only | [Apparent Horizon Library](apparent-horizon-library.md) |
 | `blackhole_spectroscopy.py` | `[--cuda] [--fccz4] [--floating_point_precision TYPE]` | Ubuntu/macOS default BSSN/OpenMP `make` build only | [Standalone GR/BHaH](standalone-gr-bhah.md) |
 | `carpet_baikal_thorns.py` | none | `einsteintoolkit-validation` ET build + `Baikal`/`BaikalVacuum` testsuites | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `carpet_wavetoy_thorns.py` | none | `einsteintoolkit-validation` ET build + `WaveToyNRPy` testsuite | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
@@ -69,7 +69,7 @@ See [SEBOBv1 JAX Workflow](../infrastructures/jax/sebobv1-jax-workflow.md) for `
 - [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml) - `dendro-validation-dendrolib-master`
 - [sebobv2-projected-attachment.yml](../../.github/workflows/sebobv2-projected-attachment.yml) - `projected-reference-and-matching`
 - [full_nrpy_local_ci.sh](../../.github/full_nrpy_local_ci.sh) - manual local build and `--cuda` configuration script
-- [bhahaha.py](../../nrpy/examples/bhahaha.py) - `parser`, `project_name`
+- [bhahaha.py](../../nrpy/examples/bhahaha.py) - `parser`, `--sequential-codegen`, `project_name`
 - [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py) - `parser`, `project_name`
 - [carpet_baikal_thorns.py](../../nrpy/examples/carpet_baikal_thorns.py) - `project_name`, `thorn_names`
 - [carpet_wavetoy_thorns.py](../../nrpy/examples/carpet_wavetoy_thorns.py) - `project_name`, thorn names

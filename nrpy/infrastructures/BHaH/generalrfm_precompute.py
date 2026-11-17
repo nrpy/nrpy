@@ -2,7 +2,8 @@
 """
 Generate C functions that precompute GeneralRFM quantities into AUXEVOL gridfunctions.
 
-Currently supports GeneralRFM_fisheyeN* via equations/generalrfm/fisheye.py.
+Supports GeneralRFM_fisheyeN* and GeneralRFM_spheroidal_fisheyeN* via
+nrpy/equations/generalrfm/fisheye.py.
 
 Design:
   * For GeneralRFM, ghat and derivatives are treated as fixed AUXEVOL gridfunctions.
