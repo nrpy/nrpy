@@ -30,6 +30,12 @@ runtime proof.
 
 Evidence (descriptive behavior): `basis_transforms/jacobians.py::BasisTransforms.basis_transform_4tensorUU_from_Cartesian_to_time_indep_rfmbasis`.
 
+`FisheyeRadialMap` registers the parameters for one radius map and evaluates
+its value and derivatives. Both fisheye providers use this helper. The radial
+provider uses the `fisheye` parameter prefix; the spheroidal provider uses
+`fisheye_xy` and `fisheye_z` for transition centers, widths, and scales while
+explicitly sharing the `fisheye_a*` plateau factors.
+
 `GeneralRFMFisheye` builds an N-transition radial fisheye map from raw
 Cartesian coordinates `xx[i]` to physical Cartesian coordinates. It registers
 the plateau, transition-center, width, and global-scale code parameters,
@@ -106,7 +112,7 @@ runtime behavior, or numerical accuracy; use [Expression Validation Helpers](../
 - [jacobians_Cartesian.py](../../nrpy/equations/basis_transforms/tests/jacobians_Cartesian.py) - `trusted_dict`
 - [jacobians_Spherical.py](../../nrpy/equations/basis_transforms/tests/jacobians_Spherical.py) - `trusted_dict`
 - [jacobians_GeneralRFM_fisheyeN2.py](../../nrpy/equations/basis_transforms/tests/jacobians_GeneralRFM_fisheyeN2.py) - `trusted_dict`
-- [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py) - `GeneralRFMFisheye`, `GeneralRFMSpheroidalFisheye`, `build_fisheye`, `build_spheroidal_fisheye`, `xx_to_CartU`, `ghatDD`, `ghatDDdD`, `ghatDDdDD`
+- [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py) - `FisheyeRadialMap`, `GeneralRFMFisheye`, `GeneralRFMSpheroidalFisheye`, `build_fisheye`, `build_spheroidal_fisheye`, `xx_to_CartU`, `ghatDD`, `ghatDDdD`, `ghatDDdDD`
 - [fisheye_N1.py](../../nrpy/equations/generalrfm/tests/fisheye_N1.py) - `trusted_dict`
 - [fisheye_N2.py](../../nrpy/equations/generalrfm/tests/fisheye_N2.py) - `trusted_dict`
 - [fisheye_spheroidal_N1.py](../../nrpy/equations/generalrfm/tests/fisheye_spheroidal_N1.py) - `trusted_dict`

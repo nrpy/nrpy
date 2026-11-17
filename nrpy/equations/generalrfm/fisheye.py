@@ -2,10 +2,20 @@
 """
 General N transition fisheye raw to physical (xx to Cart) mapping and reference metric.
 
-This module implements a radially symmetric, arbitrary N transition fisheye mapping
+This module implements radial and spheroidal N transition fisheye mappings
 from raw Cartesian coordinates xx[i] to physical Cartesian coordinates Cart[i],
-together with the induced flat reference metric in the raw coordinates and its
-first and second derivatives.
+together with the induced flat reference metric and its first and second derivatives.
+Both GeneralRFMFisheye and GeneralRFMSpheroidalFisheye use FisheyeRadialMap
+for parameter registration and one-dimensional radius maps. The public builders
+are build_fisheye and build_spheroidal_fisheye.
+
+The radial provider uses fisheye_a*, fisheye_R*, fisheye_s*, and fisheye_c.
+The spheroidal provider shares fisheye_a* between two maps, with separate
+fisheye_{xy,z}_{R*,s*,c} parameters:
+    Cart = (lam_xy(r)*xx[0], lam_xy(r)*xx[1], lam_z(r)*xx[2])
+    lam_axis(r) = rbar_axis(r) / r
+The radial metric decomposition below applies to GeneralRFMFisheye; the
+spheroidal provider constructs the metric from its axis-dependent Jacobian.
 
 Key equations used by this module:
 
@@ -103,8 +113,19 @@ class FisheyeRadialMap:
     """
     Store one N-transition fisheye radius map and its code parameters.
 
-    The spheroidal GeneralRFM provider needs two independent fisheye radius
-    maps, one for xy and one for z.
+    The radial provider uses one map; the spheroidal provider uses separate
+    xy and z maps with shared plateau factors. When a_list is omitted, all
+    parameter names use prefix.
+
+    >>> saved_parameters = par.glb_code_params_dict.copy()
+    >>> radial_map = FisheyeRadialMap(1, prefix="fisheye_xy")
+    >>> [str(a) for a in radial_map.a_list]
+    ['fisheye_xy_a0', 'fisheye_xy_a1']
+    >>> shared_map = FisheyeRadialMap(1, prefix="fisheye_z", a_list=radial_map.a_list)
+    >>> shared_map.a_list is radial_map.a_list
+    True
+    >>> par.glb_code_params_dict.clear()
+    >>> par.glb_code_params_dict.update(saved_parameters)
     """
 
     def __init__(
@@ -126,7 +147,7 @@ class FisheyeRadialMap:
             else par.register_CodeParameters(
                 "REAL",
                 thismodule,
-                [f"fisheye_a{i}" for i in range(num_transitions + 1)],
+                [f"{prefix}_a{i}" for i in range(num_transitions + 1)],
                 [1.0] * (num_transitions + 1),
                 commondata=False,
             )
@@ -273,33 +294,12 @@ class GeneralRFMFisheye:
 
         self.num_transitions = num_transitions
 
-        # Step 1: Register fisheye CodeParameters
-        # - a0..aN, R1..RN, s1..sN, c
-        thismodule = __name__
-        self.a_list = par.register_CodeParameters(
-            "REAL",
-            thismodule,
-            [f"fisheye_a{i}" for i in range(num_transitions + 1)],
-            [1.0] * (num_transitions + 1),
-            commondata=False,
-        )
-        self.R_list = par.register_CodeParameters(
-            "REAL",
-            thismodule,
-            [f"fisheye_R{i + 1}" for i in range(num_transitions)],
-            [float(i + 1) for i in range(num_transitions)],
-            commondata=False,
-        )
-        self.s_list = par.register_CodeParameters(
-            "REAL",
-            thismodule,
-            [f"fisheye_s{i + 1}" for i in range(num_transitions)],
-            [0.5] * num_transitions,
-            commondata=False,
-        )
-        self.c = par.register_CodeParameter(
-            "REAL", thismodule, "fisheye_c", defaultvalue=1.0, commondata=False
-        )
+        # Step 1: Register the shared radial map parameters.
+        self.radial_map = FisheyeRadialMap(num_transitions)
+        self.a_list = self.radial_map.a_list
+        self.R_list = self.radial_map.R_list
+        self.s_list = self.radial_map.s_list
+        self.c = self.radial_map.c
 
         # Step 2: Define raw Cartesian coordinates and radius
         # xx[i] are raw Cartesian coordinates
@@ -317,21 +317,8 @@ class GeneralRFMFisheye:
 
         # rbar_unscaled(r) = aN*r + sum_i (a[i] - a[i+1]) * G(r; R_i, s_i)
         # and derivatives through third order: d/dr, d2/dr2, d3/dr3
-        (
-            rbar_unscaled_sym,
-            drbar_unscaled_sym,
-            d2rbar_unscaled_sym,
-            d3rbar_unscaled_sym,
-        ) = _radius_map_unscaled_and_derivs_closed_form(
-            r=r_sym, a_list=self.a_list, R_list=self.R_list, s_list=self.s_list
-        )
-
-        # rbar(r) = c * rbar_unscaled(r)
-        u = self.c * rbar_unscaled_sym
-        # p = drbar/dr, q = d2rbar/dr2, t = d3rbar/dr3
-        p = self.c * drbar_unscaled_sym
-        q = self.c * d2rbar_unscaled_sym
-        t = self.c * d3rbar_unscaled_sym
+        rbar_unscaled_sym = self.radial_map.unscaled_and_derivs_closed_form(r_sym)[0]
+        u, p, q, t = self.radial_map.scaled_and_derivs_closed_form(r_sym)
 
         # lam(r) = rbar(r) / r
         lam_sym = u / r_sym
@@ -487,12 +474,7 @@ class GeneralRFMFisheye:
         :param r: Radial coordinate.
         :return: (rbar_unscaled, drbar_unscaled, d2rbar_unscaled, d3rbar_unscaled)
         """
-        return _radius_map_unscaled_and_derivs_closed_form(
-            r=r,
-            a_list=self.a_list,
-            R_list=self.R_list,
-            s_list=self.s_list,
-        )
+        return self.radial_map.unscaled_and_derivs_closed_form(r)
 
     def radius_map_and_deriv_for_inverse(self, r: sp.Expr) -> Tuple[sp.Expr, sp.Expr]:
         """
@@ -505,14 +487,7 @@ class GeneralRFMFisheye:
         :param r: Radial coordinate.
         :return: (rbar, drbar)
         """
-        rb0 = _radius_map_unscaled(
-            r=r,
-            a_list=self.a_list,
-            R_list=self.R_list,
-            s_list=self.s_list,
-        )
-        _, rb1, _, _ = self.radius_map_unscaled_and_derivs_closed_form(r)
-        return self.c * rb0, self.c * rb1
+        return self.radial_map.scaled_value_stable_and_deriv(r)
 
 
 class GeneralRFMSpheroidalFisheye:
@@ -538,9 +513,16 @@ class GeneralRFMSpheroidalFisheye:
         self.r = sp.sqrt(r2)
         r_sym = sp.Symbol("r_fisheye", real=True, positive=True)
 
-        xy_map = FisheyeRadialMap(num_transitions, prefix="fisheye_xy")
-        self.a_list = xy_map.a_list
-        self.xy_map = xy_map
+        self.a_list = par.register_CodeParameters(
+            "REAL",
+            __name__,
+            [f"fisheye_a{i}" for i in range(num_transitions + 1)],
+            [1.0] * (num_transitions + 1),
+            commondata=False,
+        )
+        self.xy_map = FisheyeRadialMap(
+            num_transitions, prefix="fisheye_xy", a_list=self.a_list
+        )
         self.z_map = FisheyeRadialMap(
             num_transitions, prefix="fisheye_z", a_list=self.a_list
         )
