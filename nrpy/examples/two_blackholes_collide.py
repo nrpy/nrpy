@@ -71,22 +71,11 @@ project_name = "two_blackholes_collide"
 CoordSystem = "Spherical"
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
-fisheye_provider_kind: Optional[str]
-num_fisheye_transitions: Optional[int]
-if CoordSystem.startswith("GeneralRFM_spheroidal_fisheyeN"):
-    fisheye_provider_kind = "spheroidal_fisheye"
-    num_fisheye_transitions = int(
-        CoordSystem.replace("GeneralRFM_spheroidal_fisheyeN", "")
-    )
-else:
-    fisheye_provider_kind = (
-        "fisheye" if CoordSystem.startswith("GeneralRFM_fisheyeN") else None
-    )
-    num_fisheye_transitions = (
-        int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
-        if CoordSystem.startswith("GeneralRFM_fisheyeN")
-        else None
-    )
+num_fisheye_transitions: Optional[int] = (
+    int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
+    if CoordSystem.startswith("GeneralRFM_fisheyeN")
+    else None
+)
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 1.0
@@ -315,14 +304,9 @@ if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
 if num_fisheye_transitions is not None:
-    if fisheye_provider_kind == "spheroidal_fisheye":
-        BHaH.fisheye.phys_params_to_fisheye.register_CFunction_spheroidal_fisheye_params_from_physical_N(
-            num_transitions=num_fisheye_transitions
-        )
-    else:
-        BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
-            num_transitions=num_fisheye_transitions
-        )
+    BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
+        num_transitions=num_fisheye_transitions
+    )
 
 BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     enable_RK3_accumulation=enable_RK3_accumulation,
@@ -438,12 +422,7 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 compute_griddata = "griddata_device" if parallelization == "cuda" else "griddata"
 post_params_struct_set_to_default = ""
 if num_fisheye_transitions is not None:
-    fisheye_post_hook = (
-        BHaH.fisheye.phys_params_to_fisheye.build_spheroidal_post_params_struct_set_to_default_hook
-        if fisheye_provider_kind == "spheroidal_fisheye"
-        else BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook
-    )
-    post_params_struct_set_to_default = fisheye_post_hook(
+    post_params_struct_set_to_default = BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
         num_transitions=num_fisheye_transitions,
         compute_griddata=compute_griddata,
     )

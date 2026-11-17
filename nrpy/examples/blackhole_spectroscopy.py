@@ -69,22 +69,11 @@ project_name = "blackhole_spectroscopy"
 CoordSystem = "SinhCylindrical"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
-fisheye_provider_kind: Optional[str]
-num_fisheye_transitions: Optional[int]
-if CoordSystem.startswith("GeneralRFM_spheroidal_fisheyeN"):
-    fisheye_provider_kind = "spheroidal_fisheye"
-    num_fisheye_transitions = int(
-        CoordSystem.replace("GeneralRFM_spheroidal_fisheyeN", "")
-    )
-else:
-    fisheye_provider_kind = (
-        "fisheye" if CoordSystem.startswith("GeneralRFM_fisheyeN") else None
-    )
-    num_fisheye_transitions = (
-        int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
-        if CoordSystem.startswith("GeneralRFM_fisheyeN")
-        else None
-    )
+num_fisheye_transitions: Optional[int] = (
+    int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
+    if CoordSystem.startswith("GeneralRFM_fisheyeN")
+    else None
+)
 
 initial_sep = 0.5
 mass_ratio = 1.0  # must be >= 1.0. Will need higher resolution for > 1.0.
@@ -424,14 +413,9 @@ if enable_psi4_diagnostics:
     BHaH.general_relativity.psi4_spinweightm2_decomposition.register_CFunction_psi4_spinweightm2_decomposition()
 
 if num_fisheye_transitions is not None:
-    if fisheye_provider_kind == "spheroidal_fisheye":
-        BHaH.fisheye.phys_params_to_fisheye.register_CFunction_spheroidal_fisheye_params_from_physical_N(
-            num_transitions=num_fisheye_transitions
-        )
-    else:
-        BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
-            num_transitions=num_fisheye_transitions
-        )
+    BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
+        num_transitions=num_fisheye_transitions
+    )
 
 BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
@@ -618,12 +602,7 @@ if enable_CAHD or enable_YBS_momentum_constraint_adjustment:
 compute_griddata = "griddata_device" if parallelization == "cuda" else "griddata"
 post_params_struct_set_to_default = ""
 if num_fisheye_transitions is not None:
-    fisheye_post_hook = (
-        BHaH.fisheye.phys_params_to_fisheye.build_spheroidal_post_params_struct_set_to_default_hook
-        if fisheye_provider_kind == "spheroidal_fisheye"
-        else BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook
-    )
-    post_params_struct_set_to_default = fisheye_post_hook(
+    post_params_struct_set_to_default = BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
         num_transitions=num_fisheye_transitions,
         compute_griddata=compute_griddata,
     )
