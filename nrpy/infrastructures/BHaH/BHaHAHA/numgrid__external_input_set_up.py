@@ -299,7 +299,7 @@ This function performs the following steps:
 
     # K = gamma^{ij} K_{ij}, and
     # \bar{A}_{ij} &= (\frac{\bar{gamma}}{gamma})^{1/3}*(K_{ij} - \frac{1}{3}*gamma_{ij}*K)
-    trK = sp.sympify(0)
+    trK: sp.Expr = sp.sympify(0)
     for i in range(3):
         for j in range(3):
             trK += gammaUU[i][j] * Sph_KDD[i][j]

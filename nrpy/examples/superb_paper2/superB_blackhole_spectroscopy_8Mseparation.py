@@ -125,6 +125,7 @@ fisheye_param_defaults = {
 }
 enable_rfm_precompute = True
 MoL_method = "RK4"
+enable_RK3_accumulation = MoL_method in ("RK3 Ralston", "RK3 Heun")
 fd_order = 8
 radiation_BC_fd_order = 4
 enable_intrinsics = True
@@ -269,6 +270,7 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     enable_CAHD=enable_CAHD,
     enable_SSL=enable_SSL,
     OMP_collapse=OMP_collapse,
+    enable_RK3_accumulation=enable_RK3_accumulation,
 )
 if enable_CAHD:
     BHaH.general_relativity.dsmin_gf.register_CFunction_dsmin_auxevol_gridfunction(
@@ -328,6 +330,7 @@ superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems={CoordSystem},
     radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
+    enable_RK3_accumulation=enable_RK3_accumulation,
 )
 
 rhs_string = ""
@@ -341,18 +344,11 @@ commondata->SSL_Gaussian_prefactor =
 """
 if separate_Ricci_and_BSSN_RHS:
     rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
-if outer_bcs_type == "radiation":
-    rhs_string += r"""
-rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
-apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
-                                   gridfunctions_wavespeed, gridfunctions_f_infinity,
-                                   RK_INPUT_GFS, RK_OUTPUT_GFS);"""
-else:
-    rhs_string += r"""
-rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"""
-
-if not enable_rfm_precompute:
-    rhs_string = rhs_string.replace("rfmstruct", "xx")
+rhs_string, rhs_accumulation_string = BHaH.general_relativity.rhs_eval.MoL_rhs_strings(
+    pre_rhs_string=rhs_string,
+    enable_rfm_precompute=enable_rfm_precompute,
+    outer_bcs_type=outer_bcs_type,
+)
 
 post_rhs_bcs_str = ""
 if outer_bcs_type != "radiation":
@@ -367,6 +363,7 @@ superB.MoL.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
     enable_psi4=enable_psi4,
+    rhs_accumulation_string=rhs_accumulation_string,
 )
 register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 register_CFunction_xx_to_Cart(CoordSystem)

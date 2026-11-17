@@ -195,7 +195,6 @@ def register_CFunction_rhs_eval(
                 CoordSystem=CoordSystem,
                 enable_rfm_precompute=False,
                 registering_module=__name__,
-                ShiftEvolutionOption=ShiftEvolutionOption,
                 KreissOliger_strength_gauge=0.3,
                 KreissOliger_strength_nongauge=0.3,
                 enable_CAKO=False,
@@ -207,7 +206,7 @@ def register_CFunction_rhs_eval(
                 include_Theta_fCCZ4=enable_fCCZ4,
             )
 
-        ssl_exponent = sp.Integer(0)
+        ssl_exponent: sp.Expr = sp.Integer(0)
         if enable_SSL:
             SSL_h, SSL_sigma = par.register_CodeParameters(
                 "REAL",
@@ -310,7 +309,7 @@ def register_CFunction_rhs_eval(
                                 )
                             ] = sp.Symbol(f"{tensor_name}_dD{i}{j}{direction}")
         rhs_by_gridfunction_name = OrderedDict(
-            (name, expression.xreplace(centered_advection_substitutions))
+            (name, cast(sp.Expr, expression.xreplace(centered_advection_substitutions)))
             for name, expression in rhs_by_gridfunction_name.items()
         )
 

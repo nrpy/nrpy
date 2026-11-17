@@ -6,13 +6,15 @@
 ## Summary
 
 superB decomposes each numerical grid across the `Nchare0`, `Nchare1`, and
-`Nchare2` chare-array dimensions. Each `Timestepping` chare owns a rectangular
+`Nchare2` chare-array dimensions. Each `Timestepping` chare holds a rectangular
 local grid with ghost zones, local coordinate arrays, local boundary metadata,
 and communication buffers. The generated runtime synchronizes ordinary ghost
 faces between neighboring chares, then handles nonlocal curvilinear inner
 boundary sources separately through source-point messages.
 
 ## Detail
+
+### Chare Grid Decomposition, Ghost Exchange, And Nonlocal CurviBCs
 
 `numerical_grid_params_Nxx_dxx_xx_chare` derives local grid parameters from
 global grid parameters and the current `chare_index`. It requires each global
@@ -29,17 +31,17 @@ per-grid diagnostic struct and invokes the setup modes for 1D and 2D
 diagnostics; the diagnostics dispatcher behavior is covered by the diagnostics
 leaf, not here.
 
-Index ownership is arithmetic rather than a stored chare communication map.
+Subdomain ownership is arithmetic rather than a stored chare communication map.
 `superB.h` provides `IDX3_OF_CHARE`, `MAP_LOCAL_TO_GLOBAL_IDX*`,
 `MAP_GLOBAL_TO_LOCAL_IDX*`, `globalidx3pt_to_chareidx3`, and
 `globalidx3pt_to_localidx3pt`. Nonlocal inner-boundary setup and send code maps
-global source and destination indices to owning chares and local indices on
+global source and destination indices to target chares and local indices on
 demand.
 
 The grid transport paths are ordinary Charm++ entry-method sends generated for
 the `Timestepping` array:
 
-| Flow | Routing | Payload | Owner facts |
+| Flow | Routing | Message buffer | Source-code details |
 | --- | --- | --- | --- |
 | ghost face slabs | indexed point-to-point `Timestepping` sends | parameter-marshaled `REAL` face slabs | face area and `NGHOSTS` from superB code |
 | nonlocal setup | sparse point-to-point sends | source index arrays | destination tells source which points are needed |
@@ -47,24 +49,21 @@ the `Timestepping` array:
 | MoL/BC ordering | SDAG local order plus `when` waits | messages buffer until wait reached | no global Charm barrier implied |
 
 `Nchare0`, `Nchare1`, and `Nchare2` define grid and chare decomposition, not
-processing-element placement. The chare/global/local owner helpers on this page
+processing-element placement. The chare/global/local index-mapping macros above
 belong to grid indexing and sparse source lookup; load-balancing policy and PE
-placement belong to the runtime page. Current ghost and nonlocal boundary paths
+placement belong to [Chare Entrypoints And Runtime](chare-entrypoints-and-runtime.md). Current ghost and nonlocal boundary paths
 do not use TRAM, multicast sections, priority sends, immediate entry methods,
 expedited handling, or zero-copy transfer. Immediate entry methods are not a
 valid replacement for these generated `Timestepping` chare-array receives: the
 current `.ci` signatures are ordinary array entry methods carrying marshaled
 buffers and matched by SDAG `when` clauses.
 
-CurviBC setup starts from the global `bc_struct` and filters it into
-chare-local storage. `bcstruct_chare_set_up` counts inner boundary points whose
-destination lies on the current chare, separates points whose source is local
-from points whose source belongs to another chare, converts local entries from
-global to local indices, records parity, and builds `nonlocalinnerbc_struct`
-arrays for both incoming source chares and outgoing destination chares. The same
-function filters pure outer boundary points into local `pure_outer_bc_array`
-entries. `apply_bcs_inner_only_nonlocal` later consumes received source-point
-buffers and applies parity-aware inner BC updates to the nonlocal entries.
+CurviBC setup starts from the global `bc_struct` eigencoordinate and parity maps
+defined in [BHaH Curvilinear Boundaries And Stencils](../bhah/curvilinear-boundaries-and-stencils.md)
+and partitions them into chare-local storage: `bcstruct_chare_set_up` separates
+local-source inner boundary points from remote-source points (`nonlocalinnerbc_struct`
+incoming/outgoing lists), filters local `pure_outer_bc_array` entries, and pairs
+with `apply_bcs_inner_only_nonlocal` for parity-signed remote updates.
 
 Neighbor ghost exchange is face based. `send_neighbor_data` packs `NGHOSTS`
 interior faces for the east-west, north-south, or top-bottom direction into
@@ -75,12 +74,14 @@ synchronized auxiliary-evolution gridfunctions when present, and after each RK
 substep for the gridfunction sets selected by the MoL generator.
 
 Nonlocal inner BC exchange is point based. During setup, each chare sends the
-global source-point indices it needs to the source-owning chares, and source
+global source-point indices it needs to the source chares, and source
 chares cache the points they must later send. During evolution,
 `send_nonlocalinnerbc_data` gathers those source values by global index,
 dispatches type-specific `receiv_nonlocalinnerbc_data_*` entry methods, and
 `process_nonlocalinnerbc` calls `apply_bcs_inner_only_nonlocal` on the received
 buffers.
+
+### Method Of Lines Phases, Initial Data, And NRPyElliptic Hooks
 
 The superB MoL generator splits each RK substep into explicit phases:
 `MOL_PRE_RK_UPDATE` for RHS evaluation, `MOL_RK_UPDATE` for the RK update,
@@ -105,29 +106,21 @@ example opts into the
 same combined conformal determinant/trace projection after checkpoint recovery
 and after final outer-plus-inner BC handling; its MoL post-RHS hook applies it
 again after each RK update. `enable_conformal_projection` defaults to `False`,
-so this lifecycle exists only for callers that opt in and supply the Method of
-Lines hook. The checked collision example uses BSSN owners and does not wire
+so this projection schedule runs only for callers that opt in and supply the Method of
+Lines hook. The checked collision example uses BSSN equation modules and does not wire
 fCCZ4 RHSs, gauge RHSs, or `Theta_fCCZ4`.
+
+Evidence (scientific/interface requirement): `superB/initial_data.py::register_CFunction_initial_data`; `superB_two_blackholes_collide.py`; corroboration: `superB/MoL.py::register_CFunctions`.
 
 Both checked superB black-hole examples explicitly set
 `enable_YBS_Gamma_constraint_adjustment = False` and forward it to the shared
-BHaH `register_CFunction_rhs_eval`. superB owns no separate YBS RHS fork:
+BHaH `register_CFunction_rhs_eval`. superB maintains no separate YBS RHS fork:
 changing that source constant routes through the BHaH registrar to the BSSN
-RHS and gauge owners, while the enabled-only runtime `YBS_chi` parameter uses
+RHS and gauge equation modules, while the enabled-only runtime `YBS_chi` parameter uses
 the reused BHaH CodeParameters flow. Neither example exposes a command-line
 switch for the code-generation choice.
 
-Claim evidence:
-- Claim: both superB black-hole generators keep the YBS adjustment explicitly default-disabled and forward the option to the shared BHaH RHS registrar; superB does not own a separate equation fork.
-- Role: descriptive behavior
-- Deciding authority: [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py) and [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py), `enable_YBS_Gamma_constraint_adjustment` forwarding
-- Corroboration: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
-
-Claim evidence:
-- Claim: superB initial-data projection is opt-in with default `False`; the checked collision example enables it and explicitly provides a Method of Lines post-RHS projection hook while using BSSN, not the new fCCZ4 evolution owners.
-- Role: public/scientific contract
-- Deciding authority: [initial_data.py](../../../nrpy/infrastructures/superB/initial_data.py), `register_CFunction_initial_data`; [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py), initial-data and Method of Lines registrations
-- Corroboration: [MoL.py](../../../nrpy/infrastructures/superB/MoL.py), `register_CFunctions`
+Evidence (descriptive behavior): `superB_two_blackholes_collide.py`; `superB_blackhole_spectroscopy.py`; corroboration: `BHaH/general_relativity/rhs_eval.py::register_CFunction_rhs_eval`.
 
 The generated `post_non_y_n_auxevol_mallocs` hook runs after memory for
 non-`y_n` and auxiliary-evolution gridfunctions has been allocated. In the
@@ -143,7 +136,7 @@ registers NRPyElliptic initial-guess, auxevol, RHS, residual, and stop-condition
 functions, but superB only wires their runtime hooks: `nrpyelliptic_project=True`
 selects a single initial-data call, registers a per-grid
 `wavespeed_at_outer_boundary` parameter, and emits
-`send_wavespeed_at_outer_boundary` so the chare owning a selected outer-boundary
+`send_wavespeed_at_outer_boundary` so the chare containing a selected outer-boundary
 point broadcasts that wavespeed to every chare before evolution. The example's
 RHS string then uses that value in radiation BC wavespeed inputs. The generated
 volume-integration report updates `commondata.log10_current_residual` from the
@@ -155,7 +148,7 @@ Current configured CI builds the elliptic and spectroscopy variants without
 running them, then runs only the collision variant. Source inspection establishes
 emitted control flow, but configured automation does not establish elliptic
 residual-stop behavior, spectroscopy/Psi4 synchronization, checkpoint/restart,
-direct payload checks, or distributed runtime outcomes.
+direct message-buffer checks, or distributed runtime outcomes.
 
 ## Sources
 
@@ -173,8 +166,6 @@ direct payload checks, or distributed runtime outcomes.
 
 ## See Also
 
-- [superB](index.md)
-- [Chare Entrypoints And Runtime](chare-entrypoints-and-runtime.md)
-- [Diagnostics And Observables](diagnostics-and-observables.md)
-- [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md)
-- [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)
+- Depends on: [BHaH Curvilinear Boundaries And Stencils](../bhah/curvilinear-boundaries-and-stencils.md)
+- See also: [Chare Entrypoints And Runtime](chare-entrypoints-and-runtime.md)
+- See also: [Diagnostics And Observables](diagnostics-and-observables.md)

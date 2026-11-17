@@ -1,11 +1,11 @@
 # GR Poststep Repairs
 
-> ETLegacy lapse flooring and combined conformal determinant/trace projection across initial and MoL lifecycle bins. · Status: confirmed
+> ETLegacy lapse flooring and combined conformal determinant/trace projection across initial and MoL schedule bins. · Status: confirmed
 > Up: [ETLegacy](index.md)
 
 ## Summary
 
-This leaf owns ETLegacy GR repair kernels. Registration places the lapse floor
+This leaf covers ETLegacy GR repair kernels. Registration places the lapse floor
 in `MoL_PostStep` and emits combined-projection entries for `CCTK_INITIAL`,
 `MoL_PostStep`, and `MoL_PseudoEvolution`. For finite, nonsingular states where
 the projection expressions are defined, those entries restore
@@ -52,11 +52,7 @@ support plus all-points memory and thread-safety concerns. All three repair
 schedules invoke this combined projector; none invokes a determinant-only
 repair.
 
-Claim evidence:
-- Claim: The ETLegacy projector registration assigns the combined determinant/trace projector to `CCTK_INITIAL`, after evolved-variable boundary conditions in `MoL_PostStep`, and before constraints without an auxiliary-boundary dependency in `MoL_PseudoEvolution`; that registration emits no determinant-only repair entry, and its source structure does not establish fresh-data, recovery, restart, or singular/nonfinite error-path behavior.
-- Role: descriptive behavior
-- Deciding authority: [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
-- Corroboration: [floor_the_lapse.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/floor_the_lapse.py), `register_CFunction_floor_the_lapse`
+Evidence (descriptive behavior): `ETLegacy/general_relativity/enforce_detgbar_equals_detghat_trAzero.py::register_CFunction_enforce_detgbar_equals_detghat_trAzero`; corroboration: `ETLegacy/general_relativity/floor_the_lapse.py::register_CFunction_floor_the_lapse`.
 
 ## Sources
 
@@ -65,9 +61,6 @@ Claim evidence:
 
 ## See Also
 
-- [ETLegacy](index.md)
-- [GR ADM/BSSN, Slicing, And Matter Coupling](gr-adm-bssn-slicing-and-matter-coupling.md)
-- [GR BSSN RHS, Ricci, Constraints, And Validation](gr-bssn-rhs-ricci-constraints-and-validation.md)
-- [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
+- Depends on: [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
 - Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)
 - Contrasts with: [CarpetX GR Poststep Repairs](../carpetx/gr-poststep-repairs.md)

@@ -1,0 +1,152 @@
+name: SEBOBv2 projected attachment
+
+on:
+  pull_request:
+    paths:
+      - 'nrpy/equations/seobnr/**'
+      - 'nrpy/infrastructures/BHaH/seobnr/**'
+      - 'nrpy/examples/sebobv2.py'
+      - 'nrpy/examples/tests/sebobv2_projected_attachment_check.py'
+      - 'nrpy/c_codegen.py'
+      - 'nrpy/c_function.py'
+      - 'nrpy/params.py'
+      - 'nrpy/helpers/parallel_codegen.py'
+      - 'nrpy/infrastructures/BHaH/CodeParameters.py'
+      - 'nrpy/infrastructures/BHaH/BHaH_defines_h.py'
+      - 'nrpy/infrastructures/BHaH/Makefile_helpers.py'
+      - '.github/workflows/sebobv2-projected-attachment.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'nrpy/equations/seobnr/**'
+      - 'nrpy/infrastructures/BHaH/seobnr/**'
+      - 'nrpy/examples/sebobv2.py'
+      - 'nrpy/examples/tests/sebobv2_projected_attachment_check.py'
+      - 'nrpy/c_codegen.py'
+      - 'nrpy/c_function.py'
+      - 'nrpy/params.py'
+      - 'nrpy/helpers/parallel_codegen.py'
+      - 'nrpy/infrastructures/BHaH/CodeParameters.py'
+      - 'nrpy/infrastructures/BHaH/BHaH_defines_h.py'
+      - 'nrpy/infrastructures/BHaH/Makefile_helpers.py'
+      - '.github/workflows/sebobv2-projected-attachment.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  projected-reference-and-matching:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      OMP_NUM_THREADS: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check out the scalar comparison source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Unchanged reviewed PR head: isolate scalar regressions from this fix.
+          # The existing scalar job retains its upstream numerical comparison.
+          ref: '0f4c0b9b5fa7545f2168ad6a2c21dd37b0aa0ce4'
+          path: scalar_reference
+
+      - uses: actions/setup-python@v7.0.0
+        with:
+          # Follow security/bug-fix maintenance releases in the supported line.
+          # The exact interpreter is recorded below; evidence covers that run.
+          python-version: '3.12'
+
+      - name: Install numerical and analysis dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc make libgsl-dev bc util-linux
+          python -m pip install \
+            appdirs==1.4.4 clang-format==23.1.0 nrpypn==2.0.1 \
+            sympy==1.14.0 typing-extensions==4.16.0 nrpylatex==1.4.0 \
+            black==26.5.1 isort==9.0.2 mypy==2.3.1 pylint==4.1.2 \
+            pydocstyle==6.3.0 darglint==1.8.1 setuptools==84.0.0 \
+            types-setuptools==84.0.0.20261006 \
+            nrpy==2.2026.6 mpmath==1.3.0 click==8.5.0 \
+            mypy-extensions==1.1.0 packaging==26.3 pathspec==1.1.1 \
+            platformdirs==4.12.4 pytokens==0.4.1 librt==0.16.0 \
+            ast-serialize==0.12.1 astroid==4.3.4 dill==0.4.1 \
+            mccabe==0.7.0 tomlkit==0.15.1 snowballstemmer==3.1.1
+          # Distribution tools use the runner's signed Ubuntu packages so this
+          # job receives security updates. Record their resolved versions and
+          # scope numerical evidence to this run, not an identical future OS.
+          echo 'Numerical comparisons are reproducible only for the recorded toolchain and package set of this run.'
+          gcc --version
+          gsl-config --version
+          make --version
+          bc --version
+          prlimit --version
+          dpkg-query --show gcc gcc-13 libgsl-dev make bc util-linux libc6
+          python --version
+          python -m pip --version
+          python -m pip freeze
+
+      - name: Analyze the modified Python modules
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          MYPY_CACHE_DIR: ${{ runner.temp }}/sebobv2-mypy
+          XDG_CACHE_HOME: ${{ runner.temp }}/sebobv2-analysis-cache
+        run: |
+          set -euo pipefail
+          for source in \
+            nrpy/infrastructures/BHaH/seobnr/SEOBNRv5_projected_attachment_reference.py \
+            nrpy/infrastructures/BHaH/seobnr/dynamics/SEOBNRv5_aligned_spin_pa_integration.py \
+            nrpy/infrastructures/BHaH/seobnr/inspiral_waveform/SEOBNRv5_aligned_spin_special_amplitude_coefficients.py \
+            nrpy/examples/sebobv2.py \
+            nrpy/examples/tests/sebobv2_projected_attachment_check.py
+          do
+            # These tracked modules had score 10.00 before this fix; both new
+            # modules must also score 10.00. Check Pylint's exit status directly
+            # so the legacy wrapper's rating parser cannot report false success.
+            python -m pylint --rcfile=.pylintrc --fail-under=10 "$source"
+            bash .github/single_file_static_analysis.sh "$source"
+          done
+          # Package initializers are bare import lists, not executable scripts.
+          black --check nrpy/infrastructures/BHaH/seobnr/__init__.py
+          isort --check-only nrpy/infrastructures/BHaH/seobnr/__init__.py
+          mypy --strict --pretty --allow-untyped-calls nrpy/infrastructures/BHaH/seobnr/__init__.py
+
+      - name: Generate and compile scalar and projected executables
+        run: |
+          set -euo pipefail
+          test -d "$RUNNER_TEMP"
+          mkdir "$RUNNER_TEMP/sebobv2-scalar" "$RUNNER_TEMP/sebobv2-projected"
+          (
+            cd "$RUNNER_TEMP/sebobv2-scalar"
+            PYTHONPATH="$GITHUB_WORKSPACE/scalar_reference" \
+              XDG_CACHE_HOME="$RUNNER_TEMP/sebobv2-scalar-cache" \
+              python -m nrpy.examples.sebobv2
+            make -C project/sebobv2 -j2
+          )
+          (
+            cd "$RUNNER_TEMP/sebobv2-projected"
+            PYTHONPATH="$GITHUB_WORKSPACE" \
+              XDG_CACHE_HOME="$RUNNER_TEMP/sebobv2-projected-cache" \
+              python -m nrpy.examples.sebobv2 --projected-attachment-diagnostics
+            make -C project/sebobv2 -j2
+          )
+
+      - name: Check projected references through NQC and merger-ringdown
+        run: |
+          set -euo pipefail
+          python nrpy/examples/tests/sebobv2_projected_attachment_check.py \
+            --project "$RUNNER_TEMP/sebobv2-projected/project/sebobv2" \
+            --baseline "$RUNNER_TEMP/sebobv2-scalar/project/sebobv2"
+
+      - name: Remove owned generated projects and caches
+        if: always()
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/sebobv2-scalar" "$RUNNER_TEMP/sebobv2-projected" \
+            "$RUNNER_TEMP/sebobv2-scalar-cache" "$RUNNER_TEMP/sebobv2-projected-cache" \
+            "$RUNNER_TEMP/sebobv2-analysis-cache" "$RUNNER_TEMP/sebobv2-mypy" \
+            "$GITHUB_WORKSPACE/project/sebobv2"

@@ -5,8 +5,8 @@
 
 ## Summary
 
-ETLegacy registers runtime services around generated equation kernels instead of
-owning the Einstein Toolkit runtime itself. MoL registration binds the generated
+ETLegacy registers runtime services around generated equation kernels rather than
+defining the Einstein Toolkit driver itself. MoL registration binds the generated
 `evol_variables` group to the generated `evol_variables_rhs` group. Symmetry
 registration emits old CartGrid3D parity declarations from registered
 gridfunction names. RHS initialization zeros every evolved RHS gridfunction at
@@ -84,8 +84,6 @@ and writes to `evol_variables_rhs(boundary)`.
 
 ## See Also
 
-- [ETLegacy](index.md)
-- [Code Parameters, Includes, And Loops](code-parameters-includes-and-loops.md)
-- [GR BSSN RHS, Ricci, Constraints, And Validation](gr-bssn-rhs-ricci-constraints-and-validation.md)
-- [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
-- [Generated Project CI](../../validation/generated-project-ci.md)
+- See also: [Code Parameters, Includes, And Loops](code-parameters-includes-and-loops.md)
+- Depends on: [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
+- Validated by: [Generated Project CI](../../validation/generated-project-ci.md)

@@ -213,7 +213,7 @@ class SpECTRESpinEstimateClass:
         self._SE_qDD_expr = ixp.zerorank2(dimension=2)
         for A in range(2):
             for B in range(2):
-                val = sp.Integer(0)
+                val: sp.Expr = sp.Integer(0)
                 for i in range(3):
                     for j in range(3):
                         val += self._eADU[A][i] * self._eADU[B][j] * self._gammaDD[i][j]
@@ -285,9 +285,9 @@ class SpECTRESpinEstimateClass:
 
         # Flux for div(R grad z): F^A = sqrt(q) * R * q^{AB} * z_,B
         self._SE_flux_densityU = ixp.declarerank1("SE_flux_densityU", dimension=2)
-        self._SE_flux_densityU_expr = [sp.Integer(0), sp.Integer(0)]
+        self._SE_flux_densityU_expr: List[sp.Expr] = [sp.Integer(0), sp.Integer(0)]
         for A in range(2):
-            tmp = sp.Integer(0)
+            tmp: sp.Expr = sp.Integer(0)
             for B in range(2):
                 tmp += (
                     self._sqrtq * self._R * self._SE_qUU[A][B] * self._SE_zeta_dD[B + 1]
@@ -297,7 +297,7 @@ class SpECTRESpinEstimateClass:
         # Derivatives of flux; used for div(R grad z)
         self._SE_flux_densityU_dD = ixp.declarerank2("SE_flux_densityU_dD", dimension=3)
 
-        flux_div = sp.Integer(0)
+        flux_div: sp.Expr = sp.Integer(0)
         for A in range(2):
             flux_div += self._SE_flux_densityU_dD[A][A + 1]
         # div_R_grad_z = (1/sqrt(q)) * partial_A ( sqrt(q) R q^{AB} z_,B )
@@ -355,7 +355,7 @@ class SpECTRESpinEstimateClass:
         self._eps2UU[1][0] = -self._orientation_sign / self._sqrtq
 
         # Recompute Omega = eps^{AB} * nabla_A X_B using updated eps^{AB}
-        omega_sum = sp.Integer(0)
+        omega_sum: sp.Expr = sp.Integer(0)
         for A in range(2):
             for B in range(2):
                 covXB = self._SE_XD_dD[B][A + 1]
@@ -577,7 +577,7 @@ class SpECTRESpinEstimateClass:
         """
         if len(zOmega_integrals) != 3:
             raise ValueError("zOmega_integrals must have three entries.")
-        ssum = sp.Integer(0)
+        ssum: sp.Expr = sp.Integer(0)
         for a in range(3):
             ssum += zOmega_integrals[a] ** 2
         return cast(sp.Expr, sp.sqrt(ssum) / (8 * sp.pi))
@@ -741,7 +741,7 @@ class SpECTRESpinEstimateClass:
         for A in range(2):
             for B in range(2):
                 for C in range(2):
-                    tmp = sp.Integer(0)
+                    tmp: sp.Expr = sp.Integer(0)
                     for E in range(2):
                         for F in range(2):
                             tmp += (
@@ -756,7 +756,7 @@ class SpECTRESpinEstimateClass:
         for C in range(2):
             for A in range(2):
                 for B in range(2):
-                    val = sp.Integer(0)
+                    val: sp.Expr = sp.Integer(0)
                     for D in range(2):
                         val += (
                             sp.Rational(1, 2)
@@ -775,7 +775,7 @@ class SpECTRESpinEstimateClass:
             for C in range(2):
                 for A in range(2):
                     for B in range(2):
-                        term = sp.Integer(0)
+                        term: sp.Expr = sp.Integer(0)
                         for D in range(2):
                             bracket = (
                                 self._SE_qDD_dD[B][D][A + 1]
@@ -802,8 +802,8 @@ class SpECTRESpinEstimateClass:
         dB_GammaCAC = ixp.zerorank2(dimension=2)
         for A in range(2):
             for B in range(2):
-                dC_GammaCAB_sum = sp.Integer(0)
-                dB_GammaCAC_sum = sp.Integer(0)
+                dC_GammaCAB_sum: sp.Expr = sp.Integer(0)
+                dB_GammaCAC_sum: sp.Expr = sp.Integer(0)
                 for C in range(2):
                     dC_GammaCAB_sum += self._GammaU2DD_dD[C][A][B][C]
                     dB_GammaCAC_sum += self._GammaU2DD_dD[C][A][C][B]
@@ -814,8 +814,8 @@ class SpECTRESpinEstimateClass:
         GammaCAD_GammaDBC = ixp.zerorank2(dimension=2)
         for A in range(2):
             for B in range(2):
-                g1 = sp.Integer(0)
-                g2 = sp.Integer(0)
+                g1: sp.Expr = sp.Integer(0)
+                g2: sp.Expr = sp.Integer(0)
                 for C in range(2):
                     for D in range(2):
                         g1 += self._GammaU2DD[C][A][B] * self._GammaU2DD[D][C][D]
@@ -837,7 +837,7 @@ class SpECTRESpinEstimateClass:
         # Spin function Omega = eps^{AB} * nabla_A X_B
         # Because the Levi-Civita tensor is antisymmetric and the Christoffels are symmetric
         # in their lower indices, the Gamma^C_{AB} term vanishes:
-        omega_sum = sp.Integer(0)
+        omega_sum: sp.Expr = sp.Integer(0)
         for A in range(2):
             for B in range(2):
                 covXB = self._SE_XD_dD[B][A + 1]
@@ -846,8 +846,8 @@ class SpECTRESpinEstimateClass:
 
         # Laplacians of zeta and y_aux:
         # Delta f = q^{AB} * ( partial_A partial_B f - Gamma^C_{AB} partial_C f )
-        self._laplacian_of_z = sp.Integer(0)
-        self._laplacian_of_y = sp.Integer(0)
+        self._laplacian_of_z: sp.Expr = sp.Integer(0)
+        self._laplacian_of_y: sp.Expr = sp.Integer(0)
         for A in range(2):
             for B in range(2):
                 term_z = self._SE_zeta_dDD[A + 1][B + 1]

@@ -339,6 +339,7 @@ def CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems: Set[str],
     radiation_BC_fd_order: int = 2,
     set_parity_on_aux: bool = False,
+    enable_RK3_accumulation: bool = False,
 ) -> None:
     """
     Register various C functions responsible for handling boundary conditions.
@@ -346,6 +347,7 @@ def CurviBoundaryConditions_register_C_functions(
     :param set_of_CoordSystems: Set of coordinate systems to use.
     :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
     :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
+    :param enable_RK3_accumulation: Register radiation BCs for the fused second RK3 stage.
     """
     for CoordSystem in set_of_CoordSystems:
         # Register C function to set up the boundary condition struct.
@@ -358,6 +360,11 @@ def CurviBoundaryConditions_register_C_functions(
             CoordSystem=CoordSystem,
             radiation_BC_fd_order=radiation_BC_fd_order,
         )
+        if enable_RK3_accumulation:
+            BHaH.CurviBoundaryConditions.apply_bcs_outerradiation_and_inner.register_CFunction_apply_bcs_outerradiation_and_inner_accumulate(
+                CoordSystem=CoordSystem,
+                radiation_BC_fd_order=radiation_BC_fd_order,
+            )
 
     # Register C function to apply boundary conditions to inner-only boundary points.
     BHaH.CurviBoundaryConditions.apply_bcs_inner_only.register_CFunction_apply_bcs_inner_only()

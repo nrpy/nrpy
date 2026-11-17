@@ -329,14 +329,15 @@ def single_RK_substep_input_symbolic(
 
     # (2) RK update
     RK_key = f"RK_STEP{rk_step}"
-    MoL_Functions_dict[RK_key] = RKFunction(
-        RK_lhs_list,
-        RK_rhs_list,
-        rk_step=rk_step,
-        enable_intrinsics=enable_intrinsics,
-        rational_const_alias=rational_const_alias,
-    )
-    body += MoL_Functions_dict[RK_key].c_function_call()
+    if RK_lhs_list:
+        MoL_Functions_dict[RK_key] = RKFunction(
+            RK_lhs_list,
+            RK_rhs_list,
+            rk_step=rk_step,
+            enable_intrinsics=enable_intrinsics,
+            rational_const_alias=rational_const_alias,
+        )
+        body += MoL_Functions_dict[RK_key].c_function_call()
 
     # (3) Post-RHS
     for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):

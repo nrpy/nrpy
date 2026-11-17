@@ -5,11 +5,10 @@
 
 ## Summary
 
-This page owns the aligned-spin SEOBNR constants that sit between conservative
-dynamics and waveform attachment. The implementation computes or exposes
-calibration parameters, final remnant mass and spin, Kerr ISCO radius, stopping
-radius, and NR-fitted mode amplitudes and frequencies at the waveform matching
-time.
+Aligned-spin SEOBNR calibration and remnant modules compute or expose the
+constants between conservative dynamics and waveform attachment: calibration
+parameters, final remnant mass and spin, Kerr ISCO radius, stopping radius, and
+NR-fitted mode amplitudes and frequencies at the waveform matching time.
 
 ## Detail
 
@@ -28,11 +27,7 @@ expressions such as `a6`, `pyseobnr_dSO`, `Delta_t_NS`, and `Delta_t_S`; when
 NRPy-calibrated fit family instead of the default pySEOBNR fit (`dSO` and
 `Delta_t_S` are unaffected by this flag).
 
-Claim evidence:
-- Claim: `SEOBNR_aligned_spin_constants` accepts `calibration_no_spin`, `calibration_spin`, and `nrpy_calibrated`, where `nrpy_calibrated` cannot be combined with either calibration flag; in the default post-calibration mode, `nrpy_calibrated=True` selects `a6` and `Delta_t_NS` from a separate NRPy-calibrated fit family (`nrpy_par_a6`, `nrpy_par_dtns`) instead of the default pySEOBNR fit (`pySEOBNR_par_a6`, `pySEOBNR_par_dtns`), while `dSO` and `Delta_t_S` are unaffected by that flag.
-- Role: descriptive behavior
-- Deciding authority: [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py), `SEOBNR_aligned_spin_constants.__init__`, `compute_calibration_params`
-- Corroboration: [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_constants.py), `trusted_dict` (`a6_nrpy_calibrated`, `Delta_t_NS_nrpy_calibrated` keys)
+Evidence (descriptive behavior): `seobnr/SEOBNRv5_aligned_spin_constants.py::SEOBNR_aligned_spin_constants.__init__`, `compute_calibration_params`; corroboration: `seobnr/tests/SEOBNRv5_aligned_spin_constants.py::trusted_dict` (`a6_nrpy_calibrated`, `Delta_t_NS_nrpy_calibrated` keys).
 
 For all modes, `Delta_t` is defined as `Delta_t_NS + Delta_t_S`. The class then
 computes remnant properties through `final_spin_non_precessing_HBR2016()` and
@@ -47,7 +42,7 @@ The class also stores NR-fitted attachment data in dictionaries keyed by mode
 strings. `hNR` and `omegaNR` cover `(2,2)`, `(3,3)`, `(2,1)`, `(4,4)`, `(4,3)`,
 `(5,5)`, and `(3,2)`. The script validation flattens those dictionaries into
 stable keys such as `hNR_22`, `omegaNR_22`, `hNR_55`, and `omegaNR_32` before
-calling the trusted-expression pipeline.
+comparing against the trusted dictionary.
 
 Script validation instantiates the default post-calibration mode twice — once
 with `nrpy_calibrated=False` and once with `nrpy_calibrated=True` — and
@@ -57,17 +52,11 @@ variant here. The stored dictionary is sampled numerical evidence for the
 current formulas, not an independent reproduction of the SEOBNRv5HM, HBR2016,
 or UIB2016 calibration data and not a remnant-fit accuracy test.
 
-Claim evidence:
-- Claim: Script validation instantiates `SEOBNR_aligned_spin_constants` in the default post-calibration mode twice — once with `nrpy_calibrated=False` and once with `nrpy_calibrated=True` — and records both selector arms' `a6`/`Delta_t_NS` under the distinct keys `a6_nrpy_calibrated`/`Delta_t_NS_nrpy_calibrated` alongside the unsuffixed default-arm keys; neither `calibration_no_spin=True` nor `calibration_spin=True` has a sibling trusted variant in this script.
-- Role: descriptive behavior
-- Deciding authority: [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py), `__main__` block
-- Corroboration: none available; this script is the sole registered source for its own sampled-dictionary construction
+Evidence (descriptive behavior): `seobnr/SEOBNRv5_aligned_spin_constants.py::__main__` block.
 
 ## Sources
 
-- [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py) - `SEOBNR_aligned_spin_constants`
-- [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py) - `compute_calibration_params`, `Kerr_ISCO_radius`
-- [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py) - `final_spin_non_precessing_HBR2016`, `final_mass_non_precessing_UIB2016`
+- [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py) - `SEOBNR_aligned_spin_constants`; `compute_calibration_params`, `Kerr_ISCO_radius`; `final_spin_non_precessing_HBR2016`, `final_mass_non_precessing_UIB2016`
 - [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_constants.py) - `trusted_dict`
 - [SEOBNRv5HM paper landing page](https://arxiv.org/abs/2303.18039) - background orientation only; Equations 78-81 and calibration context have no exact revision mapping here
 - [HBR2016 paper landing page](https://arxiv.org/abs/1605.01938) - background orientation only; final-spin fit has no exact revision mapping here
@@ -75,8 +64,6 @@ Claim evidence:
 
 ## See Also
 
-- [SEOBNR And BOB](index.md)
-- [Aligned-Spin Hamiltonian](aligned-spin-hamiltonian.md)
-- [Aligned-Spin Waveforms](aligned-spin-waveforms.md)
-- [Precessing Rotations And Ringdown](precessing-rotations-and-ringdown.md)
-- [Trusted Expression Pipeline](../trusted-expression-pipeline.md)
+- See also: [Aligned-Spin Hamiltonian](aligned-spin-hamiltonian.md)
+- See also: [Aligned-Spin Waveforms](aligned-spin-waveforms.md)
+- Validated by: [Expression Validation Helpers](../../validation/expression-validation-helpers.md)

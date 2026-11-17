@@ -1,140 +1,49 @@
 # Static Analysis
 
-> Local and CI static-analysis behavior for NRPy Python changes. · Status: confirmed
+> Local and CI static-analysis tools, Pylint score rules, cache isolation, and Python 3.7 compatibility for NRPy Python modules. · Status: confirmed
 > Up: [Validation](index.md)
 
 ## Summary
 
-For modified handwritten Python, run `black .` from repository root only in an
-isolated, user-owned intended-change worktree or copy with no unrelated
-modifications, then inspect its diff. Run the single-file checks for each file.
-A newly added handwritten file must report Pylint **10.00/10.00**. An existing
-tracked handwritten file is grandfathered at its pre-change score, including a
-legacy score at or below `9.5`, but must not regress. Current wrapper and CI
-thresholds do not distinguish those classes or enforce this policy.
+Modified handwritten Python modules require `black .` (run only in an isolated worktree or copy with no unrelated modifications) and `.github/single_file_static_analysis.sh <file>`. Newly added handwritten Python files must score Pylint **10.00/10.00**, while existing tracked handwritten files must not regress below their pre-change Pylint score (even when at or below `9.5`); neither `.github/single_file_static_analysis.sh` (`9.91`) nor CI (`9.5`) enforces that distinction automatically.
 
 ## Detail
 
-Current `coding_style.md` supplies the contributor commands, while [Code Test
-Policy](code-test-policy.md) owns their prospective test-policy requirements.
-Generated trusted `*/tests/*.py` data is exempt from per-file static analysis;
-its handwritten owner is not. A directory path never exempts legacy or
-exceptional handwritten Python, and this data exception does not admit new
-executable Python under ordinary `tests/` stores. See [Test Oracles And Safe
-Updates](test-oracles-and-safe-updates.md) for the store and update rules.
+### Pylint Policy, Trusted-Data Exemption, And Wrapper Execution
 
-Repository state before the proposed change decides the class. A handwritten
-Python path already tracked there is legacy even when modified; a newly added
-path is new. For legacy files, measure the base and proposed file with the same
-Pylint version and configuration and reject any lower proposed rating. This
-grandfathering permits preservation, not a score decrease. New paths have no
-legacy baseline and must score exactly `10.00/10.00`.
+`coding_style.md` defines the static-analysis commands, while [Code Test Policy](code-test-policy.md) and [Test Oracles And Safe Updates](test-oracles-and-safe-updates.md) govern test placement and `*/tests/*.py` reference files. Generated `trusted_dict` modules under `*/tests/*.py` are exempt from per-file static analysis, whereas their handwritten defining modules (and any handwritten Python inside `tests/`) are not. Pre-change git tracking determines whether a file is new (`10.00/10.00` required) or existing (measure baseline and candidate with identical Pylint version/config and reject any decrease).
 
-Claim evidence:
-- Claim: Existing tracked handwritten Python files are grandfathered at their pre-change Pylint score without regression, including scores at or below `9.5`; newly added handwritten Python files must score `10.00/10.00`.
-- Role: normative rule
-- Deciding authority: [coding_style.md](../../coding_style.md), `## Static Analysis Configuration`, as updated by the commissioned policy decision
-- Corroboration: none available; `coding_style.md` is the sole current normative authority
+`.github/single_file_static_analysis.sh <file>` must run from repository root (where it resolves `.pylintrc`) on one validated repo-relative regular non-symlink path matching `^[A-Za-z0-9_./-]+$` (no `..` or leading `-`, because the script dispatches command strings via `eval`). It prints the Python version and runs `black --check`, `isort --check-only`, `mypy --strict --pretty --allow-untyped-calls`, `pylint --rcfile=.pylintrc`, `pydocstyle`, `darglint -v 2`, and `python3 <file>`. Because `python3 <file>` executes `__main__` and `mypy`/`pylint` write caches when unconfigured, run the wrapper only in an isolated copy with `HOME`, `XDG_CACHE_HOME`, `PYLINTHOME`, and `MYPY_CACHE_DIR` redirected to disposable directories.
 
-The single-file script expects exactly one Python file argument and must be run
-from repository root because it resolves `.pylintrc` there. It verifies the file
-exists, prints the Python version, then schedules `black --check`, `isort
---check-only`, `mypy --strict --pretty --allow-untyped-calls`, `pylint` with
-`.pylintrc`, `pydocstyle`, `darglint -v 2`, and `python3 <file>`. Its Pylint
-gate fails below `9.91`. Executing a file can run module-specific validation,
-generation, or other `__main__` side effects, and analysis tools can create or
-update caches or other filesystem output. The wrapper's mypy command supplies no
-`--cache-dir`, and `.mypy.ini` sets no `cache_dir`, so the invocation must not be
-assumed write-free. Inspect the target, the wrapper's command construction, and
-every invoked tool. The wrapper interpolates the target path into command strings
-dispatched through `eval`. Before invocation, require a repository-relative
-argument whose resolved target stays inside the repository, is a regular
-non-symlink file, has no `..` component, does not begin with `-`, and matches
-`^[A-Za-z0-9_./-]+$`. If that gate fails, do not invoke the wrapper; hardening it
-to argument-vector execution requires separately authorized source work. For an
-accepted path, run the wrapper only in an isolated, user-owned intended-change
-worktree or copy with no unrelated modifications. Disable or redirect every
-writable tool cache and filesystem output to an owned disposable location, and
-inspect repository status afterward.
+Evidence (normative rule): `coding_style.md` (`## Static Analysis Configuration`); `.github/single_file_static_analysis.sh::run_test_step`.
 
-The configured GitHub `static-analysis` matrix has Ubuntu 22.04 and 24.04 with
-Python `3.7.13`, `3.8.12`, `3.9.19`, and `3.x`, excluding only Ubuntu 24.04 with
-3.7.13. Its file discovery skips `__init__.py`, `project/`, `build/`, every
-`*/tests/*` path, and every path containing `manga`. It also names
-`./nrpy/examples/visualization_scripts/*`, but that path does not match the
-current `nrpy/examples/geodesic_visualizations/` directory; those current
-companion scripts are therefore not excluded by that rule.
+### CI Matrix, Unchecked Pylint Thresholds, And Python 3.7 Floor
 
-For discovered files, CI executes non-root, non-example modules as its doctest
-step; applies Black only on Python minor version 10 or newer; skips isort and
-mypy on 3.7.13 and 3.8.12; and applies Pylint, pydocstyle, and darglint on all
-matrix cells. Its inline Pylint threshold is `9.5`, not the local script's
-`9.91`. Both `.pylintrc` and `.pylintrc_python36` set `fail-under=10`, but the
-wrapper and workflow suppress Pylint's own nonzero result while parsing ratings
-against their own floors. None compares an existing file with its pre-change
-rating or distinguishes a newly added file. Therefore the wrapper can reject a
-grandfathered legacy score below `9.91`, the workflow can reject one below
-`9.5`, and either can accept a new file below `10.00`; propagated config failure
-would also reject grandfathered legacy files. Workflow YAML defines configured
-matrix and command shape, not execution outcomes.
+GitHub Actions `static-analysis` runs on Ubuntu 22.04 and 24.04 across Python `3.7.13`, `3.8.12`, `3.9.19`, and `3.x` (excluding Ubuntu 24.04 + `3.7.13`). File discovery skips `__init__.py`, `project/`, `build/`, `*/tests/*`, `*manga*`, and stale `./nrpy/examples/visualization_scripts/*` (leaving `nrpy/examples/geodesic_visualizations/` included). CI executes non-root, non-example modules for doctests, runs `black` only on Python `>= 3.10`, skips `isort`/`mypy` on `3.7.13` and `3.8.12`, and runs `pylint`, `pydocstyle`, and `darglint` on all cells.
 
-Claim status: stale; contradiction: CONTR-0003.
-See [CONTR-0003](../contradictions.md#contr-0003) for the enforcement gap.
+Although `.pylintrc` and `.pylintrc_python36` set `fail-under=10`, both `.github/single_file_static_analysis.sh` (`9.91` floor) and `.github/workflows/main.yml` (`9.5` floor) suppress Pylint's exit code and compare parsed scores against fixed floors without checking pre-change baselines or new-file status—so a new file at `9.94` or a `10.00 -> 9.93` regression passes automation while a legacy `< 9.5` edit fails CI; reviewers must verify per-file scores manually.
 
-### The Bars Are Not Machine-Checked
+Claim status: stale; contradiction: CONTR-0003. See [CONTR-0003](../contradictions.md#contr-0003).
 
-Neither the 10.00 bar for a new file nor the no-regression rule for a modified
-file is enforced by any automated gate. The workflow floor is `9.5` and the
-single-file wrapper's is `9.91`, so a new file scoring `9.94` and a regression
-from `10.00` to `9.93` both pass every configured check. A reviewer must run
-the per-file score and compare it with the pre-change baseline by hand.
+Because `static-analysis` executes on Python `3.7.13`, `3.7` is the active syntax and runtime floor: newer syntax fails at parse time, while post-`3.7` runtime operators that parse on `3.8+` (such as PEP 584 `dict |= other`) raise `TypeError` on `3.7`/`3.8` despite passing `py_compile` on modern Python. Tool configs live in `pyproject.toml` (`isort` Black profile), `.mypy.ini` (strict typing, no implicit `Optional`, `warn_return_any`, `strict_equality`), `.pydocstyle`, `.darglint` (`sphinx`), `.pylintrc`, and `.pylintrc_python36`.
 
-Claim evidence:
-- Claim: no configured check enforces the 10.00 bar for a newly added handwritten Python file or the no-regression rule for a modified one; the workflow's inline Pylint floor is `9.5` and the single-file wrapper's is `9.91`, and neither compares a file with its pre-change rating.
-- Role: CI behavior
-- Deciding authority: [main.yml](../../.github/workflows/main.yml), `static-analysis` inline Pylint threshold; [single_file_static_analysis.sh](../../.github/single_file_static_analysis.sh), `run_test_step`
-- Corroboration: [.pylintrc](../../.pylintrc), `[MASTER]` `fail-under`, which the wrapper and workflow both suppress in favour of their own floors
-
-### The Supported Python Floor
-
-The `static-analysis` matrix includes Python `3.7.13`, so `3.7` is the
-supported floor and a construct newer than that fails in CI even when it parses
-locally. Separate the two failure classes: a syntax error any parse check
-catches, and a runtime `TypeError` only an old interpreter or a targeted grep
-catches. PEP 584's `dict |= other` is the worked example — valid syntax on
-`3.8`, `TypeError` at runtime there — and `py_compile` on a modern interpreter
-reports nothing.
-
-Claim evidence:
-- Claim: the configured `static-analysis` matrix includes Python `3.7.13`, so a construct newer than 3.7 reaches CI on that cell; a version-gated construct that is valid syntax fails at runtime rather than at parse time, so a modern-interpreter parse check does not detect it.
-- Role: CI behavior
-- Deciding authority: [main.yml](../../.github/workflows/main.yml), `static-analysis` matrix
-- Corroboration: [setup.py](../../setup.py), `python_requires` and the declared Python classifiers
-
-The config files supply the tool policy: `pyproject.toml` sets isort to the
-Black profile; `.mypy.ini` enables strict typed definitions, no implicit
-optional, redundant-cast and unused-ignore warnings, return-`Any` warnings, and
-strict equality; `.pydocstyle` lists the accepted ignore set; `.darglint` uses
-Sphinx docstring style; `.pylintrc` and `.pylintrc_python36` set naming,
-formatting, disabled warnings, and version-specific Pylint behavior.
+Evidence (CI behavior): `.github/workflows/main.yml` (`static-analysis`); `.github/single_file_static_analysis.sh`; `.pylintrc`; `setup.py`.
 
 ## Sources
 
-- [../../coding_style.md](../../coding_style.md) - `## Python Coding Style`, `### Formatting`
-- [../../.github/single_file_static_analysis.sh](../../.github/single_file_static_analysis.sh) - `run_test_step`
-- [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `static-analysis`
-- [../../pyproject.toml](../../pyproject.toml) - `[tool.isort]`
-- [../../.mypy.ini](../../.mypy.ini) - `[mypy]`
-- [../../.pydocstyle](../../.pydocstyle) - `[pydocstyle]`
-- [../../.pylintrc](../../.pylintrc) - `[MASTER]`
-- [../../.pylintrc_python36](../../.pylintrc_python36) - `[MASTER]`
-- [../../.darglint](../../.darglint) - `[darglint]`
+- [coding_style.md](../../coding_style.md) - `## Python Coding Style`, `## Static Analysis Configuration`
+- [single_file_static_analysis.sh](../../.github/single_file_static_analysis.sh) - `run_test_step`
+- [main.yml](../../.github/workflows/main.yml) - `static-analysis`
+- [setup.py](../../setup.py) - `python_requires` and classifiers
+- [pyproject.toml](../../pyproject.toml) - `[tool.isort]`
+- [.mypy.ini](../../.mypy.ini) - `[mypy]`
+- [.pydocstyle](../../.pydocstyle) - `[pydocstyle]`
+- [.pylintrc](../../.pylintrc) - `[MASTER]`
+- [.pylintrc_python36](../../.pylintrc_python36) - `[MASTER]`
+- [.darglint](../../.darglint) - `[darglint]`
 
 ## See Also
 
-- Parent: [Validation](index.md)
 - Depends on: [Code Test Policy](code-test-policy.md)
 - Depends on: [Test Oracles And Safe Updates](test-oracles-and-safe-updates.md)
 - See also: [Generated Project CI](generated-project-ci.md)
-- See also: [Lint Checks](../lint/CHECKS.md)
-- See also: [Workflows](../workflows.md)

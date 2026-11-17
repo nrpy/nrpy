@@ -80,6 +80,7 @@ elif num_fisheye_transitions == 2:
         "fisheye_phys_w_trans2": 1.5,
     }
 MoL_method = "RK4"
+enable_RK3_accumulation = MoL_method in ("RK3 Ralston", "RK3 Heun")
 fd_order = 4
 radiation_BC_fd_order = 4
 enable_rfm_precompute = True
@@ -170,9 +171,7 @@ if enable_BHaHAHA:
     from nrpy.infrastructures.BHaH.BHaHAHA import (
         interpolation_3d_general__uniform_src_grid,
     )
-    from nrpy.infrastructures.superB import (
-        BHaH_implementation,
-    )
+    from nrpy.infrastructures.superB import BHaH_implementation
 
     BHaH_implementation.register_CFunction_bhahaha_find_horizons(
         CoordSystem=CoordSystem, max_horizons=3
@@ -242,6 +241,7 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     enable_CAKO=enable_CAKO,
     enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
     OMP_collapse=OMP_collapse,
+    enable_RK3_accumulation=enable_RK3_accumulation,
 )
 BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
     CoordSystem=CoordSystem,
@@ -274,22 +274,16 @@ superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems={CoordSystem},
     radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
+    enable_RK3_accumulation=enable_RK3_accumulation,
 )
 rhs_string = ""
 if separate_Ricci_and_BSSN_RHS:
     rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
-if outer_bcs_type == "radiation":
-    rhs_string += """
-rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
-apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
-                                   gridfunctions_wavespeed,gridfunctions_f_infinity,
-                                   RK_INPUT_GFS, RK_OUTPUT_GFS);"""
-else:
-    rhs_string += """
-rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"""
-
-if not enable_rfm_precompute:
-    rhs_string = rhs_string.replace("rfmstruct", "xx")
+rhs_string, rhs_accumulation_string = BHaH.general_relativity.rhs_eval.MoL_rhs_strings(
+    pre_rhs_string=rhs_string,
+    enable_rfm_precompute=enable_rfm_precompute,
+    outer_bcs_type=outer_bcs_type,
+)
 
 post_rhs_bcs_str = ""
 if outer_bcs_type != "radiation":
@@ -303,6 +297,7 @@ superB.MoL.register_CFunctions(
     post_rhs_string="""enforce_detgbar_equals_detghat_trAzero(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
+    rhs_accumulation_string=rhs_accumulation_string,
 )
 
 BHaH.xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(

@@ -9,7 +9,7 @@ Authors: Siddharth Mahesh
 """
 
 # Step P1: Import needed modules:
-from typing import Union, cast
+from typing import Union
 
 import sympy as sp
 
@@ -45,7 +45,7 @@ def f2r(
         float_as_string = f"{float_as_string}."
 
     # Append zpad zeros after the decimal point to increase precision.
-    return cast(sp.Rational, sp.Rational(float_as_string + "0" * zpad))
+    return sp.Rational(float_as_string + "0" * zpad)
 
 
 if __name__ == "__main__":

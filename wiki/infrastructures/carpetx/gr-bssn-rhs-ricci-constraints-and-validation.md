@@ -5,12 +5,12 @@
 
 ## Summary
 
-This page owns the CarpetX CFunction registration layer for the generated BSSN
-Ricci, RHS, constraints, and RHS trusted-expression checks. Symbolic BSSN
-equation construction stays with
-[BSSN Family](../../equations/general-relativity/bssn-family.md), and common
-trusted-value mechanics stay with
-[Trusted Expression Pipeline](../../equations/trusted-expression-pipeline.md).
+The `CarpetX/general_relativity/` registrars emit `CFunction` kernels for BSSN
+Ricci evaluation, evolved RHSs, diagnostic constraints, and RHS
+trusted-expression checks; symbolic BSSN equations live in
+[BSSN Family](../../equations/general-relativity/bssn-family.md), and shared
+`trusted_dict` comparison utilities live in
+[Expression Validation Helpers](../../validation/expression-validation-helpers.md).
 
 `register_CFunction_Ricci_eval()` emits the Ricci auxiliary kernel and schedules
 it before the BSSN RHS kernel in `ODESolvers_RHS`. `register_CFunction_rhs_eval()`
@@ -21,6 +21,8 @@ Hamiltonian, momentum, and conformal connection diagnostics in
 magnitudes.
 
 ## Detail
+
+### Ricci And BSSN RHS Kernel Registration
 
 The CarpetX Ricci, RHS, and constraints registration functions use the same
 parallel-codegen entry pattern: during `pcg.pcg_registration_phase()` they record the call with
@@ -55,7 +57,9 @@ The RHS options that change generated behavior are `enable_T4munu`,
 `enable_rfm_precompute`, `enable_simd`, `LapseEvolutionOption`, and
 `ShiftEvolutionOption`. `enable_T4munu` changes the BSSN RHS and gauge RHS
 lookup keys. `enable_KreissOliger_dissipation` adds `_dKOD` derivative terms to
-gauge and non-gauge RHSs; when `enable_CAKO` is true, separate gauge and
+the non-gauge RHSs and to each gauge RHS that is not exactly the SymPy zero, so
+a `Frozen` lapse or shift and the driver of the first-order shift options
+receive none; when `enable_CAKO` is true, separate gauge and
 non-gauge dissipation strengths are registered and multiplied by the evolved
 conformal-factor-derived `W`. `enable_CAHD` builds the matching
 `BSSN_constraints` object and adds a Hamiltonian-damping term to `cf_rhs`.
@@ -66,6 +70,8 @@ header and `CCTK_ParameterGet()` plus `ConstSIMD()` parameter reads, but this
 path then passes `enable_simd=True` into CarpetX `simple_loop()`, which raises
 `ValueError`; the current simple-loop-backed RHS kernel path is therefore not
 usable with `enable_simd=True`.
+
+Evidence (descriptive behavior): `CarpetX/general_relativity/rhs_eval.py::register_CFunction_rhs_eval`; `equations/general_relativity/BSSN_gauge_RHSs.py::BSSN_gauge_RHSs`; corroboration: the `rhs_eval` trusted dictionaries listed in Sources; no trusted file samples a zero gauge RHS entry.
 
 After option handling, the RHS codegen constructs an upwind control vector
 `betaU[i] = vetU[i] * rfm.ReU[i]` and calls `c_codegen()` with finite-difference
@@ -91,6 +97,8 @@ The CAHD body templates currently leave an empty operand in the SIMD
 SIMD body constructs `noSIMD_SSL_Gaussian_prefactor` as a scalar value and then
 passes `*noSIMD_SSL_Gaussian_prefactor` to `ConstSIMD()`.
 
+### Constraints Kernel And RHS Trusted Validation
+
 `register_CFunction_BSSN_constraints()` selects `BSSN_constraints` with optional
 reference-metric precompute and `T4munu` suffixes, computes `H`, `MU0`, `MU1`,
 `MU2`, `M = sqrt(gamma_ij M^i M^j)`, and
@@ -104,11 +112,7 @@ path does not currently emit a usable SIMD CarpetX loop kernel. Its schedule is 
 reading BSSN state and optional stress-energy fields, writing `aux_variables`,
 and syncing `aux_variables`.
 
-Claim evidence:
-- Claim: CarpetX `register_CFunction_BSSN_constraints` writes `H`, `MU0` through `MU2`, `M = sqrt(BSSNconstraints.Msquared)`, and `LAMBDA_CONSTRAINT = BSSNconstraints.LambdaConstraintMagnitude` to auxiliary gridfunctions.
-- Role: descriptive behavior
-- Deciding authority: [BSSN_constraints.py](../../../nrpy/infrastructures/CarpetX/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
-- Corroboration: [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [interface_ccl.py](../../../nrpy/infrastructures/CarpetX/interface_ccl.py), `construct_interface_ccl`
+Evidence (descriptive behavior): `CarpetX/general_relativity/BSSN_constraints.py::register_CFunction_BSSN_constraints`; corroboration: `equations/general_relativity/BSSN_constraints.py::BSSNconstraints.__init__`; `CarpetX/interface_ccl.py::construct_interface_ccl`.
 
 RHS trusted-expression validation belongs here because `rhs_eval.py` validates
 the CarpetX-specific assembled RHS dictionary after CarpetX option handling and
@@ -134,6 +138,9 @@ KO-enabled cases span both `T4munu` states with improvements disabled.
 - [rhs_eval.py](../../../nrpy/infrastructures/CarpetX/general_relativity/rhs_eval.py) - `register_CFunction_rhs_eval`, `validate_expressions`, `__main__`
 - [Ricci_eval.py](../../../nrpy/infrastructures/CarpetX/general_relativity/Ricci_eval.py) - `register_CFunction_Ricci_eval`
 - [BSSN_constraints.py](../../../nrpy/infrastructures/CarpetX/general_relativity/BSSN_constraints.py) - `register_CFunction_BSSN_constraints`
+- [equations BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py) - `BSSN_gauge_RHSs`
+- [equations BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py) - `BSSNconstraints.__init__`
+- [interface_ccl.py](../../../nrpy/infrastructures/CarpetX/interface_ccl.py) - `construct_interface_ccl`
 - [rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsFalse.py](../../../nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsFalse.py) - `trusted_dict`
 - [rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsTrue.py](../../../nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsTrue.py) - `trusted_dict`
 - [rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsFalse.py](../../../nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsFalse.py) - `trusted_dict`
@@ -143,12 +150,6 @@ KO-enabled cases span both `T4munu` states with improvements disabled.
 
 ## See Also
 
-- [CarpetX](index.md)
-- [Code Parameters, Includes, And Loops](code-parameters-includes-and-loops.md)
-- [GR ADM/BSSN And Matter Coupling](gr-adm-bssn-and-matter-coupling.md)
 - Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)
-- [Trusted Expression Pipeline](../../equations/trusted-expression-pipeline.md)
-- [C Codegen](../../core/c-codegen.md)
-- [Finite Difference](../../core/finite-difference.md)
-- [Reference Metrics](../../core/reference-metrics.md)
-- Contrasts with: [ETLegacy GR BSSN RHS, Ricci, Constraints, And Validation](../etlegacy/gr-bssn-rhs-ricci-constraints-and-validation.md)
+- Depends on: [C Codegen](../../core/c-codegen.md)
+- Depends on: [Finite Difference](../../core/finite-difference.md)

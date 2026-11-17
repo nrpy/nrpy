@@ -6,8 +6,11 @@ description: Use when explicitly asked for NRPy trialectic, "engage tri", "run t
 # NRPy Trialectic
 
 Read [the required shared protocol](../../review-protocol.md) for modes, independence,
-coverage, budgets, validation, and delivery. Load this skill and the protocol only;
-distribute them together.
+coverage, budgets, validation, and delivery. Root loads this skill and the
+protocol. Seats do not read the protocol file: paste into each seat's brief only
+this skill's `Roles` and the protocol sections `Preparation And Independence`,
+`Decisions And Coverage`, `Delta And Impact`, and `Proportionate Validation`
+(add `KB Candidates` for KB work).
 
 Use exactly three independent seats. Root owns live writes; seats never delegate
 or edit live targets. Default to `review`, including documents and all KB work.

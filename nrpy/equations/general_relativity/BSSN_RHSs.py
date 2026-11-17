@@ -99,7 +99,7 @@ class BSSNRHSs:
         detgammabar_dD = Bq.detgammabar_dD
 
         # Step 2.b.ii: Compute the contraction \bar{D}_k \beta^k = \beta^k_{,k} + \frac{\beta^k \bar{\gamma}_{,k}}{2 \bar{\gamma}}
-        Dbarbetacontraction = sp.sympify(0)
+        Dbarbetacontraction: sp.Expr = sp.sympify(0)
         for k in range(3):
             Dbarbetacontraction += betaU_dD[k][k] + betaU[k] * detgammabar_dD[k] / (2 * detgammabar)
 
@@ -171,7 +171,7 @@ class BSSNRHSs:
                                             - alpha_dBarDD[i][j] + alpha * RbarDD[i][j]
 
         # Step 3.c.v: Compute the trace:
-        curlybracketterms_trace = sp.sympify(0)
+        curlybracketterms_trace: sp.Expr = sp.sympify(0)
         for i in range(3):
             for j in range(3):
                 curlybracketterms_trace += gammabarUU[i][j] * curlybrackettermsDD[i][j]
@@ -512,7 +512,7 @@ class BSSNRHSs:
                     for k in range(3):
                         self.DbarMD[i][j] -= GammabarUDD[k][i][j] * self.MD[k]
 
-            DbarM_contraction = sp.sympify(0)
+            DbarM_contraction: sp.Expr = sp.sympify(0)
             for k in range(3):
                 for l in range(3):
                     DbarM_contraction += (

@@ -1,6 +1,6 @@
 # Einstein Toolkit Thorn Generators
 
-> Explain NRPy's Einstein Toolkit thorn-generation examples and checked-in ET fixtures. · Status: confirmed
+> Explain NRPy's Einstein Toolkit thorn-generation examples and checked-in ET parameter and reference files. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
@@ -20,6 +20,8 @@ They create thorn directories and CCL/build metadata that must be copied or
 linked into an Einstein Toolkit checkout before ET build or testsuite runs.
 
 ## Detail
+
+### ETLegacy And CarpetX Thorn Generators
 
 The command shape follows the module names from the repository root:
 
@@ -61,25 +63,27 @@ zero-RHS helpers, and the same BSSN/Ricci/RHS/constraints/poststep-repair
 registration family as the ETLegacy generator.
 
 WaveToy is split into separate thorns in both output families. The ID thorn writes
-the spherical-Gaussian exact solution at `CCTK_INITIAL` and owns initial-data
-parameters such as `sigma` and `wavespeed`. The evolution thorn owns `uu` and
+the spherical-Gaussian exact solution at `CCTK_INITIAL` and declares initial-data
+parameters such as `sigma` and `wavespeed`. The evolution thorn declares `uu` and
 `vv` evolution variables, registers RHS evaluation for the wave equation, and
 shares `wavespeed` from the ID thorn. The diagnostics thorn writes exact
 solution auxiliary variables during analysis and shares or reads the ID
 parameters needed for comparison output.
+
+### Checked-In Reference Files And CI Validation
 
 Each generator creates CCL files and thorn-local build metadata through the
 infrastructure writers, then writes registered C or C++ functions through
 `make.code.defn`. These generated `interface.ccl`, `param.ccl`,
 `schedule.ccl`, optional `configuration.ccl`, `src/make.code.defn`, and
 `src/*` files are generated thorn products under `project/**`, not durable KB
-sources. The checked-in fixture files under `nrpy/examples/et_WaveToyfiles/`
+sources. The checked-in reference files under `nrpy/examples/et_WaveToyfiles/`
 are different: `ThornList` is an ET component list including Cactus, Carpet,
 Carpet IO, CarpetRegrid2, MoL, NewRad, and other thorns needed by the Carpet
 WaveToy run; `WaveToyNRPy.par` is a larger Carpet WaveToy parfile; the
 `test/` subtree contains a testsuite descriptor, a small eight-iteration
-`WaveToyNRPy_test.par`, and `WaveToyNRPy_test/uuGF.x.asc` as checked-in fixture
-evidence for the CarpetIOASCII `uuGF` x-line output. That ASCII file is not a
+`WaveToyNRPy_test.par`, and `WaveToyNRPy_test/uuGF.x.asc` as checked-in reference
+output for the CarpetIOASCII `uuGF` x-line file. That ASCII file is not a
 generated thorn product; it is registered directly in `raw/SOURCES.md`.
 
 Python generation dependencies and ET build dependencies are separate. Running
@@ -110,27 +114,21 @@ numerical correctness or CarpetX compatibility.
 
 ## Sources
 
-- [carpet_wavetoy_thorns.py](../../nrpy/examples/carpet_wavetoy_thorns.py) - `project_name`, `ID_thorn_name`, `diag_thorn_name`, `evol_thorn_name`, `register_CFunction_rhs_eval`
-- [carpet_wavetoy_thorns.py](../../nrpy/examples/carpet_wavetoy_thorns.py) - `construct_schedule_ccl`, `construct_interface_ccl`, `construct_param_ccl`
-- [carpet_baikal_thorns.py](../../nrpy/examples/carpet_baikal_thorns.py) - `project_name`, `thorn_names`, `enable_T4munu`, `fd_order_list`
-- [carpet_baikal_thorns.py](../../nrpy/examples/carpet_baikal_thorns.py) - `register_CFunction_ADM_to_BSSN`, `register_CFunction_Ricci_eval`, `register_CFunction_rhs_eval`, `register_CFunction_BSSN_constraints`, `output_CFunctions_and_construct_make_code_defn`
-- [carpetx_wavetoy_thorns.py](../../nrpy/examples/carpetx_wavetoy_thorns.py) - `project_name`, `ID_thorn_name`, `diag_thorn_name`, `evol_thorn_name`, `register_CFunction_rhs_eval`
-- [carpetx_wavetoy_thorns.py](../../nrpy/examples/carpetx_wavetoy_thorns.py) - `ODESolvers_RHS`, `loop_device.hxx`, `DECLARE_CCTK_ARGUMENTSX`
-- [carpetx_baikal_thorns.py](../../nrpy/examples/carpetx_baikal_thorns.py) - `project_name`, `thorn_names`, `configuration_ccl.construct_configuration_ccl`
-- [carpetx_baikal_thorns.py](../../nrpy/examples/carpetx_baikal_thorns.py) - `ADMBaseX`, `USES INCLUDE: loop_device.hxx`, `register_CFunction_ADM_to_BSSN`, `register_CFunction_Ricci_eval`, `register_CFunction_rhs_eval`, `register_CFunction_BSSN_constraints`
-- [ThornList](../../nrpy/examples/et_WaveToyfiles/ThornList) - Einstein Toolkit component list fixture
-- [WaveToyNRPy.par](../../nrpy/examples/et_WaveToyfiles/WaveToyNRPy.par) - Carpet WaveToy parfile fixture
+- [carpet_wavetoy_thorns.py](../../nrpy/examples/carpet_wavetoy_thorns.py) - `project_name`, `ID_thorn_name`, `diag_thorn_name`, `evol_thorn_name`, `register_CFunction_rhs_eval`; `construct_schedule_ccl`, `construct_interface_ccl`, `construct_param_ccl`
+- [carpet_baikal_thorns.py](../../nrpy/examples/carpet_baikal_thorns.py) - `project_name`, `thorn_names`, `enable_T4munu`, `fd_order_list`; `register_CFunction_ADM_to_BSSN`, `register_CFunction_Ricci_eval`, `register_CFunction_rhs_eval`, `register_CFunction_BSSN_constraints`, `output_CFunctions_and_construct_make_code_defn`
+- [carpetx_wavetoy_thorns.py](../../nrpy/examples/carpetx_wavetoy_thorns.py) - `project_name`, `ID_thorn_name`, `diag_thorn_name`, `evol_thorn_name`, `register_CFunction_rhs_eval`; `ODESolvers_RHS`, `loop_device.hxx`, `DECLARE_CCTK_ARGUMENTSX`
+- [carpetx_baikal_thorns.py](../../nrpy/examples/carpetx_baikal_thorns.py) - `project_name`, `thorn_names`, `configuration_ccl.construct_configuration_ccl`; `ADMBaseX`, `USES INCLUDE: loop_device.hxx`, `register_CFunction_ADM_to_BSSN`, `register_CFunction_Ricci_eval`, `register_CFunction_rhs_eval`, `register_CFunction_BSSN_constraints`
+- [ThornList](../../nrpy/examples/et_WaveToyfiles/ThornList) - Einstein Toolkit component list
+- [WaveToyNRPy.par](../../nrpy/examples/et_WaveToyfiles/WaveToyNRPy.par) - Carpet WaveToy parameter file
 - [test.ccl](../../nrpy/examples/et_WaveToyfiles/test/test.ccl) - `TEST WaveToyNRPy_test`
 - [WaveToyNRPy_test.par](../../nrpy/examples/et_WaveToyfiles/test/WaveToyNRPy_test.par) - eight-iteration Carpet WaveToy test parfile
-- [uuGF.x.asc](../../nrpy/examples/et_WaveToyfiles/test/WaveToyNRPy_test/uuGF.x.asc) - checked-in fixture evidence for CarpetIOASCII `uuGF` x-line output
-- [README.md](../../README.md) - `Einstein Toolkit and CarpetX Generators`; official [Einstein Toolkit test-case documentation](https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case) - `A test case is...`
+- [uuGF.x.asc](../../nrpy/examples/et_WaveToyfiles/test/WaveToyNRPy_test/uuGF.x.asc) - checked-in reference data for CarpetIOASCII `uuGF` x-line output
+- [README.md](../../README.md) - `Einstein Toolkit and CarpetX Generators`
+- [Einstein Toolkit test-case documentation](https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case) - `A test case is...`
 - [.github/workflows/main.yml](../../.github/workflows/main.yml) - `einsteintoolkit-validation`
-- [.github/full_nrpy_local_ci.sh](../../.github/full_nrpy_local_ci.sh) - `example_scripts`
 
 ## See Also
 
-- [Examples](index.md)
-- [Generated Output Boundaries](../architecture/generated-output-boundaries.md)
-- [Generated Project CI](../validation/generated-project-ci.md)
-- [ETLegacy Thorn Assembly And CCL Files](../infrastructures/etlegacy/thorn-assembly-and-ccl-files.md)
-- [CarpetX Thorn Assembly, Configuration, And CCL Files](../infrastructures/carpetx/thorn-assembly-configuration-and-ccl-files.md)
+- Validated by: [Generated Project CI](../validation/generated-project-ci.md)
+- Depends on: [ETLegacy Thorn Assembly And CCL Files](../infrastructures/etlegacy/thorn-assembly-and-ccl-files.md)
+- Depends on: [CarpetX Thorn Assembly, Configuration, And CCL Files](../infrastructures/carpetx/thorn-assembly-configuration-and-ccl-files.md)

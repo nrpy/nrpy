@@ -14,6 +14,8 @@ strings, updates gridfunctions, advances `commondata->time`, and increments
 
 ## Detail
 
+### Butcher Tables, Stage Allocations, And Step Driver
+
 `MoLtimestepping/register_all.py` is the one-stop registration entrypoint. It
 registers commondata CodeParameters `nn_0`, `nn`, `CFL_FACTOR`, `dt`, `t_0`,
 `time`, and `t_final`; checks that the selected parallelization is supported;
@@ -22,7 +24,7 @@ optionally registers `MoL_step_forward_in_time()`; adds
 `MoL_gridfunctions_struct gridfuncs` to `griddata_struct`; and registers MoL's
 `BHaH_defines.h` contribution.
 
-`rk_butcher_table_dictionary.py` owns the available explicit integrators. Its
+`rk_butcher_table_dictionary.py` defines the available explicit integrators. Its
 `generate_Butcher_tables()` dictionary includes Euler, several RK2/RK3 methods,
 SSP methods, classic `RK4`, Dormand-Prince and other high-order tables, adaptive
 embedded tables, and optional Adams-Bashforth generation. `validate()` checks
@@ -63,6 +65,47 @@ registration flags `enable_rfm_precompute`, `enable_curviBCs`, and
 `enable_intrinsics` determine whether generated aliases include `rfmstruct`,
 `bcstruct`, and SIMD/CUDA intrinsic headers and update loops.
 
+### RK3 Accumulation Kernels And Substep Code Generation
+
+`RK3 Ralston` and `RK3 Heun` require `rhs_accumulation_string` in addition
+to the ordinary RHS hook. Only the BSSN and fCCZ4 generator in `rhs_eval.py`
+supplies it, so registering either method for another equation set stops at
+generation time with an error that names the missing string and suggests a
+method such as `RK4`. Its placeholders `RK_INPUT_GFS`, `RK_STAGE_GFS`,
+`RK_ACCUM_GFS`, `RK_STAGE_DT`, and `RK_ACCUM_DT` specify an unchanged input
+stage and two distinct arrays that receive weighted derivatives. The first
+substep saves the weighted first derivative before projection changes its
+stage. The second RHS adds directly to `y_n_gfs` and the final running sum.
+The third RHS supplies the last derivative, and the final result remains in
+the original `y_n_gfs` allocation. Both methods retain their Butcher
+coefficients, use three evolved-field arrays including `y_n_gfs`, and evaluate
+the RHS three times. The post-RHS hook must prepare or project only the next
+input stage or final state, and never the running sum.
+
+Evidence (descriptive behavior): `BHaH/MoLtimestepping/MoL_step_forward_in_time.py::register_CFunction_MoL_step_forward_in_time`; `BHaH/MoLtimestepping/rk_butcher_table_dictionary.py::generate_Butcher_tables` and `intermediate_stage_gf_names_list`.
+
+`general_relativity/rhs_eval.py::MoL_rhs_strings()` builds matching ordinary
+and accumulated BSSN/fCCZ4 calls.
+`register_CFunction_rhs_eval(enable_RK3_accumulation=True)` registers the
+accumulated RHS, and
+`CurviBoundaryConditions.register_all.register_C_functions(enable_RK3_accumulation=True)`
+registers its radiation boundary function. With three distinct arrays, the
+accumulated kernel reads the projected stage, computes one point's derivatives,
+and immediately adds them to the two output arrays. Its partial SIMD group
+stores only interior lanes, and an output with a zero coefficient remains
+unchanged. Ricci and other pre-RHS calculations must leave both live output
+arrays unchanged.
+
+Evidence (descriptive behavior): `BHaH/general_relativity/rhs_eval.py::MoL_rhs_strings` and `register_CFunction_rhs_eval`; `BHaH/CurviBoundaryConditions/register_all.py::register_C_functions`.
+
+For radiation, preparation subtracts each old boundary-source contribution
+in reverse dependency order; completion adds the updated source and radiation
+term in forward order. With distinct arrays and a fixed input stage, this
+preserves the original ghost values plus their weighted RHS increments
+without another complete evolved array.
+
+Evidence (descriptive behavior): `BHaH/CurviBoundaryConditions/apply_bcs_outerradiation_and_inner.py::register_CFunction_apply_bcs_outerradiation_and_inner_accumulate`.
+
 `rk_substep.py` provides the low-level RK code generator. `RKFunction` turns
 symbolic RK left-hand and right-hand sides into a launchable update function,
 using OpenMP or CUDA loop generation and optional SIMD/CUDA intrinsic reads and
@@ -86,12 +129,14 @@ regrids where `dt` can change. It then increments `commondata->nn`.
 - [MoL_step_forward_in_time.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/MoL_step_forward_in_time.py) - `register_CFunction_MoL_step_forward_in_time`
 - [MoL_malloc_intermediate_stage_gfs.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/MoL_malloc_intermediate_stage_gfs.py) - `register_CFunction_MoL_malloc_intermediate_stage_gfs`
 - [MoL_free_intermediate_stage_gfs.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/MoL_free_intermediate_stage_gfs.py) - `register_CFunction_MoL_free_intermediate_levels`
+- [apply_bcs_outerradiation_and_inner.py](../../../nrpy/infrastructures/BHaH/CurviBoundaryConditions/apply_bcs_outerradiation_and_inner.py) - radiation and inner accumulation functions
+- [boundary register_all.py](../../../nrpy/infrastructures/BHaH/CurviBoundaryConditions/register_all.py) - `register_C_functions`
+- [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py) - `MoL_rhs_strings`, `register_CFunction_rhs_eval`
 - [rk_substep.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/rk_substep.py) - `RKFunction`, `single_RK_substep_input_symbolic`, `construct_RK_functions_prefunc`, `MoL_Functions_dict`, `check_supported_parallelization`
 - [rk_butcher_table_dictionary.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/rk_butcher_table_dictionary.py) - `generate_Butcher_tables`, `validate`, `is_diagonal_Butcher`, `intermediate_stage_gf_names_list`
 - [BHaH_defines.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/BHaH_defines.py) - `register_BHaH_defines_h`
 
 ## See Also
 
-- [BHaH](index.md)
-- [Grids, Coordinates, Reference Metrics, And Boundaries](grids-coordinates-reference-metrics-and-boundaries.md)
-- [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md)
+- See also: [Curvilinear Boundaries And Stencils](curvilinear-boundaries-and-stencils.md)
+- See also: [Project Assembly, main.c, And Makefile Emission](lifecycle-and-project-assembly.md)

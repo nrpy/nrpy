@@ -1,14 +1,14 @@
 # Initial Data
 
-> Map Cartesian and spherical ADM initial-data providers used by GR equation consumers. · Status: confirmed
+> Map Cartesian and spherical ADM initial-data modules used by GR equation builders and infrastructure generators. · Status: confirmed
 > Up: [General Relativity](index.md)
 
 ## Summary
 
 NRPy's general-relativity initial-data modules construct ADM quantities, not
 evolved BSSN RHSs. Both providers expose `gammaDD`, `KDD`, `alpha`, `betaU`,
-and `BU`, plus the coordinate symbols used by the data. Downstream consumers can
-feed these ADM fields into `ADM_to_BSSN` or generated application setup code.
+and `BU`, plus the coordinate symbols used by the data. Callers pass
+these ADM fields into `ADM_to_BSSN` or generated application setup code.
 
 The Cartesian provider supports `BrillLindquist` and `Kasner`. The spherical
 provider supports `UIUCBlackHole`, `StaticTrumpet`, and `OffsetKerrSchild`.
@@ -19,12 +19,23 @@ provider supports `UIUCBlackHole`, `StaticTrumpet`, and `OffsetKerrSchild`.
 and the Cartesian symbols `x`, `y`, and `z`. `BrillLindquist` registers two
 black-hole positions and masses, builds a conformally flat spatial metric, and
 sets zero extrinsic curvature. `Kasner` delegates to
-`kasner_adm_quantities`, which constructs diagonal exact-Kasner ADM fields from
-`KASNER_t0`, `KASNER_p1`, `KASNER_p2`, and `KASNER_p3`.
+`kasner_adm_quantities`, which constructs diagonal Kasner-form ADM fields from
+`KASNER_t0`, `KASNER_p1`, `KASNER_p2`, and `KASNER_p3`. The usual nonstatic
+vacuum Kasner solution requires `sum_i p_i = sum_i p_i^2 = 1`; generic real
+powers require positive time. The helper does not enforce these conditions.
+For arbitrary exponents its vacuum Hamiltonian residual is
+`((sum_i p_i)^2-sum_i p_i^2)/t^2`.
+
+Evidence (descriptive behavior): `general_relativity/InitialData_Cartesian.py::kasner_adm_quantities`; corroboration: direct contraction of the returned diagonal `gammaDD` and `KDD` gives the displayed Hamiltonian residual; trusted expression samples do not enforce physical parameter conditions.
 
 `InitialData_Spherical` initializes the same ADM outputs with spherical symbols
 `r`, `th`, and `ph`. `UIUCBlackHole` registers `M` and `chi` and returns the
 spinning-black-hole spatial metric and extrinsic curvature in the UIUC slicing.
+Its `a=M*chi` and `sqrt(M^2-a^2)` require `M^2-a^2>=0` for real horizon radii,
+or `abs(chi)<=1` for positive mass; the provider does not validate this input.
+
+Evidence (descriptive behavior): `general_relativity/InitialData_Spherical.py::UIUCBlackHole`.
+
 `StaticTrumpet` returns spherical trumpet data with its own lapse and radial
 shift. `OffsetKerrSchild` registers `M`, `a`, and `r0`, uses the offset
 Kerr-Schild radius `r + r0`, and returns ADM metric, extrinsic curvature,
@@ -33,14 +44,10 @@ lapse, radial shift, and zero `BU`.
 For the `R0=M` StaticTrumpet solution, the lapse is
 `alpha=r/(r+M)=exp(-2*phi)=W`. Ruchlin, Etienne, and Baumgarte pair these data
 with `partial_0(alpha)=-alpha*(1-alpha)*K`, a lapse condition they describe
-as consistent with staticity. [BSSN Family](bssn-family.md) owns the current
+as consistent with staticity. [BSSN Family](bssn-family.md) documents the current
 NRPy option-name mapping and its distinction from `BHSHarmonicSlicing`.
 
-Claim evidence:
-- Claim: The `R0=M` StaticTrumpet solution has `alpha=r/(r+M)=exp(-2*phi)=W`, and Ruchlin, Etienne, and Baumgarte pair these data with `partial_0(alpha)=-alpha*(1-alpha)*K`, which they describe as consistent with staticity.
-- Role: public/scientific contract
-- Deciding authority: [Ruchlin, Etienne, and Baumgarte, arXiv:1712.07658v2](https://arxiv.org/pdf/1712.07658v2), Eqs. (65), (67), and (69)
-- Corroboration: [InitialData_Spherical.py](../../../nrpy/equations/general_relativity/InitialData_Spherical.py), `StaticTrumpet`, for the lapse/conformal-factor identity only; none separate for the paper-defined evolution pairing
+Evidence (scientific/interface requirement): `arXiv:1712.07658v2`, Eqs. (65), (67), and (69); corroboration: `general_relativity/InitialData_Spherical.py::StaticTrumpet`, for the lapse/conformal-factor identity only; none separate for the paper-defined evolution pairing.
 
 Gauge handling is explicit. If an initial-data family does not define gauge
 quantities, or if `override_gauge_with_standard=True`, the provider sets
@@ -56,12 +63,12 @@ trusted file covers the handoff from spherical ADM initial data into BSSN
 variables.
 
 Two similarly named binary-puncture paths are outside these two provider
-classes. [Conformally Flat Elliptic](../conformally-flat-elliptic.md) owns the
+classes. [Conformally Flat Elliptic](../conformally-flat-elliptic.md) documents the
 equation-side NRPyElliptic Bowen-York source and hyperbolic-relaxation
 expressions. BHaH `TwoPunctures` is an external compact-object initial-data
 library integration, not a subpackage of `nrpy/equations`; its generated-C
 registration, persistent structure, interpolation, and cleanup belong to
-[BHaH GR Application Wiring](../../infrastructures/bhah/gr-application-wiring.md).
+[BHaH GR Initial Data And Psi4](../../infrastructures/bhah/gr-initial-data-and-psi4.md).
 Neither path is evidence that these `InitialData_*` classes produce
 TwoPunctures data.
 
@@ -80,9 +87,6 @@ TwoPunctures data.
 
 ## See Also
 
-- [General Relativity](index.md)
-- [Metric Conversions And Matter](metric-conversions-and-matter.md)
-- [BSSN Family](bssn-family.md)
-- [Fishbone-Moncrief](fishbone-moncrief.md)
-- [Conformally Flat Elliptic](../conformally-flat-elliptic.md)
-- [Trusted Expression Pipeline](../trusted-expression-pipeline.md)
+- See also: [Metric Conversions And Matter](metric-conversions-and-matter.md)
+- See also: [BSSN Family](bssn-family.md)
+- Validated by: [Expression Validation Helpers](../../validation/expression-validation-helpers.md)

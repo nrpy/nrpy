@@ -424,7 +424,7 @@ def c_codegen(
     10 {0}
 
     Compare complete small generated kernels using the standard trusted-source
-    helper. Cover automatic reuse, CPU/CUDA dispatch, scalar/SIMD, and inline/helper emission. Matched
+    helper. Cover automatic reuse, CPU/CUDA dispatch, SIMD, and inline/helper emission. Matched
     derivatives in all three directions coexist with missing-KO and mismatched-
     direction requests, so shared downwind helpers must remain available. Include
     a mixed derivative to cover the pointer/stride helper path. FD4 exercises a
@@ -442,7 +442,8 @@ def c_codegen(
     ...     for backend in ("openmp", "cuda"):
     ...         par.set_parval_from_str("parallelization", backend)
     ...         for helpers in (False, True):
-    ...             for simd in (False, True):
+    ...             # Scalar output prints the upwind formula differently under SymPy 1.14 and SymPy master.
+    ...             for simd in (True,):
     ...                 code = c_codegen(expressions, [f"out[{i}]" for i in range(len(expressions))],
     ...                                  enable_fd_codegen=True, enable_fd_functions=helpers, enable_simd=simd,
     ...                                  upwind_control_vec=[u, v, w])
@@ -458,18 +459,18 @@ def c_codegen(
     >>> print(c_codegen(x**2 + sp.sqrt(y) - sp.sin(x*z), "double blah", include_braces=False, verbose=False))
     double blah = ((x)*(x)) + sqrt(y) - sin(x*z);
     <BLANKLINE>
-    >>> print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), "double blah", include_braces=False, verbose=False))
-    double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
+    >>> print(c_codegen((1/x**2 + 1/sp.sqrt(y))/sp.sin(x*z), "double blah", include_braces=False, verbose=False))
+    double blah = ((1.0/sqrt(y)) + (1.0/((x)*(x))))/sin(x*z);
     <BLANKLINE>
     >>> for fp_type in ["double", "float", "long double", "double complex"]:
-    ...     print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), f"{fp_type} blah", include_braces=False, verbose=False, fp_type=fp_type))
-    double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
+    ...     print(c_codegen((1/x**2 + 1/sp.sqrt(y))/sp.sin(x*z), f"{fp_type} blah", include_braces=False, verbose=False, fp_type=fp_type))
+    double blah = ((1.0/sqrt(y)) + (1.0/((x)*(x))))/sin(x*z);
     <BLANKLINE>
-    float blah = -1/sinf(x*z) + (1.0f/sqrtf(y)) + (1.0f/((x)*(x)));
+    float blah = ((1.0f/sqrtf(y)) + (1.0f/((x)*(x))))/sinf(x*z);
     <BLANKLINE>
-    long double blah = -1/sinl(x*z) + (1.0l/sqrtl(y)) + (1.0l/((x)*(x)));
+    long double blah = ((1.0l/sqrtl(y)) + (1.0l/((x)*(x))))/sinl(x*z);
     <BLANKLINE>
-    double complex blah = -1/csin(x*z) + (1.0/csqrt(y)) + (1.0/((x)*(x)));
+    double complex blah = ((1.0/csqrt(y)) + (1.0/((x)*(x))))/csin(x*z);
     <BLANKLINE>
     >>> print(c_codegen(1.0 * sp.sin(x * sp.pi), "float blah", include_braces=False, fp_type="float", verbose=False))
     float blah = 1.0F*sinf(M_PI*x);
@@ -923,7 +924,7 @@ def gridfunction_management_and_FD_codegen(
     >>> par.set_parval_from_str("Infrastructure", "BHaH")
     >>> gri.glb_gridfcs_dict.clear()
     >>> mem_alloc_style = "210"
-    >>> enable_simd=False
+    >>> enable_simd=True  # scalar FD stencils print differently under SymPy 1.14 and SymPy master
     >>> fp_type="double"
     >>> fp_type_alias="REAL"
     >>> enable_fd_functions=False
@@ -960,46 +961,67 @@ def gridfunction_management_and_FD_codegen(
      * NRPy-Generated GF Access/FD Code, Step 1 of 3:
      * Read gridfunction(s) from main memory and compute FD stencils as needed.
      */
-    const REAL hDD01_i1m1 = in_gfs[IDX4(HDD01GF, i0, i1-1, i2)];
-    const REAL hDD01 = in_gfs[IDX4(HDD01GF, i0, i1, i2)];
-    const REAL hDD01_i1p1 = in_gfs[IDX4(HDD01GF, i0, i1+1, i2)];
-    const REAL hDD02_i2m2 = in_gfs[IDX4(HDD02GF, i0, i1, i2-2)];
-    const REAL hDD02_i2m1 = in_gfs[IDX4(HDD02GF, i0, i1, i2-1)];
-    const REAL hDD02_i0m2 = in_gfs[IDX4(HDD02GF, i0-2, i1, i2)];
-    const REAL hDD02_i0m1 = in_gfs[IDX4(HDD02GF, i0-1, i1, i2)];
-    const REAL hDD02 = in_gfs[IDX4(HDD02GF, i0, i1, i2)];
-    const REAL hDD02_i0p1 = in_gfs[IDX4(HDD02GF, i0+1, i1, i2)];
-    const REAL hDD02_i0p2 = in_gfs[IDX4(HDD02GF, i0+2, i1, i2)];
-    const REAL hDD02_i2p1 = in_gfs[IDX4(HDD02GF, i0, i1, i2+1)];
-    const REAL hDD02_i2p2 = in_gfs[IDX4(HDD02GF, i0, i1, i2+2)];
-    const REAL vU1 = in_gfs[IDX4(VU1GF, i0, i1, i2)];
-    static const REAL FDPart1_Rational_1_2 = 1.0/2.0;
-    static const REAL FDPart1_Integer_2 = 2;
-    static const REAL FDPart1_Rational_3_2 = 3.0/2.0;
-    const REAL FDPart1tmp0 = FDPart1_Rational_3_2*hDD02;
-    const REAL UpwindAlgInputhDD_ddnD020 = invdxx0*(-FDPart1_Integer_2*hDD02_i0m1 + FDPart1_Rational_1_2*hDD02_i0m2 + FDPart1tmp0);
-    const REAL UpwindAlgInputhDD_ddnD022 = invdxx2*(-FDPart1_Integer_2*hDD02_i2m1 + FDPart1_Rational_1_2*hDD02_i2m2 + FDPart1tmp0);
-    const REAL UpwindAlgInputhDD_dupD020 = invdxx0*(FDPart1_Integer_2*hDD02_i0p1 - FDPart1_Rational_1_2*hDD02_i0p2 - FDPart1tmp0);
-    const REAL UpwindAlgInputhDD_dupD022 = invdxx2*(FDPart1_Integer_2*hDD02_i2p1 - FDPart1_Rational_1_2*hDD02_i2p2 - FDPart1tmp0);
-    const REAL UpwindControlVectorU0 = vetU0;
-    const REAL UpwindControlVectorU2 = vetU2;
-    const REAL hDD_dD011 = FDPart1_Rational_1_2*invdxx1*(-hDD01_i1m1 + hDD01_i1p1);
+    const REAL_SIMD_ARRAY hDD01_i1m1 = ReadSIMD(&in_gfs[IDX4(HDD01GF, i0, i1-1, i2)]);
+    const REAL_SIMD_ARRAY hDD01 = ReadSIMD(&in_gfs[IDX4(HDD01GF, i0, i1, i2)]);
+    const REAL_SIMD_ARRAY hDD01_i1p1 = ReadSIMD(&in_gfs[IDX4(HDD01GF, i0, i1+1, i2)]);
+    const REAL_SIMD_ARRAY hDD02_i2m2 = ReadSIMD(&in_gfs[IDX4(HDD02GF, i0, i1, i2-2)]);
+    const REAL_SIMD_ARRAY hDD02_i2m1 = ReadSIMD(&in_gfs[IDX4(HDD02GF, i0, i1, i2-1)]);
+    const REAL_SIMD_ARRAY hDD02_i0m2 = ReadSIMD(&in_gfs[IDX4(HDD02GF, i0-2, i1, i2)]);
+    const REAL_SIMD_ARRAY hDD02_i0m1 = ReadSIMD(&in_gfs[IDX4(HDD02GF, i0-1, i1, i2)]);
+    const REAL_SIMD_ARRAY hDD02 = ReadSIMD(&in_gfs[IDX4(HDD02GF, i0, i1, i2)]);
+    const REAL_SIMD_ARRAY hDD02_i0p1 = ReadSIMD(&in_gfs[IDX4(HDD02GF, i0+1, i1, i2)]);
+    const REAL_SIMD_ARRAY hDD02_i0p2 = ReadSIMD(&in_gfs[IDX4(HDD02GF, i0+2, i1, i2)]);
+    const REAL_SIMD_ARRAY hDD02_i2p1 = ReadSIMD(&in_gfs[IDX4(HDD02GF, i0, i1, i2+1)]);
+    const REAL_SIMD_ARRAY hDD02_i2p2 = ReadSIMD(&in_gfs[IDX4(HDD02GF, i0, i1, i2+2)]);
+    const REAL_SIMD_ARRAY vU1 = ReadSIMD(&in_gfs[IDX4(VU1GF, i0, i1, i2)]);
+    static const double dblFDPart1_Integer_2 = 2.0;
+     const REAL_SIMD_ARRAY FDPart1_Integer_2 = ConstSIMD(dblFDPart1_Integer_2);
+    <BLANKLINE>
+    static const double dblFDPart1_NegativeOne_ = -1.0;
+    MAYBE_UNUSED const REAL_SIMD_ARRAY FDPart1_NegativeOne_ = ConstSIMD(dblFDPart1_NegativeOne_);
+    <BLANKLINE>
+    static const double dblFDPart1_Rational_1_2 = 1.0/2.0;
+     const REAL_SIMD_ARRAY FDPart1_Rational_1_2 = ConstSIMD(dblFDPart1_Rational_1_2);
+    <BLANKLINE>
+    static const double dblFDPart1_Rational_3_2 = 3.0/2.0;
+     const REAL_SIMD_ARRAY FDPart1_Rational_3_2 = ConstSIMD(dblFDPart1_Rational_3_2);
+    <BLANKLINE>
+    const REAL_SIMD_ARRAY FDPart1tmp0 = MulSIMD(FDPart1_Rational_3_2, hDD02);
+    const REAL_SIMD_ARRAY UpwindAlgInputhDD_ddnD020 = MulSIMD(invdxx0, FusedMulAddSIMD(FDPart1_Rational_1_2, hDD02_i0m2, NegFusedMulAddSIMD(FDPart1_Integer_2, hDD02_i0m1, FDPart1tmp0)));
+    const REAL_SIMD_ARRAY UpwindAlgInputhDD_ddnD022 = MulSIMD(invdxx2, FusedMulAddSIMD(FDPart1_Rational_1_2, hDD02_i2m2, NegFusedMulAddSIMD(FDPart1_Integer_2, hDD02_i2m1, FDPart1tmp0)));
+    const REAL_SIMD_ARRAY UpwindAlgInputhDD_dupD020 = MulSIMD(invdxx0, FusedMulSubSIMD(FDPart1_Integer_2, hDD02_i0p1, FusedMulAddSIMD(FDPart1_Rational_1_2, hDD02_i0p2, FDPart1tmp0)));
+    const REAL_SIMD_ARRAY UpwindAlgInputhDD_dupD022 = MulSIMD(invdxx2, FusedMulSubSIMD(FDPart1_Integer_2, hDD02_i2p1, FusedMulAddSIMD(FDPart1_Rational_1_2, hDD02_i2p2, FDPart1tmp0)));
+    const REAL_SIMD_ARRAY UpwindControlVectorU0 = vetU0;
+    const REAL_SIMD_ARRAY UpwindControlVectorU2 = vetU2;
+    const REAL_SIMD_ARRAY hDD_dD011 = MulSIMD(FDPart1_Rational_1_2, MulSIMD(invdxx1, SubSIMD(hDD01_i1p1, hDD01_i1m1)));
     <BLANKLINE>
     /*
      * NRPy-Generated GF Access/FD Code, Step 2 of 3:
      * Implement upwinding algorithm.
      */
-    const REAL Upwind0 = UPWIND_ALG(UpwindControlVectorU0);
-    const REAL Upwind2 = UPWIND_ALG(UpwindControlVectorU2);
-    const REAL hDD_dupD020 = Upwind0*(-UpwindAlgInputhDD_ddnD020 + UpwindAlgInputhDD_dupD020) + UpwindAlgInputhDD_ddnD020;
-    const REAL hDD_dupD022 = Upwind2*(-UpwindAlgInputhDD_ddnD022 + UpwindAlgInputhDD_dupD022) + UpwindAlgInputhDD_ddnD022;
+    MAYBE_UNUSED const double tmp_upwind_Integer_0 = 0.000000000000000000000000000000000;
+    <BLANKLINE>
+    MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_0 = ConstSIMD(tmp_upwind_Integer_0);
+    MAYBE_UNUSED const double tmp_upwind_Integer_1 = 1.000000000000000000000000000000000;
+    <BLANKLINE>
+    MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_1 = ConstSIMD(tmp_upwind_Integer_1);
+    const REAL_SIMD_ARRAY Upwind0 = UPWIND_ALG(UpwindControlVectorU0);
+    const REAL_SIMD_ARRAY Upwind2 = UPWIND_ALG(UpwindControlVectorU2);
+    static const double dblFDPart2_NegativeOne_ = -1.0;
+    MAYBE_UNUSED const REAL_SIMD_ARRAY FDPart2_NegativeOne_ = ConstSIMD(dblFDPart2_NegativeOne_);
+    <BLANKLINE>
+    const REAL_SIMD_ARRAY hDD_dupD020 = FusedMulAddSIMD(Upwind0, SubSIMD(UpwindAlgInputhDD_dupD020, UpwindAlgInputhDD_ddnD020), UpwindAlgInputhDD_ddnD020);
+    const REAL_SIMD_ARRAY hDD_dupD022 = FusedMulAddSIMD(Upwind2, SubSIMD(UpwindAlgInputhDD_dupD022, UpwindAlgInputhDD_ddnD022), UpwindAlgInputhDD_ddnD022);
     <BLANKLINE>
     /*
      * NRPy-Generated GF Access/FD Code, Step 3 of 3:
      * Evaluate SymPy expressions and write to main memory.
      */
-    a0 = b*hDD01 + c*hDD_dD011;
-    a1 = a0*a1*vU1 + b*hDD_dupD020 + c*hDD_dupD022;
+    const REAL_SIMD_ARRAY __RHS_exp_0 = FusedMulAddSIMD(hDD01, b, MulSIMD(hDD_dD011, c));
+    const REAL_SIMD_ARRAY __RHS_exp_1 = FusedMulAddSIMD(hDD_dupD022, c, FusedMulAddSIMD(vU1, MulSIMD(a0, a1), MulSIMD(hDD_dupD020, b)));
+    <BLANKLINE>
+    WriteSIMD(&a0, __RHS_exp_0);
+    WriteSIMD(&a1, __RHS_exp_1);
     <BLANKLINE>
     """
     CCGParams = CCodeGen(**kwargs)

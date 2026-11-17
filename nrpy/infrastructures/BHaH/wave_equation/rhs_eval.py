@@ -77,7 +77,7 @@ def register_CFunction_rhs_eval(
     # Populate uu_rhs, vv_rhs
     rhs = WaveEquationCurvilinear_RHSs(CoordSystem, enable_rfm_precompute)
     uu_rhs = cast(sp.Expr, rhs.uu_rhs)
-    vv_rhs = cast(sp.Expr, rhs.vv_rhs)
+    vv_rhs = rhs.vv_rhs
     if enable_KreissOliger_dissipation:
         diss_strength = par.register_CodeParameter(
             "REAL",

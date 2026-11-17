@@ -58,11 +58,7 @@ No parameter name or matter flag is special-cased in this handoff. `PI` appears
 only when the selected T4munu expressions contain the registered,
 non-commondata `PI` CodeParameter; vacuum expressions do not contribute it.
 
-Claim evidence:
-- Claim: ETLegacy BSSN RHS and constraint registrations derive non-commondata CodeParameters from their final expressions, use that same list for current-thorn metadata and SIMD `read_CodeParameters()` declarations, use `DECLARE_CCTK_PARAMETERS` in scalar mode, and do not select `PI` by parameter name or matter flag.
-- Role: descriptive behavior
-- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
-- Corroboration: [expression_utils.py](../../../nrpy/helpers/expression_utils.py), `get_params_commondata_symbols_from_expr_list`; [CodeParameters.py](../../../nrpy/infrastructures/ETLegacy/CodeParameters.py), `read_CodeParameters`
+Evidence (descriptive behavior): `ETLegacy/general_relativity/rhs_eval.py::register_CFunction_rhs_eval`; `ETLegacy/general_relativity/BSSN_constraints.py::register_CFunction_BSSN_constraints`; corroboration: `expression_utils.py::get_params_commondata_symbols_from_expr_list`.
 
 `define_standard_includes()` centralizes the default include list for
 NRPy-generated ETLegacy C functions. It returns `math.h`, `cctk.h`,
@@ -98,11 +94,6 @@ outer `i2` and `i1` loops keep unit stride.
 
 ## See Also
 
-- [ETLegacy](index.md)
-- [Thorn Assembly And CCL Files](thorn-assembly-and-ccl-files.md)
-- [MoL, Boundaries, Symmetry, And RHS Initialization](mol-boundaries-symmetry-and-rhs-initialization.md)
-- [C Codegen](../../core/c-codegen.md)
-- [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
+- Depends on: [C Codegen](../../core/c-codegen.md)
+- Depends on: [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
 - Depends on: [Symbolic Expression Utilities](../../core/helpers/symbolic-expression-utilities.md)
-- [SIMD And Intrinsic Support](../../core/helpers/simd-and-intrinsic-support.md)
-- [Loop Kernel And Device Helpers](../../core/helpers/loop-kernel-and-device-helpers.md)

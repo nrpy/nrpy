@@ -1,19 +1,21 @@
 # SEOBNR Precessing Rotations And Ringdown
 
-> Map co-precessing frame rotations, inertial polarizations, and precessing merger-ringdown frame quantities. · Status: confirmed
+> Map co-precessing frame rotations, inertial polarizations, and precessing merger-ringdown frame quantities. · Status: contested
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
 
 The rotations and ringdown SEOBNR modules turn precessing-frame ingredients into
 observer-frame and post-merger symbolic quantities. `SEOBNRv5_Coprecessing_Rotations`
-owns the final-angular-momentum frame triad, inertial Euler-angle extraction,
+constructs the final-angular-momentum frame triad, inertial Euler-angle extraction,
 Wigner small-d rotations, and inertial plus/cross polarizations.
-`SEOBNRv5_MergerRingdown_Quantities` owns post-merger Euler angles, precession
+`SEOBNRv5_MergerRingdown_Quantities` constructs post-merger Euler angles, precession
 frequency selection, and QNM-frequency conversion from the final-angular-momentum
 frame to the co-precessing frame.
 
 ## Detail
+
+### Co-Precessing Rotations And Inertial Polarizations
 
 `SEOBNRv5_Coprecessing_Rotations` defaults to the mode set `(2,2)`, `(2,1)`,
 `(3,3)`, `(3,2)`, `(4,4)`, `(4,3)`, and `(5,5)`. Callers may pass another
@@ -45,15 +47,28 @@ stores branch-specific polarizations `h_plus_I_generic`, `h_cross_I_generic`,
 `h_cross_I_pole_neg`, with `h_plus_I` and `h_cross_I` as generic-branch
 aliases.
 
+### Merger-Ringdown Precession Frequency And QNM Shifts
+
 `SEOBNRv5_MergerRingdown_Quantities` starts from final spin and final orbital
 angular-momentum symbols, stores the matching angles `alpha_match`,
 `beta_match`, and `gamma_match`, and stores times `t` and `t_match`.
-It computes `chi_f_dot_L_f` and uses no-branch coordinate-bound helpers to
-select the prograde or retrograde precession-frequency expression. The selected
-frequency is stored as `omega_prec`.
+It computes `chi_f_dot_L_f` and combines the prograde and retrograde
+precession frequencies using `coord_greater_bound` and `coord_less_bound`, with
+`nrpyAbs` replaced by `Abs`. These helpers provide fractional weights rather
+than exact branch selection. Let `d = chi_f_dot_L_f` and
+`epsilon = TINYDOUBLE > 0`. Away from singular points, positive `d` multiplies
+the prograde frequency by `d/(d+epsilon)`, while negative `d` multiplies the
+retrograde frequency by `d/(d-epsilon)`. At `d = ±epsilon/2`, the active
+frequency is reduced to one third. At `d = ±epsilon`, the inactive term has a
+zero denominator. The resulting `omega_prec` feeds the Euler angles and QNM
+frequency shifts below.
 
-At `chi_f_dot_L_f == 0`, both strict branch masks vanish, so the current
-expression selects `omega_prec = 0`.
+At `d=0`, both strict weights vanish and `omega_prec=0` for positive `epsilon`.
+
+Claim status: contested; contradiction: CONTR-0020.
+See [CONTR-0020](../../contradictions.md#contr-0020).
+
+Evidence (descriptive behavior): `seobnr/SEOBNRv5_merger_ringdown.py::SEOBNRv5_MergerRingdown_Quantities.__init__`; `grhd/Min_Max_and_Piecewise_Expressions.py::coord_greater_bound` and `coord_less_bound`.
 
 The merger-ringdown class advances post-merger Euler angles as
 `alpha_merger_RD`, `beta_merger_RD`, and `gamma_merger_RD`. It declares
@@ -68,15 +83,13 @@ entries, Euler-angle branches, inertial polarizations, post-merger Euler angles,
 `omega_prec`, and J-frame/P-frame QNM frequencies.
 
 The trusted rotation object uses only the default mode list, and the trusted
-merger-ringdown object uses its fixed implemented mode list. Alternate caller
+merger-ringdown object uses its fixed implemented mode list; alternate caller
 mode lists and Euler-pole branch selection in generated code have no separate
-runtime evidence here. Sampled symbolic matching does not prove orthonormality
-for all inputs, generated branch correctness, or waveform accuracy.
+runtime evidence here.
 
 ## Sources
 
-- [SEOBNRv5_coprecessing_rotations_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_coprecessing_rotations_quantities.py) - `SEOBNRv5_Coprecessing_Rotations`, `wigner_d_small_template`, `wigner_d_small`, `_polarizations_from_angles`
-- [SEOBNRv5_coprecessing_rotations_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_coprecessing_rotations_quantities.py) - `R_Eq15_00`, `R_Eq15_22`, `M33`, `beta_PI`, `alpha_PI_generic`, `h_plus_I_generic`, `h_cross_I_generic`
+- [SEOBNRv5_coprecessing_rotations_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_coprecessing_rotations_quantities.py) - `SEOBNRv5_Coprecessing_Rotations`, `wigner_d_small_template`, `wigner_d_small`, `_polarizations_from_angles`; `R_Eq15_00`, `R_Eq15_22`, `M33`, `beta_PI`, `alpha_PI_generic`, `h_plus_I_generic`, `h_cross_I_generic`
 - [SEOBNRv5_merger_ringdown.py](../../../nrpy/equations/seobnr/SEOBNRv5_merger_ringdown.py) - `SEOBNRv5_MergerRingdown_Quantities`, `chi_f_dot_L_f`, `omega_prec`, `alpha_merger_RD`
 - [SEOBNRv5_coprecessing_rotations_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_coprecessing_rotations_quantities.py) - `trusted_dict`
 - [SEOBNRv5_merger_ringdown.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_merger_ringdown.py) - `trusted_dict`
@@ -85,9 +98,6 @@ for all inputs, generated branch correctness, or waveform accuracy.
 
 ## See Also
 
-- [SEOBNR And BOB](index.md)
-- [Aligned-Spin Waveforms](aligned-spin-waveforms.md)
-- [Precessing Dynamics](precessing-dynamics.md)
-- [BOB Waveforms](bob-waveforms.md)
-- [Geometry And Special-Function Support](../geometry-and-special-function-support.md)
-- [Trusted Expression Pipeline](../trusted-expression-pipeline.md)
+- See also: [Aligned-Spin Waveforms](aligned-spin-waveforms.md)
+- See also: [Precessing Dynamics](precessing-dynamics.md)
+- Validated by: [Expression Validation Helpers](../../validation/expression-validation-helpers.md)

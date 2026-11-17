@@ -106,7 +106,7 @@ class WaveEquationCurvilinear_RHSs:
         #          is given by:
         #          \hat{g}^{ij} \partial_i \partial_j u - \hat{\Gamma}^i \partial_i u.
         #          ^^^^^^^^^^^^ PART 1 ^^^^^^^^^^^^^^^^ ^^^^^^^^^^ PART 2 ^^^^^^^^^^^
-        self.vv_rhs = sp.sympify(0)
+        self.vv_rhs: sp.Expr = sp.sympify(0)
         for i in range(3):
             # PART 2:
             self.vv_rhs -= contractedGammahatU[i] * uu_dD[i]

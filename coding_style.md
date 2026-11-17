@@ -111,6 +111,7 @@ from . import (
 - Use **triple double-quotes** (`"""`) consistently.
 - Follow **Sphinx/reStructuredText-style** docstrings using `:param name:`, `:return:`, `:raises ExceptionType:` fields. This is **not** Google-style (which uses `Args:` / `Returns:` / `Raises:` sections) — never use the Google-style section headers.
 - Use `:return:` (**singular**, not `:returns:`).
+- **Functions annotated `-> None` have no return field in the docstring.** Do not write `:return None:`, `:return None`, or `:return: None`. `:return None:` is also malformed reST: it declares a field named `return None` rather than a `:return:` field. Describe side effects in the docstring body. Do not add `return None` or `# noqa: DAR202` to satisfy darglint. Functions annotated `Union[None, X]` or `Optional[X]` keep `:return:` and describe both the `None` case and the `X` case, as in the parallel-codegen registration functions.
 - Module docstrings at the top of each file should describe purpose and authors. For non-`__init__.py` files, an optional leading filename comment may appear immediately before the module docstring if and only if it has the exact form `# <relative path from nrpy root>.py`.
 - **Exception**: `__init__.py` files never have module docstrings (see above).
 - **Exception**: Test data files (trusted dict files) never have module docstrings.

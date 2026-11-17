@@ -105,15 +105,15 @@ class BSSNconstraints:
                 self.H += -Bq.AbarDD[i][j] * Bq.AbarUU[i][j]
 
         # Term 3a: trace(Rbar)
-        Rbartrace = sp.sympify(0)
+        Rbartrace: sp.Expr = sp.sympify(0)
         for i in range(3):
             for j in range(3):
                 Rbartrace += Bq.gammabarUU[i][j] * Bq.RbarDD[i][j]
 
         # Term 3b: -8 \bar{\gamma}^{ij} \bar{D}_i \phi \bar{D}_j \phi = -8*phi_dBar_times_phi_dBar
         # Term 3c: -8 \bar{\gamma}^{ij} \bar{D}_i \bar{D}_j \phi      = -8*phi_dBarDD_contraction
-        phi_dBar_times_phi_dBar = sp.sympify(0)  # Term 3b
-        phi_dBarDD_contraction = sp.sympify(0)  # Term 3c
+        phi_dBar_times_phi_dBar: sp.Expr = sp.sympify(0)  # Term 3b
+        phi_dBarDD_contraction: sp.Expr = sp.sympify(0)  # Term 3c
         for i in range(3):
             for j in range(3):
                 phi_dBar_times_phi_dBar += (
@@ -193,7 +193,7 @@ class BSSNconstraints:
 
         # Then compute M^2 = gamma_{ij} M^i M^j, where
         # gamma_{ij} = gammabar_{ij} / exp(-4 phi).
-        self.Msquared = sp.sympify(0)
+        self.Msquared: sp.Expr = sp.sympify(0)
         for i in range(3):
             for j in range(3):
                 self.Msquared += Bq.gammabarDD[i][j] * self.MU[i] * self.MU[j]
@@ -210,7 +210,7 @@ class BSSNconstraints:
             self.LambdaConstraintU[i] = Bq.LambdabarU[i] - Bq.DGammaU[i]
 
         # Contract with the conformal metric.
-        self.LambdaConstraintSquared = sp.sympify(0)
+        self.LambdaConstraintSquared: sp.Expr = sp.sympify(0)
         for i in range(3):
             for j in range(3):
                 self.LambdaConstraintSquared += (
