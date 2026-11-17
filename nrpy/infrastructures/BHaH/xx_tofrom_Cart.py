@@ -1163,7 +1163,8 @@ if(r2 <= (REAL)0.0) {
   xCart[0] = params->Cart_originx;
   xCart[1] = params->Cart_originy;
   xCart[2] = params->Cart_originz;
-} else {
+} // END IF: raw spheroidal origin
+else {
 """
             + codegen_results
             + """

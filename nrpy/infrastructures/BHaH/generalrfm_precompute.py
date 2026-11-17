@@ -174,9 +174,9 @@ for (int i2 = 0; i2 < params->Nxx_plus_2NGHOSTS2; i2++) {{
       const REAL xx1 = xx[1][i1];
       const REAL xx2 = xx[2][i2];
 {ccode}
-    }} // END LOOP: for i0 over all x0 points including ghost zones
-  }} // END LOOP: for i1 over all x1 points including ghost zones
-}} // END LOOP: for i2 over all x2 points including ghost zones
+    }} // END LOOP: for i0 including ghost points
+  }} // END LOOP: for i1 including ghost points
+}} // END LOOP: for i2 including ghost points
 """
 
     name = "generalrfm_precompute"
