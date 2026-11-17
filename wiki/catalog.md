@@ -25,7 +25,7 @@ Search this table with `rg -n -i -F '<term>' wiki/catalog.md` when router titles
 | [Indexed Expressions](core/indexed-expressions.md) | Symbolic rank-1..4 tensor declarations, symmetries, and inverses. | indexedexp, declarerank1, declarerank2, symmetry_axes, inverter |
 | [Python Codegen](core/python-codegen.md) | SymPy-to-JAX Python assignment emission and PyCodeGen. | py_codegen, jnp, postproc_substitution_dict |
 | [Python Function Registry](core/python-function-registry.md) | PyFunction text assembly and PyFunction_dict for JAX modules. | register_PyFunction, full_function, subdirectory |
-| [Reference Metrics](core/reference-metrics.md) | Coordinate reference metrics, rfm_dict, and rfm_precompute. | ReferenceMetric, CoordSystem, GeneralRFM_spheroidal_fisheyeN, enable_rfm_precompute, ReU |
+| [Reference Metrics](core/reference-metrics.md) | Coordinate reference metrics, rfm_dict, and rfm_precompute. | ReferenceMetric, CoordSystem, enable_rfm_precompute, ReU |
 | [Conformally Flat Elliptic](equations/conformally-flat-elliptic.md) | NRPyElliptic conformally flat relaxation RHSs and sources. | ConformallyFlat_RHSs, ConformallyFlat_SourceTerms, psi_background |
 | [Equation Setup Style](equations/equation-setup-style.md) | SymPy equation conventions, derivative names, and trusted dicts. | cached_simplify, dD, dDD, dupD, trusted_dict |
 | [BSSN Family](equations/general-relativity/bssn-family.md) | Reference-metric BSSN quantities, RHSs, gauge, constraints, KO. | BSSN_quantities, BSSN_RHSs, BSSN_gauge_RHSs, BSSN_constraints, nrpylatex |
@@ -39,7 +39,7 @@ Search this table with `rg -n -i -F '<term>' wiki/catalog.md` when router titles
 | [Psi4 And Tetrads](equations/general-relativity/psi4-and-tetrads.md) | Weyl scalar Psi4 evaluation and BCL or symbolic tetrads. | Psi4Tetrads, psi4_re, psi4_im, leave_symbolic |
 | [YBS Gamma-Constraint Adjustment](equations/general-relativity/ybs-gamma-constraint-adjustment.md) | Opt-in YBS_chi Gamma-constraint term in BSSN LambdaBar RHS. | enable_YBS_Gamma_constraint_adjustment, xi, BSSN_RHSs |
 | [YBS-MOM Timestep-Scaled Momentum Adjustment](equations/general-relativity/ybs-momentum-damping.md) | Yo-Lin-Cao momentum-gradient adjustment with CAHD scaling. | C_YBS_mom, enable_YBS_momentum_constraint_adjustment, DSMINGF, dsmin |
-| [Geometry And Special-Function Support](equations/geometry-and-special-function-support.md) | Basis transforms, fisheye, SO(3)/quaternion rotations, _s Y_{lm}. | BasisTransforms, GeneralRFMFisheye, GeneralRFMSpheroidalFisheye, SO3_rotations, spherical harmonics |
+| [Geometry And Special-Function Support](equations/geometry-and-special-function-support.md) | Basis transforms, fisheye, SO(3)/quaternion rotations, _s Y_{lm}. | BasisTransforms, GeneralRFMFisheye, SO3_rotations, spherical harmonics |
 | [GRHD](equations/grhd.md) | Reference-metric Valencia GRHD conservatives, fluxes, and speeds. | GRHD_Equations, T4UU, u4U, HLL_fluxes |
 | [GRMHD](equations/grmhd.md) | Magnetic stress-energy in GRHD, magnetosonic bounds, HLL fluxes. | GRMHD_Equations, BmagU, smallb4U, Alfven, cmin, cmax |
 | [Aligned-Spin Calibration And Remnant](equations/seobnr/aligned-spin-calibration-and-remnant.md) | SEOBNRv5 calibration constants, ISCO helpers, and remnant fits. | SEOBNRv5_aligned_spin_constants, HBR2016, UIB2016 |
@@ -69,7 +69,7 @@ Search this table with `rg -n -i -F '<term>' wiki/catalog.md` when router titles
 | [Geodesics And Raytracing Runtime](infrastructures/bhah/geodesics-and-raytracing-runtime.md) | BHaH RKF45 geodesic integration and azimuthal metric stencils. | output_raytracing_data, ode_gsl_wrapper_massive, Lagrange |
 | [GR Evolution And Constraints](infrastructures/bhah/gr-evolution-and-constraints.md) | BHaH BSSN/fCCZ4 RHS, Ricci, YBS/CAHD options, and constraints. | rhs_eval, Ricci_eval, enforce_detgbar_equals_detghat_trAzero, constraints_eval |
 | [GR Initial Data And Psi4](infrastructures/bhah/gr-initial-data-and-psi4.md) | BHaH analytic/TwoPunctures/TOVola initial data and Psi4 modes. | ID_persist_struct, register_CFunction_psi4, psi4_spinweightm2_decomposition |
-| [Grids And Reference Metrics](infrastructures/bhah/grids-coordinates-and-reference-metrics.md) | BHaH numerical grids, fisheye setup, Cart_to_xx, and CFL dt. | numerical_grids_and_timestep, spheroidal fisheye, rfm_precompute, CoordSystem_hash, rfm_struct |
+| [Grids And Reference Metrics](infrastructures/bhah/grids-coordinates-and-reference-metrics.md) | BHaH numerical grids, fisheye setup, Cart_to_xx, and CFL dt. | numerical_grids_and_timestep, rfm_precompute, CoordSystem_hash, rfm_struct |
 | [GRoovy GRHD Runtime](infrastructures/bhah/groovy-grhd-runtime.md) | BHaH GRoovy GRHD gridfunctions, GRHayL EOS, PPM, and HLL. | GRHD_Equations, reconstruction_loop, calculate_HLL_flux_dirn_i, grhd_rhs_eval |
 | [BHaH Project Assembly](infrastructures/bhah/lifecycle-and-project-assembly.md) | BHaH main.c registration, Makefile emission, and library mode. | register_CFunction_main_c, Makefile_helpers, create_lib |
 | [MoL Time Integration](infrastructures/bhah/mol-time-integration.md) | BHaH Butcher tables, RK stage buffers, and MoL stepping. | MoLtimestepping, Butcher_dict, MoL_malloc_intermediate_stage_gfs, MoL_step_forward_in_time |
@@ -112,6 +112,6 @@ Search this table with `rg -n -i -F '<term>' wiki/catalog.md` when router titles
 | [Code Test Policy](validation/code-test-policy.md) | Test placement, numerical assertions, and integration rules. | pytest, doctest, coding_style.md |
 | [Narrow Examples Product Exception](validation/examples-product-exception.md) | Twelve rules for nrpy/examples/** standalone test scripts. | sebob_consistency_check, sebobv2_consistency_check, dendro_application_check |
 | [Expression Validation Helpers](validation/expression-validation-helpers.md) | assert_equal, check_zero, and trusted_dict module validation. | process_dictionary_of_expressions, compare_or_generate_trusted_results |
-| [Generated Project CI](validation/generated-project-ci.md) | GitHub Actions workflows building and running generated codes. | main.yml, dendrolib-canary.yml, sebobv2-projected-attachment.yml, spheroidal_fisheye_roundtrip.yml, full_nrpy_local_ci.sh |
+| [Generated Project CI](validation/generated-project-ci.md) | GitHub Actions workflows building and running generated codes. | main.yml, dendrolib-canary.yml, sebobv2-projected-attachment.yml, full_nrpy_local_ci.sh |
 | [Static Analysis](validation/static-analysis.md) | Black, isort, mypy, Pylint, pydocstyle, darglint, and doctests. | single_file_static_analysis.sh, .pylintrc, coding_style.md, trusted_dict |
 | [Test Oracles And Safe Updates](validation/test-oracles-and-safe-updates.md) | Expected-output storage, two-process review, and isolation. | validate_strings, trusted_dict, compare_or_generate_trusted_results, subprocess |
