@@ -108,8 +108,7 @@ default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_x_posn = +4.0
 default_BH2_x_posn = -4.0
 # Fisheye parameters
-fisheye_param_defaults: Dict[str, float] = {}
-fisheye_param_defaults = {
+fisheye_param_defaults: Dict[str, float] = {
     "fisheye_phys_a0": 1.0,
     "fisheye_phys_a1": 2.0,
     "fisheye_phys_a2": 4.0,
@@ -361,7 +360,7 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     enable_CAHD=enable_CAHD,
     enable_SSL=enable_SSL,
     OMP_collapse=OMP_collapse,
-    enable_RK3_accumulation=not spheroidal and enable_RK3_accumulation,
+    enable_RK3_accumulation=enable_RK3_accumulation,
 )
 if enable_CAHD:
     BHaH.general_relativity.dsmin_gf.register_CFunction_dsmin_auxevol_gridfunction(
@@ -426,7 +425,7 @@ superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems={CoordSystem},
     radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
-    enable_RK3_accumulation=not spheroidal and enable_RK3_accumulation,
+    enable_RK3_accumulation=enable_RK3_accumulation,
 )
 
 rhs_string = ""
@@ -440,27 +439,11 @@ commondata->SSL_Gaussian_prefactor =
 """
 if separate_Ricci_and_BSSN_RHS:
     rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
-if spheroidal:
-    if outer_bcs_type == "radiation":
-        rhs_string += r"""
-    rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
-    apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
-                                       gridfunctions_wavespeed, gridfunctions_f_infinity,
-                                       RK_INPUT_GFS, RK_OUTPUT_GFS);"""
-    else:
-        rhs_string += r"""
-    rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"""
-
-    if not enable_rfm_precompute:
-        rhs_string = rhs_string.replace("rfmstruct", "xx")
-else:
-    rhs_string, rhs_accumulation_string = (
-        BHaH.general_relativity.rhs_eval.MoL_rhs_strings(
-            pre_rhs_string=rhs_string,
-            enable_rfm_precompute=enable_rfm_precompute,
-            outer_bcs_type=outer_bcs_type,
-        )
-    )
+rhs_string, rhs_accumulation_string = BHaH.general_relativity.rhs_eval.MoL_rhs_strings(
+    pre_rhs_string=rhs_string,
+    enable_rfm_precompute=enable_rfm_precompute,
+    outer_bcs_type=outer_bcs_type,
+)
 
 post_rhs_bcs_str = ""
 if outer_bcs_type != "radiation":
@@ -475,7 +458,7 @@ superB.MoL.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
     enable_psi4=enable_psi4,
-    rhs_accumulation_string="" if spheroidal else rhs_accumulation_string,
+    rhs_accumulation_string=rhs_accumulation_string,
 )
 register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(CoordSystem)
 register_CFunction_xx_to_Cart(CoordSystem)
@@ -521,7 +504,6 @@ if enable_psi4:
     par.adjust_CodeParam_default(
         "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
     )
-if enable_psi4:
     par.adjust_CodeParam_default("num_psi4_extraction_radii", num_psi4_extraction_radii)
     par.adjust_CodeParam_default(
         "list_of_psi4_extraction_radii",
