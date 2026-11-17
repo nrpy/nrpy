@@ -507,7 +507,6 @@ class GeneralRFMSpheroidalFisheye:
             raise ValueError(f"num_transitions must be >= 1; got {num_transitions}.")
 
         self.num_transitions = num_transitions
-        self.provider_kind = "spheroidal_fisheye"
         self.xx = list(ixp.declarerank1("xx", dimension=3))
         r2 = sum(self.xx[i] ** 2 for i in range(3))
         self.r = sp.sqrt(r2)

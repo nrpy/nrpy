@@ -50,7 +50,7 @@ def _radiation_r_and_partials_exprs(CoordSystem: str) -> List[sp.Expr]:
     """
     rfm = refmetric.reference_metric[CoordSystem]
     provider = getattr(rfm, "general_rfm_provider", None)
-    provider_kind = getattr(provider, "provider_kind", None)
+    provider_kind = getattr(rfm, "general_rfm_provider_name", None)
 
     if provider is not None and provider_kind == "spheroidal_fisheye":
         raw_x, raw_y, raw_z = rfm.xx

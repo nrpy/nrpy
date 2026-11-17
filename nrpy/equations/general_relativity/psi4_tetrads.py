@@ -120,7 +120,7 @@ class Psi4Tetrads:
         # expressions become very large. The seed vectors admit much simpler
         # closed forms in the raw coordinates.
         provider = getattr(rfm, "general_rfm_provider", None)
-        provider_kind = getattr(provider, "provider_kind", None)
+        provider_kind = getattr(rfm, "general_rfm_provider_name", None)
         if provider is not None and provider_kind == "spheroidal_fisheye":
             raw_x, raw_y, _ = rfm.xx
             v1U = [-raw_y, raw_x, sp.sympify(0)]
