@@ -145,6 +145,20 @@ if (!check_roundtrip(&params, anisotropic_xx,
   return 2;
 
 if (sizeof(REAL) == sizeof(double)) {
+  params.fisheye_a0 = params.fisheye_a1 = (REAL)1.0;
+  params.fisheye_xy_R1 = params.fisheye_z_R1 = (REAL)1.0;
+  params.fisheye_xy_s1 = params.fisheye_z_s1 = (REAL)0.5;
+  params.fisheye_xy_c = params.fisheye_z_c = (REAL)1.0;
+  const REAL tiny_xx[3] = {(REAL)1.0e-15, (REAL)0.0, (REAL)0.0};
+  REAL tiny_Cart[3], tiny_xx_back[3];
+  xx_to_Cart__rfm__GeneralRFM_spheroidal_fisheyeN1(&params, tiny_xx, tiny_Cart);
+  if (generalrfm_Cart_to_xx__GeneralRFM_spheroidal_fisheyeN1(
+          &params, tiny_Cart, tiny_xx_back) != 0 ||
+      fabs(tiny_xx_back[0] / tiny_xx[0] - (REAL)1.0) > (REAL)1.0e-10)
+    return 9;
+} // END IF: tiny identity radius
+
+if (sizeof(REAL) == sizeof(double)) {
   params.fisheye_a0 = (REAL)1.0e10;
   params.fisheye_a1 = (REAL)1.0;
   params.fisheye_xy_R1 = params.fisheye_z_R1 = (REAL)1.0;
@@ -172,6 +186,49 @@ if (!check_roundtrip(&params, shipped_n8_xx,
                      xx_to_Cart__rfm__GeneralRFM_spheroidal_fisheyeN8,
                      generalrfm_Cart_to_xx__GeneralRFM_spheroidal_fisheyeN8))
   return 4;
+if (sizeof(REAL) == sizeof(double)) {
+  const REAL stalled_n8_xx[3] = {
+      (REAL)58.90804597701151,
+      (REAL)-61.781609195402325,
+      (REAL)234.375,
+  };
+  if (!check_roundtrip(&params, stalled_n8_xx,
+                       xx_to_Cart__rfm__GeneralRFM_spheroidal_fisheyeN8,
+                       generalrfm_Cart_to_xx__GeneralRFM_spheroidal_fisheyeN8))
+    return 5;
+} // END IF: double precision N8 inversion
+if (sizeof(REAL) == sizeof(float)) {
+  const REAL stalled_n8_xx[3] = {
+      (REAL)2.0114874839782715,
+      (REAL)-125.57471466064453,
+      (REAL)189.93052673339844,
+  };
+  if (!check_roundtrip(&params, stalled_n8_xx,
+                       xx_to_Cart__rfm__GeneralRFM_spheroidal_fisheyeN8,
+                       generalrfm_Cart_to_xx__GeneralRFM_spheroidal_fisheyeN8))
+    return 6;
+} // END IF: float precision N8 inversion
+if (sizeof(REAL) == sizeof(double)) {
+  const REAL pi = (REAL)3.14159265358979323846;
+  const REAL dtheta = pi / (REAL)100.0;
+  const REAL dphi = (REAL)2.0 * pi / (REAL)200.0;
+  for (int i_ph = 0; i_ph < 200; i_ph++) {
+    const REAL phi = -pi + ((REAL)i_ph + (REAL)0.5) * dphi;
+    for (int i_th = 0; i_th < 100; i_th++) {
+      const REAL theta = ((REAL)i_th + (REAL)0.5) * dtheta;
+      const REAL xCart[3] = {(REAL)11.5 * sin(theta) * cos(phi),
+                             (REAL)11.5 * sin(theta) * sin(phi),
+                             (REAL)11.5 * cos(theta)};
+      REAL xx[3], xCart_back[3];
+      if (generalrfm_Cart_to_xx__GeneralRFM_spheroidal_fisheyeN8(
+              &params, xCart, xx) != 0)
+        return 7;
+      xx_to_Cart__rfm__GeneralRFM_spheroidal_fisheyeN8(&params, xx, xCart_back);
+      if (!vectors_match(xCart, xCart_back))
+        return 8;
+    } // END LOOP: shell theta points
+  } // END LOOP: shell phi points
+} // END IF: double precision shell
 return 0;
 """
     )

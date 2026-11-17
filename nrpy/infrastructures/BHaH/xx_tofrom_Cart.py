@@ -345,6 +345,8 @@ def _generate_spheroidal_fisheye_inverse_body(
         (sizeof(REAL) == sizeof(float)) ? (REAL)1.0e-5 : (REAL)1.0e-12;
     const REAL derivative_floor =
         (sizeof(REAL) == sizeof(float)) ? (REAL)1.0e-7 : (REAL)1.0e-14;
+    const REAL machine_epsilon =
+        (sizeof(REAL) == sizeof(float)) ? (REAL)1.1920928955078125e-7 : (REAL)2.2204460492503131e-16;
     REAL asymptotic_scale;
 {asymptotic_scale_codegen}
     const REAL inv_asymptotic_scale =
@@ -372,9 +374,11 @@ def _generate_spheroidal_fisheye_inverse_body(
       REAL radial_residual_prime;
 {radial_codegen}
       REAL trial_seed = (REAL)0.5 * (low + high);
+      const REAL bracket_third = (high - low) / (REAL)3.0;
       if (isfinite(radial_residual_prime) && fabs(radial_residual_prime) > derivative_floor) {{
         const REAL newton_seed = radial_seed - radial_residual / radial_residual_prime;
-        if (isfinite(newton_seed) && newton_seed > low && newton_seed < high &&
+        if (isfinite(newton_seed) && newton_seed > low + bracket_third &&
+            newton_seed < high - bracket_third &&
             newton_seed != radial_seed)
           trial_seed = newton_seed;
       }} // END IF: use Newton seed
@@ -398,7 +402,12 @@ def _generate_spheroidal_fisheye_inverse_body(
       const REAL residual_tolerance =
           inverse_relative_tol * raw_radius_scale * raw_radius_scale;
       const REAL bracket_tolerance = inverse_relative_tol * raw_radius_scale;
-      if (fabs(trial_residual) < residual_tolerance && bracket_width < bracket_tolerance) {{
+      // Compare residual roundoff with the derivative-scaled radius tolerance.
+      const REAL residual_roundoff =
+          (REAL)8.0 * machine_epsilon * raw_radius_scale * raw_radius_scale;
+      if (fabs(trial_residual) < residual_tolerance && bracket_width < bracket_tolerance &&
+          isfinite(radial_residual_prime) &&
+          residual_roundoff < bracket_tolerance * fabs(radial_residual_prime)) {{
         radial_seed = trial_seed;
         converged = 1;
         break;
