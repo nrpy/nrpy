@@ -1104,3 +1104,33 @@ if __name__ == "__main__":
             f"{os.path.splitext(os.path.basename(__file__))[0]}_N{N}",
             results_dict,
         )
+
+    for N in (1, 2):
+        spheroidal = GeneralRFMSpheroidalFisheye(num_transitions=N)
+        # Check representative mixed derivatives independently of their stored formulas.
+        for stored, differentiated in (
+            (
+                spheroidal.dCart_dxxUD[0][1],
+                sp.diff(spheroidal.xx_to_CartU[0], spheroidal.xx[1]),
+            ),
+            (
+                spheroidal.ghatDDdD[0][1][2],
+                sp.diff(spheroidal.ghatDD[0][1], spheroidal.xx[2]),
+            ),
+            (
+                spheroidal.ghatDDdDD[0][1][2][0],
+                sp.diff(spheroidal.ghatDD[0][1], spheroidal.xx[2], spheroidal.xx[0]),
+            ),
+        ):
+            assert ve.check_zero(
+                stored - differentiated, fixed_mpfs_for_free_symbols=True
+            )
+        results_dict = ve.process_dictionary_of_expressions(
+            spheroidal.__dict__, fixed_mpfs_for_free_symbols=True
+        )
+        ve.compare_or_generate_trusted_results(
+            os.path.abspath(__file__),
+            os.getcwd(),
+            f"fisheye_spheroidal_N{N}",
+            results_dict,
+        )
