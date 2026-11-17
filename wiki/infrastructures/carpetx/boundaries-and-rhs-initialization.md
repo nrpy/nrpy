@@ -32,7 +32,7 @@ the radial power argument is fixed to `1.0` in this generator.
 The NewRadX schedule entry is registered in `ODESolvers_RHS after <thorn>_RHS`.
 It declares `READS: evol_variables(everywhere)` and
 `WRITES: evol_variables_rhs(boundary)`. The schedule bin ordering context is
-owned by `construct_schedule_ccl()`, which emits `ODESolvers_RHS` after
+set by `construct_schedule_ccl()`, which emits `ODESolvers_RHS` after
 `STARTUP`, `BASEGRID`, and `CCTK_INITIAL`, and before
 `ODESolvers_PostStep` and remaining bins.
 
@@ -42,10 +42,8 @@ registered `EVOL` gridfunctions and emits assignments setting each matching
 `BASEGRID after Symmetry_registration` and declares
 `WRITES: evol_variables_rhs(everywhere)`.
 
-Observed weak behavior: `zero_rhss.py` is inside the CarpetX infrastructure but
-imports `nrpy.infrastructures.ETLegacy.simple_loop as lp` and uses
-`gri.ETLegacyGridFunction.access_gf()` for RHS accesses. This page documents
-that source behavior only; it is not a code-fix task.
+`CarpetX/zero_rhss.py` imports `nrpy.infrastructures.ETLegacy.simple_loop as lp`
+and calls `gri.ETLegacyGridFunction.access_gf()` for RHS accesses.
 
 A scoped inventory of `nrpy/infrastructures/CarpetX/` shows no
 local CarpetX files named for MoL registration, Symmetry registration, Driver
@@ -58,11 +56,10 @@ scope is the NewRadX-oriented `boundary_conditions.py` file described above.
 - [boundary_conditions.py](../../../nrpy/infrastructures/CarpetX/boundary_conditions.py) - `register_CFunction_specify_NewRad_BoundaryConditions_parameters`, `register_CFunctions`
 - [zero_rhss.py](../../../nrpy/infrastructures/CarpetX/zero_rhss.py) - `register_CFunction_zero_rhss`
 - [schedule_ccl.py](../../../nrpy/infrastructures/CarpetX/schedule_ccl.py) - `construct_schedule_ccl`
-- [Source Manifest](../../../raw/SOURCES.md) - `carpetx-package-inventory` scoped inventory for absence claims
+- [CarpetX/__init__.py](../../../nrpy/infrastructures/CarpetX/__init__.py) - package module inventory
 
 ## See Also
 
-- [CarpetX](index.md)
-- [Thorn Assembly, Configuration, And CCL Files](thorn-assembly-configuration-and-ccl-files.md)
-- [Code Parameters, Includes, And Loops](code-parameters-includes-and-loops.md)
-- [ETLegacy MoL, Boundaries, Symmetry, And RHS Initialization](../etlegacy/mol-boundaries-symmetry-and-rhs-initialization.md)
+- See also: [Thorn Assembly, Configuration, And CCL Files](thorn-assembly-configuration-and-ccl-files.md)
+- See also: [Code Parameters, Includes, And Loops](code-parameters-includes-and-loops.md)
+- See also: [ETLegacy MoL, Boundaries, Symmetry, And RHS Initialization](../etlegacy/mol-boundaries-symmetry-and-rhs-initialization.md)

@@ -1,162 +1,120 @@
 # Example Generator Catalog
 
-> Inventory the runnable example generators, companion scripts, output families, prerequisites, validation status, and owning pages. · Status: confirmed
+> Inventory of runnable `nrpy/examples/*.py` generators, CLI flags, configured CI coverage, companion scripts, and detail leaves. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
 
-This catalog is the inventory leaf for `nrpy/examples`. Every non-`__init__.py`
-top-level generator under `nrpy/examples/*.py` appears once below with its
-command shape, output family, prerequisite class, validation route or manual
-status, and owning detail page. Companion files under
-`nrpy/examples/geodesic_visualizations/`, `nrpy/examples/tests/`, and
-`nrpy/examples/et_WaveToyfiles/` are cataloged by group after the generator
-inventory. Top-level `__init__.py` is explicitly excluded because it is package
-import aggregation, not a generator entry point.
-
-Generated `project/**` trees, rendered plots, images, ZIPs, binaries, and
-scratch logs remain artifacts. Use the checked-in generator and companion files
-as source evidence, then follow the owning page for details.
+Every runnable generator module under `nrpy/examples/*.py` (`__init__.py` is package import only) is listed below with its CLI flags, configured CI coverage (`manual` denotes source-supported scripts outside GitHub Actions), and defining detail leaf, followed by checked-in companion directories. Generated `project/**` trees, plots, ZIP archives, and compiled binaries remain disposable outputs ([Generated Output Boundaries](../architecture/generated-output-boundaries.md)).
 
 ## Detail
 
-Run module commands from the repository root after installing NRPy or setting
-`PYTHONPATH` to include `.` as described in [Build And Run](../architecture/build-and-run.md).
-Most generators delete and recreate their fixed `project/<project_name>/`
-directory. Preserve any wanted generated output before rerunning one. Evidence
-labels below describe configured workflow/helper steps, not CI outcomes;
-`manual/source-supported` identifies a source-supported manual route, not
-generation, build, or runtime coverage.
+### Top-Level `nrpy/examples/*.py` Generators
 
-| Generator | Command shape | Output family | Prerequisites | Validation route or status | Owning page |
-| --- | --- | --- | --- | --- | --- |
-| `bhahaha.py` | `python -m nrpy.examples.bhahaha [--fdorder N] [--outrootdir DIR] [--cpp] [--no-openmp]` | Static BHaHAHA apparent-horizon library under the chosen output root | Python, C compiler, `make`; OpenMP optional | Configured Ubuntu/macOS CI generation and default library build; no library runtime exists | [Apparent Horizon Library](apparent-horizon-library.md) |
-| `blackhole_spectroscopy.py` | `python -m nrpy.examples.blackhole_spectroscopy [--cuda] [--fccz4] [--floating_point_precision TYPE]` | Standalone BHaH binary-black-hole spectroscopy project, BSSN by default or opt-in fCCZ4 | Python, C or CUDA toolchain, `make`, GSL | Configured Ubuntu/macOS CI generation and default BSSN/OpenMP build; no configured startup, restart, CUDA, or scientific-result check | [Standalone GR/BHaH](standalone-gr-bhah.md) |
-| `carpet_baikal_thorns.py` | `python -m nrpy.examples.carpet_baikal_thorns` | ETLegacy/Carpet Baikal and BaikalVacuum thorns | Python for generation; Einstein Toolkit checkout for build/test | Configured `einsteintoolkit-validation` generation, ET build, and Baikal/BaikalVacuum regression testsuites | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
-| `carpet_wavetoy_thorns.py` | `python -m nrpy.examples.carpet_wavetoy_thorns` | ETLegacy/Carpet WaveToyNRPy, IDWaveToyNRPy, and diagWaveToyNRPy thorns | Python for generation; Einstein Toolkit checkout for build/test | Configured `einsteintoolkit-validation` generation, ET build, and WaveToyNRPy regression testsuite | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
-| `carpetx_baikal_thorns.py` | `python -m nrpy.examples.carpetx_baikal_thorns` | CarpetX BaikalX and BaikalVacuumX thorns | Python for generation; CarpetX/Einstein Toolkit environment for build/test | Local helper invokes generation but skips compile for every `carpet*` script; no configured CarpetX build/run | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
-| `carpetx_wavetoy_thorns.py` | `python -m nrpy.examples.carpetx_wavetoy_thorns` | CarpetX WaveToyNRPyX, IDWaveToyNRPyX, and diagWaveToyNRPyX thorns | Python for generation; CarpetX/Einstein Toolkit environment for build/test | Local helper invokes generation but skips compile for every `carpet*` script; no configured CarpetX build/run | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
-| `dendro_bssn.py` | `python -m nrpy.examples.dendro_bssn [--project-dir DIR] [--fd-order {4,6,8}] [--conformal-factor {W,chi}] [--ybs-gamma] [--ybs-momentum]` | Complete, standalone `Dendro_NRPy_BSSN` application in `project/Dendro_NRPy_BSSN` (or `DIR/Dendro_NRPy_BSSN`), with CMake project `Dendro_NRPy_BSSN`, namespace `nrpy::bssn`, and executable `nrpyBssnSolver`; W and KO are defaults, while all FD4/6/8 kernels are emitted with the in-script KO setting | Python for generation; CMake 3.18+, GNU compilers (gcc, g++, gfortran), MPI with C, C++, and Fortran bindings, OpenMP, GSL, BLAS/LAPACK, and network access (Dendrolib, toml11, and spdlog are fetched) for build; the example prints the build and run commands | `dendro-validation` matrix leg runs `nrpy/examples/tests/dendro_application_check.py`: W and chi generation determinism, builds, TwoPunctures solve, and short MPI runs with remesh, horizons, waves, restart identity, rank-count agreement, FD4/6/8 initialization, and rejection cases | [Dendro](../infrastructures/dendro/index.md) |
-| `dendro_fccz4.py` | `python -m nrpy.examples.dendro_fccz4 [--project-dir DIR] [--fd-order {4,6,8}] [--conformal-factor {W,chi}] [--ybs-gamma] [--ybs-momentum]` | Complete, standalone `Dendro_NRPy_fCCZ4` application in `project/Dendro_NRPy_fCCZ4` (or `DIR/Dendro_NRPy_fCCZ4`), with CMake project `Dendro_NRPy_fCCZ4`, namespace `nrpy::fccz4`, and executable `nrpyFccz4Solver`; W and KO default on and all FD4/6/8 kernels are emitted with the in-script KO setting | Python for generation; CMake 3.18+, GNU compilers (gcc, g++, gfortran), MPI with C, C++, and Fortran bindings, OpenMP, GSL, BLAS/LAPACK, and network access (Dendrolib, toml11, and spdlog are fetched) for build; the example prints the build and run commands | `dendro-validation` matrix leg runs `nrpy/examples/tests/dendro_application_check.py`: W and chi generation determinism, builds, TwoPunctures solve, and short MPI runs with remesh, horizons, waves, restart identity, rank-count agreement, FD4/6/8 initialization, and rejection cases | [Dendro](../infrastructures/dendro/index.md) |
-| `groovy_TOV_BSSN.py` | `python -m nrpy.examples.groovy_TOV_BSSN` | Standalone BHaH/GRoovy TOV GRHD evolution project | Python, Git and network access, C compiler, `make`, GSL, and GRHayL configure/build prerequisites | Manual/source-supported; generator clones, configures, builds, and installs GRHayL, and inspected CI does not invoke it | [Matter TOV Workflows](matter-tov-workflows.md) |
-| `hydro_without_hydro.py` | `python -m nrpy.examples.hydro_without_hydro [--cuda] [--floating_point_precision TYPE]` | Standalone BHaH static-fluid spacetime evolution project | Python, C or CUDA toolchain, `make`, GSL | Configured Ubuntu/macOS CI generation and default OpenMP build; local helper configures a CUDA build, but no runtime/result check | [Matter TOV Workflows](matter-tov-workflows.md) |
-| `kasner_exact_evolution.py` | `python -m nrpy.examples.kasner_exact_evolution [--floating_point_precision TYPE]` | Standalone BHaH Kasner benchmark project | Python, C compiler, `make` | Manual/source-supported default OpenMP route; the parser exposes `--cuda`, but GeneralRFM precompute rejects CUDA during generation | [Standalone GR/BHaH](standalone-gr-bhah.md) |
-| `manga_bhah_lib.py` | `python -m nrpy.examples.manga_bhah_lib` | MANGA-facing `bhah_lib` library project | Python, C compiler, `make`, GSL | Source-supported library route; CI commands are present but commented out | [Matter TOV Workflows](matter-tov-workflows.md) |
-| `mass_geodesic_integrator.py` | `python -m nrpy.examples.mass_geodesic_integrator` | Standalone massive-particle geodesic C project plus trajectory visualization copy | Python, C compiler, `make`, GSL, NumPy/Matplotlib for visualization | Manual/source-supported single-ray route | [Geodesic Raytracing](geodesic-raytracing.md) |
-| `nrpyelliptic_conformally_flat.py` | `python -m nrpy.examples.nrpyelliptic_conformally_flat [--cuda] [--floating_point_precision TYPE]` | Standalone BHaH NRPyElliptic conformally flat project | Python, C or CUDA toolchain, `make` | Configured Ubuntu/macOS CI generation and default OpenMP build; local helper configures CUDA build only | [Elliptic Initial Data](elliptic-initial-data.md) |
-| `nrpypn_quasicircular_momenta.py` | `python -m nrpy.examples.nrpypn_quasicircular_momenta` | Standalone BHaH PN momentum utility project | Python, C compiler, `make` | Configured Ubuntu/macOS CI generation and build; no runtime/result check | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
-| `photon_geodesic_batch_integrator.py` | `python -m nrpy.examples.photon_geodesic_batch_integrator [--cuda] [--outdir DIR]` | Standalone tiled photon raytracing project emitting light-blueprint ZIP artifacts | Python, C or CUDA toolchain, `make`, NumPy/Matplotlib/Pillow for visualization; Numba optional for acceleration | Manual/source-supported batch route | [Geodesic Raytracing](geodesic-raytracing.md) |
-| `photon_geodesic_integrator.py` | `python -m nrpy.examples.photon_geodesic_integrator` | Standalone single-photon geodesic project plus trajectory visualization copy | Python, C compiler, `make`, NumPy/Matplotlib for visualization | Manual/source-supported single-ray route | [Geodesic Raytracing](geodesic-raytracing.md) |
-| `sebobv1_jax.py` | `python -m nrpy.examples.sebobv1_jax` | Python/JAX package generation intended for SEOBNRv5 coefficient initialization | Python for generation; generated package declares JAX, `jaxlib`, and NumPy | Configured Ubuntu/macOS generation, generated-package install, and one coefficient-function call with Python-scalar inputs; no generated test, accelerator, or numerical check | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
-| `sebobv2.py` | `python -m nrpy.examples.sebobv2` | GSL-backed BHaH C waveform project | Python, C compiler, `make`, GSL | Configured trusted/current build, executable run, and ten-input perturbation-relative comparison | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
-| `seobnrv5_aligned_spin_inspiral.py` | `python -m nrpy.examples.seobnrv5_aligned_spin_inspiral [-seobnrv5_bob|-seobnrv5_nrnqc_bob|-seobnrv5_nrpy] [-calibration_no_spin|-calibration_spin|-nrpy_calibrated]` | GSL-backed BHaH C SEOBNRv5 waveform project family | Python, C compiler, `make`, GSL | Configured trusted/current build and ten-input executable comparison for all calibration/production variants; the additional `-nrpy_calibrated` variants are build-only | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
-| `spinning_blackhole.py` | `python -m nrpy.examples.spinning_blackhole [--cuda] [--floating_point_precision TYPE]` | Standalone BHaH spinning black-hole project | Python, C or CUDA toolchain, `make`; BHaHAHA in supported OpenMP/double path | Configured Ubuntu/macOS default OpenMP build; local helper configures CUDA build; neither runs the executable | [Standalone GR/BHaH](standalone-gr-bhah.md) |
-| `superB_blackhole_spectroscopy.py` | `python -m nrpy.examples.superB_blackhole_spectroscopy [--paper]` | Charm++/superB black-hole spectroscopy project | Python, Charm++ toolchain, `make`, GSL | Configured Charm++ generation/build; no executable, restart, or Psi4 result run | [superB Charm++ Workflows](superb-charm-workflows.md) |
-| `superB_nrpyelliptic_conformally_flat.py` | `python -m nrpy.examples.superB_nrpyelliptic_conformally_flat [--floating_point_precision TYPE]` | Charm++/superB NRPyElliptic conformally flat project | Python, Charm++ toolchain, `make` | Configured Charm++ generation/build; no executable or residual check | [superB Charm++ Workflows](superb-charm-workflows.md) |
-| `superB_two_blackholes_collide.py` | `python -m nrpy.examples.superB_two_blackholes_collide` | Charm++/superB Brill-Lindquist binary black-hole project | Python, Charm++ toolchain, `make`; generated BHaHAHA library | Configured Charm++ generation/build and `+p2` run; no scientific-output assertion | [superB Charm++ Workflows](superb-charm-workflows.md) |
-| `tovola_neutron_star.py` | `python -m nrpy.examples.tovola_neutron_star` | Standalone BHaH TOVola initial-data and constraint project | Python, C compiler, `make`, GSL | Configured Ubuntu/macOS generation and build; local helper's `--cuda` token is ignored because generator has no argument parser, so it is not CUDA evidence | [Matter TOV Workflows](matter-tov-workflows.md) |
-| `two_blackholes_collide.py` | `python -m nrpy.examples.two_blackholes_collide [--cuda] [--floating_point_precision TYPE] [--raytracing-outputs]` | Standalone BHaH Brill-Lindquist binary black-hole project | Python, C or CUDA toolchain, `make`; BHaHAHA in supported OpenMP/double path | Configured Ubuntu/macOS default OpenMP build; local helper configures CUDA build; no runtime or raytracing-result check | [Standalone GR/BHaH](standalone-gr-bhah.md) |
-| `wave_equation_cartesian.py` | `python -m nrpy.examples.wave_equation_cartesian` | Minimal standalone BHaH Cartesian wave project | Python, C compiler, `make` | First-run manual route plus configured Ubuntu/macOS generation/build; executable and numerical output are not CI-checked | [Wave Equation Generators](wave-equation-generators.md) |
-| `wave_equation_curvilinear.py` | `python -m nrpy.examples.wave_equation_curvilinear [--cuda] [--floating_point_precision TYPE] [--disable_intrinsics] [--disable_rfm_precompute]` | Standalone BHaH single-coordinate curvilinear wave project | Python, C or CUDA toolchain, `make` | Configured Ubuntu/macOS OpenMP build and local CUDA build; no executable/result check | [Wave Equation Generators](wave-equation-generators.md) |
-| `wave_equation_multicoordinates.py` | `python -m nrpy.examples.wave_equation_multicoordinates [--cuda] [--floating_point_precision TYPE] [--disable_intrinsics] [--disable_rfm_precompute]` | Standalone BHaH multicoordinate wave project | Python, C or CUDA toolchain, `make` | Configured Ubuntu/macOS OpenMP build and local CUDA build; no executable/result check | [Wave Equation Generators](wave-equation-generators.md) |
+Run `python -m nrpy.examples.<module> [flags]` from the repository root ([Build And Run](../architecture/build-and-run.md)); most generators recreate `project/<project_name>/` cleanly on each run.
 
-Claim evidence:
-- Claim: The Dendro generators emit complete, standalone applications named `Dendro_NRPy_BSSN` and `Dendro_NRPy_fCCZ4`, each with KO enabled by default and a code-generation-time W/chi option; the `dendro-validation` CI job generates, builds, and runs both applications in W and chi variants through `dendro_application_check.py`.
-- Role: public generator interface and CI behavior
-- Deciding authority: `nrpy/examples/dendro_bssn.py`, `parse_args`, `SOLVER_NAME`, and `main`; `nrpy/examples/dendro_fccz4.py`, `parse_args`, `SOLVER_NAME`, and `main`; `.github/workflows/main.yml`, `dendro-validation`; `nrpy/examples/tests/dendro_application_check.py`, `Leg.run`.
-- Corroboration: `nrpy/infrastructures/Dendro/CMakeLists.py`, `output_CFunctions_function_prototypes_and_construct_CMakeLists`, uses the selected solver name for the emitted CMake project.
-
-The `seobnrv5_aligned_spin_inspiral.py` row's validation-route cell states that
-CI builds and ten-input-compares only the calibration/production variants,
-leaving the additional `-nrpy_calibrated` variants build-only.
-
-Claim evidence:
-- Claim: `seobnrv5_aligned_spin_inspiral.py`'s configured CI route builds and ten-input-compares only the calibration/production variants (each approximant × {production, `-calibration_no_spin`, `-calibration_spin`}); the additional `-nrpy_calibrated` variants are generated and built in `codegen-ubuntu`/`codegen-mac` but are not included in the `sebob-consistency-test` comparison.
-- Role: CI behavior
-- Deciding authority: [main.yml](../../.github/workflows/main.yml), jobs `codegen-ubuntu`, `codegen-mac`, `sebob-consistency-test`
-- Corroboration: [sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py), `__main__` invocation list
-
-The `sebobv1_jax.py` row's validation-route cell states that CI generates and
-installs the package and calls the coefficient function once without checking
-returned values.
-
-Claim evidence:
-- Claim: Both `codegen-ubuntu` and `codegen-mac` generate `sebobv1_jax`, run `pip install .` in the generated project, import `SEOBNRv5_aligned_spin_coefficients`, call it once without a JAX transformation such as `jax.jit`, with the Python-scalar inputs `(1.5, 0.3, -0.2, 0.02, 2.4627455127717882e-05, 50.0)`, and print the returned `Commondata`. The step fails only if generation, installation, import, or the call raises; it asserts no returned field or value and does not run the generated pytest, a float32 input, a traced function, or an accelerator.
-- Role: CI behavior
-- Deciding authority: [main.yml](../../.github/workflows/main.yml), jobs `codegen-ubuntu` and `codegen-mac`
-- Corroboration: `none available`; no other configured file restates these job commands
-
-Companion groups:
-
-| Companion group | Checked-in source shape | Artifact boundary | Owning page |
+| Generator | Key CLI flags | CI check | Detail leaf |
 | --- | --- | --- | --- |
-| `nrpy/examples/et_WaveToyfiles/**` | ET ThornList, Carpet WaveToy parfiles, testsuite descriptor, and checked-in ASCII fixture | Generated thorn files under `project/**` stay artifacts; checked-in fixtures are source evidence | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
-| `nrpy/examples/geodesic_visualizations/*.py` | Trajectory plotter, light-blueprint schema, lensed-image renderer, image visualizer, and blueprint diagnostics | `trajectory.txt`, PNGs, downloaded textures, and `light_blueprint_*.zip` files stay artifacts | [Geodesic Raytracing](geodesic-raytracing.md) |
-| `nrpy/examples/tests/sebob*_consistency_check.py` | Current-vs-trusted waveform consistency scripts | Trusted/current generated executable directories and waveform stdout are run artifacts | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
+| `bhahaha.py` | `[--fdorder N] [--outrootdir DIR] [--cpp] [--no-openmp]` | Ubuntu/macOS C static-library `make` build only | [Apparent Horizon Library](apparent-horizon-library.md) |
+| `blackhole_spectroscopy.py` | `[--cuda] [--fccz4] [--floating_point_precision TYPE]` | Ubuntu/macOS default BSSN/OpenMP `make` build only | [Standalone GR/BHaH](standalone-gr-bhah.md) |
+| `carpet_baikal_thorns.py` | none | `einsteintoolkit-validation` ET build + `Baikal`/`BaikalVacuum` testsuites | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
+| `carpet_wavetoy_thorns.py` | none | `einsteintoolkit-validation` ET build + `WaveToyNRPy` testsuite | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
+| `carpetx_baikal_thorns.py` | none | `full_nrpy_local_ci.sh` generation only; no CI build/run | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
+| `carpetx_wavetoy_thorns.py` | none | `full_nrpy_local_ci.sh` generation only; no CI build/run | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
+| `dendro_bssn.py` | `[--project-dir D] [--fd-order {4,6,8}] [--conformal-factor {W,chi}] [--ybs-{gamma,momentum}]` | `dendro-validation`, `dendrolib-canary` | [Dendro BSSN](../infrastructures/dendro/bssn-application-wiring.md) |
+| `dendro_fccz4.py` | `[--project-dir D] [--fd-order {4,6,8}] [--conformal-factor {W,chi}] [--ybs-{gamma,momentum}]` | `dendro-validation`, `dendrolib-canary` | [Dendro fCCZ4](../infrastructures/dendro/fccz4-application-wiring.md) |
+| `groovy_TOV_BSSN.py` | none (clones/builds GRHayL) | manual only; not invoked in CI | [Matter TOV Workflows](matter-tov-workflows.md) |
+| `hydro_without_hydro.py` | `[--cuda] [--floating_point_precision TYPE]` | Ubuntu/macOS OpenMP `make` build (`--cuda` in local script only) | [Matter TOV Workflows](matter-tov-workflows.md) |
+| `kasner_exact_evolution.py` | `[--floating_point_precision TYPE]` (`--cuda` rejected by `GeneralRFM`) | manual OpenMP route; not invoked in CI | [Standalone GR/BHaH](standalone-gr-bhah.md) |
+| `manga_bhah_lib.py` | none (`create_lib=True`) | commented out in `main.yml` | [Matter TOV Workflows](matter-tov-workflows.md) |
+| `mass_geodesic_integrator.py` | none (requires GSL) | manual single-ray route | [Geodesic Raytracing](geodesic-raytracing.md) |
+| `nrpyelliptic_conformally_flat.py` | `[--cuda] [--floating_point_precision TYPE]` | Ubuntu/macOS OpenMP `make` build (`--cuda` in local script only) | [Elliptic Initial Data](elliptic-initial-data.md) |
+| `nrpypn_quasicircular_momenta.py` | none | Ubuntu/macOS `make` build only | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
+| `photon_geodesic_batch_integrator.py` | `[--cuda] [--outdir DIR]` | manual tiled batch route | [Geodesic Raytracing](geodesic-raytracing.md) |
+| `photon_geodesic_integrator.py` | none | manual single-ray route | [Geodesic Raytracing](geodesic-raytracing.md) |
+| `sebobv1_jax.py` | none | Ubuntu/macOS `pip install .` + 1 scalar call ([`sebobv1_jax` step](../validation/generated-project-ci.md#sebobv1_jax-install-and-call-step)) | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
+| `sebobv2.py` | `[--projected-attachment-diagnostics]` (GSL; `use_projected_attachment` in `.par`) | Ubuntu/macOS build + `sebobv2` & projected-attachment CI | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
+| `seobnrv5_aligned_spin_inspiral.py` | `[-seobnrv5_{bob,nrnqc_bob,nrpy}] [-{calibration_no_spin,calibration_spin,nrpy_calibrated}]` | Ubuntu/macOS; `sebob-consistency-test` | [Waveform JAX PN](waveform-jax-pn-generators.md) |
+| `spinning_blackhole.py` | `[--cuda] [--floating_point_precision TYPE]` | Ubuntu/macOS OpenMP `make` build (`--cuda` in local script only) | [Standalone GR/BHaH](standalone-gr-bhah.md) |
+| `superB_blackhole_spectroscopy.py` | `[--paper]` | `charmpp-validation` Charm++ build only | [superB Charm++ Workflows](superb-charm-workflows.md) |
+| `superB_nrpyelliptic_conformally_flat.py` | `[--floating_point_precision TYPE]` | `charmpp-validation` Charm++ build only | [superB Charm++ Workflows](superb-charm-workflows.md) |
+| `superB_two_blackholes_collide.py` | none (links BHaHAHA) | `charmpp-validation` build + `charmrun +p2` exit check | [superB Charm++ Workflows](superb-charm-workflows.md) |
+| `tovola_neutron_star.py` | none (ignores `--cuda` in local script) | Ubuntu/macOS C `make` build only | [Matter TOV Workflows](matter-tov-workflows.md) |
+| `two_blackholes_collide.py` | `[--cuda] [--floating_point_precision TYPE] [--raytracing-outputs]` | Ubuntu/macOS OpenMP `make` build (`--cuda` in local script only) | [Standalone GR/BHaH](standalone-gr-bhah.md) |
+| `wave_equation_cartesian.py` | none | Ubuntu/macOS `make` build only | [Wave Equation Generators](wave-equation-generators.md) |
+| `wave_equation_curvilinear.py` | `[--cuda] [--floating_point_precision P] [--disable_intrinsics] [--disable_rfm_precompute]` | Ubuntu/macOS OpenMP `make` build | [Wave Equation Generators](wave-equation-generators.md) |
+| `wave_equation_multicoordinates.py` | `[--cuda] [--floating_point_precision P] [--disable_intrinsics] [--disable_rfm_precompute]` | Ubuntu/macOS OpenMP `make` build | [Wave Equation Generators](wave-equation-generators.md) |
 
-Inventory disposition is exact for the current aggregate: the table identifies
-the generators, and the companion groups identify ET fixtures, geodesic scripts,
-waveform consistency helpers, and the excluded `__init__.py`. The direct source
-rows in [Sources](../../raw/SOURCES.md) register the cited files. Aggregate status
-remains `partial` because file-set ownership does not by itself prove complete
-semantic reconciliation or future-file ingestion.
+Evidence (CI behavior): `.github/workflows/main.yml`; `.github/workflows/dendrolib-canary.yml`; `.github/workflows/sebobv2-projected-attachment.yml`; `.github/full_nrpy_local_ci.sh`; `dendro_bssn.py`; `dendro_fccz4.py`; `sebobv2.py`.
 
-The `sebobv1_jax` row records generation intent. CI generates and installs the
-package and calls the coefficient function once without checking its returned
-values. See
-[SEBOBv1 JAX Workflow](../infrastructures/jax/sebobv1-jax-workflow.md) for the
-generated coefficient function and its `Commondata` fields.
+### Companion Script And Test Directories
+
+| Companion group | Checked-in files | Generated-output boundary | Detail leaf |
+| --- | --- | --- | --- |
+| `nrpy/examples/et_WaveToyfiles/**` | `ThornList`, `WaveToyNRPy*.par`, `test.ccl`, `uuGF.x.asc` | Checked-in ET inputs; `project/**` disposable | [ET Thorn Generators](einstein-toolkit-thorn-generators.md) |
+| `nrpy/examples/geodesic_visualizations/*.py` | `visualize_{trajectory,lensed_image}.py`, `render_lensed_image.py`, `blueprint_*.py` | PNGs, `trajectory.txt`, ZIPs disposable | [Geodesic Raytracing](geodesic-raytracing.md) |
+| `nrpy/examples/tests/*.py` | `sebob*_consistency_check.py`, `sebobv2_projected_attachment_check.py`, `dendro_application_check*.py` | Temp worktrees disposable | [Generated Project CI](../validation/generated-project-ci.md) |
+| `nrpy/examples/superb_paper2/*.py` | `superB_blackhole_spectroscopy_{8Mseparation,last_orbit}.py` | Generated Charm++ `project/**` disposable | [superB Charm++ Workflows](superb-charm-workflows.md) |
+| `nrpy/examples/q1.par.lowres.toml` | Checked-in low-res Dendro BSSN/fCCZ4 TOML parameter file | Copied into generated `pars/` alongside `<stem>.toml` | [Dendro Parameters](../infrastructures/dendro/runtime-parameters.md) |
+
+See [SEBOBv1 JAX Workflow](../infrastructures/jax/sebobv1-jax-workflow.md) for `SEOBNRv5_aligned_spin_coefficients` and `Commondata` fields.
 
 ## Sources
 
+- [main.yml](../../.github/workflows/main.yml) - CI build and validation matrix
+- [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml) - `dendro-validation-dendrolib-master`
+- [sebobv2-projected-attachment.yml](../../.github/workflows/sebobv2-projected-attachment.yml) - `projected-reference-and-matching`
+- [full_nrpy_local_ci.sh](../../.github/full_nrpy_local_ci.sh) - manual local build and `--cuda` configuration script
+- [bhahaha.py](../../nrpy/examples/bhahaha.py) - `parser`, `project_name`
+- [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py) - `parser`, `project_name`
+- [carpet_baikal_thorns.py](../../nrpy/examples/carpet_baikal_thorns.py) - `project_name`, `thorn_names`
+- [carpet_wavetoy_thorns.py](../../nrpy/examples/carpet_wavetoy_thorns.py) - `project_name`, thorn names
+- [carpetx_baikal_thorns.py](../../nrpy/examples/carpetx_baikal_thorns.py) - `project_name`, `thorn_names`
+- [carpetx_wavetoy_thorns.py](../../nrpy/examples/carpetx_wavetoy_thorns.py) - `project_name`, thorn names
+- [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) - `parse_args`, `SOLVER_NAME`
+- [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - `parse_args`, `SOLVER_NAME`
+- [groovy_TOV_BSSN.py](../../nrpy/examples/groovy_TOV_BSSN.py) - `project_name`, `repo_url`
+- [hydro_without_hydro.py](../../nrpy/examples/hydro_without_hydro.py) - `parser`, `project_name`
+- [kasner_exact_evolution.py](../../nrpy/examples/kasner_exact_evolution.py) - `parser`, `project_name`
+- [manga_bhah_lib.py](../../nrpy/examples/manga_bhah_lib.py) - `project_name`, `create_lib=True`
+- [mass_geodesic_integrator.py](../../nrpy/examples/mass_geodesic_integrator.py) - `project_name`
+- [nrpyelliptic_conformally_flat.py](../../nrpy/examples/nrpyelliptic_conformally_flat.py) - `parser`, `project_name`
+- [nrpypn_quasicircular_momenta.py](../../nrpy/examples/nrpypn_quasicircular_momenta.py) - `project_name`
+- [photon_geodesic_batch_integrator.py](../../nrpy/examples/photon_geodesic_batch_integrator.py) - `--outdir`, `--cuda`
+- [photon_geodesic_integrator.py](../../nrpy/examples/photon_geodesic_integrator.py) - `project_name`
+- [sebobv1_jax.py](../../nrpy/examples/sebobv1_jax.py) - `project_name`
+- [sebobv2.py](../../nrpy/examples/sebobv2.py) - `--projected-attachment-diagnostics`, `project_name`
+- [seobnrv5_aligned_spin_inspiral.py](../../nrpy/examples/seobnrv5_aligned_spin_inspiral.py) - `argparse`, `project_name`
+- [spinning_blackhole.py](../../nrpy/examples/spinning_blackhole.py) - `parser`, `project_name`
+- [superB_blackhole_spectroscopy.py](../../nrpy/examples/superB_blackhole_spectroscopy.py) - `parser`, `project_name`
+- [superB_nrpyelliptic_conformally_flat.py](../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `parser`, `project_name`
+- [superB_two_blackholes_collide.py](../../nrpy/examples/superB_two_blackholes_collide.py) - `project_name`
+- [tovola_neutron_star.py](../../nrpy/examples/tovola_neutron_star.py) - `project_name`
+- [two_blackholes_collide.py](../../nrpy/examples/two_blackholes_collide.py) - `parser`, `project_name`
 - [wave_equation_cartesian.py](../../nrpy/examples/wave_equation_cartesian.py) - `project_name`
 - [wave_equation_curvilinear.py](../../nrpy/examples/wave_equation_curvilinear.py) - `parser`, `project_name`
 - [wave_equation_multicoordinates.py](../../nrpy/examples/wave_equation_multicoordinates.py) - `parser`, `project_name`
-- [two_blackholes_collide.py](../../nrpy/examples/two_blackholes_collide.py) - `parser`, `project_name`, `--raytracing-outputs`
-- [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py) - `parser`, `project_name`
-- [spinning_blackhole.py](../../nrpy/examples/spinning_blackhole.py) - `parser`, `project_name`
-- [kasner_exact_evolution.py](../../nrpy/examples/kasner_exact_evolution.py) - `parser`, `project_name`
-- [nrpyelliptic_conformally_flat.py](../../nrpy/examples/nrpyelliptic_conformally_flat.py) - `parser`, `project_name`
-- [superB_nrpyelliptic_conformally_flat.py](../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `parser`, `project_name`
-- [carpet_wavetoy_thorns.py](../../nrpy/examples/carpet_wavetoy_thorns.py) - `project_name`, `ID_thorn_name`, `evol_thorn_name`, `diag_thorn_name`
-- [carpet_baikal_thorns.py](../../nrpy/examples/carpet_baikal_thorns.py) - `project_name`, `thorn_names`
-- [carpetx_wavetoy_thorns.py](../../nrpy/examples/carpetx_wavetoy_thorns.py) - `project_name`, `ID_thorn_name`, `evol_thorn_name`, `diag_thorn_name`
-- [carpetx_baikal_thorns.py](../../nrpy/examples/carpetx_baikal_thorns.py) - `project_name`, `thorn_names`
-- [superB_two_blackholes_collide.py](../../nrpy/examples/superB_two_blackholes_collide.py) - `project_name`
-- [superB_blackhole_spectroscopy.py](../../nrpy/examples/superB_blackhole_spectroscopy.py) - `parser`, `project_name`
-- [seobnrv5_aligned_spin_inspiral.py](../../nrpy/examples/seobnrv5_aligned_spin_inspiral.py) - `argparse`, `project_name`
-- [sebobv2.py](../../nrpy/examples/sebobv2.py) - `project_name`
-- [sebobv1_jax.py](../../nrpy/examples/sebobv1_jax.py) - `project_name`, `Infrastructure`
-- [nrpypn_quasicircular_momenta.py](../../nrpy/examples/nrpypn_quasicircular_momenta.py) - `project_name`
-- [mass_geodesic_integrator.py](../../nrpy/examples/mass_geodesic_integrator.py) - `project_name`, `gsl-config`
-- [photon_geodesic_integrator.py](../../nrpy/examples/photon_geodesic_integrator.py) - `project_name`
-- [photon_geodesic_batch_integrator.py](../../nrpy/examples/photon_geodesic_batch_integrator.py) - `--outdir`, `--cuda`, `project_name`
-- [tovola_neutron_star.py](../../nrpy/examples/tovola_neutron_star.py) - `project_name`
-- [hydro_without_hydro.py](../../nrpy/examples/hydro_without_hydro.py) - `parser`, `project_name`
-- [groovy_TOV_BSSN.py](../../nrpy/examples/groovy_TOV_BSSN.py) - `project_name`, `repo_url`
-- [manga_bhah_lib.py](../../nrpy/examples/manga_bhah_lib.py) - `project_name`, `create_lib=True`
-- [bhahaha.py](../../nrpy/examples/bhahaha.py) - `parser`, `project_name`
-- [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) - current BSSN command, application output, and printed build and run commands.
-- [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - current fCCZ4 command, application output, and printed build and run commands.
-- [main.yml](../../.github/workflows/main.yml) - `dendro-validation` matrix and helper invocation.
-- [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py) - `Leg.run`, profiles and checks.
-- [ThornList](../../nrpy/examples/et_WaveToyfiles/ThornList) - Einstein Toolkit component-list fixture
-- [WaveToyNRPy.par](../../nrpy/examples/et_WaveToyfiles/WaveToyNRPy.par) - Carpet WaveToy parfile fixture
+- [q1.par.lowres.toml](../../nrpy/examples/q1.par.lowres.toml) - checked-in low-resolution Dendro BBH TOML
+- [ThornList](../../nrpy/examples/et_WaveToyfiles/ThornList) - ET ThornList
+- [WaveToyNRPy.par](../../nrpy/examples/et_WaveToyfiles/WaveToyNRPy.par) - WaveToy parfile
 - [test.ccl](../../nrpy/examples/et_WaveToyfiles/test/test.ccl) - `TEST WaveToyNRPy_test`
-- [WaveToyNRPy_test.par](../../nrpy/examples/et_WaveToyfiles/test/WaveToyNRPy_test.par) - Carpet WaveToy test parfile
-- [uuGF.x.asc](../../nrpy/examples/et_WaveToyfiles/test/WaveToyNRPy_test/uuGF.x.asc) - checked-in CarpetIOASCII fixture
+- [WaveToyNRPy_test.par](../../nrpy/examples/et_WaveToyfiles/test/WaveToyNRPy_test.par) - testsuite parfile
+- [uuGF.x.asc](../../nrpy/examples/et_WaveToyfiles/test/WaveToyNRPy_test/uuGF.x.asc) - CarpetIOASCII reference output
 - [visualize_trajectory.py](../../nrpy/examples/geodesic_visualizations/visualize_trajectory.py) - `visualize_trajectory`
 - [blueprint_config_and_schema.py](../../nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py) - `BLUEPRINT_DTYPE`
 - [render_lensed_image.py](../../nrpy/examples/geodesic_visualizations/render_lensed_image.py) - `generate_static_lensed_image`
 - [visualize_lensed_image.py](../../nrpy/examples/geodesic_visualizations/visualize_lensed_image.py) - `main`
 - [blueprint_analysis.py](../../nrpy/examples/geodesic_visualizations/blueprint_analysis.py) - `diagnose_blueprint`
+- [superB_blackhole_spectroscopy_8Mseparation.py](../../nrpy/examples/superb_paper2/superB_blackhole_spectroscopy_8Mseparation.py) - 8M separation superB spectroscopy setup
+- [superB_blackhole_spectroscopy_last_orbit.py](../../nrpy/examples/superb_paper2/superB_blackhole_spectroscopy_last_orbit.py) - last-orbit superB spectroscopy setup
 - [sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py) - `__main__`
 - [sebobv2_consistency_check.py](../../nrpy/examples/tests/sebobv2_consistency_check.py) - `__main__`
+- [sebobv2_projected_attachment_check.py](../../nrpy/examples/tests/sebobv2_projected_attachment_check.py) - `main`
+- [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py) - `Leg.run`
+- [dendro_application_check_reference.py](../../nrpy/examples/tests/dendro_application_check_reference.py) - `trusted_dict`
 
 ## See Also
 
-- Parent: [Examples](index.md)
 - Depends on: [Generated Output Boundaries](../architecture/generated-output-boundaries.md)
+- Depends on: [Build And Run](../architecture/build-and-run.md)
 - Validated by: [Generated Project CI](../validation/generated-project-ci.md)
-- Example: [First Wave Equation Run](first-wave-equation-run.md)
-- Example: [Black Hole Evolution](black-hole-evolution.md)

@@ -6,12 +6,10 @@
 ## Summary
 
 The `nrpy.equations.general_relativity.bhahaha` modules define symbolic
-apparent-horizon geometry and spin diagnostics on surfaces
-`r = h(theta, phi)` in a spherical reference-metric chart. This page covers only
-equation-side modules: surface area and circumference ingredients, the
-expansion function, approximate-Killing-vector spin integrands,
-vorticity-dipole spin integrands, and SpECTRE-style Omega-based spin
-estimators.
+apparent-horizon geometry and spin diagnostics on horizon surfaces
+`r = h(theta, phi)` in a spherical reference-metric chart: two-surface area and
+circumference integrands, the expansion function, and SpECTRE-style Omega-based
+spin estimators.
 
 ## Detail
 
@@ -27,31 +25,36 @@ metric, determinant derivatives, unit normal `sU`, `KDD`, and stores `Theta`.
 `circumference_metric_roots`. It also provides `spin_NewtonRaphson` and
 `spin_HalleysMethod` iteration expressions for circumference-ratio spin
 estimation. Its script validation checks that the three area expressions agree
-before exporting representative surface-geometry expressions.
-
-`ApproxKillingSpinClass` builds single-pass apparent-horizon integrands for
-approximate-Killing-vector spin. Public outputs are `sqrtq`,
-`Hmn_integrand`, `Nmn_integrand`, and `Jm_integrand`. The class accepts
-`Spherical` and `Spherical_rfm_precompute`, constructs the induced 2-metric and
-surface connection, uses the standard `l=1` rotation basis on the sphere, and
-leaves the global `1/(8*pi)` angular-momentum prefactor to the caller.
-
-`HorizonSpinVorticityDipoleClass` builds quasilocal spin-vector densities from
-the horizon vorticity one-form. It supports `K_input="BSSN"` or `"external"`,
-`normal_orientation` values `outward` and `inward`, and `K_sign` values `+1`
-and `-1`, while the dictionary accessor exposes the usual spherical and
-rfm-precompute keys. Its public `JCart_densU` components include the `1/(8*pi)`
-factor; helper methods construct scalar spin density about an axis and
-Omega-moment densities from a supplied Omega expression.
+before exporting representative two-surface geometry expressions.
 
 `SpECTRESpinEstimateClass` constructs an intrinsic two-surface estimator using
-the induced metric, `X_B = e_B^i K_ij s^j`, the surface Ricci scalar `R`, and
+the induced metric, `X_B = e_B^i K_ij s^j`, the two-surface Ricci scalar `R`, and
 the spin function `Omega`. The public API returns integrands through
 `get_public_integrands`, gridfunction assignment recipes through
 `get_gridfunction_assignments`, and algebraic post-integration helpers for
 centroids, spin magnitude, and nominal/fallback spin-vector components. It is
 spherical-only, provides the same two cached coordinate keys, and leaves
-near-zero branch selection to generated C code.
+near-zero branch selection to generated C code. Its scalar public integrands
+require `dA`; `area_density` supplies `sqrtq` separately.
+
+Evidence (descriptive behavior): `general_relativity/bhahaha/SpECTRESpinEstimate.py::get_public_integrands`.
+
+The SpECTRE class expects physical metric, extrinsic curvature, and normal
+components already evaluated on the horizon surface in the spherical basis. Its
+`hh_dD[0]` and `hh_dD[1]` mean theta and phi derivatives; the other horizon
+modules use slots 1 and 2. Callers must map these indices explicitly.
+`get_gridfunction_assignments` does not generate the required derivatives:
+assign the induced metric and `X_B`, compute their angular derivatives and
+two-surface curvature, then construct and differentiate the curvature-dependent
+flux where needed, using consistent finite-difference stencils.
+
+`Salpha_and_magnitude_from_zOmega` requires area-weighted integrals of externally
+supplied, appropriately normalized modes. It returns
+`S_alpha=integral(z_alpha*Omega*dA)/(8*pi)` and their Euclidean norm; this
+module neither solves for nor normalizes the modes. Rescaling them rescales
+the reported spin.
+
+Evidence (descriptive behavior): `general_relativity/bhahaha/SpECTRESpinEstimate.py::SpECTRESpinEstimateClass.__init__`, `get_gridfunction_assignments`, and `Salpha_and_magnitude_from_zOmega`; none available for a complete numerical spin calculation.
 
 The cited representative trusted dictionaries cover the ordinary spherical
 variants for each assigned equation-side family. The source modules also expose
@@ -63,20 +66,13 @@ expressions; they do not document infrastructure generation.
 
 - [ExpansionFunctionTheta.py](../../../nrpy/equations/general_relativity/bhahaha/ExpansionFunctionTheta.py) - `ExpansionFunctionThetaClass`, `ExpansionFunctionTheta`
 - [area.py](../../../nrpy/equations/general_relativity/bhahaha/area.py) - `area`, `area2`, `area3`, `compute_q2DD`, `circumference_metric_roots`
-- [approx_killing_vector_spin.py](../../../nrpy/equations/general_relativity/bhahaha/approx_killing_vector_spin.py) - `ApproxKillingSpinClass`, `ApproxKillingSpin`
-- [HorizonSpinVorticityDipole.py](../../../nrpy/equations/general_relativity/bhahaha/HorizonSpinVorticityDipole.py) - `HorizonSpinVorticityDipoleClass`, `JCart_densU`
 - [SpECTRESpinEstimate.py](../../../nrpy/equations/general_relativity/bhahaha/SpECTRESpinEstimate.py) - `SpECTRESpinEstimateClass`, `get_public_integrands`, `compute_spin_vectors_for_c`
 - [area_Spherical.py](../../../nrpy/equations/general_relativity/bhahaha/tests/area_Spherical.py) - `trusted_dict`
 - [ExpansionFunctionTheta_Spherical.py](../../../nrpy/equations/general_relativity/bhahaha/tests/ExpansionFunctionTheta_Spherical.py) - `trusted_dict`
-- [approx_killing_vector_spin_Spherical.py](../../../nrpy/equations/general_relativity/bhahaha/tests/approx_killing_vector_spin_Spherical.py) - `trusted_dict`
-- [HorizonSpinVorticityDipole_Spherical.py](../../../nrpy/equations/general_relativity/bhahaha/tests/HorizonSpinVorticityDipole_Spherical.py) - `trusted_dict`
 - [SpECTRESpinEstimate_Spherical.py](../../../nrpy/equations/general_relativity/bhahaha/tests/SpECTRESpinEstimate_Spherical.py) - `trusted_dict`
 
 ## See Also
 
-- [General Relativity](index.md)
-- [BSSN Family](bssn-family.md)
-- [Metric Conversions And Matter](metric-conversions-and-matter.md)
-- [Initial Data](initial-data.md)
-- [Reference Metrics](../../core/reference-metrics.md)
-- [Trusted Expression Pipeline](../trusted-expression-pipeline.md)
+- See also: [BSSN Family](bssn-family.md)
+- Depends on: [Reference Metrics](../../core/reference-metrics.md)
+- Validated by: [Expression Validation Helpers](../../validation/expression-validation-helpers.md)

@@ -130,7 +130,7 @@ class ReferenceMetric:
 
         # START: RFM PRECOMPUTE STUFF
         # Must be set in terms of generic functions of xx[]s
-        self.scalefactor_orthog_funcform = [sp.sympify(0)] * 3
+        self.scalefactor_orthog_funcform: List[sp.Expr] = [sp.sympify(0)] * 3
 
         self.f0_of_xx0_funcform = sp.Function("f0_of_xx0_funcform")(self.xx[0])
         self.f1_of_xx1_funcform = sp.Function("f1_of_xx1_funcform")(self.xx[1])
@@ -583,7 +583,7 @@ class ReferenceMetric:
                     oper = "__D" + "D" * (order - 1) + var * order
                     # add replacement rule to dictionary
                     rule[item] = sp.sympify(strfunc + oper)
-            expr = expr.xreplace(rule)
+            expr = cast(sp.Expr, expr.xreplace(rule))
             rule = {}
 
             # Example: f0_of_xx0_funcform(xx0)(xx0) >> f0_of_xx0
@@ -1549,10 +1549,10 @@ class ReferenceMetric:
 
             # Inverse transformation derived from Mathematica (see validation script)
             def acsch(x: sp.Expr) -> sp.Expr:
-                return cast(sp.Expr, sp.log(sp.sqrt(1 + x ** (-2)) + 1 / x))
+                return sp.log(sp.sqrt(1 + x ** (-2)) + 1 / x)
 
             def csch(x: sp.Expr) -> sp.Expr:
-                return cast(sp.Expr, 2 / (sp.exp(x) - sp.exp(-x)))
+                return 2 / (sp.exp(x) - sp.exp(-x))
 
             self.Cart_to_xx[0] = SINHWAA * acsch(
                 sp.sqrt(sp.Integer(2)) * AMAX * csch(1 / SINHWAA) / (denom_sqrt_x0)

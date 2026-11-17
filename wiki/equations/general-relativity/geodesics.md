@@ -26,8 +26,24 @@ constraint by `particle_type`. The massive path returns eight ODE right-hand
 sides from position and four-velocity evolution, plus `u0_massive` from the
 timelike normalization condition. The photon path returns nine ODE right-hand
 sides from position and four-momentum evolution; the ninth component is the
-Eulerian path-length diagnostic, and `p0_photon` comes from the null constraint.
+signed Eulerian path-length diagnostic `dL/dlambda=alpha*p^0`, with
+`alpha=1/sqrt(-g^{00})`, requiring `g^{00}<0`. The initialization methods
+select the positive massive root and the negative photon root for reverse ray
+tracing. In Minkowski spacetime these are `u^0=sqrt(1+sum_i (u^i)^2)` and
+`p^0=-sqrt(sum_i (p^i)^2)`. Thus the photon distance decreases with increasing
+affine parameter for this nonzero, past-directed initial momentum. Both
+initialization formulas assume the documented `(-,+,+,+)` metric and
+`g_00<0`; they divide by `2*g_00` and provide no `g_00=0` fallback. These are
+initialization restrictions, not a demonstrated evolution restriction.
 Unsupported particle types raise `ValueError`.
+
+The stored analytic geometry and the returned ODE expressions are separate:
+RHSs and normalization expressions declare generic `conn_Gamma4UDD`,
+`metric_g4DD`, and tangent-component symbols. Callers must supply those metric,
+connection, and tangent values; coordinates alone do not evaluate the returned
+RHSs.
+
+Evidence (descriptive behavior): `general_relativity/geodesics/geodesics.py::hamiltonian_constraint_massive`, `hamiltonian_constraint_photon`, `geodesic_eom_rhs_massive`, `geodesic_eom_rhs_photon`, and `normalization_constraint`.
 
 The same module also exposes reusable recipes for numerical spacetime data:
 `symbolic_numerical_christoffel_recipe`,
@@ -63,9 +79,6 @@ cases before emitting trusted expressions.
 
 ## See Also
 
-- [General Relativity](index.md)
-- [BSSN Family](bssn-family.md)
-- [Metric Conversions And Matter](metric-conversions-and-matter.md)
-- [Psi4 And Tetrads](psi4-and-tetrads.md)
-- [Reference Metrics](../../core/reference-metrics.md)
-- [Trusted Expression Pipeline](../trusted-expression-pipeline.md)
+- See also: [BSSN Family](bssn-family.md)
+- Depends on: [Reference Metrics](../../core/reference-metrics.md)
+- Validated by: [Expression Validation Helpers](../../validation/expression-validation-helpers.md)

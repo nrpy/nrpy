@@ -206,8 +206,9 @@ if __name__ == "__main__":
         cplus_tmp_test,
     ) = find_cp_cm(1, g4_faceUU, u4lU, cs2_r_test)
 
-    exprs_dict["cminus"] = cminus_tmp_test.subs(sp.Function("nrpyAbs"), sp.Abs)
-    exprs_dict["cplus"] = cplus_tmp_test.subs(sp.Function("nrpyAbs"), sp.Abs)
+    nrpyAbs_to_Abs: Dict[Any, Any] = {sp.Function("nrpyAbs"): sp.Abs}
+    exprs_dict["cminus"] = cminus_tmp_test.subs(nrpyAbs_to_Abs)
+    exprs_dict["cplus"] = cplus_tmp_test.subs(nrpyAbs_to_Abs)
 
     (
         cmin_tmp_test,
@@ -223,8 +224,54 @@ if __name__ == "__main__":
         cs2_l_test,
     )
 
-    exprs_dict["cmin"] = cmin_tmp_test.subs(sp.Function("nrpyAbs"), sp.Abs)
-    exprs_dict["cmax"] = cmax_tmp_test.subs(sp.Function("nrpyAbs"), sp.Abs)
+    exprs_dict["cmin"] = cmin_tmp_test.subs(nrpyAbs_to_Abs)
+    exprs_dict["cmax"] = cmax_tmp_test.subs(nrpyAbs_to_Abs)
+
+    # At the sample values above, every characteristic speed is negative, so
+    #   cmax = 0. Repeat on a flat face (alpha = 1, beta^i = 0, gamma_ij = delta_ij)
+    #   with a subsonic right state moving in +x and a subsonic left state moving
+    #   in -x: cmax then comes from the right state, cmin from the left state, and
+    #   the two differ. A second evaluation exchanges the face states, so the
+    #   other state sets each bound.
+    flat_gammaDD = ixp.zerorank2()
+    for i in range(3):
+        flat_gammaDD[i][i] = sp.sympify(1)
+    v_r, v_l = sp.Rational(1, 10), sp.Rational(-3, 10)
+    u4rU_subsonic: List[sp.Expr] = [
+        1 / sp.sqrt(1 - v_r**2),
+        v_r / sp.sqrt(1 - v_r**2),
+        sp.sympify(0),
+        sp.sympify(0),
+    ]
+    u4lU_subsonic: List[sp.Expr] = [
+        1 / sp.sqrt(1 - v_l**2),
+        v_l / sp.sqrt(1 - v_l**2),
+        sp.sympify(0),
+        sp.sympify(0),
+    ]
+    cs2_r_subsonic, cs2_l_subsonic = sp.Rational(1, 3), sp.Rational(1, 4)
+    for prefix, u4rU_sample, u4lU_sample, cs2_r_sample, cs2_l_sample in (
+        ("subsonic_", u4rU_subsonic, u4lU_subsonic, cs2_r_subsonic, cs2_l_subsonic),
+        (
+            "subsonic_exchanged_",
+            u4lU_subsonic,
+            u4rU_subsonic,
+            cs2_l_subsonic,
+            cs2_r_subsonic,
+        ),
+    ):
+        cmin_subsonic, cmax_subsonic = find_cmax_cmin(
+            0,
+            flat_gammaDD,
+            ixp.zerorank1(),
+            sp.sympify(1),
+            u4rU_sample,
+            u4lU_sample,
+            cs2_r_sample,
+            cs2_l_sample,
+        )
+        exprs_dict[prefix + "cmin"] = cmin_subsonic.subs(nrpyAbs_to_Abs)
+        exprs_dict[prefix + "cmax"] = cmax_subsonic.subs(nrpyAbs_to_Abs)
 
     results_dict = ve.process_dictionary_of_expressions(
         exprs_dict, fixed_mpfs_for_free_symbols=True

@@ -5,7 +5,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import sympy as sp
 
@@ -38,7 +38,7 @@ def _project_general_rfm(
         for j in range(3):
             gammabarprimeDD[i][j] = q * Bq.gammabarDD[i][j]
     gammabarprimeUU = ixp.symm_matrix_inverter3x3(gammabarprimeDD)[0]
-    trAbarprime = sp.sympify(0)
+    trAbarprime: sp.Expr = sp.sympify(0)
     for i in range(3):
         for j in range(3):
             trAbarprime += gammabarprimeUU[i][j] * Bq.AbarDD[i][j]
@@ -77,7 +77,7 @@ def _project_orthogonal_rfm(
             HDD[i][j] = Bq.hDD[i][j] + sp.KroneckerDelta(i, j)
     HUU, detH = ixp.symm_matrix_inverter3x3(HDD)
     q = detH ** sp.Rational(-1, 3)
-    trA = sp.sympify(0)
+    trA: sp.Expr = sp.sympify(0)
     for i in range(3):
         for j in range(3):
             trA += HUU[i][j] * Bq.aDD[i][j]
@@ -119,14 +119,9 @@ if __name__ == "__main__":
         hprimeDD, aprimeDD = BSSN_algebraic_constraints(
             validation_coord, validation_precompute
         )
-        hprimeDD = [
-            [expr.subs(sp.Function("nrpyAbs"), sp.Abs) for expr in row]
-            for row in hprimeDD
-        ]
-        aprimeDD = [
-            [expr.subs(sp.Function("nrpyAbs"), sp.Abs) for expr in row]
-            for row in aprimeDD
-        ]
+        nrpyAbs_to_Abs: Dict[Any, Any] = {sp.Function("nrpyAbs"): sp.Abs}
+        hprimeDD = [[expr.subs(nrpyAbs_to_Abs) for expr in row] for row in hprimeDD]
+        aprimeDD = [[expr.subs(nrpyAbs_to_Abs) for expr in row] for row in aprimeDD]
         results_dict = ve.process_dictionary_of_expressions(
             {"hprimeDD": hprimeDD, "aprimeDD": aprimeDD},
             fixed_mpfs_for_free_symbols=True,

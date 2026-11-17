@@ -76,15 +76,6 @@ def register_CFunction_psi4(
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict in_gfs, const REAL *restrict auxevol_gfs, REAL *restrict diagnostic_gfs"
 
     psi4_class = psi4.Psi4(CoordSystem=CoordSystem, enable_rfm_precompute=False)
-    body = r"""if(! (params->Cart_originx == 0 && params->Cart_originy == 0 && params->Cart_originz == 0) ) {
-  fprintf(stderr, "Error: psi4 output assumes that the grid is centered on the origin.\n");
-  fprintf(stderr, "       Good news: check out the C code for proposed modifications.\n");
-  exit(1);
-}
-"""
-    for i in range(3):
-        body += f"const REAL *restrict x{i} = xx[{i}];\n"
-
     expr_list: List[sp.Expr] = [psi4_class.psi4_re, psi4_class.psi4_im]
 
     # Find symbols stored in params
@@ -113,7 +104,6 @@ def register_CFunction_psi4(
         )
     )
 
-    # body += kernel_body
     loop_prefix = rf"""
 REAL xx0, xx1, xx2;
 {{

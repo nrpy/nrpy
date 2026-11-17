@@ -1,212 +1,133 @@
 # Contradictions
 
-> Register for contested and stale KB claims. Plain Markdown only. · Status: confirmed
+> Register of active contested and stale NRPy KB claims. · Status: confirmed
 
-Known contested/stale claims are tracked below. A row records
-source-side truth and containment; it does not imply that NRPy source was fixed.
-
-## Register
-
-| ID | Claim | Claim status | Source A | Source B | Authority decision | Affected pages | Page-status rationale | Owner/trigger | Resolution test | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| CONTR-0001 | `manga_bhah_lib` tells users to run `./bhah_lib` and says `bhah_lib.par` exists, but its assembly path requests a library target and does not call the parser/default-parfile writer. | stale | [`manga_bhah_lib.py`](../nrpy/examples/manga_bhah_lib.py) final two `print()` calls | [`manga_bhah_lib.py`](../nrpy/examples/manga_bhah_lib.py) commented parser registration and `output_CFunctions_function_prototypes_and_construct_Makefile(create_lib=True)` call; [`Makefile_helpers.py`](../nrpy/infrastructures/BHaH/Makefile_helpers.py) `output_CFunctions_function_prototypes_and_construct_Makefile` | For descriptive current behavior, precise registrations and writer calls decide. They emit `libbhah_lib.so` on Linux or `libbhah_lib.dylib` on Darwin, not an executable `bhah_lib`; no invoked writer emits `bhah_lib.par`. Both generic final prints are stale. | [BHaH Lifecycle And Project Assembly](infrastructures/bhah/lifecycle-and-project-assembly.md); [Matter TOV Workflows](examples/matter-tov-workflows.md) | Both pages remain `confirmed`: these are bounded final-message claims, corrected inline with explicit non-guarantees; their principal lifecycle/workflow answers remain supported. | BHaH/example owners; trigger when `manga_bhah_lib.py` final messaging, parser/parfile registration, or Makefile arguments change. | In an isolated output root, run the generator, capture stdout, inspect emitted files and the Makefile `all` target, and build. Pass only if stdout gives library-consumer guidance, never instructs executing `./bhah_lib`, mentions a parfile only if one is emitted, and `make` produces the platform library named by the Makefile. | Configured CI does not cover this resolution test. |
-| CONTR-0002 | `sebobv1_jax` emits `Commondata(..., a_f=a_f)`, but its batch field registration supplies fourteen names/descriptions and thirteen dtypes/defaults; `zip()` therefore omits `a_f` from the generated dataclass. | resolved | [`SEOBNRv5_aligned_spin_coefficients.py`](../nrpy/infrastructures/JAX/sebob/SEOBNRv5_aligned_spin_coefficients.py) `register_PyFunction_SEOBNRv5_aligned_spin_coefficients` emitted return | [`sebobv1_jax.py`](../nrpy/examples/sebobv1_jax.py) `register_commondata_params` call and [`commondata.py`](../nrpy/infrastructures/JAX/commondata.py) `register_commondata_params` / `generate_commondata_dataclass` | Descriptive behavior is decided by all three code paths together. `register_commondata_params` now raises `ValueError` when its four lists differ in length, `sebobv1_jax` supplies fourteen entries in each list, and the generated `Commondata` therefore has every keyword, including `a_f`, that the emitted function passes. | [SEBOBv1 JAX Workflow](infrastructures/jax/sebobv1-jax-workflow.md); [Commondata And PyFunction Registry](infrastructures/jax/commondata-and-pyfunction-registry.md); [Waveform JAX PN Generators](examples/waveform-jax-pn-generators.md); [Example Generator Catalog](examples/example-generator-catalog.md) | The inline markers are removed. `SEBOBv1 JAX Workflow` returns to `confirmed` because its coefficient interface now matches the registered fields; the other pages already were `confirmed` and now state the corrected registration. | JAX/example owners; trigger when batch registration loses its length check, the four lists change, or the emitted return signature changes. | In an isolated output root, generate the project; assert batch metadata passes equal-length validation; import the generated coefficient function; call it with a valid finite input set; assert every returned keyword is a generated `Commondata` field and every returned numerical field is finite; if `a_f` remains in the intended return contract, assert that `a_f` is present and finite; then run the generated smoke test. All applicable checks must pass. | Configured CI installs the generated package and calls the coefficient function once, but asserts no returned field or value, so this resolution test is not run in CI. Generated code became runnable only together with the `py_codegen()` change that prints right-hand sides without `assign_to` and `NRPyJaxPrinter._print_Max`; see [Python Codegen](core/python-codegen.md) and [CSE And Printer Support](core/helpers/cse-and-printer-support.md). |
-| CONTR-0003 | Pylint policy distinguishes grandfathered existing tracked handwritten files from newly added handwritten files, but both configs use `fail-under=10`, the local wrapper uses a blanket `9.91` floor, and the workflow uses a blanket `9.5` floor; none enforces the tiered rule. | stale | [`coding_style.md`](../coding_style.md) `## Static Analysis Configuration` | [`.pylintrc`](../.pylintrc) and [`.pylintrc_python36`](../.pylintrc_python36) `[MASTER]`; [`single_file_static_analysis.sh`](../.github/single_file_static_analysis.sh) `run_test_step`; [`main.yml`](../.github/workflows/main.yml) `static-analysis` | Existing tracked handwritten files retain their pre-change score without regression, including legacy scores at or below `9.5`; newly added handwritten files require `10.00/10.00`. Enforcement must classify the path from the base revision, compare legacy base and proposed ratings under the same tool/config, require exact `10.00` for new paths, and reject missing or unparseable ratings. | [Static Analysis](validation/static-analysis.md) | The page remains `confirmed`: the enforcement mismatch is one bounded, directly sourced Detail claim with an inline marker and explicit non-guarantee; the principal command and configuration answer remains reliable. | Validation and contributor-guidance owners; trigger when the tiered Pylint rule, either config, local wrapper classification/rating handling, or workflow classification/rating handling changes. | Deterministically inspect contributor guidance, both configs, local wrapper, and workflow. Pass only if documentation states the tiered rule and every enforcement path classifies paths from a base revision, rejects a lower legacy rating, requires exactly `10.00` for a new handwritten file, and rejects missing or unparseable ratings; generated trusted data remains exempt. | Configs and wrappers do not implement the required classification. |
-| CONTR-0004 | Under its own full-Lie time-operator definition, Mewes et al.'s printed connection shift bracket adds the constraint-vector stretch a second time. | resolved | [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), `partial_0=partial_t-L_beta`, Eq. (29), and the evolution system after Eq. (32) | [`BSSN_RHSs.py`](../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__`; [`fCCZ4_constraints.py`](../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints.__init__`; [Alic et al., arXiv:1106.2254v2](https://arxiv.org/pdf/1106.2254v2), Eq. (19) | fCCZ4 reuses `Lambdabar_rhsU_without_Brown_constraint_term`; its full Lie pair already contains `-C^k Dhat_k beta^i`. NRPy omits the duplicate printed term and retains `+2 C^i Dhat_k beta^k/3`. | [Fully Covariant Conformal Z4](equations/general-relativity/fccz4.md) | Page remains `confirmed`: the corrected equation, derivation, source discrepancy, and exact validation boundary are documented with its central scientific equations. | fCCZ4 equation modules; trigger when the evolved-connection definition, BSSN connection shift sector, fCCZ4 correction, or source crosswalk changes. | Inspect the full-Lie derivation and aggregate coefficient `-Lambdatilde^b delta^i_a+(2/3)Lambdatilde^i delta^a_b`; run the fCCZ4 RHS and gauge trusted-expression comparisons. For a BSSN-only Brown change, require every fCCZ4 value to remain unchanged. | The printed Mewes-minus-corrected residual is exactly the duplicated `-C^k Dhat_k beta^i`; Alic et al. corroborate the full corrected Cartesian coefficient, while Sanchis-Gual et al. corroborate one stretch and their spherical display contains the compatible divergence promotion. |
-| CONTR-0005 | Mewes et al.'s prose around its conformal-factor alternatives reverses the signs implied by its displayed evolution equations and used by NRPy's established BSSN variables. | resolved | [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), Eqs. (33)-(34) and surrounding prose | [`BSSN_quantities.py`](../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities.__init__` | NRPy retains its established `W=exp(-2 phi)` and `chi=exp(-4 phi)` definitions, whose chain rules agree with the displayed evolution equations; sign-reversed prose is not adopted. | [Fully Covariant Conformal Z4](equations/general-relativity/fccz4.md) | Page remains `confirmed`: definitions and authority choice are explicit and owner validation covers all three conformal-factor options. | BSSN/fCCZ4 equation owners; trigger when conformal-factor definitions, source crosswalk, or option validation changes. | Run fCCZ4 constraint/RHS owner validation across `W`, `phi`, and `chi`; verify exact chain-rule definitions and trusted expressions. | This resolves a source-internal prose/equation mismatch without changing NRPy's established variables. |
-| CONTR-0006 | Mewes et al.'s displayed advective 1+log equation omits the lapse factor present in Alic et al.'s exact advective form; Sanchis-Gual et al. corroborates the lapse factor only in a nonadvective form. | resolved | [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), Eq. (35) | [Alic et al., arXiv:1106.2254v2](https://arxiv.org/pdf/1106.2254v2), Eq. (20) | NRPy adopts `partial_0 alpha=-2 alpha(K-2 Theta)` by reusing BSSN 1+log and adding `4 alpha Theta`; the missing lapse in Mewes Eq. (35) is treated as a typographical omission. | [Fully Covariant Conformal Z4](equations/general-relativity/fccz4.md) | Page remains `confirmed`: the adopted gauge formula and source decision are explicit and validated across Cartesian and curved reference metrics. | fCCZ4 gauge modules; trigger when lapse options, 1+log correction, source authority, or gauge validation changes. | Run the fCCZ4 gauge trusted-expression comparisons and verify the 1+log correction is exactly `4 alpha Theta`. | Sanchis-Gual et al. Eq. (2.25) corroborates the lapse factor but not the advective operator; frozen lapse is unaffected. |
-| CONTR-0007 | The frozen commissioned YBS-MOM source proposes an auxiliary hyperbolic-relaxation field, but the corrected implementation contract requires the Yo--Lin--Cao term directly with CAHD-style timestep scaling and no new evolved state. | resolved | [preserved YBS-MOM specification](../raw/source-docs/ybs-momentum-damping-spec.md), `Proposed system` and auxiliary-field analysis | [`BSSN_RHSs.py`](../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS momentum branch; commissioned user clarification | The user clarification controls the commissioned design: apply the direct covariant STF momentum gradient with `C_YBS_mom*CFL_FACTOR*DSMINGF`, exactly analogous to CAHD's timestep-scaled parabolic coefficient. Retain the frozen source as historical provenance; do not add `qD` or any other evolved cleaner field. A later maintainer decision multiplies the coefficient by the conformal factor `W`; the direct, stateless formulation is unchanged. | [YBS-MOM Timestep-Scaled Momentum Adjustment](equations/general-relativity/ybs-momentum-damping.md); [BSSN Family](equations/general-relativity/bssn-family.md); [Fully Covariant Conformal Z4](equations/general-relativity/fccz4.md); [BHaH GR Application Wiring](infrastructures/bhah/gr-application-wiring.md) | Pages remain `confirmed`: code and compiled pages now agree on the direct no-state contract; the superseded proposal is explicitly bounded. | BSSN/fCCZ4/BHaH owners; trigger when YBS-MOM variables, coefficient, momentum residual, STF projection, shared spacing, defaults, or source authority changes. | Verify no `qD`/`q_rhsD` gridfunction or output exists; compare the lower residual with canonical `BSSNconstraints.MU`; run all existing jointly YBS-enabled trusted dictionaries; generate ordinary and fisheye OpenMP/CUDA spacing paths; run static analysis and KB lint. | Resolution rejects auxiliary-state hyperbolization. The term remains parabolic in principal character; CAHD-style local timestep scaling satisfies the intended CFL compatibility. |
-| CONTR-0008 | The Dendro BSSN leaf claimed the emitted `bssn_constraints*` kernels matched Dendro-GR's `bssn_constraints.cpp`. Upstream, that file's `enforce_bssn_constraints` is the det(gammabar)/tr(Abar) *enforcement*, and the Hamiltonian/momentum diagnostics live in `physcon.cpp` as `physical_constraints`; the claimed precedent named the wrong operation. | resolved | [`bssn-application-wiring.md`](infrastructures/dendro/bssn-application-wiring.md), "Dendro's own vocabulary" (superseded wording) | Dendro-GR `BSSN_GR/include/bssn_constraints.h`, `enforce_bssn_constraints`; `BSSN_GR/src/physcon.cpp`, `physical_constraints` | Host vocabulary governs host-side identifiers only. NRPy emits order-specific `BSSN_constraints` or `fCCZ4_constraints` diagnostic kernels and a separate `enforce_detgbar_equals_detghat_trAzero` algebraic-projection kernel. | [BSSN Application Wiring](infrastructures/dendro/bssn-application-wiring.md); [fCCZ4 Application Wiring](infrastructures/dendro/fccz4-application-wiring.md); [New Infrastructure Conformance](infrastructures/new-infrastructure-conformance.md) | Pages stay `provisional`/`confirmed`: the false sentence is rewritten and the conformance page now scopes host vocabulary explicitly. | Dendro owner; trigger when an emitted Dendro kernel is named for an upstream source file. | Generate and build both applications, then inspect their named constraint and algebraic-projection kernels. | The host and NRPy operation vocabularies are intentionally distinct. |
-| CONTR-0009 | The Dendro BSSN leaf claimed the BSSN constraint builder "removes"/"deletes" the newly added AUX gridfunction names it does not write. The builder deletes nothing; it suppresses the two registrations at the source by setting `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` to `False` across the factory construction and restoring it in a `finally` block. | resolved | [`bssn-application-wiring.md`](infrastructures/dendro/bssn-application-wiring.md), "The DIAG-before-factory ordering, and why" and its claim-evidence block (superseded wording) | [`BSSN_constraints.py`](../nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py), the `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` save/set/restore around the equation construction | For descriptive current behavior the code decides. No Dendro builder deletes a registered name from `glb_gridfcs_dict`. The flag is a construction-parameter memo key, so setting it forces a rebuild that never registers the two names. The `NUM_AUX_GFS = 0` outcome the leaf reports is unaffected. | [BSSN Application Wiring](infrastructures/dendro/bssn-application-wiring.md) | The page stays `provisional`: one bounded mechanism sentence and its claim-evidence block are rewritten, and the page's routed answer about what the BSSN builders do is unchanged. | Dendro owner; trigger when the AUX suppression mechanism, the `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` flag, or the emitted `NUM_AUX_GFS` changes. | Inspect `glb_gridfcs_dict` mutations in Dendro owners; generate the complete BSSN generated application and verify `NUM_AUX_GFS = 0`; build it and run authorized MPI diagnostics. | The superseded wording attested only the outcome, not the mechanism. |
-| CONTR-0010 | The Dendro BSSN leaf called the private-builder-per-formulation layout "BHaH's own arrangement". BHaH's module holding both formulations' RHS systems holds no private builder and no private registrar. | resolved | [`bssn-application-wiring.md`](infrastructures/dendro/bssn-application-wiring.md), the Summary's layout paragraph (superseded wording) | [BHaH rhs_eval.py](../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` | The code decides. BHaH's module holding both formulations' RHS systems uses public `register_CFunction_rhs_eval`, branches inline on `enable_fCCZ4`, and holds no private builder or registrar. Dendro's module layout does follow BHaH; the split inside the module does not. | [BSSN Application Wiring](infrastructures/dendro/bssn-application-wiring.md) | The page stayed `provisional` for this row: the layout paragraph is rewritten to separate the conforming module layout from the Dendro-only intra-module split, and the rest of the page is unaffected. CONTR-0011 subsequently opened and was resolved by consolidation. | Dendro owner; trigger when either Dendro leaf describes the intra-module layout, or when BHaH's `rhs_eval.py` gains a private per-formulation builder. | Require `rg '^def ' nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py` to identify only `register_CFunction_rhs_eval`, and require the Dendro BSSN leaf to attribute the per-formulation split to no peer. | The superseded Dendro wording conflated module layout with intra-module structure. |
-| CONTR-0011 | The Dendro RHS and constraint modules duplicated private builders and registrars per formulation without a host requirement. | resolved | [New Infrastructure Conformance](infrastructures/new-infrastructure-conformance.md), `### Conformance is one-way` and `## Summary` | [rhs_eval.py](../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_constraints.py](../nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`; [fCCZ4_constraints.py](../nrpy/infrastructures/Dendro/general_relativity/fCCZ4_constraints.py), `register_CFunction_fCCZ4_constraints` | Each generated operation has one public registrar. Formulation-specific constraint equations remain in their named modules. | [BSSN Application Wiring](infrastructures/dendro/bssn-application-wiring.md) | The affected page returns to provisional: this conflict is closed, while broader runtime qualification remains explicitly scoped. | Dendro owner; trigger when either module's per-formulation expression assembly or registrar structure changes, when a host requirement for a split is identified, or when the shared registrar changes. | Inspect for private per-formulation builder or registrar pairs. Generate and build both complete generated applications, then run authorized MPI diagnostics. | Resolved by one public registrar per operation. |
-
-### CONTR-0001
-
-The resolution test deliberately requires generation, artifact inspection, and
-a build because source inspection alone cannot establish the user-facing
-library contract.
-
-### CONTR-0002
-
-The resolution test deliberately asserts the returned fields and their finite
-values because the configured CI call checks only that the generated function
-returns without error.
-
-The mismatch no longer occurs: `sebobv1_jax` now supplies a dtype and default
-for `a_f`, and `register_commondata_params` rejects lists of unequal length
-instead of letting `zip()` drop trailing fields. Running the generated function
-also required `py_codegen()` to print each right-hand side without passing the
-output name as `assign_to`, which had dropped negative powers such as `m2/m1`,
-and `NRPyJaxPrinter` to print the `Max` in the final mass without `functools`;
-see [Python Codegen](core/python-codegen.md) and [CSE And Printer
-Support](core/helpers/cse-and-printer-support.md). The large integers in this
-function appear only as numerators and denominators of rational coefficients,
-which Python divides to floats, so this function does not depend on the printer
-rules for large integers and rationals.
-
-### CONTR-0003
-
-Existing tracked handwritten files retain their pre-change Pylint score without
-regression, including legacy scores at or below `9.5`; newly added handwritten
-files require `10.00/10.00`. Enforcement must classify paths from the base
-revision and reject missing or unparseable ratings.
-
-Claim evidence:
-- Claim: Existing tracked handwritten files retain their pre-change Pylint score without regression, including legacy scores at or below `9.5`; newly added handwritten files require `10.00/10.00`.
-- Role: normative rule
-- Deciding authority: registered [`coding_style.md`](../coding_style.md), `## Static Analysis Configuration`, as updated by the commissioned policy decision
-- Corroboration: [Static Analysis](validation/static-analysis.md) and [Code Test Policy](validation/code-test-policy.md) apply the rule; registered [`single_file_static_analysis.sh`](../.github/single_file_static_analysis.sh), `run_test_step`, and [`main.yml`](../.github/workflows/main.yml), `static-analysis`, identify enforcement surfaces but do not implement the distinction
-
-The configs and wrappers use blanket floors. None classifies paths from a base
-revision or checks legacy score regression.
-
-### CONTR-0004
-
-Mewes et al. define
-`Lambdatilde^i=DeltaGamma^i+C^i` and
-`partial_0=partial_t-L_beta`. The full contravariant-vector Lie pair obeys
-
-```text
-beta^k partial_k Lambdatilde^i - Lambdatilde^k partial_k beta^i
-= beta^k Dhat_k Lambdatilde^i - Lambdatilde^k Dhat_k beta^i.
-```
-
-fCCZ4 reuses the BSSN base before Brown's BSSN-only adjustment, retaining the
-full `-Lambdatilde^k Dhat_k beta^i` stretch. The companion
-`+2 C^i Dhat_k beta^k/3` promotes the reused geometric divergence coefficient.
-
-NRPy corrects the apparent paper error. Its aggregate Cartesian coefficient
-for `partial_b beta^a` is exactly
-`-Lambdatilde^b delta^i_a+(2/3)Lambdatilde^i delta^a_b`. That property was
-settled by the derivation and review recorded here. The equation owner now
-locks the complete reviewed expression set through trusted dictionaries; it
-does not add a Mewes-specific reconstruction, coefficient, or shear test.
-
-Claim evidence:
-- Claim: fCCZ4 reuses the pre-Brown BSSN base, retains `+2 C^i Dhat_k beta^k/3`, and produces exactly one evolved-vector stretch.
-- Role: public/scientific contract
-- Deciding authority: [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), its `partial_0` definition, Eq. (29), and the evolution system following Eq. (32), composed with [`BSSN_RHSs.py`](../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__`, [`fCCZ4_constraints.py`](../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints.__init__`, and [`fCCZ4_RHSs.py`](../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` and module `__main__`
-- Corroboration: [Alic et al., arXiv:1106.2254v2](https://arxiv.org/pdf/1106.2254v2), Eq. (19), corroborates the full corrected Cartesian coefficient; [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1), Eqs. (2.11) and (2.17), corroborates one stretch, while spherical Eq. (3.14) contains the compatible divergence promotion but is not identical to the general display off constraint
-
-### CONTR-0005
-
-NRPy uses `W=exp(-2 phi)` and `chi=exp(-4 phi)`. These definitions agree with
-Mewes et al.'s displayed conformal-factor equations; the neighboring
-sign-reversed prose is not part of NRPy's scientific contract.
-
-Claim evidence:
-- Claim: NRPy resolves the Mewes conformal-factor prose/equation mismatch by retaining `W=exp(-2 phi)` and `chi=exp(-4 phi)`, matching the displayed equations and established BSSN variables.
-- Role: public/scientific contract
-- Deciding authority: [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), Eqs. (33)-(34); [`BSSN_quantities.py`](../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities.__init__`
-- Corroboration: [`fCCZ4_constraints.py`](../nrpy/equations/general_relativity/fCCZ4_constraints.py), module `__main__`, exercises `W`, `phi`, and `chi` across Cartesian and SinhSpherical owner cases
-
-### CONTR-0006
-
-NRPy adopts advective 1+log as
-`partial_0 alpha=-2 alpha(K-2 Theta)`. Its fCCZ4 gauge owner obtains this by
-reusing the BSSN branch and adding `4 alpha Theta`; it does not adopt the
-lapse-free right-hand side printed in Mewes et al. Eq. (35).
-
-Claim evidence:
-- Claim: NRPy treats the missing lapse in Mewes et al. Eq. (35) as a typographical omission and adopts `partial_0 alpha=-2 alpha(K-2 Theta)` for its supported fCCZ4 1+log branch.
-- Role: public/scientific contract
-- Deciding authority: [Mewes et al., arXiv:2002.06225v2](https://arxiv.org/pdf/2002.06225v2), Eq. (35); [Alic et al., arXiv:1106.2254v2](https://arxiv.org/pdf/1106.2254v2), Eq. (20); [`fCCZ4_gauge_RHSs.py`](../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), `fCCZ4_gauge_RHSs`
-- Corroboration: [Sanchis-Gual et al., arXiv:1403.3653v1](https://arxiv.org/pdf/1403.3653v1), Eq. (2.25), corroborates the lapse factor in a nonadvective form
-
-### CONTR-0007
-
-The frozen commissioned source interpreted “hyperbolize” as introducing an
-auxiliary relaxation covector. The later explicit user clarification instead
-defines the intended analogy to CAHD: keep the direct parabolic
-momentum-gradient adjustment and multiply its coefficient by the local
-timestep scale. Current code therefore adds no evolved field and leaves
-initial data, restart, boundary, AMR, and dissipation state routes unchanged.
-
-Claim evidence:
-- Claim: Current YBS-MOM uses the direct covariant STF gradient of the matter-complete lower momentum residual, multiplied by `C_YBS_mom*CFL_FACTOR*DSMINGF*W`, where the weight `W` is a later maintainer decision; the frozen auxiliary-relaxation proposal is superseded and no cleaner state is permitted.
-- Role: public/scientific contract
-- Deciding authority: commissioned user clarification composed with [`BSSN_RHSs.py`](../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` YBS momentum branch
-- Corroboration: [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (56), and [Etienne, Phys. Rev. D 110, 064045](https://doi.org/10.1103/PhysRevD.110.064045), Eq. (26)
+Active source discrepancies and unreconciled drift are tracked below. Recording an entry documents current code versus specification or docstring behavior without implying a source patch.
 
 ## Rules
 
-- Follow the contradiction contract in [Schema](SCHEMA.md#contradiction-contract).
-- Open a row when registered sources disagree, when a living source supersedes
-  a KB claim, or when a page is marked `contested` or `stale`.
-- Update affected-page links and exact inline markers together.
-- Resolve a row only after its resolution test passes and all affected pages,
-  reverse dependents, aliases, typed neighbors, and targeted wiki hits are
-  reconciled.
+- Follow [KB Rules](SCHEMA.md#contradiction-rules): keep only `contested` and `stale` claims in `## Register`, paired with `### CONTR-XXXX` subsections and inline markers (`Claim status: contested; contradiction: CONTR-0001.` or `stale`) on every affected leaf.
+- Look up one entry with `rg -n -F '| CONTR-0014 |' wiki/contradictions.md` and read its `### CONTR-XXXX` subsection.
+- Retire resolved entries in the resolving commit once affected leaves are reconciled and all `#contr-*` links are removed. Retired IDs: CONTR-0002, CONTR-0004, CONTR-0005, CONTR-0006, CONTR-0007, CONTR-0008 to CONTR-0011, CONTR-0013.
 
-### CONTR-0008
+## Register
 
-The Dendro BSSN leaf recorded that the emitted `bssn_constraints*` CFunctions
-matched `bssn_constraints.cpp` in Dendro-GR's own BSSN solver. Reading that
-source shows the match was in name only: upstream's `enforce_bssn_constraints`
-rescales the conformal metric and removes the trace of the conformal extrinsic
-curvature — the operation BHaH and ETLegacy call
-`enforce_detgbar_equals_detghat_trAzero` — while the Hamiltonian and momentum
-constraint diagnostics are computed in `physcon.cpp`. The kernels are now named
-for their operation with the NRPy vocabulary, and the host vocabulary is scoped
-to host-side identifiers.
+| ID | Claim status | Affected pages | Summary |
+| --- | --- | --- | --- |
+| CONTR-0001 | stale | [Assembly](infrastructures/bhah/lifecycle-and-project-assembly.md); [TOV](examples/matter-tov-workflows.md) | `manga_bhah_lib.py` prints `./bhah_lib`/`.par` while building only `libbhah_lib`. |
+| CONTR-0003 | stale | [Static Analysis](validation/static-analysis.md) | `coding_style.md` states tiered Pylint rules; configs/wrappers enforce blanket floors. |
+| CONTR-0012 | contested | [Python Codegen](core/python-codegen.md); [C Codegen](core/c-codegen.md) | Nonempty `postproc_substitution_dict` raises `TypeError` on tuple CSE entries. |
+| CONTR-0014 | contested | [CSE/Printer](core/helpers/cse-and-printer-support.md); [C Codegen](core/c-codegen.md) | CSE sort keeps input order on ties, and `_Integer_*`/`tmp*` names can capture inputs. |
+| CONTR-0015 | contested | [SIMD](core/helpers/simd-and-intrinsic-support.md) | `expr_convert_to_simd_intrins` omits `_Integer_1` or emits missing `Pow`/`Cbrt`/`Log`/`Sign`. |
+| CONTR-0016 | contested | [Expression Utils](core/helpers/symbolic-expression-utilities.md) | `_get_free_symbol_names_cached` drops free occurrences matching bound variable names. |
+| CONTR-0017 | contested | [Expression Utils](core/helpers/symbolic-expression-utilities.md) | `f2r` appends zeros after scientific-notation exponents, corrupting values. |
+| CONTR-0018 | contested | [Expression Utils](core/helpers/symbolic-expression-utilities.md) | `product` flattens iterables, exhausts iterators, and mishandles scalars/`repeat=0`. |
+| CONTR-0019 | contested | [Loop/Device](core/helpers/loop-kernel-and-device-helpers.md) | `GPUKernel` corrupts empty-arg calls, ignores `cfunc_type`, and can omit `streamid`. |
+| CONTR-0020 | contested | [GRHD](equations/grhd.md); [Ringdown](equations/seobnr/precessing-rotations-and-ringdown.md) | Shifted coordinate-bound quotients have singular denominators affecting `omega_prec`. |
+| CONTR-0021 | contested | [Wave Equation](equations/wave-equation.md) | Wave constructors guard only `uu` and check `glb_params_dict` for `CodeParameter`s. |
+| CONTR-0022 | contested | [Metric/Matter](equations/general-relativity/metric-conversions-and-matter.md) | Zero-velocity `LorentzBoost` divides by `0/0` instead of returning identity. |
+| CONTR-0023 | contested | [Geodesics](infrastructures/bhah/geodesics-and-raytracing-runtime.md) | Azimuthal geodesic interpolation rotates reflected Cartesian records by `+/-pi`. |
 
-Claim evidence:
-- Claim: Dendro-GR's `bssn_constraints.cpp` implements the algebraic det/trace enforcement, not the Hamiltonian/momentum constraint diagnostics; NRPy emits order-specific `BSSN_constraints` or `fCCZ4_constraints` kernels and a separate algebraic-projection kernel.
-- Role: descriptive behavior
-- Deciding authority: Dendro-GR `BSSN_GR/include/bssn_constraints.h`, `enforce_bssn_constraints`; `BSSN_GR/src/physcon.cpp`, `physical_constraints`; [BHaH enforce_detgbar_equals_detghat_trAzero.py](../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `name`
-- Corroboration: [BSSN_constraints.py](../nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`; [fCCZ4_constraints.py](../nrpy/infrastructures/Dendro/general_relativity/fCCZ4_constraints.py), `register_CFunction_fCCZ4_constraints`; [enforce_detgbar_equals_detghat_trAzero.py](../nrpy/infrastructures/Dendro/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
+### CONTR-0001
 
-### CONTR-0009
+- Competing sources & authority: `nrpy/examples/manga_bhah_lib.py` final `print()` lines versus its `output_CFunctions_function_prototypes_and_construct_Makefile(create_lib=True)` call and `Makefile_helpers.py` (invoked writers decide: shared library only, no `bhah_lib.par`). Both affected leaves stay `confirmed`.
+- Recheck trigger: edits to `manga_bhah_lib.py` final messages, parameter-file registration, or `Makefile_helpers.py` `create_lib` handling.
+- Resolution check: generate in an isolated directory, verify stdout gives library instructions without `./bhah_lib` or ungenerated `bhah_lib.par`, and verify `make` builds `libbhah_lib.{so,dylib}`.
 
-The Dendro BSSN leaf described the constraint builder as removing, and in its
-claim-evidence block as deleting, the newly added AUX gridfunction names the
-kernel does not write. The builder does no such thing. It reads
-`register_M_and_LAMBDA_CONSTRAINT_gridfunctions`, sets it to `False`, constructs
-`BSSN_constraints` inside a `try`, and restores the previous value in a
-`finally` block, so `M` and `LAMBDA_CONSTRAINT` are never registered in the
-first place. The code comment at that site says exactly this. Suppressing the
-registration is also what makes a deletion pass unnecessary: the same
-construction pulls in the evolved state, so a pass that deleted newly added
-names would have to tell the two constraint names apart from it.
+Evidence (descriptive behavior): `nrpy/examples/manga_bhah_lib.py` final `print()` calls vs `create_lib=True` in `BHaH/Makefile_helpers.py::output_CFunctions_function_prototypes_and_construct_Makefile`.
 
-Claim evidence:
-- Claim: the Dendro BSSN constraint builder suppresses the `M` and `LAMBDA_CONSTRAINT` registrations by setting `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` to `False` across the `BSSN_constraints` construction and restoring the previous value afterwards; no Dendro production builder deletes registered fields.
-- Role: descriptive behavior
-- Deciding authority: [BSSN_constraints.py](../nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py), the `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` save/set/restore around the equation construction
-- Corroboration: [BSSN_constraints.py](../nrpy/equations/general_relativity/BSSN_constraints.py), the `group="AUX"` registrations gated on that CodeParameter
+### CONTR-0003
 
-### CONTR-0010
+- Competing sources & authority: `coding_style.md` (`## Static Analysis Configuration`: legacy handwritten files keep pre-change score without regression; new handwritten files require `10.00/10.00`) versus `.pylintrc`/`.pylintrc_python36` (`fail-under=10`), `.github/single_file_static_analysis.sh` (`9.91`), and `.github/workflows/main.yml` (`9.5`). `coding_style.md` decides contributor policy; [Static Analysis](validation/static-analysis.md) stays `confirmed`.
+- Recheck trigger: edits to `coding_style.md`, `.pylintrc*`, `single_file_static_analysis.sh`, or `main.yml` `static-analysis`.
+- Resolution check: inspect all four files and verify base-revision new-vs-legacy classification (`10.00` for new handwritten files, non-regression for legacy files, rejection of unparseable scores).
 
-The Dendro BSSN leaf attributed the private-builder-per-formulation layout to
-BHaH. BHaH's `general_relativity/rhs_eval.py` defines the public
-`register_CFunction_rhs_eval` and branches inline on `enable_fCCZ4`.
-What Dendro does take from BHaH is the module layout -- one
-module per artifact, both formulations behind one boolean -- and that half of
-the sentence stands; the private builder and private registrar per formulation
-inside the module were Dendro's own. CONTR-0011 subsequently removed that
-duplication; this entry preserves the attribution correction.
+Evidence (normative rule): `coding_style.md::Static Analysis Configuration`; corroboration: `.pylintrc`, `.github/single_file_static_analysis.sh::run_test_step`, and `.github/workflows/main.yml::static-analysis`.
 
-Claim evidence:
-- Claim: `BHaH/general_relativity/rhs_eval.py` holds one public registration function and no private per-formulation builder or registrar; the former private-builder-per-formulation split inside a Dendro module was Dendro's own, not BHaH's arrangement.
-- Role: descriptive behavior
-- Deciding authority: [BHaH rhs_eval.py](../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval` and its `enable_fCCZ4` branches
-- Corroboration: none available; BHaH's own module is the whole of the evidence, and no Dendro leaf records the per-formulation split as a peer practice
+### CONTR-0012
 
-### CONTR-0011
+- Competing sources & authority: `nrpy/py_codegen.py` and `nrpy/c_codegen.py` substitution option docstrings versus their scalar CSE loops assigning into tuple `common_subexpression[1]` returned by `cse_postprocess`. Implementation decides current behavior; both codegen leaves are `contested` (SIMD and FD C paths are unaffected).
+- Recheck trigger: edits to `postproc_substitution_dict` handling or `cse_postprocess` entry types.
+- Resolution check: run `py_codegen` and non-FD, non-SIMD `c_codegen` with a surviving CSE temporary and nonempty `postproc_substitution_dict` (matching and nonmatching keys), requiring valid substituted code return.
 
-Resolved. Both modules now contain one public registrar. In `rhs_eval.py`,
-`enable_fCCZ4` selects the expression set, the CAHD parameter registration, the
-extra `Theta_fCCZ4` right-hand-side entry, the evolved-field list and its
-validation, and the formulation label in the description; lowering, wrappers,
-and registration share one path. The previous duplication had no host
-requirement and was removed. Other top-level Dendro modules use
-`enable_fCCZ4` to select state, checkpoint, kernel, and label text, as
-[New Infrastructure Conformance](infrastructures/new-infrastructure-conformance.md)
-lists.
+Evidence (descriptive behavior): `nrpy/py_codegen.py::py_codegen` and `nrpy/c_codegen.py::c_codegen` scalar CSE substitution loops; corroboration: `nrpy/helpers/cse_preprocess_postprocess.py::cse_postprocess`.
 
-Claim evidence:
-- Claim: the unsupported per-formulation builder and registrar duplication is removed in both Dendro modules; each operation now has one public registrar, resolving CONTR-0011.
-- Role: normative rule
-- Deciding authority: [new-infrastructure-conformance.md](infrastructures/new-infrastructure-conformance.md), `Conformance is one-way`; [rhs_eval.py](../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_constraints.py](../nrpy/infrastructures/Dendro/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`; [fCCZ4_constraints.py](../nrpy/infrastructures/Dendro/general_relativity/fCCZ4_constraints.py), `register_CFunction_fCCZ4_constraints`
-- Corroboration: [BHaH rhs_eval.py](../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), inline formulation branching; complete generated BSSN and fCCZ4 project tests exercise both consolidated paths
+### CONTR-0014
+
+- Competing sources & authority: `nrpy/helpers/cse_preprocess_postprocess.py` determinism/equivalence docstrings versus `cse_preprocess` and `sort_cse_output_deterministically`. Implementation decides; both affected leaves are `contested`.
+- Recheck trigger: edits to `cse_preprocess` or `sort_cse_output_deterministically`.
+- Resolution check: permute replacements for `x**y` and `y**x` requiring identical output, and test `2*x + _Integer_2` and `([(a0, x**3)], [a0 + tmp0])` requiring preserved expressions or explicit collision rejection.
+
+Evidence (descriptive behavior): `nrpy/helpers/cse_preprocess_postprocess.py::cse_preprocess` and `sort_cse_output_deterministically`.
+
+### CONTR-0015
+
+- Competing sources & authority: `nrpy/helpers/simd.py` (`expr_convert_to_simd_intrins`) versus `nrpy/helpers/simd_intrinsics.h` macro definitions. Implementation decides; the SIMD leaf is `contested`.
+- Recheck trigger: edits to `expr_convert_to_simd_intrins` or `simd_intrinsics.h`.
+- Resolution check: verify `_Integer_1` declaration for negative half-powers and compile emitted `Pow`/`Cbrt`/`Log`/`Sign` intrinsics with `simd_intrinsics.h`.
+
+Evidence (descriptive behavior): `nrpy/helpers/simd.py::expr_convert_to_simd_intrins`; corroboration: `nrpy/helpers/simd_intrinsics.h`.
+
+### CONTR-0016
+
+- Competing sources & authority: `nrpy/helpers/expression_utils.py` SymPy `free_symbols` equivalence docstring versus `_get_free_symbol_names_cached` and `get_params_commondata_symbols_from_expr_list`. Implementation decides; leaf is `contested`.
+- Recheck trigger: edits to `_get_free_symbol_names_cached` or parameter extraction helpers.
+- Resolution check: compare extracted names against `expr.free_symbols` on `Integral(x, (x, 0, x))`, `Lambda`, and `Subs`, verifying registered free parameter names are retained.
+
+Evidence (descriptive behavior): `nrpy/helpers/expression_utils.py::_get_free_symbol_names_cached` and `get_params_commondata_symbols_from_expr_list`.
+
+### CONTR-0017
+
+- Competing sources & authority: `nrpy/helpers/float_to_rational.py` high-precision conversion docstring versus `f2r` string zero-padding on scientific notation. Implementation decides; leaf is `contested`.
+- Recheck trigger: edits to `f2r`.
+- Resolution check: require equal rationals for scientific (`1e-7`, `1.2e-7`) and fixed-point decimal strings across padding widths.
+
+Evidence (descriptive behavior): `nrpy/helpers/float_to_rational.py::f2r`.
+
+### CONTR-0018
+
+- Competing sources & authority: `nrpy/helpers/functional.py` Cartesian-product docstring versus `product` recursive flattening/iteration. Implementation decides; leaf is `contested`.
+- Recheck trigger: edits to `functional.py::product`.
+- Resolution check: match `itertools.product` behavior (or reject invalid scalar inputs) across one-shot iterators, tuple-valued elements, single integers, and `repeat=0`.
+
+Evidence (descriptive behavior): `nrpy/helpers/functional.py::product`.
+
+### CONTR-0019
+
+- Competing sources & authority: `nrpy/helpers/parallelization/utilities.py` wrapper docs versus `nrpy/helpers/parallelization/gpu_kernel.py` (`GPUKernel.__init__`, `GPUKernel.c_function_call`). Implementation decides; leaf is `contested`.
+- Recheck trigger: edits to `GPUKernel` or `generate_kernel_and_launch_code`.
+- Resolution check: generate and compile an empty-argument host call, a non-`void` CUDA kernel, and custom CUDA launch settings reading parameters, verifying valid call syntax, `cfunc_type`, and declared `streamid`.
+
+Evidence (descriptive behavior): `nrpy/helpers/parallelization/gpu_kernel.py::GPUKernel.__init__` and `GPUKernel.c_function_call`; corroboration: `utilities.py::generate_kernel_and_launch_code`.
+
+### CONTR-0020
+
+- Competing sources & authority: `nrpy/equations/grhd/Min_Max_and_Piecewise_Expressions.py` Boolean coordinate-helper docstrings versus their `TINYDOUBLE`-shifted quotient formulas used in `SEOBNRv5_merger_ringdown.py` (`omega_prec`). Expressions decide; `grhd.md` stays `confirmed` while `precessing-rotations-and-ringdown.md` is `contested`.
+- Recheck trigger: edits to `coord_less_bound`/`coord_greater_bound` offsets/formulas or `SEOBNRv5_MergerRingdown_Quantities.__init__`.
+- Resolution check: evaluate with `nrpyAbs(x) = |x|` across `0` and `+/-TINYDOUBLE`, requiring finite `{0, 1}` step values (or restricted documented semantics) and consistent `omega_prec` weights.
+
+Evidence (descriptive behavior): `nrpy/equations/grhd/Min_Max_and_Piecewise_Expressions.py` coordinate helpers; corroboration: `nrpy/equations/seobnr/SEOBNRv5_merger_ringdown.py::SEOBNRv5_MergerRingdown_Quantities.__init__`.
+
+### CONTR-0021
+
+- Competing sources & authority: `nrpy/equations/wave_equation/` constructor comments versus `uu`-only gridfunction guards and `glb_params_dict` checks (while `CodeParameter` entries live in `glb_code_params_dict`). Implementation decides; `wave-equation.md` is `contested`.
+- Recheck trigger: edits to wave-equation constructor guards or `CodeParameter` registration.
+- Resolution check: in isolated processes, pre-register `uu` without `vv` (or incompatible metadata) and pre-register `NRPyParameter` `wavespeed`/`time`, requiring valid registrations or explicit `ValueError`.
+
+Evidence (descriptive behavior): `WaveEquation_RHSs.py::WaveEquation_RHSs.__init__`, `WaveEquationCurvilinear_RHSs.py::__init__`, and `WaveEquation_Solutions_InitialData.py::__init__`; corroboration: `nrpy/params.py::CodeParameter._register_globally`.
+
+### CONTR-0022
+
+- Competing sources & authority: `nrpy/equations/general_relativity/LorentzBoost.py` Lorentz-transformation docstring versus `_compute_LorentzMatrix` dividing by squared boost speed without a `v = 0` branch. Implementation decides; `metric-conversions-and-matter.md` stays `confirmed`.
+- Recheck trigger: edits to `LorentzBoost._compute_LorentzMatrix`.
+- Resolution check: evaluate `LorentzBoost` and its inverse at `vU = [0, 0, 0]`, requiring finite `4x4` identity matrices while preserving subluminal nonzero cases.
+
+Evidence (descriptive behavior): `nrpy/equations/general_relativity/LorentzBoost.py::LorentzBoost._compute_LorentzMatrix` (trusted samples test nonzero boost only).
+
+### CONTR-0023
+
+- Competing sources & authority: `azimuthal_symmetry_spatial_lagrange_interpolation.py` docstring claiming reflected nodes need rotation to the reference plane versus `output_raytracing_data.py` storing Cartesian-basis tensor components at each node's own position. Emitted C code decides; `geodesics-and-raytracing-runtime.md` stays `confirmed`.
+- Recheck trigger: edits to `azimuthal_symmetry_spatial_lagrange_interpolation.py` reflection/rotation logic or `output_raytracing_data.py` basis conventions.
+- Resolution check: on `Spherical` data (`Nphi = 2`), interpolate a nonconstant `z`-axisymmetric Cartesian `g4DD` and `Gamma4UDD` across `theta in {0, pi}` or `r = 0` and verify interior convergence order.
+
+Evidence (descriptive behavior): `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/azimuthal_symmetry_spatial_lagrange_interpolation.py::register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation`; corroboration: `output_raytracing_data.py`.

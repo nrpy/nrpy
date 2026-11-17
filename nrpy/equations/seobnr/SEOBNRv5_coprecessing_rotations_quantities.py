@@ -106,10 +106,7 @@ class SEOBNRv5_Coprecessing_Rotations:
                 f"Received m1={m1}, m2={m2}, l={l}"
             )
 
-        return cast(
-            sp.Expr,
-            cls.wigner_d_small_template(l, m1, m2).xreplace({cls._WIGNER_BETA: beta}),
-        )
+        return cls.wigner_d_small_template(l, m1, m2).xreplace({cls._WIGNER_BETA: beta})
 
     def _polarizations_from_angles(
         self,
@@ -201,7 +198,8 @@ class SEOBNRv5_Coprecessing_Rotations:
             sp.sympify(0),
             sp.Min(
                 sp.sympify(1),
-                (sp.sympify(1) - abs_e3_x - sp.sympify("1e-5")) / sp.sympify("9e-5"),
+                (sp.sympify(1) - abs_e3_x - cast(sp.Expr, sp.sympify("1e-5")))
+                / cast(sp.Expr, sp.sympify("9e-5")),
             ),
         )
         weight_y = sp.sympify(1) - weight_x

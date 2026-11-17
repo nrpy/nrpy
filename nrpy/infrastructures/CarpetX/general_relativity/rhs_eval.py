@@ -222,10 +222,21 @@ def register_CFunction_rhs_eval(
         lambdaU_dKOD = ixp.declarerank2("lambdaU_dKOD", symmetry="nosym")
         aDD_dKOD = ixp.declarerank3("aDD_dKOD", symmetry="sym01")
         hDD_dKOD = ixp.declarerank3("hDD_dKOD", symmetry="sym01")
+        # A gauge field whose RHS is exactly the SymPy zero does not evolve (a
+        # frozen lapse or shift, or the shift driver of a first-order or frozen
+        # shift option), so it receives no dissipation. Record this before any
+        # dissipation term is added.
+        gauge_field_evolves = {
+            name: local_BSSN_RHSs_varname_to_expr_dict[name] != 0
+            for name in ["alpha_rhs"]
+            + [f"vet_rhsU{i}" for i in range(3)]
+            + [f"bet_rhsU{i}" for i in range(3)]
+        }
         for k in range(3):
-            local_BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] += (
-                diss_strength_gauge * alpha_dKOD[k] * rfm.ReU[k]
-            )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+            if gauge_field_evolves["alpha_rhs"]:
+                local_BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] += (
+                    diss_strength_gauge * alpha_dKOD[k] * rfm.ReU[k]
+                )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
             local_BSSN_RHSs_varname_to_expr_dict["cf_rhs"] += (
                 diss_strength_nongauge * cf_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
@@ -233,13 +244,14 @@ def register_CFunction_rhs_eval(
                 diss_strength_nongauge * trK_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
             for i in range(3):
-                if "2ndOrder" in ShiftEvolutionOption:
+                if gauge_field_evolves[f"bet_rhsU{i}"]:
                     local_BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] += (
                         diss_strength_gauge * betU_dKOD[i][k] * rfm.ReU[k]
                     )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-                local_BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] += (
-                    diss_strength_gauge * vetU_dKOD[i][k] * rfm.ReU[k]
-                )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+                if gauge_field_evolves[f"vet_rhsU{i}"]:
+                    local_BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] += (
+                        diss_strength_gauge * vetU_dKOD[i][k] * rfm.ReU[k]
+                    )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
                 local_BSSN_RHSs_varname_to_expr_dict[f"lambda_rhsU{i}"] += (
                     diss_strength_nongauge * lambdaU_dKOD[i][k] * rfm.ReU[k]
                 )  # ReU[k] = 1/scalefactor_orthog_funcform[k]

@@ -16,7 +16,7 @@ Author: Thiago Assumpção
 """
 
 # Step P1: Import needed modules.
-from typing import List, Tuple, Union, cast
+from typing import List, Tuple, Union
 
 import sympy as sp  # For symbolic computations
 
@@ -191,13 +191,13 @@ def VU_cart_two_punctures(
         :param SU: Spin S^i.
         :return: The vector V^i components.
         """
-        r = sp.sympify(0)
+        r: sp.Expr = sp.sympify(0)
         for i in range(dimension):
             r += sp.Pow(xU[i], 2)
         r = sp.sqrt(r)
 
         VU_cart = ixp.zerorank1()
-        x_dot_P = sp.sympify(0)
+        x_dot_P: sp.Expr = sp.sympify(0)
         for j in range(dimension):
             x_dot_P += xU[j] * PU[j]
         for i in range(dimension):
@@ -252,7 +252,7 @@ def ADD_conf_cartesian(
             VD_cart_dD[i][j] = sp.diff(VD_cart[i], xxCart[j])
 
     #  Compute the divergence
-    V_cart_div = sp.sympify(0)
+    V_cart_div: sp.Expr = sp.sympify(0)
     for i in range(dimension):
         V_cart_div += VD_cart_dD[i][i]
 
@@ -288,12 +288,12 @@ def ADD_times_AUU_conf_cartesian(
     dimension = 3
 
     # Compute contraction assuming Cartesian coordinates
-    ADD_times_AUU_conf_cart = sp.sympify(0)
+    ADD_times_AUU_conf_cart: sp.Expr = sp.sympify(0)
     for i in range(dimension):
         for j in range(dimension):
             ADD_times_AUU_conf_cart += ADD_conf_cart[i][j] * ADD_conf_cart[i][j]
 
-    return cast(sp.Expr, ADD_times_AUU_conf_cart)
+    return ADD_times_AUU_conf_cart
 
 
 def psi_background_cartesian(
@@ -331,21 +331,21 @@ def psi_background_cartesian(
         :return: The scalar contribution to the conformal factor.
         """
         # Compute distance of puncture from the origin
-        r = sp.sympify(0)
+        r: sp.Expr = sp.sympify(0)
         for i in range(dimension):
             r += sp.Pow(xU[i], 2)
         r = sp.sqrt(r)
 
         # Compute contribution to conformal factor
         psi_single = bare_mass / (2 * r)
-        return cast(sp.Expr, psi_single)
+        return psi_single
 
     psi_puncture_0 = psi_background_cartesian_single_puncture(_bare_mass_0, _xU0)
     psi_puncture_1 = psi_background_cartesian_single_puncture(_bare_mass_1, _xU1)
 
     # Compute superposition of conformal factors, adding 1 for the asymptotic limit
     psi = sp.sympify(1) + psi_puncture_0 + psi_puncture_1
-    return cast(sp.Expr, psi)
+    return psi
 
 
 if __name__ == "__main__":

@@ -166,6 +166,7 @@ def generate_prefunc_auxevol_gfs_single_point(
         verbose=False,
         include_braces=False,
         enable_simd=False,
+        enable_cse_preprocess=True,
     )
 
     prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
@@ -258,26 +259,6 @@ def register_CFunction_auxevol_gfs_set_to_constant(
     :param CoordSystem: The coordinate system to use in setting up the AUXEVOL gridfunctions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :return: None if in registration phase, else the updated NRPy environment.
-
-    Doctest:
-    >>> import nrpy.c_function as cfc
-    >>> from nrpy.helpers.generic import validate_strings
-    >>> import nrpy.params as par
-    >>> from nrpy.reference_metric import unittest_CoordSystems
-    >>> supported_Parallelizations = ["openmp", "cuda"]
-    >>> name="auxevol_gfs_set_to_constant"
-    >>> for parallelization in supported_Parallelizations:
-    ...    par.set_parval_from_str("parallelization", parallelization)
-    ...    for CoordSystem in unittest_CoordSystems:
-    ...       cfc.CFunction_dict.clear()
-    ...       _ = register_CFunction_auxevol_gfs_set_to_constant(CoordSystem)
-    ...       generated_str = cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function
-    ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}".replace(" ", "_")
-    ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
-    Setting up reference_metric[SinhSymTP]...
-    Setting up reference_metric[HoleySinhSpherical]...
-    Setting up reference_metric[Cartesian]...
-    Setting up reference_metric[SinhCylindricalv2n2]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())

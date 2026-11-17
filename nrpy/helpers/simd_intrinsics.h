@@ -113,9 +113,8 @@
 #define NegFusedMulAddSIMD(a, b, c) _mm256_sub_pd((c), _mm256_mul_pd((a), (b))) // c - a*b
 
 // NegFusedMulSubSIMD(a, b, c) = -a*b - c
-//                              = c - (c + a*b + c)
-//                              = SubSIMD(c, AddSIMD(c, AddSIMD(MulSIMD(a, b), c)))
-#define NegFusedMulSubSIMD(a, b, c) _mm256_sub_pd((c), _mm256_add_pd((c), _mm256_add_pd(_mm256_mul_pd((a), (b)), (c))))
+// Flip the sum's sign bit to preserve unary negation, including signed zero.
+#define NegFusedMulSubSIMD(a, b, c) _mm256_xor_pd(_mm256_add_pd(_mm256_mul_pd((a), (b)), (c)), _mm256_set1_pd(-0.0))
 #endif // __FMA__
 
 // Initialize vector to zero (output is REAL_SIMD_ARRAY)
@@ -131,7 +130,11 @@
 
 // If compiled with SSE2 SIMD instructions enabled:
 #elif defined(__SSE2__)
+#if defined(__FMA__)
+#include <immintrin.h>
+#else
 #include <emmintrin.h>
+#endif // __FMA__
 #define REAL_SIMD_ARRAY __m128d
 #define SIMD_WIDTH 2 // 2 doubles per loop iteration
 
@@ -168,17 +171,16 @@
 // Note: There are no mainstream non-AVX+ chips that have FMA, but we include these for completeness.
 #define FusedMulAddSIMD(a, b, c) _mm_fmadd_pd((a), (b), (c))
 #define FusedMulSubSIMD(a, b, c) _mm_fmsub_pd((a), (b), (c))
-#define NegFusedMulAddSIMD(a, b, c) _mm_sub_pd((c), _mm_mul_pd((a), (b)))                                   // c - a*b
-#define NegFusedMulSubSIMD(a, b, c) _mm_sub_pd((c), _mm_sub_pd((c), _mm_sub_pd(_mm_mul_pd((a), (b)), (c)))) // -a*b - c = c - (c + a*b + c)
+#define NegFusedMulAddSIMD(a, b, c) _mm_sub_pd((c), _mm_mul_pd((a), (b))) // c - a*b
+#define NegFusedMulSubSIMD(a, b, c) _mm_fnmsub_pd((a), (b), (c))
 #else
 // Fused Multiply-Add/Subtract Operations without FMA
 #define FusedMulAddSIMD(a, b, c) _mm_add_pd(_mm_mul_pd((a), (b)), (c))    // a*b + c
 #define FusedMulSubSIMD(a, b, c) _mm_sub_pd(_mm_mul_pd((a), (b)), (c))    // a*b - c
 #define NegFusedMulAddSIMD(a, b, c) _mm_sub_pd((c), _mm_mul_pd((a), (b))) // c - a*b
 // NegFusedMulSubSIMD(a,b,c) = -a*b - c
-//                            = c - (c + a*b + c)
-//                            = SubSIMD(c, AddSIMD(c, AddSIMD(MulSIMD(a, b), c)))
-#define NegFusedMulSubSIMD(a, b, c) _mm_sub_pd((c), _mm_add_pd((c), _mm_add_pd(_mm_mul_pd((a), (b)), (c))))
+// Flip the sum's sign bit to preserve unary negation, including signed zero.
+#define NegFusedMulSubSIMD(a, b, c) _mm_xor_pd(_mm_add_pd(_mm_mul_pd((a), (b)), (c)), _mm_set1_pd(-0.0))
 #endif // __FMA__
 
 // Initialize vector to zero (output is REAL_SIMD_ARRAY)

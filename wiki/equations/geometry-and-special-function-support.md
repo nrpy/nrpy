@@ -5,50 +5,79 @@
 
 ## Summary
 
-This page owns support modules under `nrpy/equations` that are not themselves
-evolution systems: reference-metric basis transforms, GeneralRFM fisheye
-coordinate maps, SO(3) rotation expressions, quaternion tensor rotation, and
-spin-weighted spherical harmonics. The generic tensor containers, parameters,
-and reference-metric registry remain owned by the Core API pages.
+Non-evolution coordinate, rotation, and basis modules under `nrpy/equations`
+provide reference-metric basis transforms, GeneralRFM fisheye coordinate maps,
+SO(3) rotation expressions, quaternion tensor rotation, and spin-weighted
+spherical harmonics; generic tensor containers, parameters, and the
+reference-metric registry live in `nrpy` core modules.
 
 ## Detail
 
+### Basis Transforms And Fisheye Coordinate Maps
+
 `BasisTransforms` wraps an existing coordinate-system `ReferenceMetric` entry
 and applies its stored Jacobians. It transforms contravariant vectors,
-covariant vectors, rank-2 covariant tensors, and time-independent four-tensors
-between the reference-metric basis and Cartesian or spherical bases. The lazy
+covariant vectors, rank-2 covariant tensors, and contravariant rank-2
+spacetime tensors between the reference-metric basis and Cartesian or spherical
+bases. The spacetime-tensor methods assume a time-independent spatial coordinate
+transformation, with unchanged time coordinate and no time-space mixing;
+the tensor components themselves may depend on time. The lazy
 `basis_transforms` dictionary constructs one `BasisTransforms` object per
 coordinate system. Its script validation emits one trusted dictionary for every
 entry currently in `reference_metric.supported_CoordSystems`; this is sampled
 expression coverage for those transforms, not a round-trip or generated-code
 runtime proof.
 
+Evidence (descriptive behavior): `basis_transforms/jacobians.py::BasisTransforms.basis_transform_4tensorUU_from_Cartesian_to_time_indep_rfmbasis`.
+
 `GeneralRFMFisheye` builds an N-transition radial fisheye map from raw
-Cartesian coordinates `xx[i]` to physical Cartesian coordinates. The shared
-fisheye radial-map helper registers plateau, transition-center, width, and
-scale code parameters and provides the transition kernel used by radial and
-spheroidal providers. `GeneralRFMSpheroidalFisheye` composes separate xy and z
-radial maps into `Cart = (lambda_xy(r)x, lambda_xy(r)y, lambda_z(r)z)`.
-Both providers store `xx_to_CartU`, metric data `ghatDD`, and first and second
-metric derivatives in raw coordinates. `build_fisheye` and
-`build_spheroidal_fisheye` are the constructor wrappers; trusted radial files
-cover only the N=1 and N=2 variants.
+Cartesian coordinates `xx[i]` to physical Cartesian coordinates. It registers
+the plateau, transition-center, width, and global-scale code parameters,
+stores `xx_to_CartU` and `dCart_dxxUD`, and constructs the induced flat
+reference metric `ghatDD` plus first and second derivatives in the raw
+coordinates. `build_fisheye` is the public constructor wrapper, and trusted
+files cover only the N=1 and N=2 variants. The class accepts any integer
+`num_transitions >= 1`; larger N is implemented but not covered by those two
+trusted files. The coordinate expressions contain `rbar/r` and higher inverse
+powers of the raw radius, so direct substitution at the origin can be
+undefined even for a map with a regular limit. Origin limits need separate
+handling. Transition widths and `tanh(R/s)` occur in denominators; callers
+must keep those denominators defined and choose a nonsingular radial map.
+The constructor checks the transition count, not these parameter-domain or
+invertibility conditions. `GeneralRFMSpheroidalFisheye` uses independent
+N-transition xy and z radius maps. It scales the raw x and y coordinates by
+the xy map and the raw z coordinate by the z map, then computes the induced
+reference metric and its first and second derivatives. Its constructor also
+requires a positive transition count.
+
+Evidence (descriptive behavior): `generalrfm/fisheye.py::GeneralRFMFisheye.__init__`; `generalrfm/fisheye.py::GeneralRFMSpheroidalFisheye.__init__`; `generalrfm/fisheye.py::_G_and_derivs_closed_form`.
+
+### Rotations And Spin-Weighted Spherical Harmonics
 
 `SO3Expressions` stores symbolic matrix-rotation expressions used by equation
 validation and by the generated BHaH SO(3) helper layer. Its helpers build a
 rotation matrix from orthonormal frame hats, apply `R` or `R^T` to vectors and
 rank-2 covariant tensors, compute relative rotations, dot products, norms,
 cross products, right-handed-frame invariants, Rodrigues axis-angle matrices,
-and axis recovery branches from a rotation matrix. Its script entry point sends
-the object dictionary through the trusted-expression pipeline. Generated BHaH C
+and expressions used in axis recovery. Normalization and the axis-angle
+constructor require a nonzero axis. General-branch recovery divides by the
+caller-supplied `2*sin(phi)`, which must be nonzero. The pi-branch helper returns
+`(Rii+1)/2`, the squared unit-axis components at a pi rotation; it does not
+choose signs, take square roots, or select a recovery branch. Its script entry point validates
+the object dictionary against its trusted dictionary. Generated BHaH C
 helpers that wrap this symbolic layer are routed from
 [BHaH SO(3) Rotation Helpers](../infrastructures/bhah/so3-rotation-helpers.md).
+
+Evidence (descriptive behavior): `rotation/SO3_rotations.py::SO3Expressions.normalize_axis`; `rotation/SO3_rotations.py::SO3Expressions.axis_angle_general_branch_axis`; `rotation/SO3_rotations.py::SO3Expressions.axis_angle_pi_branch_diagonal_terms`.
 
 `tensor_rotation.rotate` is a lighter quaternion path for symbolic vectors and
 3x3 tensors. It constructs a SymPy quaternion from an axis and angle, applies
 `q v q*` for vectors, and applies the corresponding row and column rotations
-for matrices. The module is doctest-only: its `__main__` block runs doctests
+for matrices. The axis must be nonzero; the function supplies no zero-axis
+fallback. The module is doctest-only: its `__main__` block runs doctests
 and does not generate a sibling trusted dictionary.
+
+Evidence (descriptive behavior): `quaternion_rotations/tensor_rotation.py::rotate`.
 
 `spin_weighted_spherical_harmonics.Y` implements the Goldberg-formula path for
 spin-weighted spherical harmonics. It registers `M_PI` for generated C contexts,
@@ -63,8 +92,7 @@ the Mathematica-code branch have no trusted-value coverage in that entry point.
 
 All trusted dictionaries named here compare deterministic sampled numerical
 values. They do not establish formal identities, generated-code builds,
-runtime behavior, or numerical accuracy; use [Trusted Expression
-Pipeline](trusted-expression-pipeline.md) for that boundary.
+runtime behavior, or numerical accuracy; use [Expression Validation Helpers](../validation/expression-validation-helpers.md) for that boundary.
 
 ## Sources
 
@@ -72,7 +100,7 @@ Pipeline](trusted-expression-pipeline.md) for that boundary.
 - [jacobians_Cartesian.py](../../nrpy/equations/basis_transforms/tests/jacobians_Cartesian.py) - `trusted_dict`
 - [jacobians_Spherical.py](../../nrpy/equations/basis_transforms/tests/jacobians_Spherical.py) - `trusted_dict`
 - [jacobians_GeneralRFM_fisheyeN2.py](../../nrpy/equations/basis_transforms/tests/jacobians_GeneralRFM_fisheyeN2.py) - `trusted_dict`
-- [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py) - `FisheyeRadialMap`, `GeneralRFMFisheye`, `GeneralRFMSpheroidalFisheye`, `build_fisheye`, `build_spheroidal_fisheye`, `xx_to_CartU`, `ghatDD`, `ghatDDdD`, `ghatDDdDD`
+- [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py) - `GeneralRFMFisheye`, `GeneralRFMSpheroidalFisheye`, `build_fisheye`, `build_spheroidal_fisheye`, `xx_to_CartU`, `ghatDD`, `ghatDDdD`, `ghatDDdDD`
 - [fisheye_N1.py](../../nrpy/equations/generalrfm/tests/fisheye_N1.py) - `trusted_dict`
 - [fisheye_N2.py](../../nrpy/equations/generalrfm/tests/fisheye_N2.py) - `trusted_dict`
 - [SO3_rotations.py](../../nrpy/equations/rotation/SO3_rotations.py) - `SO3Expressions`, `apply_R_to_vector`, `apply_R_to_tensorDD`, `rodrigues_matrix_from_axis_angle`
@@ -85,11 +113,6 @@ Pipeline](trusted-expression-pipeline.md) for that boundary.
 
 ## See Also
 
-- [Equations](index.md)
-- [Wave Equation](wave-equation.md)
-- [Conformally Flat Elliptic](conformally-flat-elliptic.md)
-- [SEOBNR And BOB](seobnr/index.md)
-- [Reference Metrics](../core/reference-metrics.md)
-- [Indexed Expressions](../core/indexed-expressions.md)
-- [Gridfunctions And Parameters](../core/gridfunctions-and-parameters.md)
-- [Trusted Expression Pipeline](trusted-expression-pipeline.md)
+- See also: [Wave Equation](wave-equation.md)
+- See also: [Conformally Flat Elliptic](conformally-flat-elliptic.md)
+- See also: [SEOBNR And BOB](seobnr/index.md)

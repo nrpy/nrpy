@@ -1,6 +1,6 @@
 # Geodesic Raytracing
 
-> Explain standalone massive and photon geodesic examples plus batch photon raytracing visualization artifacts. · Status: confirmed
+> Explain standalone massive and photon geodesic examples plus batch photon raytracing output files and visualizations. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
@@ -11,15 +11,16 @@ RKF45 ODE path. `photon_geodesic_integrator` builds a single photon trajectory
 with the same analytic spacetime target but uses the split-pipeline photon RKF45
 kernels directly. `photon_geodesic_batch_integrator` builds a tiled photon
 raytracing project, defaults to OpenMP, can generate CUDA code with `--cuda`,
-honors `--outdir`, and writes per-tile light-blueprint ZIP artifacts for the
+honors `--outdir`, and writes per-tile light-blueprint ZIP archives for the
 lensed-image renderer and diagnostic scripts.
 
-All generation, build, executable, trajectory, and rendering commands on this
-page are manual/source-supported. Neither GitHub workflow nor the local full-CI
-helper invokes these generators, so configured validation does not cover their
-runtime or numerical results.
+All geodesic generation, build, executable, trajectory, and rendering commands
+are manual and source-derived: neither GitHub workflow nor `full_nrpy_local_ci.sh`
+invokes these generators or checks their runtime outputs.
 
 ## Detail
+
+### Single-Ray Massive And Photon Integrators
 
 From a repository checkout, run generators from the repository root. If NRPy is
 not installed editable, first set `PYTHONPATH` as described by
@@ -62,7 +63,7 @@ python3 visualize_trajectory.py --particle_type Photon
 
 The single-photon path also targets `KerrSchild_Cartesian`, but it does not use
 GSL. It allocates one Structure-of-Arrays photon state, computes photon `p_t`
-with `p0_reverse_kernel`, runs the split RKF45 pipeline through
+with `p0_reverse_kernel`, runs the split-pipeline RKF45 stages through
 `interpolation_kernel`, `calculate_ode_rhs_kernel`, `rkf45_stage_update`, and
 `rkf45_finalize_and_control`, writes `trajectory.txt`, and reports null
 normalization and conserved-quantity errors. Both single-ray generators copy
@@ -70,13 +71,15 @@ normalization and conserved-quantity errors. Both single-ray generators copy
 `pip install matplotlib numpy`; those Python visualization dependencies are
 source-limited to the checked-in script imports and generator message.
 
-`trajectory.txt` is the handoff artifact for the single-ray visualization. The
+`trajectory.txt` is the output text file read by single-ray visualization. The
 massive file header is `# tau t x y z u^t u^x u^y u^z`; the photon file header
 is `# lambda t x y z p_t p_x p_y p_z aux`. `visualize_trajectory.py` loads that
 text file with NumPy, validates it is present and non-empty, prints initial and
 final spatial positions plus the accumulated affine or proper parameter, then
 saves `trajectory_plot.png` and displays a Matplotlib 3D path with an approximate
 `r=2M` horizon.
+
+### Batch Photon Raytracing And Lensed-Image Visualization
 
 For a batch lensed-image run with default OpenMP output under `project/`:
 
@@ -107,16 +110,16 @@ grid, and `scan_density = 1000`. The CUDA runtime/toolchain facts are limited to
 the generator's compiler, flags, and copied helper declarations. NVIDIA's
 official [NVCC guide](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/nvcc.html)
 heading `NVCC: The NVIDIA CUDA Compiler` establishes that `nvcc` belongs to the
-CUDA Toolkit; this page does not claim any GPU model/toolkit version was tested.
+CUDA Toolkit; no specific GPU model or toolkit version is tested in CI.
 
 The batch executable produces tiled `light_blueprint_XX_YY.zip` files in its
-project directory. Those ZIPs are generated artifacts, not KB sources. The
-Python schema in `blueprint_config_and_schema.py` defines `BLUEPRINT_DTYPE` for
+project directory. Those ZIP archives are generated output files, not KB sources. The
+NumPy dtype definition in `blueprint_config_and_schema.py` defines `BLUEPRINT_DTYPE` for
 the binary records: termination type, camera-window coordinates, source-plane
 coordinates, final sphere angles, and affine/time values at window and source
-intersections. The schema file explicitly says the dtype must match the C
+intersections. That module explicitly says the dtype must match the C
 `blueprint_data_t` layout and that termination enum constants must stay
-synchronized with generated C headers; this is the main schema synchronization
+synchronized with generated C headers; this is the main binary-layout synchronization
 risk.
 
 `visualize_lensed_image.py` expects those per-tile ZIPs next to the script,
@@ -131,27 +134,29 @@ fallback if import fails, but the batch generator still prints
 `pip install matplotlib numpy numba Pillow`; that dependency statement is
 source-limited to the checked-in files.
 
-`blueprint_analysis.py` is the diagnostic script for the same ZIP artifacts. It
+`blueprint_analysis.py` is the diagnostic script for the same ZIP output files. It
 streams each tile, counts raw termination enums, compares them to
 `blueprint_config_and_schema.py`, reports camera-window in-view statistics,
 prints early records, and displays heatmaps for camera-window, source-plane, and
-celestial-sphere coordinates. Its warning text directs maintainers to update the
-schema file when raw enum values do not match current Python constants.
+celestial-sphere coordinates. Its warning text directs maintainers to update
+`blueprint_config_and_schema.py` when raw enum values do not match current Python constants.
 
 This standalone batch raytracer is related to, but distinct from, the
 evolution-time raytracing export enabled by
 `python -m nrpy.examples.two_blackholes_collide --raytracing-outputs`. The
 black-hole evolution option writes Cartesian metric and Christoffel data on
 diagnostic output steps and is currently rejected for CUDA builds. See
-[Black Hole Evolution](black-hole-evolution.md) and
+[Standalone GR/BHaH](standalone-gr-bhah.md) and
 [Geodesics And Raytracing Runtime](../infrastructures/bhah/geodesics-and-raytracing-runtime.md)
 for that context.
 
 ## Sources
 
-- [mass_geodesic_integrator.py](../../nrpy/examples/mass_geodesic_integrator.py) - `project_name`, `main_c`, `ode_gsl_wrapper_massive`, `gsl_odeiv2_step_rkf45`, `trajectory.txt`, `gsl-config`; official GSL [Using the Library](https://www.gnu.org/software/gsl/doc/html/usage.html) - `Compiling and Linking`
+- [mass_geodesic_integrator.py](../../nrpy/examples/mass_geodesic_integrator.py) - `project_name`, `main_c`, `ode_gsl_wrapper_massive`, `gsl_odeiv2_step_rkf45`, `trajectory.txt`, `gsl-config`
+- [GSL Using the Library](https://www.gnu.org/software/gsl/doc/html/usage.html) - `Compiling and Linking`
 - [photon_geodesic_integrator.py](../../nrpy/examples/photon_geodesic_integrator.py) - `project_name`, `main_c`, `p0_reverse_kernel`, `rkf45_stage_update`, `trajectory.txt`
-- [photon_geodesic_batch_integrator.py](../../nrpy/examples/photon_geodesic_batch_integrator.py) - `--outdir`, `--cuda`, `parallelization_mode`, `vis_command`, `blueprint_command`; official NVIDIA [NVCC guide](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/nvcc.html) - `NVCC: The NVIDIA CUDA Compiler`
+- [photon_geodesic_batch_integrator.py](../../nrpy/examples/photon_geodesic_batch_integrator.py) - `--outdir`, `--cuda`, `parallelization_mode`, `vis_command`, `blueprint_command`
+- [NVIDIA NVCC guide](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/nvcc.html) - `NVCC: The NVIDIA CUDA Compiler`
 - [visualize_trajectory.py](../../nrpy/examples/geodesic_visualizations/visualize_trajectory.py) - `visualize_trajectory`, `plot_trajectory`
 - [blueprint_config_and_schema.py](../../nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py) - `BLUEPRINT_DTYPE`, `TERM_SPHERE`, `TERM_SOURCE_PLANE`
 - [render_lensed_image.py](../../nrpy/examples/geodesic_visualizations/render_lensed_image.py) - `generate_static_lensed_image`, `_process_blueprint_tile`, `_load_texture`
@@ -161,7 +166,6 @@ for that context.
 
 ## See Also
 
-- [Examples](index.md)
-- [Black Hole Evolution](black-hole-evolution.md)
-- [Geodesics](../equations/general-relativity/geodesics.md)
-- [Geodesics And Raytracing Runtime](../infrastructures/bhah/geodesics-and-raytracing-runtime.md)
+- See also: [Standalone GR/BHaH](standalone-gr-bhah.md)
+- Depends on: [Geodesics](../equations/general-relativity/geodesics.md)
+- Depends on: [Geodesics And Raytracing Runtime](../infrastructures/bhah/geodesics-and-raytracing-runtime.md)

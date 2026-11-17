@@ -46,7 +46,7 @@ def ADM_to_g4DD(
             betaD[i] += gammaDD[i][j] * betaU[j]
 
     # Step 2: Compute beta_i beta^i, the beta contraction
-    beta2 = sp.sympify(0)
+    beta2: sp.Expr = sp.sympify(0)
     for i in range(3):
         beta2 += betaU[i] * betaD[i]
 
@@ -188,7 +188,7 @@ def g4DD_to_ADM(
 
     # Step 4: Compute alpha based on the 4-metric tensor
     # Step 4.a: Compute beta^2 = beta^k beta_k:
-    beta_squared = sp.sympify(0)
+    beta_squared: sp.Expr = sp.sympify(0)
     for k in range(3):
         beta_squared += betaU[k] * betaD[k]
 

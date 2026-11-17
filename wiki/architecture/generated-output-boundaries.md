@@ -1,54 +1,44 @@
 # Generated Output Boundaries
 
-> Distinguish handwritten source from generated projects, generated thorns, generated language targets, and artifacts. · Status: confirmed
+> Boundary between checked-in NRPy generator source files and disposable generated `project/` trees, thorns, binaries, and banners. · Status: confirmed
 > Up: [Architecture](index.md)
 
 ## Summary
 
-NRPy source files are the handwritten generators, symbolic equations, infrastructure modules, helpers, packaging files, and CI configuration. Generated C/CUDA projects, Einstein Toolkit thorns, Charm++ projects, JAX projects, compiled binaries, archives, images, and scratch outputs are products or artifacts unless a selected generated file is deliberately registered as frozen evidence.
+Handwritten Python generators, symbolic equation modules, infrastructure emitters, helpers, packaging files, and CI YAML constitute NRPy's source tree, whereas generated C/CUDA/C++ applications, Einstein Toolkit/CarpetX thorns, Charm++ projects, and JAX packages written under `project/<name>/` are disposable outputs. Binaries, images, archives, and compiled objects are never committed without explicit maintainer approval and are excluded from KB content.
 
 ## Detail
 
-Most example generators write under `project/<name>/`. Standalone BHaH examples usually create a buildable project containing C source, headers, a Makefile, a parameter file, and an executable target for Cartesian or curvilinear-coordinate workflows. Waveform, geodesic, and some physics generators also produce standalone projects, often with a GSL build dependency.
+### Project Output Trees And Non-Text Exclusions
 
-Einstein Toolkit and CarpetX generators produce thorn directories rather than standalone executables. Those thorns are generated into `project/<name>/` and then copied or linked into an Einstein Toolkit checkout for build and run. `superB` generators produce Charm++ projects, `dendro_bssn.py` and `dendro_fccz4.py` produce standalone `Dendro_NRPy_BSSN` and `Dendro_NRPy_fCCZ4` CMake and MPI applications, and `sebobv1_jax` generates a Python/JAX project instead of a C executable.
+Example generators write disposable trees under `project/<name>/`: standalone BHaH C/CUDA projects (`Makefile`, `.c`/`.cu`, `.h`, `.par`), Einstein Toolkit and CarpetX thorn directories linked into Cactus trees, `superB` Charm++ chare projects, `Dendro_NRPy_BSSN` / `Dendro_NRPy_fCCZ4` CMake+MPI applications (`dendro_bssn.py`, `dendro_fccz4.py`), and `sebobv1_jax` Python/JAX packages. GitHub Actions (`codegen-ubuntu`, `codegen-mac`, `einsteintoolkit-validation`, `dendro-validation`, `charmpp-validation`) generates and builds these outputs in temporary directories.
 
-Claim evidence:
-- Claim: `dendro_bssn.py` and `dendro_fccz4.py` generate standalone `Dendro_NRPy_BSSN` and `Dendro_NRPy_fCCZ4` CMake and MPI applications that are built against Dendrolib.
-- Role: descriptive behavior
-- Deciding authority: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py), `main`
-- Corroboration: [main.yml](../../.github/workflows/main.yml), `dendro-validation`, which generates, builds, and runs both applications
+Committing binaries, images, archives, or compiled objects requires explicit maintainer approval (`coding_style.md`). Within the KB, cite the handwritten generator module and symbol rather than generated `project/` files unless a specific generated text file is registered as `frozen` in `raw/SOURCES.md` ([KB Rules](../SCHEMA.md#not-in-the-kb)).
 
-CI deliberately creates and builds generated outputs as validation evidence. The Ubuntu and macOS codegen jobs install NRPy, generate many projects, and run `make` where applicable. Separate Einstein Toolkit and Charm++ jobs generate backend products inside CI containers, the Dendro job generates them in the runner's temporary directory, and each job runs its configured build, runtime, and required checks.
+Evidence (normative rule): `coding_style.md` (`## Python Coding Style`); `dendro_bssn.py`; `.github/workflows/main.yml`.
 
-The contribution boundary is stricter than the generated-project capability. Binary files, images, archives, compiled artifacts, generated projects, and similar non-text outputs should not be committed unless maintainers approve or a specific generated artifact is intentionally registered as source evidence. For documentation and review, cite the generator source and stable symbols rather than transient generated output whenever possible.
+### Identifying Generated File Banners
 
-### What A Generated File Carries
+Generated headers and sources carry emitter-specific banners rather than one universal template: `BHaH/BHaH_defines_h.py::output_BHaH_defines_h` writes a do-not-edit banner naming its Python module (shared by `superB_two_blackholes_collide.py`), `BHaH/CodeParameters.py::write_CodeParameters_h_files` annotates each parameter with its registering module, ETLegacy and CarpetX `interface_ccl.py::construct_interface_ccl` name NRPy in `.ccl` headers, and `Dendro/main_cpp.py::output_main_cpp` emits both a do-not-edit banner and upstream `DENDRO_LICENSE` provenance for `punctureDataPhysicalCoord`.
 
-Provenance in a generated NRPy file is a do-not-edit banner and nothing more.
-BHaH's names the module that generated the file; ETLegacy's and CarpetX's
-`.ccl` banners name NRPy without the module; superB emits none. No NRPy
-infrastructure stamps a provenance hash into a generated file or ships a
-file-hash manifest beside a generated project, so a richer provenance scheme in
-a new infrastructure is recognisably an invention rather than a convention
-being followed.
-
-Claim evidence:
-- Claim: generated-file provenance in NRPy is a do-not-edit banner — naming the generating module in BHaH, naming NRPy alone in the ETLegacy and CarpetX `.ccl` writers, and absent in superB — and no infrastructure stamps a provenance hash or ships a file-hash manifest.
-- Role: normative rule
-- Deciding authority: [BHaH_defines_h.py](../../nrpy/infrastructures/BHaH/BHaH_defines_h.py), the emitted banner text
-- Corroboration: [interface_ccl.py](../../nrpy/infrastructures/ETLegacy/interface_ccl.py) and [interface_ccl.py](../../nrpy/infrastructures/CarpetX/interface_ccl.py), the `automatically generated by NRPy` banner each emits
+Evidence (descriptive behavior): `BHaH/BHaH_defines_h.py`; `BHaH/CodeParameters.py`; `Dendro/main_cpp.py`; `ETLegacy/interface_ccl.py`; `CarpetX/interface_ccl.py`.
 
 ## Sources
 
+- [coding_style.md](../../coding_style.md) - `## Python Coding Style`, `### Formatting`
 - [README.md](../../README.md) - `## What Gets Generated?`, `## Project Families and Example Generators`
-- [.github/workflows/main.yml](../../.github/workflows/main.yml) - `einsteintoolkit-validation`, `dendro-validation`, `charmpp-validation`, `codegen-ubuntu`, `codegen-mac`
-- [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - the Dendro application output directories.
-- [raw/source-docs/original-agents.md](../../raw/source-docs/original-agents.md) - `## Scope`
+- [main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`, `codegen-mac`, `einsteintoolkit-validation`, `dendro-validation`, `charmpp-validation`
+- [BHaH_defines_h.py](../../nrpy/infrastructures/BHaH/BHaH_defines_h.py) - `output_BHaH_defines_h`
+- [CodeParameters.py](../../nrpy/infrastructures/BHaH/CodeParameters.py) - `write_CodeParameters_h_files`
+- [main_cpp.py](../../nrpy/infrastructures/Dendro/main_cpp.py) - `DENDRO_LICENSE`, `output_main_cpp`
+- [ETLegacy interface_ccl.py](../../nrpy/infrastructures/ETLegacy/interface_ccl.py) - `construct_interface_ccl`
+- [CarpetX interface_ccl.py](../../nrpy/infrastructures/CarpetX/interface_ccl.py) - `construct_interface_ccl`
+- [superB_two_blackholes_collide.py](../../nrpy/examples/superB_two_blackholes_collide.py) - shared `output_BHaH_defines_h` call
+- [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) - `Dendro_NRPy_BSSN` output tree
+- [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - `Dendro_NRPy_fCCZ4` output tree
 
 ## See Also
 
-- Parent: [Architecture](index.md)
 - Depends on: [Build And Run](build-and-run.md)
 - Depends on: [Contribution Style And Static Analysis](contribution-style-and-static-analysis.md)
 - See also: [Overview](overview.md)

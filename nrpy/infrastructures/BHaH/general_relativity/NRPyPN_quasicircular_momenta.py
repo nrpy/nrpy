@@ -96,12 +96,12 @@ if(commondata->initial_p_t == -1.0 && commondata->initial_p_r == -1.0) {
     // In NRPyPN, q = m2/m1 = mass_M/mass_m. So mass_m = object 1, and mass_M is object 2.
     const REAL q = commondata->mass_ratio;
     const REAL r = commondata->initial_sep;
-    const REAL chi1U0 = commondata->bbhxy_BH_M_chix;
-    const REAL chi1U1 = commondata->bbhxy_BH_M_chiy;
-    const REAL chi1U2 = commondata->bbhxy_BH_M_chiz;
-    const REAL chi2U0 = commondata->bbhxy_BH_m_chix;
-    const REAL chi2U1 = commondata->bbhxy_BH_m_chiy;
-    const REAL chi2U2 = commondata->bbhxy_BH_m_chiz;
+    const REAL chi1U0 = commondata->bbhxy_BH_m_chix;
+    const REAL chi1U1 = commondata->bbhxy_BH_m_chiy;
+    const REAL chi1U2 = commondata->bbhxy_BH_m_chiz;
+    const REAL chi2U0 = commondata->bbhxy_BH_M_chix;
+    const REAL chi2U1 = commondata->bbhxy_BH_M_chiy;
+    const REAL chi2U2 = commondata->bbhxy_BH_M_chiz;
 
     const REAL mass_M =   q / (1.0 + q);
     const REAL mass_m = 1.0 / (1.0 + q);

@@ -377,19 +377,23 @@ def register_CFunction_ds_min_single_pt(
     :param CoordSystem: The coordinate system of the numerical grid.
 
     Doctests:
-    >>> from nrpy.helpers.generic import validate_strings
+    >>> from nrpy.helpers.generic import validate_strings, clang_format
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> from nrpy.reference_metric import unittest_CoordSystems
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> name = "ds_min_single_pt"
+    >>> sympy_1_15 = tuple(int(v) for v in sp.__version__.split(".")[:2]) >= (1, 15)
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    for CoordSystem in unittest_CoordSystems:
     ...       cfc.CFunction_dict.clear()
     ...       register_CFunction_ds_min_single_pt(CoordSystem)
-    ...       generated_str = cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function
+    ...       generated_str = clang_format(cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function)
     ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
+    ...       # Curvilinear scale factors must be checked with either SymPy printer.
+    ...       if sympy_1_15 and CoordSystem != "Cartesian":
+    ...          validation_desc += "__sympy_1_15"
     ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     Setting up reference_metric[SinhSymTP]...
     Setting up reference_metric[HoleySinhSpherical]...

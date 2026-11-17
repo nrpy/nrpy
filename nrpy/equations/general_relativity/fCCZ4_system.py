@@ -236,7 +236,6 @@ def build_fccz4_expression_bundle(
             CoordSystem=CoordSystem,
             enable_rfm_precompute=enable_rfm_precompute,
             registering_module=__name__,
-            ShiftEvolutionOption=ShiftEvolutionOption,
             KreissOliger_strength_gauge=KreissOliger_strength_gauge,
             KreissOliger_strength_nongauge=KreissOliger_strength_nongauge,
             enable_CAKO=enable_CAKO,

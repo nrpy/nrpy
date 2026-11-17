@@ -1,6 +1,6 @@
 # Chare Entrypoints And Runtime
 
-> Structural map of superB Charm++ chares, entry methods, proxies, SDAG, reductions, checkpointing, and PUP contracts. · Status: confirmed
+> Structural map of superB Charm++ chares, entry methods, proxies, SDAG, reductions, checkpointing, and PUP serialization. · Status: confirmed
 > Up: [superB](index.md)
 
 ## Summary
@@ -9,11 +9,13 @@ superB emits a Charm++ program around one `Main` mainchare, one required
 three-dimensional `Timestepping` chare array, and optional `Interpolator3d`
 and `Horizon_finder` arrays when the BHaHAHA-facing service path is enabled.
 Runtime communication is by generated Charm++ proxy handles and entry methods,
-not direct object pointers. The Python generators own the handwritten source
+not direct object pointers. The Python generators define the handwritten source
 text for generated `.h`, `.cpp`, and `.ci` files; generated project files
-themselves remain output artifacts, not KB source evidence.
+themselves remain output files, not KB source evidence.
 
 ## Detail
+
+### Mainchare, Chare Arrays, And Readonly Proxies
 
 Charm++ vocabulary is used in the ordinary upstream sense: `.ci` files declare
 chares, chare arrays, entry methods, messages, readonly variables, and array
@@ -36,7 +38,7 @@ for `mainProxy` and `timesteppingArray`; BHaHAHA builds also declare readonly
 startup-published Charm globals or handles, not shared mutable transport state.
 Charm++ initializes readonly variables in the mainchare startup path and
 broadcasts them; assignments outside the mainchare constructor are invalid
-under the readonly contract even though the translator cannot enforce that
+for readonly variables even though the translator cannot enforce that
 restriction.
 
 `Main` assigns all runtime handles before dependent use. In non-BHaHAHA
@@ -84,6 +86,8 @@ derives from `CBase_Horizon_finder`, embeds `Horizon_finder_SDAG_CODE`, runs a
 `start()` SDAG entry, receives interpolation results, signals horizon
 completion, and reduces completion to `mainProxy.horizon_finder_done()`.
 
+### SDAG Sequencing, PUP Serialization, And Reductions
+
 The `Timestepping` SDAG entry is the structural runtime spine. It orders
 initialization, staged data synchronization, diagnostic sessions, optional
 service-array messages, optional checkpoint coordination, Method of Lines
@@ -105,7 +109,7 @@ and callback paths, reference numbers travel through `CkSetRefNum` and
 superB PUP support has two layers. Chare classes PUP their own object state:
 `Main` conditionally PUPs startup/completion fields; `Timestepping` PUPs
 commondata, global griddata, chare-local griddata, and optional state; and the
-optional service chares PUP their SDAG-visible state and owned buffers. The
+optional service chares PUP their SDAG-visible state and chare-allocated buffers. The
 shared C-function registration in `superB_pup.py` emits struct-level PUP
 routines for commondata, params, boundary, MoL, chare communication,
 diagnostics, nonlocal-inner-boundary, temporary-buffer, `griddata`, and
@@ -123,7 +127,7 @@ Reductions appear in four distinct superB roles:
   `CkIndex_Timestepping::report_sums_for_volume(NULL)` on
   `Timestepping[0,0,0]`; `report_sums_for_volume` is not declared
   `[reductiontarget]`. It receives a `CkReductionMsg *` as a message-client
-  callback and parses the summed `double` payload.
+  callback and parses the summed `double` array.
 - Zero-data completion reductions: BHaHAHA completion uses zero-data
   reductions with `CkReductionTarget` callbacks so the root `Timestepping` or
   root `Horizon_finder` element can notify `Main`.
@@ -133,12 +137,12 @@ Reductions appear in four distinct superB roles:
   later waits for `recvCheckPointDone()`.
 - CkIO completion callbacks: diagnostic write and close callbacks receive
   `CkReductionMsg *` as completion messages from the CkIO path. They are not
-  user volume-reduction payloads.
+  user volume-reduction arrays.
 
 `CkReduction::reducerType` is Charm++'s reducer selector type.
 `CkReduction::sum_double` is the reducer used by superB volume diagnostics to
 sum vectors of `double` values. Zero-data completion and checkpoint
-coordination reductions use no user data payload.
+coordination reductions carry no user data buffer.
 
 Placement is separate from decomposition. `Nchare0`, `Nchare1`, and `Nchare2`
 define the grid/chare decomposition and array extents; they are not PE
@@ -189,10 +193,6 @@ current configured CI.
 
 ## See Also
 
-- [superB](index.md)
-- [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md)
-- [Diagnostics And Observables](diagnostics-and-observables.md)
-- [Grids, Boundaries, MoL, And Initial Data](grids-boundaries-mol-and-initial-data.md)
-- [GR, BHaHAHA, Psi4, And Interpolation](gr-bhahaha-psi4-and-interpolation.md)
-- [Generated Project CI](../../validation/generated-project-ci.md)
-- [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)
+- See also: [superB Project Assembly, .ci, And Makefile Emission](lifecycle-and-project-assembly.md)
+- See also: [Diagnostics And Observables](diagnostics-and-observables.md)
+- Validated by: [Generated Project CI](../../validation/generated-project-ci.md)

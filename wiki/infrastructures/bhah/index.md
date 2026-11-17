@@ -4,20 +4,19 @@
 
 | Page | Go here when... |
 | --- | --- |
-| [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md) | You need the executable/library lifecycle, project assembly, Makefile helper path, or generated-output boundary. |
-| [Runtime Data, Parameters, Headers, And CLI](runtime-data-parameters-headers-and-cli.md) | You need generated structs, parameters, headers, default parfiles, command-line/parfile override flow, or CUDA host/device runtime data. |
-| [Grids, Coordinates, Reference Metrics, And Boundaries](grids-coordinates-reference-metrics-and-boundaries.md) | You need grid setup, coordinates, reference metrics, CFL timestep setup, or CurviBC registration. |
-| [MoL Time Integration](mol-time-integration.md) | You need Method of Lines storage, Runge-Kutta method selection, stage stepping, or time-integration hooks. |
-| [Diagnostics Output And Checkpointing](diagnostics-output-and-checkpointing.md) | You need diagnostics dispatch, output cadence, progress indicators, or checkpoint/restart flow. |
-| [GR Application Wiring](gr-application-wiring.md) | You need BHaH GR RHS, Ricci, constraints, TwoPunctures/TOVola initial data, basis transforms, Psi4, or spin-weighted special-function wiring. |
-| [SO(3) Rotation Helpers](so3-rotation-helpers.md) | You need BHaH generated C helper registration, API names, conventions, or generated-string validation for `nrpy/infrastructures/BHaH/rotation/`. |
-| [BHaHAHA Horizon Runtime](bhahaha-horizon-runtime.md) | You need orientation for BHaHAHA apparent-horizon runtime and its task pages. |
-| [BHaHAHA Public API And Input Contract](bhahaha-public-api-and-input-contract.md) | You need the public C boundary, caller inputs, generated BHaH controls, or runtime validation contract. |
-| [BHaHAHA Grid, Interpolation, And Boundaries](bhahaha-grid-interpolation-and-boundaries.md) | You need the BHaH-to-BHaHAHA data bridge, spherical grids, interpolation stages, or local boundary handling. |
-| [BHaHAHA Relaxation, Diagnostics, And State](bhahaha-relaxation-diagnostics-and-state.md) | You need the solver loop, multiresolution relaxation, diagnostics, BBH/common-horizon state, or cleanup path. |
-| [GRoovy GRHD Runtime](groovy-grhd-runtime.md) | You need GRoovy GRHD runtime, GRHayL/EOS boundary, reconstruction, fluxes, or primitive/conservative conversion. |
-| [NRPyElliptic Workflow](nrpyelliptic-workflow.md) | You need NRPyElliptic initial data, relaxation RHS, residuals, stop conditions, or diagnostics wiring. |
-| [Geodesics And Raytracing Runtime](geodesics-and-raytracing-runtime.md) | You need geodesic executables, raytracing export, RKF45 control, interpolation, or output-artifact boundaries. |
-| [SEOBNR BOB Generated Library](seobnr-bob-generated-library.md) | You need SEOBNR/BOB generated-library assembly, commondata, GSL utilities, or waveform output boundaries. |
+| [Project Assembly, main.c, And Makefile Emission](lifecycle-and-project-assembly.md) | You need executable/library generation order, `main.c` assembly, `Makefile_helpers.py`, or generated-output boundaries. |
+| [Runtime Data, Parameters, Headers, And CLI](runtime-data-parameters-headers-and-cli.md) | You need generated structs, parameters, `BHaH_defines.h`, parfiles, CLI overrides, or CUDA host/device structs. |
+| [Grids, Coordinates, And Reference Metrics](grids-coordinates-and-reference-metrics.md) | You need numerical grid allocation, `ReferenceMetric`/fisheye setup, coordinate conversions, or CFL `dt`/`dsmin` evaluation. |
+| [Curvilinear Boundaries And Stencils](curvilinear-boundaries-and-stencils.md) | You need `CurviBoundaryConditions`, inner parity/outer radiation BCs, angular grid-count parity rules, or stencil ghost bounds. |
+| [MoL Time Integration](mol-time-integration.md) | You need Method of Lines storage, Runge-Kutta method tables, stage stepping, or time-integration hooks. |
+| [Diagnostics Output And Checkpointing](diagnostics-output-and-checkpointing.md) | You need diagnostics dispatch, 0D/1D/2D/volume output, progress indicators, or checkpoint/restart readers and writers. |
+| [GR Evolution And Constraints](gr-evolution-and-constraints.md) | You need BHaH BSSN/fCCZ4 RHS, Ricci, YBS/CAHD options, algebraic repairs, `H`/`M^2`/`Lambda^2` constraints, or tile helpers. |
+| [GR Initial Data And Psi4](gr-initial-data-and-psi4.md) | You need Cartesian/spherical ADM, TwoPunctures (`W` lapse), NRPyElliptic, TOVola initial data, basis transforms, or `Psi4` decomposition. |
+| [SO(3) Rotation Helpers](so3-rotation-helpers.md) | You need BHaH generated C helper registration, conventions, or string validation under `nrpy/infrastructures/BHaH/rotation/`. |
+| [BHaHAHA](bhahaha/index.md) | You need the BHaHAHA apparent-horizon C API, spherical grid interpolation, or multiresolution hyperbolic relaxation. |
+| [GRoovy GRHD Runtime](groovy-grhd-runtime.md) | You need GRoovy GRHD gridfunctions, GRHayL/EOS calls, reconstruction, HLL fluxes, or primitive recovery. |
+| [NRPyElliptic Workflow](nrpyelliptic-workflow.md) | You need NRPyElliptic initial guesses, hyperbolic-relaxation RHSs, residual norms, stop conditions, or diagnostics. |
+| [Geodesics And Raytracing Runtime](geodesics-and-raytracing-runtime.md) | You need geodesic executables, evolution raytracing export, RKF45 integration, Lagrange interpolation, or output files. |
+| [SEOBNR BOB Generated Library](seobnr-bob-generated-library.md) | You need SEOBNRv5/BOB/SEBOBv2 generated C library assembly, `commondata`, GSL ODE integration, or strain resampling. |
 
 Back to [Infrastructures](../index.md).

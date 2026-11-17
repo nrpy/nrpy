@@ -17,6 +17,8 @@ not a normal runnable executable workflow.
 
 ## Detail
 
+### TOVola Initial Data And Hydro-Without-Hydro Projects
+
 Run repository-checkout examples as modules after installing the package or
 after putting `.` on `PYTHONPATH` from the repository root. The command shapes
 are:
@@ -86,6 +88,8 @@ project, building it, and running `make clean`. CUDA is a source-supported
 option from the example; the local helper configures a CUDA build, while no
 configured route runs either executable or checks results.
 
+### GRoovy TOV Evolution And MANGA Library Generation
+
 `groovy_TOV_BSSN.py` writes `project/groovy_TOV_BSSN__Spherical/` by default.
 It sets `CoordSystem = "Spherical"`, `IDType = "TOV"`, evolving spacetime on,
 evolving temperature off, `OnePlusLog` lapse, covariant second-order gamma
@@ -144,7 +148,7 @@ functions, coordinate transforms, and coordinate-system wrappers.
 
 The library split happens at Makefile generation: `exec_or_library_name` is
 `libbhah_lib`, `create_lib=True`, and `register_CFunctions_bhah_lib()` provides
-the library-facing surface. The generated project still uses GSL build flags,
+the library-facing C entry points. The generated project still uses GSL build flags,
 but the expected product is a library, not a standalone executable run:
 
 ```bash
@@ -172,24 +176,16 @@ separate from executable run instructions.
 
 ## Sources
 
-- [tovola_neutron_star.py](../../nrpy/examples/tovola_neutron_star.py) - `project_name`, `CoordSystem`, `IDtype`, `IDCoordSystem`
-- [tovola_neutron_star.py](../../nrpy/examples/tovola_neutron_star.py) - `register_CFunction_TOVola_interp`, `register_CFunction_TOVola_solve`, `register_CFunction_initial_data`
-- [tovola_neutron_star.py](../../nrpy/examples/tovola_neutron_star.py) - `BHaH.read_checkpoint.register_CFunction_read_checkpoint`, `BHaH.write_checkpoint.register_CFunction_write_checkpoint`, `BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile`
-- [hydro_without_hydro.py](../../nrpy/examples/hydro_without_hydro.py) - `parser`, `parallelization`, `project_name`, `CoordSystem`, `IDtype`
-- [hydro_without_hydro.py](../../nrpy/examples/hydro_without_hydro.py) - `enable_T4munu`, `rhs_string`, `output_CFunctions_function_prototypes_and_construct_Makefile`
-- [groovy_TOV_BSSN.py](../../nrpy/examples/groovy_TOV_BSSN.py) - `project_name`, `IDType`, `grhayl_setup_str`
-- [groovy_TOV_BSSN.py](../../nrpy/examples/groovy_TOV_BSSN.py) - `register_all_grhd_gridfunctions`, `register_CFunction_grhd_rhs_eval`, `post_RHS_string`
-- [groovy_TOV_BSSN.py](../../nrpy/examples/groovy_TOV_BSSN.py) - `additional_includes`, `ghl_INC_FLAG`, `repo_url`
-- [manga_bhah_lib.py](../../nrpy/examples/manga_bhah_lib.py) - `project_name`, `set_of_CoordSystems`, `IDtype`
-- [manga_bhah_lib.py](../../nrpy/examples/manga_bhah_lib.py) - `register_CFunctions_bhah_lib`, `create_lib=True`
+- [tovola_neutron_star.py](../../nrpy/examples/tovola_neutron_star.py) - `project_name`, `CoordSystem`, `IDtype`, `IDCoordSystem`; `register_CFunction_TOVola_interp`, `register_CFunction_TOVola_solve`, `register_CFunction_initial_data`; `BHaH.read_checkpoint.register_CFunction_read_checkpoint`, `BHaH.write_checkpoint.register_CFunction_write_checkpoint`, `BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile`
+- [hydro_without_hydro.py](../../nrpy/examples/hydro_without_hydro.py) - `parser`, `parallelization`, `project_name`, `CoordSystem`, `IDtype`; `enable_T4munu`, `rhs_string`, `output_CFunctions_function_prototypes_and_construct_Makefile`
+- [groovy_TOV_BSSN.py](../../nrpy/examples/groovy_TOV_BSSN.py) - `project_name`, `IDType`, `grhayl_setup_str`; `register_all_grhd_gridfunctions`, `register_CFunction_grhd_rhs_eval`, `post_RHS_string`; `additional_includes`, `ghl_INC_FLAG`, `repo_url`
+- [manga_bhah_lib.py](../../nrpy/examples/manga_bhah_lib.py) - `project_name`, `set_of_CoordSystems`, `IDtype`; `register_CFunctions_bhah_lib`, `create_lib=True`
 - [.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`, `codegen-mac`
-- [README.md](../../README.md) - `Prerequisites by Workflow`; official GSL [Using the Library](https://www.gnu.org/software/gsl/doc/html/usage.html) - `Compiling and Linking`
+- [README.md](../../README.md) - `Prerequisites by Workflow`
+- [GSL Using the Library](https://www.gnu.org/software/gsl/doc/html/usage.html) - `Compiling and Linking`
 
 ## See Also
 
-- [Examples](index.md)
-- [First Wave Equation Run](first-wave-equation-run.md)
-- [Black Hole Evolution](black-hole-evolution.md)
-- [Generated Project CI](../validation/generated-project-ci.md)
-- [GRoovy GRHD Runtime](../infrastructures/bhah/groovy-grhd-runtime.md)
-- [Lifecycle And Project Assembly](../infrastructures/bhah/lifecycle-and-project-assembly.md)
+- Validated by: [Generated Project CI](../validation/generated-project-ci.md)
+- Depends on: [GRoovy GRHD Runtime](../infrastructures/bhah/groovy-grhd-runtime.md)
+- Depends on: [Project Assembly, main.c, And Makefile Emission](../infrastructures/bhah/lifecycle-and-project-assembly.md)

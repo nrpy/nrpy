@@ -290,7 +290,6 @@ def register_CFunction_timestepping_malloc(
     Register a C function for timestepping malloc.
 
     :param enable_BHaHAHA: If True, allocate memory of tmpBuffer_bhahaha_gfs..
-    :return None
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Allocate memory for temporary buffers used to communicate face data"
@@ -347,7 +346,6 @@ def register_CFunction_timestepping_free_memory(
     Register a C function for timestepping free memory.
 
     :param enable_BHaHAHA: If True, free memory of tmpBuffer_bhahaha_gfs.
-    :return None
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Free memory for temporary buffers used to communicate face data"
