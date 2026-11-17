@@ -552,6 +552,24 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     Setting up reference_metric[HoleySinhSpherical]...
     >>> _run_generalrfm_fisheye_inverse_roundtrip_check("float")
     >>> _run_generalrfm_fisheye_inverse_roundtrip_check("double")
+    >>> par.set_parval_from_str("parallelization", "openmp")
+    >>> cfc.CFunction_dict.clear()
+    >>> import contextlib, io
+    >>> coord = "GeneralRFM_spheroidal_fisheyeN1"
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     _ = register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(coord)
+    >>> wrapper = cfc.CFunction_dict[f"{name}__rfm__{coord}"]
+    >>> body = wrapper.body
+    >>> assert "Cartx -= params->Cart_originx;" in body
+    >>> assert "Carty -= params->Cart_originy;" in body
+    >>> assert "Cartz -= params->Cart_originz;" in body
+    >>> null_guard = "if (Cart_to_i0i1i2 == NULL)" + chr(10) + "        return;"
+    >>> assert null_guard in body
+    >>> for i in range(3):
+    ...     index_code = (f"Cart_to_i0i1i2[{i}] = (int)( ( xx[{i}] - "
+    ...                   f"params->xxmin{i} ) / params->dxx{i} + (REAL)NGHOSTS );")
+    ...     assert index_code in body
+    ...     assert body.index(null_guard) < body.index(index_code)
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    cfc.CFunction_dict.clear()
