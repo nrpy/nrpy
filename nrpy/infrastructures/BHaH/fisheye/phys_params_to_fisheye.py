@@ -27,50 +27,43 @@ from nrpy.equations.generalrfm import fisheye as fisheye_eqs
 
 def _register_physical_fisheye_codeparams(
     num_transitions: int,
-    add_to_parfile: bool = True,
-    register_shared_phys_params: bool = True,
     axis_prefixes: Tuple[str, ...] = ("",),
 ) -> None:
     """
     Register physical fisheye CodeParameters in commondata_struct.
 
     :param num_transitions: Number of fisheye transitions.
-    :param add_to_parfile: Whether to emit the registered parameters into the
-        generated parameter file.
-    :param register_shared_phys_params: Whether to register the shared outer
-        radius and plateau-factor parameters.
     :param axis_prefixes: Transition parameter prefixes, empty for radial maps.
     """
-    if register_shared_phys_params:
-        _ = par.register_CodeParameter(
-            "REAL",
-            __name__,
-            "fisheye_phys_L",
-            10.0,
-            commondata=True,
-            add_to_parfile=add_to_parfile,
-            description="Outer physical boundary radius.",
-        )
+    _ = par.register_CodeParameter(
+        "REAL",
+        __name__,
+        "fisheye_phys_L",
+        max(10.0, 2.0 * (num_transitions + 1)),
+        commondata=True,
+        add_to_parfile=True,
+        description="Outer physical boundary radius.",
+    )
 
-        # Step 1: Register runtime-steerable fisheye plateau/stretch factors in commondata.
-        # These are copied into params->fisheye_a* in the post-params hook so users
-        # can tune a_i from the .par file without recompiling.
-        a_phys_names = [f"fisheye_phys_a{i}" for i in range(num_transitions + 1)]
-        a_phys_defaults: List[Union[str, int, float]] = [
-            float(2**i) for i in range(num_transitions + 1)
-        ]
-        _ = par.register_CodeParameters(
-            "REAL",
-            __name__,
-            a_phys_names,
-            a_phys_defaults,
-            commondata=True,
-            add_to_parfile=add_to_parfile,
-            descriptions=[
-                f"Physical/input fisheye plateau factor a{i} (copied to params->fisheye_a{i})."
-                for i in range(num_transitions + 1)
-            ],
-        )
+    # Step 1: Register runtime-steerable fisheye plateau/stretch factors in commondata.
+    # These are copied into params->fisheye_a* in the post-params hook so users
+    # can tune a_i from the .par file without recompiling.
+    a_phys_names = [f"fisheye_phys_a{i}" for i in range(num_transitions + 1)]
+    a_phys_defaults: List[Union[str, int, float]] = [
+        float(2**i) for i in range(num_transitions + 1)
+    ]
+    _ = par.register_CodeParameters(
+        "REAL",
+        __name__,
+        a_phys_names,
+        a_phys_defaults,
+        commondata=True,
+        add_to_parfile=True,
+        descriptions=[
+            f"Physical/input fisheye plateau factor a{i} (copied to params->fisheye_a{i})."
+            for i in range(num_transitions + 1)
+        ],
+    )
 
     for prefix in axis_prefixes:
         r_names = [
@@ -92,7 +85,7 @@ def _register_physical_fisheye_codeparams(
             r_names,
             r_defaults,
             commondata=True,
-            add_to_parfile=add_to_parfile,
+            add_to_parfile=True,
             descriptions=[
                 f"Physical center radius of transition {i + 1}."
                 for i in range(num_transitions)
@@ -104,7 +97,7 @@ def _register_physical_fisheye_codeparams(
             w_names,
             w_defaults,
             commondata=True,
-            add_to_parfile=add_to_parfile,
+            add_to_parfile=True,
             descriptions=[
                 f"Physical width of transition {i + 1}." for i in range(num_transitions)
             ],
@@ -199,7 +192,10 @@ def _physical_fisheye_solver_prefunc() -> str:
 
     :return: C helper definitions independent of parameter structs.
     """
-    return r"""/**
+    return r"""#ifndef NRPY_PHYSICAL_FISHEYE_SOLVER_HELPERS_H
+#define NRPY_PHYSICAL_FISHEYE_SOLVER_HELPERS_H
+
+/**
  * Compute log(cosh(x)) stably for large |x|.
  *
  * Uses log(cosh(x)) = |x| + log(1 + exp(-2|x|)) - log(2).
@@ -491,13 +487,13 @@ static inline int solve_physical_fisheye_params(const REAL L,
   *c_out = c;
   return 0;
 } // END FUNCTION: solve_physical_fisheye_params
+
+#endif // NRPY_PHYSICAL_FISHEYE_SOLVER_HELPERS_H
 """
 
 
 def register_CFunction_fisheye_params_from_physical_N(
     num_transitions: int = 2,
-    physical_params_add_to_parfile: bool = True,
-    register_shared_phys_params: bool = True,
 ) -> None:
     """
     Register a C function that solves for fisheye (R_i, s_i) and computes c from physical parameters.
@@ -520,10 +516,6 @@ def register_CFunction_fisheye_params_from_physical_N(
     ...     validate_strings(generated_str, name, file_ext="c")
 
     :param num_transitions: Number of fisheye transitions.
-    :param physical_params_add_to_parfile: Whether the radial fisheye physical
-        input parameters should be emitted into the generated parfile.
-    :param register_shared_phys_params: Whether to register the shared
-        `fisheye_phys_L` and `fisheye_phys_a*` parameters in this call.
     :raises ValueError: If num_transitions is less than 1.
     """
     if num_transitions < 1:
@@ -533,11 +525,7 @@ def register_CFunction_fisheye_params_from_physical_N(
     _ = fisheye_eqs.build_fisheye(num_transitions=num_transitions)
 
     # Step 2: Register physical parameters in commondata_struct.
-    _register_physical_fisheye_codeparams(
-        num_transitions,
-        add_to_parfile=physical_params_add_to_parfile,
-        register_shared_phys_params=register_shared_phys_params,
-    )
+    _register_physical_fisheye_codeparams(num_transitions)
 
     includes = ["<math.h>", "<stdio.h>", "<stdlib.h>"]
     desc = """\

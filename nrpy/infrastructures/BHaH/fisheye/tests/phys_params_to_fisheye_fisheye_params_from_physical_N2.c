@@ -26,6 +26,9 @@ typedef struct __params_struct__ {
 } params_struct;
 #endif
 
+#ifndef NRPY_PHYSICAL_FISHEYE_SOLVER_HELPERS_H
+#define NRPY_PHYSICAL_FISHEYE_SOLVER_HELPERS_H
+
 /**
  * Compute log(cosh(x)) stably for large |x|.
  *
@@ -334,6 +337,8 @@ static inline int solve_physical_fisheye_params(const REAL L, const REAL a[], co
   *c_out = c;
   return 0;
 } // END FUNCTION: solve_physical_fisheye_params
+
+#endif // NRPY_PHYSICAL_FISHEYE_SOLVER_HELPERS_H
 
 /**
  * Compute fisheye internal parameters (R_i, s_i) and compute c from physical fisheye inputs
