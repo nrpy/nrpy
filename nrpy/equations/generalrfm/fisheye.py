@@ -93,6 +93,7 @@ scalar factors.
 from typing import Dict, List, Optional, Tuple, cast
 
 import sympy as sp
+from sympy.codegen.cfunctions import expm1, log1p
 
 import nrpy.indexedexp as ixp
 import nrpy.params as par
@@ -769,7 +770,6 @@ def build_spheroidal_fisheye(num_transitions: int) -> GeneralRFMSpheroidalFishey
     Doctests:
     >>> radial = build_fisheye(1)
     >>> spheroidal = build_spheroidal_fisheye(1)
-    >>> import math
     >>> substitutions = {
     ...     radial.a_list[0]: 1.0,
     ...     radial.a_list[1]: 2.0,
@@ -792,10 +792,7 @@ def build_spheroidal_fisheye(num_transitions: int) -> GeneralRFMSpheroidalFishey
     ...     spheroidal.xx[2]: 0.8,
     ... }
     >>> spheroidal_values = [
-    ...     sp.lambdify(
-    ...         (), expr.subs(substitutions),
-    ...         [{"log1p": math.log1p, "expm1": math.expm1}, "math"],
-    ...     )()
+    ...     float(expr.evalf(subs=substitutions))
     ...     for expr in spheroidal.xx_to_CartU
     ... ]
     >>> all(
@@ -842,12 +839,9 @@ def _G_kernel(r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:
     scaled_min = sp.Min(r, R) / s
     scaled_max = sp.Max(r, R) / s
     tail = sp.exp(-2 * (scaled_max - scaled_min))
-    log1p = sp.Function("log1p")
-    expm1 = sp.Function("expm1")
-    logcosh_difference = 2 * scaled_min + log1p(
-        tail * expm1(-4 * scaled_min) / (sp.Integer(1) + tail)
-    )
-    return (s / (2 * sp.tanh(R / s))) * logcosh_difference
+    # Avoid dividing the leading radius by s and multiplying it back in float.
+    correction = log1p(tail * expm1(-4 * scaled_min) / (sp.Integer(1) + tail))
+    return (sp.Min(r, R) + s * correction / 2) / sp.tanh(R / s)
 
 
 def _radius_map_unscaled(

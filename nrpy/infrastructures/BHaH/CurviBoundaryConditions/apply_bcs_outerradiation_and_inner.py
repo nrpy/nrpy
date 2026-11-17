@@ -67,28 +67,6 @@ def _radiation_r_and_partials_exprs(CoordSystem: str) -> List[sp.Expr]:
     ]
 
 
-def _radiation_partial_is_identically_zero(
-    CoordSystem: str, partial_expr: sp.Expr
-) -> bool:
-    """
-    Decide whether a radiation-BC partial expression is identically zero.
-
-    For spheroidal GeneralRFM fisheye, all three partial_r x^i expressions are
-    generically nonzero, and asking SymPy/mpmath to numerically prove
-    nonzeroness is more expensive than emitting the small extra FD helper.
-
-    :param CoordSystem: Coordinate system used by the radiation boundary.
-    :param partial_expr: Partial-derivative expression to test.
-    :return: Whether the expression is identically zero.
-    """
-    rfm = refmetric.reference_metric[CoordSystem]
-    provider = getattr(rfm, "general_rfm_provider", None)
-    provider_kind = getattr(provider, "provider_kind", None)
-    if provider_kind == "spheroidal_fisheye":
-        return False
-    return check_zero(partial_expr, fixed_mpfs_for_free_symbols=True)
-
-
 ###############################
 ## RADIATION (NewRad-like) BOUNDARY CONDITIONS.
 ##  Functions are fully documented in nrpytutorial's
@@ -377,7 +355,7 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
 """
     for i in range(3):
         si = str(i)
-        if _radiation_partial_is_identically_zero(CoordSystem, partials_exprs[i + 1]):
+        if check_zero(partials_exprs[i + 1], fixed_mpfs_for_free_symbols=True):
             body += f"  const REAL partial_x{si}_f=0.0;\n"
         else:
             body += (
@@ -431,9 +409,7 @@ def setup_Cfunction_radiation_bcs(
         cfunc_decorators += " __device__"
     for i in range(3):
         # Do not generate FD1_arbitrary_upwind_xj_dirn() if the symbolic expression for dxj/dr == 0!
-        if not _radiation_partial_is_identically_zero(
-            CoordSystem, partials_exprs[i + 1]
-        ):
+        if not check_zero(partials_exprs[i + 1], fixed_mpfs_for_free_symbols=True):
             prefunc += setup_Cfunction_FD1_arbitrary_upwind(
                 dirn=i,
                 cfunc_decorators=cfunc_decorators,
