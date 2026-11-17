@@ -18,8 +18,12 @@ Note: This is the superB version.
 """
 
 import os
+import selectors
 import shutil
+import signal
 import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Callable, Dict, cast
 
@@ -176,54 +180,68 @@ if enable_BHaHAHA:
     #########################################################
     # Step 2: Declare core C functions & register each to
     #         cfc.CFunction_dict["function_name"]
-    try:
-        # Attempt to run as a script path
-        subprocess.run(
-            [
-                "python",
-                "nrpy/examples/bhahaha.py",
-                "--fdorder",
-                str(fd_order),
-                "--outrootdir",
-                project_dir,
-                "--cpp",
-                "--no-openmp",
-                "--no-parallel-codegen",
-            ],
-            check=True,
-            timeout=300,
-            stdout=subprocess.DEVNULL,
+    # Allow each finite-difference-order-8 BHaHAHA generation attempt 15 minutes.
+    bhahaha_timeout_seconds = 900
+    bhahaha_args = [
+        "--fdorder",
+        str(fd_order),
+        "--outrootdir",
+        project_dir,
+        "--cpp",
+        "--no-openmp",
+        "--no-parallel-codegen",
+    ]
+    for invocation in (
+        [sys.executable, "nrpy/examples/bhahaha.py"],
+        [sys.executable, "-m", "nrpy.examples.bhahaha"],
+    ):
+        command = [*invocation, *bhahaha_args]
+        with subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise RuntimeError(
-            "BHaHAHA C-code generation exceeded the 300-second limit."
-        ) from error
-    except subprocess.CalledProcessError:
-        # If it fails (e.g., from a pip install), try running as a module
-        try:
-            subprocess.run(
-                [
-                    "python",
-                    "-m",
-                    "nrpy.examples.bhahaha",
-                    "--fdorder",
-                    str(fd_order),
-                    "--outrootdir",
-                    project_dir,
-                    "--cpp",
-                    "--no-openmp",
-                    "--no-parallel-codegen",
-                ],
-                check=True,
-                timeout=300,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.STDOUT,
-            )
-        except subprocess.TimeoutExpired as error:
-            raise RuntimeError(
-                "BHaHAHA C-code generation exceeded the 300-second limit."
-            ) from error
+            start_new_session=True,
+        ) as process:
+            output_tail = b""
+            deadline = time.monotonic() + bhahaha_timeout_seconds
+            try:
+                assert process.stdout is not None
+                with selectors.DefaultSelector() as selector:
+                    selector.register(process.stdout, selectors.EVENT_READ)
+                    while True:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0 or not selector.select(timeout=remaining):
+                            raise subprocess.TimeoutExpired(
+                                command, bhahaha_timeout_seconds
+                            )
+                        chunk = os.read(process.stdout.fileno(), 4096)
+                        if not chunk:
+                            break
+                        # Drain continuously, retaining only the last 4 KiB in memory.
+                        output_tail = (output_tail + chunk)[-4096:]
+                returncode = process.wait(timeout=max(0, deadline - time.monotonic()))
+                if returncode:
+                    raise subprocess.CalledProcessError(returncode, command)
+            except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
+                diagnostics = output_tail.decode("utf-8", errors="replace")
+                if isinstance(error, subprocess.TimeoutExpired):
+                    raise RuntimeError(
+                        f"BHaHAHA C-code generation exceeded {bhahaha_timeout_seconds} seconds.\n{diagnostics}"
+                    ) from error
+                if invocation[1] == "-m":
+                    raise RuntimeError(
+                        f"BHaHAHA C-code generation failed with exit code {error.returncode}.\n{diagnostics}"
+                    ) from error
+                # A missing script path can still be run from an installed module.
+            else:
+                break
+            finally:
+                # Also stop forked workers before retrying or propagating a failure.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait()
     from nrpy.infrastructures.superB import BHaH_implementation
 
     BHaH_implementation.register_CFunction_bhahaha_find_horizons(
