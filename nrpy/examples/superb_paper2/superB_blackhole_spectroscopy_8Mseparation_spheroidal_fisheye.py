@@ -189,7 +189,7 @@ if enable_BHaHAHA:
         project_dir,
         "--cpp",
         "--no-openmp",
-        "--no-parallel-codegen",
+        "--sequential-codegen",
     ]
     for invocation in (
         [sys.executable, "nrpy/examples/bhahaha.py"],

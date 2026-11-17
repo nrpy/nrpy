@@ -47,7 +47,7 @@ parser.add_argument(
     help="Disable OpenMP flags",
 )
 parser.add_argument(
-    "--no-parallel-codegen",
+    "--sequential-codegen",
     action="store_true",
     help="Generate C functions sequentially",
 )
@@ -72,7 +72,7 @@ enable_rfm_precompute = True
 enable_fd_functions = True
 MoL_method = "SSPRK33"
 enable_simd = False  # Does not work, as the SIMD vector would be in the radial direction, where only a single point is sampled.
-enable_parallel_codegen = not args.no_parallel_codegen
+enable_parallel_codegen = not args.sequential_codegen
 boundary_conditions_desc = "inner boundaries only"
 
 #########################################################
