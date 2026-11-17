@@ -250,6 +250,10 @@ def _generate_spheroidal_fisheye_inverse_body(
     """
     Generate a bracketed 1D inverse for axis-scaled spheroidal fisheye maps.
 
+    Solve M(r) - rCart = 0, where M(r) = r / norm(u / lambda(r))
+    and u is the Cartesian unit direction. Evaluating scale factors before
+    this norm avoids squared-radius underflow and keeps M'(r) finite near zero.
+
     :param provider: Spheroidal fisheye reference-metric provider.
     :param cart_components: C expressions for the Cartesian coordinates.
     :param origin_body: C code emitted when the Cartesian point is the origin.
@@ -259,21 +263,9 @@ def _generate_spheroidal_fisheye_inverse_body(
     """
     cartx, carty, cartz = cart_components
     r_symbol = sp.Symbol("r", real=True, positive=True)
-    lam_xy, lam_z, dlam_xy, dlam_z, asymptotic_scale = provider.axis_maps_for_inverse(
-        r_symbol
-    )
-    cartx_sym, carty_sym, cartz_sym = sp.symbols("Cartx Carty Cartz", real=True)
-    cart_xy2 = cartx_sym * cartx_sym + carty_sym * carty_sym
-    residual_expr = (
-        cart_xy2 / (lam_xy * lam_xy)
-        + cartz_sym * cartz_sym / (lam_z * lam_z)
-        - r_symbol * r_symbol
-    )
-    residual_deriv_expr = (
-        -2 * cart_xy2 * dlam_xy / (lam_xy**3)
-        - 2 * cartz_sym * cartz_sym * dlam_z / (lam_z**3)
-        - 2 * r_symbol
-    )
+    lam_xy, lam_z, _, _, asymptotic_scale = provider.axis_maps_for_inverse(r_symbol)
+    _, xy_radius_prime = provider.xy_map.scaled_value_stable_and_deriv(r_symbol)
+    _, z_radius_prime = provider.z_map.scaled_value_stable_and_deriv(r_symbol)
 
     def emit_codegen(
         radius_var: str,
@@ -285,9 +277,6 @@ def _generate_spheroidal_fisheye_inverse_body(
         local_radius = sp.Symbol(radius_var, real=True, positive=True)
         substitutions = {
             r_symbol: local_radius,
-            cartx_sym: sp.Symbol(cartx),
-            carty_sym: sp.Symbol(carty),
-            cartz_sym: sp.Symbol(cartz),
         }
         processed_exprs = _prepare_sympy_exprs_for_codegen(
             [expr.xreplace(substitutions) for _, expr in outputs],
@@ -306,29 +295,42 @@ def _generate_spheroidal_fisheye_inverse_body(
         (("asymptotic_scale", asymptotic_scale),),
         "asymptotic_",
     )
-    high_residual_codegen = emit_codegen(
-        "high",
-        (("high_residual", residual_expr),),
-        "high_",
-    )
-    radial_codegen = emit_codegen(
-        "radial_seed",
-        (
-            ("radial_residual", residual_expr),
-            ("radial_residual_prime", residual_deriv_expr),
-        ),
-        "radial_",
-    )
-    trial_residual_codegen = emit_codegen(
-        "trial_seed",
-        (("trial_residual", residual_expr),),
-        "trial_",
-    )
-    fallback_residual_codegen = emit_codegen(
-        "trial_seed",
-        (("trial_residual_fallback", residual_expr),),
-        "fallback_",
-    )
+
+    def emit_residual(radius_var: str, prefix: str, derivative: bool = False) -> str:
+        # Keep the scale factors separate from the norm: symbolic combination
+        # would reintroduce powers of the tiny physical radius into denominators.
+        outputs = [(f"{prefix}lam_xy", lam_xy), (f"{prefix}lam_z", lam_z)]
+        if derivative:
+            outputs.extend(
+                [
+                    (f"{prefix}xy_prime", xy_radius_prime),
+                    (f"{prefix}z_prime", z_radius_prime),
+                ]
+            )
+        result = "\n".join(f"    REAL {name};" for name, _ in outputs) + "\n"
+        result += emit_codegen(radius_var, tuple(outputs), prefix)
+        result += rf"""
+    const REAL {prefix}ux = ({cartx} / rCart) / {prefix}lam_xy;
+    const REAL {prefix}uy = ({carty} / rCart) / {prefix}lam_xy;
+    const REAL {prefix}uz = ({cartz} / rCart) / {prefix}lam_z;
+    const REAL {prefix}norm = hypot(hypot({prefix}ux, {prefix}uy), {prefix}uz);
+    {prefix}residual = {radius_var} / {prefix}norm - rCart;
+"""
+        if derivative:
+            result += rf"""
+    const REAL {prefix}wx = {prefix}ux / {prefix}norm;
+    const REAL {prefix}wy = {prefix}uy / {prefix}norm;
+    const REAL {prefix}wz = {prefix}uz / {prefix}norm;
+    {prefix}residual_prime =
+        (({prefix}wx * {prefix}wx + {prefix}wy * {prefix}wy) * {prefix}xy_prime / {prefix}lam_xy
+         + {prefix}wz * {prefix}wz * {prefix}z_prime / {prefix}lam_z) / {prefix}norm;
+"""
+        return result
+
+    high_residual_codegen = emit_residual("high", "high_")
+    radial_codegen = emit_residual("radial_seed", "radial_", derivative=True)
+    trial_residual_codegen = emit_residual("trial_seed", "trial_")
+    fallback_residual_codegen = emit_residual("trial_seed", "fallback_")
     final_lam_codegen = emit_codegen(
         "radial_seed",
         (("lam_xy", lam_xy), ("lam_z", lam_z)),
@@ -336,7 +338,7 @@ def _generate_spheroidal_fisheye_inverse_body(
     )
 
     return rf"""
-  const REAL rCart = sqrt(({cartx}) * ({cartx}) + ({carty}) * ({carty}) + ({cartz}) * ({cartz}));
+  const REAL rCart = hypot(hypot({cartx}, {carty}), {cartz});
   if (rCart <= (REAL)0.0) {{
 {origin_body}
   }} // END IF: handle origin
@@ -349,21 +351,20 @@ def _generate_spheroidal_fisheye_inverse_body(
         (sizeof(REAL) == sizeof(float)) ? (REAL)1.1920928955078125e-7 : (REAL)2.2204460492503131e-16;
     REAL asymptotic_scale;
 {asymptotic_scale_codegen}
-    const REAL inv_asymptotic_scale =
-        (fabs(asymptotic_scale) > (REAL)1.0e-15) ? (REAL)1.0 / asymptotic_scale : (REAL)1.0;
     REAL low = (REAL)0.0;
-    REAL high = NRPYMAX(rCart * inv_asymptotic_scale, rCart);
+    REAL high = NRPYMAX(rCart / asymptotic_scale, rCart);
     REAL radial_seed = (REAL)0.5 * high;
     int bracket_found = 0;
     int converged = 0;
     for (int expand = 0; expand < 80; expand++) {{
       REAL high_residual;
 {high_residual_codegen}
-      if (isfinite(high_residual) && high_residual <= (REAL)0.0) {{
+      if (isfinite(high_residual) && high_residual >= (REAL)0.0) {{
         bracket_found = 1;
         break;
       }} // END IF: found bracket
-      high = NRPYMAX(high * (REAL)2.0, (REAL)1.0);
+      low = high;
+      high *= (REAL)2.0;
     }} // END LOOP: for expand over bracket expansions
     if (!bracket_found) {{
 {failure_body}
@@ -386,25 +387,25 @@ def _generate_spheroidal_fisheye_inverse_body(
 {trial_residual_codegen}
       if (!isfinite(trial_residual)) {{
         trial_seed = (REAL)0.5 * (low + high);
-        REAL trial_residual_fallback;
+        REAL fallback_residual;
 {fallback_residual_codegen}
-        trial_residual = trial_residual_fallback;
+        trial_residual = fallback_residual;
         if (!isfinite(trial_residual)) {{
 {failure_body}
         }} // END IF: fallback residual is non-finite
       }} // END IF: primary trial residual is non-finite
-      if (trial_residual <= (REAL)0.0)
+      if (trial_residual >= (REAL)0.0)
         high = trial_seed;
       else
         low = trial_seed;
       const REAL bracket_width = fabs(high - low);
       const REAL raw_radius_scale = fabs(trial_seed);
       const REAL residual_tolerance =
-          inverse_relative_tol * raw_radius_scale * raw_radius_scale;
+          inverse_relative_tol * rCart;
       const REAL bracket_tolerance = inverse_relative_tol * raw_radius_scale;
       // Compare residual roundoff with the derivative-scaled radius tolerance.
       const REAL residual_roundoff =
-          (REAL)8.0 * machine_epsilon * raw_radius_scale * raw_radius_scale;
+          (REAL)8.0 * machine_epsilon * rCart;
       if (fabs(trial_residual) < residual_tolerance && bracket_width < bracket_tolerance &&
           isfinite(radial_residual_prime) &&
           residual_roundoff < bracket_tolerance * fabs(radial_residual_prime)) {{

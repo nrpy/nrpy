@@ -41,6 +41,36 @@ static int check_roundtrip(const params_struct *params, const REAL xx[3],
     return 0;
   return vectors_match(xx, xx_back);
 } // END FUNCTION: check_roundtrip
+
+static int check_small_radius_inverse(const params_struct *params,
+                                     int (*inverse)(const params_struct *, const REAL[3], REAL[3])) {
+  const int exponents[] = {8, 12, 16, 20, 30, 200};
+  const REAL directions[3][3] = {{1, 0, 0}, {0, 0, 1}, {0.6, -0.8, 1}};
+  const REAL tolerance = sizeof(REAL) == sizeof(float) ? (REAL)1.0e-4 : (REAL)1.0e-10;
+  const int num_radii = sizeof(REAL) == sizeof(float) ? 5 : 6;
+  for (int n = 0; n < num_radii; n++) {
+    const REAL radius = (REAL)pow(10.0, -exponents[n]);
+    for (int direction = 0; direction < 3; direction++) {
+      REAL Cart[3], expected[3], actual[3];
+      for (int i = 0; i < 3; i++) {
+        Cart[i] = radius * directions[direction][i];
+        const REAL scale = i == 2 ? params->fisheye_z_c : params->fisheye_xy_c;
+        expected[i] = Cart[i] / (params->fisheye_a0 * scale);
+      } // END LOOP: limiting inverse components
+      const int status = inverse(params, Cart, actual);
+      const REAL expected_scale = fmax(fmax(fabs(expected[0]), fabs(expected[1])), fabs(expected[2]));
+      for (int i = 0; i < 3; i++) {
+        if (status != 0 || !isfinite(actual[i]) ||
+            fabs((actual[i] - expected[i]) / expected_scale) > tolerance) {
+          fprintf(stderr, "Small-radius inverse failed: exponent=%d direction=%d status=%d component=%d expected=%.17g actual=%.17g\n",
+                  exponents[n], direction, status, i, (double)expected[i], status ? 0.0 : (double)actual[i]);
+          return 0;
+        } // END IF: limiting inverse mismatch
+      } // END LOOP: check relative errors
+    } // END LOOP: Cartesian directions
+  } // END LOOP: small nonzero radii
+  return 1;
+} // END FUNCTION: check_small_radius_inverse
 """
 
 N8_PARAMETERS: Dict[str, List[float]] = {
@@ -138,6 +168,8 @@ params.fisheye_xy_c = (REAL)0.8;
 params.fisheye_z_R1 = (REAL)8.0;
 params.fisheye_z_s1 = (REAL)1.2;
 params.fisheye_z_c = (REAL)1.1;
+if (!check_small_radius_inverse(&params, generalrfm_Cart_to_xx__GeneralRFM_spheroidal_fisheyeN1))
+  return 10;
 const REAL anisotropic_xx[3] = {(REAL)3.0, (REAL)-5.0, (REAL)7.0};
 if (!check_roundtrip(&params, anisotropic_xx,
                      xx_to_Cart__rfm__GeneralRFM_spheroidal_fisheyeN1,
@@ -158,6 +190,16 @@ if (sizeof(REAL) == sizeof(double)) {
     return 9;
 } // END IF: tiny identity radius
 
+params.fisheye_a0 = params.fisheye_a1 = (REAL)1.0;
+params.fisheye_xy_R1 = params.fisheye_z_R1 = (REAL)1.0;
+params.fisheye_xy_s1 = params.fisheye_z_s1 = (REAL)0.5;
+params.fisheye_xy_c = params.fisheye_z_c = (REAL)1.0e-30;
+const REAL small_scale_xx[3] = {(REAL)1.0, (REAL)0.0, (REAL)0.0};
+if (!check_roundtrip(&params, small_scale_xx,
+                     xx_to_Cart__rfm__GeneralRFM_spheroidal_fisheyeN1,
+                     generalrfm_Cart_to_xx__GeneralRFM_spheroidal_fisheyeN1))
+  return 12;
+
 if (sizeof(REAL) == sizeof(double)) {
   params.fisheye_a0 = (REAL)1.0e10;
   params.fisheye_a1 = (REAL)1.0;
@@ -177,6 +219,8 @@ if (sizeof(REAL) == sizeof(double)) {
 """
         + n8_assignments
         + r"""
+if (!check_small_radius_inverse(&params, generalrfm_Cart_to_xx__GeneralRFM_spheroidal_fisheyeN8))
+  return 11;
 const REAL shipped_n8_xx[3] = {
     (REAL)-192.3581085205078,
     (REAL)-94.86515808105469,
