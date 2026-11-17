@@ -266,7 +266,8 @@ static void apply_inner_bc_for_selected_gfs(bc_struct *restrict bcstruct, REAL *
     } // END LOOP: for pt over inner boundary points
   } // END LOOP: for which_gf over gridfunctions
 #else
-  } END_PARALLEL_2D_LOOP; // END LOOP: which_gf over gridfunctions and pt over boundary points
+  } // END LOOP: which_gf over gridfunctions and pt over boundary points
+  END_PARALLEL_2D_LOOP; 
 #endif
 } // END FUNCTION: apply_inner_bc_for_selected_gfs
 
@@ -430,7 +431,8 @@ __device__
       } // END LOOP: for i1 over theta points on the horizon surface
     } // END LOOP: for i2 over phi points on the horizon surface
 #else
-    } END_PARALLEL_2D_LOOP; // END LOOP: loop i1, i2, over theta and phi points on horizon surface
+    } // END LOOP: loop (i1, i2) over (theta, phi) points on horizon surface
+    END_PARALLEL_2D_LOOP; 
 #endif
 
     // Apply inner boundary conditions to q-metric gridfunctions sqrt(qtt), sqrt(qpp), and qtp:
@@ -554,7 +556,8 @@ __device__
     } // END LOOP: for i1 over theta
   } // END LOOP: for i2 over phi
 #else
-  } END_PARALLEL_2D_LOOP; // END LOOP: loop i1, i2 over theta, phi
+  } // END LOOP: loop (i1, i2) over (theta, phi)
+  END_PARALLEL_2D_LOOP;
 #endif
 
   // Apply inner boundary conditions to the newly computed scalar integrands f_eq (which_gf=3)

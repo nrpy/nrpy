@@ -108,7 +108,8 @@ __device__
         const REAL t_prev = commondata->time_of_h_p, t_curr = commondata->time;
         const REAL dst_time = t_prev + overstep * (t_curr - t_prev);
         in_gfs[IDX4pt(HHGF, idx3)] = y_curr + (y_prev - y_curr) * (dst_time - t_curr) / (t_prev - t_curr);
-      } END_PARALLEL_LOOP;  // END LOOP: Apply overstep to gridpoints.
+      } // END LOOP: for i0/i1/i2 over overstep gridpoints.
+      END_PARALLEL_LOOP;  
 
 #ifdef __CUDACC__
       gpu_grid.sync();
@@ -127,7 +128,8 @@ __device__
 #endif         
           commondata->error_flag = BHAHAHA_SUCCESS;
 #ifdef __CUDACC__
-        } END_CUDA_ONE_THREAD; //End global variable modification
+        } //End global variable modification
+        END_CUDA_ONE_THREAD; 
 #endif
       }
 #ifdef __CUDACC__
@@ -136,7 +138,8 @@ __device__
 
       PARALLEL_LOOP(i0, NGHOSTS, NGHOSTS+1, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
         in_gfs[IDX4(HHGF, i0, i1, i2)] = in_gfs[IDX4(HHGF, i0 + 1, i1, i2)]; // Revert horizon values to their original state.
-      } END_PARALLEL_LOOP;  // END LOOP: Revert horizon values to their original state.
+      } // END LOOP: for i0/i1/i2 over reverted horizon values
+      END_PARALLEL_LOOP;  
 #ifdef __CUDACC__
       gpu_grid.sync();
 #endif
@@ -153,12 +156,13 @@ __device__
             printf("# Iteration %d: Best overstep factor = %e, Improvement ratio = %.15e\n", commondata->nn, best_overstep,
                  fabs(M_irr_orig - min_Theta_Linf_times_M) / M_irr_orig);
 #ifdef __CUDACC__
-        } END_CUDA_ONE_THREAD; //End global variable modification
+        } //End global variable modification
+        END_CUDA_ONE_THREAD; 
 #endif
       } else {
         break; // Exit loop early if no further improvement is found.
       } // END IF: overstep resulted in a reduced error.
-    } // END LOOP: Iterate over oversteps.
+    } // END LOOP: for overstep_idx over canidate oversteps
 
     // Apply the best overstep if it significantly improves convergence.
     
@@ -175,11 +179,12 @@ __device__
   
         // Update v(theta, phi) to reset time dynamics.
         in_gfs[IDX4(VVGF, i0, i1, i2)] = commondata->eta_damping * in_gfs[IDX4(HHGF, i0, i1, i2)];
-      } END_PARALLEL_LOOP; // END LOOP over grid interior.
+      } // END LOOP: for i0/i1/i2 over grid interior
+      END_PARALLEL_LOOP; 
 #ifdef __CUDACC__
       gpu_grid.sync();
 #endif
-    } // END LOOP: Apply the optimal overstep.
+    } // END IF: Apply the optimal overstep 
 
     // Since over-relaxation was successful, we need to update the surface on which the metric
     //    is interpolated, and the CFL-limited timestep.
@@ -200,14 +205,16 @@ __device__
     // Reset the stored horizon guess h_p and its time t_p.
     PARALLEL_LOOP(i0, NGHOSTS, NGHOSTS+1, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
       commondata->h_p[IDX3(i0, i1, i2)] = 0.0; //
-    } END_PARALLEL_LOOP; //END LOOP: Reset horizon
+    } //END LOOP: i0/i1/i2 over all gridpoints 
+    END_PARALLEL_LOOP; 
 #ifdef __CUDACC__
     gpu_grid.sync();
     CUDA_ONE_THREAD(gpu_grid) {
 #endif
       commondata->time_of_h_p = 0.0; // Reset time for h_p.
 #ifdef __CUDACC__
-    } END_CUDA_ONE_THREAD; //End global variable modification
+    } //End global variable modification
+    END_CUDA_ONE_THREAD; 
     gpu_grid.sync();
 #endif
     return;
@@ -219,19 +226,20 @@ __device__
   gpu_grid.sync();
 #endif
   if (commondata->nn % relax_every_nn == 0) {
-    PARALLEL_LOOP(i0, NGHOSTS, NGHOSTS+1, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2)
+    PARALLEL_LOOP(i0, NGHOSTS, NGHOSTS+1, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
       commondata->h_p[IDX3(i0, i1, i2)] = in_gfs[IDX4pt(HHGF, IDX3(i0, i1, i2))];
-    END_PARALLEL_LOOP; // END LOOP over all gridpoints
+    } // END LOOP: i0/i1/i2 over all gridpoints
+    END_PARALLEL_LOOP; 
 #ifdef __CUDACC__
     gpu_grid.sync();
     CUDA_ONE_THREAD(gpu_grid) {
 #endif
       commondata->time_of_h_p = commondata->time; // Update time for h_p.
 #ifdef __CUDACC__
-    } END_CUDA_ONE_THREAD; //End global variable modification
-
+    } //End global variable modification
+    END_CUDA_ONE_THREAD; 
 #endif
-  } // END IF nn % relax_every_nn == 0
+  } // END IF: nn % relax_every_nn == 0
 #ifdef __CUDACC__
   gpu_grid.sync();
 #endif

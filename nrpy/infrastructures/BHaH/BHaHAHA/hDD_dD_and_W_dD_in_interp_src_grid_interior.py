@@ -66,7 +66,8 @@ __device__
         enable_fd_codegen=True,
     ).replace("auxevol_gfs[IDX4(", "commondata->interp_src_gfs[IDX4(SRC_")
     body += r"""
-      } END_PARALLEL_LOOP; // END LOOP: for pt over non-inner-boundary points
+      } // END LOOP: for pt over non-inner-boundary points
+      END_PARALLEL_LOOP; 
 
   // PART 2 OF 2: Compute radial derivatives h_{ij,k} and W_{,k} (k = 0) at ALL interior points.
   PARALLEL_LOOP(i0, NGHOSTS, Nxx_plus_2NGHOSTS0 - NGHOSTS, i1, NGHOSTS, Nxx_plus_2NGHOSTS1 - NGHOSTS, i2, NGHOSTS, Nxx_plus_2NGHOSTS2 - NGHOSTS) {
@@ -93,7 +94,8 @@ __device__
     ).replace("auxevol_gfs[IDX4(", "commondata->interp_src_gfs[IDX4(SRC_")
 
     body += r"""
-} END_PARALLEL_LOOP; // END LOOP: for i0/i1/i2 over all interior points
+} // END LOOP: for i0/i1/i2 over all interior points
+END_PARALLEL_LOOP; 
 """
 
     cfc.register_CFunction(

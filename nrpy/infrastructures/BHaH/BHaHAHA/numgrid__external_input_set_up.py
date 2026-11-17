@@ -153,7 +153,8 @@ void initialize_transform_and_rescale(commondata_struct *restrict commondata)
     for (int gf = 0; gf < NUM_EXT_INPUT_CARTESIAN_GFS; gf++) {
       external_input_gfs[EX_IDX4(gf, i0 + i0_min_shift, i1 + NGHOSTS, i2 + NGHOSTS)] = external_input_gfs_no_gzs[EX_NOGZ_IDX4(gf, i0, i1, i2)];
     }
-  } END_PARALLEL_LOOP; // END LOOP: iterating through the external input grid points
+  } // END LOOP: idx over external input grid points
+  END_PARALLEL_LOOP;
 
   {
     const int Nxx_plus_2NGHOSTS0 = commondata->external_input_Nxx_plus_2NGHOSTS0;
@@ -167,13 +168,16 @@ void initialize_transform_and_rescale(commondata_struct *restrict commondata)
 
     PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS0) {
       commondata->external_input_r_theta_phi[0][j] = xxmin0 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->external_input_dxx0;
-    } END_PARALLEL_1D_LOOP;
+    } 
+    END_PARALLEL_1D_LOOP;
     PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS1) {
       commondata->external_input_r_theta_phi[1][j] = xxmin1 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->external_input_dxx1;
-    } END_PARALLEL_1D_LOOP;
+    } 
+    END_PARALLEL_1D_LOOP;
     PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS2) {
       commondata->external_input_r_theta_phi[2][j] = xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->external_input_dxx2;
-    } END_PARALLEL_1D_LOOP;
+    } 
+    END_PARALLEL_1D_LOOP;
   } // END BLOCK: setting up coordinate arrays
 
 #ifdef __CUDACC__
@@ -307,14 +311,15 @@ void initialize_transform_and_rescale(commondata_struct *restrict commondata)
     )
     prefunc += """
 #ifndef __CUDACC__
-        } // END LOOP over i0
-      } // END LOOP over i1
-    } // END LOOP over i2
+        } // END LOOP: for i0 over radial points in the external-input grid 
+      } // END LOOP: for i1 over theta points in the external-input grid
+    } // END LOOP: for i2 over phi points in the external-input grid
 #else
-    } END_PARALLEL_LOOP; // END LOOP over i0, i1, i2
+    } // END LOOP: (i0, i1, i2) over (radial, theta, phi) points in the external-input grid
+    END_PARALLEL_LOOP;
 #endif
-  } // END BLOCK: transformation and rescaling
-} // END FUNCTION transform_and_rescale
+  } // END BLOCK: Step 4 transform Cartesian input data to rescaled spherical BSSN fields
+} // END FUNCTION: transform_and_rescale
 
 #ifdef __CUDACC__
 __constant__ int8_t c_external_input_gf_parity[14];
@@ -364,10 +369,11 @@ void apply_bcs_external_src(commondata_struct *restrict commondata, bc_struct *r
             external_input_bcstruct->inner_bc_array[pt].parity[external_input_gf_parity[which_gf]] *
             commondata->external_input_gfs[IDX4pt(which_gf, srcpt)];
 #ifndef __CUDACC__
-      } // END LOOP over inner boundary points
-    } // END LOOP over gridfunctions
+      } // END LOOP: for pt over inner boundary points
+    } // END LOOP: for which_gf over gridfunctions
 #else
-      } END_PARALLEL_2D_LOOP; // END LOOP over inner boundary points and gridfunctions
+    } // END LOOP: (pt, which_gf) over (inner boundary points, gridfunctions)
+    END_PARALLEL_2D_LOOP; 
 #endif
 } // END FUNCTION apply_bcs_external_src
 
@@ -463,7 +469,7 @@ This function performs the following steps:
   if (external_input_gfs == NULL) {
     commondata->error_flag =  NUMGRID_EXTERN_MALLOC_ERROR_GFS;
     return;
-  } // END IF memory allocation for external_input_gfs failed
+  } // END IF: memory allocation for external_input_gfs failed
 
   // Assign the allocated array to commondata for use outside this function.
   commondata->external_input_gfs = external_input_gfs;
@@ -492,7 +498,7 @@ This function performs the following steps:
       FREE(external_input_gfs);
       commondata->error_flag = NUMGRID_EXTERN_MALLOC_ERROR_RTHETAPHI;
       return;
-    } // END IF memory allocation for external_input_r_theta_phi arrays failed
+    } // END IF: memory allocation for external_input_r_theta_phi arrays failed
 
   }
 
@@ -573,7 +579,7 @@ This function performs the following steps:
     FREE(external_input_bcstruct.inner_bc_array);
     for (int ng = 0; ng < NGHOSTS * 3; ng++)
       FREE(external_input_bcstruct.pure_outer_bc_array[ng]);
-  } // END BLOCK: applying boundary conditions
+  } // END BLOCK: Step 5 apply external-input inner boundary conditions
 
 #ifdef __CUDACC__
   CUDA_FREE(d_commondata);

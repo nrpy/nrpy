@@ -247,7 +247,8 @@ __device__
           gfs[IDX4(which_gf, i0, i1, i2)] = partial_x0_f;
         } // END IF: the derivative gridfunction needs to be set
       } // END LOOP: for which_gf over gridfunctions
-    } END_PARALLEL_2D_LOOP; // END LOOP: i1 over theta points, i2 over phi points on the r_max boundary
+    } // END LOOP: (i1, i2)  over (theta, phi) points on the r_max boundary
+    END_PARALLEL_2D_LOOP; 
   } // END LOOP: for i0 over r_max radial ghost-zone layers
 
   /////////////////////////////////////////////////////////////////
@@ -297,7 +298,8 @@ __device__
             gfs[IDX4(which_gf, i0, i1, i2)] = partial_x0_f;
           } // END IF: the derivative gridfunction needs to be set
         } // END LOOP: for which_gf over gridfunctions
-      } END_PARALLEL_2D_LOOP; // END LOOP: i1 over theta points and i2 over phi points on the r_min boundary
+      } // END LOOP: (i1, i2) over (theta, phi) points on the r_min boundary
+      END_PARALLEL_2D_LOOP; 
     } // END LOOP: for i0 over r_min radial ghost-zone layers
   } // END IF: fill_r_min_ghosts requested
 """

@@ -165,7 +165,7 @@ __device__
 #ifndef __CUDACC__
             continue; // Skip further work for this iteration
 #endif
-          } // END IF stencil in bounds
+          } // END IF: stencil in bounds
 
 #if defined(DEBUG) && !defined(__CUDACC__)
           // Verify that the central index is the closest grid point to the destination radius
@@ -177,9 +177,9 @@ __device__
           if (fabs(src_r_theta_phi[2][idx_center_ph] - phi_dst) > src_dxx2 * (0.5 + TOLERANCE)) {
             fprintf(stderr, "ERROR: phi center index too far from destination point! %.15e > %.15e\n",
                     fabs(src_r_theta_phi[2][idx_center_ph] - phi_dst), src_dxx2 * (0.5 + TOLERANCE));
-          } // END IF central index is properly centered
+          } // END IF: central index is properly centered
 #endif // DEBUG
-        } // END sanity checks
+        } // END BLOCK: theta/phi stencil bounds and center-index sanity checks
 
 #ifdef __CUDACC__
         if (commondata->error_flag == BHAHAHA_SUCCESS) {
@@ -201,14 +201,14 @@ __device__
             const REAL coeff_ph_i = lagrange_basis_coeffs_ph[iph];
             for (int ith = 0; ith < INTERP_ORDER; ith++) {
               coeff_2d[iph][ith] = coeff_ph_i * lagrange_basis_coeffs_th[ith];
-            } // END LOOP over theta
-          } // END LOOP over phi
+            } // END LOOP: ith over theta stencil
+          } // END LOOP: iph over phi stencil
 
           // Step 3: Perform the 2D Lagrange interpolation, optimizing memory accesses and enabling vectorization
           REAL sum[NUM_EXT_INPUT_CONFORMAL_GFS];
           for (int gf = 0; gf < NUM_EXT_INPUT_CONFORMAL_GFS; gf++) {
             sum[gf] = 0.0;
-          } // END LOOP over grid functions
+          } // END LOOP: for gf over grid functions
           for (int iph = 0; iph < INTERP_ORDER; iph++) {
             const int idx_ph = base_idx_ph + iph;
             for (int ith = 0; ith < INTERP_ORDER; ith++) {
@@ -219,21 +219,22 @@ __device__
 #endif
               for (int gf = 0; gf < NUM_EXT_INPUT_CONFORMAL_GFS; gf++) {
                 sum[gf] += src_gfs[SRC_IDX4(gf, ir, idx_th, idx_ph)] * coeff;
-              } // END LOOP over src gridfunctions
-            } // END LOOP over theta
-          } // END LOOP over phi
+              } // END LOOP: for gf over source gridfunctions
+            } // END LOOP for ith over theta stencil
+          } // END LOOP for iph over phi stencil
           for (int gf = 0; gf < NUM_EXT_INPUT_CONFORMAL_GFS; gf++) {
             dst_gfs[DST_IDX4(gf, ir, itheta, iphi)] = sum[gf] * src_invdxx12_INTERP_ORDERm1;
-          } // END LOOP over dst gridfunctions
+          } // END LOOP: for gf over destination gridfunctions
 #ifdef __CUDACC__
-        } // END IF passed sanity checks 
+        } // END IF: passed sanity checks 
 #endif 
   #ifndef __CUDACC__
-      } // END LOOP over theta
-    } // END LOOP over phi
-  } // END LOOP over r
+      } // END LOOP: itheta over destination theta
+    } // END LOOP: iphi over destination phi
+  } // END LOOP: ir over radial shells
   #else
-  } END_PARALLEL_LOOP 
+  } // END LOOP: (ir, itheta, iphi) over (radial shells, destination theta, destination phi)
+  END_PARALLEL_LOOP;
   #endif
 
   return;

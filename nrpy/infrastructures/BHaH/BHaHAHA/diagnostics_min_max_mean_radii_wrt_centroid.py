@@ -180,11 +180,11 @@ __device__
               min_radius_squared = radius_squared;
             if (radius_squared > max_radius_squared)
               max_radius_squared = radius_squared;
-          } // END OMP CRITICAL
-        } // END LOOP over i0
-      } // END LOOP over i1
-    } // END LOOP over i2
-  } // END OMP PARALLEL
+          } // END OMP CRITICAL: update shared centroid-radius diagnostics
+        } // END LOOP: for i0 over radial horizon-grid points 
+      } // END LOOP: for i1 over theta horizon-grid points
+    } // END LOOP: for i2 over phi horizon-grid points
+  } // END OMP PARALLEL: scan all horizon surface points
 #else
 //Prep for Reduction
           s_sum_curr_area[tid] += area_element *weight1 * weight2;
@@ -202,7 +202,8 @@ __device__
             s_min_radius_squared[tid] = radius_squared;
           if (radius_squared > s_max_radius_squared[tid])
             s_max_radius_squared[tid]  = radius_squared;
-} END_CUDA_3D_LOOP          
+} // END LOOP: cuda i# over radial, theat, phi horizon-grid points
+END_CUDA_3D_LOOP;          
 #endif
 
 #ifdef __CUDACC__
@@ -218,11 +219,11 @@ __device__
           s_min_radius_squared[tid] = s_min_radius_squared[tid + halfsize];
         if (s_max_radius_squared[tid] < s_max_radius_squared[tid + halfsize])
           s_max_radius_squared[tid] = s_max_radius_squared[tid + halfsize];
-      }
-    }
+      } // END IF: compare only valued points
+    } //END IF: compare lower half of threads
     __syncthreads();
     halfsize = halfsize>>1;
-  }
+  } //END LOOP: block level reduction of diagnostic values
   // Grid level reduction to norms struct
   if (blockDim.x*blockIdx.x < Nxx0*Nxx1*Nxx2 && threadIdx.x == 0) {
     atomicAdd(&norms->sum_curr_area, s_sum_curr_area[0]);

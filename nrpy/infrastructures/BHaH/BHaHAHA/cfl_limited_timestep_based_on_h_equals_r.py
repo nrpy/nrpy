@@ -40,7 +40,7 @@ __device__ static double atomicMin_double(double* address, double val)
         __double_as_longlong(fmin(val, __longlong_as_double(assumed))));
   } while (assumed != old);
   return __longlong_as_double(old);
-}
+} //END FUNCTION: atomicMin_double
 #endif
 """
     description = "Compute minimum timestep dt = CFL_FACTOR * ds_min on a 2D spherical numerical grid."
@@ -122,7 +122,7 @@ __device__
       }
       __syncthreads();
       halfsize = halfsize>>1;
-    }
+    } //END LOOP: Minimum via reduction
     if (blockDim.x*blockIdx.x < Nxx0*Nxx1*Nxx2 && threadIdx.x == 0 ) {
       atomicMin_double(&commondata->dt, ds_min[0] * commondata->CFL_FACTOR);
     }

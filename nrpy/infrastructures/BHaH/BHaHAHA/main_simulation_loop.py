@@ -76,15 +76,17 @@ __global__
     // Step 1.b: Update the timestep based on the CFL condition.
     bah_cfl_limited_timestep_based_on_h_equals_r(commondata, griddata);
 
-    // Reset Horizon
+    // Initialize the previous horizon guess h_p and its associated time t_p on the first iteration. 
     if (commondata->nn == 0) {
       PARALLEL_LOOP(i0, NGHOSTS, NGHOSTS+1, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
         commondata->h_p[IDX3(i0,i1,i2)] = 0.0;
-      } END_PARALLEL_LOOP;
+      } 
+      END_PARALLEL_LOOP;
       #ifdef __CUDACC__
       gpu_grid.sync();
       #endif
-    } // END IF: Reset horizon
+      commondata->time_of_h_p = 0.0; // Initialize the time for h_p.
+    } // END IF: initialization of h_p and t_p
 
     // Step 1.c: Attempt over-relaxation every once in a while. If an
     //           over-relaxation is performed, the CFL timestep
@@ -114,13 +116,15 @@ __global__
         const REAL eta_damping_times_M = NRPYMAX(eta_min_times_M, eta_max_times_M * sqrt(bhahaha_diags->Theta_Linf_times_M));
         commondata->eta_damping = eta_damping_times_M / bhahaha_params_and_data->M_scale;
 #ifdef __CUDACC__
-      } END_CUDA_ONE_THREAD; //End global variable modification
+      } //End global variable modification
+      END_CUDA_ONE_THREAD; 
       gpu_grid.sync();
 #endif
       PARALLEL_LOOP(i0, NGHOSTS, NGHOSTS+1, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
         griddata[0].gridfuncs.y_n_gfs[IDX4(VVGF, i0, i1, i2)] =
             commondata->eta_damping * griddata[0].gridfuncs.y_n_gfs[IDX4(HHGF, i0, i1, i2)];
-      } END_PARALLEL_LOOP; // END LOOP over all gridpoints on horizon surface.
+      } // END LOOP: (i0, i1, i2) over all gridpoints on horizon surface.
+      END_PARALLEL_LOOP;
       #ifdef __CUDACC__
       gpu_grid.sync();
       #endif

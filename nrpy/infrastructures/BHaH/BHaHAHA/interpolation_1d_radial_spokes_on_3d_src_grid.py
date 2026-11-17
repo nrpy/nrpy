@@ -189,15 +189,15 @@ __device__
           #ifndef __CUDACC__
           continue; // Skip further work for this iteration
           #endif
-        } // END IF stencil in bounds
+        } // END IF: stencil in bounds
         
 #if defined(DEBUG) && !defined(__CUDACC__)
         // Verify that the central index is the closest grid point to the destination radius.
         if (fabs(interp_src_r_theta_phi[0][idx_center0] - r_dst) > commondata->interp_src_dxx0 * 0.5) {
           fprintf(stderr, "ERROR: Radial center index too far from destination point!\n");
-        } // END IF central index is properly centered.
+        } // END IF: central index is properly centered.
 #endif // DEBUG
-      } // END SANITY CHECKS.
+      } // END BLOCK: sanity checks for stencil bounds and center index
 
       #ifdef __CUDACC__
       //If all sanity checks are pass, perform the final interpolation
@@ -216,11 +216,12 @@ __device__
           dst_interp_gfs[DST_IDX4(gf, NGHOSTS, itheta, iphi)] =
               sum_lagrange_x0_simd(INTERP_ORDER, &interp_src_gfs[SRC_IDX4(gf, base_idx_x0, itheta, iphi)], lagrange_basis_coeffs_x0) *
               src_invdxx0_INTERP_ORDERm1;
-        } // END LOOP over grid functions.
+        } // END LOOP: for which_gf over grid functions.
       #ifdef __CUDACC__
-      } // END IF final interpolation
+      } // END IF: final interpolation
       #endif
-  } END_PARALLEL_2D_LOOP; // End LOOP over theta and phi
+  } // End LOOP: (itheta, iphi) over (theta, phi)
+  END_PARALLEL_2D_LOOP; 
 """
     postfunc = r"""#pragma GCC reset_options // Reset compiler optimizations after the function
 

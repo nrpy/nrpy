@@ -72,7 +72,8 @@ __device__
     } // END LOOP: for pt over inner boundary points
   } // END LOOP: for which_gf over evolution gridfunctions
 #else
-  } END_PARALLEL_2D_LOOP;
+  } // END LOOP: cuda pt, which_gf over inner boundary points, evolution gridfunctions
+  END_PARALLEL_2D_LOOP;
 #endif
 """
     cfc.register_CFunction(

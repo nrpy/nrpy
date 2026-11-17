@@ -125,7 +125,7 @@ void bah_diagnostics_final(commondata_struct *restrict commondata, griddata_stru
         printf("#(%5.5e, %5.5e) = (Area, M_irr)\n", bhahaha_diags->area, sqrt(bhahaha_diags->area / (16 * M_PI)));
         printf("#(%+4.4e, %+4.4e, %+4.4e) = (x, y, z) centroid, wrt input grid origin\n", bhahaha_diags->x_centroid_wrt_coord_origin,
                bhahaha_diags->y_centroid_wrt_coord_origin, bhahaha_diags->z_centroid_wrt_coord_origin);
-      } // END IF verbosity_level > 0, then print the diagnostics
+      } // END IF: verbosity_level > 0, then print the diagnostics
     
       REAL x_center, y_center, z_center, r_min, r_max;
       bah_xyz_center_r_minmax(commondata->bhahaha_params_and_data, &x_center, &y_center, &z_center, &r_min, &r_max);
@@ -175,12 +175,13 @@ void bah_diagnostics_final(commondata_struct *restrict commondata, griddata_stru
           display_spin("spin_z", bhahaha_diags->spin_a_z_from_xz_over_xy_prop_circumfs, bhahaha_diags->spin_a_z_from_yz_over_xy_prop_circumfs, //
                        "xz/xy", "yz/xy");
         } // END IF: verbosity level > 0
-      } // END IF display proper circumference diagnostics if verbosity is enabled.
-    } // END compute, store, and (optionally) print final diagnostics
+      } // END IF: display proper circumference diagnostics if verbosity is enabled.
+    } // END BLOCK: compute final diagnostics and update stored horizon history
 #ifdef __CUDACC__
-  } END_CUDA_ONE_THREAD;
+  } 
+  END_CUDA_ONE_THREAD;
 #endif
-}
+} // END FUNCTION: bah_diagnostics_final
 """
     desc = """
 Launches apparent horizon diagnostics for BHaHAHA.

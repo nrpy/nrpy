@@ -54,7 +54,7 @@ static void deep_retrieve_after_error(bhahaha_params_and_data_struct *restrict h
   CUDA_COPY_FROM(h_bhahaha_diags, d_bhahaha_diags, sizeof(bhahaha_diagnostics_struct));
   CUDA_FREE(d_bhahaha_params_and_data);
   CUDA_FREE(d_bhahaha_diags);
-}
+} //END FUNCTION: deep_retrieve_after_error
 #endif
 
 /**
@@ -292,7 +292,7 @@ to identify the apparent horizon with progressively refined grid resolutions.
     const int INTERP_ORDER = (2 * NinterpGHOSTS + 1); // Interpolation order corresponds to the number of points in the stencil per dimension.
 #endif
     
-    //Allocate h_p
+    //Allocate the previous horizon guess h_p before iteration
     MALLOC(commondata.h_p, sizeof(REAL) * Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2);
 
 #ifdef __CUDACC__
@@ -390,7 +390,7 @@ to identify the apparent horizon with progressively refined grid resolutions.
         int threadsperblock = THREADSPERBLOCK << 1;
         do {
           threadsperblock = threadsperblock >> 1;
-          sharesize = sizeof(REAL)*(INTERP_ORDER + (THREADSPERBLOCK*4)*INTERP_ORDER + THREADSPERBLOCK*INTERP_ORDER*INTERP_ORDER) + sizeof(REAL)*INTERP_ORDER;
+          sharesize = sizeof(REAL)*(INTERP_ORDER + (threadsperblock*4)*INTERP_ORDER + threadsperblock*INTERP_ORDER*INTERP_ORDER) + sizeof(REAL)*INTERP_ORDER;
         } while ( sharesize > 48000);
         COOPERATIVE_KERNEL(bah_diagnostics_full, Args, threadsperblock, sharesize);
         CUDA_COPY_FROM(&commondata, d_commondata, sizeof(commondata_struct));

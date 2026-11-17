@@ -254,10 +254,11 @@ __device__
     )
     body += r"""
 #ifndef __CUDACC__
-      } // END LOOP over i1 (theta)
-    } // END LOOP over i2 (phi)
+      } // END LOOP: for i1 over theta points on the horizon surface 
+    } // END LOOP: for i2 over phi points on the horizon surface
 #else
-    } END_PARALLEL_2D_LOOP;
+    } // END LOOP: cuda (i1, i2) over (theta, phi) points on the horizon surface
+    END_PARALLEL_2D_LOOP;
     gpu_grid.sync();
 #endif
 
@@ -301,14 +302,15 @@ __device__
             metric_data_gfs[IDX4pt(which_gf, 0) + IDX2(dst_i1, dst_i2)] = metric_data_gfs[IDX4pt(which_gf, 0) + IDX2(src_i1, src_i2)];
           }
       #ifndef __CUDACC__
-        } // END LOOP over inner boundary points
-      } // END LOOP over gridfunctions
+        } // END LOOP: for pt over inner boundary points
+      } // END LOOP: for which_gf over gridfunctions
       #else
-      } END_PARALLEL_2D_LOOP;
+      } // END LOOP: cuda pt, which gf over gridfunctions 
+      END_PARALLEL_2D_LOOP;
       gpu_grid.sync();
       #endif
-    } // END application of inner boundary conditions
-  } // END computation of line element gridfunction
+    } // END LOOP: apply inner boundary condtitions to circumference metric data  
+  } // END BLOCK: compute line-element gridfunctions on the horizon surface 
 
   // Grid spacings in theta and phi directions.
   const REAL dxx1 = griddata[grid].params.dxx1;
@@ -344,7 +346,8 @@ __device__
     PARALLEL_1D_LOOP(i2, 0, N_angle) { 
       dst_pts[i2][0] = M_PI / 2;                                   // Equator: theta = pi/2.
       dst_pts[i2][1] = -M_PI + ((REAL)i2 + (1.0 / 2.0)) * d_angle; // Equator: phi = [-pi, pi].
-    } END_PARALLEL_1D_LOOP; // END LOOP over phi angles
+    } // END LOOP: i2 over phi angles 
+    END_PARALLEL_1D_LOOP; 
 
     // Interpolate sqrt(q_{phi phi}) values onto the equator points to compute the circumference;
     //   note that sqrt(q_{phi phi}) is stored in metric_data_gfs[IDX4(1,...)]
@@ -365,22 +368,23 @@ __device__
     bah_diagnostics_integration_weights(N_angle, N_angle, &weights, &weight_stencil_size);
 
     // Compute the total xy-plane circumference by integrating over the sampled points.
-    #ifdef __CUDACC__
+#ifdef __CUDACC__
     CUDA_ONE_THREAD(gpu_grid) {
-    #endif
+#endif
     REAL sum_circumference = 0.0;
 #pragma omp parallel for reduction(+ : sum_circumference)
     for (int ic = 0; ic < N_angle; ic++) {
       const REAL weight = weights[ic % weight_stencil_size]; // Integration weight for this point.
       sum_circumference += circumference[ic] * weight;
-    } // END LOOP over ic
+    } // END LOOP: ic over circumference samples 
     // Multiply the sum by d[angle]
     commondata->bhahaha_diagnostics->xy_plane_circumference = sum_circumference * d_angle;
-    #ifdef __CUDACC__
-    } END_CUDA_ONE_THREAD;
+#ifdef __CUDACC__
+    } // END ONE_THREAD: reduction of sum_circumference
+    END_CUDA_ONE_THREAD;
     gpu_grid.sync();
-    #endif
-  } // END xy-plane circumference
+#endif
+  } // END BLOCK: compute xy-plane proper circumference
 
   // Polar (xz-plane) circumference next
   {
@@ -394,8 +398,9 @@ __device__
         // Second half: Theta from pi back to 0, phi = -pi
         dst_pts[i2][0] = ((REAL)(N_angle - i2) - 0.5) * (M_PI / ((REAL)(N_angle) / 2.0));
         dst_pts[i2][1] = -M_PI; // phi spans from [-pi, pi), so instead of interpolating at phi=pi, must interpolate at phi=-pi.
-      } // END IF theta is going from 0 to pi or vice-versa.
-    } END_PARALLEL_1D_LOOP; // END LOOP over angle
+      } // END IF: theta is going from 0 to pi or vice-versa.
+    } // END LOOP: for i2 over angle samples
+    END_PARALLEL_1D_LOOP; 
 
     // Interpolate sqrt(q_{theta theta}) values onto the polar (xz-plane) points to compute the circumference;
     //   note that sqrt(q_{theta theta}) is stored in metric_data_gfs[IDX4(0,...)]
@@ -424,14 +429,15 @@ __device__
     for (int ic = 0; ic < N_angle; ic++) {
       const REAL weight = weights[ic % weight_stencil_size]; // Integration weight for this point.
       sum_circumference += circumference[ic] * weight;
-    } // END LOOP over ic
+    } // END LOOP: for ic over circumference samples
     // Multiply the sum by d[angle]
     commondata->bhahaha_diagnostics->xz_plane_circumference = sum_circumference * d_angle;
     #ifdef __CUDACC__
-    } END_CUDA_ONE_THREAD;
+    } //END ONE_THREAD: reduction of sum_circumference 
+    END_CUDA_ONE_THREAD;
     gpu_grid.sync();
     #endif
-  } // END xz-plane circumference
+  } // END BLOCK: compute xz-plane proper circumference
 
   // Polar (yz-plane) circumference next
   {
@@ -445,8 +451,9 @@ __device__
         // Second half: Theta from pi back to 0, phi = -pi/2
         dst_pts[i2][0] = ((REAL)(N_angle - i2) - 0.5) * (M_PI / ((REAL)(N_angle) / 2.0));
         dst_pts[i2][1] = -M_PI / 2.0;
-      } // END IF theta is going from 0 to pi or vice-versa.
-    } END_PARALLEL_1D_LOOP; // END LOOP over angle
+      } // END IF: theta is going from 0 to pi or vice-versa.
+    } // END LOOP: for i2 over angle samples
+    END_PARALLEL_1D_LOOP;
 
     // Interpolate sqrt(q_{theta theta}) values onto the polar (yz-plane) points to compute the circumference;
     //   note that sqrt(q_{theta theta}) is stored in metric_data_gfs[IDX4(0,...)]
@@ -467,26 +474,27 @@ __device__
     bah_diagnostics_integration_weights(N_angle, N_angle, &weights, &weight_stencil_size);
 
     // Compute the total yz-plane circumference by integrating over the sampled points.
-    #ifdef __CUDACC__
+#ifdef __CUDACC__
     CUDA_ONE_THREAD(gpu_grid) {
-    #endif
+#endif
     REAL sum_circumference = 0.0;
 #pragma omp parallel for reduction(+ : sum_circumference)
     for (int ic = 0; ic < N_angle; ic++) {
       const REAL weight = weights[ic % weight_stencil_size]; // Integration weight for this point.
       sum_circumference += circumference[ic] * weight;
-    } // END LOOP over ic
+    } // END LOOP: for ic over circumference samples 
     // Multiply the sum by d[angle]
     commondata->bhahaha_diagnostics->yz_plane_circumference = sum_circumference * d_angle;
-    #ifdef __CUDACC__
-    } END_CUDA_ONE_THREAD;
+#ifdef __CUDACC__
+    } // END ONE_THREAD: reduction of sum_circumference
+    END_CUDA_ONE_THREAD;
     gpu_grid.sync();
-    #endif
-  } // END yz-plane circumference
+#endif
+  } // END BLOCK: compute yz-plane proper circumference
 
-  #ifdef __CUDACC__
+#ifdef __CUDACC__
   CUDA_ONE_THREAD(gpu_grid) {
-  #endif
+#endif
   // Next estimate spin parameter magnitudes, valid for equilibrium BHs only.
   //   Based on Eq 5.2 of Alcubierre et al arXiv:gr-qc/0411149.
   {
@@ -505,10 +513,11 @@ __device__
     commondata->bhahaha_diagnostics->spin_a_z_from_xz_over_xy_prop_circumfs = compute_spin(C_xz_xy);
     commondata->bhahaha_diagnostics->spin_a_z_from_yz_over_xy_prop_circumfs = compute_spin(C_yz_xy);
   }
-  #ifdef __CUDACC__
-  } END_CUDA_ONE_THREAD;
+#ifdef __CUDACC__
+  } // END ONE_THREAD: compute spins
+  END_CUDA_ONE_THREAD;
   gpu_grid.sync();
-  #endif
+#endif
 """
     cfc.register_CFunction(
         subdirectory="",

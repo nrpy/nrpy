@@ -174,16 +174,19 @@ void initialize_and_interpolate(commondata_struct *restrict commondata)
     // Initialize radial coordinates by copying from external input.
     PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS0) {
       commondata->interp_src_r_theta_phi[0][j] = commondata->external_input_r_theta_phi[0][j];
-    } END_PARALLEL_1D_LOOP;
+    } 
+    END_PARALLEL_1D_LOOP;
     // Initialize theta coordinates with cell-centered values.
     PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS1) {
       commondata->interp_src_r_theta_phi[1][j] = xxmin1 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->interp_src_dxx1;
-    } END_PARALLEL_1D_LOOP;
+    } 
+    END_PARALLEL_1D_LOOP;
     // Initialize phi coordinates with cell-centered values.
     PARALLEL_1D_LOOP(j, 0, Nxx_plus_2NGHOSTS2) {
       commondata->interp_src_r_theta_phi[2][j] = xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->interp_src_dxx2;
-    } END_PARALLEL_1D_LOOP;
-  } // END STEP 2: Initialize coordinate arrays for the interpolation source grid.
+    } 
+    END_PARALLEL_1D_LOOP;
+  } // END BLOCK: Step 2 initialize interpolation-source coordinate arrays
 #ifdef __CUDACC__
   gpu_grid.sync();
 #endif
@@ -247,13 +250,14 @@ void initialize_and_interpolate(commondata_struct *restrict commondata)
             )
     prefunc += """
 #ifndef __CUDACC__
-        } // END LOOP over i0
-      } // END LOOP over i1
-    } // END LOOP over i2
+        } // END LOOP: for over i0 over radial points in the interpolation-source grid
+      } // END LOOP: for i1 over theta points in the interpolation-source grid
+    } // END LOOP: for i2 over phi points in the interpolation-source grid
 #else
-    } END_PARALLEL_LOOP;
+    } //END LOOP: (i0, i1, i2) over (radial, theta, phi) points in the interpolation-source grid
+    END_PARALLEL_LOOP;
 #endif
-  } // END BLOCK: Step 4 Transfer interpolated data to interpolation source grid functions.
+  } // END BLOCK: Step 4 transfer interpolated data into interpolation-source gridfunctions.
 } // END FUNCTION: initialize_and_interpolate
 
 
@@ -305,31 +309,23 @@ void apply_bcs_interp_src(commondata_struct *restrict commondata, bc_struct *res
       case SRC_HDD11GF:
       case SRC_HDD12GF:
       case SRC_HDD22GF: {
-#ifdef __CUDACC__
-        PARALLEL_1D_LOOP(pt, 0, bc_info->num_inner_boundary_points)
-#else
-#pragma omp for
-        for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) 
-#endif          
-        {
+        PARALLEL_1D_LOOP(pt, 0, bc_info->num_inner_boundary_points) {
           const int dstpt = interp_src_bcstruct->inner_bc_array[pt].dstpt;
           const int srcpt = interp_src_bcstruct->inner_bc_array[pt].srcpt;
 
           // Apply boundary condition by copying and adjusting with parity.
           commondata->interp_src_gfs[IDX4pt(which_gf, dstpt)] =
               interp_src_bcstruct->inner_bc_array[pt].parity[interp_src_gf_parity[which_gf]] * commondata->interp_src_gfs[IDX4pt(which_gf, srcpt)];
-        } // END LOOP over inner boundary points
-        #ifdef __CUDACC__
-        END_PARALLEL_1D_LOOP; // END LOOP over inner boundary points
-        #endif
+        } // END LOOP: pt over inner boundary points
+        END_PARALLEL_1D_LOOP;
         break;
-      }
+      } // END BLOCK: selected gridfunction case with inner boundary updates
       default:
         // No boundary conditions needed for other grid functions.
         break;
-      } // END SWITCH
-    } // END LOOP over gridfunctions
-  } // END STEP 1: Apply inner boundary conditions to specific grid functions.
+      } // END SWITCH: select gridfunctions requiring inner boundary conditions
+    } // END LOOP: which_gf over gridfunctions
+  } // END BLOCK: Step 1 apply inner boundary conditions to selected interpolation-source fields
   
   #ifdef __CUDACC__
   gpu_grid.sync();
@@ -349,6 +345,7 @@ void apply_bcs_interp_src(commondata_struct *restrict commondata, bc_struct *res
     const bc_info_struct *restrict bc_info = &interp_src_bcstruct->bc_info;
 
     // Step 4.b: Apply boundary conditions across all grid functions and boundary points.
+    //FIXME: Updated version in nrpy main
 #ifdef __CUDACC__
     PARALLEL_2D_LOOP(pt, 0, bc_info->num_inner_boundary_points, which_gf, 0, NUM_INTERP_SRC_GFS) {
 #else
@@ -363,13 +360,14 @@ void apply_bcs_interp_src(commondata_struct *restrict commondata, bc_struct *res
         commondata->interp_src_gfs[IDX4pt(which_gf, dstpt)] =
             interp_src_bcstruct->inner_bc_array[pt].parity[interp_src_gf_parity[which_gf]] * commondata->interp_src_gfs[IDX4pt(which_gf, srcpt)];
 #ifndef __CUDACC__
-      } // END LOOP over inner boundary points
-    } // END LOOP over gridfunctions
+      } // END LOOP: for pt over inner boundary points
+    } // END LOOP: for which_gf over gridfunctions
 #else
-    } END_PARALLEL_2D_LOOP; // END LOOP over inner boundary points and gridfunctions
+    } // END LOOP: (pt, which_gf) over (inner boundary points, gridfunctions)
+    END_PARALLEL_2D_LOOP;
 #endif
-  } // END BLOCK: Step 4: Enforce boundary conditions on all interpolation source grid functions.
-} // END FUNCTION apply_bcs_interp_src
+  } // END BLOCK: Step 4 enforce boundary conditions on all interpolation-source gridfunctions
+} // END FUNCTION: apply_bcs_interp_src
 
 """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -418,7 +416,7 @@ and computes necessary spatial derivatives.
     commondata->interp_src_invdxx1 = 1.0 / commondata->interp_src_dxx1;
     commondata->interp_src_invdxx2 = 1.0 / commondata->interp_src_dxx2;
   
-  } // END STEP 1: Configure grid parameters for the interpolation source.
+  } // END BLOCK: Step 1 configure interpolation-source grid parameters.
 
   // Step 2: Allocate interpolation source grid functions and coordinate arrays for the interpolation source grid.
   {
@@ -442,8 +440,8 @@ and computes necessary spatial derivatives.
       FREE(commondata->interp_src_gfs);
       commondata->error_flag = NUMGRID_INTERP_MALLOC_ERROR_RTHETAPHI;
       return;
-  } // END IF memory allocation for coordinate arrays failed
-} // END STEP 2: Allocate interpolation source grid functions and coordinate arrays for the interpolation source grid.
+  } // END IF: memory allocation for coordinate arrays failed
+} // END BLOCK: Step 2 Allocate interpolation source grid functions and coordinate arrays
 
 #ifdef __CUDACC__
   // Update device side commondata
@@ -462,8 +460,9 @@ and computes necessary spatial derivatives.
 #endif 
     if (commondata->error_flag != BHAHAHA_SUCCESS)
       return;
-  } 
-  // Step 5: Initialize boundary condition structure for the interpolation source grid.
+  } // END BLOCK: Step 3 initialize coordinate arrays
+
+  // Step 4: Initialize boundary condition structure for the interpolation source grid.
   bc_struct interp_src_bcstruct;
   {
     // Assign grid spacing and sizes to the boundary condition structure.
@@ -487,10 +486,10 @@ and computes necessary spatial derivatives.
 #endif
     if (commondata->error_flag != BHAHAHA_SUCCESS)
       return;
-  } // END STEP 5: Initialize boundary condition structure.
+  } // END BLOCK: Step 4 initialize th interpolation-source boundary-condition structure
 
 
-  // Step 6. Appply boundary conditions and compute necessary spacial derivatives
+  // Step 5. Appply boundary conditions and compute necessary spacial derivatives
   {
 #ifdef __CUDACC__
     // Create a device side copy of interp_src_bcstruct
@@ -518,9 +517,8 @@ and computes necessary spatial derivatives.
     FREE(interp_src_bcstruct.inner_bc_array);
     for (int ng = 0; ng < NGHOSTS * 3; ng++)
       FREE(interp_src_bcstruct.pure_outer_bc_array[ng]);
-  } //END STEP 6: Appply boundary conditions and compute necessary spacial derivatives
-
-  //Copy then free device side copy of commondata
+  } // END BLOCK: Step 5 apply inner boundary conditions to selected interpolation-source fields
+  // Free device side copy of commondata
 #ifdef __CUDACC__
   CUDA_FREE(d_commondata);
 #endif

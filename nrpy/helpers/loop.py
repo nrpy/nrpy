@@ -177,13 +177,13 @@ def loop(
         cuda_loop_header = "#ifdef __CUDACC__\n"
         if len(idx_var) == 1:
             cuda_loop_header += "PARALLEL_1D_LOOP("
-            cuda_loop_footer = "#else\n } END_PARALLEL_1D_LOOP\n#endif"
+            cuda_loop_footer = "#else\n} //END LOOP: " + f"for {idx_var[0]} over [{lower_bound[0]},{upper_bound[0]})" + "\n END_PARALLEL_1D_LOOP\n #endif"
         elif len(idx_var) == 2:
             cuda_loop_header += "PARALLEL_2D_LOOP("
-            cuda_loop_footer = "#else\n} END_PARALLEL_2D_LOOP\n#endif"
+            cuda_loop_footer = "#else\n} //END LOOP: " + f"for {idx_var[0]}/{idx_var[1]} over [{lower_bound[0]},{upper_bound[0]})/[{lower_bound[1]},{upper_bound[1]})" + "\n END_PARALLEL_2D_LOOP\n#endif"
         elif len(idx_var) == 3:
             cuda_loop_header += "PARALLEL_LOOP("
-            cuda_loop_footer = "#else\n} END_PARALLEL_LOOP\n#endif"
+            cuda_loop_footer = "#else\n} //END LOOP: " + f"for {idx_var[0]}/{idx_var[1]}/{idx_var[2]} over [{lower_bound[0]},{upper_bound[0]})/[{lower_bound[1]},{upper_bound[1]})/[{lower_bound[2]},{upper_bound[2]})" + " \n END_PARALLEL_LOOP\n#endif"
         else:
             raise ValueError(
                 f"A cuda PARALLEL_LOOP is only currently possible with 1,2 or 3 Dimensions but you have provided {len(idx_var)}"

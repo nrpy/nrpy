@@ -64,15 +64,6 @@ int bhahaha_gpu_set_error(int *error_flag, int code)
 {
   /* First error wins: change code from 0 to 'code' atomically. */
   return atomicCAS(error_flag, 0, code);
-  //int old =atomicCAS(&st->code, 0, code);
-  /*
-  if (old == 0) {
-    st->stage_id = stage_id;
-    st->i0 = i0;
-    st->i1 = i1;
-    st->i2 = i2;
-  }
-  */
 }
 #endif
 
@@ -250,7 +241,7 @@ __device__
 #ifndef __CUDACC__
       continue; // Skip interpolation for this destination point to prevent invalid memory access.
 #endif
-      } // END IF: Check stencil boundaries.
+      } // END IF: theta/phi stencil exceeded source-grid bounds
 
       // Additional sanity checks to ensure central index is correctly positioned.
 #if defined(DEBUG) && !defined(__CUDACC__)
@@ -266,7 +257,7 @@ __device__
         } // END IF: Central index is properly centered
       } //END IF: Sanity checks after bound checks
 #endif // DEBUG
-    } // END SANITY CHECKS: Ensure stencil is valid and central index is correct.
+    } // END BLOCK: theta/phi stencil bounds and center-index sanity checks
 
     // Skip interpolation for this destination point to prevent invalid memory access.
     if (*error_flag == BHAHAHA_SUCCESS) {
@@ -306,8 +297,8 @@ __device__
 #else
           coeff_2d[iph][ith] = coeff_ph_i * lagrange_basis_coeffs_th[ith];
 #endif
-        } // END LOOP over theta
-      } // END LOOP over phi
+        } // END LOOP: for ith over theta stencil
+      } // END LOOP: for iph over phi stencil
   
       // Define a macro to calculate the flattened index for accessing the source grid function.
 #define SRC_IDX2(j, k) ((j) + src_Nxx_plus_2NGHOSTS1 * (k))
@@ -323,13 +314,14 @@ __device__
 #else
         sum += sum_lagrange_x0_simd(INTERP_ORDER, &src_gf[base_offset], &coeff_2d[iph][0]);
 #endif
-      } // END LOOP phi direction
+      } // END LOOP: for iph over phi direction
   
       // Store the interpolated value for this grid function and destination point.
       dst_data[dst_pt] = sum * src_invdxx12_INTERP_ORDERm1;
     
-    } //END IF: Successfully interpolated points. 
-  } END_PARALLEL_1D_LOOP; // END LOOP: Interpolate all destination points.
+    } //END IF: passed sanity checks 
+  } // END LOOP: for dst_pt over destination points
+  END_PARALLEL_1D_LOOP;
 """
     postfunc = r"""
 #pragma GCC reset_options // Reset compiler optimizations after the function.

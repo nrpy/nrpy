@@ -87,7 +87,8 @@ void set_initial_data(commondata_struct *restrict commondata, griddata_struct *r
     // set VVGF = eta * HHGF,
     //  so that partial_t h = VVGF - eta * HHGF = 0 at t=0. Otherwise we get really ugly dynamics.
     griddata[grid].gridfuncs.y_n_gfs[IDX4(VVGF, i0, i1, i2)] = eta_damping * griddata[grid].gridfuncs.y_n_gfs[IDX4(HHGF, i0, i1, i2)];
-  } END_PARALLEL_LOOP; // END LOOP over all gridpoints
+  } // END LOOP over all gridpoints
+  END_PARALLEL_LOOP; 
 
 #ifdef __CUDACC__
   gpu_grid.sync();
@@ -139,7 +140,7 @@ void set_initial_data(commondata_struct *restrict commondata, griddata_struct *r
   int threadsperblock = THREADSPERBLOCK << 1;
   do {
     threadsperblock = threadsperblock >> 1;
-    sharesize = sizeof(REAL)*(INTERP_ORDER + (THREADSPERBLOCK*4)*INTERP_ORDER + THREADSPERBLOCK*INTERP_ORDER*INTERP_ORDER);
+    sharesize = sizeof(REAL)*(INTERP_ORDER + (threadsperblock*4)*INTERP_ORDER + threadsperblock*INTERP_ORDER*INTERP_ORDER);
   } while ( sharesize > 48000 );
   COOPERATIVE_KERNEL(set_initial_data, Args, threadsperblock, sharesize)
 #else

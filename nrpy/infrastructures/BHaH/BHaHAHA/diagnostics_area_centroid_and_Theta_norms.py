@@ -214,18 +214,18 @@ __device__
               sum_x_centroid += (Cart_originx + tmp0 * cos(xx2)) * area_element * weight1 * weight2;
               sum_y_centroid += (Cart_originy + tmp0 * sin(xx2)) * area_element * weight1 * weight2;
               sum_z_centroid += (Cart_originz + hh * cos(xx1)) * area_element * weight1 * weight2;
-            } // END centroid sums
+            } // END BLOCK: accumulate centroid numerators 
             if (Theta * Theta > max_Theta_squared_for_Linf_norm)
               max_Theta_squared_for_Linf_norm = Theta * Theta;
             if (hh > max_radius)
               max_radius = hh;
             if (hh < min_radius)
               min_radius = hh;
-          } // END OMP CRITICAL
-        } // END LOOP over i0
-      } // END LOOP over i1
-    } // END LOOP over i2
-  } // END OMP PARALLEL
+          } // END OMP CRITICAL: update shared area and centroid diagnostics
+        } // END LOOP: for i0 over radial horizon-grid points 
+      } // END LOOP: for i1 over theta horizon-grid points
+    } // END LOOP: for i2 over phi horizon-grid point
+  } // END OMP PARALLEL: scan all horizon surface points
 #else
           //Prep for Reduction in the "loop"
           s_sum_curr_area[tid] += area_element * weight1 * weight2;
@@ -235,14 +235,15 @@ __device__
             s_sum_x_centroid[tid] += (Cart_originx + tmp0 * cos(xx2)) * area_element * weight1 * weight2;
             s_sum_y_centroid[tid] += (Cart_originy + tmp0 * sin(xx2)) * area_element * weight1 * weight2;
             s_sum_z_centroid[tid] += (Cart_originz + hh * cos(xx1)) * area_element * weight1 * weight2;
-          } // END centroid sums
+          } // END BLOCK: accumulate centroid numerators
           if (Theta * Theta > s_max_Theta_squared_for_Linf_norm[tid])
             s_max_Theta_squared_for_Linf_norm[tid] = Theta * Theta;
           if (hh > s_max_radius[tid])
             s_max_radius[tid] = hh;
           if (hh < s_min_radius[tid])
             s_min_radius[tid] = hh;
-  } END_PARALLEL_LOOP;
+  } //END LOOP: cuda i# over radial, theta, phi horizon-grid points
+  END_PARALLEL_LOOP; 
   gpu_grid.sync();
 #endif
 
@@ -263,11 +264,11 @@ __device__
           s_max_radius[tid] = s_max_radius[tid + halfsize];
         if (s_min_radius[tid] > s_min_radius[tid + halfsize])
           s_min_radius[tid] = s_min_radius[tid + halfsize];
-      }
-    }
+      } //END IF: compare only valued points
+    } // END IF: compare lower half of threads 
     __syncthreads();
     halfsize = halfsize>>1;
-  }
+  } // END LOOP: block level reduction of diagnostic values
   //Reduction at grid level to norms struct
   if (blockDim.x*blockIdx.x < Nxx0*Nxx1*Nxx2 && threadIdx.x == 0 ) {
     atomicAdd(&norms->sum_curr_area, s_sum_curr_area[0]);
@@ -278,7 +279,7 @@ __device__
     atomicMax_double(&norms->max_Theta_squared_for_Linf_norm, s_max_Theta_squared_for_Linf_norm[0]);
     atomicMax_double(&norms->max_radius, s_max_radius[0]);
     atomicMin_double(&norms->min_radius, s_min_radius[0]);
-  }
+  } // END IF: accumulate centroid numerators
   gpu_grid.sync();
 #endif
 
@@ -324,7 +325,7 @@ __device__
     bhahaha_diags->x_centroid_wrt_coord_origin = sum_x_centroid * params->dxx1 * params->dxx2 / bhahaha_diags->area;
     bhahaha_diags->y_centroid_wrt_coord_origin = sum_y_centroid * params->dxx1 * params->dxx2 / bhahaha_diags->area;
     bhahaha_diags->z_centroid_wrt_coord_origin = sum_z_centroid * params->dxx1 * params->dxx2 / bhahaha_diags->area;
-  } // END store diagnostics in commondata->bhahaha_diagnostics struct.
+  } // END BLOCK: store area, centroid, and Theta norms in commondata diagnostics
   #ifdef __CUDACC__
   END_CUDA_ONE_THREAD; //End global variable modification
   gpu_grid.sync();
