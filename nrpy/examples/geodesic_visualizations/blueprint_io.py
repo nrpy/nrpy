@@ -46,6 +46,27 @@ Doctests:
 ...         pass
 ...     else:
 ...         raise AssertionError("Missing puncture labels were accepted")
+>>> with tempfile.TemporaryDirectory() as directory:
+...     path = Path(directory) / "light_blueprint_00_00.bin"
+...     record = np.zeros(1, dtype=cfg.BLUEPRINT_DTYPE)
+...     record["termination_type"] = 12
+...     record["y_t"], record["z_t"] = 3, np.nan
+...     def check_tile(version, horizon_id):
+...         record["y_t"] = horizon_id
+...         raw = struct.pack("=8s7IQ6d", b"NRPYBP01", version, 92, 124,
+...                           0, 0, 1, 1, 1, 1., 1., 0., 1., 0., 1.)
+...         _ = path.write_bytes(raw + record.tobytes())
+...         for header, _, chunk in iter_blueprint_chunks(str(path), 1):
+...             assert header.schema_version == version
+...             assert chunk["y_t"].tolist() == [horizon_id]
+...     check_tile(10, 3)
+...     for version, horizon_id in ((9, 3), (10, 1.5), (10, 4)):
+...         try:
+...             check_tile(version, horizon_id)
+...         except ValueError:
+...             pass
+...         else:
+...             raise AssertionError("Invalid horizon-stop record was accepted")
 """
 
 import os
@@ -112,10 +133,13 @@ def read_blueprint_header(
     header = BlueprintHeader(*values)
     if header.magic != cfg.BLUEPRINT_MAGIC:
         raise ValueError(f"Blueprint '{filename}' has an invalid magic value")
-    if header.schema_version != cfg.BLUEPRINT_SCHEMA_VERSION:
+    if header.schema_version not in (
+        cfg.BLUEPRINT_SCHEMA_VERSION,
+        cfg.BLUEPRINT_HORIZON_VERSION,
+    ):
         raise ValueError(
             f"Blueprint '{filename}' uses version {header.schema_version}; "
-            f"expected {cfg.BLUEPRINT_SCHEMA_VERSION}. Regenerate it with the current photon generator."
+            f"expected {cfg.BLUEPRINT_SCHEMA_VERSION} or {cfg.BLUEPRINT_HORIZON_VERSION}."
         )
     if header.header_size != cfg.BLUEPRINT_HEADER_SIZE:
         raise ValueError(f"Blueprint '{filename}' has an invalid header size")
@@ -269,6 +293,24 @@ def iter_blueprint_chunks(
                 raise ValueError(
                     f"Blueprint '{filename}' has an invalid termination type"
                 )
+            horizon_stops = (
+                termination_types == cfg.STOP_CONDITION_INSIDE_APPARENT_HORIZON
+            )
+            if np.any(horizon_stops):
+                if header.schema_version != cfg.BLUEPRINT_HORIZON_VERSION:
+                    raise ValueError(
+                        f"Blueprint '{filename}' requires version 10 for horizon stops"
+                    )
+                if np.any(
+                    ~np.isin(
+                        records["y_t"][horizon_stops],
+                        (cfg.PUNCTURE_1, cfg.PUNCTURE_2, cfg.MERGED_PUNCTURE),
+                    )
+                    | ~np.isnan(records["z_t"][horizon_stops])
+                ):
+                    raise ValueError(
+                        f"Blueprint '{filename}' has an invalid horizon-stop record"
+                    )
             yield (
                 header,
                 record_start,

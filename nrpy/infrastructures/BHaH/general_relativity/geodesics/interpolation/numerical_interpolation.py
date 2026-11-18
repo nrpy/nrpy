@@ -36,6 +36,9 @@ import nrpy.params as par
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.azimuthal_symmetry_spatial_lagrange_interpolation import (
     register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation,
 )
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.azimuthal_symmetry_spatial_lagrange_interpolation_masked import (
+    register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation_masked,
+)
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.temporal_lagrange_interpolation import (
     register_CFunction_temporal_lagrange_interpolation,
 )
@@ -212,10 +215,14 @@ def register_CFunction_numerical_interpolation(
     # and the accepted-state metric refresh within one RK trial.
     spatial_center_params = """const int *restrict d_spatial_stencil_center_i0,
                 const int *restrict d_spatial_stencil_center_i2,
-                const uint64_t *restrict d_temporal_stencil_center,"""
+                const uint64_t *restrict d_temporal_stencil_center,
+                const unsigned char *restrict d_spatial_mask,
+                const bool *restrict d_has_excluded_nodes,"""
     spatial_center_desc = """@param[in] d_spatial_stencil_center_i0 Trial-locked native dimension-0 centers, or NULL.
 @param[in] d_spatial_stencil_center_i2 Trial-locked native dimension-2 centers, or NULL.
 @param[in] d_temporal_stencil_center Trial-locked retained time-slice centers, or NULL.
+@param[in] d_spatial_mask Trial-locked row-major masks, or NULL for independent sampling.
+@param[in] d_has_excluded_nodes Per-photon exclusion flags, or NULL for independent sampling.
 """
     spatial_center_setup = r"""
     NumericalSpatialStencilCenter fixed_center;
@@ -351,7 +358,53 @@ def register_CFunction_numerical_interpolation(
             enable_simd=enable_simd,
             project_dir=project_dir,
         )
-    prefunc = ""
+    masked_spatial_name = (
+        "azimuthal_symmetry_spatial_lagrange_interpolation_masked__rfm__"
+        f"{CoordSystem}"
+    )
+    if masked_spatial_name not in cfc.CFunction_dict:
+        register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation_masked(
+            CoordSystem,
+            interpolation_method=interpolation_method,
+            enable_simd=enable_simd,
+            project_dir=project_dir,
+        )
+    prefunc = r"""
+/**
+ * Select ordinary or masked spatial interpolation for one geometry request.
+ *
+ * @param has_excluded_nodes Whether the attempt excludes any spatial nodes.
+ * @param[in] mask Locked spatial exclusion bytes.
+ * @param[in] context Stored azimuthal planes.
+ * @param[in] commondata Interpolation parameters.
+ * @param[in] params Numerical grid parameters.
+ * @param x Cartesian x coordinate.
+ * @param y Cartesian y coordinate.
+ * @param z Cartesian z coordinate.
+ * @param[in] center Locked spatial center or NULL for independent sampling.
+ * @param count Number of requested slices.
+ * @param[in] slices Mapped slice pointers.
+ * @param[out] metric Ten Cartesian metric components per slice.
+ * @param[out] geometry Forty Cartesian geometry components per slice.
+ * @return Spatial interpolation status.
+ */
+static int numerical_interpolation_spatial_dispatch(
+    const bool has_excluded_nodes, const unsigned char *restrict mask,
+    const azimuthal_symmetry_spatial_lagrange_context_struct *restrict context,
+    const commondata_struct *restrict commondata,
+    const params_struct *restrict params,
+    const REAL x, const REAL y, const REAL z,
+    const NumericalSpatialStencilCenter *restrict center,
+    const int count, const double *const *restrict slices,
+    REAL *restrict metric, REAL *restrict geometry) {
+  if (has_excluded_nodes)
+    return @MASKED@(
+        context, commondata, params, x, y, z, center, count, slices,
+        metric, geometry, mask);
+  return @ORDINARY@(
+      context, commondata, params, x, y, z, center, count, slices, metric, geometry);
+} // END FUNCTION: select spatial interpolation method
+""".replace("@MASKED@", masked_spatial_name).replace("@ORDINARY@", spatial_name)
 
     includes = [
         "BHaH_defines.h",
@@ -512,6 +565,46 @@ independently ray-by-ray.
     const REAL z = (REAL)f_local[3];
 {spatial_center_setup}
     termination_type_t interpolation_failure = ACTIVE;
+    const int spatial_count = 2 * commondata->numerical_spacetime_spatial_interp_half_width + 1;
+    unsigned char local_spatial_mask[spatial_count * spatial_count];
+    bool has_excluded_nodes = false;
+    const unsigned char *spatial_mask = local_spatial_mask;
+    if (d_spatial_mask != NULL && d_has_excluded_nodes != NULL) {
+      spatial_mask = d_spatial_mask + i * spatial_count * spatial_count;
+      has_excluded_nodes = d_has_excluded_nodes[i];
+    } else {
+      const REAL xCart[3] = {x, y, z};
+      REAL native[3];
+      int automatic_center[3], selected_center[3];
+      if (time_window_manager_numerical_resolve_spatial_target_and_stencil(
+              params, xCart, fixed_spatial_center, native,
+              automatic_center, selected_center) != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+        interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
+      } else {
+        fixed_center.i0 = selected_center[0];
+        fixed_center.i2 = selected_center[2];
+        fixed_spatial_center = &fixed_center;
+        const int plane = native[1] < 0.0 ||
+            native[1] >= 3.14159265358979323846 - 1.0e-12 ? 0 : 1;
+        const uint64_t center = d_temporal_stencil_center != NULL
+            ? d_temporal_stencil_center[i]
+            : time_window_manager_numerical_nearest_selected_slice_for_time(numerical_window, t);
+        if (time_window_manager_numerical_build_spatial_mask(
+                commondata, params, numerical_window, fixed_spatial_center,
+                plane, center, t, local_spatial_mask, &has_excluded_nodes) !=
+            TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS)
+          interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
+      } // END ELSE: construct independent sampling mask
+    } // END ELSE: independent geometry request
+    if (interpolation_failure != ACTIVE) {
+      d_status[i] = interpolation_failure;
+      for (int comp = 0; comp < 10; ++comp)
+        d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
+      if (d_rhs_geometry_bundle != NULL)
+        for (int comp = 0; comp < 40; ++comp)
+          d_rhs_geometry_bundle[IDX_RHS_GEOMETRY(comp, i)] = NAN;
+      continue;
+    } // END IF: spatial mask construction failed
     uint64_t available_slice_indices[temporal_num_points];
     REAL available_slice_times[temporal_num_points];
     const double *available_slice_payloads[temporal_num_points];
@@ -800,7 +893,11 @@ independently ray-by-ray.
   #undef IDX_RHS_GEOMETRY
   #undef G4_SLICE
   #undef GEOMETRY_SLICE
-""".replace("{spatial_name}", spatial_name)
+""".replace("{spatial_name}", "numerical_interpolation_spatial_dispatch")
+        .replace(
+            "spatial_context, commondata, params, x, y, z,",
+            "has_excluded_nodes, spatial_mask, spatial_context, commondata, params, x, y, z,",
+        )
         .replace("{spatial_center_params}", spatial_center_params)
         .replace("{spatial_center_setup}", spatial_center_setup)
         .replace("{fixed_spatial_center_argument}", fixed_spatial_center_argument)

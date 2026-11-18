@@ -117,6 +117,10 @@ def calculate_and_fill_blueprint_data_universal(
     //==========================================
     // EVENT DETECTION & TERMINATION CHECKS
     //==========================================
+    // The numerical integrator has already written the containing horizon ID in y_t.
+    if (d_status_bundle[c] == STOP_CONDITION_INSIDE_APPARENT_HORIZON)
+        d_result_bundle[c].z_t = NAN;
+
     // === Termination Dispatch: Celestial Sphere (Escape) ===
     if (d_status_bundle[c] == STOP_CONDITION_COORD_RADIUS_EXCEEDED) {
         // Unpack final coordinates from the bundled state vector $f^mu$ in memory.

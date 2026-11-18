@@ -75,11 +75,7 @@ under "Names identify both NRPy and the target code":
 A path, namespace, or file stem written as a literal formulation name in these
 modules fails the test.
 
-Claim evidence:
-- Claim: no top-level Dendro module writes a formulation name into a generated path, namespace, or file stem; the formulation names these modules carry select state, checkpoint, kernel, or label text from `enable_fCCZ4`, name host-required `BSSN_*` keys, call the BSSN-named conversion kernels, index horizon fields with the BSSN evolved list, name native sources to reject, or appear in doctests, docstring examples, and local variable names.
-- Role: descriptive behavior
-- Deciding authority: [state_h.py](../../nrpy/infrastructures/Dendro/state_h.py), `evolved_gridfunctions`; [checkpoint.py](../../nrpy/infrastructures/Dendro/checkpoint.py), `output_checkpoint_cpp`; [solver_context.py](../../nrpy/infrastructures/Dendro/solver_context.py), `output_solver_context_cpp`; [main_cpp.py](../../nrpy/infrastructures/Dendro/main_cpp.py), `output_main_cpp`; [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py), `output_CFunctions_function_prototypes_and_construct_CMakeLists`, the native-source screen
-- Corroboration: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) pass the solver stem and namespace into these modules
+Evidence (descriptive behavior): `Dendro/state_h.py::evolved_gridfunctions`; `Dendro/checkpoint.py::output_checkpoint_cpp`; `Dendro/solver_context.py::output_solver_context_cpp`; corroboration: `dendro_bssn.py` and `dendro_fccz4.py` pass the solver stem and namespace into these modules.
 
 ### Read the registries directly
 
@@ -93,9 +89,11 @@ does not copy them into a parallel record set.
 for cp_name, code_param in par.glb_code_params_dict.items():
 ```
 
-The emitter names the registry it reads. `Makefile_helpers.py` reads
-`cfc.CFunction_dict` the same way, and ETLegacy, CarpetX, and superB follow the
-same pattern.
+The emitter names the registry it reads. `BHaH/Makefile_helpers.py` and
+`superB/Makefile_helpers.py` import `CFunction_dict` directly
+(`from nrpy.c_function import CFunction_dict`), while other BHaH and superB
+modules plus ETLegacy, CarpetX, and Dendro read `cfc.CFunction_dict` at the
+point of use.
 
 **Wrong** — an emitter that takes a snapshot of the registries as a parameter:
 
@@ -117,10 +115,10 @@ improvement:
   layer reads as an upgrade rather than a divergence. The question is not
   whether the mechanism is good; it is whether NRPy already does this.
 - *The invention hides behind a plausible seam.* Freezing before emitting reads
-  as a lifecycle stage, not as a second registry, so nobody asks where the data
+  as a generation stage, not as a second registry, so nobody asks where the data
   came from.
 - *Nobody checks, because no brief asks.* A review brief that never poses "does
-  NRPy do it this way?" cannot surface the answer, however many reviewers read
+  NRPy do it this way?" cannot uncover the answer, however many reviewers read
   it.
 
 **Test.**
@@ -164,11 +162,7 @@ Dendro applications use directories and CMake projects `Dendro_NRPy_BSSN` and
 `nrpy::fccz4`. Child files and functions retain the formulation stem, while
 their executable targets identify the NRPy implementation.
 
-Claim evidence:
-- Claim: NRPy-generated Dendro application directories, CMake projects, namespaces, and executables identify NRPy; child files and functions retain their formulation or host-required names.
-- Role: normative rule
-- Deciding authority: this page, `Names identify both NRPy and the target code`, Rule
-- Corroboration: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) set application, project, namespace, and executable identities; registered Dendro-GR source establishes host conventions
+Evidence (normative rule): `dendro_bssn.py::main`; `dendro_fccz4.py::main`; `Dendro/CMakeLists.py`; [Dendro-GR](https://github.com/paralab/Dendro-GR).
 
 **Wrong** — replacing the C++ namespace `fccz4::generated` with
 `Dendro::generated` on the reasoning that "fccz4" is a formulation name and
@@ -213,18 +207,21 @@ their purpose", was too weak to prevent any of them.
 ## Sources
 
 - [BHaH_defines_h.py](../../nrpy/infrastructures/BHaH/BHaH_defines_h.py) - `par.glb_code_params_dict` iteration
-- [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `cfc.CFunction_dict` iteration
+- [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `CFunction_dict` iteration
+- [superB Makefile_helpers.py](../../nrpy/infrastructures/superB/Makefile_helpers.py) - `CFunction_dict` iteration
 - [main_c.py](../../nrpy/infrastructures/BHaH/main_c.py) - `register_CFunction_main_c`
 - [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - `main`, the inline project assembly
 - [coding_style.md](../../coding_style.md) - `## Python Coding Style`, module naming
-- [state_h.py](../../nrpy/infrastructures/Dendro/state_h.py), [checkpoint.py](../../nrpy/infrastructures/Dendro/checkpoint.py), [solver_context.py](../../nrpy/infrastructures/Dendro/solver_context.py), and [main_cpp.py](../../nrpy/infrastructures/Dendro/main_cpp.py) - the Dendro top-level modules that carry formulation names.
-- [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py) - the native-source screen.
-- [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) - the solver stem and namespace that the examples thread into the generators.
+- [state_h.py](../../nrpy/infrastructures/Dendro/state_h.py) - top-level Dendro state header emission
+- [checkpoint.py](../../nrpy/infrastructures/Dendro/checkpoint.py) - top-level Dendro checkpoint emission
+- [solver_context.py](../../nrpy/infrastructures/Dendro/solver_context.py) - top-level Dendro solver context emission
+- [main_cpp.py](../../nrpy/infrastructures/Dendro/main_cpp.py) - top-level Dendro entry-point emission
+- [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py) - the native-source screen
+- [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) - the solver stem and namespace that the examples thread into the generators
+- [Dendro-GR](https://github.com/paralab/Dendro-GR) - native `BSSN_GR` host file and parameter conventions
 
 ## See Also
 
-- Parent: [Infrastructures](index.md)
 - Depends on: [Infrastructure Code Style](infrastructure-code-style.md)
 - Depends on: [Python Coding Style](../architecture/python-coding-style.md)
-- See also: [Generated Output Boundaries](../architecture/generated-output-boundaries.md)
 - Example: [Project Assembly And Generating Functions](dendro/project-assembly-and-emitters.md)

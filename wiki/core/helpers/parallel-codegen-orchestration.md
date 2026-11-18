@@ -9,27 +9,23 @@
 
 ## Detail
 
+### Deferred Registration And Environment Merging
+
 At import time, `parallel_codegen.py` registers two NRPy parameters: `enable_parallel_codegen`, defaulting to `False`, and `parallel_codegen_stage`, defaulting to `"register"`. These parameters control whether calls are collected and when the collected calls are executed.
 
 `ParallelCodeGen` stores one deferred call. It splits a dotted path into `module_path` and `function_name`, then stores the argument dictionary that will later be passed as keyword arguments. `ParallelCodeGen_dict` is the module-level registry for these deferred calls. `register_func_call()` keys entries by `name + str(args)` and raises if the same string key has already been registered. This is textual duplicate detection: argument dictionaries with different insertion order can produce different keys even when they contain the same pairs.
 
 `NRPyEnv()` returns references to `par.glb_params_dict`, `par.glb_code_params_dict`, `cfc.CFunction_dict`, `pyfc.PyFunction_dict`, `gri.glb_gridfcs_dict`, and `par.glb_extras_dict`. It does not copy them: later in-process mutations remain visible through the tuple. Multiprocessing transfers these values through later serialization.
 
-Claim evidence:
-- Claim: `NRPyEnv()` returns the original dictionaries; it does not create an independent snapshot.
-- Role: descriptive behavior
-- Deciding authority: [nrpy/helpers/parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py), `NRPyEnv`
-- Corroboration: `none available`; the named implementation decides this behavior.
+Evidence (descriptive behavior): `parallel_codegen.py::NRPyEnv`.
 
 `unpack_NRPy_environment_dict()` merges complete worker registries into the parent. Parameters, code parameters, C/Python functions, and gridfunctions use dictionary updates; extras use `deep_update()`. Returned registries include inherited entries, so an unchanged value from a later worker can overwrite another worker's change. There is no semantic-conflict check. `deep_update()` recurses whenever the incoming value is a dictionary and otherwise assigns the value. Existing nested values must have compatible dictionary structure: updating `{"k": 1}` with `{"k": {"x": 2}}` raises `TypeError`, with no rollback of preceding updates.
 
-Claim evidence:
-- Claim: Complete worker registries can overwrite independent changes with inherited values; recursive extras merging can fail on incompatible nested types.
-- Role: descriptive behavior
-- Deciding authority: [nrpy/helpers/parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py), `NRPyEnv, unpack_NRPy_environment_dict, deep_update, do_parallel_codegen`
-- Corroboration: `none available`; the named implementation decides this behavior.
+Evidence (descriptive behavior): `parallel_codegen.py::NRPyEnv`; `parallel_codegen.py::unpack_NRPy_environment_dict`; `parallel_codegen.py::deep_update`; `parallel_codegen.py::do_parallel_codegen`.
 
 `pcg_registration_phase()` is true only when `enable_parallel_codegen` is enabled and `parallel_codegen_stage` is `"register"`. Call sites can use that predicate to choose registration instead of immediate generation. `register_func_call()` only performs duplicate detection and storage; it does not itself check the phase predicate, so callers remain responsible for using it in the intended phase.
+
+### Worker Pool Execution And `fork` Semantics
 
 `get_nested_function()` dynamically imports the stored module path, walks dot-separated attributes inside the function name, verifies the result is callable, and raises import, attribute, or type errors with context when lookup fails. `parallel_function_call()` uses that lookup, calls the target with the stored keyword arguments, and expects the target to return an `NRPyEnv`-shaped tuple.
 
@@ -37,9 +33,9 @@ Claim evidence:
 
 `do_parallel_codegen()` is the execution boundary. If `enable_parallel_codegen` is false, it returns immediately. Otherwise it switches `parallel_codegen_stage` to `"codegen"`, forces the multiprocessing start method to `"fork"`, creates a `Manager().dict()` to collect worker environments, maps all registered calls through a `Pool`, then unpacks the collected environments back into the parent globals.
 
-The forced `"fork"` start method is an implementation fact. The source comments explain that NRPy relies on inherited global state during parallel code generation and explicitly chooses `fork` for that behavior. This page does not treat that choice as a portability guarantee across Python platforms or libraries.
+`do_parallel_codegen()` forces `"fork"` because NRPy workers rely on inherited parent globals during parallel code generation, without guaranteeing `"fork"` portability across non-POSIX Python platforms or libraries.
 
-Because this helper mutates global registries, it is closely related to the C-function, gridfunction, parameter, and Python-function registries. The ownership remains separate: this page owns the multiprocessing orchestration and merge contract, while the cited registry modules define the meaning and validation rules of the stored objects.
+`nrpy.helpers.parallel_codegen` schedules worker calls and merges global dictionaries into the C-function, gridfunction, parameter, and Python-function registries.
 
 ## Sources
 
@@ -51,9 +47,6 @@ Because this helper mutates global registries, it is closely related to the C-fu
 
 ## See Also
 
-- Parent: [Helper APIs](index.md)
 - See also: [Loop Kernel And Device Helpers](loop-kernel-and-device-helpers.md)
 - See also: [C Function Registry](../c-function-registry.md)
 - See also: [Python Function Registry](../python-function-registry.md)
-- See also: [Gridfunctions And Parameters](../gridfunctions-and-parameters.md)
-- See also: [Lifecycle And Project Assembly](../../infrastructures/bhah/lifecycle-and-project-assembly.md)

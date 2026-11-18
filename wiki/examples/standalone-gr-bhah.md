@@ -1,153 +1,71 @@
 # Standalone GR/BHaH
 
-> Route standalone BHaH numerical-relativity generators by initial data, coordinates, diagnostics, and build mode. · Status: confirmed
+> Compare standalone BHaH numerical-relativity generators by initial data, coordinates, formulations, diagnostics, and OpenMP/CUDA build modes. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
 
-Standalone GR/BHaH examples are Python generators that write complete BHaH
-projects under `project/<project_name>/`, then expect `make` and the generated
-executable to run inside that project directory. The checked-in owners are
-`two_blackholes_collide.py` for compact Brill-Lindquist binary black-hole
-evolution, `blackhole_spectroscopy.py` for a TwoPunctures-backed binary with
-checkpointing and Psi4 diagnostics, `spinning_blackhole.py` for a single
-spinning UIUC black hole, and `kasner_exact_evolution.py` for a vacuum Kasner
-benchmark.
-
-Each generator deletes and recreates its fixed project directory. Configured
-GitHub codegen generates and builds the default OpenMP path for every owner
-except Kasner and runs no executable. The local helper configures OpenMP and
-CUDA builds for every owner except Kasner and also runs no executable or
-scientific check. Preserve output before reruns; runtime remains manual here.
+Four generators in `nrpy/examples/` emit standalone single-patch BHaH general-relativity projects under `project/<project_name>/`: `two_blackholes_collide.py` (lightweight Brill-Lindquist head-on binary), `spinning_blackhole.py` (UIUC spinning puncture), `blackhole_spectroscopy.py` (quasicircular TwoPunctures binary with optional `--fccz4`, checkpointing, and `Psi4`), and `kasner_exact_evolution.py` (cosmological `GeneralRFM_fisheyeN1` benchmark). Each recreates its `project/<project_name>/` directory before emitting C/CUDA sources, `<project_name>.par`, and a `Makefile`.
 
 ## Detail
 
-`python -m nrpy.examples.two_blackholes_collide` generates
-`project/two_blackholes_collide/`. It uses `IDtype = "BrillLindquist"` with
-Cartesian initial-data coordinates on a `Spherical` evolution coordinate
-system, `OnePlusLog` lapse, `GammaDriving2ndOrder_Covariant` shift, RK4 Method
-of Lines timestepping, fourth-order finite differences, reference-metric
-precomputation, outgoing radiation boundaries, and a separate Ricci evaluation
-before BSSN RHS evaluation. Its defaults place equal masses at opposite
-z-axis positions. The generator accepts `--cuda`,
-`--floating_point_precision`, and `--raytracing-time`; raytracing output is
-explicitly OpenMP-only and is rejected with `--cuda`.
+### `two_blackholes_collide.py` And `spinning_blackhole.py`
 
-`python -m nrpy.examples.blackhole_spectroscopy` generates
-`project/blackhole_spectroscopy/`. It uses `IDtype = "TP_Interp"` with
-Cartesian initial-data coordinates on `SinhCylindrical`, registers
-`NRPyPN_quasicircular_momenta`, registers the TwoPunctures library, solves the
-TwoPunctures initial-data persist structure before filling BHaH initial data,
-and frees the TwoPunctures derivative storage afterward. It overrides the
-shared `psi^n` initial lapse with `W` for SSL; option semantics are documented in
-[BHaH GR Application Wiring](../infrastructures/bhah/gr-application-wiring.md).
-It uses
-`OnePlusLog`/`GammaDriving2ndOrder_Covariant`, eighth-order finite differences,
-separate Ricci, outgoing radiation boundaries, checkpointing every `2.0` by
-default, Psi4 and spin-weight minus-two spherical-harmonic diagnostics, and GSL
-Makefile flags through `gsl-config`. Its generation flags include
-`--cuda`, `--fccz4`, `--floating_point_precision`, `--initial-sep`, and
-`--initial-p-r`. BSSN remains the
-default. `--fccz4` selects fCCZ4 RHS/gauge registration and zeroes
-`Theta_fCCZ4` only while fresh ADM data are converted; checkpoint loading is
-attempted first and returns without that zeroing. Both choices use the same
-combined determinant/trace projection after initial-data boundary handling and
-in the Method of Lines post-RHS hook.
+- **`two_blackholes_collide.py`** (`README.md`'s lightweight single-patch BH@H example): Evolves equal-mass opposite-`z` `IDtype = "BrillLindquist"` data (Cartesian ID coordinates) on a `Spherical` grid with `OnePlusLog` lapse, `GammaDriving2ndOrder_Covariant` shift, RK4 MoL, `fd_order = 4`, `rfm_precompute`, Sommerfeld radiation boundaries, separate Ricci evaluation, algebraic determinant/trace projection, constraint/nearest/volume diagnostics, and `convergence_factor` CLI scaling. Accepts `--cuda`, `--floating_point_precision`, and `--raytracing-time` for numerical raytracing output.
+- **`spinning_blackhole.py`**: Evolves `IDtype = "UIUCBlackHole"` (`M = 1.0`, `chiU = (0, 0, +0.8)`, spherical ID coordinates; `OffsetKerrSchild` is present as an inactive branch) on `SinhCylindrical` with the same `OnePlusLog`/`GammaDriving2ndOrder_Covariant`, RK4, `fd_order = 4`, separate Ricci, and radiation-boundary configuration. Accepts `--cuda` and `--floating_point_precision`.
 
-With `--raytracing-time [T_FINAL DIAGNOSTICS_OUTPUT_EVERY]`, spectroscopy
-also writes numerical spacetime slices through the shared BHaH diagnostics
-function. Raytracing output requires OpenMP and double precision. Its default
-separation, momentum, time, output cadence, and grid remain the spectroscopy
-defaults when the matching options are omitted. The default coordinate system
-remains `SinhCylindrical`; `--raytracing-coord-system
-SinhCylindricalv2n2` selects the five-parameter cylindrical domain instead.
-`--raytracing-domain`, `--raytracing-Nxx`, `--raytracing-data-mode`, and
-`--raytracing-static-christoffels` select the grid and metric data. The
-generated `raytracing_run_metadata.json` records TwoPunctures separation,
-radial momentum, and target ADM masses. Raytracing generation retains the
-spectroscopy Psi4 and BHaHAHA parameter defaults. Run
-`project/blackhole_spectroscopy/run_raytracing_data_pipeline.sh` from its
-project directory to build, evolve, and combine the time slices into
-`project/raytracing_data/`. The JSON records generator defaults; changing
-the generated `.par` file afterward does not update those fields.
+### `blackhole_spectroscopy.py` (`--fccz4`, TwoPunctures, And `Psi4`)
 
-Claim evidence:
-- Claim: `blackhole_spectroscopy.py` defaults to BSSN and accepts `--fccz4`; that flag selects fCCZ4 RHS/gauge registration and fresh-data-only Theta zeroing after the checkpoint branch, while both formulations use the same initial-data and post-RHS conformal projection; this source ordering does not prove restart correctness or scientific validity.
-- Role: public/scientific contract
-- Deciding authority: [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py), `parser`, `enable_fCCZ4`, initial-data/RHS/Method of Lines registrations
-- Corroboration: [initial_data.py](../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [ADM_Initial_Data_Reader__BSSN_Converter.py](../../nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py), `register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`; [enforce_detgbar_equals_detghat_trAzero.py](../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), combined projector
+`blackhole_spectroscopy.py` evolves `IDtype = "TP_Interp"` on `SinhCylindrical` using `NRPyPN_quasicircular_momenta` and `TwoPunctures_lib` (freeing TwoPunctures derivative buffers after interpolation), overriding the `psi^n` initial lapse with `W` for slow-start lapse (SSL; see [BHaH GR Initial Data And Psi4](../infrastructures/bhah/gr-initial-data-and-psi4.md)). It configures `fd_order = 8`, separate Ricci, radiation boundaries, checkpointing every `2.0`, `Psi4` `s = -2` spherical-harmonic extraction, and `gsl-config` `Makefile` flags.
 
-`python -m nrpy.examples.spinning_blackhole` generates
-`project/spinning_blackhole/`. It evolves `IDtype = "UIUCBlackHole"` in
-`SinhCylindrical` coordinates from spherical initial-data coordinates, with an
-inactive source option for `OffsetKerrSchild` in the script. It uses the same
-`OnePlusLog` lapse, `GammaDriving2ndOrder_Covariant` shift, RK4, fourth-order
-finite differences, separate Ricci, and outgoing radiation pattern as the
-compact binary example, but owns the single spinning black-hole defaults:
-`M = 1.0` and spin vector `(chi_x, chi_y, chi_z) = (0.0, 0.0, +0.8)`.
-Its source-backed generation flags are `--cuda` and `--floating_point_precision`.
+BSSN is the default. The `--fccz4` flag switches to fCCZ4 RHS/gauge kernels and zeroes `Theta_fCCZ4` only on fresh ADM-to-BSSN/fCCZ4 conversion (checkpoint restore returns earlier without zeroing `Theta_fCCZ4`). Both formulations run `enforce_detgbar_equals_detghat_trAzero` after initial-data boundaries and in the MoL post-RHS step.
 
-`python -m nrpy.examples.kasner_exact_evolution` generates
-`project/kasner_exact_evolution/`. It is a benchmark rather than a black-hole
-horizon workflow: `IDtype = "Kasner"`, Cartesian initial-data coordinates,
-`GeneralRFM_fisheyeN1` evolution coordinates, frozen lapse and shift, RK4,
-fourth-order finite differences, extrapolation outer boundaries, and a guard
-that requires the Kasner exponents to satisfy both Kasner constraints. It uses
-Kasner-specific diagnostic gridfunction registration and nearest diagnostics.
-The parser exposes `--cuda`, but that route is not usable. The fixed GeneralRFM
-coordinate causes initial-data registration to request GeneralRFM support, and
-GeneralRFM precompute rejects CUDA before later Ricci registration can help.
-Use the default OpenMP route; `--floating_point_precision` remains available.
+Evidence (scientific/interface requirement): `blackhole_spectroscopy.py` (`--fccz4`, MoL/ID calls); corroboration: `BHaH/general_relativity/initial_data.py`; `ADM_Initial_Data_Reader__BSSN_Converter.py`; `BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py`.
 
-Claim evidence:
-- Claim: `kasner_exact_evolution.py` defaults to a source-supported OpenMP path and exposes `--floating_point_precision`; it also exposes `--cuda`, but CUDA generation fails while initial-data registration requests support for its fixed GeneralRFM coordinate because GeneralRFM precompute rejects CUDA before later Ricci registration.
-- Role: descriptive behavior
-- Deciding authority: [kasner_exact_evolution.py](../../nrpy/examples/kasner_exact_evolution.py), `parser`, `parallelization`, `CoordSystem`, `enable_rfm_precompute`, `BHaH.general_relativity.initial_data.register_CFunction_initial_data`, and `BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval`
-- Corroboration: [initial_data.py](../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [generalrfm_precompute.py](../../nrpy/infrastructures/BHaH/generalrfm_precompute.py), `register_CFunctions_generalrfm_support` and `register_CFunction_generalrfm_precompute`
+### Numerical Spacetime Export
 
-The listed generators default to OpenMP. The black-hole generators switch
-to CUDA when `--cuda` is present; the Kasner parser selects CUDA but fails at
-the GeneralRFM precompute gate described above. For the usable CUDA routes,
-generators register CUDA host/device helpers, use `nvcc`, choose `.cu` source
-output, copy `cuda_intrinsics.h`, and relax generated pointer qualifiers from
-`*restrict` to `*`. In OpenMP mode, the black-hole examples generate or
-link a BHaHAHA static library subdirectory and require double precision for
-that integration; non-double OpenMP BHaHAHA generation raises an error. The
-Kasner benchmark does not generate BHaHAHA.
+`two_blackholes_collide.py` and `blackhole_spectroscopy.py` accept
+`--raytracing-time [T_FINAL OUTPUT_EVERY]` for OpenMP, double-precision
+evolution. `--raytracing-data-mode` selects the data to write. The
+`--raytracing-coord-system SinhCylindricalv2n2` option selects the grid
+coordinate system used by the numerical photon integrators. Set its
+parameters with `--raytracing-domain` and its resolution with `--raytracing-Nxx`.
+Spectroscopy accepts `--initial-sep` and `--initial-p-r` for the
+TwoPunctures separation and radial momentum.
 
-The shared BHaH runtime pieces include nearest and volume diagnostics,
-diagnostic gridfunction header generation, progress output, constraint
-evaluation, determinant enforcement, curvilinear boundary setup,
-Cartesian/native coordinate transforms, basis transforms, generated parameter
-files, `convergence_factor` command-line parsing, copied intrinsics, generated
-headers, and a Makefile. Details of generated project assembly belong in
-[Lifecycle And Project Assembly](../infrastructures/bhah/lifecycle-and-project-assembly.md);
-details of diagnostic file formats, checkpoint payloads, and raytracing stage
-files belong in
-[Diagnostics Output And Checkpointing](../infrastructures/bhah/diagnostics-output-and-checkpointing.md).
+From the generated evolution directory, run
+`./run_raytracing_data_pipeline.sh` to build, evolve, and combine the
+numerical spacetime and apparent-horizon data under `project/raytracing_data/`.
+The apparent-horizon combination step requires NumPy. The generated
+`raytracing_run_metadata.json` records generation settings. Run settings
+changed by editing the `.par` file are not copied back to that JSON.
 
-For related workflows, use
-[Geodesics And Raytracing Runtime](../infrastructures/bhah/geodesics-and-raytracing-runtime.md)
-for standalone geodesics and evolution-time raytracing export, and
-[Apparent Horizon Library](apparent-horizon-library.md) for the BHaHAHA library
-generator that horizon-enabled black-hole examples call.
+Evidence (descriptive behavior): `raytracing_example_helper.py::add_raytracing_cli`, `check_raytracing_cli`, and `shell_generator`.
+
+### `kasner_exact_evolution.py` And OpenMP/CUDA/BHaHAHA Rules
+
+`kasner_exact_evolution.py` evolves `IDtype = "Kasner"` on `GeneralRFM_fisheyeN1` with frozen lapse/shift, RK4, `fd_order = 4`, extrapolation outer boundaries, Kasner exponent constraint checks, and nearest diagnostics. Although its CLI parser defines `--cuda`, CUDA generation fails because `initial_data.py` requests `generalrfm_precompute` support for `GeneralRFM_fisheyeN1`, which raises on `parallelization == "cuda"` before `Ricci_eval` runs; only OpenMP (`--floating_point_precision`) is usable.
+
+Evidence (descriptive behavior): `kasner_exact_evolution.py` (`CoordSystem = "GeneralRFM_fisheyeN1"`, `--cuda`); corroboration: `BHaH/general_relativity/initial_data.py` and `BHaH/generalrfm_precompute.py::register_CFunction_generalrfm_precompute`.
+
+On the three black-hole generators, `--cuda` emits `.cu` files, `cuda_intrinsics.h`, `nvcc` build rules, and non-`restrict` device pointers, whereas OpenMP + `double` builds link a BHaHAHA apparent-horizon subdirectory (non-`double` OpenMP BHaHAHA raises an error; Kasner omits BHaHAHA). GitHub `codegen-{ubuntu,mac}` compiles default OpenMP builds (and `.github/full_nrpy_local_ci.sh` adds CUDA builds) for the three black-hole generators without executing them.
 
 ## Sources
 
-- [two_blackholes_collide.py](../../nrpy/examples/two_blackholes_collide.py) - `project_name`, `CoordSystem`, `IDtype`, `--raytracing-time`, `--raytracing-data-mode`, `enable_bhahaha`
-- [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py) - `project_name`, `IDtype`, `BHaH.general_relativity.TwoPunctures.TwoPunctures_lib.register_C_functions`, `enable_psi4_diagnostics`, `BHaH.read_checkpoint.register_CFunction_read_checkpoint`, `BHaH.write_checkpoint.register_CFunction_write_checkpoint`
-- [initial_data.py](../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py) - checkpoint-first `register_CFunction_initial_data`
-- [ADM_Initial_Data_Reader__BSSN_Converter.py](../../nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py) - fresh-data `Theta_fCCZ4` initialization
-- [enforce_detgbar_equals_detghat_trAzero.py](../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - shared determinant/trace projector
-- [spinning_blackhole.py](../../nrpy/examples/spinning_blackhole.py) - `project_name`, `CoordSystem`, `IDtype`, `spin_alignment_vector_params`, `default_BH_spin_chiU`
-- [kasner_exact_evolution.py](../../nrpy/examples/kasner_exact_evolution.py) - `project_name`, `IDtype`, `LapseEvolutionOption`, `ShiftEvolutionOption`, `use_separate_ricci`
+- [README.md](../../README.md) - `## Lightweight Single-Patch BH@H Example`, `### Standalone BHaH Generators`
+- [two_blackholes_collide.py](../../nrpy/examples/two_blackholes_collide.py) - `project_name`, `CoordSystem`, `IDtype`, `--raytracing-time`, `enable_bhahaha`
+- [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py) - `parser`, `enable_fCCZ4`, `IDtype`, `TwoPunctures_lib`, `enable_psi4_diagnostics`, `read_checkpoint`, `write_checkpoint`
+- [spinning_blackhole.py](../../nrpy/examples/spinning_blackhole.py) - `project_name`, `CoordSystem`, `IDtype`, `default_BH_spin_chiU`
+- [kasner_exact_evolution.py](../../nrpy/examples/kasner_exact_evolution.py) - `parser`, `CoordSystem`, `IDtype`, `LapseEvolutionOption`, `ShiftEvolutionOption`
+- [initial_data.py](../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py) - `register_CFunction_initial_data`
+- [ADM_Initial_Data_Reader__BSSN_Converter.py](../../nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py) - `register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`
+- [enforce_detgbar_equals_detghat_trAzero.py](../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - [generalrfm_precompute.py](../../nrpy/infrastructures/BHaH/generalrfm_precompute.py) - `register_CFunctions_generalrfm_support`, `register_CFunction_generalrfm_precompute`
+
+- [raytracing_example_helper.py](../../nrpy/infrastructures/BHaH/general_relativity/geodesics/raytracing_example_helper.py) - generation options, run metadata, and build and export commands
 
 ## See Also
 
-- [Examples](index.md)
-- [Black Hole Evolution](black-hole-evolution.md)
-- [Apparent Horizon Library](apparent-horizon-library.md)
-- [Lifecycle And Project Assembly](../infrastructures/bhah/lifecycle-and-project-assembly.md)
-- [Diagnostics Output And Checkpointing](../infrastructures/bhah/diagnostics-output-and-checkpointing.md)
-- [Geodesics And Raytracing Runtime](../infrastructures/bhah/geodesics-and-raytracing-runtime.md)
+- Depends on: [BHaH Project Assembly](../infrastructures/bhah/lifecycle-and-project-assembly.md)
+- Depends on: [BHaH GR Evolution And Constraints](../infrastructures/bhah/gr-evolution-and-constraints.md)
+- Depends on: [BHaH GR Initial Data And Psi4](../infrastructures/bhah/gr-initial-data-and-psi4.md)

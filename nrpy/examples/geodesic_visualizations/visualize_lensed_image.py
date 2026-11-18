@@ -87,9 +87,8 @@ def main() -> None:
         "--color-by-puncture",
         action="store_true",
         help=(
-            "Color evolution-measure stops using matching puncture blueprint files. "
-            "Labels approximate association with individual horizon centroids or "
-            "the common-horizon epoch."
+            "Color horizon stops by containing horizon. When puncture diagnostics "
+            "are available, color energy stops by their recorded association."
         ),
     )
     parser.add_argument(
@@ -213,15 +212,10 @@ def main() -> None:
     if args.debug is not None:
         print("Debug failure-color key:")
         for term_type, label, color in rli.DEBUG_FAILURE_INFO:
-            if (
-                args.color_by_puncture
-                and term_type == cfg.STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED
-            ):
-                continue
             color_hex = f"#{color[0]:02X}{color[1]:02X}{color[2]:02X}"
             print(f"  {term_type}: {label} = {color_hex}")
     if args.color_by_puncture:
-        print("Approximate puncture association color key:")
+        print("Apparent horizon and puncture color key:")
         for puncture, label, color in rli.PUNCTURE_COLOR_INFO:
             color_hex = f"#{color[0]:02X}{color[1]:02X}{color[2]:02X}"
             print(f"  {puncture}: {label} = {color_hex}")

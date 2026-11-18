@@ -113,7 +113,8 @@ def main(
         "'light_blueprint_synthetic_slice_usage_XX_YY.bin' with 26-byte records: "
         "a uint64_t photon index, two uint8_t use flags, and two f64 request times; "
         "false flags have NaN times."
-        " A nonempty puncture_diagnostics_dir also writes "
+        " An apparent horizon binary enables stopping inside a horizon. "
+        "With binary or text horizon diagnostics, each tile writes "
         "'light_blueprint_puncture_XX_YY.bin' with ten bytes per "
         "main blueprint record: puncture_id (0 unclassified, 1 puncture_1, "
         "2 puncture_2, 3 merged_puncture) and horizon_status "
@@ -137,7 +138,8 @@ def main(
         """
             char norm_abs_bin_name[256];
             char puncture_bin_name[256];
-            if (commondata.puncture_diagnostics_dir[0] != '\\0') {
+            if (commondata.apparent_horizon_bin_path[0] != '\\0' ||
+                commondata.puncture_diagnostics_dir[0] != '\\0') {
                 snprintf(puncture_bin_name, sizeof(puncture_bin_name),
                          "light_blueprint_puncture_%02d_%02d.bin", tx, ty);
             } else {
@@ -588,6 +590,13 @@ def main(
             header.a_max = commondata.image_plane_crop_enabled ? commondata.a_max : 1.0;
             header.b_min = commondata.image_plane_crop_enabled ? commondata.b_min : 0.0;
             header.b_max = commondata.image_plane_crop_enabled ? commondata.b_max : 1.0;
+
+            for (uint64_t ray = 0; ray < record_count; ++ray) {{
+                if (results_buffer[ray].termination_type == STOP_CONDITION_INSIDE_APPARENT_HORIZON) {{
+                    header.native_schema_version = BLUEPRINT_HORIZON_VERSION;
+                    break;
+                }} // END IF: tile contains horizon stop
+            }} // END LOOP: select blueprint version
 
             if (write_blueprint_file(bin_name, &header, results_buffer, record_count) != 0) {{
                 free(results_buffer);

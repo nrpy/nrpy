@@ -20,7 +20,7 @@ Doctests:
 >>> arguments = (terms, fractions, np.full(7, 0.5), zeros, zeros, zeros, zeros,
 ...              7, 1, (0.0, 1.0, 0.0, 1.0), 2.0,
 ...              np.full((1, 1, 3), 0.25), np.full((1, 1, 3), 0.5),
-...              colors, counts, debug, 1, 0, 2, 6, 9, 10, 11, True)
+...              colors, counts, debug, 1, 0, 2, 12, 6, 9, 10, 11, True)
 >>> labels = np.array([0, 1, 2, 3, 3, 3, 3], dtype=np.uint8)
 >>> _accumulate_ray_hits_jit(*arguments, labels, PUNCTURE_COLORS, True)
 >>> assert np.allclose(colors[0, :4], PUNCTURE_COLORS)
@@ -36,7 +36,7 @@ Doctests:
 >>> _accumulate_ray_hits_jit(terms[:2], fractions[:2], np.full(2, 0.5),
 ...     zeros[:2], zeros[:2], zeros[:2], zeros[:2], 1, 1, (0.0, 1.0, 0.0, 1.0),
 ...     2.0, np.full((1, 1, 3), 0.25), np.full((1, 1, 3), 0.5), mixed_colors,
-...     mixed_counts, np.empty((0, 0), dtype=np.int8), 1, 0, 2, 6, 9, 10, 11, False,
+...     mixed_counts, np.empty((0, 0), dtype=np.int8), 1, 0, 2, 12, 6, 9, 10, 11, False,
 ...     np.array([1, 2], dtype=np.uint8), PUNCTURE_COLORS, True)
 >>> assert mixed_counts[0, 0] == 2
 >>> assert np.allclose(mixed_colors[0, 0] / 2, PUNCTURE_COLORS[1:3].mean(axis=0))
@@ -49,6 +49,13 @@ Doctests:
 >>> no_debug_arguments = (*arguments[:-1], False)
 >>> _accumulate_ray_hits_jit(*no_debug_arguments, labels, PUNCTURE_COLORS, True)
 >>> assert debug[0, -1] == _DEBUG_STATUS_UNSET
+>>> terms[:3] = cfg.STOP_CONDITION_INSIDE_APPARENT_HORIZON
+>>> zeros[:3] = [1., 2., 3.]
+>>> colors.fill(0); counts.fill(0); debug.fill(_DEBUG_STATUS_UNSET)
+>>> _accumulate_ray_hits_jit(*arguments, np.empty(0, dtype=np.uint8), PUNCTURE_COLORS, True)
+>>> assert np.allclose(colors[0, :3], PUNCTURE_COLORS[1:])
+>>> assert counts[0, :4].tolist() == [1, 1, 1, 0]
+>>> assert debug[0, 3] == cfg.STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED
 
 """
 
@@ -351,6 +358,7 @@ def _accumulate_ray_hits_jit(
     term_terminal_plane: int,
     term_sphere: int,
     term_evolution_measure: int,
+    term_horizon: int,
     term_fail_generic: int,
     term_fail_spatial_interpolation: int,
     term_fail_temporal_interpolation: int,
@@ -414,8 +422,13 @@ def _accumulate_ray_hits_jit(
             local_pixel_acc[py, px, 2] += sphere_tex[py_sph, px_sph, 2]
             local_count_acc[py, px] += 1
 
-        elif color_by_puncture and term == term_evolution_measure:
-            label = rays_puncture_labels[i]
+        elif color_by_puncture and (
+            term == term_horizon
+            or (term == term_evolution_measure and rays_puncture_labels.size)
+        ):
+            label = (
+                int(rays_y_t[i]) if term == term_horizon else rays_puncture_labels[i]
+            )
             local_pixel_acc[py, px, 0] += puncture_colors[label, 0]
             local_pixel_acc[py, px, 1] += puncture_colors[label, 1]
             local_pixel_acc[py, px, 2] += puncture_colors[label, 2]
@@ -424,7 +437,11 @@ def _accumulate_ray_hits_jit(
         # Preserve requested integration failures for the opt-in debug overlay.
         if (
             enable_debug
-            and not (color_by_puncture and term == term_evolution_measure)
+            and not (
+                color_by_puncture
+                and term == term_evolution_measure
+                and rays_puncture_labels.size
+            )
             and (
                 term_evolution_measure <= term <= term_fail_generic
                 or term == term_fail_spatial_interpolation
@@ -477,11 +494,13 @@ def _process_blueprint_tile(
     else:
         local_debug_term_types = np.empty((0, 0), dtype=np.int8)
 
-    puncture_labels = (
-        blueprint_io.read_puncture_labels(blueprint_filename)
-        if color_by_puncture
-        else np.empty(0, dtype=cfg.PUNCTURE_DTYPE)
-    )
+    puncture_labels = np.empty(0, dtype=cfg.PUNCTURE_DTYPE)
+    if color_by_puncture:
+        try:
+            puncture_labels = blueprint_io.read_puncture_labels(blueprint_filename)
+        except FileNotFoundError:
+            # Containing horizon IDs are already stored in the main blueprint.
+            pass
     for header, record_start, chunk_data in blueprint_io.iter_blueprint_chunks(
         blueprint_filename, chunk_records
     ):
@@ -505,6 +524,7 @@ def _process_blueprint_tile(
             cfg.STOP_CONDITION_TERMINAL_PLANE,
             cfg.STOP_CONDITION_COORD_RADIUS_EXCEEDED,
             cfg.STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED,
+            cfg.STOP_CONDITION_INSIDE_APPARENT_HORIZON,
             cfg.FAILURE_GENERIC,
             cfg.FAILURE_SPATIAL_INTERPOLATION,
             cfg.FAILURE_TEMPORAL_INTERPOLATION,
@@ -592,7 +612,7 @@ def generate_static_lensed_image(
     Reads native blueprint records in chunks, identifies where each ray terminated,
     and maps each record's normalized image-sample coordinate to the final image.
     Uses a process pool executor to process individual blueprint tiles in parallel.
-    Missing requested puncture files propagate FileNotFoundError from the reader.
+    An optional puncture file supplies labels for energy-cutoff stops.
 
     :param output_filename: Path where the final rendered image will be saved.
     :param output_pixel_width: Desired width of the output image in pixels.
@@ -607,7 +627,7 @@ def generate_static_lensed_image(
     :param custom_source_image: Whether the source texture came from a custom CLI override.
     :param enable_debug: Whether to overlay requested integration failures with fixed colors.
     :param include_debug_key: Whether to add the enabled failure and puncture color key.
-    :param color_by_puncture: Color evolution-measure stops using saved puncture labels.
+    :param color_by_puncture: Color horizon stops by ID and energy stops by saved labels when available.
     :raises ValueError: If blueprint metadata or requested puncture labels are invalid.
     """
     # pylint: disable=import-outside-toplevel, import-error
@@ -670,10 +690,6 @@ def generate_static_lensed_image(
         raise ValueError(
             "Blueprint headers disagree about tile grid, fields of view, or image-plane bounds"
         )
-
-    if color_by_puncture:
-        for filename, header in zip(blueprint_filenames, headers):
-            blueprint_io.read_puncture_labels(filename, header)
 
     chunk_records = chunk_size
 
@@ -751,15 +767,7 @@ def generate_static_lensed_image(
         padding = 4
         swatch_size = 8
         line_height = 11
-        color_key_info = tuple(
-            info
-            for info in DEBUG_FAILURE_INFO
-            if enable_debug
-            and not (
-                color_by_puncture
-                and info[0] == cfg.STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED
-            )
-        )
+        color_key_info = DEBUG_FAILURE_INFO if enable_debug else ()
         if color_by_puncture:
             color_key_info += PUNCTURE_COLOR_INFO
         labels = [info[1] for info in color_key_info]

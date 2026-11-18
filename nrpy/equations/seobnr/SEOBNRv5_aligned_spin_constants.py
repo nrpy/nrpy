@@ -15,7 +15,7 @@ The NR constants are expressed in terms of the binary masses (m1, m2), and spins
 """
 
 # Step P1: Import needed modules:
-from typing import Dict, cast
+from typing import Any, Dict, cast
 
 import sympy as sp
 
@@ -199,12 +199,13 @@ class SEOBNR_aligned_spin_constants:
         self.final_spin_non_precessing_HBR2016()
         self.final_mass_non_precessing_UIB2016()
         self.rISCO = self.Kerr_ISCO_radius(self.a_f)
+        nrpyAbs_to_Abs: Dict[Any, Any] = {sp.Function("nrpyAbs"): sp.Abs}
         self.rstop = -1 * coord_less_bound(self.Delta_t, sp.sympify(0)).subs(
-            sp.Function("nrpyAbs"), sp.Abs
+            nrpyAbs_to_Abs
         ) + f2r(0.98) * self.rISCO * coord_greater_bound(
             self.Delta_t, sp.sympify(0)
         ).subs(
-            sp.Function("nrpyAbs"), sp.Abs
+            nrpyAbs_to_Abs
         )
         # strain NR fits at t_match
         self.hNR: Dict[str, sp.Expr] = {}
@@ -556,7 +557,7 @@ class SEOBNR_aligned_spin_constants:
             for j in range(nJ + 1):
                 ksum += k[i, j] * nu_i[i] * aeff_j[j]
 
-        return cast(sp.Expr, sp.Abs(LISCOeff - 2 * atot * (EISCOeff - 1) + nu * ksum))
+        return sp.Abs(LISCOeff - 2 * atot * (EISCOeff - 1) + nu * ksum)
 
     def final_spin_non_precessing_HBR2016(
         self,

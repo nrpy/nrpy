@@ -6,7 +6,7 @@
 ## Summary
 
 The GRHD modules build perfect-fluid, Valencia-style symbolic hydrodynamics
-expressions on top of BSSN-derived ADM metric quantities. `GRHD_Equations` owns the conserved
+expressions on top of BSSN-derived ADM metric quantities. `GRHD_Equations` defines the conserved
 variables, stress-energy tensors, fluxes, source terms, connection terms, and
 reference-metric rescalings; companion modules compute characteristic speeds,
 HLL interface fluxes, and no-branch min/max expressions used by generated C
@@ -15,6 +15,8 @@ recovery; `GRMHD_Equations` in [GRMHD](grmhd.md) subclasses `GRHD_Equations` to
 add magnetic stress-energy.
 
 ## Detail
+
+### Conserved Variables, Fluxes, And Geometric Source Terms
 
 `GRHD_Equations` initializes a coordinate-system reference metric, imports the
 matching `BSSN_quantities` entry, converts BSSN quantities to ADM spatial metric
@@ -25,11 +27,7 @@ The constructor uses it to form the spatial four-velocity components. This is
 the velocity transporting the fluid through the coordinates; the Eulerian
 three-velocity is `(VU[i] + betaU[i])/alpha`.
 
-Claim evidence:
-- Claim: `VU` denotes coordinate transport velocity, `u^i/u^0`, and `rescaledvU[i] = VU[i]/ReU[i]`.
-- Role: descriptive behavior
-- Deciding authority: [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py), `GRHD_Equations.__init__, compute_vU_from_u4U__no_speed_limit`
-- Corroboration: `none available`; the named implementation decides the stated behavior.
+Evidence (descriptive behavior): `grhd/GRHD_equations.py::GRHD_Equations.__init__`; `grhd/GRHD_equations.py::compute_vU_from_u4U__no_speed_limit`.
 
 The conserved variables are stored as object attributes. `compute_rho_star`,
 `compute_Ye_star`, `compute_S_star`, `compute_tau_tilde`, and
@@ -76,11 +74,9 @@ convention of the calling code. Neither the `S_star` definition nor its
 transport law comes from Duez et al. or Jacques et al.; Jacques et al.,
 Eq. (11), only rewrites the chosen current's divergence.
 
-Claim evidence:
-- Claim: The perfect-fluid tensor, conserved mass, momentum, and energy variables, fluxes, and energy source follow Duez et al. Eqs. (16) and (34)-(39), with reference-metric volume factor, electron fraction, conserved system, sources, connection terms, and component rescaling from Jacques et al. Eqs. (4)-(5) and (13)-(24). Neither paper defines `S_star` or its transport law.
-- Role: public/scientific contract
-- Deciding authority: [Duez et al. (2005)](https://arxiv.org/pdf/astro-ph/0503420v2), Eqs. (16) and (34)-(39); [Jacques et al.](https://arxiv.org/pdf/2412.03659v2), Eqs. (4)-(5), (11), and (13)-(24)
-- Corroboration: [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py), method docstrings including `compute_S_star`; [GRHD_equations_Cartesian.py](../../nrpy/equations/grhd/tests/GRHD_equations_Cartesian.py), `trusted_dict`
+Evidence (scientific/interface requirement): `arXiv:astro-ph/0503420v2`, Eqs. (16) and (34)-(39); `arXiv:2412.03659v2`, Eqs. (4)-(5), (11), and (13)-(24); corroboration: `grhd/GRHD_equations.py`, method docstrings including `compute_S_star`; `grhd/tests/GRHD_equations_Cartesian.py::trusted_dict`.
+
+### Characteristic Speeds, HLL Fluxes, And Trusted Validation
 
 `find_cp_cm` computes the smaller and larger roots of the characteristic
 quadratic in one flux direction from the contravariant four-metric,
@@ -96,11 +92,7 @@ evaluates the right and left reconstructed states with their supplied `v02_r`
 and `v02_l`, and returns nonnegative `(cmin, cmax)` HLL bounds. See
 [GRMHD](grmhd.md) for its magnetic speed estimate.
 
-Claim evidence:
-- Claim: `find_cp_cm` uses one squared fluid-frame speed `v02` to return ordered roots; `find_cmax_cmin` uses the two face-state values `v02_r` and `v02_l` to return nonnegative HLL bounds. GRHD supplies sound speeds and GRMHD supplies magnetic speed estimates.
-- Role: descriptive behavior
-- Deciding authority: [characteristic_speeds.py](../../nrpy/equations/grhd/characteristic_speeds.py), `find_cp_cm` and `find_cmax_cmin`
-- Corroboration: [GRMHD characteristic_speeds.py](../../nrpy/equations/grmhd/characteristic_speeds.py), `find_cmax_cmin` caller
+Evidence (descriptive behavior): `grhd/characteristic_speeds.py::find_cp_cm` and `find_cmax_cmin`; corroboration: `grmhd/characteristic_speeds.py::find_cmax_cmin` caller.
 
 These helpers assume caller-supplied physical states and usable denominators.
 `flux_dirn` is used as a spatial index and is not range-checked; intended values
@@ -122,11 +114,7 @@ The GRHD `calculate_HLL_fluxes` obtains `cmin` and `cmax` and applies
 `HLL_solver` to `rho_star`, `Ye_star`, `S_star`, `tau_tilde`, and each
 component of `S_tildeD`.
 
-Claim evidence:
-- Claim: `calculate_Tmunu_and_contractions_from_equations` replaces the Cartesian equation object's metric and fluid state and computes conserved variables and fluxes. The GRHD and GRMHD HLL functions pass their respective equation classes.
-- Role: descriptive behavior
-- Deciding authority: [HLL_fluxes.py](../../nrpy/equations/grhd/HLL_fluxes.py), `calculate_Tmunu_and_contractions_from_equations` and `calculate_HLL_fluxes`
-- Corroboration: [GRMHD HLL_fluxes.py](../../nrpy/equations/grmhd/HLL_fluxes.py), `calculate_HLL_fluxes` caller
+Evidence (descriptive behavior): `grhd/HLL_fluxes.py::calculate_Tmunu_and_contractions_from_equations` and `calculate_HLL_fluxes`; corroboration: `grmhd/HLL_fluxes.py::calculate_HLL_fluxes` caller.
 
 `Min_Max_and_Piecewise_Expressions.py` provides symbolic min/max expressions
 through `nrpyAbs`, which later becomes a generated C absolute-value call.
@@ -143,11 +131,7 @@ Callers must account for these fractional values and singular points.
 Claim status: contested; contradiction: CONTR-0020.
 See [CONTR-0020](../contradictions.md#contr-0020).
 
-Claim evidence:
-- Claim: Coordinate-bound helpers use shifted quotients, so exact 0-or-1 comparison semantics are not guaranteed and denominators can vanish.
-- Role: descriptive behavior
-- Deciding authority: [Min_Max_and_Piecewise_Expressions.py](../../nrpy/equations/grhd/Min_Max_and_Piecewise_Expressions.py), `coord_leq_bound`, `coord_geq_bound`, `coord_less_bound`, `coord_greater_bound`
-- Corroboration: `none available`; the module's trusted-value path substitutes other functions for `nrpyAbs` and does not validate absolute-value comparison semantics.
+Evidence (descriptive behavior): `grhd/Min_Max_and_Piecewise_Expressions.py::coord_leq_bound`, `coord_geq_bound`, `coord_less_bound`, `coord_greater_bound`.
 
 Representative trusted files cover both Cartesian-equivalent and curvilinear
 paths. `GRHD_equations_Cartesian.py`, `GRHD_equations_Spherical.py`, and
@@ -175,20 +159,13 @@ evaluation with the face states exchanged, so each state sets each bound in one
 of the two evaluations. The `HLL_test` entry samples `HLL_solver` with an
 independent symbol for every input.
 
-Claim evidence:
-- Claim: At the shared general-metric sample point the GRHD characteristic speeds entering `cmax` are all negative, so `cmax = 0` and the sampled HLL fluxes reduce to right-state fluxes; the speed and HLL modules also sample a flat-face pair of subsonic states and its exchange, which makes both speed bounds nonzero and lets each state set each bound in one of the two evaluations; `HLL_test` samples `HLL_solver` with independent symbols. These are sampled expression checks, not generated-code execution.
-- Role: descriptive behavior
-- Deciding authority: [characteristic_speeds.py](../../nrpy/equations/grhd/characteristic_speeds.py), module `__main__`; [HLL_fluxes.py](../../nrpy/equations/grhd/HLL_fluxes.py), module `__main__`
-- Corroboration: [characteristic_speeds.py](../../nrpy/equations/grhd/tests/characteristic_speeds.py) and [HLL_fluxes.py](../../nrpy/equations/grhd/tests/HLL_fluxes.py), `trusted_dict` entries with the `subsonic_` and `subsonic_exchanged_` prefixes
+Evidence (descriptive behavior): `grhd/characteristic_speeds.py`, module `__main__`; `grhd/HLL_fluxes.py`, module `__main__`; corroboration: `grhd/tests/characteristic_speeds.py` and `grhd/tests/HLL_fluxes.py::trusted_dict` entries with the `subsonic_` and `subsonic_exchanged_` prefixes.
 
 ## Sources
 
 - [Duez et al. (2005)](https://arxiv.org/pdf/astro-ph/0503420v2) - Eqs. (16), (34)-(39), (48)-(50)
 - [Jacques et al.](https://arxiv.org/pdf/2412.03659v2) - Eqs. (2)-(5), (11), (13)-(24)
-- [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py) - `GRHD_Equations`, `construct_all_equations`
-- [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py) - `compute_rho_star`, `compute_Ye_star`, `compute_S_star`, `compute_tau_tilde`, `compute_S_tildeD`
-- [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py) - `compute_T4UU`, `compute_T4UD`, `compute_rho_star_fluxU`, `compute_tau_tilde_fluxU`, `compute_S_tilde_fluxUD`
-- [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py) - `compute_tau_source_term`, `compute_all_connection_terms`, `compute_S_tilde_source_termD`, `compute_S_tilde_connection_termsD`
+- [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py) - `GRHD_Equations`, `construct_all_equations`; `compute_rho_star`, `compute_Ye_star`, `compute_S_star`, `compute_tau_tilde`, `compute_S_tildeD`; `compute_T4UU`, `compute_T4UD`, `compute_rho_star_fluxU`, `compute_tau_tilde_fluxU`, `compute_S_tilde_fluxUD`; `compute_tau_source_term`, `compute_all_connection_terms`, `compute_S_tilde_source_termD`, `compute_S_tilde_connection_termsD`
 - [characteristic_speeds.py](../../nrpy/equations/grhd/characteristic_speeds.py) - `find_cp_cm`, `find_cmax_cmin`
 - [HLL_fluxes.py](../../nrpy/equations/grhd/HLL_fluxes.py) - `calculate_Tmunu_and_contractions_from_equations`, `HLL_solver`, `calculate_HLL_fluxes`
 - [Min_Max_and_Piecewise_Expressions.py](../../nrpy/equations/grhd/Min_Max_and_Piecewise_Expressions.py) - `min_noif`, `max_noif`, `coord_leq_bound`, `coord_geq_bound`, `coord_less_bound`, `coord_greater_bound`
@@ -198,13 +175,11 @@ Claim evidence:
 - [characteristic_speeds.py](../../nrpy/equations/grhd/tests/characteristic_speeds.py) - `trusted_dict`
 - [HLL_fluxes.py](../../nrpy/equations/grhd/tests/HLL_fluxes.py) - `trusted_dict`
 - [Min_Max_and_Piecewise_Expressions.py](../../nrpy/equations/grhd/tests/Min_Max_and_Piecewise_Expressions.py) - `trusted_dict`
+- [GRMHD characteristic_speeds.py](../../nrpy/equations/grmhd/characteristic_speeds.py) - `find_cmax_cmin`
+- [GRMHD HLL_fluxes.py](../../nrpy/equations/grmhd/HLL_fluxes.py) - `calculate_HLL_fluxes`
 
 ## See Also
 
-- Parent: [Equations](index.md)
 - Depends on: [BSSN Family](general-relativity/bssn-family.md)
 - Depends on: [Metric Conversions And Matter](general-relativity/metric-conversions-and-matter.md)
-- See also: [Fishbone-Moncrief](general-relativity/fishbone-moncrief.md)
 - Depends on: [Reference Metrics](../core/reference-metrics.md)
-- Validated by: [Trusted Expression Pipeline](trusted-expression-pipeline.md)
-- See also: [GRMHD](grmhd.md)

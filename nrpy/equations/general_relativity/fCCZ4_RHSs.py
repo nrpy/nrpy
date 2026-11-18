@@ -153,7 +153,7 @@ class FCCZ4RHSs:
 
         self.h_rhsDD = ixp.zerorank2()
         self.a_rhsDD = ixp.zerorank2()
-        delta_trace = sp.sympify(0)
+        delta_trace: sp.Expr = sp.sympify(0)
         for i in range(3):
             for j in range(3):
                 delta_trace += Bq.gammabarUU[i][j] * self.RbarZ4DD_delta[i][j]
@@ -174,7 +174,7 @@ class FCCZ4RHSs:
                     / rfm.ReDD[i][j]
                 )
 
-        Dhat_div_beta = sp.sympify(0)
+        Dhat_div_beta: sp.Expr = sp.sympify(0)
         for k in range(3):
             Dhat_div_beta += Bq.betaU_dD[k][k]
             for ell in range(3):

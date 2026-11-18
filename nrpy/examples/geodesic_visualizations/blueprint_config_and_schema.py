@@ -10,7 +10,7 @@ Final blueprint records contain physical stop conditions and terminal failures,
 never the internal active or rejected RKF45 states.
 
 >>> FINAL_TERMINATION_TYPES
-(0, 1, 2, 3, 4, 5, 6, 9, 10, 11)
+(0, 1, 2, 3, 4, 5, 6, 9, 10, 11, 12)
 >>> ACTIVE in FINAL_TERMINATION_TYPES or REJECTED in FINAL_TERMINATION_TYPES
 False
 
@@ -29,6 +29,7 @@ import numpy as np
 # terminal-plane texture samples.
 BLUEPRINT_MAGIC = b"NRPYBP01"
 BLUEPRINT_SCHEMA_VERSION = 9
+BLUEPRINT_HORIZON_VERSION = 10
 # Header stores tile identity/counts, full-camera fields of view, and exact
 # global image-plane bounds. Output pixel dimensions are chosen when rendering.
 BLUEPRINT_HEADER_FORMAT = "=8sIIIIIIIQ6d"
@@ -49,8 +50,8 @@ BLUEPRINT_DTYPE = np.dtype(
         ),  # Enum indicating escape, terminal-plane hit, or integration failure
         ("y_nt", "=f8"),  # Local horizontal nonterminal-plane diagnostic
         ("z_nt", "=f8"),  # Local vertical nonterminal-plane diagnostic
-        ("y_t", "=f8"),  # Local horizontal terminal-plane coordinate
-        ("z_t", "=f8"),  # Local vertical terminal-plane coordinate
+        ("y_t", "=f8"),  # Terminal-plane coordinate or containing horizon ID
+        ("z_t", "=f8"),  # Terminal-plane coordinate or NaN for a horizon stop
         ("final_theta", "=f8"),  # Final polar angle on the celestial sphere
         ("final_phi", "=f8"),  # Final azimuthal angle on the celestial sphere
         (
@@ -150,6 +151,8 @@ FAILURE_SPATIAL_INTERPOLATION = 9  # Spatial interpolation failed for this ray
 FAILURE_TEMPORAL_INTERPOLATION = 10  # Temporal interpolation failed for this ray
 FAILURE_RKF45_MIN_STEP_LIMIT = 11  # Too many consecutive minimum-size RKF45 attempts
 
+STOP_CONDITION_INSIDE_APPARENT_HORIZON = 12
+
 # Only completed physical stops and failures may be serialized. ACTIVE and
 # REJECTED are internal RKF45 states and therefore deliberately absent.
 FINAL_TERMINATION_TYPES = (
@@ -163,6 +166,7 @@ FINAL_TERMINATION_TYPES = (
     FAILURE_SPATIAL_INTERPOLATION,
     FAILURE_TEMPORAL_INTERPOLATION,
     FAILURE_RKF45_MIN_STEP_LIMIT,
+    STOP_CONDITION_INSIDE_APPARENT_HORIZON,
 )
 
 # Step 3: Physics and scene parameters.

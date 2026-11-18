@@ -76,6 +76,8 @@ def time_window_manager_numerical(
     True
     >>> par.glb_code_params_dict["numerical_spacetime_time_slice_stride"].defaultvalue
     1
+    >>> par.glb_code_params_dict["numerical_spacetime_spatial_mask_threshold"].defaultvalue
+    10.0
     """
     if interpolation_method == "g4DD":
         combined_magic = "NRPYRTSTACKMET1"
@@ -179,6 +181,20 @@ def time_window_manager_numerical(
         commondata=True,
         add_to_parfile=False,
         description="Runtime temporal-stencil coordinate-time step limit; zero disables it.",
+    )
+
+    _ = par.register_CodeParameter(
+        "REAL",
+        __name__,
+        "numerical_spacetime_spatial_mask_threshold",
+        10.0,
+        commondata=True,
+        add_to_parfile=True,
+        description=(
+            "Exclude spatial nodes whose spatial-metric Frobenius norm exceeds "
+            "this factor times the median neighboring norm; use a large finite "
+            "factor to suppress exclusions. Must be finite and greater than one."
+        ),
     )
 
     # Step 2: Register the shared backward-time RKF45 lookahead parameter.
@@ -296,6 +312,11 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
       int i0;
       int i2;
     } NumericalSpatialStencilCenter; // END STRUCT: NumericalSpatialStencilCenter
+
+    // Defined with the ordinary spatial interpolator; reused without new bounds logic.
+    int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_indices(
+        const params_struct *restrict params, const int i0_storage,
+        const int i1_storage, const int i2_storage, uint64_t *restrict point_index);
 
     /**
      * Resolve one Cartesian target and its spatial interpolation centers.
@@ -1219,6 +1240,11 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
       time_window_manager_numerical_free(ntwm);
       if (combined_path == NULL || commondata == NULL)
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      if (!isfinite(commondata->numerical_spacetime_spatial_mask_threshold) ||
+          commondata->numerical_spacetime_spatial_mask_threshold <= 1.0) {
+        fprintf(stderr, "ERROR: numerical_spacetime_spatial_mask_threshold must be finite and greater than one.\n");
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: spatial mask threshold invalid
       if (temporal_interp_half_width < 0 ||
           temporal_interp_half_width >
               TIME_WINDOW_MANAGER_NUMERICAL_MAX_TEMPORAL_INTERP_HALF_WIDTH)
@@ -1801,6 +1827,119 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
     } // END FUNCTION: time_window_manager_numerical_stencil_for_center
+
+    /**
+     * Construct one spatial exclusion mask from the selected temporal slices.
+     *
+     * @param[in] commondata Spatial half-width and exclusion threshold.
+     * @param[in] params Stored grid dimensions and ghost-zone count.
+     * @param[in] ntwm Active mapped numerical slices.
+     * @param[in] center Locked spatial center.
+     * @param phi_plane Stored azimuthal plane selected at attempt start.
+     * @param temporal_center Locked retained temporal center.
+     * @param sampling_time Attempt-start geometry time, including fast light.
+     * @param[out] mask Row-major exclusion bytes; caller allocates (2*h+1)^2.
+     * @param[out] has_excluded_nodes Whether any mask entry is one.
+     * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
+     */
+    static inline int time_window_manager_numerical_build_spatial_mask(
+        const commondata_struct *restrict commondata,
+        const params_struct *restrict params,
+        const NumericalTimeWindowManager *restrict ntwm,
+        const NumericalSpatialStencilCenter *restrict center,
+        const int phi_plane, const uint64_t temporal_center,
+        const double sampling_time, unsigned char *restrict mask,
+        bool *restrict has_excluded_nodes) {
+      const int half_width = commondata->numerical_spacetime_spatial_interp_half_width;
+      const int count = 2 * half_width + 1;
+      memset(mask, 0, (size_t)count * (size_t)count);
+      *has_excluded_nodes = false;
+      if (half_width == 0)
+        return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
+
+      const int temporal_count = ntwm->temporal_interp_num_points;
+      const double *slices[temporal_count + 2];
+      int slice_count = 0;
+      const uint64_t final_slice = time_window_manager_numerical_final_selected_slice(ntwm);
+      if (sampling_time <= ntwm->slice_times[0]) {
+        slices[slice_count++] = time_window_manager_numerical_grid_ptr(ntwm, 0ULL);
+      } else if (sampling_time >= ntwm->slice_times[final_slice]) {
+        slices[slice_count++] = time_window_manager_numerical_grid_ptr(ntwm, final_slice);
+      } else {
+        uint64_t indices[temporal_count];
+        REAL times[temporal_count], missing_times[temporal_count];
+        int missing_count = 0;
+        if (time_window_manager_numerical_stencil_for_center(
+                ntwm, temporal_center, ntwm->temporal_interp_half_width,
+                indices, times, slices, &slice_count, missing_times, &missing_count) !=
+            TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS)
+          return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+        bool need_first = false, need_final = false;
+        for (int k = 0; k < missing_count; ++k) {
+          need_first |= missing_times[k] <= ntwm->slice_times[0];
+          need_final |= missing_times[k] >= ntwm->slice_times[final_slice];
+        } // END LOOP: identify synthetic endpoint sources
+        if (need_first)
+          slices[slice_count++] = time_window_manager_numerical_grid_ptr(ntwm, 0ULL);
+        if (need_final)
+          slices[slice_count++] = time_window_manager_numerical_grid_ptr(ntwm, final_slice);
+      } // END ELSE: select mixed temporal stencil
+
+      uint64_t points[count][count];
+      for (int v = 0; v < count; ++v)
+        for (int u = 0; u < count; ++u)
+          if (azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_indices(
+                  params, center->i0 + u - half_width,
+                  params->numerical_spacetime_nghosts + phi_plane,
+                  center->i2 + v - half_width, &points[v][u]) != 0)
+            return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+
+      for (int s = 0; s < slice_count; ++s) {
+        if (slices[s] == NULL)
+          return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+        double norms[count][count];
+        for (int v = 0; v < count; ++v) {
+          for (int u = 0; u < count; ++u) {
+            const double *g = slices[s] +
+                points[v][u] * TIME_WINDOW_MANAGER_NUMERICAL_RT_POINT_RECORD_REAL_COUNT + 3;
+            const double root_two = 1.4142135623730950488;
+            norms[v][u] = hypot(hypot(hypot(g[4], g[7]), g[9]),
+                hypot(hypot(root_two * g[5], root_two * g[6]), root_two * g[8]));
+            if (!isfinite(norms[v][u]))
+              return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+          } // END LOOP: calculate rho metric norms
+        } // END LOOP: calculate z metric norms
+        for (int v = 0; v < count; ++v) {
+          for (int u = 0; u < count; ++u) {
+            double neighbors[8];
+            int neighbor_count = 0;
+            for (int dv = -1; dv <= 1; ++dv) {
+              for (int du = -1; du <= 1; ++du) {
+                if ((du == 0 && dv == 0) || u + du < 0 || u + du >= count ||
+                    v + dv < 0 || v + dv >= count)
+                  continue;
+                const double value = norms[v + dv][u + du];
+                int pos = neighbor_count++;
+                while (pos > 0 && neighbors[pos - 1] > value) {
+                  neighbors[pos] = neighbors[pos - 1];
+                  --pos;
+                } // END WHILE: insert neighboring norm
+                neighbors[pos] = value;
+              } // END LOOP: visit neighboring rho nodes
+            } // END LOOP: visit neighboring z rows
+            const double median = neighbor_count % 2
+                ? neighbors[neighbor_count / 2]
+                : 0.5 * neighbors[neighbor_count / 2 - 1] +
+                  0.5 * neighbors[neighbor_count / 2];
+            if (norms[v][u] > commondata->numerical_spacetime_spatial_mask_threshold * median) {
+              mask[v * count + u] = 1;
+              *has_excluded_nodes = true;
+            } // END IF: exclude unusually large metric
+          } // END LOOP: compare rho node norms
+        } // END LOOP: compare z row norms
+      } // END LOOP: union exclusions across slices
+      return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
+    } // END FUNCTION: construct spatial exclusion mask
 
     """.replace("{combined_magic}", combined_magic).replace(
         "{point_record_real_count}", str(point_record_real_count)

@@ -14,8 +14,15 @@ local plane coordinates, and nine refined state components to
 
 Optional fast-light generation samples geometry at ``t_start`` throughout
 propagation and diagnostics while photon coordinate time continues advancing.
-An optional ``puncture_diagnostics_dir`` checks the last accepted state against
+An optional ``apparent_horizon_bin_path`` checks accepted photon positions against
 saved apparent horizons and writes one ``horizon_diagnostics.txt`` row.
+
+Each attempted RKF45 step excludes spatial nodes whose stored spatial-metric
+norm exceeds the configured neighboring-median factor on any selected time
+slice. The mask is fixed through the stages and accepted-state checks. The
+final normalization check rebuilds the accepted mask from its retained centers,
+inspection plane, and original sampling time. Trial and stage debugging append
+the mask flag, exclusion count, inspection plane, and locked spatial centers.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -301,7 +308,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     NumericalSpatialStencilCenter trial_spatial_center;
     const REAL trial_cartesian[3] = {
         (REAL)f_start[1], (REAL)f_start[2], (REAL)f_start[3]};
-    REAL trial_native[3];
+    REAL trial_native[3] = {0};
     int trial_automatic_center_idx[3];
     int trial_selected_center_idx[3];
     if (time_window_manager_numerical_resolve_spatial_target_and_stencil(
@@ -323,7 +330,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     terminal_geometry_slot_index = (
         "initial_slot_index"
         if fast_light
-        else "slot_get_index(&tsm, terminal_coordinate_time)"
+        else "slot_get_index(&tsm, accepted_mask_selection_available ? accepted_mask_sampling_time : terminal_coordinate_time)"
     )
 
     # Step 2: Select emitted C expressions for the two state conventions.
@@ -338,9 +345,11 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         trajectory_header = "# lambda t x y z u Pi_1 Pi_2 Pi_3 L_normal norm\\n"
         interpolation_stage_arguments = (
             "&trial_spatial_center.i0, &trial_spatial_center.i2, &trial_temporal_center, "
-            "integration_param, h, stage,"
+            "spatial_mask, &trial_has_excluded_nodes, integration_param, h, stage,"
         )
-        interpolation_initial_arguments = "NULL, NULL, NULL, integration_param, h, 1,"
+        interpolation_initial_arguments = (
+            "NULL, NULL, NULL, NULL, NULL, integration_param, h, 1,"
+        )
         rhs_integration_arguments = "integration_param, h,"
         momentum_conversion_call = (
             "photon_momentum_to_normalized_kernel(f, metric, chunk_size);"
@@ -356,8 +365,8 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         trajectory_lambda_expression = "*integration_param"
         trajectory_time_expression = "f[0]"
         trajectory_header = "# lambda t x y z p^t p^x p^y p^z L_normal norm\\n"
-        interpolation_stage_arguments = "&trial_spatial_center.i0, &trial_spatial_center.i2, &trial_temporal_center,"
-        interpolation_initial_arguments = "NULL, NULL, NULL,"
+        interpolation_stage_arguments = "&trial_spatial_center.i0, &trial_spatial_center.i2, &trial_temporal_center, spatial_mask, &trial_has_excluded_nodes,"
+        interpolation_initial_arguments = "NULL, NULL, NULL, NULL, NULL,"
         rhs_integration_arguments = ""
         momentum_conversion_call = ""
         normalization_kernel_name = "normalization_constraint_photon"
@@ -377,6 +386,26 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         time_window_manager_numerical_nearest_selected_slice_for_time(
             &numerical_window, @MIDPOINT@);
 """.replace("@MIDPOINT@", temporal_midpoint)
+    mask_sampling_time = "commondata.t_start" if fast_light else "coordinate_time"
+    trial_spatial_center_setup += r"""
+    bool trial_has_excluded_nodes = false;
+    const double trial_mask_sampling_time = @SAMPLING_TIME@;
+    const int trial_mask_phi_plane = trial_native[1] < 0.0 ||
+        trial_native[1] >= 3.14159265358979323846 - 1.0e-12 ? 0 : 1;
+    if (*status == ACTIVE && time_window_manager_numerical_build_spatial_mask(
+            &commondata, &numerical_params, &numerical_window,
+            &trial_spatial_center, trial_mask_phi_plane, trial_temporal_center,
+            trial_mask_sampling_time, spatial_mask, &trial_has_excluded_nodes) !=
+        TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS)
+      *status = FAILURE_SPATIAL_INTERPOLATION;
+""".replace("@SAMPLING_TIME@", mask_sampling_time)
+    if enable_rkf45_trial_debug:
+        trial_spatial_center_setup += r"""
+    int trial_excluded_nodes = 0;
+    if (trial_has_excluded_nodes)
+      for (size_t node = 0; node < spatial_mask_node_count; ++node)
+        trial_excluded_nodes += spatial_mask[node] != 0;
+"""
     temporal_cap_disable = (
         "commondata.numerical_spacetime_temporal_max_delta_t = 0.0;"
         if fast_light
@@ -454,9 +483,17 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
 
     accepted_metric_interpolation_arguments = (
         "&trial_spatial_center.i0, &trial_spatial_center.i2, "
-        "&trial_temporal_center, integration_param, h, 1,"
+        "&trial_temporal_center, spatial_mask, &trial_has_excluded_nodes, integration_param, h, 1,"
         if normalized_eom
-        else "&trial_spatial_center.i0, &trial_spatial_center.i2, &trial_temporal_center,"
+        else "&trial_spatial_center.i0, &trial_spatial_center.i2, &trial_temporal_center, spatial_mask, &trial_has_excluded_nodes,"
+    )
+    terminal_metric_interpolation_arguments = (
+        "accepted_mask_selection_available ? &accepted_spatial_center.i0 : NULL, "
+        "accepted_mask_selection_available ? &accepted_spatial_center.i2 : NULL, "
+        "accepted_mask_selection_available ? &accepted_temporal_center : NULL, "
+        "accepted_mask_selection_available ? spatial_mask : NULL, "
+        "accepted_mask_selection_available ? &terminal_has_excluded_nodes : NULL, "
+        + ("integration_param, h, 1," if normalized_eom else "")
     )
     initial_temporal_cap_diagnostic = (
         "next_h_before_temporal_cap = *h;" if enable_rkf45_trial_debug else ""
@@ -668,7 +705,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
             )
         stage_debug_header = stage_debug_header.rstrip("\n") + (
             " temporal_center_slice temporal_center_time temporal_stencil_first_time"
-            " temporal_stencil_last_time temporal_max_delta_t h_trial_before_temporal_cap h_trial_after_temporal_cap\n"
+            " temporal_stencil_last_time temporal_max_delta_t h_trial_before_temporal_cap h_trial_after_temporal_cap spatial_mask_used spatial_mask_excluded_nodes spatial_mask_phi_plane spatial_mask_center_i0 spatial_mask_center_i2\n"
         )
         stage_debug_header_c = (
             stage_debug_header.rstrip("\n").replace("\\", "\\\\").replace('"', '\\"')
@@ -755,7 +792,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
           "%ld %ld %d %d "
           "%.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g "
           "%d %d %d %d %d %d %d "
-          "%.17g %.17g %.17g %.17g{gradient_stage_format} %llu %.17g %.17g %.17g %.17g %.17g %.17g\n",
+          "%.17g %.17g %.17g %.17g{gradient_stage_format} %llu %.17g %.17g %.17g %.17g %.17g %.17g %d %d %d %d %d\n",
           accepted_step_before_trial,
           trial_number,
           retry_number_before,
@@ -787,7 +824,9 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
           sample_first_time,
           sample_last_time,
           (double)commondata.numerical_spacetime_temporal_max_delta_t,
-          h_trial_before_temporal_cap, h_trial);
+          h_trial_before_temporal_cap, h_trial,
+          (int)trial_has_excluded_nodes, trial_excluded_nodes,
+          trial_mask_phi_plane, trial_spatial_center.i0, trial_spatial_center.i2);
       fflush(stage_debug_file);
       }} // END IF: stage interpolation valid
 """
@@ -804,7 +843,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
       "status_name status_value t_start h_trial h_error_controller h_proposed "
       "err_norm limiting_component limiting_component_name "
       "limiting_delta_5_minus_4 limiting_error_absolute limiting_scale "
-      "limiting_error_normalized trial_result x_start y_start z_start r_start@GRADIENT_HEADER@ temporal_center_slice temporal_center_time temporal_stencil_first_time temporal_stencil_last_time temporal_max_delta_t h_trial_before_temporal_cap h_trial_after_temporal_cap\n");
+      "limiting_error_normalized trial_result x_start y_start z_start r_start@GRADIENT_HEADER@ temporal_center_slice temporal_center_time temporal_stencil_first_time temporal_stencil_last_time temporal_max_delta_t h_trial_before_temporal_cap h_trial_after_temporal_cap spatial_mask_used spatial_mask_excluded_nodes spatial_mask_phi_plane spatial_mask_center_i0 spatial_mask_center_i2\n");
 """.replace("@GRADIENT_HEADER@", gradient_trial_header)
         if enable_metric_gradient_tolerances:
             trial_debug_open += r"""
@@ -854,7 +893,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     fprintf(
         trial_debug_file,
         "%ld %ld %d %d %s %d %.17g %.17g %.17g %.17g %.17g %d %s "
-        "%.17g %.17g %.17g %.17g %s %.17g %.17g %.17g %.17g@GRADIENT_FORMAT@ %llu %.17g %.17g %.17g %.17g %.17g %.17g\n",
+        "%.17g %.17g %.17g %.17g %s %.17g %.17g %.17g %.17g@GRADIENT_FORMAT@ %llu %.17g %.17g %.17g %.17g %.17g %.17g %d %d %d %d %d\n",
         accepted_step_before_trial,
         trial_number,
         retry_number_before,
@@ -886,7 +925,9 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
               &numerical_window, trial_temporal_center,
               commondata.numerical_spacetime_temporal_interp_half_width),
           (double)commondata.numerical_spacetime_temporal_max_delta_t,
-          h_trial_before_temporal_cap, h_trial);
+          h_trial_before_temporal_cap, h_trial,
+          (int)trial_has_excluded_nodes, trial_excluded_nodes,
+          trial_mask_phi_plane, trial_spatial_center.i0, trial_spatial_center.i2);
     fflush(trial_debug_file);
 """.replace("@GRADIENT_FORMAT@", gradient_trial_format).replace(
             "@GRADIENT_ARGUMENTS@", gradient_trial_arguments
@@ -1048,6 +1089,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
     "FAILURE_SPATIAL_INTERPOLATION",
     "FAILURE_TEMPORAL_INTERPOLATION",
     "FAILURE_RKF45_MIN_STEP_LIMIT",
+    "STOP_CONDITION_INSIDE_APPARENT_HORIZON",
   }};
 
   int exit_status = EXIT_SUCCESS;
@@ -1059,9 +1101,17 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
 {synthetic_slice_usage_declarations}
   bool slot_manager_initialized = false;
   bool numerical_window_initialized = false;
-  puncture_diagnostics_t puncture_data =
-      puncture_load_diagnostics(commondata.puncture_diagnostics_dir);
+  apparent_horizon_file_t horizons = {{0}};
+  puncture_result_t photon_horizon = {{0, HORIZON_OUTSIDE, NAN, NAN}};
+  puncture_diagnostics_t puncture_data = puncture_load_diagnostics(
+      commondata.apparent_horizon_bin_path[0] ? "" : commondata.puncture_diagnostics_dir);
 
+  unsigned char *spatial_mask = NULL;
+  NumericalSpatialStencilCenter accepted_spatial_center = {{0, 0}};
+  uint64_t accepted_temporal_center = 0ULL;
+  int accepted_mask_phi_plane = 0;
+  double accepted_mask_sampling_time = commondata.t_start;
+  bool accepted_mask_selection_available = false;
   double *f = NULL;
   double *f_start = NULL;
   double *f_temp = NULL;
@@ -1163,6 +1213,12 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
     goto cleanup;
   }} // END IF: numerical time-window manager initialization failed
   numerical_window_initialized = true;
+  if (apparent_horizons_open(&horizons, &numerical_window, commondata.apparent_horizon_bin_path)) {{
+    fprintf(stderr, "ERROR: cannot read synchronized apparent horizons from %s.\n",
+            commondata.apparent_horizon_bin_path);
+    exit_status = EXIT_FAILURE;
+    goto cleanup;
+  }} // END IF: invalid apparent horizon file
   {temporal_cap_disable}
   printf("Numerical spacetime first stored slice time: %.15e\n",
          (double)commondata.t_numerical_initial);
@@ -1264,6 +1320,16 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   }} // END IF: initial numerical time-window mapping failed
   mapped_slot_index = initial_slot_index;
 
+  const size_t spatial_mask_width =
+      2 * (size_t)commondata.numerical_spacetime_spatial_interp_half_width + 1;
+  const size_t spatial_mask_node_count = spatial_mask_width * spatial_mask_width;
+  BHAH_MALLOC(spatial_mask, sizeof(unsigned char) * spatial_mask_node_count);
+  if (spatial_mask == NULL) {{
+    fprintf(stderr, "ERROR: failed to allocate the single-photon spatial mask.\n");
+    exit_status = EXIT_FAILURE;
+    goto cleanup;
+  }} // END IF: spatial mask allocation failed
+
   // Observer interpolation uses a temporary status because failure here means
   // no photon can be initialized; it is therefore a project-level error.
   termination_type_t observer_interpolation_status = ACTIVE;
@@ -1350,6 +1416,13 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
     goto cleanup;
   }} // END IF: initial numerical step limits incompatible
 
+  if (horizons.bytes != NULL) {{
+    const double point[3] = {{f[1], f[2], f[3]}};
+    photon_horizon = apparent_horizons_classify(&horizons, &numerical_window, commondata.t_start, point);
+    if (photon_horizon.horizon_status == HORIZON_INSIDE)
+      *status = STOP_CONDITION_INSIDE_APPARENT_HORIZON;
+  }} // END IF: evaluate the observer position
+
   printf("Initial State:\n");
   printf("  Pos (%.4f, %.4f, %.4f)\n", f[1], f[2], f[3]);
   printf(
@@ -1404,7 +1477,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   long int accepted_steps = 0;
   long int rkf45_attempts = 0;
 
-  while (accepted_steps < max_accepted_steps &&
+  while (*status == ACTIVE && accepted_steps < max_accepted_steps &&
          rkf45_attempts < max_rkf45_attempts) {{
     const double coordinate_time = {coordinate_time_expression};
     const int slot_index = slot_get_index(&tsm, coordinate_time);
@@ -1508,6 +1581,11 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
       }} // END LOOP: for component over accepted state
 
 {accepted_Lz_before_interpolation}
+      accepted_spatial_center = trial_spatial_center;
+      accepted_temporal_center = trial_temporal_center;
+      accepted_mask_phi_plane = trial_mask_phi_plane;
+      accepted_mask_sampling_time = trial_mask_sampling_time;
+      accepted_mask_selection_available = true;
       numerical_interpolation(
           &commondata,
           &numerical_params,
@@ -1562,7 +1640,8 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
           &integration_param_before_step, integration_param, status,
           &on_positive_side_of_non_terminal_plane_prev,
           &on_positive_side_of_terminal_plane_prev, &plane_candidates,
-          event_chunk_index, chunk_size, stream_idx);
+          event_chunk_index, chunk_size, stream_idx,
+          &horizons, &numerical_window, &photon_horizon, {str(fast_light).lower()});
 
       normalization_constraint_t normalization;
       {normalization_kernel_name}(
@@ -1650,12 +1729,14 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
     printf("Integration stopped at the RKF45-attempt safety limit.\n");
   }} // END ELSE IF: integration reached the RKF45-attempt safety
 
-  if (commondata.puncture_diagnostics_dir[0] != '\0') {{
+  if (horizons.bytes != NULL || puncture_data.directory[0] != '\0') {{
     const double photon_time = {coordinate_time_expression};
     const double lookup_time = fmax({horizon_lookup_time}, 0.0);
     const double point[3] = {{f[1], f[2], f[3]}};
     puncture_result_t horizon_result = {{PUNCTURE_UNCLASSIFIED, HORIZON_NOT_CHECKED, NAN, NAN}};
-    if (accepted_steps > 0) {{
+    if (horizons.bytes != NULL) {{
+      horizon_result = photon_horizon;
+    }} else if (accepted_steps > 0) {{
       horizon_result = puncture_classify_endpoint(&puncture_data, lookup_time, point);
     }} // END IF: accepted endpoint available
     FILE *horizon_file = fopen("horizon_diagnostics.txt", "w");
@@ -1762,7 +1843,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
 
   const int final_status_index = (int)*status;
   const char *final_status_name =
-      (final_status_index >= 0 && final_status_index < 12)
+      (final_status_index >= 0 && (size_t)final_status_index < sizeof(status_names) / sizeof(*status_names))
           ? status_names[final_status_index]
           : "UNKNOWN_STATUS";
   printf(
@@ -1803,6 +1884,18 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
       }} // END IF: terminal state changed slot
 
       if (terminal_normalization_ready) {{
+        bool terminal_has_excluded_nodes = false;
+        if (accepted_mask_selection_available &&
+            time_window_manager_numerical_build_spatial_mask(
+                &commondata, &numerical_params, &numerical_window,
+                &accepted_spatial_center, accepted_mask_phi_plane,
+                accepted_temporal_center, accepted_mask_sampling_time,
+                spatial_mask, &terminal_has_excluded_nodes) !=
+            TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {{
+          printf("Terminal normalization skipped: cannot reconstruct the accepted spatial mask.\n");
+          terminal_normalization_ready = false;
+        }} // END IF: accepted mask reconstruction failed
+        if (terminal_normalization_ready) {{
         // A separate status prevents this optional diagnostic from replacing
         // the physical termination status established by the evolution.
         termination_type_t terminal_interpolation_status = ACTIVE;
@@ -1813,7 +1906,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
             &numerical_window,
             f,
             &terminal_interpolation_status,
-            {interpolation_initial_arguments}
+            {terminal_metric_interpolation_arguments}
             {synthetic_slice_usage_null_arguments}
             metric,
             NULL,
@@ -1841,11 +1934,13 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
                 normalization_deviation);
           }} // END ELSE: terminal normalization deviation is finite
         }} // END ELSE: terminal normalization interpolation succeeded
+        }} // END IF: accepted spatial mask available
       }} // END IF: terminal normalization window available
     }} // END ELSE: terminal state inside window
   }} // END IF: terminal normalization diagnostics were requested
 
   cleanup:
+  apparent_horizons_close(&horizons);
   puncture_free_diagnostics(&puncture_data);
 {synthetic_slice_usage_report}
 {trial_debug_cleanup}
@@ -1860,6 +1955,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
     slot_manager_free(&tsm);
 
   BHAH_FREE(f);
+  BHAH_FREE(spatial_mask);
   BHAH_FREE(f_start);
   BHAH_FREE(f_temp);
   BHAH_FREE(metric);

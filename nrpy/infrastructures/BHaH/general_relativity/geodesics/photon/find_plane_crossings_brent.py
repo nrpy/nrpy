@@ -244,6 +244,27 @@ def plane_crossing_brent_refine_candidate(
         if analytical
         else "const int stencil_i0, const int stencil_i2,\n    "
         "const uint64_t stencil_temporal_center,\n    "
+        "const unsigned char *stencil_mask, const bool stencil_has_excluded_nodes,\n    "
+    )
+    trial_geometry_desc = (
+        ""
+        if analytical
+        else """
+ * @param[in] numerical_params Stored numerical grid parameters.
+ * @param[in] spatial_context Stored azimuthal planes.
+ * @param[in] numerical_window Mapped spacetime slices.
+"""
+    )
+    trial_stencil_desc = (
+        ""
+        if analytical
+        else """
+ * @param stencil_i0 Locked native radial center index.
+ * @param stencil_i2 Locked native vertical center index.
+ * @param stencil_temporal_center Locked retained temporal center index.
+ * @param[in] stencil_mask Locked spatial exclusion mask.
+ * @param stencil_has_excluded_nodes Whether any spatial nodes are excluded.
+"""
     )
     trial_stencil_setup = (
         ""
@@ -257,7 +278,7 @@ def plane_crossing_brent_refine_candidate(
         else "plane_crossing_numerical_interpolation(\n"
         "            commondata, numerical_params, spatial_context, numerical_window,\n"
         "            stage_state, &status, &selected_i0, &selected_i2,\n"
-        "            &stencil_temporal_center,\n"
+        "            &stencil_temporal_center, stencil_mask, &stencil_has_excluded_nodes,\n"
         f"            {interpolation_args}{synthetic_args}metric, geometry,\n"
         "            chunk_size, stream_idx);"
     )
@@ -286,6 +307,15 @@ static double plane_crossing_signed_distance(
            normal[2] * (state[3] - center[2]);
 }} // END FUNCTION: plane_crossing_signed_distance
 
+/**
+ * Take one fifth-order RKF45 step from the saved plane-crossing anchor.
+ *
+ * @param[in] commondata Photon evolution and interpolation parameters.{trial_geometry_desc.rstrip()}
+ * @param[in] candidate Saved state and integration interval.{trial_stencil_desc.rstrip()}
+ * @param trial_parameter Integration parameter at the requested trial endpoint.
+ * @param[out] trial_state Photon state at the requested trial endpoint.
+ * @return True if the trial produces a finite state, false on failure.
+ */
 static bool plane_crossing_rk5_trial(
     const commondata_struct *commondata,
     {trial_geometry_params}
@@ -538,6 +568,37 @@ static bool plane_crossing_rk5_trial(
     temporal_setup = "" if analytical else """const uint64_t selected_temporal_center =
         time_window_manager_numerical_nearest_selected_slice_for_time(
             numerical_window, """ + temporal_midpoint + ");"
+    if not analytical:
+        anchor_sampling_time = (
+            "commondata->t_start"
+            if fast_light
+            else (
+                "candidate->parameter_before"
+                if normalized_eom
+                else "candidate->state_before[0]"
+            )
+        )
+        temporal_setup += r"""
+    const int mask_width = 2 * commondata->numerical_spacetime_spatial_interp_half_width + 1;
+    unsigned char selected_mask[mask_width * mask_width];
+    bool selected_has_excluded_nodes = false;
+    const NumericalSpatialStencilCenter mask_center = {selected_center[0], selected_center[2]};
+    const int mask_plane = anchor_native[1] < 0.0 ||
+        anchor_native[1] >= 3.14159265358979323846 - 1.0e-12 ? 0 : 1;
+    if (time_window_manager_numerical_build_spatial_mask(
+            commondata, numerical_params, numerical_window, &mask_center,
+            mask_plane, selected_temporal_center, @SAMPLING_TIME@,
+            selected_mask, &selected_has_excluded_nodes) !=
+        TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+        root->status = PLANE_CROSSING_ROOT_RKF45_FAILURE;
+        return;
+    } // END IF: refinement spatial mask unavailable
+""".replace("@SAMPLING_TIME@", anchor_sampling_time)
+        body = body.replace(
+            "candidate, selected_center[0], selected_center[2], selected_temporal_center,",
+            "candidate, selected_center[0], selected_center[2], selected_temporal_center, "
+            "selected_mask, selected_has_excluded_nodes,",
+        )
     body = body.replace("@TEMPORAL_CENTER_SETUP@", temporal_setup)
     if analytical:
         spatial_setup = """    const REAL anchor_cartesian[3] = {

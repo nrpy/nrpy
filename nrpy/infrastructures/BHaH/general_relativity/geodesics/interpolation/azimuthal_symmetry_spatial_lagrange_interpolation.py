@@ -99,6 +99,7 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     interpolation_method: str = "g4DD",
     enable_simd: bool = False,
     project_dir: str = ".",
+    masked_weight_code: str = "",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the azimuthal-symmetry spatial Lagrange interpolation helper.
@@ -116,6 +117,8 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     :param interpolation_method: Geometry payload method to generate.
     :param enable_simd: Whether SIMD helper headers are already available.
     :param project_dir: Destination project directory for copied headers.
+    :param masked_weight_code: Nonuniform weight helpers for the masked variant;
+        an empty string selects ordinary spatial interpolation.
     :return: None if in registration phase, else the updated NRPy environment.
     :raises ValueError: If the coordinate system or interpolation method is not
         supported.
@@ -166,6 +169,7 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
+    spatial_masked = bool(masked_weight_code)
     phi_dim, interp_dim0, interp_dim1 = 1, 0, 2
     is_gamma_method = interpolation_method == "GammaUDD"
     is_metric_time_derivative_method = interpolation_method == "g4DD_d0"
@@ -175,24 +179,25 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         "GammaUDD": 53,
     }[interpolation_method]
 
-    _ = par.register_CodeParameter(
-        "int",
-        __name__,
-        "numerical_spacetime_spatial_interp_half_width",
-        2,
-        commondata=True,
-        add_to_parfile=True,
-        description=(
-            "Centered spatial Lagrange interpolation half-width n; the generated "
-            "helper uses 2*n+1 stencil points in each interpolation direction."
-        ),
-    )
-    Bdefines_h.register_BHaH_defines(
-        "azimuthal_symmetry_spatial_lagrange_interpolation",
-        AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_DEFINES.replace(
-            "{record_component_count}", str(record_component_count)
-        ),
-    )
+    if not spatial_masked:
+        _ = par.register_CodeParameter(
+            "int",
+            __name__,
+            "numerical_spacetime_spatial_interp_half_width",
+            2,
+            commondata=True,
+            add_to_parfile=True,
+            description=(
+                "Centered spatial Lagrange interpolation half-width n; the generated "
+                "helper uses 2*n+1 stencil points in each interpolation direction."
+            ),
+        )
+        Bdefines_h.register_BHaH_defines(
+            "azimuthal_symmetry_spatial_lagrange_interpolation",
+            AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_DEFINES.replace(
+                "{record_component_count}", str(record_component_count)
+            ),
+        )
 
     # Step 2: Ensure required helper headers are copied into the project.
     if not enable_simd:
@@ -211,9 +216,13 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         project_dir=project_dir,
         subdirectory="interpolation",
     )
-    register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
-        CoordSystem, use_numerical_spacetime_nghosts=True
-    )
+    if (
+        f"Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__{CoordSystem}"
+        not in cfc.CFunction_dict
+    ):
+        register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+            CoordSystem, use_numerical_spacetime_nghosts=True
+        )
     storage_exprs = {
         interp_dim0: "interp_0_storage_stencil[u]",
         interp_dim1: "interp_1_storage_stencil[v]",
@@ -241,7 +250,7 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
  * @param[out] point_index Serialized zero-based point-record index.
  * @return Interpolation status code.
  */
-static int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_indices(
+int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_indices(
     const params_struct *restrict params,
     const int i0_storage,
     const int i1_storage,
@@ -427,7 +436,9 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_gamma_about_z(
 } // END FUNCTION: azimuthal_symmetry_spatial_lagrange_rotate_gamma_about_z
         """.replace(
                 "{direct_gamma_metric_assignments}", direct_gamma_metric_assignments
-            ).replace("{direct_gamma_assignments}", direct_gamma_assignments)
+            ).replace(
+                "{direct_gamma_assignments}", direct_gamma_assignments
+            )
         )
     else:
         rfm = reference_metric[CoordSystem]
@@ -592,6 +603,10 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
             .replace("{metric_time_derivative_code}", metric_time_derivative_code)
         )
 
+    if spatial_masked:
+        prefunc = prefunc.replace(point_index_prefunc, "")
+        prefunc += masked_weight_code
+
     cfunc_type = "int"
     name = "azimuthal_symmetry_spatial_lagrange_interpolation"
     params = """const azimuthal_symmetry_spatial_lagrange_context_struct *restrict context,
@@ -603,6 +618,10 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
                 const double *const *restrict slice_payloads,
                 REAL *restrict g4dd_out,
                 REAL *restrict rhs_geometry_out"""
+
+    if spatial_masked:
+        name += "_masked"
+        params += ", const unsigned char *restrict spatial_mask"
 
     if is_gamma_method:
         derivative_coefficient_declarations = ""
@@ -786,6 +805,62 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
             .replace("{metric_time_output}", metric_time_output)
         )
 
+    coefficient_declarations = r"""
+  REAL inv_denom[interp_order];
+  REAL diffs_interp_0[interp_order];
+  REAL diffs_interp_1[interp_order];
+  REAL coeff_interp_0[interp_order];
+  REAL coeff_interp_1[interp_order];
+""" + derivative_coefficient_declarations
+    coefficient_calculation = r"""
+  compute_inv_denom(interp_order, inv_denom);
+  compute_diffs_xi(
+      interp_order, target_interp_0, src_interp_0_stencil, diffs_interp_0);
+  compute_diffs_xi(
+      interp_order, target_interp_1, src_interp_1_stencil, diffs_interp_1);
+  compute_lagrange_basis_coeffs_xi(
+      interp_order, inv_denom, diffs_interp_0, coeff_interp_0);
+  compute_lagrange_basis_coeffs_xi(
+      interp_order, inv_denom, diffs_interp_1, coeff_interp_1);
+""" + derivative_coefficient_calculation
+    if spatial_masked:
+        coefficient_declarations = r"""
+  REAL masked_value[interp_order][interp_order];
+  REAL masked_derivative0[interp_order][interp_order];
+  REAL masked_derivative2[interp_order][interp_order];
+"""
+        coefficient_calculation = r"""
+  const int masked_status = spatial_lagrange_masked_weights(
+      interp_order, target_interp_0, target_interp_1,
+      src_interp_0_stencil, src_interp_1_stencil, spatial_mask,
+      masked_value, masked_derivative0, masked_derivative2);
+  if (masked_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
+    return masked_status;
+"""
+        metric_slice_processing = (
+            metric_slice_processing.replace(
+                "        const double *restrict tensor_record =",
+                """        if (masked_value[v][u] == 0.0 &&
+            masked_derivative0[v][u] == 0.0 && masked_derivative2[v][u] == 0.0)
+          continue;
+        const double *restrict tensor_record =""",
+            )
+            .replace(
+                "normalization_2d * coeff_interp_1[v] * coeff_interp_0[u]",
+                "masked_value[v][u]",
+            )
+            .replace(
+                "normalization_2d * coeff_interp_1[v] *\n"
+                "            derivative_coeff_interp_0[u]",
+                "masked_derivative0[v][u]",
+            )
+            .replace(
+                "normalization_2d * derivative_coeff_interp_1[v] *\n"
+                "            coeff_interp_0[u]",
+                "masked_derivative2[v][u]",
+            )
+        )
+
     # Step 4: Use placeholder replacement for generated symbols so the raw C
     # body can keep ordinary braces instead of escaped f-string braces.
     body = (
@@ -856,20 +931,13 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
   const int phi_plane_storage_index = params->numerical_spacetime_nghosts + phi_plane;
   const REAL phi_ref = (REAL)context->stored_phi_samples[phi_plane];
 
-  REAL inv_denom[interp_order];
   REAL src_interp_0_stencil[interp_order];
   REAL src_interp_1_stencil[interp_order];
-  REAL diffs_interp_0[interp_order];
-  REAL diffs_interp_1[interp_order];
-  REAL coeff_interp_0[interp_order];
-  REAL coeff_interp_1[interp_order];
-{derivative_coefficient_declarations}
+{coefficient_declarations}
   uint64_t mapped_point_index[interp_order][interp_order];
   int interp_0_storage_stencil[interp_order];
   int interp_1_storage_stencil[interp_order];
-  const REAL normalization_2d =
-      pow((REAL)(params->dxx{interp_dim0} * params->dxx{interp_dim1}),
-          -(interp_order - 1));
+{normalization_declaration}
 
   for (int u = 0; u < interp_order; u++) {
     const int interp_0_raw = selected_center_idx[{interp_dim0}] + (u - n_interp_ghosts);
@@ -886,16 +954,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
                (((interp_1_raw - params->numerical_spacetime_nghosts) + 0.5) * params->dxx{interp_dim1}));
   } // END LOOP: for v over second interpolation-dimension
 
-  compute_inv_denom(interp_order, inv_denom);
-  compute_diffs_xi(
-      interp_order, target_interp_0, src_interp_0_stencil, diffs_interp_0);
-  compute_diffs_xi(
-      interp_order, target_interp_1, src_interp_1_stencil, diffs_interp_1);
-  compute_lagrange_basis_coeffs_xi(
-      interp_order, inv_denom, diffs_interp_0, coeff_interp_0);
-  compute_lagrange_basis_coeffs_xi(
-      interp_order, inv_denom, diffs_interp_1, coeff_interp_1);
-{derivative_coefficient_calculation}
+{coefficient_calculation}
 
   // Step 3: Convert each raw storage-grid stencil node to one payload index.
   for (int v = 0; v < interp_order; v++) {
@@ -924,12 +983,23 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
         .replace("{i1_storage_expr}", storage_exprs[1])
         .replace("{i2_storage_expr}", storage_exprs[2])
         .replace(
-            "{derivative_coefficient_declarations}",
-            derivative_coefficient_declarations,
+            "{coefficient_declarations}",
+            coefficient_declarations,
         )
         .replace(
-            "{derivative_coefficient_calculation}",
-            derivative_coefficient_calculation,
+            "{coefficient_calculation}",
+            coefficient_calculation,
+        )
+        .replace(
+            "{normalization_declaration}",
+            (
+                ""
+                if spatial_masked
+                else r"""
+  const REAL normalization_2d =
+      pow((REAL)(params->dxx0 * params->dxx2), -(interp_order - 1));
+"""
+            ),
         )
         .replace("{inverse_jacobian_setup}", inverse_jacobian_setup)
         .replace("{metric_slice_processing}", metric_slice_processing)
@@ -968,6 +1038,9 @@ for the two metric methods or Christoffel components for ``GammaUDD``.
 @param[out] rhs_geometry_out Forty metric-derivative or Christoffel values per slice, as selected at generation time.
 @return Interpolation status code.
 """
+
+    if spatial_masked:
+        desc += "\n@param[in] spatial_mask Row-major spatial exclusion bytes.\n"
 
     cfc.register_CFunction(
         subdirectory=CoordSystem,

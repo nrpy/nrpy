@@ -31,10 +31,13 @@ if __name__ == "__main__":
     import doctest
     import sys
 
+    import sympy as sp
+
     cfc.CFunction_dict.clear()
     par.set_parval_from_str("parallelization", "openmp")
     register_CFunctions()
     tests_dir = Path(__file__).resolve().parent / "tests"
+    sympy_1_15 = tuple(int(v) for v in sp.__version__.split(".")[:2]) >= (1, 15)
     for func_name in (
         "so3_build_R_from_hats",
         "so3_axis_angle_to_R",
@@ -46,7 +49,13 @@ if __name__ == "__main__":
         "so3_find_nU_and_dphi_from_unit_vectors",
     ):
         generated_str = cfc.CFunction_dict[func_name].full_function
-        trusted_path = tests_dir / f"{func_name}_{func_name}__openmp.c"
+        sympy_suffix = ""
+        if sympy_1_15 and func_name in (
+            "so3_axis_angle_to_R",
+            "so3_find_nU_and_dphi_from_unit_vectors",
+        ):
+            sympy_suffix = "__sympy_1_15"
+        trusted_path = tests_dir / f"{func_name}_{func_name}__openmp{sympy_suffix}.c"
         trusted_str = trusted_path.read_text(encoding="utf-8")
         if trusted_str != generated_str:
             raise ValueError(f"Mismatch in trusted file: {trusted_path.name}")

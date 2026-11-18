@@ -68,7 +68,7 @@ def T4UU_and_ADM_to_SDD_SD_S_rho(
 
     # Step 3.c: S = gamma^{ij} S_{ij}
     gammaUU, _ = ixp.symm_matrix_inverter3x3(gammaDD)
-    S = zero
+    S: sp.Expr = zero
     for i in range(3):
         for j in range(3):
             S += gammaUU[i][j] * SDD[i][j]

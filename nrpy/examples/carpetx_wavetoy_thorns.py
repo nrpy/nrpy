@@ -228,7 +228,7 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
     # Populate uu_rhs, vv_rhs
     rhs = WaveEquation_RHSs()
     uu_rhs = cast(sp.Expr, rhs.uu_rhs)
-    vv_rhs = cast(sp.Expr, rhs.vv_rhs)
+    vv_rhs = rhs.vv_rhs
 
     if enable_KreissOliger_dissipation:
         diss_strength = par.register_CodeParameter(

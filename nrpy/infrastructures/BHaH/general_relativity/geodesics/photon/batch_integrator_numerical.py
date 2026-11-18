@@ -20,9 +20,11 @@ The numerical time-window logic assumes the generator also registers
 ``rkf45_finalize_and_control_kernel(enable_numerical_time_window_step_cap=True)``
 so accepted RKF45 steps remain inside the mapped numerical window.
 
-After finalization, direct-EOM batches re-interpolate ``g4DD`` at the current
-state using the same trial-locked spatial stencil centers used by every RK
-stage. Both EOM modes then pass the common ``ln|alpha p^0|`` scalar to event
+Each RK attempt selects one spatial mask across its locked temporal nodes.
+All stages and direct-EOM endpoint metric evaluations reuse that mask.
+Delayed norm and angular-momentum checks rebuild the mask from the accepted
+stencil selection or the saved plane-crossing candidate.
+Both EOM modes then pass the common ``ln|alpha p^0|`` scalar to event
 detection; normalized mode reads it directly from ``u``.
 
 The terminal display counts retryable rejections in the latest processed
@@ -37,11 +39,10 @@ generator declares axial symmetry about the Cartesian ``z`` axis, optional
 initial, nonterminal plane, and terminal ``L_z`` evaluations measure
 angular-momentum conservation.
 
-An optional ``puncture_diagnostics_dir`` parameter selects BHaHAHA centroid
-tables and saved apparent-horizon surfaces. After final termination selection,
-two ID/status bytes and an eight-byte double record the associated horizon,
-containment result, and signed radial gap for each evolution-measure stop.
-These diagnostics do not change photon evolution.
+An optional ``apparent_horizon_bin_path`` enables stopping inside saved apparent
+horizons. The puncture output records the latest horizon ID, containment status,
+and signed radial gap for each photon. The separate directory diagnostic
+classifies final evolution-measure stops when binary horizon stopping is disabled.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -80,7 +81,7 @@ def batch_integrator_numerical(
 
     :param spacetime_name: Spacetime identifier used to validate registration context.
     :param dataset_coord_system: Coordinate system used by the numerical dataset.
-    :param interpolation_method: Numerical geometry payload method used by the generated project.
+    :param interpolation_method: Numerical metric or connection interpolation method.
     :param normalized_eom: Whether to evolve normalized coordinate-time photon equations.
     :param axisymmetric_about_z: Whether the numerical spacetime has a rotational
         Killing vector about the Cartesian ``z`` axis, permitting ``L_z`` checks.
@@ -508,15 +509,7 @@ static void write_plane_crossings(
         if normalized_eom
         else "all_photons_host.f[0 * num_rays + m_idx]"
     )
-    terminal_coordinate_time = (
-        "terminal_crossing_results[norm_ray].found ? "
-        "terminal_crossing_results[norm_ray].coordinate_time : "
-        + (
-            "all_photons_host.integration_param[norm_ray]"
-            if normalized_eom
-            else "all_photons_host.f[0 * num_rays + norm_ray]"
-        )
-    )
+    terminal_mask_sampling_time = "accepted_mask_selection[norm_ray].sampling_time"
     interpolation_synthetic_usage_args_current = (
         "commondata->perform_synthetic_slice_check ? chunk_buffer[current] : NULL, "
         "commondata->perform_synthetic_slice_check ? synthetic_slice_usage_by_photon : NULL, "
@@ -529,6 +522,7 @@ static void write_plane_crossings(
         "d_spatial_stencil_center_i0[current], "
         "d_spatial_stencil_center_i2[current], "
         "d_temporal_stencil_center[current], "
+        "d_spatial_mask[current], d_has_excluded_nodes[current], "
         + (
             "d_integration_param_bundle[current], d_h[current], stage,"
             if normalized_eom
@@ -540,6 +534,7 @@ static void write_plane_crossings(
         "d_spatial_stencil_center_i0[next], "
         "d_spatial_stencil_center_i2[next], "
         "d_temporal_stencil_center[next], "
+        "d_spatial_mask[next], d_has_excluded_nodes[next], "
         + (
             "d_integration_param_bundle[next], d_h[next], stage,"
             if normalized_eom
@@ -548,12 +543,14 @@ static void write_plane_crossings(
         + interpolation_synthetic_usage_args_next
     )
     interpolation_initial_integration_param_args = (
-        "NULL, NULL, NULL, "
+        "NULL, NULL, NULL, NULL, NULL, "
         + ("d_integration_param_bundle[0], d_h[0], 1," if normalized_eom else "")
         + "NULL, NULL, "
     )
     interpolation_terminal_integration_param_args = (
-        "NULL, NULL, NULL, "
+        "d_spatial_stencil_center_i0[0], d_spatial_stencil_center_i2[0], "
+        "d_temporal_stencil_center[0], d_spatial_mask[0], "
+        "d_has_excluded_nodes[0], "
         + ("d_integration_param_bundle[0], d_h[0], 1," if normalized_eom else "")
         + "NULL, NULL, "
     )
@@ -653,16 +650,29 @@ static void write_plane_crossings(
     int *d_spatial_stencil_center_i0[2];
     int *d_spatial_stencil_center_i2[2];
     uint64_t *d_temporal_stencil_center[2];
+    unsigned char *d_spatial_mask[2];
+    bool *d_has_excluded_nodes[2];
+    batch_spatial_mask_selection_struct *d_mask_selection[2];
+    batch_spatial_mask_selection_struct *accepted_mask_selection = NULL;
 """
     spatial_center_allocations = f"""
         {malloc_device}(d_spatial_stencil_center_i0[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate native dimension-0 trial centers.
         {malloc_device}(d_spatial_stencil_center_i2[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate native dimension-2 trial centers.
         {malloc_device}(d_temporal_stencil_center[s], sizeof(uint64_t) * BUNDLE_CAPACITY); // Allocate retained temporal centers.
+        {malloc_device}(d_mask_selection[s], sizeof(batch_spatial_mask_selection_struct) * BUNDLE_CAPACITY);
+        {malloc_device}(d_has_excluded_nodes[s], sizeof(bool) * BUNDLE_CAPACITY);
+        if (d_mask_selection[s] == NULL || d_has_excluded_nodes[s] == NULL) {{
+            fprintf(stderr, "ERROR: could not allocate photon spatial-mask selections.\\n");
+            exit(EXIT_FAILURE);
+        }} // END IF: mask selection allocation failed
 """
     spatial_center_frees = f"""
             {free_device}(d_spatial_stencil_center_i0[s]); // Purges native dimension-0 trial centers.
             {free_device}(d_spatial_stencil_center_i2[s]); // Purges native dimension-2 trial centers.
             {free_device}(d_temporal_stencil_center[s]); // Release retained temporal centers.
+            {free_device}(d_mask_selection[s]);
+            {free_device}(d_has_excluded_nodes[s]);
+            {free_device}(d_spatial_mask[s]);
 """
     trial_spatial_center_setup_current = r"""
             for (long int stencil_i = 0; stencil_i < active_chunks[current]; ++stencil_i) {
@@ -673,6 +683,7 @@ static void write_plane_crossings(
                 REAL trial_native[3];
                 int automatic_center_idx[3];
                 int selected_center_idx[3];
+                d_has_excluded_nodes[current][stencil_i] = false;
                 if (time_window_manager_numerical_resolve_spatial_target_and_stencil(
                         &numerical_params, trial_cartesian, NULL, trial_native,
                         automatic_center_idx, selected_center_idx) !=
@@ -689,6 +700,9 @@ static void write_plane_crossings(
                         selected_center_idx[0];
                     d_spatial_stencil_center_i2[current][stencil_i] =
                         selected_center_idx[2];
+                    d_mask_selection[current][stencil_i].phi_plane =
+                        trial_native[1] < 0.0 ||
+                        trial_native[1] >= 3.14159265358979323846 - 1.0e-12 ? 0 : 1;
                 } // END ELSE: current trial center resolved
             } // END LOOP: for stencil_i over trial rays
 """
@@ -701,6 +715,7 @@ static void write_plane_crossings(
                     REAL trial_native[3];
                     int automatic_center_idx[3];
                     int selected_center_idx[3];
+                    d_has_excluded_nodes[next][stencil_i] = false;
                     if (time_window_manager_numerical_resolve_spatial_target_and_stencil(
                             &numerical_params, trial_cartesian, NULL, trial_native,
                             automatic_center_idx, selected_center_idx) !=
@@ -716,6 +731,9 @@ static void write_plane_crossings(
                             selected_center_idx[0];
                         d_spatial_stencil_center_i2[next][stencil_i] =
                             selected_center_idx[2];
+                        d_mask_selection[next][stencil_i].phi_plane =
+                            trial_native[1] < 0.0 ||
+                            trial_native[1] >= 3.14159265358979323846 - 1.0e-12 ? 0 : 1;
                     } // END ELSE: next trial center resolved
                 } // END LOOP: for stencil_i over trial rays
 """
@@ -734,15 +752,52 @@ static void write_plane_crossings(
     )
     temporal_center_setup_current = r"""
             for (long int stencil_i = 0; stencil_i < active_chunks[current]; ++stencil_i) {
+                if (d_status[current][stencil_i] != ACTIVE) continue;
                 d_temporal_stencil_center[current][stencil_i] =
                     time_window_manager_numerical_nearest_selected_slice_for_time(
                         &numerical_window, @MIDPOINT@);
-            } // END LOOP: select fixed temporal centers
-""".replace("@MIDPOINT@", temporal_midpoint_current)
+                batch_spatial_mask_selection_struct *selection =
+                    &d_mask_selection[current][stencil_i];
+                selection->spatial_center.i0 = d_spatial_stencil_center_i0[current][stencil_i];
+                selection->spatial_center.i2 = d_spatial_stencil_center_i2[current][stencil_i];
+                selection->temporal_center = d_temporal_stencil_center[current][stencil_i];
+                selection->sampling_time = @SAMPLING_TIME@;
+                if (time_window_manager_numerical_build_spatial_mask(
+                        commondata, &numerical_params, &numerical_window,
+                        &selection->spatial_center, selection->phi_plane,
+                        selection->temporal_center, selection->sampling_time,
+                        d_spatial_mask[current] + (size_t)stencil_i * spatial_mask_node_count,
+                        &d_has_excluded_nodes[current][stencil_i]) !=
+                    TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+                    d_status[current][stencil_i] = FAILURE_SPATIAL_INTERPOLATION;
+                } // END IF: trial mask unavailable
+            } // END LOOP: select trial stencils and masks
+""".replace("@MIDPOINT@", temporal_midpoint_current).replace(
+        "@SAMPLING_TIME@",
+        (
+            "commondata->t_start"
+            if fast_light
+            else (
+                "d_integration_param_bundle[current][stencil_i]"
+                if normalized_eom
+                else "d_f_start_bundle[current][stencil_i]"
+            )
+        ),
+    )
     trial_spatial_center_setup_current += temporal_center_setup_current
     trial_spatial_center_setup_next += temporal_center_setup_current.replace(
         "[current]", "[next]"
     )
+    accepted_mask_save_current = r"""
+            if (accepted_mask_selection != NULL) {
+                for (long int mask_i = 0; mask_i < active_chunks[current]; ++mask_i) {
+                    if (d_status[current][mask_i] == ACTIVE)
+                        accepted_mask_selection[chunk_buffer[current][mask_i]] =
+                            d_mask_selection[current][mask_i];
+                } // END LOOP: retain accepted stencil selections
+            } // END IF: delayed metric diagnostics enabled
+"""
+    accepted_mask_save_next = accepted_mask_save_current.replace("[current]", "[next]")
     temporal_cap_disable = (
         "commondata->numerical_spacetime_temporal_max_delta_t = 0.0;"
         if fast_light
@@ -855,6 +910,8 @@ static void write_plane_crossings(
                     d_spatial_stencil_center_i0[current],
                     d_spatial_stencil_center_i2[current],
                     d_temporal_stencil_center[current],
+                    d_spatial_mask[current],
+                    d_has_excluded_nodes[current],
                     NULL,
                     NULL,
                     d_metric_bundle[current],
@@ -880,6 +937,8 @@ static void write_plane_crossings(
                     d_spatial_stencil_center_i0[next],
                     d_spatial_stencil_center_i2[next],
                     d_temporal_stencil_center[next],
+                    d_spatial_mask[next],
+                    d_has_excluded_nodes[next],
                     NULL,
                     NULL,
                     d_metric_bundle[next],
@@ -1004,7 +1063,7 @@ static void write_plane_crossings(
                 non_terminal_recorded_count++;
                 const int norm_slot_idx = slot_get_index(
                     &non_terminal_norm_tsm,
-                    non_terminal_crossing_results[norm_ray].coordinate_time);
+                    @NON_TERMINAL_MASK_TIME@);
                 if (norm_slot_idx < 0) {
                     non_terminal_skipped_count++;
                     continue;
@@ -1058,6 +1117,7 @@ static void write_plane_crossings(
                         d_status[0][norm_i] = ACTIVE;
                     }
 {NON_TERMINAL_INTEGRATION_PARAM_SETUP}
+{NON_TERMINAL_MASK_SETUP}
 
                     numerical_interpolation(
                         commondata,
@@ -1136,6 +1196,18 @@ static void write_plane_crossings(
         )
         .replace("{NON_TERMINAL_LZ_KERNEL_CALL}", non_terminal_Lz_kernel_call)
         .replace("{NON_TERMINAL_LZ_STORE}", non_terminal_Lz_store)
+        .replace(
+            "@NON_TERMINAL_MASK_TIME@",
+            (
+                "commondata->t_start"
+                if fast_light
+                else (
+                    "plane_crossing_candidates[norm_ray].non_terminal_candidate.parameter_before"
+                    if normalized_eom
+                    else "plane_crossing_candidates[norm_ray].non_terminal_candidate.state_before[0]"
+                )
+            ),
+        )
     )
 
     terminal_diagnostic_condition = "commondata->perform_normalization_check"
@@ -1246,8 +1318,21 @@ static void write_plane_crossings(
             for (long int diagnostic_ray = 0;
                  diagnostic_ray < num_rays;
                  ++diagnostic_ray) {
+                if (terminal_crossing_results[diagnostic_ray].found) {
+                    const int candidate_number =
+                        terminal_crossing_results[diagnostic_ray].selected_candidate_number;
+                    const photon_plane_crossing_candidates_t *candidates =
+                        &plane_crossing_candidates[diagnostic_ray];
+                    const photon_plane_crossing_candidate_t *candidate =
+                        candidate_number == 1 ? &candidates->terminal_candidate_1 :
+                        candidate_number == 2 ? &candidates->terminal_candidate_2 :
+                                                &candidates->terminal_candidate_3;
+                    accepted_mask_selection[diagnostic_ray] =
+                        batch_numerical_mask_selection(
+                            commondata, &numerical_params, &numerical_window, candidate);
+                } // END IF: use refined crossing selection
                 const int diagnostic_slot_idx = slot_get_index(
-                    &diagnostic_tsm, {TERMINAL_COORDINATE_TIME});
+                    &diagnostic_tsm, {TERMINAL_MASK_SAMPLING_TIME});
                 if (diagnostic_slot_idx < 0) {
 {TERMINAL_SKIP_ONE}
                     continue;
@@ -1313,6 +1398,7 @@ static void write_plane_crossings(
                         d_status[0][diagnostic_i] = ACTIVE;
                     }
 {TERMINAL_INTEGRATION_PARAM_SETUP}
+{TERMINAL_MASK_SETUP}
 
                     numerical_interpolation(
                         commondata,
@@ -1418,8 +1504,8 @@ static void write_plane_crossings(
             terminal_diagnostic_declarations,
         )
         .replace(
-            "{TERMINAL_COORDINATE_TIME}",
-            terminal_coordinate_time.replace("norm_ray", "diagnostic_ray"),
+            "{TERMINAL_MASK_SAMPLING_TIME}",
+            terminal_mask_sampling_time.replace("norm_ray", "diagnostic_ray"),
         )
         .replace("{TERMINAL_SKIP_ONE}", terminal_skip_one)
         .replace("{TERMINAL_SKIP_COUNT}", terminal_skip_count)
@@ -1553,18 +1639,128 @@ static void write_plane_crossings(
             f"d_on_pos_non_terminal_plane_prev[{slot}], "
             f"d_on_pos_terminal_plane_prev[{slot}], "
             "plane_crossing_candidates, "
-            f"d_chunk_buffer[{slot}], active_chunks[{slot}], {slot});"
+            f"d_chunk_buffer[{slot}], active_chunks[{slot}], {slot}, "
+            f"&horizons, &numerical_window, photon_horizons, {str(fast_light).lower()});"
         )
 
     event_manager_current = event_manager_call("current")
     event_manager_next = event_manager_call("next")
 
+    def _diagnostic_mask_setup(selection_expression: str) -> str:
+        """
+        Rebuild fixed spatial masks for a diagnostic photon chunk.
+
+        :param selection_expression: C expression selecting the saved spatial and temporal nodes.
+        :return: C loop filling the interpolation centers, masks, and diagnostic statuses.
+        """
+        return r"""
+                    for (long int mask_i = 0; mask_i < chunk_size; ++mask_i) {
+                        const long int master_idx = chunk_buffer[0][mask_i];
+                        const batch_spatial_mask_selection_struct selection = @SELECTION@;
+                        d_spatial_stencil_center_i0[0][mask_i] = selection.spatial_center.i0;
+                        d_spatial_stencil_center_i2[0][mask_i] = selection.spatial_center.i2;
+                        d_temporal_stencil_center[0][mask_i] = selection.temporal_center;
+                        d_has_excluded_nodes[0][mask_i] = false;
+                        if (time_window_manager_numerical_build_spatial_mask(
+                                commondata, &numerical_params, &numerical_window,
+                                &selection.spatial_center, selection.phi_plane,
+                                selection.temporal_center, selection.sampling_time,
+                                d_spatial_mask[0] + (size_t)mask_i * spatial_mask_node_count,
+                                &d_has_excluded_nodes[0][mask_i]) !=
+                            TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+                            d_status[0][mask_i] = FAILURE_SPATIAL_INTERPOLATION;
+                        } // END IF: diagnostic mask unavailable
+                    } // END LOOP: rebuild diagnostic spatial masks
+""".replace("@SELECTION@", selection_expression)
+
+    non_terminal_normalization_block = non_terminal_normalization_block.replace(
+        "{NON_TERMINAL_MASK_SETUP}",
+        _diagnostic_mask_setup(
+            "batch_numerical_mask_selection(commondata, &numerical_params, "
+            "&numerical_window, &plane_crossing_candidates[master_idx].non_terminal_candidate)"
+        ),
+    )
+    terminal_diagnostics_block = terminal_diagnostics_block.replace(
+        "{TERMINAL_MASK_SETUP}",
+        _diagnostic_mask_setup("accepted_mask_selection[master_idx]"),
+    )
+    mask_diagnostic_condition = "commondata->perform_normalization_check"
+    if axisymmetric_about_z:
+        mask_diagnostic_condition += " || commondata->perform_Lz_check"
+    mask_selection_helpers = r"""
+typedef struct {
+    NumericalSpatialStencilCenter spatial_center;
+    uint64_t temporal_center;
+    int phi_plane;
+    double sampling_time;
+} batch_spatial_mask_selection_struct;
+
+/**
+ * Select mask nodes at the validated observer or a refined crossing anchor.
+ *
+ * @param[in] commondata Photon evolution and interpolation parameters.
+ * @param[in] numerical_params Numerical spatial grid parameters.
+ * @param[in] numerical_window Retained numerical slice times.
+ * @param[in] candidate Saved crossing anchor, or NULL for the observer.
+ * @return Spatial center, temporal center, azimuthal plane, and sampling time.
+ *
+ * @pre Observer interpolation or crossing refinement has validated the anchor.
+ */
+static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
+    const commondata_struct *commondata, const params_struct *numerical_params,
+    const NumericalTimeWindowManager *numerical_window,
+    const photon_plane_crossing_candidate_t *candidate) {
+    const REAL cartesian[3] = {
+        candidate == NULL ? commondata->observer_x : candidate->state_before[1],
+        candidate == NULL ? commondata->observer_y : candidate->state_before[2],
+        candidate == NULL ? commondata->observer_z : candidate->state_before[3]};
+    REAL native[3];
+    int automatic_center[3], selected_center[3];
+    (void)time_window_manager_numerical_resolve_spatial_target_and_stencil(
+        numerical_params, cartesian, NULL, native, automatic_center, selected_center);
+    const double sampling_time = candidate == NULL ? commondata->t_start : @ANCHOR_TIME@;
+    const double midpoint = candidate == NULL ? commondata->t_start : @CROSSING_MIDPOINT@;
+    const batch_spatial_mask_selection_struct selection = {
+        {selected_center[0], selected_center[2]},
+        time_window_manager_numerical_nearest_selected_slice_for_time(
+            numerical_window, midpoint),
+        native[1] < 0.0 || native[1] >= 3.14159265358979323846 - 1.0e-12 ? 0 : 1,
+        sampling_time};
+    return selection;
+} // END FUNCTION: select diagnostic stencil nodes
+""".replace(
+        "@ANCHOR_TIME@",
+        (
+            "commondata->t_start"
+            if fast_light
+            else (
+                "candidate->parameter_before"
+                if normalized_eom
+                else "candidate->state_before[0]"
+            )
+        ),
+    ).replace(
+        "@CROSSING_MIDPOINT@",
+        (
+            "commondata->t_start"
+            if fast_light
+            else (
+                "0.5 * (candidate->parameter_before + candidate->parameter_after)"
+                if normalized_eom
+                else "candidate->state_before[0] + 0.5 * "
+                "(candidate->parameter_after - candidate->parameter_before) * candidate->state_before[4]"
+            )
+        ),
+    )
+
     puncture_helpers = puncture_diagnostics()
     body = rf"""
 {gradient_validation}
     // Read requested horizon positions before evolving any photons in this tile.
-    puncture_diagnostics_t puncture_data =
-        puncture_load_diagnostics(commondata->puncture_diagnostics_dir);
+    apparent_horizon_file_t horizons = {{0}};
+    puncture_result_t *photon_horizons = NULL;
+    puncture_diagnostics_t puncture_data = puncture_load_diagnostics(
+        commondata->apparent_horizon_bin_path[0] ? "" : commondata->puncture_diagnostics_dir);
 
     // Initialize caller-owned output records before any event handler writes fields.
     for (long int i = 0; i < num_rays; ++i) {{
@@ -1831,6 +2027,17 @@ static void write_plane_crossings(
         slot_manager_free(&tsm);
         exit(1);
     }} // END IF: numerical time-window manager initialization failed
+    const size_t spatial_mask_width =
+        2 * (size_t)commondata->numerical_spacetime_spatial_interp_half_width + 1;
+    const size_t spatial_mask_node_count = spatial_mask_width * spatial_mask_width;
+    const size_t spatial_mask_ray_capacity = NRPYMIN((long int)BUNDLE_CAPACITY, num_rays);
+    for (int s = 0; s < 2; ++s) {{
+        {malloc_device}(d_spatial_mask[s], spatial_mask_node_count * spatial_mask_ray_capacity);
+        if (d_spatial_mask[s] == NULL) {{
+            fprintf(stderr, "ERROR: could not allocate photon spatial masks.\n");
+            exit(EXIT_FAILURE);
+        }} // END IF: spatial mask allocation failed
+    }} // END LOOP: allocate photon spatial masks
     {temporal_cap_disable}
     printf("Numerical spacetime first stored slice time: %.15e\n",
            (double)commondata->t_numerical_initial);
@@ -1876,6 +2083,19 @@ static void write_plane_crossings(
         slot_manager_free(&tsm);
         exit(1);
     }} // END IF: initial slot time window mapping
+
+    if (apparent_horizons_open(&horizons, &numerical_window, commondata->apparent_horizon_bin_path)) {{
+        fprintf(stderr, "ERROR: cannot read synchronized apparent horizons from %s.\n",
+                commondata->apparent_horizon_bin_path);
+        exit(EXIT_FAILURE);
+    }} // END IF: invalid apparent horizon file
+    if (horizons.bytes != NULL) {{
+        photon_horizons = calloc((size_t)num_rays, sizeof(*photon_horizons));
+        if (photon_horizons == NULL) {{
+            fprintf(stderr, "ERROR: cannot allocate photon horizon results.\n");
+            exit(EXIT_FAILURE);
+        }} // END IF: allocation failed
+    }} // END IF: binary horizon checking enabled
 
     // Interpolate the metric once at the common observer event. This temporary
     // state uses the observer position and t_start, but does not represent a
@@ -1923,6 +2143,20 @@ static void write_plane_crossings(
         slot_manager_free(&tsm);
         exit(1);
     }} // END IF: observer interpolation failed
+
+    if ({mask_diagnostic_condition}) {{
+        {malloc_pinned}(accepted_mask_selection, sizeof(*accepted_mask_selection) * num_rays);
+        if (accepted_mask_selection == NULL) {{
+            fprintf(stderr, "ERROR: could not allocate accepted photon stencil selections.\n");
+            exit(EXIT_FAILURE);
+        }} // END IF: accepted selection allocation failed
+        const batch_spatial_mask_selection_struct observer_selection =
+            batch_numerical_mask_selection(
+                commondata, &numerical_params, &numerical_window, NULL);
+        for (long int ray = 0; ray < num_rays; ++ray) {{
+            accepted_mask_selection[ray] = observer_selection;
+        }} // END LOOP: seed observer stencil selections
+    }} // END IF: delayed metric diagnostics enabled
 
     // Operates synchronously as the primary state array must be fully
     // populated before pipeline dispatch. The initializer validates the
@@ -2082,12 +2316,24 @@ static void write_plane_crossings(
 
     {free_device}(d_initial_norm_bundle); // Purges the initialization constraint scratchpad.
 
+    puncture_result_t observer_horizon = {{0, HORIZON_OUTSIDE, NAN, NAN}};
+    if (photon_horizons != NULL) {{
+        const double point[3] = {{commondata->observer_x, commondata->observer_y, commondata->observer_z}};
+        observer_horizon = apparent_horizons_classify(&horizons, &numerical_window, commondata->t_start, point);
+    }} // END IF: evaluate the shared observer position
     long int sync_i; // Loop iterator spanning the photon states.
     for(sync_i = 0; sync_i < num_rays; ++sync_i) {{
         all_photons_host.status[sync_i] = ACTIVE; // Assigns the initial trajectory activity enum for the global physics engine.
         all_photons_host.integration_param[sync_i] = {initial_integration_param}; // Sets the initial integration parameter.
         all_photons_host.rejection_retries[sync_i] = 0; // Clears the error rejection scalar to initialize the step size convergence tracking.
         all_photons_host.consecutive_min_steps[sync_i] = 0;
+        if (photon_horizons != NULL) {{
+            photon_horizons[sync_i] = observer_horizon;
+            if (observer_horizon.horizon_status == HORIZON_INSIDE) {{
+                all_photons_host.status[sync_i] = STOP_CONDITION_INSIDE_APPARENT_HORIZON;
+                continue;
+            }} // END IF: photon starts inside a horizon
+        }} // END IF: initialize horizon result
         all_photons_host.h[sync_i] = rkf45_cap_numerical_step(
             commondata, all_photons_host.h[sync_i],
             all_photons_host.f[4 * num_rays + sync_i],
@@ -2239,6 +2485,7 @@ static void write_plane_crossings(
             }} // END LOOP: for stage over 6
 
 {finalize_current}
+{accepted_mask_save_current}
 {accepted_metric_refresh_current}
 {log_energy_evaluation_current}
             attempted_rkf45_steps_since_print += active_chunks[current];
@@ -2354,6 +2601,7 @@ static void write_plane_crossings(
                 }} // END LOOP: for stage over 6
 
 {finalize_next}
+{accepted_mask_save_next}
 {accepted_metric_refresh_next}
 {log_energy_evaluation_next}
                 attempted_rkf45_steps_since_print += active_chunks[next];
@@ -2578,7 +2826,9 @@ static void write_plane_crossings(
                 results_buffer[ray].z_t = terminal->z_local;
                 results_buffer[ray].L_f = terminal->physical_lambda;
                 results_buffer[ray].t_f = terminal->coordinate_time;
-            }} // END IF: terminal crossing found
+            }} else if (all_photons_host.status[ray] == STOP_CONDITION_INSIDE_APPARENT_HORIZON) {{
+                results_buffer[ray].y_t = photon_horizons[ray].puncture_id;
+            }} // END IF: record terminal geometry
         }} // END LOOP: copy refined plane crossings
 
 {terminal_diagnostics_block}
@@ -2604,9 +2854,11 @@ static void write_plane_crossings(
 {angular_momentum_output}
 {synthetic_slice_usage_output}
 
-        write_puncture_diagnostics(&puncture_data, commondata, &all_photons_host,
+        write_puncture_diagnostics(&puncture_data, photon_horizons, commondata, &all_photons_host,
                                   results_buffer, num_rays, puncture_bin_path,
                                   {'true' if fast_light else 'false'});
+        free(photon_horizons);
+        apparent_horizons_close(&horizons);
         puncture_free_diagnostics(&puncture_data);
 
         if (commondata->perform_normalization_check) {{
@@ -2667,6 +2919,7 @@ static void write_plane_crossings(
         {free_pinned}(plane_crossing_candidates);
         {free_pinned}(non_terminal_crossing_results);
         {free_pinned}(terminal_crossing_results);
+        {free_pinned}(accepted_mask_selection);
 
         // Release the active numerical spacetime window before the slot lattice is destroyed.
         time_window_manager_numerical_free(&numerical_window);
@@ -2677,7 +2930,7 @@ static void write_plane_crossings(
 
     cfc.register_CFunction(
         includes=includes,
-        prefunc=plane_crossing_writer + puncture_helpers,
+        prefunc=plane_crossing_writer + puncture_helpers + mask_selection_helpers,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,

@@ -19,11 +19,7 @@ Symmetry expansion reduces multi-index groups to pairwise operations. For exampl
 
 The `indexedexp::symmetry_axes` parameter controls post-declaration derivative zeroing. `zero_out_derivatives_across_symmetry_axes()` returns immediately when `symmetry_axes` is empty. With an active symmetry-axis selection, it scans names containing `_d`, including upwind and KO names, and uses the final derivative-direction digits to zero components across the selected axes. The active pass supports ranks 1 through 4 and rejects names indicating derivative order greater than two. These checks are skipped when the symmetry-axis selection is empty.
 
-Claim evidence:
-- Claim: Symmetry-axis derivative zeroing matches `_d` names, including upwind and KO derivatives; rank and higher-derivative checks occur only when the configured symmetry-axis string is nonempty.
-- Role: descriptive behavior
-- Deciding authority: [indexedexp.py](../../nrpy/indexedexp.py), `zero_out_derivatives_across_symmetry_axes`
-- Corroboration: none available; the routine and its defining-module doctests supply the matcher and early-return conditions.
+Evidence (descriptive behavior): `indexedexp.py::zero_out_derivatives_across_symmetry_axes`.
 
 Zero initializers `zerorank1()` through `zerorank4()` call `declare_indexedexp(None, ...)`, producing mutable nested arrays initialized to symbolic zero. `get_rank()` infers rank by walking nested lists until it reaches a non-list element, so callers can classify tensor-like structures without separate metadata.
 
@@ -35,15 +31,10 @@ Use these helpers with explicit nested loops. The project style explicitly avoid
 
 ## Sources
 
-- [nrpy/indexedexp.py](../../nrpy/indexedexp.py) - `create_tensor_symbolic`, `declare_indexedexp`, `_parse_symmetry_tokens`, `_expanded_symmetry_tokens`
-- [nrpy/indexedexp.py](../../nrpy/indexedexp.py) - `declarerank1`, `declarerank2`, `declarerank3`, `declarerank4`, `zero_out_derivatives_across_symmetry_axes`, `get_rank`
-- [nrpy/indexedexp.py](../../nrpy/indexedexp.py) - `zerorank1`, `zerorank2`, `zerorank3`, `zerorank4`
-- [nrpy/indexedexp.py](../../nrpy/indexedexp.py) - `symm_matrix_inverter2x2`, `symm_matrix_inverter3x3`, `symm_matrix_inverter4x4`, `generic_matrix_inverter2x2`, `generic_matrix_inverter3x3`, `generic_matrix_inverter4x4`, `NonInvertibleMatrixError`
-- [nrpy/indexedexp.py](../../nrpy/indexedexp.py) - `LeviCivitaSymbol_dim3_rank3`, `LeviCivitaTensorUUU_dim3_rank3`, `LeviCivitaTensorDDD_dim3_rank3`
+- [nrpy/indexedexp.py](../../nrpy/indexedexp.py) - `create_tensor_symbolic`, `declare_indexedexp`, `_parse_symmetry_tokens`, `_expanded_symmetry_tokens`; `declarerank1`, `declarerank2`, `declarerank3`, `declarerank4`, `zero_out_derivatives_across_symmetry_axes`, `get_rank`; `zerorank1`, `zerorank2`, `zerorank3`, `zerorank4`; `symm_matrix_inverter2x2`, `symm_matrix_inverter3x3`, `symm_matrix_inverter4x4`, `generic_matrix_inverter2x2`, `generic_matrix_inverter3x3`, `generic_matrix_inverter4x4`, `NonInvertibleMatrixError`; `LeviCivitaSymbol_dim3_rank3`, `LeviCivitaTensorUUU_dim3_rank3`, `LeviCivitaTensorDDD_dim3_rank3`
 
 ## See Also
 
-- [Core APIs](index.md)
-- [Gridfunctions And Parameters](gridfunctions-and-parameters.md)
-- [Finite Difference](finite-difference.md)
-- [Reference Metrics](reference-metrics.md)
+- See also: [Gridfunctions And Parameters](gridfunctions-and-parameters.md)
+- See also: [Finite Difference](finite-difference.md)
+- See also: [Reference Metrics](reference-metrics.md)

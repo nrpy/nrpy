@@ -9,6 +9,9 @@ Author: Dalton J. Moone
 import nrpy.c_function as cfc
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.puncture_diagnostics import (
+    register_apparent_horizons,
+)
 
 
 def event_detection_manager_kernel(
@@ -35,6 +38,32 @@ def event_detection_manager_kernel(
     coordinate_time = (
         "d_integration_param_after[i]" if normalized_eom else "d_f_bundle[IDX_F(0, i)]"
     )
+    horizon_params = ""
+    horizon_check = ""
+    horizon_desc = ""
+    if not analytical:
+        register_apparent_horizons()
+        horizon_params = (
+            ", const apparent_horizon_file_t *horizons, "
+            "const NumericalTimeWindowManager *numerical_window, "
+            "puncture_result_t *photon_horizons, const bool fast_light"
+        )
+        horizon_desc = """
+        @param[in] horizons Apparent-horizon mapping, with an empty mapping disabling the check.
+        @param[in] numerical_window Retained numerical spacetime slice times.
+        @param[in,out] photon_horizons Latest horizon classification indexed by photon.
+        @param fast_light Whether to classify at the fixed geometry sampling time.
+"""
+        horizon_check = r"""
+        if (horizons->bytes != NULL) {
+            const double point[3] = {x, y, z};
+            const double lookup_time = fast_light ? commondata->t_start : coordinate_time;
+            photon_horizons[photon_index] =
+                apparent_horizons_classify(horizons, numerical_window, lookup_time, point);
+            if (photon_horizons[photon_index].horizon_status == HORIZON_INSIDE)
+                d_status_bundle[i] = STOP_CONDITION_INSIDE_APPARENT_HORIZON;
+        } // END IF: apparent horizon checking enabled
+"""
     body = r"""
     #define IDX_F(component, ray) ((component) * BUNDLE_CAPACITY + (ray))
     (void)stream_idx;
@@ -49,7 +78,10 @@ def event_detection_manager_kernel(
         const double y = d_f_bundle[IDX_F(2, i)];
         const double z = d_f_bundle[IDX_F(3, i)];
 
-        // Record both planes before an accepted state triggers a physical stop.
+        const double coordinate_time = @COORDINATE_TIME@;
+        @HORIZON_CHECK@
+
+        // Retain plane crossing candidates on the accepted stopping step.
         if (commondata->non_terminal_plane_enabled &&
             !crossings->non_terminal_candidate.recorded) {
             const double nx = commondata->non_terminal_plane_normal_x;
@@ -57,7 +89,7 @@ def event_detection_manager_kernel(
             const double nz = commondata->non_terminal_plane_normal_z;
             const double normal_sq = nx * nx + ny * ny + nz * nz;
             if (!isfinite(normal_sq) || normal_sq <= 1.0e-28) {
-                d_status_bundle[i] = FAILURE_GENERIC;
+                if (d_status_bundle[i] == ACTIVE) d_status_bundle[i] = FAILURE_GENERIC;
                 continue;
             } // END IF: nonterminal plane normal invalid
             const double signed_distance =
@@ -65,7 +97,7 @@ def event_detection_manager_kernel(
                 (y - commondata->non_terminal_plane_center_y) * ny +
                 (z - commondata->non_terminal_plane_center_z) * nz;
             if (!isfinite(signed_distance)) {
-                d_status_bundle[i] = FAILURE_GENERIC;
+                if (d_status_bundle[i] == ACTIVE) d_status_bundle[i] = FAILURE_GENERIC;
                 continue;
             } // END IF: nonterminal plane distance nonfinite
             const bool side = signed_distance > 0.0;
@@ -90,7 +122,7 @@ def event_detection_manager_kernel(
             const double nz = commondata->terminal_plane_normal_z;
             const double normal_sq = nx * nx + ny * ny + nz * nz;
             if (!isfinite(normal_sq) || normal_sq <= 1.0e-28) {
-                d_status_bundle[i] = FAILURE_GENERIC;
+                if (d_status_bundle[i] == ACTIVE) d_status_bundle[i] = FAILURE_GENERIC;
                 continue;
             } // END IF: terminal plane normal invalid
             const double signed_distance =
@@ -98,7 +130,7 @@ def event_detection_manager_kernel(
                 (y - commondata->terminal_plane_center_y) * ny +
                 (z - commondata->terminal_plane_center_z) * nz;
             if (!isfinite(signed_distance)) {
-                d_status_bundle[i] = FAILURE_GENERIC;
+                if (d_status_bundle[i] == ACTIVE) d_status_bundle[i] = FAILURE_GENERIC;
                 continue;
             } // END IF: terminal plane distance nonfinite
             const bool side = signed_distance > 0.0;
@@ -131,7 +163,7 @@ def event_detection_manager_kernel(
         } // END IF: detect enabled terminal crossing
 
         const double log_energy_measure = d_log_energy_bundle[i];
-        if (log_energy_measure > commondata->evolution_measure_max) {
+        if (d_status_bundle[i] == ACTIVE && log_energy_measure > commondata->evolution_measure_max) {
             d_status_bundle[i] = STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED;
         } // END IF: photon energy limit exceeded
         const double radius_squared = x * x + y * y + z * z;
@@ -139,7 +171,6 @@ def event_detection_manager_kernel(
             d_status_bundle[i] == ACTIVE) {
             d_status_bundle[i] = STOP_CONDITION_COORD_RADIUS_EXCEEDED;
         } // END IF: photon escape radius exceeded
-        const double coordinate_time = @COORDINATE_TIME@;
         if (d_status_bundle[i] == ACTIVE &&
             (!isfinite(coordinate_time) ||
              coordinate_time < commondata->slot_manager_t_min ||
@@ -148,7 +179,9 @@ def event_detection_manager_kernel(
         } // END IF: photon coordinate time invalid
     } // END LOOP: i processes accepted photon steps
     #undef IDX_F
-""".replace("@COORDINATE_TIME@", coordinate_time)
+""".replace("@COORDINATE_TIME@", coordinate_time).replace(
+        "@HORIZON_CHECK@", horizon_check
+    )
     if analytical:
         body = body.replace(
             "(!isfinite(coordinate_time) ||\n"
@@ -221,7 +254,7 @@ def event_detection_manager_kernel(
         @param[in] d_chunk_buffer Mapping from chunk entries to global photon indices.
         @param chunk_size Number of photon entries in the chunk.
         @param stream_idx CUDA launch stream index; unused by OpenMP.
-        """,
+        """ + horizon_desc,
         cfunc_type="void",
         name="event_detection_manager_kernel",
         params=(
@@ -237,7 +270,7 @@ def event_detection_manager_kernel(
             "photon_plane_crossing_candidates_t *restrict plane_crossing_candidates, "
             "const long int *restrict d_chunk_buffer, "
             "const int chunk_size, "
-            "const int stream_idx"
+            "const int stream_idx" + horizon_params
         ),
         include_CodeParameters_h=False,
         body=body,

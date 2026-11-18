@@ -1,4 +1,4 @@
-# Lifecycle And Project Assembly
+# superB Project Assembly, .ci, And Makefile Emission
 
 > Explain how superB generators assemble Charm++ projects, emitted assets, build/run guidance, and top-level header/PUP registration. · Status: confirmed
 > Up: [superB](index.md)
@@ -13,14 +13,16 @@ is a product of the local NRPy generators, so KB citations should point to the
 Python generators and static source headers rather than generated files under
 `project/`.
 
-This page owns superB build and interface-generation facts: `.ci` files,
-`mainmodule` and `extern module` declarations, generated `.decl.h`/`.def.h`
-headers, `charmc`/`charmxi` translation context, generated Makefile rules,
-`-language charm++`, `-module CkIO`, and `charmrun` launch shape. CkIO is only a
-build/link fact here; CkIO sessions and callbacks are owned by
+superB project assembly emits `.ci` interface files (`mainmodule` and
+`extern module` declarations), Makefile rules translating `.ci` into
+`.decl.h`/`.def.h` via `charmc`/`charmxi`, `-language charm++` and `-module CkIO`
+link flags, and `charmrun` launch commands; CkIO write sessions and SDAG
+callbacks are documented in
 [Diagnostics And Observables](diagnostics-and-observables.md).
 
 ## Detail
+
+### Example Assembly Sequence And `.ci` Interface Translation
 
 The public README classifies superB as NRPy's Charm++-based infrastructure for
 distributed-memory workflows and lists entry examples:
@@ -71,6 +73,8 @@ Charm++ interface translator is `charmxi`; generated superB Makefiles normally
 reach that translator through `charmc` by compiling the `.ci` targets with
 `$(CC)`.
 
+### Makefile Rules, Charm++ Launch, And PUP Registration
+
 `output_CFunctions_function_prototypes_and_construct_Makefile` writes every
 registered `CFunction` from `CFunction_dict` as `.cpp`, writes
 `BHaH_function_prototypes.h`, and creates a project Makefile. For superB, the
@@ -98,17 +102,16 @@ Charm++ quickstart describes `charmc` as the wrapper used to compile Charm++
 applications and `charmrun` as the launcher for Charm++ applications; superB's
 specific command strings come from the NRPy examples.
 
-Generated outputs are not durable KB sources by default. Do not cite generated
-`project/**` files, generated `.decl.h`/`.def.h` headers, generated
-executables, copied launchers, checkpoint logs, or runtime outputs for this
-page unless a selected generated artifact has been deliberately registered as
-frozen evidence. Cite local generators, static checked-in headers, examples,
-and workflow files instead.
+Generated `project/**` files, `.decl.h`/`.def.h` headers, executables, copied
+launchers, and runtime logs follow
+[Generated Output Boundaries](../../architecture/generated-output-boundaries.md);
+cite local Python generators, checked-in static headers, examples, and workflow
+files instead.
 
-Charm++ version statements on this page are validation-scoped. The current CI
-job exports `/opt/charm-8.0.0` paths before building and running generated
-superB projects, so `8.0.0` is a workflow-environment fact, not a claim that
-local generators target the latest upstream Charm++ source.
+In `.github/workflows/main.yml`, `charmpp-validation` exports `/opt/charm-8.0.0`
+paths before building and running generated superB projects, recording the CI
+Charm++ version rather than pinning upstream Charm++ headers inside local
+generators.
 
 Configured validation is asymmetric. `charmpp-validation` generates and builds
 the NRPyElliptic, spectroscopy, and collision projects, but runs only
@@ -149,9 +152,6 @@ struct declarations consumed by generated code.
 
 ## See Also
 
-- [superB](index.md)
-- [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)
-- [Build And Run](../../architecture/build-and-run.md)
-- [C Function Registry](../../core/c-function-registry.md)
-- [Diagnostics And Observables](diagnostics-and-observables.md)
-- [Generated Project CI](../../validation/generated-project-ci.md)
+- See also: [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)
+- Depends on: [C Function Registry](../../core/c-function-registry.md)
+- Validated by: [Generated Project CI](../../validation/generated-project-ci.md)

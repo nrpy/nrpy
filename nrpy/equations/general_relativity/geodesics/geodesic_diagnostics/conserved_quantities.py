@@ -246,11 +246,11 @@ class GeodesicDiagnostics:
         :param pU: The symbolic 4-momentum vector.
         :return: Symbolic expression for Energy.
         """
-        p_0 = sp.sympify(0)
+        p_0: sp.Expr = sp.sympify(0)
         for mu in range(4):
             # Exploit symmetry: g_{0,mu} = g_{mu,0}. Use upper triangle.
             p_0 += self.g4DD[0][mu] * pU[mu]
-        return cast(sp.Expr, -p_0)
+        return -p_0
 
     def compute_angular_momentum_z_cartesian(self, pU: List[sp.Symbol]) -> sp.Expr:
         """

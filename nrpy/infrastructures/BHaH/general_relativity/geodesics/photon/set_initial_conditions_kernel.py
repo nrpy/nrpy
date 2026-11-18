@@ -56,12 +56,14 @@ batch_structs_c_code = r"""
         FAILURE_SPATIAL_INTERPOLATION = 9, // Spatial interpolation failed for this photon.
         FAILURE_TEMPORAL_INTERPOLATION = 10, // Temporal interpolation failed for this photon.
         FAILURE_RKF45_MIN_STEP_LIMIT = 11, // Too many consecutive minimum-size attempts.
+        STOP_CONDITION_INSIDE_APPARENT_HORIZON = 12, // Accepted photon state inside a saved horizon.
     } termination_type_t; // END ENUM: termination_type_t
 
     // Native same-build metadata for one serialized blueprint tile.
     #define BLUEPRINT_MAGIC "NRPYBP01"
     // Version 9 stores the exact global image-plane scan bounds.
     #define BLUEPRINT_SCHEMA_VERSION 9U
+    #define BLUEPRINT_HORIZON_VERSION 10U
     typedef struct {
         char magic[8];
         uint32_t native_schema_version;
@@ -85,8 +87,8 @@ batch_structs_c_code = r"""
         int32_t termination_type; // Fixed-width serialized exit condition.
         double y_nt; // Local horizontal coordinate on nonterminal plane.
         double z_nt; // Local vertical coordinate on nonterminal plane.
-        double y_t; // Local horizontal coordinate on terminal plane.
-        double z_t; // Local vertical coordinate on terminal plane.
+        double y_t; // Terminal-plane horizontal coordinate, or containing horizon ID.
+        double z_t; // Terminal-plane vertical coordinate, or NaN for a horizon stop.
         double final_theta; // Final polar angle $\theta$ at termination.
         double final_phi;   // Final azimuthal angle $\phi$ at termination.
         double non_terminal_plane_lambda; // Affine parameter at nonterminal-plane intersection.

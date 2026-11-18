@@ -11,18 +11,19 @@ registry implements `KerrSchild_Cartesian`, an analytic-like static
 continuation of coincident Brill-Lindquist initial data, and a time-dependent
 Cartesian representation of flat spacetime; `GeodesicEquations`
 supports massive and photon RHS variants; `GeodesicDiagnostics` provides
-energy, Cartesian angular momentum, and Kerr-Schild Carter-constant diagnostics
+energy, axial angular momentum, and Kerr-Schild Carter-constant diagnostics
 where the required symmetries are available.
 
 ## Detail
+
+### Analytic Metrics
 
 `AnalyticSpacetimes` dispatches by spacetime name. `KerrSchild_Cartesian`
 registers `M_scale` and `a_spin`. The
 `BrillLindquist_InitialData_Static_Cartesian` recipe registers `M_total` and
 uses coincident Brill-Lindquist spatial data with
 `gamma_ij = psi^4 delta_ij`, `alpha = psi^-2`, and zero shift. This second
-branch is a chosen static four-metric continuation for controlled tests, not
-the standard Schwarzschild four-metric in isotropic coordinates.
+branch defines a static four-metric for controlled tests.
 `Minkowski_TimeDependentAxisymmetric_Cartesian` defines inertial coordinates
 `T=t`, `(X,Y)=a(t) Rot(Omega(t)+kappa(t)z)(x,y)`, and `Z=b(t)z`. It registers
 the four amplitudes, four frequencies, and twist length `flat_L` as CodeParameters.
@@ -35,34 +36,24 @@ remains available for other metrics.
 The metric remains flat and rotationally symmetric about the `z`
 axis when `a(t)` and `b(t)` are nonzero. All three branches define coordinates
 `[t, x, y, z]` and store the covariant four-metric `g4DD`.
-Unsupported analytic spacetime names raise `ValueError`; the lazy
+Unsupported analytic spacetime names raise `ValueError`. The lazy
 `Analytic_Spacetimes` dictionary caches constructed instances.
 
-Claim evidence:
-- Claim: The analytic registry contains Kerr-Schild, the documented analytic-like static Brill-Lindquist recipe, and a time-dependent Cartesian coordinate transformation of Minkowski spacetime; the Brill-Lindquist recipe is not identified as the standard isotropic Schwarzschild four-metric.
-- Role: public/scientific contract
-- Deciding authority: `nrpy/equations/general_relativity/geodesics/analytic_spacetimes.py` — `AnalyticSpacetimes`
-- Corroboration: `nrpy/equations/general_relativity/geodesics/tests/analytic_spacetimes_BrillLindquist_InitialData_Static_Cartesian.py` — trusted expressions
+Evidence (descriptive behavior): `analytic_spacetimes.py::AnalyticSpacetimes` and `Analytic_Spacetimes`.
+
+### Geodesic Equations And Normalization
 
 `GeodesicEquations` obtains `g4DD` and `xx` from the analytic registry, computes
 `g4DD_dD`, builds `Gamma4UDD`, and then chooses the RHS and initialization
 constraint by `particle_type`. The massive path returns eight ODE right-hand
 sides from position and four-velocity evolution, plus `u0_massive` from the
 timelike normalization condition. The photon path returns nine ODE right-hand
-sides from position and four-momentum evolution; the ninth component is the
-signed normal-observer path-length diagnostic, and `p0_photon` comes from the
-null constraint. For the direct RHS, the ninth component evolves signed
-normal-observer path length:
-`dL_normal/dlambda = alpha*p^0`, with `alpha=1/sqrt(-g^{00})` on the
-`g^{00}<0` domain. Its sign follows `p^0`. Reverse-ray initialization selects
-the negative photon root, so path length decreases as the affine parameter
-increases while `p^0<0`; the RHS can change sign if evolved `p^0` becomes
-positive, including inside an ergosphere. In Minkowski spacetime, initialization
-gives `u^0=sqrt(1+sum_i (u^i)^2)` for a massive particle and
-`p^0=-sqrt(sum_i (p^i)^2)` for a reverse-traced photon. The massive and photon
-initialization formulas assume signature `(-,+,+,+)` and `g_00<0`; each
-divides by `2*g_00` and has no `g_00=0` fallback. These are initialization
-limits, not restrictions established for subsequent evolution.
+sides for position, momentum, and signed normal-observer path length
+`dL_normal/dlambda = alpha*p^0`, with `alpha = 1/sqrt(-g^{00})` when
+`g^{00} < 0`. The normalization quadratics assume signature `(-,+,+,+)`
+and `g_00 < 0`. They select the positive massive root and negative photon root.
+In Minkowski coordinates these give `u^0 = sqrt(1 + sum_i (u^i)^2)` and
+`p^0 = -sqrt(sum_i (p^i)^2)`.
 
 For photon evolution, the module provides four explicit RHS forms: ordinary
 `geodesic_eom_rhs_photon` and
@@ -70,7 +61,7 @@ For photon evolution, the module provides four explicit RHS forms: ordinary
 `geodesic_eom_rhs_photon_normalized` and
 `geodesic_eom_rhs_photon_normalized_christoffel`. The first member of each pair
 consumes metric derivatives; the second consumes Christoffels. EOM-family
-selection and geometry-payload selection are separate generation choices.
+selection and selection of metric derivatives or Christoffels are separate generation choices.
 
 The photon normalization helpers make the direct and normalized state
 conventions explicit. They define `u = ln|alpha p^0|` and
@@ -78,8 +69,8 @@ conventions explicit. They define `u = ln|alpha p^0|` and
 `gamma^ij Pi_i Pi_j = 1`; the direct constraint is
 `g_mu_nu p^mu p^nu = 0`. `normal_observer_log_energy` evaluates the same
 normal-observer log-energy measure for direct states by constructing the needed
-inverse-metric component from covariant `g4DD`. This measure is an upper-only
-evolution cutoff, not a claim that energy is conserved in a general spacetime.
+inverse-metric component from covariant `g4DD`. The photon integrators use
+this measure for their upper evolution cutoff.
 
 The analytic geometry stored by `GeodesicEquations` and its returned generic
 RHS expressions are separate: the RHS and normalization expressions use
@@ -87,19 +78,9 @@ RHS expressions are separate: the RHS and normalization expressions use
 the metric, connection, and tangent values needed to evaluate them.
 Unsupported particle types raise `ValueError`.
 
-Claim evidence:
-- Claim: Photon direct and normalized states use the documented null constraints, and direct states can be mapped to the common normal-observer log-energy measure `ln|alpha p^0|`.
-- Role: public/scientific contract
-- Deciding authority: `nrpy/equations/general_relativity/geodesics/geodesics.py` — `photon_momentum_to_normalized_quantities`, `normalization_constraint_photon`, `normalization_constraint_photon_normalized`
-- Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/normal_observer_log_energy.py` — `normal_observer_log_energy`
-- Claim: `GeodesicEquations` exposes direct and normalized photon RHS forms for metric-derivative and Christoffel payloads, with EOM-family and geometry-payload selection independent.
-- Role: public/scientific contract
-- Deciding authority: `nrpy/equations/general_relativity/geodesics/geodesics.py` — `GeodesicEquations`
-- Corroboration: `nrpy/equations/general_relativity/geodesics/geodesics.py` — photon RHS construction and payload selection branches
-- Claim: Initialization selects the positive massive root and negative photon root for `g_00<0`, without a zero-coefficient fallback; direct photon path length evolves as signed `alpha*p^0`.
-- Role: descriptive behavior
-- Deciding authority: [geodesics.py](../../../nrpy/equations/general_relativity/geodesics/geodesics.py), `hamiltonian_constraint_massive`, `hamiltonian_constraint_photon`, `geodesic_eom_rhs_photon`, and `geodesic_eom_rhs_photon_christoffel`
-- Corroboration: substituting the Minkowski metric in the quadratic roots checks their time orientation directly.
+Evidence (descriptive behavior): `geodesics.py::GeodesicEquations`, `photon_momentum_to_normalized_quantities`, `normalization_constraint_photon_normalized`, and `geodesic_eom_rhs_photon`.
+
+### Numerical Spacetime And Conserved Quantities
 
 The same module also exposes reusable recipes for numerical spacetime data:
 `symbolic_numerical_christoffel_recipe`,
@@ -108,13 +89,9 @@ The same module also exposes reusable recipes for numerical spacetime data:
 `symbolic_christoffel_recipe_from_bssn_grid_basis`. The BSSN-grid helpers use
 reference-metric Jacobians and assume a time-independent spatial map lifted
 into four dimensions; the Christoffel recipe can optionally use static time
-derivatives for an explicitly requested approximate endpoint payload.
+derivatives for an explicitly requested approximate endpoint.
 
-Claim evidence:
-- Claim: The numerical-spacetime recipes use the BSSN-grid reference-metric transformation and can request static time derivatives only for an explicitly selected approximate endpoint payload.
-- Role: public/scientific contract
-- Deciding authority: `nrpy/equations/general_relativity/geodesics/geodesics.py` — `symbolic_g4DD_dt_recipe_from_bssn_grid_basis`, `symbolic_christoffel_recipe_from_bssn_grid_basis`
-- Corroboration: `nrpy/infrastructures/BHaH/diagnostics/output_raytracing_data.py` — mode-selected exporter payload
+Evidence (descriptive behavior): `geodesics.py::symbolic_g4DD_dt_recipe_from_bssn_grid_basis` and `symbolic_christoffel_recipe_from_bssn_grid_basis`.
 
 `GeodesicDiagnostics` can use analytic metrics or a generic `"Numerical"`
 metric placeholder. It always constructs `E_expr = -p_0`, builds scalar `Lz_expr` only
@@ -123,13 +100,9 @@ for spacetime names ending in `Cartesian`, and builds `Q_expr` only for
 photon particles and relies on the module assumptions documented in
 `conserved_quantities.py`.
 
-Claim evidence:
-- Claim: `GeodesicDiagnostics` exposes scalar `Lz_expr` and the axial method `compute_angular_momentum_z_cartesian()` for Cartesian spacetime names; the removed vector `L_exprs` and old Cartesian method are not part of the current API.
-- Role: public/scientific contract
-- Deciding authority: `nrpy/equations/general_relativity/geodesics/geodesic_diagnostics/conserved_quantities.py` — `GeodesicDiagnostics`
-- Corroboration: `nrpy/equations/general_relativity/geodesics/geodesic_diagnostics/tests/conserved_quantities_KerrSchild_Cartesian_massive.py` and `conserved_quantities_KerrSchild_Cartesian_photon.py` — trusted diagnostics
+Evidence (descriptive behavior): `conserved_quantities.py::GeodesicDiagnostics` and `compute_angular_momentum_z_cartesian`.
 
-Representative trusted dictionaries cover both registered analytic metric
+Representative trusted dictionaries cover Kerr-Schild and Brill-Lindquist metric
 recipes, plus massive and photon geodesic equations and conserved diagnostics
 for `KerrSchild_Cartesian`. The module-level validation also checks metric and
 Christoffel symmetry plus identity-map and spherical-to-Cartesian BSSN transform
@@ -139,6 +112,7 @@ cases before emitting trusted expressions.
 
 - [analytic_spacetimes.py](../../../nrpy/equations/general_relativity/geodesics/analytic_spacetimes.py) - `AnalyticSpacetimes`, `Analytic_Spacetimes`
 - [geodesics.py](../../../nrpy/equations/general_relativity/geodesics/geodesics.py) - `GeodesicEquations`, `geodesic_eom_rhs_massive`, `geodesic_eom_rhs_photon`, `geodesic_eom_rhs_photon_christoffel`, `geodesic_eom_rhs_photon_normalized`, `geodesic_eom_rhs_photon_normalized_christoffel`, `symbolic_g4DD_dt_recipe_from_bssn_grid_basis`, `symbolic_christoffel_recipe_from_bssn_grid_basis`
+- [normal_observer_log_energy.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/normal_observer_log_energy.py) - `normal_observer_log_energy`
 - [conserved_quantities.py](../../../nrpy/equations/general_relativity/geodesics/geodesic_diagnostics/conserved_quantities.py) - `GeodesicDiagnostics`, `compute_energy`, `compute_angular_momentum_z_cartesian`, `compute_carter_constant_KerrSchild_Cartesian`
 - [analytic_spacetimes_KerrSchild_Cartesian.py](../../../nrpy/equations/general_relativity/geodesics/tests/analytic_spacetimes_KerrSchild_Cartesian.py) - `trusted_dict`
 - [analytic_spacetimes_BrillLindquist_InitialData_Static_Cartesian.py](../../../nrpy/equations/general_relativity/geodesics/tests/analytic_spacetimes_BrillLindquist_InitialData_Static_Cartesian.py) - `trusted_dict`
@@ -149,9 +123,6 @@ cases before emitting trusted expressions.
 
 ## See Also
 
-- [General Relativity](index.md)
-- [BSSN Family](bssn-family.md)
-- [Metric Conversions And Matter](metric-conversions-and-matter.md)
-- [Psi4 And Tetrads](psi4-and-tetrads.md)
-- [Reference Metrics](../../core/reference-metrics.md)
-- [Trusted Expression Pipeline](../trusted-expression-pipeline.md)
+- See also: [BSSN Family](bssn-family.md)
+- Depends on: [Reference Metrics](../../core/reference-metrics.md)
+- Validated by: [Expression Validation Helpers](../../validation/expression-validation-helpers.md)

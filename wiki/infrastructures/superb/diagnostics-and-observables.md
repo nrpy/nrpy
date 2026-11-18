@@ -16,6 +16,8 @@ dispatcher samples residual and `uu` diagnostics.
 
 ## Detail
 
+### Phase Dispatch, Nearest Samplers, And CkIO Sessions
+
 `register_all_diagnostics` registers the common top-level diagnostics driver,
 copies helper headers needed by enabled diagnostics families, registers
 nearest-sampling helpers for each coordinate system, optionally registers
@@ -26,23 +28,17 @@ write routines, and the scheduling decision is left to the Charm++ runtime path.
 It also registers the `diagnostics_output_every` commondata parameter consumed
 by `Timestepping`.
 
-Nearest diagnostics are organized as 0D, 1D, and 2D outputs. The center helper
-chooses a coordinate-system-specific grid index nearest the physical center:
-Cartesian-like systems use midpoint indices, while spherical, cylindrical, and
-`SymTP` families use `NGHOSTS` in the radial-like direction and midpoints in
-the other directions. The 1D helper builds samples along the nearest physical
-`y` and `z` axes, converts native coordinates to Cartesian coordinates, sorts
-points by the physical axis coordinate, records chare-local indices and byte
-offsets in `diagnostic_struct`, and later writes rows for the selected
-diagnostic gridfunctions. The 2D helper does the analogous setup and write path
-for nearest `xy` and `yz` planes, including coordinate-family-specific slice
-selection and Cartesian output coordinates.
+Nearest 0D center, 1D `y`/`z`-axis, and 2D `xy`/`yz`-plane index selection and
+Cartesian coordinate sorting follow the standalone BHaH conventions in
+[BHaH Diagnostics Output And Checkpointing](../bhah/diagnostics-output-and-checkpointing.md#nearest-and-volume-diagnostic-samplers),
+while superB additionally records chare-local point indices and file byte
+offsets in `diagnostic_struct` for distributed CkIO writes.
 
 `diagnostic_struct` is the persistent per-grid, per-chare bookkeeping object for
-the 1D/2D nearest-output path. It stores total point counts, chare-owned point
+the 1D/2D nearest-output path. It stores total point counts, chare-local point
 counts, local point indices, per-point output offsets, per-row byte sizes, total
 file sizes, and filename components for `out1d-y`, `out1d-z`, `out2d-xy`, and
-`out2d-yz`. The phase constants in `superB.h` define the contract between
+`out2d-yz`. The phase constants in `superB.h` define the phase codes shared by
 `Timestepping`, `diagnostics()`, and the nearest helpers:
 `DIAGNOSTICS_SETUP_1D`, `DIAGNOSTICS_SETUP_2D`,
 `DIAGNOSTICS_WRITE_CENTER`, `DIAGNOSTICS_WRITE_Y`,
@@ -77,8 +73,8 @@ Charm++ defines those write offsets as relative to the whole file, not to the
 session offset, while the session itself is a byte window; superB's precomputed
 header and row offsets must therefore fit inside that file-global window. CkIO
 uses seek/read/write at the lowest level, so this output path requires seekable
-files. The generated code constructs default `Ck::IO::Options` values for
-opens, but this page does not prescribe CkIO option tuning. Current superB
+files. The generated code constructs default `Ck::IO::Options` values when opening
+CkIO sessions without custom stripe or buffer tuning. Current superB
 control flow should not be read as checkpointing an open CkIO file: write
 sessions complete, files close, SDAG reaches the `closed_*` callbacks, and only
 then does the timestepping continuation and checkpoint-scheduling path proceed.
@@ -86,13 +82,15 @@ then does the timestepping continuation and checkpoint-scheduling path proceed.
 | Step | superB entry or call | Charm++ message/meaning |
 | --- | --- | --- |
 | open | root diagnostics branch calls `Ck::IO::open` | schedules file open with a `thisProxy` array-broadcast callback |
-| file ready | `ready_*` | receives `FileReadyMsg`; generated callback target is array-shaped, while the intended consuming SDAG branch is root-owned |
+| file ready | `ready_*` | receives `FileReadyMsg`; generated callback target is array-shaped, while the intended consuming SDAG branch runs on the root chare |
 | start session | `Ck::IO::startSession` | intended root branch starts byte-window session |
 | session ready | `start_write_*` | receives `SessionReadyMsg` and broadcasts `diagnostics_ckio` |
 | write | all `Timestepping` elements call `Ck::IO::write` | multi-PE row/header writes into session window |
-| write complete | `test_written_*` | receives completion `CkReductionMsg *`; delete/ignore payload as completion, not reducer data |
+| write complete | `test_written_*` | receives completion `CkReductionMsg *`; delete/ignore message buffer as completion, not reducer data |
 | close | root calls `Ck::IO::close` | closes after completion |
 | closed | `closed_*` | SDAG resumes only after close callback |
+
+### Reduction-Backed Volume Integrals And Project Variants
 
 Volume diagnostics use Charm++ reductions rather than CkIO row writes.
 `diagnostics_ckio` checks for `DIAGNOSTICS_VOLUME` before calling the generated
@@ -107,7 +105,7 @@ as selected volume followed by that recipe's integrands. It contributes the
 flattened vector with `CkReduction::sum_double`. The callback is constructed as
 `CkIndex_Timestepping::report_sums_for_volume(NULL)` on
 `Timestepping(0,0,0)`, not as a typed `[reductiontarget]` callback, so the root
-entry receives a real `CkReductionMsg *` payload and reconstructs doubles from
+entry receives a `CkReductionMsg *` data buffer and reconstructs doubles from
 `getSize()` and `getData()`. This is distinct from CkIO callback messages in
 `test_written_*` and `closed_*`: `test_written_*` receives the empty CkIO
 completion `CkReductionMsg *`, and both handlers delete callback messages
@@ -116,30 +114,21 @@ recipe results, writes `out3d-integrals-conv_factor...` files from the root
 chare, and for NRPyElliptic updates `commondata.log10_current_residual` from
 the residual RMS for the named `sphere_R_80` recipe.
 
-Claim evidence:
-- Claim: superB GR volume reductions define both default recipes with `DIAG_HAMILTONIANGF`, `DIAG_MGF`, and `DIAG_LAMBDA_CONSTRAINTGF` as squared integrands, while NRPyElliptic keeps one residual integrand per recipe.
-- Role: descriptive behavior
-- Deciding authority: [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py), `output_timestepping_h` and `diags_integration_build_default_recipes`; [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
-- Corroboration: [BHaH diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
+Evidence (descriptive behavior): `superB/timestepping_chare.py::output_timestepping_h` and `diags_integration_build_default_recipes`; `general_relativity/BSSN_constraints.py::BSSNconstraints.__init__`; `BHaH/general_relativity/constraints_eval.py::register_CFunction_constraints_eval`.
 
 The GR and NRPyElliptic nearest diagnostic variants share the same orchestration
 and helper calls; they differ in the diagnostic gridfunctions selected in their
 `USER-EDIT` blocks. The GR dispatcher samples `DIAG_HAMILTONIANGF`, `DIAG_MGF`,
 and `DIAG_LAMBDA_CONSTRAINTGF` for 0D, 1D, and 2D nearest outputs. The
-NRPyElliptic dispatcher samples `DIAG_RESIDUALGF` and `DIAG_UUGF` for the same
-output dimensions. This page treats those as superB output choices and leaves
-the equation definitions behind those gridfunctions to the equation pages.
+NRPyElliptic dispatcher samples `DIAG_RESIDUALGF` and `DIAG_UUGF` across the
+same 0D, 1D, and 2D output slices.
 
-Claim evidence:
-- Claim: The superB GR nearest dispatcher selects Hamiltonian, momentum magnitude, and Lambda-constraint magnitude for all 0D, 1D, and 2D outputs, while the NRPyElliptic dispatcher remains residual-and-`uu` only.
-- Role: descriptive behavior
-- Deciding authority: [GR diagnostics_nearest.py](../../../nrpy/infrastructures/superB/general_relativity/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [NRPyElliptic diagnostics_nearest.py](../../../nrpy/infrastructures/superB/nrpyelliptic/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
-- Corroboration: [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py), generated diagnostic dispatch; [BHaH diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
+Evidence (descriptive behavior): `superB/general_relativity/diagnostics_nearest.py::register_CFunction_diagnostics_nearest`; `superB/nrpyelliptic/diagnostics_nearest.py::register_CFunction_diagnostics_nearest`; `general_relativity/BSSN_constraints.py::BSSNconstraints.__init__`.
 
 Current configured CI builds all superB projects but runs only the
 collision executable. It does not inspect CkIO files, volume-reduction values,
 NRPyElliptic residual stopping, checkpoint/restart, or error paths. The prose
-above describes local generator control flow plus Charm++ 8.0.0 API contracts,
+above describes local generator control flow plus Charm++ 8.0.0 API specifications,
 not observed runtime output.
 
 ## Sources
@@ -161,8 +150,6 @@ not observed runtime output.
 
 ## See Also
 
-- [superB](index.md)
 - Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)
-- [Chare Entrypoints And Runtime](chare-entrypoints-and-runtime.md)
-- [GR, BHaHAHA, Psi4, And Interpolation](gr-bhahaha-psi4-and-interpolation.md)
-- [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md)
+- Depends on: [BHaH Diagnostics Output And Checkpointing](../bhah/diagnostics-output-and-checkpointing.md)
+- See also: [Chare Entrypoints And Runtime](chare-entrypoints-and-runtime.md)

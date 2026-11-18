@@ -127,7 +127,13 @@ if __name__ == "__main__":
             "The combined .bin file is still selected by --bin-name."
         ),
     )
-    parser.add_argument(
+    horizon_input = parser.add_mutually_exclusive_group()
+    horizon_input.add_argument(
+        "--apparent-horizon-bin-path",
+        default="",
+        help="Combined apparent-horizon file. Stops the photon at an accepted point inside a horizon.",
+    )
+    horizon_input.add_argument(
         "--puncture-diagnostics-dir",
         default="",
         help=(
@@ -401,6 +407,16 @@ if __name__ == "__main__":
         help="Normalized-EOM RKF45 log-energy tolerance; invalid in direct mode.",
     )
     parser.add_argument(
+        "--spatial-mask-threshold",
+        type=float,
+        default=10.0,
+        metavar="FACTOR",
+        help=(
+            "Exclude spatial nodes whose spatial-metric norm exceeds FACTOR times "
+            "the median neighboring norm; must be finite and greater than 1; default: 10."
+        ),
+    )
+    parser.add_argument(
         "--interpolation-half-widths",
         nargs=2,
         type=int,
@@ -437,6 +453,16 @@ if __name__ == "__main__":
             "--rkf45-max-consecutive-min-steps must be between 0 and 2147483647."
         )
 
+    apparent_horizon_bin_path = ""
+    if args.apparent_horizon_bin_path:
+        apparent_horizon_bin_path = os.path.abspath(args.apparent_horizon_bin_path)
+        if not os.path.isfile(apparent_horizon_bin_path) or not os.access(
+            apparent_horizon_bin_path, os.R_OK
+        ):
+            parser.error(
+                f"Cannot read apparent-horizon file '{apparent_horizon_bin_path}'."
+            )
+
     puncture_diagnostics_dir = ""
     if args.puncture_diagnostics_dir:
         puncture_diagnostics_dir = os.path.abspath(args.puncture_diagnostics_dir)
@@ -469,6 +495,11 @@ if __name__ == "__main__":
     interpolation_method = args.interpolation_method
     rhs_uses_metric_derivatives = interpolation_method != "GammaUDD"
 
+    _require(
+        math.isfinite(args.spatial_mask_threshold)
+        and args.spatial_mask_threshold > 1.0,
+        "--spatial-mask-threshold must be finite and greater than 1.",
+    )
     for option, value in (
         ("--l-sense", args.l_sense),
         ("--tol-scale-min", args.tol_scale_min),
@@ -819,13 +850,17 @@ if __name__ == "__main__":
     par.adjust_CodeParam_default("rho_slope", rho_slope)
     par.adjust_CodeParam_default("z_slope", z_slope)
 
-    # Step 6.c: Set interpolation half-width defaults.
+    # Step 6.c: Set interpolation half widths and spatial-mask threshold.
     par.adjust_CodeParam_default("numerical_spacetime_spatial_interp_half_width", 3)
     par.adjust_CodeParam_default("numerical_spacetime_temporal_interp_half_width", 3)
+    par.adjust_CodeParam_default(
+        "numerical_spacetime_spatial_mask_threshold", args.spatial_mask_threshold
+    )
 
     # Step 6.d: Set initial-condition defaults.
     par.adjust_CodeParam_default("t_start", args.t_start)
     par.adjust_CodeParam_default("puncture_diagnostics_dir", puncture_diagnostics_dir)
+    par.adjust_CodeParam_default("apparent_horizon_bin_path", apparent_horizon_bin_path)
     par.adjust_CodeParam_default("scan_density", args.scan_density)
 
     # Step 6.e: Set batch-integrator and numerical-limit defaults.
@@ -1040,8 +1075,11 @@ if __name__ == "__main__":
     print(f" -> Interpolation method: {interpolation_method}")
     print(f" -> Photon equations of motion: {args.eom}")
     print(f" -> Fixed geometry sampling at t_start: {args.fast_light}")
+    if apparent_horizon_bin_path:
+        print(f" -> Apparent-horizon .bin path: {apparent_horizon_bin_path}")
     if puncture_diagnostics_dir:
         print(f" -> Puncture diagnostics directory: {puncture_diagnostics_dir}")
+    if apparent_horizon_bin_path or puncture_diagnostics_dir:
         print(
             " -> Additional output: light_blueprint_puncture_XX_YY.bin "
             "(ten bytes per ray: uint8 puncture_id, uint8 horizon_status, "

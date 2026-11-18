@@ -6,6 +6,36 @@
 #include <stdlib.h>
 
 /**
+ * Select ordinary or masked spatial interpolation for one geometry request.
+ *
+ * @param has_excluded_nodes Whether the attempt excludes any spatial nodes.
+ * @param[in] mask Locked spatial exclusion bytes.
+ * @param[in] context Stored azimuthal planes.
+ * @param[in] commondata Interpolation parameters.
+ * @param[in] params Numerical grid parameters.
+ * @param x Cartesian x coordinate.
+ * @param y Cartesian y coordinate.
+ * @param z Cartesian z coordinate.
+ * @param[in] center Locked spatial center or NULL for independent sampling.
+ * @param count Number of requested slices.
+ * @param[in] slices Mapped slice pointers.
+ * @param[out] metric Ten Cartesian metric components per slice.
+ * @param[out] geometry Forty Cartesian geometry components per slice.
+ * @return Spatial interpolation status.
+ */
+static int numerical_interpolation_spatial_dispatch(const bool has_excluded_nodes, const unsigned char *restrict mask,
+                                                    const azimuthal_symmetry_spatial_lagrange_context_struct *restrict context,
+                                                    const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL x,
+                                                    const REAL y, const REAL z, const NumericalSpatialStencilCenter *restrict center, const int count,
+                                                    const double *const *restrict slices, REAL *restrict metric, REAL *restrict geometry) {
+  if (has_excluded_nodes)
+    return azimuthal_symmetry_spatial_lagrange_interpolation_masked__rfm__SinhCylindricalv2n2(context, commondata, params, x, y, z, center, count,
+                                                                                              slices, metric, geometry, mask);
+  return azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(context, commondata, params, x, y, z, center, count, slices,
+                                                                                     metric, geometry);
+} // END FUNCTION: select spatial interpolation method
+
+/**
  * Interpolate piecewise static/numerical spacetime tensors for one photon chunk.
  *
  * The caller supplies an active numerical time window, a spatial interpolation
@@ -33,6 +63,8 @@
  * @param[in] d_spatial_stencil_center_i0 Trial-locked native dimension-0 centers, or NULL.
  * @param[in] d_spatial_stencil_center_i2 Trial-locked native dimension-2 centers, or NULL.
  * @param[in] d_temporal_stencil_center Trial-locked retained time-slice centers, or NULL.
+ * @param[in] d_spatial_mask Trial-locked row-major masks, or NULL for independent sampling.
+ * @param[in] d_has_excluded_nodes Per-photon exclusion flags, or NULL for independent sampling.
  * @param[out] d_metric_bundle Destination metric bundle.
  * @param[out] d_rhs_geometry_bundle Destination 40-component geometry bundle, or NULL.
  * @param chunk_size Number of active rays in the chunk.
@@ -45,6 +77,7 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
                              const NumericalTimeWindowManager *restrict numerical_window, const double *restrict d_f_bundle,
                              termination_type_t *restrict d_status, const int *restrict d_spatial_stencil_center_i0,
                              const int *restrict d_spatial_stencil_center_i2, const uint64_t *restrict d_temporal_stencil_center,
+                             const unsigned char *restrict d_spatial_mask, const bool *restrict d_has_excluded_nodes,
 
                              double *restrict d_metric_bundle, double *restrict d_rhs_geometry_bundle, const long int chunk_size,
                              const int stream_idx) {
@@ -130,6 +163,42 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
     } // END IF: trial-locked centers supplied
 
     termination_type_t interpolation_failure = ACTIVE;
+    const int spatial_count = 2 * commondata->numerical_spacetime_spatial_interp_half_width + 1;
+    unsigned char local_spatial_mask[spatial_count * spatial_count];
+    bool has_excluded_nodes = false;
+    const unsigned char *spatial_mask = local_spatial_mask;
+    if (d_spatial_mask != NULL && d_has_excluded_nodes != NULL) {
+      spatial_mask = d_spatial_mask + i * spatial_count * spatial_count;
+      has_excluded_nodes = d_has_excluded_nodes[i];
+    } else {
+      const REAL xCart[3] = {x, y, z};
+      REAL native[3];
+      int automatic_center[3], selected_center[3];
+      if (time_window_manager_numerical_resolve_spatial_target_and_stencil(params, xCart, fixed_spatial_center, native, automatic_center,
+                                                                           selected_center) != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+        interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
+      } else {
+        fixed_center.i0 = selected_center[0];
+        fixed_center.i2 = selected_center[2];
+        fixed_spatial_center = &fixed_center;
+        const int plane = native[1] < 0.0 || native[1] >= 3.14159265358979323846 - 1.0e-12 ? 0 : 1;
+        const uint64_t center = d_temporal_stencil_center != NULL
+                                    ? d_temporal_stencil_center[i]
+                                    : time_window_manager_numerical_nearest_selected_slice_for_time(numerical_window, t);
+        if (time_window_manager_numerical_build_spatial_mask(commondata, params, numerical_window, fixed_spatial_center, plane, center, t,
+                                                             local_spatial_mask, &has_excluded_nodes) != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS)
+          interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
+      } // END ELSE: construct independent sampling mask
+    } // END ELSE: independent geometry request
+    if (interpolation_failure != ACTIVE) {
+      d_status[i] = interpolation_failure;
+      for (int comp = 0; comp < 10; ++comp)
+        d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
+      if (d_rhs_geometry_bundle != NULL)
+        for (int comp = 0; comp < 40; ++comp)
+          d_rhs_geometry_bundle[IDX_RHS_GEOMETRY(comp, i)] = NAN;
+      continue;
+    } // END IF: spatial mask construction failed
     uint64_t available_slice_indices[temporal_num_points];
     REAL available_slice_times[temporal_num_points];
     const double *available_slice_payloads[temporal_num_points];
@@ -156,8 +225,9 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
       if (first_slice_payloads[0] == NULL) {
         interpolation_failure = FAILURE_TEMPORAL_INTERPOLATION;
       } else {
-        const int spatial_status = azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
-            spatial_context, commondata, params, x, y, z, fixed_spatial_center, 1, first_slice_payloads, g4dd_local, geometry_local);
+        const int spatial_status =
+            numerical_interpolation_spatial_dispatch(has_excluded_nodes, spatial_mask, spatial_context, commondata, params, x, y, z,
+                                                     fixed_spatial_center, 1, first_slice_payloads, g4dd_local, geometry_local);
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
           interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
         } else {
@@ -177,8 +247,9 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
       if (final_slice_payloads[0] == NULL) {
         interpolation_failure = FAILURE_TEMPORAL_INTERPOLATION;
       } else {
-        const int spatial_status = azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
-            spatial_context, commondata, params, x, y, z, fixed_spatial_center, 1, final_slice_payloads, g4dd_local, geometry_local);
+        const int spatial_status =
+            numerical_interpolation_spatial_dispatch(has_excluded_nodes, spatial_mask, spatial_context, commondata, params, x, y, z,
+                                                     fixed_spatial_center, 1, final_slice_payloads, g4dd_local, geometry_local);
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
           interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
         } else {
@@ -208,9 +279,9 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
         // Step 3: Interpolate only the available mapped numerical slices in
         // space at the photon position, then validate those spatial outputs
         // before temporal reconstruction can propagate a failure.
-        const int spatial_status = azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
-            spatial_context, commondata, params, x, y, z, fixed_spatial_center, num_available_slices, available_slice_payloads, g4dd_available,
-            geometry_available);
+        const int spatial_status = numerical_interpolation_spatial_dispatch(has_excluded_nodes, spatial_mask, spatial_context, commondata, params, x,
+                                                                            y, z, fixed_spatial_center, num_available_slices,
+                                                                            available_slice_payloads, g4dd_available, geometry_available);
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
           interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
         } else {
@@ -251,9 +322,9 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
             if (first_slice_payloads[0] == NULL) {
               interpolation_failure = FAILURE_TEMPORAL_INTERPOLATION;
             } else {
-              const int first_slice_spatial_status = azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
-                  spatial_context, commondata, params, x, y, z, fixed_spatial_center, 1, first_slice_payloads, g4dd_missing_local,
-                  geometry_missing_local);
+              const int first_slice_spatial_status =
+                  numerical_interpolation_spatial_dispatch(has_excluded_nodes, spatial_mask, spatial_context, commondata, params, x, y, z,
+                                                           fixed_spatial_center, 1, first_slice_payloads, g4dd_missing_local, geometry_missing_local);
               if (first_slice_spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
                 interpolation_failure = FAILURE_SPATIAL_INTERPOLATION;
               } else {

@@ -13,15 +13,17 @@ nrpy.examples.superB_nrpyelliptic_conformally_flat` generates a Charm++/superB
 project under `project/superB_nrpyelliptic_conformally_flat/`.
 
 Both examples solve the NRPyElliptic hyperbolic-relaxation system for
-conformally flat binary-black-hole initial data. This page owns the example
-comparison; [NRPyElliptic Workflow](../infrastructures/bhah/nrpyelliptic-workflow.md)
-owns standalone BHaH infrastructure assembly.
+conformally flat binary-black-hole initial data; see
+[NRPyElliptic Workflow](../infrastructures/bhah/nrpyelliptic-workflow.md)
+for standalone BHaH C-function registration.
 
 Both generators delete and recreate their fixed project directories. Preserve
 prior generated output before rerunning. Build/run commands below are generated
 workflow instructions, not recorded execution evidence.
 
 ## Detail
+
+### Generation Commands And Relaxation Settings
 
 Use these commands side by side:
 
@@ -58,6 +60,8 @@ and defaults `checkpoint_every` to `50.0`. The superB elliptic example sets its
 initial-data checkpoint hook off, then stops by calling `stop_conditions_check`
 inside a Charm++ serial block and finishing through `mainProxy.done()`.
 
+### Coordinate Defaults, Runtime Assembly, And CI Coverage
+
 The coordinate defaults differ. The standalone example currently selects
 `SinhSymTP`, with `Nxx = [128, 128, 16]`, `AMAX = 1.0e6`, `bScale = 5.0`, and
 `SINHWAA = 0.07`. Its source also carries inactive alternatives for
@@ -89,19 +93,13 @@ shape, not latest success.
 
 ## Sources
 
-- [nrpyelliptic_conformally_flat.py](../../nrpy/examples/nrpyelliptic_conformally_flat.py) - `project_name`, `get_log10_residual_tolerance`, `CoordSystem`, `BHaH.main_c.register_CFunction_main_c`
-- [nrpyelliptic_conformally_flat.py](../../nrpy/examples/nrpyelliptic_conformally_flat.py) - `--cuda`, `--floating_point_precision`, `enable_checkpointing`, `cmdline_inputs=["convergence_factor"]`
-- [superB_nrpyelliptic_conformally_flat.py](../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `project_name`, `get_log10_residual_tolerance`, `CoordSystem`, `Nchare0`
-- [superB_nrpyelliptic_conformally_flat.py](../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `nrpyelliptic_project=True`, `register_CFunction_superB_pup_routines`, `output_CFunctions_function_prototypes_and_construct_Makefile`
+- [nrpyelliptic_conformally_flat.py](../../nrpy/examples/nrpyelliptic_conformally_flat.py) - `project_name`, `get_log10_residual_tolerance`, `CoordSystem`, `BHaH.main_c.register_CFunction_main_c`; `--cuda`, `--floating_point_precision`, `enable_checkpointing`, `cmdline_inputs=["convergence_factor"]`
+- [superB_nrpyelliptic_conformally_flat.py](../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `project_name`, `get_log10_residual_tolerance`, `CoordSystem`, `Nchare0`; `nrpyelliptic_project=True`, `register_CFunction_superB_pup_routines`, `output_CFunctions_function_prototypes_and_construct_Makefile`
 - [README.md](../../README.md) - `Good Next Examples`, `Standalone BHaH Generators`, `superB / Charm++ Generators`
 - [.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`, `codegen-mac`, `charmpp-validation`
 
 ## See Also
 
-- [Examples](index.md)
-- [Black Hole Evolution](black-hole-evolution.md)
-- [superB Lifecycle And Project Assembly](../infrastructures/superb/lifecycle-and-project-assembly.md)
-- [superB Grids, Boundaries, MoL, And Initial Data](../infrastructures/superb/grids-boundaries-mol-and-initial-data.md)
-- [Generated Output Boundaries](../architecture/generated-output-boundaries.md)
-- Depends on: [NRPyElliptic Workflow](../infrastructures/bhah/nrpyelliptic-workflow.md) - owns standalone BHaH infrastructure assembly.
-- Depends on: [Generated Project CI](../validation/generated-project-ci.md) - compiled CI validation summary.
+- Depends on: [superB Project Assembly, .ci, And Makefile Emission](../infrastructures/superb/lifecycle-and-project-assembly.md)
+- Depends on: [superB Grids, Boundaries, MoL, And Initial Data](../infrastructures/superb/grids-boundaries-mol-and-initial-data.md)
+- Depends on: [NRPyElliptic Workflow](../infrastructures/bhah/nrpyelliptic-workflow.md) - standalone BHaH infrastructure assembly.

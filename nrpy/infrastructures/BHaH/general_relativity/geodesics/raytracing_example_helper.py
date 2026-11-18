@@ -481,7 +481,9 @@ def shell_generator(options: RaytracingOptions, project_dir: Union[str, Path]) -
         mode: project_path.parent / "raytracing_data" / f"{stem}_{mode}.bin"
         for mode in modes
     }
+    horizon_filename = f"{stem}_apparent_horizons.bin"
     metadata = {
+        "apparent_horizon_filename": horizon_filename,
         "generator_script": generator_script,
         "project_name": project_name,
         "initial_data": dict(initial_data),
@@ -506,6 +508,12 @@ def shell_generator(options: RaytracingOptions, project_dir: Union[str, Path]) -
     copy_files(
         package="nrpy.infrastructures.BHaH.diagnostics",
         filenames_list=["combine_raytracing_time_slices.py"],
+        project_dir=str(project_path),
+        subdirectory="",
+    )
+    copy_files(
+        package="nrpy.infrastructures.BHaH.general_relativity.geodesics",
+        filenames_list=["combine_apparent_horizon_time_slices.py"],
         project_dir=str(project_path),
         subdirectory="",
     )
@@ -534,6 +542,10 @@ def shell_generator(options: RaytracingOptions, project_dir: Union[str, Path]) -
                 f"echo {shlex.quote(os.path.join('..', 'raytracing_data', output_path.name))}",
             )
         )
+    shell_lines.append(
+        "python3 combine_apparent_horizon_time_slices.py --project-dir . "
+        f"--example-name {shlex.quote(example_name)} --force"
+    )
     shell_path = project_path / "run_raytracing_data_pipeline.sh"
     shell_path.write_text("\n".join(shell_lines) + "\n", encoding="utf-8")
     shell_path.chmod(0o755)
@@ -544,5 +556,8 @@ def shell_generator(options: RaytracingOptions, project_dir: Union[str, Path]) -
     output_lines.extend(
         f"    Combined {mode} data: {path}"
         for mode, path in run_files.combined_paths.items()
+    )
+    output_lines.append(
+        f"    Combined apparent horizons: {project_path.parent / 'raytracing_data' / horizon_filename}"
     )
     return "\n".join(output_lines)

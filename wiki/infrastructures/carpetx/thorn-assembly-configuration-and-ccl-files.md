@@ -15,6 +15,8 @@ Loop terminology.
 
 ## Detail
 
+### Configuration And Interface CCL Writers
+
 Cactus documentation defines CCL files as the text files that describe thorn
 configuration, and its configuration syntax documentation lists
 `interface.ccl`, `param.ccl`, `schedule.ccl`, and optional
@@ -49,6 +51,8 @@ parity values `0`, `4`, `7`, and `9` to `+1 +1 +1`; vector parity values `1`,
 `2`, and `3` to sign flips in the x, y, and z directions; and off-diagonal
 tensor parity values `5`, `6`, and `8` to paired sign flips for xy, xz, and yz
 components.
+
+### Parameter, Schedule, And C++ Source Emission
 
 `construct_param_ccl()` writes `param.ccl`. It scans registered `CFunction`
 objects, keeps only functions whose `ET_thorn_name` matches the current thorn,
@@ -97,9 +101,6 @@ does not establish CarpetX build, runtime, GPU, or restart behavior.
 
 ## See Also
 
-- [CarpetX](index.md)
-- [Code Parameters, Includes, And Loops](code-parameters-includes-and-loops.md)
-- [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)
-- [C Function Registry](../../core/c-function-registry.md)
-- [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
-- [ETLegacy Thorn Assembly And CCL Files](../etlegacy/thorn-assembly-and-ccl-files.md)
+- See also: [Code Parameters, Includes, And Loops](code-parameters-includes-and-loops.md)
+- Depends on: [C Function Registry](../../core/c-function-registry.md)
+- Depends on: [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)

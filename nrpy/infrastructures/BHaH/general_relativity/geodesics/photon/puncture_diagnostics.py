@@ -1,15 +1,16 @@
 """
-Generate final-photon association and apparent-horizon containment diagnostics.
+Generate apparent-horizon containment checks and photon diagnostics.
 
 Saved BHaHAHA Cartesian rings define a radial surface about the solver's grid
 origin, which can differ from the diagnostic centroid. Generated C helpers
 recover that origin, interpolate the radial surface at a photon direction,
-and write puncture IDs, containment bytes, and radial gaps at evolution-measure stops.
+and report the horizon ID, containment status, and radial gap.
 
 Author: OpenAI
 """
 
 import nrpy.params as par
+from nrpy.infrastructures.BHaH import BHaH_defines_h as Bdefines_h
 
 
 def puncture_diagnostics(include_batch_writer: bool = True) -> str:
@@ -35,17 +36,6 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
     helpers = r"""
     #include "interpolation/interpolation_lagrange_uniform.h"
 
-    enum {
-        PUNCTURE_UNCLASSIFIED = 0, PUNCTURE_1 = 1, PUNCTURE_2 = 2, MERGED_PUNCTURE = 3,
-        HORIZON_OUTSIDE = 0, HORIZON_INSIDE = 1, HORIZON_NOT_CHECKED = 2
-    }; // END ENUM: output byte values
-
-    typedef struct {
-        int ntheta, nphi;
-        double origin[3], roundoff, pole_radius[2];
-        double *radius;
-    } puncture_surface_t; // END STRUCT: reconstructed radial horizon
-
     typedef struct {
         long iteration;
         double time, x, y, z;
@@ -63,11 +53,6 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
         double common_horizon_time;
         size_t surfaces_loaded;
     } puncture_diagnostics_t; // END STRUCT: horizon diagnostic data
-
-    typedef struct {
-        uint8_t puncture_id, horizon_status;
-        double horizon_time, radial_gap;
-    } puncture_result_t; // END STRUCT: final photon association
 
     static void puncture_error(const char *path, const char *reason) {
         fprintf(stderr, "ERROR: puncture diagnostics '%s': %s.\n", path, reason);
@@ -327,8 +312,9 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
         for (int a = 0; a < 3; ++a) {
             surface->origin[a] = system[a][3];
         } // END LOOP: save radial grid origin
-        surface->radius = malloc(rings * (row_size - 1) * sizeof(double));
-        if (surface->radius == NULL) {
+        double *radial_samples = malloc(rings * (row_size - 1) * sizeof(double));
+        surface->radius = radial_samples;
+        if (radial_samples == NULL) {
             puncture_error(path, "cannot allocate radial grid");
         } // END IF: radial allocation failed
         for (int i = 0; i < surface->ntheta; ++i) {
@@ -350,7 +336,7 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
                 if (!isfinite(radius) || radius <= 0.0 || residual > surface->roundoff) {
                     puncture_error(path, "points do not match a positive radial surface");
                 } // END IF: invalid radial representation
-                surface->radius[(size_t)i*surface->nphi+j] = radius;
+                radial_samples[(size_t)i*surface->nphi+j] = radius;
                 if (i == 0) {
                     surface->pole_radius[0] += radius / surface->nphi;
                 } // END IF: accumulate north pole estimate
@@ -364,26 +350,6 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
         ++data->surfaces_loaded;
         return surface;
     } // END FUNCTION: reconstruct saved radial horizon
-
-    /**
-     * Read one radial sample with periodic azimuth and polar reflection.
-     *
-     * @param[in] surface Loaded cell-centered radial grid.
-     * @param i Polar index, including reflected neighbors.
-     * @param j Azimuthal index, including periodic neighbors.
-     * @return Radial sample after applying spherical angular boundaries.
-     */
-    static double puncture_radial_sample(const puncture_surface_t *surface, int i, int j) {
-        if (i < 0) {
-            i = -i - 1;
-            j += surface->nphi / 2;
-        } else if (i >= surface->ntheta) {
-            i = 2*surface->ntheta - i - 1;
-            j += surface->nphi / 2;
-        } // END ELSE IF: reflect south polar neighbor
-        j = (j % surface->nphi + surface->nphi) % surface->nphi;
-        return surface->radius[(size_t)i*surface->nphi+j];
-    } // END FUNCTION: apply spherical angular boundaries
 
     /**
      * Compare a Cartesian endpoint with a nearest-time apparent horizon.
@@ -411,37 +377,7 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
         puncture_position_t *position = puncture_nearest_position(track, time);
         puncture_surface_t *surface = puncture_load_surface(data, horizon, position);
         result.horizon_time = position->time;
-        const double dx = point[0]-surface->origin[0], dy = point[1]-surface->origin[1], dz = point[2]-surface->origin[2];
-        const double rho = hypot(dx, dy), r = hypot(rho, dz);
-        if (r <= surface->roundoff) {
-            result.horizon_status = HORIZON_INSIDE;
-            return result;
-        } // END IF: photon at radial origin
-        double radius;
-        if (rho <= surface->roundoff) {
-            radius = surface->pole_radius[dz >= 0.0 ? 0 : 1];
-        } else {
-            const double theta_index = acos(fmax(-1.0, fmin(1.0, dz/r))) * surface->ntheta/M_PI - 0.5;
-            const double phi_index = (atan2(dy, dx)+M_PI) * surface->nphi/(2.0*M_PI) - 0.5;
-            const int i = (int)floor(theta_index + 0.5) - 1;
-            const int j = (int)floor(phi_index + 0.5) - 1;
-            const REAL nodes[3] = {0.0, 1.0, 2.0};
-            REAL inv_denom[3], theta_diffs[3], phi_diffs[3];
-            REAL theta_weights[3], phi_weights[3];
-            compute_inv_denom(3, inv_denom);
-            compute_diffs_xi(3, theta_index-i, nodes, theta_diffs);
-            compute_diffs_xi(3, phi_index-j, nodes, phi_diffs);
-            compute_lagrange_basis_coeffs_xi(3, inv_denom, theta_diffs, theta_weights);
-            compute_lagrange_basis_coeffs_xi(3, inv_denom, phi_diffs, phi_weights);
-            radius = 0.0;
-            for (int a = 0; a < 3; ++a) {
-                for (int b = 0; b < 3; ++b) {
-                    radius += theta_weights[a]*phi_weights[b]*puncture_radial_sample(surface,i+a,j+b);
-                } // END LOOP: sum azimuthal interpolation weights
-            } // END LOOP: sum polar interpolation weights
-        } // END ELSE: interpolate nonpolar surface direction
-        result.radial_gap = r - radius;
-        result.horizon_status = r <= radius + surface->roundoff ? HORIZON_INSIDE : HORIZON_OUTSIDE;
+        puncture_evaluate_surface(surface, point, &result);
         return result;
     } // END FUNCTION: check nearest snapshot containment
 
@@ -501,7 +437,7 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
             for (size_t i = 0; i < data->tracks[h].count; ++i) {
                 puncture_surface_t *surface = data->tracks[h].positions[i].surface;
                 if (surface != NULL) {
-                    free(surface->radius);
+                    free((void *)surface->radius);
                     free(surface);
                 } // END IF: release loaded radial surface
             } // END LOOP: release cached horizon snapshots
@@ -514,12 +450,13 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
     /**
      * Write ID/status bytes and a radial-gap double per photon.
      *
-     * Only final evolution-measure records enter the reported percentages.
-     * Inside fractions exclude unavailable checks. Other termination types
-     * receive unclassified/not-checked bytes and a NaN gap in main record order.
+     * Binary horizon checks report the latest accepted state for every ray.
+     * Directory diagnostics classify only final evolution-measure stops.
+     * Inside fractions exclude unavailable horizon checks.
      * Records contain no structure padding between the two bytes and double.
      *
      * @param[in,out] data Diagnostic tables and lazily loaded radial surfaces.
+     * @param[in] photon_horizons Latest accepted binary horizon results, when enabled.
      * @param[in] commondata Observer time and runtime parameters.
      * @param[in] photons Final photon states in structure-of-arrays order.
      * @param[in] results Final saved termination records after terminal-plane selection.
@@ -528,10 +465,11 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
      * @param fast_light Whether horizon lookup uses the fixed observer time.
      */
     static void write_puncture_diagnostics(puncture_diagnostics_t *data,
+        const puncture_result_t *photon_horizons,
         const commondata_struct *commondata, const PhotonStateSoA *photons,
         const blueprint_data_t *results, const long num_rays,
         const char *filename, const bool fast_light) {
-        if (data->directory[0] == '\0') {
+        if (photon_horizons == NULL && data->directory[0] == '\0') {
             return;
         } // END IF: diagnostic output disabled
         FILE *file = fopen(filename, "wb");
@@ -539,19 +477,23 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
             puncture_error(filename, "cannot open combined puncture blueprint");
         } // END IF: output open failed
         long counts[4][3] = {{0}};
-        long evolution_stops = 0;
+        long reported_rays = 0;
         uint8_t records[4096][2 + sizeof(double)];
         for (long start = 0; start < num_rays; start += 4096) {
             const size_t count = (size_t)((num_rays-start < 4096) ? num_rays-start : 4096);
             for (size_t offset = 0; offset < count; ++offset) {
                 const long ray = start + (long)offset;
                 puncture_result_t result = {PUNCTURE_UNCLASSIFIED, HORIZON_NOT_CHECKED, NAN, NAN};
-                if (results[ray].termination_type == STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED) {
+                if (photon_horizons != NULL) {
+                    result = photon_horizons[ray];
+                    ++counts[result.puncture_id][result.horizon_status];
+                    ++reported_rays;
+                } else if (results[ray].termination_type == STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED) {
                     const double point[3] = {photons->f[num_rays+ray], photons->f[2*num_rays+ray], photons->f[3*num_rays+ray]};
                     const double time = fast_light ? commondata->t_start : results[ray].t_f;
                     result = puncture_classify_endpoint(data, time, point);
                     ++counts[result.puncture_id][result.horizon_status];
-                    ++evolution_stops;
+                    ++reported_rays;
                 } // END IF: evolution measure stop selected
                 records[offset][0] = result.puncture_id;
                 records[offset][1] = result.horizon_status;
@@ -565,11 +507,11 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
             puncture_error(filename, "cannot close combined puncture blueprint");
         } // END IF: output close failed
         printf("\nPUNCTURE / APPARENT-HORIZON DIAGNOSTICS (this tile)\n");
-        printf("Evolution-measure stops: %ld\n", evolution_stops);
-        if (evolution_stops > 0) {
+        printf("%s: %ld\n", photon_horizons != NULL ? "Photon endpoints" : "Evolution-measure stops", reported_rays);
+        if (reported_rays > 0) {
             const char *names[4] = {"unclassified", "puncture_1", "puncture_2", "merged_puncture"};
             long total_inside = 0, total_outside = 0, total_unknown = 0;
-            printf("%-15s %10s %10s %26s %12s\n", "Association", "Photons", "% of stops", "Inside / checked (%)", "Not checked");
+            printf("%-15s %10s %10s %26s %12s\n", "Association", "Photons", "% of reported", "Inside / checked (%)", "Not checked");
             for (int id = 0; id < 4; ++id) {
                 const long checked = counts[id][HORIZON_INSIDE] + counts[id][HORIZON_OUTSIDE];
                 const long assigned = checked + counts[id][HORIZON_NOT_CHECKED];
@@ -581,17 +523,278 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
                     snprintf(fraction, sizeof(fraction), "n/a (0 checked)");
                 } // END ELSE: no known containment results
                 printf("%-15s %10ld %9.2f%% %26s %12ld\n", names[id], assigned,
-                       100.0*assigned/evolution_stops, fraction, counts[id][HORIZON_NOT_CHECKED]);
+                       100.0*assigned/reported_rays, fraction, counts[id][HORIZON_NOT_CHECKED]);
                 total_inside += counts[id][HORIZON_INSIDE];
                 total_outside += counts[id][HORIZON_OUTSIDE];
                 total_unknown += counts[id][HORIZON_NOT_CHECKED];
             } // END LOOP: report four association categories
             printf("Totals: inside=%ld outside=%ld not_checked=%ld; inside percentages exclude not_checked.\n",
                    total_inside, total_outside, total_unknown);
-        } // END IF: report evolution stop fractions
+        } // END IF: report horizon classifications
         printf("Wrote %ld puncture records (%zu bytes each) to %s; surfaces loaded: %zu.\n",
                num_rays, sizeof(records[0]), filename, data->surfaces_loaded);
     } // END FUNCTION: write combined records and summary
 
     """
     return helpers
+
+
+def register_apparent_horizons() -> None:
+    """Register the numerical horizon reader and shared containment calculation."""
+    par.register_CodeParameter(
+        "char[4096]",
+        __name__,
+        "apparent_horizon_bin_path",
+        "",
+        commondata=True,
+        add_to_parfile=True,
+        description="Combined apparent horizon file. An empty path disables horizon stopping.",
+    )
+    # This header section follows the numerical time-window manager definitions.
+    Bdefines_h.register_BHaH_defines(
+        "time_window_manager_numerical_horizons",
+        r"""
+    #include "interpolation/interpolation_lagrange_uniform.h"
+    #include <sys/stat.h>
+
+    enum {
+        PUNCTURE_UNCLASSIFIED = 0, PUNCTURE_1 = 1, PUNCTURE_2 = 2, MERGED_PUNCTURE = 3,
+        HORIZON_OUTSIDE = 0, HORIZON_INSIDE = 1, HORIZON_NOT_CHECKED = 2
+    }; // END ENUM: output byte values
+
+    typedef struct {
+        int ntheta, nphi;
+        double origin[3], roundoff, pole_radius[2];
+        const double *radius;
+    } puncture_surface_t; // END STRUCT: reconstructed radial horizon
+
+    typedef struct {
+        uint8_t puncture_id, horizon_status;
+        double horizon_time, radial_gap;
+    } puncture_result_t; // END STRUCT: final photon association
+
+    /**
+     * Read one radial sample with periodic azimuth and polar reflection.
+     *
+     * @param[in] surface Loaded cell-centered radial grid.
+     * @param i Polar index, including reflected neighbors.
+     * @param j Azimuthal index, including periodic neighbors.
+     * @return Radial sample after applying spherical angular boundaries.
+     */
+    static inline double puncture_radial_sample(const puncture_surface_t *surface, int i, int j) {
+        if (i < 0) {
+            i = -i - 1;
+            j += surface->nphi / 2;
+        } // END IF: reflect north polar neighbor
+        else if (i >= surface->ntheta) {
+            i = 2*surface->ntheta - i - 1;
+            j += surface->nphi / 2;
+        } // END ELSE IF: reflect south polar neighbor
+        j = (j % surface->nphi + surface->nphi) % surface->nphi;
+        return surface->radius[(size_t)i*surface->nphi+j];
+    } // END FUNCTION: apply spherical angular boundaries
+
+    /**
+     * Compare a Cartesian photon position with a saved radial horizon.
+     *
+     * @param[in] surface Saved horizon radii and surface origin.
+     * @param[in] point Cartesian photon position.
+     * @param[in,out] result Horizon result with containment status and radial gap filled in.
+     *
+     * @note At the radial origin, the point is inside and the radial gap is undefined.
+     */
+    static inline void puncture_evaluate_surface(const puncture_surface_t *surface,
+                                                 const double point[3], puncture_result_t *result) {
+        const double dx = point[0]-surface->origin[0], dy = point[1]-surface->origin[1], dz = point[2]-surface->origin[2];
+        const double rho = hypot(dx, dy), r = hypot(rho, dz);
+        if (r <= surface->roundoff) {
+            result->horizon_status = HORIZON_INSIDE;
+            return;
+        } // END IF: photon at radial origin
+        double radius;
+        if (rho <= surface->roundoff) {
+            radius = surface->pole_radius[dz >= 0.0 ? 0 : 1];
+        } // END IF: use polar radius
+        else {
+            const double theta_index = acos(fmax(-1.0, fmin(1.0, dz/r))) * surface->ntheta/M_PI - 0.5;
+            const double phi_index = (atan2(dy, dx)+M_PI) * surface->nphi/(2.0*M_PI) - 0.5;
+            const int i = (int)floor(theta_index + 0.5) - 1;
+            const int j = (int)floor(phi_index + 0.5) - 1;
+            const REAL nodes[3] = {0.0, 1.0, 2.0};
+            REAL inv_denom[3], theta_diffs[3], phi_diffs[3];
+            REAL theta_weights[3], phi_weights[3];
+            compute_inv_denom(3, inv_denom);
+            compute_diffs_xi(3, theta_index-i, nodes, theta_diffs);
+            compute_diffs_xi(3, phi_index-j, nodes, phi_diffs);
+            compute_lagrange_basis_coeffs_xi(3, inv_denom, theta_diffs, theta_weights);
+            compute_lagrange_basis_coeffs_xi(3, inv_denom, phi_diffs, phi_weights);
+            radius = 0.0;
+            for (int a = 0; a < 3; ++a) {
+                for (int b = 0; b < 3; ++b) {
+                    radius += theta_weights[a]*phi_weights[b]*puncture_radial_sample(surface,i+a,j+b);
+                } // END LOOP: sum azimuthal interpolation weights
+            } // END LOOP: sum polar interpolation weights
+        } // END ELSE: interpolate nonpolar surface direction
+        result->radial_gap = r - radius;
+        result->horizon_status = r <= radius + surface->roundoff ? HORIZON_INSIDE : HORIZON_OUTSIDE;
+        return;
+    } // END FUNCTION: evaluate radial surface
+
+    // Matches the explicit widths in combine_apparent_horizon_time_slices.py.
+    enum { AH_HEADER_BYTES = 32, AH_SLICE_BYTES = 40, AH_SURFACE_BYTES = 88 };
+    typedef struct {
+        const unsigned char *bytes;
+        size_t size;
+        double common_time;
+        double first_time[3], last_time[3];
+    } apparent_horizon_file_t;
+
+    static inline void apparent_horizons_close(apparent_horizon_file_t *horizons) {
+        if (horizons->bytes != NULL) {
+            munmap((void *)horizons->bytes, horizons->size);
+            horizons->bytes = NULL;
+        } // END IF: horizon file mapped
+    } // END FUNCTION: release horizon mapping
+
+    /**
+     * Map a horizon file and validate its correspondence with the spacetime slices.
+     *
+     * @param[out] horizons Read-only mapping and time coverage for each horizon.
+     * @param[in] window Numerical spacetime slice table and file descriptor.
+     * @param[in] path Apparent-horizon filename, or an empty string to disable lookup.
+     * @return 0 for a valid mapping or an empty path, 1 if opening or validation fails.
+     */
+    static inline int apparent_horizons_open(apparent_horizon_file_t *horizons,
+        const NumericalTimeWindowManager *window, const char *path) {
+        if (path[0] == '\0') return 0;
+        const int fd = open(path, O_RDONLY);
+        if (fd < 0) return 1;
+        struct stat info;
+        if (fstat(fd, &info) != 0 || info.st_size < AH_HEADER_BYTES ||
+            (uintmax_t)info.st_size > SIZE_MAX) {
+            close(fd);
+            return 1;
+        } // END IF: no readable horizon header
+        const size_t size = (size_t)info.st_size;
+        const unsigned char *bytes = (const unsigned char *)mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+        close(fd);
+        if (bytes == MAP_FAILED) return 1;
+        horizons->bytes = bytes;
+        horizons->size = size;
+        const uint64_t count = time_window_manager_numerical_load_u64(bytes + 8);
+        const uint64_t metadata = time_window_manager_numerical_load_u64(bytes + 24);
+        if (memcmp(bytes, "NRPYAH01", 8) != 0 || count != window->num_time_slices ||
+            metadata >= size || metadata < AH_HEADER_BYTES ||
+            count > (metadata - AH_HEADER_BYTES) / AH_SLICE_BYTES) {
+            goto invalid;
+        } // END IF: invalid horizon slice table
+        horizons->common_time = time_window_manager_numerical_load_f64(bytes + 16);
+        bool common_time_recorded = horizons->common_time == INFINITY;
+        for (int h = 0; h < 3; ++h) {
+            horizons->first_time[h] = INFINITY;
+            horizons->last_time[h] = -INFINITY;
+        } // END LOOP: initialize recorded coverage
+        uint64_t previous_end = AH_HEADER_BYTES + count * AH_SLICE_BYTES;
+        for (uint64_t index = 0; index < count; ++index) {
+            const unsigned char *entry = bytes + AH_HEADER_BYTES + index * AH_SLICE_BYTES;
+            unsigned char spacetime_index[8];
+            const double time = time_window_manager_numerical_load_f64(entry + 8);
+            if (time != window->slice_times[index] ||
+                time_window_manager_numerical_read_exact_at(window->fd, spacetime_index,
+                    sizeof(spacetime_index), window->slice_table_offset + index * window->slice_table_entry_bytes) != 0 ||
+                memcmp(entry, spacetime_index, sizeof(spacetime_index)) != 0) {
+                goto invalid;
+            } // END IF: horizon and spacetime output differ
+            if (time == horizons->common_time) common_time_recorded = true;
+            for (int h = 0; h < 3; ++h) {
+                const uint64_t offset = time_window_manager_numerical_load_u64(entry + 16 + 8*h);
+                if (!offset) continue;
+                if (offset < previous_end || offset % 8 || metadata - previous_end < AH_SURFACE_BYTES ||
+                    offset > metadata - AH_SURFACE_BYTES) {
+                    goto invalid;
+                } // END IF: shape descriptor exceeds file
+                uint32_t dims[2];
+                memcpy(dims, bytes + offset + 8, sizeof(dims));
+                if (dims[0] < 2 || dims[0] > INT_MAX/2 || dims[1] < 2 ||
+                    dims[1] > INT_MAX/2 || dims[1] % 2) goto invalid;
+                const uint64_t samples = (uint64_t)dims[0] * dims[1];
+                if (samples > (metadata - offset - AH_SURFACE_BYTES) / sizeof(double))
+                    goto invalid;
+                previous_end = offset + AH_SURFACE_BYTES + samples * sizeof(double);
+                if (horizons->first_time[h] == INFINITY) horizons->first_time[h] = time;
+                horizons->last_time[h] = time;
+            } // END LOOP: validate horizon array extents
+        } // END LOOP: compare synchronized slices
+        if (!common_time_recorded) goto invalid;
+        return 0;
+
+    invalid:
+        apparent_horizons_close(horizons);
+        return 1;
+    } // END FUNCTION: apparent_horizons_open
+
+    /**
+     * Classify a photon against the relevant saved apparent horizons.
+     *
+     * @param[in] horizons Mapped horizon file and time coverage.
+     * @param[in] window Retained spacetime slice times.
+     * @param time Photon coordinate time or fixed geometry sampling time.
+     * @param[in] point Cartesian photon position.
+     * @return Horizon ID, containment status, slice time, and signed radial gap.
+     */
+    static inline puncture_result_t apparent_horizons_classify(
+        const apparent_horizon_file_t *horizons, const NumericalTimeWindowManager *window,
+        double time, const double point[3]) {
+        puncture_result_t result = {PUNCTURE_UNCLASSIFIED, HORIZON_NOT_CHECKED, NAN, NAN};
+        time = fmax(time, 0.0);
+        const uint64_t index = time_window_manager_numerical_nearest_selected_slice_for_time(window, time);
+        const unsigned char *entry = horizons->bytes + AH_HEADER_BYTES + index * AH_SLICE_BYTES;
+        const bool common = time >= horizons->common_time;
+        const int first = common ? 2 : 0;
+        const int last = common ? 2 : 1;
+        bool missing = false;
+        double nearest_distance = INFINITY;
+        double containing_distance = INFINITY;
+        puncture_result_t containing = result;
+        for (int h = first; h <= last; ++h) {
+            const uint64_t offset = time_window_manager_numerical_load_u64(entry + 16 + 8*h);
+            if (!offset || time < horizons->first_time[h] || time > horizons->last_time[h]) {
+                missing = true;
+                continue;
+            } // END IF: required horizon shape unavailable
+            const unsigned char *record = horizons->bytes + offset;
+            uint32_t dims[2];
+            double values[9];
+            memcpy(dims, record + 8, sizeof(dims));
+            memcpy(values, record + 16, sizeof(values));
+            const puncture_surface_t surface = {
+                (int)dims[0], (int)dims[1], {values[3], values[4], values[5]}, values[6],
+                {values[7], values[8]}, (const double *)(record + AH_SURFACE_BYTES)
+            };
+            const double distance = hypot(hypot(point[0]-values[0], point[1]-values[1]), point[2]-values[2]);
+            puncture_result_t check = {(uint8_t)(h + 1), HORIZON_NOT_CHECKED, window->slice_times[index], NAN};
+            puncture_evaluate_surface(&surface, point, &check);
+            if (check.horizon_status == HORIZON_INSIDE) {
+                if (distance < containing_distance) {
+                    containing_distance = distance;
+                    containing = check;
+                } // END IF: prefer the nearer containing horizon
+            } // END IF: photon inside horizon
+            else if (distance < nearest_distance) {
+                nearest_distance = distance;
+                result = check;
+            } // END ELSE IF: nearer exterior horizon
+            else if (distance == nearest_distance) {
+                result = (puncture_result_t){PUNCTURE_UNCLASSIFIED, HORIZON_OUTSIDE, NAN, NAN};
+            } // END ELSE IF: both centroids equally distant
+        } // END LOOP: check the required horizons
+        if (containing.horizon_status == HORIZON_INSIDE) return containing;
+        if (missing) {
+            result.horizon_status = HORIZON_NOT_CHECKED;
+            result.horizon_time = NAN;
+            result.radial_gap = NAN;
+        } // END IF: missing required horizon shape
+        return result;
+    } // END FUNCTION: classify a photon endpoint
+""",
+    )

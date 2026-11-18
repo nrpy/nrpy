@@ -15,9 +15,9 @@
  * @param[out] point_index Serialized zero-based point-record index.
  * @return Interpolation status code.
  */
-static int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_indices(const params_struct *restrict params, const int i0_storage,
-                                                                                     const int i1_storage, const int i2_storage,
-                                                                                     uint64_t *restrict point_index) {
+int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_indices(const params_struct *restrict params, const int i0_storage,
+                                                                              const int i1_storage, const int i2_storage,
+                                                                              uint64_t *restrict point_index) {
   const int payload_i0_count = params->Nxx_plus_2NGHOSTS0;
   const int payload_i1_count = params->Nxx_plus_2NGHOSTS1;
   const int payload_i2_count = params->Nxx_plus_2NGHOSTS2;
@@ -284,9 +284,10 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
   const int phi_plane_storage_index = params->numerical_spacetime_nghosts + phi_plane;
   const REAL phi_ref = (REAL)context->stored_phi_samples[phi_plane];
 
-  REAL inv_denom[interp_order];
   REAL src_interp_0_stencil[interp_order];
   REAL src_interp_1_stencil[interp_order];
+
+  REAL inv_denom[interp_order];
   REAL diffs_interp_0[interp_order];
   REAL diffs_interp_1[interp_order];
   REAL coeff_interp_0[interp_order];
@@ -296,6 +297,7 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
   uint64_t mapped_point_index[interp_order][interp_order];
   int interp_0_storage_stencil[interp_order];
   int interp_1_storage_stencil[interp_order];
+
   const REAL normalization_2d = pow((REAL)(params->dxx0 * params->dxx2), -(interp_order - 1));
 
   for (int u = 0; u < interp_order; u++) {

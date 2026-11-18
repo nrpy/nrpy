@@ -212,7 +212,7 @@ class GeodesicEquations:
         Gamma4UDD = ixp.declarerank3("conn_Gamma4UDD", dimension=4, symmetry="sym12")
         vel_rhs = ixp.zerorank1(dimension=4)
         for alpha in range(4):
-            sum_term = sp.sympify(0)
+            sum_term: sp.Expr = sp.sympify(0)
             # Exploit symmetry by summing over the upper triangle of (mu, nu)
             for mu in range(4):
                 for nu in range(mu, 4):
@@ -340,7 +340,7 @@ class GeodesicEquations:
         Gamma4UDD = ixp.declarerank3("conn_Gamma4UDD", dimension=4, symmetry="sym12")
         mom_rhs = ixp.zerorank1(dimension=4)
         for alpha in range(4):
-            sum_term = sp.sympify(0)
+            sum_term: sp.Expr = sp.sympify(0)
             # Exploit symmetry by summing over the upper triangle of (mu, nu)
             for mu in range(4):
                 for nu in range(mu, 4):
@@ -995,7 +995,7 @@ class GeodesicEquations:
         # Generic metric g_mu_nu
         g4DD = ixp.declarerank2("metric_g4DD", symmetry="sym01", dimension=4)
 
-        constraint = sp.sympify(0)
+        constraint: sp.Expr = sp.sympify(0)
 
         # Loop over indices, exploiting g_{mu,nu} = g_{nu,mu} symmetry
         for mu in range(4):
@@ -1311,7 +1311,7 @@ class GeodesicEquations:
         target_g4DD = ixp.zerorank2(dimension=4)
         for mu in range(4):
             for nu in range(mu, 4):
-                term = sp.sympify(0)
+                term: sp.Expr = sp.sympify(0)
 
                 # Step 2: Contract the source-basis metric with one inverse
                 #         Jacobian factor for each covariant index:
@@ -1347,7 +1347,7 @@ class GeodesicEquations:
         for alpha in range(4):
             for mu in range(4):
                 for nu in range(mu, 4):
-                    term = sp.sympify(0)
+                    term: sp.Expr = sp.sympify(0)
                     for beta in range(4):
                         term += (
                             sp.Rational(1, 2)
@@ -1473,7 +1473,7 @@ class GeodesicEquations:
         for alpha in range(4):
             for mu in range(4):
                 for nu in range(mu, 4):
-                    term = sp.sympify(0)
+                    term: sp.Expr = sp.sympify(0)
                     for grid_a in range(4):
                         for grid_b in range(4):
                             for grid_c in range(4):
@@ -1592,7 +1592,134 @@ if __name__ == "__main__":
     print("Validation successful.")
     print("-" * 40)
 
-    # Step 2: Validate the BSSN-specialized transformed-four-metric recipe
+    # Step 2: Check the metric-based Christoffels on cylindrical Minkowski data.
+    # The only nonzero components are Gamma^rho_phi_phi = -rho and
+    # Gamma^phi_rho_phi = Gamma^phi_phi_rho = 1/rho.
+    print("Checking the metric-based cylindrical Minkowski Christoffels...")
+    sample_rho = sp.Rational(5, 4)
+    cylindrical_metric = ixp.zerorank2(dimension=4)
+    cylindrical_metric[0][0] = sp.sympify(-1)
+    cylindrical_metric[1][1] = sp.sympify(1)
+    cylindrical_metric[2][2] = sample_rho**2
+    cylindrical_metric[3][3] = sp.sympify(1)
+    cylindrical_derivatives = ixp.zerorank3(dimension=4)
+    cylindrical_derivatives[2][2][1] = 2 * sample_rho
+    metric_symbols = ixp.declarerank2("g4DD_sym", dimension=4)
+    derivative_symbols = ixp.declarerank3("g4DD_dD_sym", dimension=4)
+    metric_values: Dict[sp.Basic, sp.Basic] = {}
+    for metric_mu in range(4):
+        for metric_nu in range(4):
+            metric_values[metric_symbols[metric_mu][metric_nu]] = cylindrical_metric[
+                metric_mu
+            ][metric_nu]
+            for direction in range(4):
+                metric_values[derivative_symbols[metric_mu][metric_nu][direction]] = (
+                    cylindrical_derivatives[metric_mu][metric_nu][direction]
+                )
+    expected_gamma = ixp.zerorank3(dimension=4)
+    expected_gamma[1][2][2] = -sample_rho
+    expected_gamma[2][1][2] = expected_gamma[2][2][1] = 1 / sample_rho
+    metric_recipe = GeodesicEquations.symbolic_numerical_christoffel_recipe()
+    for check_alpha in range(4):
+        for check_mu in range(4):
+            for check_nu in range(check_mu, 4):
+                gamma_diff = (
+                    cast(
+                        sp.Expr,
+                        metric_recipe[check_alpha][check_mu][check_nu].xreplace(
+                            metric_values
+                        ),
+                    )
+                    - expected_gamma[check_alpha][check_mu][check_nu]
+                )
+                if not ve.check_zero(
+                    gamma_diff, fixed_mpfs_for_free_symbols=True, verbose=False
+                ):
+                    raise ValueError(
+                        "Cylindrical Minkowski metric-based Christoffel check "
+                        f"failed for Gamma[{check_alpha}][{check_mu}][{check_nu}]"
+                    )
+    print("Metric-based cylindrical Christoffel check passed.")
+
+    # Step 2.a: Check both BSSN connection recipes under the Cartesian identity map.
+    import nrpy.params as par
+    from nrpy.equations.general_relativity.BSSN_to_g4Christoffel import (
+        BSSN_to_g4Christoffel as BSSN_to_g4Christoffel_main,
+    )
+
+    bssn_identity_helper = BSSN_to_g4Christoffel_main(CoordSystem="Cartesian")
+    for use_static_derivatives in (False, True):
+        identity_recipe = symbolic_christoffel_recipe_from_bssn_grid_basis(
+            bssn_coord_system="Cartesian",
+            target_basis="Cartesian",
+            use_static_time_derivatives=use_static_derivatives,
+        )
+        identity_expected = (
+            bssn_identity_helper.Gamma4UDD_static
+            if use_static_derivatives
+            else bssn_identity_helper.Gamma4UDD
+        )
+        for check_alpha in range(4):
+            for check_mu in range(4):
+                for check_nu in range(check_mu, 4):
+                    identity_diff = (
+                        identity_recipe[check_alpha][check_mu][check_nu]
+                        - identity_expected[check_alpha][check_mu][check_nu]
+                    )
+                    if not ve.check_zero(
+                        identity_diff, fixed_mpfs_for_free_symbols=True, verbose=False
+                    ):
+                        raise ValueError(
+                            "BSSN Christoffel identity-map check failed for "
+                            f"Gamma[{check_alpha}][{check_mu}][{check_nu}]"
+                        )
+    print("BSSN Christoffel identity-map checks passed.")
+
+    # Step 2.b: In flat cylindrical BSSN data, transformed Cartesian Christoffels
+    # vanish. Set lapse and conformal scale to unity, all BSSN perturbations
+    # and their derivatives to zero, and evaluate at a fixed nonsingular point.
+    cylindrical_recipe = symbolic_christoffel_recipe_from_bssn_grid_basis(
+        bssn_coord_system="Cylindrical", target_basis="Cartesian"
+    )
+    flat_cf = (
+        sp.sympify(0)
+        if par.parval_from_str("EvolvedConformalFactor_cf") == "phi"
+        else sp.sympify(1)
+    )
+    flat_scalar_values = {
+        "alpha": sp.sympify(1),
+        "cf": flat_cf,
+        "xx0": sample_rho,
+        "xx1": sp.Rational(2, 5),
+        "xx2": sp.Rational(7, 10),
+    }
+    flat_values: Dict[sp.Basic, sp.Basic] = {}
+    for gamma_plane in cylindrical_recipe:
+        for gamma_row in gamma_plane:
+            for gamma_component in gamma_row:
+                for free_symbol in gamma_component.free_symbols:
+                    flat_values[free_symbol] = flat_scalar_values.get(
+                        str(free_symbol), sp.sympify(0)
+                    )
+    for check_alpha in range(4):
+        for check_mu in range(4):
+            for check_nu in range(check_mu, 4):
+                flat_diff = cast(
+                    sp.Expr,
+                    cylindrical_recipe[check_alpha][check_mu][check_nu].xreplace(
+                        flat_values
+                    ),
+                )
+                if not ve.check_zero(
+                    flat_diff, fixed_mpfs_for_free_symbols=True, verbose=False
+                ):
+                    raise ValueError(
+                        "Cylindrical-to-Cartesian Minkowski Christoffel check "
+                        f"failed for Gamma[{check_alpha}][{check_mu}][{check_nu}]"
+                    )
+    print("Cylindrical-to-Cartesian Christoffel check passed.")
+
+    # Step 3: Validate the BSSN-specialized transformed-four-metric recipe
     #           in the Cartesian identity-map case, where the transformed
     #           four-metric must reproduce the source-basis BSSN four-metric.
     print(
@@ -1620,7 +1747,7 @@ if __name__ == "__main__":
                 )
     print("BSSN-specialized transformed-four-metric identity-map check passed.")
 
-    # Step 2.a: Validate the spherical-to-Cartesian transformed-four-metric
+    # Step 3.a: Validate the spherical-to-Cartesian transformed-four-metric
     #           recipe by plugging in flat-space spherical BSSN data at a
     #           fixed nonsingular sample point. The transformed metric must
     #           reduce numerically to Cartesian Minkowski spacetime.
@@ -1659,8 +1786,11 @@ if __name__ == "__main__":
     for check_mu in range(4):
         for check_nu in range(check_mu, 4):
             spherical_g4_diff = sp.simplify(
-                spherical_recipe_g4DD[check_mu][check_nu].xreplace(
-                    spherical_numeric_values
+                cast(
+                    sp.Expr,
+                    spherical_recipe_g4DD[check_mu][check_nu].xreplace(
+                        spherical_numeric_values
+                    ),
                 )
                 - spherical_expected_g4DD[check_mu][check_nu]
             )
@@ -1671,7 +1801,7 @@ if __name__ == "__main__":
                 )
     print("BSSN-specialized transformed-four-metric spherical check passed.")
 
-    # Step 3: Generate trusted results for all configurations.
+    # Step 4: Generate trusted results for all configurations.
     # This loop ensures that the __init__ logic (including the solver) works for all spacetimes.
     for config_key in ["KerrSchild_Cartesian_massive", "KerrSchild_Cartesian_photon"]:
         print(f"Processing configuration: {config_key}...")

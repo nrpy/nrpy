@@ -44,6 +44,10 @@ TERMINATION_TYPE_INFO: Dict[int, Tuple[str, str]] = {
         "STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED",
         "Evolution measure exceeded its configured limit",
     ),
+    cfg.STOP_CONDITION_INSIDE_APPARENT_HORIZON: (
+        "STOP_CONDITION_INSIDE_APPARENT_HORIZON",
+        "Ray stopped inside a saved apparent horizon",
+    ),
     cfg.FAILURE_RKF45_REJECTION_LIMIT: (
         "FAILURE_RKF45_REJECTION_LIMIT",
         "RKF45 rejected too many consecutive steps",
@@ -676,6 +680,7 @@ def diagnose_blueprint(show_plots: bool = True) -> None:
     total_rays = 0
     in_view = 0
     enum_counts: Dict[int, int] = {}
+    horizon_counts = np.zeros(4, dtype=np.int64)
     first_records: List[npt.NDArray[np.void]] = []
     sampled_records: List[npt.NDArray[np.void]] = []
     sampled_norm_abs: List[npt.NDArray[np.float64]] = []
@@ -724,6 +729,15 @@ def diagnose_blueprint(show_plots: bool = True) -> None:
                 for enum_value, count in zip(unique_enums, counts):
                     enum_int = int(enum_value)
                     enum_counts[enum_int] = enum_counts.get(enum_int, 0) + int(count)
+                horizon_stops = (
+                    chunk_data["termination_type"]
+                    == cfg.STOP_CONDITION_INSIDE_APPARENT_HORIZON
+                )
+                if np.any(horizon_stops):
+                    horizon_ids = chunk_data["y_t"][horizon_stops].astype(np.intp)
+                    horizon_counts += np.bincount(
+                        horizon_ids, minlength=len(horizon_counts)
+                    )
                 total_rays += len(chunk_data)
                 crossing_start = np.searchsorted(crossing_indices, record_start)
                 crossing_end = np.searchsorted(
@@ -761,6 +775,16 @@ def diagnose_blueprint(show_plots: bool = True) -> None:
             f"  Raw Enum {enum_value:2d} ({name}): "
             f"{count:12,} rays ({percentage:6.2f}%)"
         )
+
+    if np.any(horizon_counts):
+        print("\n--- Containing Apparent Horizons ---")
+        for horizon_id in (cfg.PUNCTURE_1, cfg.PUNCTURE_2, cfg.MERGED_PUNCTURE):
+            label = (
+                "common horizon"
+                if horizon_id == cfg.MERGED_PUNCTURE
+                else f"horizon {horizon_id}"
+            )
+            print(f"  {label}: {horizon_counts[horizon_id]:,} rays")
 
     print("\n--- Termination Enum Definitions ---")
     for enum_value in sorted(TERMINATION_TYPE_INFO):

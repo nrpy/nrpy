@@ -9,6 +9,8 @@
 
 ## Detail
 
+### Coordinate-Family Dispatch And Supported Systems
+
 `ReferenceMetric` is initialized with a coordinate-system name and an
 `enable_rfm_precompute` flag. `CoordSystem_to_register_CodeParameters` sets
 `add_CodeParams_to_glb_code_params_dict` when its value is `All` or matches the
@@ -18,11 +20,7 @@ are restricted by this selection. Shared parameters, `register_pi()`,
 use it. Constructing an unselected fisheye metric can therefore still change the
 global CodeParameter dictionary.
 
-Claim evidence:
-- Claim: Coordinate-system selection controls only registrations that receive `add_CodeParams_to_glb_code_params_dict`; it does not suppress shared, special-constant, or fisheye-provider registrations.
-- Role: descriptive behavior
-- Deciding authority: [reference_metric.py](../../nrpy/reference_metric.py), `ReferenceMetric.__init__`, `register_pi`, `register_sqrt1_2`, and `general_rfm_like`
-- Corroboration: [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py), `GeneralRFMFisheye.__init__`, registers provider parameters without the coordinate-selection flag.
+Evidence (descriptive behavior): `reference_metric.py::ReferenceMetric.__init__`, `register_pi`, `register_sqrt1_2`, and `general_rfm_like`; corroboration: `generalrfm/fisheye.py::GeneralRFMFisheye.__init__`, registers provider parameters without the coordinate-selection flag.
 
 Every constructor registers or uses the shared reference-metric parameters `enable_grid_physical_size`, `grid_physical_size`, `grid_hole_radius`, and `CoordSystemName`. It creates symbolic grid coordinates `xx`, declares Cartesian symbols, and initializes mappings such as `xx_to_Cart`, `Cart_to_xx`, `xxSph`, orthogonal scale factors, unit vectors, grid bounds, hole-radius dictionaries, physical-size dictionaries, and rescaling arrays.
 
@@ -39,24 +37,18 @@ two, and `GeneralRFM_fisheyeN*` providers with positive transition counts.
 Accepting a name does not mean that the module's trusted-value loop exercises it.
 Unrecognized coordinate families raise `ValueError`. A `GeneralRFM` name that does not begin with `GeneralRFM_fisheyeN` retains placeholder provider metadata. Names beginning with that prefix must have the required numeric suffix and a positive transition count; malformed suffixes raise `ValueError`.
 
-Claim evidence:
-- Claim: `supported_CoordSystems` selects the module's trusted-value comparisons; coordinate dispatch accepts additional implemented variants and some `GeneralRFM` names with placeholder provider metadata, so the list is neither an exhaustive accepted-name list nor proof of validation for every accepted variant.
-- Role: descriptive behavior
-- Deciding authority: [reference_metric.py](../../nrpy/reference_metric.py), `supported_CoordSystems`, `ReferenceMetric.__init__`, `cartesian_like`, `Sinhv2`, `general_rfm_like`, and the module `__main__` loop
-- Corroboration: [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py), `GeneralRFMFisheye.__init__`, checks the positive transition count independently of that list.
+Evidence (descriptive behavior): `reference_metric.py::supported_CoordSystems`, `ReferenceMetric.__init__` (`cartesian_like`, `Sinhv2`, `general_rfm_like`), and `__main__`; corroboration: `generalrfm/fisheye.py::GeneralRFMFisheye.__init__`.
 
 The `SinhSphericalv2n*` radial inverse and the `SinhCylindricalv2n*` radial and
 axial inverses require numerical root finding. Their `Cart_to_xx` entries contain
 the string `"NewtonRaphson"`, with `requires_NewtonRaphson_for_Cart_to_xx=True`
 and residuals in `NewtonRaphson_f_of_xx`. These entries are not analytic SymPy
-expressions. BHaH's [coordinate conversion](../infrastructures/bhah/grids-coordinates-reference-metrics-and-boundaries.md)
+expressions. BHaH's [coordinate conversion](../infrastructures/bhah/grids-coordinates-and-reference-metrics.md)
 uses this information when generating the Cartesian-to-grid map.
 
-Claim evidence:
-- Claim: The spherical v2 radial inverse and cylindrical v2 radial and axial inverses use `"NewtonRaphson"` markers and residual expressions rather than analytic inverse-map expressions.
-- Role: descriptive behavior
-- Deciding authority: [reference_metric.py](../../nrpy/reference_metric.py), `spherical_like` and `cylindrical_like`
-- Corroboration: [xx_tofrom_Cart.py](../../nrpy/infrastructures/BHaH/xx_tofrom_Cart.py), `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, generates the numerical inversion.
+Evidence (descriptive behavior): `reference_metric.py::spherical_like` and `cylindrical_like`; corroboration: `BHaH/xx_tofrom_Cart.py::register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, generates the numerical inversion.
+
+### `rfm_dict`, `GeneralRFM`, And Precompute Expressions
 
 `rfm_dict.__getitem__()` lazily builds reference metrics. If a requested key is missing, it strips any `_rfm_precompute` suffix, builds the base `ReferenceMetric(CoordSystem, enable_rfm_precompute=False)`, caches it under the base key, and also caches a precompute key. Non-`GeneralRFM` systems get a separate `ReferenceMetric(CoordSystem, enable_rfm_precompute=True)` under `CoordSystem + "_rfm_precompute"`; `GeneralRFM` precompute keys map to the same base object because GeneralRFM data is already gridfunction-provided.
 
@@ -69,11 +61,7 @@ values contain matching NaN components. A finite value at one of those keys, or
 a computed NaN at a finite trusted key, is a validation failure; NaN is not a
 blanket wildcard.
 
-Claim evidence:
-- Claim: The `GeneralRFM_fisheyeN2` trusted dictionary contains exactly three intentional NaN inverse-map sentinels, and validation accepts them only against matching NaN components.
-- Role: descriptive behavior
-- Deciding authority: [reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py), `trusted_dict`, and [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `compare_against_trusted` and `_nonfinite_values_match`
-- Corroboration: [reference_metric.py](../../nrpy/reference_metric.py), `general_rfm_like`, assigns unavailable analytic inverse-map entries to `nan`
+Evidence (descriptive behavior): `tests/reference_metric_GeneralRFM_fisheyeN2.py::trusted_dict`, and `validate_expressions.py::compare_against_trusted` and `_nonfinite_values_match`; corroboration: `reference_metric.py::general_rfm_like`, assigns unavailable analytic inverse-map entries to `nan`.
 
 When precompute is enabled for non-`GeneralRFM` systems, hatted quantities are first expressed through generic function forms such as `f0_of_xx0_funcform`. The replacement pass rewrites functions and derivatives into rigid NRPy variable names such as base function names plus `__D...` derivative suffixes, folds derivatives that evaluate to coordinate-independent values, and skips creating a separate precompute object for `GeneralRFM`.
 
@@ -83,11 +71,7 @@ In BHaH, generated default-initialization functions assign these values to the
 parameter struct; `set_CodeParameters*.h` supplies local reads of the stored
 parameters rather than their numeric initialization.
 
-Claim evidence:
-- Claim: `PI` and `SQRT1_2` are registered parameter defaults excluded from parfiles; BHaH emits numeric assignments in default-initialization functions and local parameter reads in declaration headers.
-- Role: descriptive behavior
-- Deciding authority: [reference_metric.py](../../nrpy/reference_metric.py), `register_pi` and `register_sqrt1_2`; [CodeParameters.py](../../nrpy/infrastructures/BHaH/CodeParameters.py), `register_CFunctions_params_commondata_struct_set_to_default` and `write_CodeParameters_h_files`
-- Corroboration: none available; this statement follows the registrations and their defining output functions, without a separate runtime initialization test.
+Evidence (descriptive behavior): `reference_metric.py::register_pi` and `register_sqrt1_2`; `BHaH/CodeParameters.py::register_CFunctions_params_commondata_struct_set_to_default` and `write_CodeParameters_h_files`.
 
 In the module `__main__` validation path, doctests run first. Then every entry in `supported_CoordSystems` is processed through `validate_expressions.process_dictionary_of_expressions()` and compared or regenerated through `compare_or_generate_trusted_results()`. A separate `SinhSymTP` validation substitutes `Cart_to_xx` into `xx_to_Cart` and checks each Cartesian residual with `check_zero()`.
 
@@ -96,17 +80,12 @@ In the module `__main__` validation path, doctests run first. Then every entry i
 - [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py) - `GeneralRFMFisheye.__init__`
 - [CodeParameters.py](../../nrpy/infrastructures/BHaH/CodeParameters.py) - `register_CFunctions_params_commondata_struct_set_to_default`, `write_CodeParameters_h_files`
 - [xx_tofrom_Cart.py](../../nrpy/infrastructures/BHaH/xx_tofrom_Cart.py) - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`
-
-- [nrpy/reference_metric.py](../../nrpy/reference_metric.py) - `ReferenceMetric`, `CoordSystem_to_register_CodeParameters`, `reference_metric`, `rfm_dict`
-- [nrpy/reference_metric.py](../../nrpy/reference_metric.py) - `supported_CoordSystems`, `unittest_CoordSystems`
-- [nrpy/reference_metric.py](../../nrpy/reference_metric.py) - `Sinhv1`, `Sinhv2`, `cartesian_like`, `spherical_like`, `spherical_wedge_like`, `prolate_spheroidal_like`, `cylindrical_like`, `general_rfm_like`
-- [nrpy/reference_metric.py](../../nrpy/reference_metric.py) - `register_pi`, `register_sqrt1_2`
-- [nrpy/reference_metric.py](../../nrpy/reference_metric.py) - `__main__` validation loop and `SinhSymTP` `check_zero` inverse check
+- [nrpy/reference_metric.py](../../nrpy/reference_metric.py) - `ReferenceMetric`, `CoordSystem_to_register_CodeParameters`, `reference_metric`, `rfm_dict`; `supported_CoordSystems`, `unittest_CoordSystems`; `Sinhv1`, `Sinhv2`, `cartesian_like`, `spherical_like`, `spherical_wedge_like`, `prolate_spheroidal_like`, `cylindrical_like`, `general_rfm_like`; `register_pi`, `register_sqrt1_2`; `__main__` validation loop and `SinhSymTP` `check_zero` inverse check
 - [nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py) - `trusted_dict`
+- [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `compare_against_trusted`, `_nonfinite_values_match`
 
 ## See Also
 
-- Parent: [Core APIs](index.md)
 - Depends on: [Indexed Expressions](indexed-expressions.md)
 - Depends on: [Gridfunctions And Parameters](gridfunctions-and-parameters.md)
 - Validated by: [Expression Validation Helpers](../validation/expression-validation-helpers.md)
