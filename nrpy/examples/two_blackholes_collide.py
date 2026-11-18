@@ -351,6 +351,8 @@ BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
 par.adjust_CodeParam_default("t_final", t_final)
+if (enable_bhahaha):
+    par.adjust_CodeParam_default("bah_verbosity_level", 1)
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", 0.4)
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
@@ -461,6 +463,7 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     addl_libraries=(
         [f"-L{BHaHAHA_subdir}", f"-l{BHaHAHA_subdir}"] if enable_bhahaha else []
     ),
+    bhahaha=True,
 )
 
 print(

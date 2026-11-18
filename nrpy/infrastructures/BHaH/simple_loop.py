@@ -141,6 +141,7 @@ def simple_loop(
     OMP_custom_pragma: str = "",
     OMP_collapse: int = 1,
     loop_bounds: Union[Tuple[List[str], List[str]], None] = None,
+    cuda_parallel_pair: bool = False,
 ) -> str:
     """
     Generate a simple loop in C (for use inside of a function).
@@ -155,6 +156,7 @@ def simple_loop(
     :param OMP_custom_pragma: Enable loop parallelization using OpenMP with custom pragma
     :param OMP_collapse: Specifies the number of nested loops to collapse
     :param loop_bounds: Optional CPU loop minimums and exclusive maximums, in i2/i1/i0 order.
+    :param cuda_parallel_pair: Boolean to determine if CUDA "Loops" should also be generated
     :return: The complete loop code as a string.
     :raises ValueError: If the loop region or bounds are unsupported, or if both coordinate read modes are enabled.
 
@@ -357,6 +359,7 @@ def simple_loop(
             increment,
             prefix_loop_with,
             loop_body=final_loop_body,
+            cuda_parallel_pair=cuda_parallel_pair,
         )
     )
 
