@@ -178,20 +178,20 @@ class SpECTRESpinEstimateClass:
         # BHaHAHA symbolic construction from the evolved and AUXEVOL fields.
         self._gammaDD = [
             [
-                cast(sp.Expr, Th.gammaDD[i][j].xreplace(surface_replacements))
+                Th.gammaDD[i][j].xreplace(surface_replacements)
                 for j in range(3)
             ]
             for i in range(3)
         ]
         self._KDD = [
             [
-                cast(sp.Expr, Th.KDD[i][j].xreplace(surface_replacements))
+                Th.KDD[i][j].xreplace(surface_replacements)
                 for j in range(3)
             ]
             for i in range(3)
         ]
         self._sU = [
-            cast(sp.Expr, Th.sU[i].xreplace(surface_replacements)) for i in range(3)
+            Th.sU[i].xreplace(surface_replacements) for i in range(3)
         ]
         self._zU = ixp.declarerank1("zU", dimension=3)
 
