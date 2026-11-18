@@ -578,7 +578,9 @@ class GeneralRFMSpheroidalFisheye:
             (0, 1, 0),
             (0, 0, 1),
         )
-        self.dCart_dxxUD = [[sp.Integer(0) for _ in range(3)] for _ in range(3)]
+        self.dCart_dxxUD: List[List[sp.Expr]] = [
+            [sp.Integer(0) for _ in range(3)] for _ in range(3)
+        ]
         for mu in range(3):
             lam_mu = lam_xy if mu < 2 else lam_z
             dlam_mu_over_r = dlam_xy_over_r if mu < 2 else dlam_z_over_r
@@ -822,7 +824,7 @@ def _G_kernel(r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:
     tail = sp.exp(-2 * (scaled_max - scaled_min))
     # Avoid dividing the leading radius by s and multiplying it back in float.
     correction = log1p(tail * expm1(-4 * scaled_min) / (sp.Integer(1) + tail))
-    return (sp.Min(r, R) + s * correction / 2) / sp.tanh(R / s)
+    return cast(sp.Expr, (sp.Min(r, R) + s * correction / 2) / sp.tanh(R / s))
 
 
 def _radius_map_unscaled(
