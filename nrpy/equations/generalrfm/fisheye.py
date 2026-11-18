@@ -824,7 +824,8 @@ def _G_kernel(r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:
     tail = sp.exp(-2 * (scaled_max - scaled_min))
     # Avoid dividing the leading radius by s and multiplying it back in float.
     correction = log1p(tail * expm1(-4 * scaled_min) / (sp.Integer(1) + tail))
-    return cast(sp.Expr, (sp.Min(r, R) + s * correction / 2) / sp.tanh(R / s))
+    result: sp.Expr = (sp.Min(r, R) + s * correction / 2) / sp.tanh(R / s)
+    return result
 
 
 def _radius_map_unscaled(
