@@ -764,6 +764,9 @@ def register_CFunction_spheroidal_fisheye_params_from_physical_N(
     and z axes using the shared array-based radial solver. Both solves must
     succeed before the axis-specific internal fields are updated.
 
+    :param num_transitions: Number of fisheye transitions on each axis.
+    :raises ValueError: If num_transitions is less than 1.
+
     Doctests:
     >>> import nrpy.c_function as cfc
     >>> saved_functions = cfc.CFunction_dict.copy()
@@ -788,9 +791,6 @@ def register_CFunction_spheroidal_fisheye_params_from_physical_N(
     >>> cfc.CFunction_dict.update(saved_functions)
     >>> par.glb_code_params_dict.clear()
     >>> par.glb_code_params_dict.update(saved_parameters)
-
-    :param num_transitions: Number of fisheye transitions on each axis.
-    :raises ValueError: If num_transitions is less than 1.
     """
     if num_transitions < 1:
         raise ValueError("num_transitions must be >= 1")
