@@ -132,7 +132,7 @@ static inline int solve_linear_system(const int n, const fisheye_solver_real *A_
     for (int j = 0; j < n; j++)
       A[i][j] = A_in[i * n + j];
     A[i][n] = b_in[i];
-  } // END LOOP: for i over augmented matrix rows
+  } // END LOOP: for i over matrix rows
 
   for (int k = 0; k < n; k++) {
     int pivot = k;
@@ -199,7 +199,7 @@ static inline int solve_physical_fisheye_params(const fisheye_solver_real L, con
       return 1;
     if (i > 0 && !(r_trans[i] > r_trans[i - 1]))
       return 1;
-  } // END LOOP: for i over physical transition inputs
+  } // END LOOP: for i over transition inputs
 
   fisheye_solver_real approx_R[NTRANS];
   fisheye_solver_real approx_s[NTRANS];
