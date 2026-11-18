@@ -119,7 +119,11 @@ __device__
 #ifdef __CUDACC__
       gpu_grid.sync(); 
 #endif
-      if (commondata->error_flag == 0) {
+      int tmp_error_flag = commondata->error_flag;
+#ifdef __CUDACC__
+      gpu_grid.sync(); 
+#endif
+      if (tmp_error_flag == 0) {
         bah_diagnostics_area_centroid_and_Theta_norms(commondata, griddata); // Update diagnostics.
       } else {
         // Reset any errors that are raised.
