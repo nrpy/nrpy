@@ -190,10 +190,17 @@ def _physical_fisheye_solver_prefunc() -> str:
     """
     Return the shared static C solver for physical fisheye parameters.
 
+    Float inputs are solved in double precision; long-double inputs retain
+    long-double arithmetic and math functions. Stored outputs use REAL.
+
     :return: C helper definitions independent of parameter structs.
     """
-    return r"""#ifndef NRPY_PHYSICAL_FISHEYE_SOLVER_HELPERS_H
+    solver_type = (
+        "long double" if par.parval_from_str("fp_type") == "long double" else "double"
+    )
+    prefunc = r"""#ifndef NRPY_PHYSICAL_FISHEYE_SOLVER_HELPERS_H
 #define NRPY_PHYSICAL_FISHEYE_SOLVER_HELPERS_H
+#include <float.h>
 
 /**
  * Compute log(cosh(x)) stably for large |x|.
@@ -203,9 +210,9 @@ def _physical_fisheye_solver_prefunc() -> str:
  * @param[in] x Input value.
  * @return Stable log(cosh(x)).
  */
-static inline REAL logcosh_stable(const REAL x) {
-  const REAL ax = fabs(x);
-  return ax + log1p(exp((REAL)-2.0 * ax)) - log((REAL)2.0);
+static inline fisheye_solver_real logcosh_stable(const fisheye_solver_real x) {
+  const fisheye_solver_real ax = fabs(x);
+  return ax + log1p(exp((fisheye_solver_real)-2.0 * ax)) - log((fisheye_solver_real)2.0);
 } // END FUNCTION: logcosh_stable
 
 /**
@@ -218,18 +225,18 @@ static inline REAL logcosh_stable(const REAL x) {
  * @param[in] N Number of fisheye transitions.
  * @return Unscaled fisheye radius.
  */
-static inline REAL rbar_unscaled(const REAL r,
-                                 const REAL a[],
-                                 const REAL R[],
-                                 const REAL s[],
+static inline fisheye_solver_real rbar_unscaled(const fisheye_solver_real r,
+                                 const fisheye_solver_real a[],
+                                 const fisheye_solver_real R[],
+                                 const fisheye_solver_real s[],
                                  const int N) {
-  REAL rb = a[N] * r;
+  fisheye_solver_real rb = a[N] * r;
   for (int i = 0; i < N; i++) {
-    const REAL delta_a = a[i] - a[i + 1];
-    const REAL denom = (REAL)2.0 * tanh(R[i] / s[i]);
-    const REAL u = (r + R[i]) / s[i];
-    const REAL v = (r - R[i]) / s[i];
-    const REAL term = (delta_a * s[i]) / denom * (logcosh_stable(u) - logcosh_stable(v));
+    const fisheye_solver_real delta_a = a[i] - a[i + 1];
+    const fisheye_solver_real denom = (fisheye_solver_real)2.0 * tanh(R[i] / s[i]);
+    const fisheye_solver_real u = (r + R[i]) / s[i];
+    const fisheye_solver_real v = (r - R[i]) / s[i];
+    const fisheye_solver_real term = (delta_a * s[i]) / denom * (logcosh_stable(u) - logcosh_stable(v));
     rb += term;
   } // END LOOP: for i over fisheye transitions
   return rb;
@@ -249,25 +256,25 @@ static inline REAL rbar_unscaled(const REAL r,
  * @param[out] c_out Optional scale-factor output.
  * @return 0 on success, nonzero on invalid or non-finite scaling.
  */
-static inline int evaluate_constraints(const REAL L,
-                                        const REAL r_trans[],
-                                        const REAL w_trans[],
-                                        const REAL a[],
-                                        const REAL R[],
-                                        const REAL s[],
+static inline int evaluate_constraints(const fisheye_solver_real L,
+                                        const fisheye_solver_real r_trans[],
+                                        const fisheye_solver_real w_trans[],
+                                        const fisheye_solver_real a[],
+                                        const fisheye_solver_real R[],
+                                        const fisheye_solver_real s[],
                                         const int N,
-                                        REAL F[], REAL *c_out) {
-  const REAL rbar_L = rbar_unscaled(L, a, R, s, N);
-  if (!(isfinite(rbar_L)) || !(rbar_L > (REAL)0.0)) return 1;
-  const REAL c = L / rbar_L;
-  if (!(isfinite(c)) || !(c > (REAL)0.0)) return 1;
+                                        fisheye_solver_real F[], fisheye_solver_real *c_out) {
+  const fisheye_solver_real rbar_L = rbar_unscaled(L, a, R, s, N);
+  if (!(isfinite(rbar_L)) || !(rbar_L > (fisheye_solver_real)0.0)) return 1;
+  const fisheye_solver_real c = L / rbar_L;
+  if (!(isfinite(c)) || !(c > (fisheye_solver_real)0.0)) return 1;
 
   for (int i = 0; i < N; i++) {
-    const REAL Rm = R[i] - s[i];
-    const REAL Rp = R[i] + s[i];
-    const REAL Rphys_R = c * rbar_unscaled(R[i], a, R, s, N);
-    const REAL Rphys_Rp = c * rbar_unscaled(Rp, a, R, s, N);
-    const REAL Rphys_Rm = c * rbar_unscaled(Rm, a, R, s, N);
+    const fisheye_solver_real Rm = R[i] - s[i];
+    const fisheye_solver_real Rp = R[i] + s[i];
+    const fisheye_solver_real Rphys_R = c * rbar_unscaled(R[i], a, R, s, N);
+    const fisheye_solver_real Rphys_Rp = c * rbar_unscaled(Rp, a, R, s, N);
+    const fisheye_solver_real Rphys_Rm = c * rbar_unscaled(Rm, a, R, s, N);
     F[2 * i + 0] = Rphys_R - r_trans[i];
     F[2 * i + 1] = (Rphys_Rp - Rphys_Rm) - w_trans[i];
   } // END LOOP: for i over fisheye constraints
@@ -286,16 +293,16 @@ static inline int evaluate_constraints(const REAL L,
  * @return 0 on success, nonzero on invalid dimensions or singular matrix.
  */
 static inline int solve_linear_system(const int n,
-                                      const REAL *A_in,
-                                      const REAL *b_in,
-                                      REAL *x_out) {
+                                      const fisheye_solver_real *A_in,
+                                      const fisheye_solver_real *b_in,
+                                      fisheye_solver_real *x_out) {
   enum { MAX_LINEAR_N = 64 };
   if (n <= 0 || n > MAX_LINEAR_N) {
     fprintf(stderr, "ERROR: fisheye solve_linear_system requires 0 < n <= %d (got n=%d)\\n",
             MAX_LINEAR_N, n);
     return 1;
   } // END IF: invalid linear-system dimension
-  REAL A[MAX_LINEAR_N][MAX_LINEAR_N + 1];
+  fisheye_solver_real A[MAX_LINEAR_N][MAX_LINEAR_N + 1];
   for (int i = 0; i < n; i++) {
     for (int j = 0; j < n; j++) A[i][j] = A_in[i * n + j];
     A[i][n] = b_in[i];
@@ -303,24 +310,24 @@ static inline int solve_linear_system(const int n,
 
   for (int k = 0; k < n; k++) {
     int pivot = k;
-    REAL maxval = fabs(A[k][k]);
+    fisheye_solver_real maxval = fabs(A[k][k]);
     for (int i = k + 1; i < n; i++) {
-      const REAL val = fabs(A[i][k]);
+      const fisheye_solver_real val = fabs(A[i][k]);
       if (val > maxval) { maxval = val; pivot = i; }
     }
-    if (!(maxval > (REAL)0.0)) return 1;
+    if (!(maxval > (fisheye_solver_real)0.0)) return 1;
     if (pivot != k) {
       for (int j = k; j < n + 1; j++) {
-        const REAL tmp = A[k][j];
+        const fisheye_solver_real tmp = A[k][j];
         A[k][j] = A[pivot][j];
         A[pivot][j] = tmp;
       } // END LOOP: for j over pivot-row entries
     } // END IF: pivot row must be swapped
-    const REAL inv_pivot = (REAL)1.0 / A[k][k];
+    const fisheye_solver_real inv_pivot = (fisheye_solver_real)1.0 / A[k][k];
     for (int j = k; j < n + 1; j++) A[k][j] *= inv_pivot;
     for (int i = 0; i < n; i++) {
       if (i == k) continue;
-      const REAL factor = A[i][k];
+      const fisheye_solver_real factor = A[i][k];
       for (int j = k; j < n + 1; j++) A[i][j] -= factor * A[k][j];
     } // END LOOP: for i over elimination rows
   } // END LOOP: for k over Gaussian-elimination pivots
@@ -340,67 +347,66 @@ static inline int solve_linear_system(const int n,
  * @param[out] R_out Internal transition centers.
  * @param[out] s_out Internal transition widths.
  * @param[out] c_out Outer-boundary scale factor.
- * @return 0 on success, nonzero on invalid input or Newton failure.
+ * @return 0 on success, nonzero on invalid input, Newton failure, or invalid REAL outputs.
  */
-static inline int solve_physical_fisheye_params(const REAL L,
-                                                const REAL a[],
-                                                const REAL r_trans[],
-                                                const REAL w_trans[],
+static inline int solve_physical_fisheye_params(const fisheye_solver_real L,
+                                                const fisheye_solver_real a[],
+                                                const fisheye_solver_real r_trans[],
+                                                const fisheye_solver_real w_trans[],
                                                 const int NTRANS,
                                                 const int max_iter,
-                                                REAL R_out[],
-                                                REAL s_out[],
-                                                REAL *c_out) {
+                                                fisheye_solver_real R_out[],
+                                                fisheye_solver_real s_out[],
+                                                fisheye_solver_real *c_out) {
   const int NUNK = 2 * NTRANS;
 
   for (int i = 0; i < NTRANS + 1; i++) {
-    if (!(a[i] > (REAL)0.0)) return 1;
+    if (!(a[i] > (fisheye_solver_real)0.0)) return 1;
   } // END LOOP: for i over plateau factors
-  if (!(L > (REAL)0.0)) return 1;
+  if (!(L > (fisheye_solver_real)0.0)) return 1;
   for (int i = 0; i < NTRANS; i++) {
-    if (!(r_trans[i] > (REAL)0.0) || !(w_trans[i] > (REAL)0.0)) return 1;
+    if (!(r_trans[i] > (fisheye_solver_real)0.0) || !(w_trans[i] > (fisheye_solver_real)0.0)) return 1;
     if (i > 0 && !(r_trans[i] > r_trans[i - 1])) return 1;
   } // END LOOP: for i over physical transition inputs
 
-  REAL approx_R[NTRANS];
-  REAL approx_s[NTRANS];
+  fisheye_solver_real approx_R[NTRANS];
+  fisheye_solver_real approx_s[NTRANS];
   for (int i = 0; i < NTRANS; i++) {
     approx_R[i] = r_trans[i];
-    approx_s[i] = (REAL)0.5 * w_trans[i];
+    approx_s[i] = (fisheye_solver_real)0.5 * w_trans[i];
   } // END LOOP: for i over initial approximations
-  const REAL approx_rbar_L = rbar_unscaled(L, a, approx_R, approx_s, NTRANS);
-  if (!(isfinite(approx_rbar_L)) || !(approx_rbar_L > (REAL)0.0)) return 1;
-  const REAL approx_c = L / approx_rbar_L;
-  if (!(isfinite(approx_c)) || !(approx_c > (REAL)0.0)) return 1;
+  const fisheye_solver_real approx_rbar_L = rbar_unscaled(L, a, approx_R, approx_s, NTRANS);
+  if (!(isfinite(approx_rbar_L)) || !(approx_rbar_L > (fisheye_solver_real)0.0)) return 1;
+  const fisheye_solver_real approx_c = L / approx_rbar_L;
+  if (!(isfinite(approx_c)) || !(approx_c > (fisheye_solver_real)0.0)) return 1;
 
-  REAL x[NUNK];
+  fisheye_solver_real x[NUNK];
   for (int i = 0; i < NTRANS; i++) {
     x[2 * i + 0] = r_trans[i] / approx_c;
-    x[2 * i + 1] = ((REAL)0.5 * w_trans[i]) / approx_c;
+    x[2 * i + 1] = ((fisheye_solver_real)0.5 * w_trans[i]) / approx_c;
   } // END LOOP: for i over initial guess
 
-  const REAL relative_tol =
-      (sizeof(REAL) == sizeof(float)) ? (REAL)1e-5 : (REAL)1e-10;
-  const REAL eps = (REAL)1e-6;
+  const fisheye_solver_real relative_tol = (fisheye_solver_real)1e-10;
+  const fisheye_solver_real eps = (fisheye_solver_real)1e-6;
 
   int converged = 0;
-  REAL c = (REAL)1.0;
+  fisheye_solver_real c = (fisheye_solver_real)1.0;
 
   for (int iter = 0; iter < max_iter; iter++) {
     // Step 1: Build R and s arrays from x.
-    REAL R[NTRANS];
-    REAL s[NTRANS];
+    fisheye_solver_real R[NTRANS];
+    fisheye_solver_real s[NTRANS];
     for (int i = 0; i < NTRANS; i++) {
       R[i] = x[2 * i + 0];
       s[i] = x[2 * i + 1];
-      if (!(R[i] > (REAL)0.0) || !(s[i] > (REAL)0.0)) return 1;
+      if (!(R[i] > (fisheye_solver_real)0.0) || !(s[i] > (fisheye_solver_real)0.0)) return 1;
       if (!(R[i] > s[i])) return 1;
     } // END LOOP: for i over Newton state
 
-    REAL F[NUNK];
+    fisheye_solver_real F[NUNK];
     if (evaluate_constraints(L, r_trans, w_trans, a, R, s, NTRANS, F, &c)) return 1;
 
-    REAL relative_Fnorm = (REAL)0.0;
+    fisheye_solver_real relative_Fnorm = (fisheye_solver_real)0.0;
     for (int i = 0; i < NTRANS; i++) {
       relative_Fnorm += fabs(F[2 * i + 0]) / r_trans[i];
       relative_Fnorm += fabs(F[2 * i + 1]) / w_trans[i];
@@ -408,20 +414,20 @@ static inline int solve_physical_fisheye_params(const REAL L,
     if (relative_Fnorm < relative_tol) { converged = 1; break; }
 
     // Step 2: Compute the numerical Jacobian.
-    REAL J[NUNK][NUNK];
+    fisheye_solver_real J[NUNK][NUNK];
     for (int j = 0; j < NUNK; j++) {
-      const REAL xj = x[j];
-      const REAL dx = eps * (fabs(xj) + (REAL)1.0);
+      const fisheye_solver_real xj = x[j];
+      const fisheye_solver_real dx = eps * (fabs(xj) + (fisheye_solver_real)1.0);
       x[j] = xj + dx;
 
-      REAL Rp[NTRANS];
-      REAL sp[NTRANS];
+      fisheye_solver_real Rp[NTRANS];
+      fisheye_solver_real sp[NTRANS];
       for (int i = 0; i < NTRANS; i++) {
         Rp[i] = x[2 * i + 0];
         sp[i] = x[2 * i + 1];
       } // END LOOP: for i over perturbed state
 
-      REAL Fp[NUNK];
+      fisheye_solver_real Fp[NUNK];
       if (evaluate_constraints(L, r_trans, w_trans, a, Rp, sp, NTRANS, Fp, NULL)) return 1;
       for (int i = 0; i < NUNK; i++) {
         J[i][j] = (Fp[i] - F[i]) / dx;
@@ -429,40 +435,40 @@ static inline int solve_physical_fisheye_params(const REAL L,
       x[j] = xj;
     } // END LOOP: for j over Jacobian columns
 
-    REAL delta[NUNK];
-    REAL minusF[NUNK];
+    fisheye_solver_real delta[NUNK];
+    fisheye_solver_real minusF[NUNK];
     for (int i = 0; i < NUNK; i++) minusF[i] = -F[i];
 
     if (solve_linear_system(NUNK, &J[0][0], minusF, delta)) return 1;
 
     // Step 3: Apply a damped step to enforce positivity and improve robustness.
-    REAL alpha = (REAL)1.0;
+    fisheye_solver_real alpha = (fisheye_solver_real)1.0;
     int accepted = 0;
     for (int attempt = 0; attempt < 12; attempt++) {
       int ok = 1;
       for (int i = 0; i < NUNK; i++) {
-        const REAL trial = x[i] + alpha * delta[i];
-        if (!(trial > (REAL)0.0)) { ok = 0; break; }
+        const fisheye_solver_real trial = x[i] + alpha * delta[i];
+        if (!(trial > (fisheye_solver_real)0.0)) { ok = 0; break; }
       } // END LOOP: for i over trial values
       if (ok) {
         for (int i = 0; i < NTRANS; i++) {
-          const REAL Rtrial = x[2 * i + 0] + alpha * delta[2 * i + 0];
-          const REAL strial = x[2 * i + 1] + alpha * delta[2 * i + 1];
+          const fisheye_solver_real Rtrial = x[2 * i + 0] + alpha * delta[2 * i + 0];
+          const fisheye_solver_real strial = x[2 * i + 1] + alpha * delta[2 * i + 1];
           if (!(Rtrial > strial)) { ok = 0; break; }
         } // END LOOP: for i over width checks
       } // END IF: trial values are positive
       if (ok) {
-        REAL x_trial[NUNK];
+        fisheye_solver_real x_trial[NUNK];
         for (int i = 0; i < NUNK; i++) x_trial[i] = x[i] + alpha * delta[i];
-        REAL Rt[NTRANS];
-        REAL st[NTRANS];
+        fisheye_solver_real Rt[NTRANS];
+        fisheye_solver_real st[NTRANS];
         for (int i = 0; i < NTRANS; i++) {
           Rt[i] = x_trial[2 * i + 0];
           st[i] = x_trial[2 * i + 1];
         } // END LOOP: for i over trial state
-        REAL F_trial[NUNK];
+        fisheye_solver_real F_trial[NUNK];
         if (evaluate_constraints(L, r_trans, w_trans, a, Rt, st, NTRANS, F_trial, NULL)) return 1;
-        REAL relative_Fnorm_trial = (REAL)0.0;
+        fisheye_solver_real relative_Fnorm_trial = (fisheye_solver_real)0.0;
         for (int i = 0; i < NTRANS; i++) {
           relative_Fnorm_trial += fabs(F_trial[2 * i + 0]) / r_trans[i];
           relative_Fnorm_trial += fabs(F_trial[2 * i + 1]) / w_trans[i];
@@ -473,12 +479,25 @@ static inline int solve_physical_fisheye_params(const REAL L,
           break;
         } // END IF: trial reduces residual norm
       } // END IF: trial state passes validation
-      alpha *= (REAL)0.5;
+      alpha *= (fisheye_solver_real)0.5;
     } // END LOOP: for attempt over damping attempts
     if (!accepted) return 1;
   } // END LOOP: for iter over Newton iterations
 
   if (!converged) return 1;
+
+  // Validate every REAL conversion before writing any output.
+  const long double output_max = sizeof(REAL) == sizeof(float) ? FLT_MAX :
+      sizeof(REAL) == sizeof(double) ? DBL_MAX : LDBL_MAX;
+  if (!isfinite(c) || !(c > 0) || c > output_max) return 1;
+  if (!((REAL)c > 0)) return 1;
+  for (int i = 0; i < NTRANS; i++) {
+    const fisheye_solver_real Ri = x[2 * i + 0];
+    const fisheye_solver_real si = x[2 * i + 1];
+    if (!isfinite(Ri) || !isfinite(si) || !(Ri > 0) || !(si > 0) ||
+        Ri > output_max || si > output_max) return 1;
+    if (!((REAL)si > 0) || !((REAL)Ri > (REAL)si)) return 1;
+  } // END LOOP: validate stored transition parameters
 
   for (int i = 0; i < NTRANS; i++) {
     R_out[i] = x[2 * i + 0];
@@ -490,6 +509,16 @@ static inline int solve_physical_fisheye_params(const REAL L,
 
 #endif // NRPY_PHYSICAL_FISHEYE_SOLVER_HELPERS_H
 """
+
+    prefunc = prefunc.replace(
+        "#define NRPY_PHYSICAL_FISHEYE_SOLVER_HELPERS_H",
+        "#define NRPY_PHYSICAL_FISHEYE_SOLVER_HELPERS_H\n"
+        f"typedef {solver_type} fisheye_solver_real;",
+    )
+    if solver_type == "long double":
+        for function in ("fabs", "log1p", "exp", "log", "tanh"):
+            prefunc = prefunc.replace(f"{function}(", f"{function}l(")
+    return prefunc
 
 
 def register_CFunction_fisheye_params_from_physical_N(
@@ -576,22 +605,22 @@ typedef struct __params_struct__ {{
     body = rf"""
   const int NTRANS = {num_transitions};
 
-  const REAL L = commondata->fisheye_phys_L;
-  const REAL a[{num_transitions + 1}] = {{ {_c_array_initializer(a_vals)} }};
-  const REAL r_trans[{num_transitions}] = {{ {_c_array_initializer(r_trans_vals)} }};
-  const REAL w_trans[{num_transitions}] = {{ {_c_array_initializer(w_trans_vals)} }};
+  const fisheye_solver_real L = commondata->fisheye_phys_L;
+  const fisheye_solver_real a[{num_transitions + 1}] = {{ {_c_array_initializer(a_vals)} }};
+  const fisheye_solver_real r_trans[{num_transitions}] = {{ {_c_array_initializer(r_trans_vals)} }};
+  const fisheye_solver_real w_trans[{num_transitions}] = {{ {_c_array_initializer(w_trans_vals)} }};
 
   const int max_iter = 80;
-  REAL R[NTRANS];
-  REAL s[NTRANS];
-  REAL c = (REAL)1.0;
+  fisheye_solver_real R[NTRANS];
+  fisheye_solver_real s[NTRANS];
+  fisheye_solver_real c = (fisheye_solver_real)1.0;
   if (solve_physical_fisheye_params(L, a, r_trans, w_trans, NTRANS, max_iter,
                                     R, s, &c)) return 1;
 
   // Step 4: Commit results into params.
   for (int i = 0; i < NTRANS; i++) {{
-    const REAL Ri = R[i];
-    const REAL si = s[i];
+    const REAL Ri = (REAL)R[i];
+    const REAL si = (REAL)s[i];
     switch (i) {{
 """
 
@@ -607,7 +636,7 @@ typedef struct __params_struct__ {{
     body += r"""
     } // END SWITCH: assign fisheye transition parameters
   } // END LOOP: for i over transition outputs
-  params->fisheye_c = c;
+  params->fisheye_c = (REAL)c;
   return 0;
 """
 
@@ -649,14 +678,14 @@ static int write_fisheye_grid_txt(const char *fname) {{
   const REAL L = {standalone_L:.15e};
   // Physical parameters:
   //   r_trans[i]: physical transition centers; w_trans[i]: physical widths.
-  const REAL r_trans[] = {{ {standalone_r_trans} }};
-  const REAL w_trans[] = {{ {standalone_w_trans} }};
-  const REAL a[] = {{ {standalone_a} }};
+  const fisheye_solver_real r_trans[] = {{ {standalone_r_trans} }};
+  const fisheye_solver_real w_trans[] = {{ {standalone_w_trans} }};
+  const fisheye_solver_real a[] = {{ {standalone_a} }};
   const int NTRANS = (int)(sizeof(r_trans) / sizeof(r_trans[0]));
   const int max_iter = 60;
-  REAL R[NTRANS];
-  REAL s[NTRANS];
-  REAL c = (REAL)1.0;
+  fisheye_solver_real R[NTRANS];
+  fisheye_solver_real s[NTRANS];
+  fisheye_solver_real c = (fisheye_solver_real)1.0;
   if (solve_physical_fisheye_params(L, a, r_trans, w_trans, NTRANS, max_iter,
                                     R, s, &c))
     return 1;
@@ -784,7 +813,7 @@ Compute spheroidal fisheye internal parameters from physical xy and z axis input
         "const commondata_struct *restrict commondata, params_struct *restrict params"
     )
     a_vals = [f"params->fisheye_a{i}" for i in range(num_transitions + 1)]
-    body = f"  const REAL a[{num_transitions + 1}] = {{ {_c_array_initializer(a_vals)} }};\n"
+    body = f"  const fisheye_solver_real a[{num_transitions + 1}] = {{ {_c_array_initializer(a_vals)} }};\n"
     for axis in ("xy", "z"):
         r_vals = [
             f"commondata->fisheye_phys_{axis}_r_trans{i + 1}"
@@ -795,9 +824,9 @@ Compute spheroidal fisheye internal parameters from physical xy and z axis input
             for i in range(num_transitions)
         ]
         body += f"""
-  const REAL {axis}_r_trans[{num_transitions}] = {{ {_c_array_initializer(r_vals)} }};
-  const REAL {axis}_w_trans[{num_transitions}] = {{ {_c_array_initializer(w_vals)} }};
-  REAL {axis}_R[{num_transitions}], {axis}_s[{num_transitions}], {axis}_c;
+  const fisheye_solver_real {axis}_r_trans[{num_transitions}] = {{ {_c_array_initializer(r_vals)} }};
+  const fisheye_solver_real {axis}_w_trans[{num_transitions}] = {{ {_c_array_initializer(w_vals)} }};
+  fisheye_solver_real {axis}_R[{num_transitions}], {axis}_s[{num_transitions}], {axis}_c;
   if (solve_physical_fisheye_params(commondata->fisheye_phys_L, a,
                                     {axis}_r_trans, {axis}_w_trans, {num_transitions}, 80,
                                     {axis}_R, {axis}_s, &{axis}_c)) return 1;
@@ -805,9 +834,9 @@ Compute spheroidal fisheye internal parameters from physical xy and z axis input
     # Write parameters only after both axis solves succeed.
     for axis in ("xy", "z"):
         for i in range(num_transitions):
-            body += f"  params->fisheye_{axis}_R{i + 1} = {axis}_R[{i}];\n"
-            body += f"  params->fisheye_{axis}_s{i + 1} = {axis}_s[{i}];\n"
-        body += f"  params->fisheye_{axis}_c = {axis}_c;\n"
+            body += f"  params->fisheye_{axis}_R{i + 1} = (REAL){axis}_R[{i}];\n"
+            body += f"  params->fisheye_{axis}_s{i + 1} = (REAL){axis}_s[{i}];\n"
+        body += f"  params->fisheye_{axis}_c = (REAL){axis}_c;\n"
     body += "  return 0;\n"
     register_CFunction(
         subdirectory="fisheye",
