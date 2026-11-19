@@ -15,9 +15,9 @@ from typing import Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.inverse_spheroidal_fisheye as inverse_fisheye
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
+from nrpy.infrastructures.BHaH import inverse_fisheye
 from nrpy.infrastructures.BHaH.xx_tofrom_Cart import (
     _generate_bracketed_radial_inverse_body,
 )
@@ -45,7 +45,7 @@ def register_CFunction_generalrfm_Cart_to_xx(
     if not CoordSystem.startswith("GeneralRFM"):
         raise ValueError(f"{CoordSystem} is not a GeneralRFM coordinate system.")
     provider_name = getattr(rfm, "general_rfm_provider_name", "")
-    if provider_name == "inverse_spheroidal_fisheye":
+    if provider_name == "inverse_fisheye":
         n = rfm.general_rfm_provider_meta["num_transitions"]
         inverse_fisheye.register_CFunctions(n)
         body = f"""

@@ -42,9 +42,6 @@ Add an exact local path here only when no aggregate row above covers it.
 | `bin/nrpyinline.py` | living |
 | `coding_style.md` | living |
 | `tools/kb_lint.py` | living |
-| `nrpy/equations/generalrfm/inverse_spheroidal_fisheye.py` | living |
-| `nrpy/infrastructures/BHaH/inverse_spheroidal_fisheye.py` | living |
-| `.github/scripts/check_inverse_spheroidal_fisheye.py` | living |
 
 ## External Sources
 

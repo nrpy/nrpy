@@ -1,5 +1,8 @@
 """
-Inverse spheroidal fisheye specified in physical Cartesian coordinates.
+Inverse fisheye specified in physical Cartesian coordinates.
+
+Equal polar and equatorial centers give spherical transitions; distinct centers
+select spheroidal transitions within the same map.
 
 Unlike the forward fisheye provider, this construction specifies computational
 coordinates explicitly in terms of physical coordinates. It is not generally
@@ -224,7 +227,7 @@ stability analysis of the evolution scheme.
 Author: OpenAI
 
 Doctests:
->>> model = GeneralRFMInverseSpheroidalFisheye(1)
+>>> model = GeneralRFMInverseFisheye(1)
 >>> x, y, z = model.Cart
 >>> unit = {model.a_list[1]: sp.Integer(1)}
 >>> [sp.simplify(v.xreplace(unit)) for v in model.Cart_to_xxU]
@@ -241,7 +244,7 @@ Doctests:
 >>> coordinate = InverseFisheyeComponent(2, 0, 1, 0, *q)
 >>> all(sp.diff(coordinate, q[j]) == InverseFisheyeComponent(2, 1, 1, j, *q) for j in range(3))
 True
->>> GeneralRFMInverseSpheroidalFisheye(0)
+>>> GeneralRFMInverseFisheye(0)
 Traceback (most recent call last):
 ...
 ValueError: num_transitions must be a positive integer.
@@ -257,7 +260,8 @@ import nrpy.params as par
 from nrpy.equations.generalrfm.fisheye import _G_kernel
 
 
-class InverseFisheyeComponent(sp.Function):
+# SymPy does not provide typing metadata for its Function base class.
+class InverseFisheyeComponent(sp.Function):  # type: ignore[misc]
     """
     Represent a numerically evaluated map or Jacobian component in generated C.
 
@@ -290,7 +294,7 @@ class InverseFisheyeComponent(sp.Function):
         return f"inverse_fisheye_component__N{n}(params, {args})"
 
 
-class GeneralRFMInverseSpheroidalFisheye:
+class GeneralRFMInverseFisheye:
     """Build the explicit physical-to-computational map and its local geometry."""
 
     def __init__(self, num_transitions: int) -> None:

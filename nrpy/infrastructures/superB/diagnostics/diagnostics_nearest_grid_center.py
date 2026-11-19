@@ -48,7 +48,7 @@ def get_center_index_exprs_for_coordsystem(CoordSystem: str) -> Tuple[str, str, 
         (
             "GeneralRFM_fisheye",
             "GeneralRFM_spheroidal_fisheye",
-            "GeneralRFM_inverse_spheroidal_fisheyeN",
+            "GeneralRFM_inverse_fisheyeN",
         )
     )
 

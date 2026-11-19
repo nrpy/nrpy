@@ -72,7 +72,7 @@ params_chare->Nxx_plus_2NGHOSTS2 = params_chare->Nxx2 + 2*NGHOSTS;
 // Set grid size to grid_physical_size (set above, based on params->grid_physical_size):
 """
     rfm = refmetric.reference_metric[CoordSystem]
-    if getattr(rfm, "general_rfm_provider_name", "") == "inverse_spheroidal_fisheye":
+    if getattr(rfm, "general_rfm_provider_name", "") == "inverse_fisheye":
         # Every chare uses the same map and normalization as the global grid.
         body += "params_chare->inverse_fisheye_c = params->inverse_fisheye_c;\n"
         for j in range(1, rfm.general_rfm_provider_meta["num_transitions"] + 1):

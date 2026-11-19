@@ -50,9 +50,10 @@ int main() {
   p.inverse_fisheye_R8 = 196.835023;
   p.inverse_fisheye_Rz8 = 196.835023;
   p.inverse_fisheye_w8 = 74.89408;
-  p.CoordSystem_hash = GENERALRFM_INVERSE_SPHEROIDAL_FISHEYEN8;
+  p.CoordSystem_hash = GENERALRFM_INVERSE_FISHEYEN8;
   p.grid_physical_size = 400;
   inverse_fisheye_normalize__N8(&p);
+  p.xxmin0 = p.xmin; p.xxmin1 = p.ymin; p.xxmin2 = p.zmin;
   p.Nxx0 = 24;
   p.Nxx1 = 36;
   p.Nxx2 = 24;
@@ -73,7 +74,7 @@ int main() {
   }
   bc_struct global = {};
   double start = now();
-  bcstruct_set_up__rfm__GeneralRFM_inverse_spheroidal_fisheyeN8(&c, &p, xx,
+  bcstruct_set_up__rfm__GeneralRFM_inverse_fisheyeN8(&c, &p, xx,
                                                                 &global);
   printf("baseline global boundary setup %.6f seconds\n", now() - start);
   fflush(stdout);
@@ -98,7 +99,7 @@ int main() {
           bc_struct fast = {};
           nonlocalinnerbc_struct nonlocal = {};
           double fast_start = now();
-          bcstruct_chare_set_up__rfm__GeneralRFM_inverse_spheroidal_fisheyeN8(
+          bcstruct_chare_set_up__rfm__GeneralRFM_inverse_fisheyeN8(
               &c, &p, &local, xx, NULL, &fast, &nonlocal, ci);
           fast_seconds += now() - fast_start;
           assert(!fast.bc_info.num_inner_boundary_points &&
@@ -125,6 +126,14 @@ int main() {
                        a.i2 == b.i2 - z * local.Nxx2);
                 assert(a.FACEX0 == b.FACEX0 && a.FACEX1 == b.FACEX1 &&
                        a.FACEX2 == b.FACEX2);
+                assert(isfinite(a.r) && fabs(a.r-b.r) <= 1e-11*fmax(1.,fabs(b.r)));
+                assert(isfinite(a.partial_x0_partial_r) && fabs(a.partial_x0_partial_r-b.partial_x0_partial_r) <= 1e-11*fmax(1.,fabs(b.partial_x0_partial_r)));
+                assert(isfinite(a.partial_x1_partial_r) && fabs(a.partial_x1_partial_r-b.partial_x1_partial_r) <= 1e-11*fmax(1.,fabs(b.partial_x1_partial_r)));
+                assert(isfinite(a.partial_x2_partial_r) && fabs(a.partial_x2_partial_r-b.partial_x2_partial_r) <= 1e-11*fmax(1.,fabs(b.partial_x2_partial_r)));
+                assert(isfinite(a.r_int) && fabs(a.r_int-b.r_int) <= 1e-11*fmax(1.,fabs(b.r_int)));
+                assert(isfinite(a.partial_x0_partial_r_int) && fabs(a.partial_x0_partial_r_int-b.partial_x0_partial_r_int) <= 1e-11*fmax(1.,fabs(b.partial_x0_partial_r_int)));
+                assert(isfinite(a.partial_x1_partial_r_int) && fabs(a.partial_x1_partial_r_int-b.partial_x1_partial_r_int) <= 1e-11*fmax(1.,fabs(b.partial_x1_partial_r_int)));
+                assert(isfinite(a.partial_x2_partial_r_int) && fabs(a.partial_x2_partial_r_int-b.partial_x2_partial_r_int) <= 1e-11*fmax(1.,fabs(b.partial_x2_partial_r_int)));
               }
               assert(count ==
                      fast.bc_info.num_pure_outer_boundary_points[gz][dir]);
@@ -148,7 +157,7 @@ int main() {
     for (int y = 0; y < nt[1]; y++)
       for (int x = 0; x < nt[0]; x++) {
         REAL ds;
-        ds_min_single_pt__rfm__GeneralRFM_inverse_spheroidal_fisheyeN8(
+        ds_min_single_pt__rfm__GeneralRFM_inverse_fisheyeN8(
             &p, xx[0][x], xx[1][y], xx[2][z], &ds);
         minimum = fmin(minimum, ds);
       }

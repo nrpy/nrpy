@@ -103,17 +103,26 @@ def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
     body = ""
 
     rfm = refmetric.reference_metric[CoordSystem]
-    if enable_xx_to_Cart_precompute:
+    if getattr(rfm, "general_rfm_provider_name", "") == "inverse_fisheye":
         n = rfm.general_rfm_provider_meta["num_transitions"]
+        position = "const REAL x[3]={xCart[0]-params->Cart_originx, xCart[1]-params->Cart_originy, xCart[2]-params->Cart_originz};"
+        if not enable_xx_to_Cart_precompute:
+            position = f"""const REAL q[3]={{xx0,xx1,xx2}};
+REAL x[3];
+if (inverse_fisheye_solve__N{n}(params,q,x)) {{ fprintf(stderr,"Inverse fisheye boundary solve failed.\\n"); exit(1); }}"""
         return cfc.CFunction(
             includes=[],
             desc=desc,
             cfunc_type=cfunc_type,
             name=name,
-            params="const params_struct *restrict params, const REAL xCart[3], REAL *r, REAL *partial_x0_partial_r, REAL *partial_x1_partial_r, REAL *partial_x2_partial_r",
+            params=(
+                "const params_struct *restrict params, const REAL xCart[3], REAL *r, REAL *partial_x0_partial_r, REAL *partial_x1_partial_r, REAL *partial_x2_partial_r"
+                if enable_xx_to_Cart_precompute
+                else params
+            ),
             include_CodeParameters_h=False,
             body=f"""
-const REAL x[3]={{xCart[0]-params->Cart_originx, xCart[1]-params->Cart_originy, xCart[2]-params->Cart_originz}};
+{position}
 REAL J[3][3], K[3][3], g[3][3], dg[3][3][3], ddg[3][3][3][3];
 inverse_fisheye_geometry__N{n}(params, x, false, J, K, g, dg, ddg);
 *r = sqrt(x[0]*x[0]+x[1]*x[1]+x[2]*x[2]);
@@ -385,7 +394,7 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
         # its numerical component calls cannot be evaluated by check_zero.
         if getattr(
             refmetric.reference_metric[CoordSystem], "general_rfm_provider_name", ""
-        ) != "inverse_spheroidal_fisheye" and check_zero(
+        ) != "inverse_fisheye" and check_zero(
             partials_exprs[i + 1], fixed_mpfs_for_free_symbols=True
         ):
             body += f"  const REAL partial_x{si}_f=0.0;\n"
@@ -447,7 +456,7 @@ def setup_Cfunction_radiation_bcs(
         # Keep all three radial contributions for the implicit spheroidal map.
         if getattr(
             refmetric.reference_metric[CoordSystem], "general_rfm_provider_name", ""
-        ) == "inverse_spheroidal_fisheye" or not check_zero(
+        ) == "inverse_fisheye" or not check_zero(
             partials_exprs[i + 1], fixed_mpfs_for_free_symbols=True
         ):
             prefunc += setup_Cfunction_FD1_arbitrary_upwind(
@@ -781,7 +790,7 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     Setting up reference_metric[SinhCylindricalv2n2]...
     """
     if enable_xx_to_Cart_precompute and (
-        not CoordSystem.startswith("GeneralRFM_inverse_spheroidal_fisheyeN")
+        not CoordSystem.startswith("GeneralRFM_inverse_fisheyeN")
         or par.parval_from_str("parallelization") == "cuda"
     ):
         raise ValueError(

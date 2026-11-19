@@ -30,10 +30,9 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
-import nrpy.infrastructures.BHaH.inverse_spheroidal_fisheye as inverse_fisheye
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-from nrpy.infrastructures.BHaH import generalrfm_cart_to_xx
+from nrpy.infrastructures.BHaH import generalrfm_cart_to_xx, inverse_fisheye
 
 
 def _access_auxevol_gf(
@@ -93,7 +92,7 @@ def register_CFunction_generalrfm_precompute(
     if not CoordSystem.startswith("GeneralRFM"):
         raise ValueError(f"{CoordSystem} is not a GeneralRFM coordinate system.")
     provider_name = getattr(rfm, "general_rfm_provider_name", "")
-    if provider_name == "inverse_spheroidal_fisheye":
+    if provider_name == "inverse_fisheye":
         inverse_fisheye.register_precompute(
             CoordSystem,
             rfm.general_rfm_provider_meta["num_transitions"],

@@ -21,10 +21,10 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.inverse_spheroidal_fisheye as inverse_fisheye
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.equations.generalrfm import fisheye as fisheye_eqs
+from nrpy.infrastructures.BHaH import inverse_fisheye
 from nrpy.infrastructures.BHaH.rotation import (
     so3_apply_R_to_vector,
     so3_apply_RT_to_vector,
@@ -611,7 +611,7 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     is_spheroidal_fisheye_provider = (
         is_generalrfm and provider_name == "spheroidal_fisheye"
     )
-    is_inverse_fisheye = provider_name == "inverse_spheroidal_fisheye"
+    is_inverse_fisheye = provider_name == "inverse_fisheye"
     if is_inverse_fisheye:
         inverse_fisheye.register_CFunctions(
             rfm.general_rfm_provider_meta["num_transitions"]
@@ -994,7 +994,7 @@ def register_CFunction_xx_to_Cart(
     is_spheroidal_fisheye_provider = (
         is_generalrfm and provider_name == "spheroidal_fisheye"
     )
-    is_inverse_fisheye = provider_name == "inverse_spheroidal_fisheye"
+    is_inverse_fisheye = provider_name == "inverse_fisheye"
     if is_inverse_fisheye:
         inverse_fisheye.register_CFunctions(
             rfm.general_rfm_provider_meta["num_transitions"]

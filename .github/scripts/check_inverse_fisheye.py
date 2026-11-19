@@ -21,7 +21,7 @@ from nrpy.infrastructures.BHaH.CurviBoundaryConditions.apply_bcs_outerradiation_
 from nrpy.infrastructures.BHaH.generalrfm_cart_to_xx import (
     register_CFunction_generalrfm_Cart_to_xx,
 )
-from nrpy.infrastructures.BHaH.inverse_spheroidal_fisheye import (
+from nrpy.infrastructures.BHaH.inverse_fisheye import (
     register_CFunctions,
     register_precompute,
 )
@@ -72,7 +72,7 @@ def main() -> None:
         par.set_parval_from_str("fp_type", real_type)
         for n in (1, 2):
             register_CFunctions(n)
-            coord = f"GeneralRFM_inverse_spheroidal_fisheyeN{n}"
+            coord = f"GeneralRFM_inverse_fisheyeN{n}"
             register_CFunction_xx_to_Cart(coord)
             register_CFunction_generalrfm_Cart_to_xx(coord)
             register_precompute(coord, n, enable_xx_to_Cart_precompute=n == 2)
@@ -370,7 +370,7 @@ typedef struct {{ int unused; }} commondata_struct;
                     storage = (scalar * len(gf_names))()
                     precompute = getattr(
                         library,
-                        f"generalrfm_precompute__rfm__GeneralRFM_inverse_spheroidal_fisheyeN{n}",
+                        f"generalrfm_precompute__rfm__GeneralRFM_inverse_fisheyeN{n}",
                     )
                     for axis, offset in zip("xyz", (1, -2, 3)):
                         setattr(params, f"Cart_origin{axis}", offset)
@@ -411,7 +411,7 @@ typedef struct {{ int unused; }} commondata_struct;
                                     )
                     spacing = getattr(
                         library,
-                        f"ds_min_single_pt__rfm__GeneralRFM_inverse_spheroidal_fisheyeN{n}",
+                        f"ds_min_single_pt__rfm__GeneralRFM_inverse_fisheyeN{n}",
                     )
                     result_spacing = scalar()
                     spacing(
@@ -429,7 +429,7 @@ typedef struct {{ int unused; }} commondata_struct;
                     # Public coordinate wrapper includes translation; the direct helper is patch-local.
                     for axis, offset in zip("xyz", [1, -2, 3]):
                         setattr(params, "Cart_origin" + axis, offset)
-                    coord = f"GeneralRFM_inverse_spheroidal_fisheyeN{n}"
+                    coord = f"GeneralRFM_inverse_fisheyeN{n}"
                     forward = getattr(library, f"xx_to_Cart__rfm__{coord}")
                     inverse = getattr(library, f"generalrfm_Cart_to_xx__{coord}")
                     q, cart, result = vector(1, 2, 3), vector(), vector()
@@ -498,11 +498,11 @@ def check_wave_project(enable_xx_to_Cart_precompute: bool = False) -> None:
     )
     source = source.replace(
         'CoordSystem = "SinhCylindrical"',
-        'CoordSystem = "GeneralRFM_inverse_spheroidal_fisheyeN1"',
+        'CoordSystem = "GeneralRFM_inverse_fisheyeN1"',
     )
     source = source.replace(
         '    "GeneralRFM_fisheyeN1": [64, 64, 64],',
-        '    "GeneralRFM_inverse_spheroidal_fisheyeN1": [8, 8, 8],',
+        '    "GeneralRFM_inverse_fisheyeN1": [8, 8, 8],',
     )
     source = source.replace(
         "enable_parallel_codegen = True", "enable_parallel_codegen = False"
@@ -544,7 +544,7 @@ def check_wave_project(enable_xx_to_Cart_precompute: bool = False) -> None:
                     timeout=180,
                 )
         if enable_xx_to_Cart_precompute:
-            coord = "GeneralRFM_inverse_spheroidal_fisheyeN1"
+            coord = "GeneralRFM_inverse_fisheyeN1"
             register_CFunction_apply_bcs_outerradiation_and_inner(coord)
             name = f"apply_bcs_outerradiation_and_inner__rfm__{coord}"
             reference = directory / "reference_boundary.c"
@@ -574,11 +574,17 @@ int main(int argc, const char *argv[]) {
   griddata_struct *griddata=calloc(MAXNUMGRIDS,sizeof(griddata_struct));
   params_struct_set_to_default(&commondata,griddata);
   params_struct *params=&griddata[0].params;
-  params->CoordSystem_hash=GENERALRFM_INVERSE_SPHEROIDAL_FISHEYEN1;
+  params->CoordSystem_hash=GENERALRFM_INVERSE_FISHEYEN1;
   params->grid_physical_size=4;
   params->Cart_originx=1; params->Cart_originy=-2; params->Cart_originz=3;
   const int Nx[3]={8,10,12};
   REAL *xx[3];
+  commondata.inverse_fisheye_phys_Rz1=0;
+  numerical_grid_params_Nxx_dxx_xx(&commondata,params,xx,Nx,true);
+  assert(params->inverse_fisheye_Rz1 == params->inverse_fisheye_R1);
+  assert(fabs(params->xmax-params->zmax)<1e-12);
+  for(int i=0;i<3;i++) free(xx[i]);
+  commondata.inverse_fisheye_phys_Rz1=1;
   numerical_grid_params_Nxx_dxx_xx(&commondata,params,xx,Nx,true);
   const int Nxx_plus_2NGHOSTS0=params->Nxx_plus_2NGHOSTS0;
   const int Nxx_plus_2NGHOSTS1=params->Nxx_plus_2NGHOSTS1;
@@ -664,6 +670,9 @@ int main(int argc, const char *argv[]) {
         text = text.replace(
             "inverse_fisheye_phys_R1 = 1.0", "inverse_fisheye_phys_R1 = 2.0"
         )
+        text = text.replace(
+            "inverse_fisheye_phys_Rz1 = 0.0", "inverse_fisheye_phys_Rz1 = 1.0"
+        )
         parfile.write_text(text, encoding="utf-8")
         with (directory / "run.log").open("w", encoding="utf-8") as log:
             subprocess.run(
@@ -676,8 +685,7 @@ int main(int argc, const char *argv[]) {
                 timeout=120,
             )
         diagnostic = (
-            project
-            / "out0d-grid00-GeneralRFM_inverse_spheroidal_fisheyeN1-conv_factor-1.00.txt"
+            project / "out0d-grid00-GeneralRFM_inverse_fisheyeN1-conv_factor-1.00.txt"
         )
         rows = [
             [float(value) for value in line.split()]

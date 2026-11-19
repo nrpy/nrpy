@@ -54,7 +54,7 @@ def register_CFunction_psi4(
         "diagnostics/diagnostic_gfs.h",
         "intrinsics/simd_intrinsics.h",
     ]
-    if CoordSystem.startswith("GeneralRFM_inverse_spheroidal_fisheyeN"):
+    if CoordSystem.startswith("GeneralRFM_inverse_fisheyeN"):
         includes.append("BHaH_function_prototypes.h")
 
     desc = "Compute psi4 at all interior gridpoints"

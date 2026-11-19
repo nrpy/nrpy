@@ -19,8 +19,8 @@ import nrpy.grid as gri
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.equations.generalrfm.fisheye import GeneralRFMFisheye
-from nrpy.equations.generalrfm.inverse_spheroidal_fisheye import (
-    GeneralRFMInverseSpheroidalFisheye,
+from nrpy.equations.generalrfm.inverse_fisheye import (
+    GeneralRFMInverseFisheye,
     InverseFisheyeComponent,
 )
 from nrpy.helpers.cached_functions import cached_simplify
@@ -197,10 +197,7 @@ class ReferenceMetric:
         def compute_Jacobian_and_inverseJacobian_tofrom_Cartesian(
             self: ReferenceMetric,
         ) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]]]:
-            if (
-                getattr(self, "general_rfm_provider_name", "")
-                == "inverse_spheroidal_fisheye"
-            ):
+            if getattr(self, "general_rfm_provider_name", "") == "inverse_fisheye":
                 n = self.general_rfm_provider_meta["num_transitions"]
                 return (
                     [
@@ -256,10 +253,7 @@ class ReferenceMetric:
         def compute_Jacobian_and_inverseJacobian_tofrom_Spherical(
             self: ReferenceMetric,
         ) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]]]:
-            if (
-                getattr(self, "general_rfm_provider_name", "")
-                == "inverse_spheroidal_fisheye"
-            ):
+            if getattr(self, "general_rfm_provider_name", "") == "inverse_fisheye":
                 x, y, z = sp.symbols("sph_x sph_y sph_z", real=True)
                 physical = [x, y, z]
                 spherical = [
@@ -1922,7 +1916,7 @@ class ReferenceMetric:
             Union[
                 "GeneralRFMFisheye",
                 "GeneralRFMSpheroidalFisheye",
-                GeneralRFMInverseSpheroidalFisheye,
+                GeneralRFMInverseFisheye,
             ]
         ] = None
         self.general_rfm_provider_meta: Dict[str, Any] = {}
@@ -1964,15 +1958,15 @@ class ReferenceMetric:
                 self.general_rfm_provider = spheroidal_provider
             self.general_rfm_provider_meta = {"num_transitions": num_transitions}
 
-        if self.CoordSystem.startswith("GeneralRFM_inverse_spheroidal_fisheyeN"):
-            suffix = self.CoordSystem[len("GeneralRFM_inverse_spheroidal_fisheyeN") :]
+        if self.CoordSystem.startswith("GeneralRFM_inverse_fisheyeN"):
+            suffix = self.CoordSystem[len("GeneralRFM_inverse_fisheyeN") :]
             if not suffix.isdigit() or int(suffix) < 1:
                 raise ValueError(
-                    "Expected GeneralRFM_inverse_spheroidal_fisheyeN followed by a positive integer."
+                    "Expected GeneralRFM_inverse_fisheyeN followed by a positive integer."
                 )
             n = int(suffix)
-            inverse_provider = GeneralRFMInverseSpheroidalFisheye(n)
-            self.general_rfm_provider_name = "inverse_spheroidal_fisheye"
+            inverse_provider = GeneralRFMInverseFisheye(n)
+            self.general_rfm_provider_name = "inverse_fisheye"
             self.general_rfm_provider = inverse_provider
             self.general_rfm_provider_meta = {"num_transitions": n}
             for i in range(3):

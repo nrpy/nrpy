@@ -30,7 +30,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH, superB
-from nrpy.infrastructures.BHaH import checkpointing, xx_tofrom_Cart
+from nrpy.infrastructures.BHaH import xx_tofrom_Cart
 from nrpy.infrastructures.BHaH.general_relativity import NRPyPN_quasicircular_momenta
 from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import (
     ID_persist_struct,
@@ -41,8 +41,8 @@ from nrpy.infrastructures.superB import initial_data, timestepping_chare
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
-project_name = "superB_blackhole_spectroscopy_8Mseparation_inverse_spheroidal_fisheye"
-CoordSystem = "GeneralRFM_inverse_spheroidal_fisheyeN8"
+project_name = "superB_blackhole_spectroscopy_8Mseparation_inverse_fisheye"
+CoordSystem = "GeneralRFM_inverse_fisheyeN8"
 set_of_CoordSystems = {CoordSystem}
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
@@ -80,7 +80,7 @@ if enable_psi4:
     list_of_psi4_extraction_radii = [60.0, 90.0, 120.0, 150.0]
     num_psi4_extraction_radii = len(list_of_psi4_extraction_radii)
 Nxx_dict = {
-    "GeneralRFM_inverse_spheroidal_fisheyeN8": [1392, 1392, 1104],
+    "GeneralRFM_inverse_fisheyeN8": [1392, 1392, 1104],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_x_posn = +4.0
@@ -210,6 +210,7 @@ if enable_BHaHAHA:
 NRPyPN_quasicircular_momenta.register_CFunction_NRPyPN_quasicircular_momenta()
 TwoPunctures_lib.register_C_functions(enable_xy_plane=True)
 initial_data.register_CFunction_initial_data(
+    enable_rfm_precompute=enable_rfm_precompute,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     set_of_CoordSystems=set_of_CoordSystems,
@@ -272,7 +273,7 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     OMP_collapse=OMP_collapse,
 )
 if enable_CAHD:
-    BHaH.general_relativity.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
+    BHaH.general_relativity.dsmin_gf.register_CFunction_dsmin_auxevol_gridfunction(
         {CoordSystem}
     )
 if separate_Ricci_and_BSSN_RHS:
@@ -282,7 +283,7 @@ if separate_Ricci_and_BSSN_RHS:
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
-BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BHaH.general_relativity.enforce_detgbar_equals_detghat_trAzero.register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
@@ -368,7 +369,7 @@ superB.MoL.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_bcs_str=post_rhs_bcs_str,
-    post_rhs_string="enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);",
+    post_rhs_string="enforce_detgbar_equals_detghat_trAzero(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
     enable_psi4=enable_psi4,
@@ -377,7 +378,10 @@ xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     CoordSystem
 )
 xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
-checkpointing.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
+BHaH.read_checkpoint.register_CFunction_read_checkpoint()
+BHaH.write_checkpoint.register_CFunction_write_checkpoint(
+    default_checkpoint_every=default_checkpoint_every
+)
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
@@ -481,8 +485,8 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 post_non_y_n_auxevol_mallocs = ""
 if enable_CAHD:
     post_non_y_n_auxevol_mallocs = r"""for (int grid = 0; grid < commondata.NUMGRIDS; grid++)
-  cahdprefactor_auxevol_gridfunction(
-      &commondata, &griddata_chare[grid].params, griddata_chare[grid].xx,
+  dsmin_auxevol_gridfunction(
+      &griddata_chare[grid].params, griddata_chare[grid].xx,
       griddata_chare[grid].gridfuncs.auxevol_gfs);
 """
 

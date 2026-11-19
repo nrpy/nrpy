@@ -38,7 +38,7 @@ Subdomain ownership is arithmetic rather than a stored chare communication map.
 global source and destination indices to target chares and local indices on
 demand.
 
-For `GeneralRFM_inverse_spheroidal_fisheyeN*`, the map is injective with
+For `GeneralRFM_inverse_fisheyeN*`, the map is injective with
 Cartesian topology, so there are no inner coordinate boundaries.
 `bcstruct_chare_set_up` directly intersects each global outer face with the
 chare's ownership box, preserving ghost-layer order and face directions.

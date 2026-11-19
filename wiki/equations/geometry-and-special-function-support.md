@@ -66,7 +66,7 @@ Evidence (descriptive behavior): `generalrfm/fisheye.py::GeneralRFMFisheye.__ini
 
 ### Rotations And Spin-Weighted Spherical Harmonics
 
-`GeneralRFMInverseSpheroidalFisheye` implements the independently specified
+`GeneralRFMInverseFisheye` implements the independently specified
 inverse spheroidal map: physical Cartesian positions map explicitly to
 computational positions. The physical equatorial centers `inverse_fisheye_Rj`,
 polar centers `inverse_fisheye_Rzj`, widths `inverse_fisheye_wj`, and spacing
@@ -121,9 +121,26 @@ All trusted dictionaries named here compare deterministic sampled numerical
 values. They do not establish formal identities, generated-code builds,
 runtime behavior, or numerical accuracy; use [Expression Validation Helpers](../validation/expression-validation-helpers.md) for that boundary.
 
+### Inverse Fisheye Shapes
+
+`GeneralRFMInverseFisheye` defines computational coordinates explicitly from
+physical Cartesian coordinates. Equal equatorial and polar transition centers
+produce a spherical map. Different physical polar centers produce the
+spheroidal option using the same map and coordinate family
+`GeneralRFM_inverse_fisheyeN*`.
+
+In generated parameter files, `inverse_fisheye_phys_Rj` selects the equatorial
+center and `inverse_fisheye_phys_Rzj` selects the polar center for layer `j`.
+A zero polar center requests the equatorial center during grid initialization,
+so leaving polar centers at their defaults gives the spherical map.
+
+Evidence (descriptive behavior): `inverse_fisheye.py::GeneralRFMInverseFisheye`; `numerical_grids_and_timestep.py::register_CFunction_numerical_grid_params_Nxx_dxx_xx`.
+
 ## Sources
 
-- [inverse_spheroidal_fisheye.py](../../nrpy/equations/generalrfm/inverse_spheroidal_fisheye.py) - `GeneralRFMInverseSpheroidalFisheye`, `InverseFisheyeComponent`
+- [numerical_grids_and_timestep.py](../../nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py) - inverse fisheye physical parameter initialization
+
+- [inverse_fisheye.py](../../nrpy/equations/generalrfm/inverse_fisheye.py) - `GeneralRFMInverseFisheye`, `InverseFisheyeComponent`
 
 - [jacobians.py](../../nrpy/equations/basis_transforms/jacobians.py) - `BasisTransforms`, `basis_transforms`, `basis_transform_vectorU_from_rfmbasis_to_Cartesian`, `basis_transform_4tensorUU_from_Cartesian_to_time_indep_rfmbasis`
 - [jacobians_Cartesian.py](../../nrpy/equations/basis_transforms/tests/jacobians_Cartesian.py) - `trusted_dict`

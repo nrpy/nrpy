@@ -43,7 +43,7 @@ def bhah_family_from_coord(CoordSystem: str) -> str:
         (
             "GeneralRFM_fisheye",
             "GeneralRFM_spheroidal_fisheye",
-            "GeneralRFM_inverse_spheroidal_fisheyeN",
+            "GeneralRFM_inverse_fisheyeN",
         )
     ):
         return "Cartesian"

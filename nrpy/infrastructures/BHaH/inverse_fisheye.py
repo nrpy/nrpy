@@ -1,5 +1,5 @@
 """
-Generate BHaH inverse spheroidal fisheye maps, normalization, and metric jets.
+Generate BHaH spherical or spheroidal inverse fisheye maps, normalization, and metric jets.
 
 Geometry helpers use patch-local physical coordinates. The optional Cartesian
 cache includes the patch origin; coordinate wrappers own rotations. The metric
@@ -22,8 +22,8 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.params as par
-from nrpy.equations.generalrfm.inverse_spheroidal_fisheye import (
-    GeneralRFMInverseSpheroidalFisheye,
+from nrpy.equations.generalrfm.inverse_fisheye import (
+    GeneralRFMInverseFisheye,
 )
 
 
@@ -39,13 +39,13 @@ def register_CFunctions(num_transitions: int) -> None:
     suffix = f"__N{num_transitions}"
     if "inverse_fisheye_scale" + suffix in cfc.CFunction_dict:
         return
-    model = GeneralRFMInverseSpheroidalFisheye(num_transitions)
+    model = GeneralRFMInverseFisheye(num_transitions)
     # BHaH parameter files expose commondata only. These are physical inputs;
     # grid setup copies them verbatim into the per-grid provider parameters.
     for key, values in [
         ("a", [1.0] * num_transitions),
         ("R", [float(j + 1) for j in range(num_transitions)]),
-        ("Rz", [float(j + 1) for j in range(num_transitions)]),
+        ("Rz", [0.0] * num_transitions),
         ("w", [0.5] * num_transitions),
     ]:
         for j, value in enumerate(values):
@@ -450,7 +450,7 @@ def register_CFunction_cfl_limited_timestep(set_of_CoordSystems: Set[str]) -> No
     :raises ValueError: If a coordinate system is not inverse spheroidal fisheye.
     """
     body = "REAL bound;\nswitch (params->CoordSystem_hash) {\n"
-    prefix = "GeneralRFM_inverse_spheroidal_fisheyeN"
+    prefix = "GeneralRFM_inverse_fisheyeN"
     for coord in sorted(set_of_CoordSystems):
         if not coord.startswith(prefix) or not coord[len(prefix) :].isdigit():
             raise ValueError("Analytic CFL bound requires inverse spheroidal fisheye.")

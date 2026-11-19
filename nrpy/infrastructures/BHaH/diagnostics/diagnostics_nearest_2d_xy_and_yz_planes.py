@@ -154,7 +154,7 @@ def get_coord_family(cs: str) -> str:
         (
             "GeneralRFM_fisheye",
             "GeneralRFM_spheroidal_fisheye",
-            "GeneralRFM_inverse_spheroidal_fisheyeN",
+            "GeneralRFM_inverse_fisheyeN",
         )
     ):
         return "Cartesian"

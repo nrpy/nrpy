@@ -66,7 +66,7 @@ def register_CFunction_diagnostics_nearest_grid_center(
         (
             "GeneralRFM_fisheye",
             "GeneralRFM_spheroidal_fisheye",
-            "GeneralRFM_inverse_spheroidal_fisheyeN",
+            "GeneralRFM_inverse_fisheyeN",
         )
     ):
         i0_center_expr = "params->Nxx_plus_2NGHOSTS0/2"

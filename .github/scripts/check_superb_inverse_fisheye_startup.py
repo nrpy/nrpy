@@ -12,10 +12,17 @@ def main() -> None:
     """
     Check local boundaries and distributed CFL scans without evolving.
 
+    An optional command-line path selects the generated project; otherwise use
+    the inverse-fisheye spectroscopy example under project/.
+
     :raises RuntimeError: If charmc is unavailable for locating Charm++ headers.
     """
-    project = Path(sys.argv[1]).resolve()
-    coord = "GeneralRFM_inverse_spheroidal_fisheyeN8"
+    project = Path(
+        sys.argv[1]
+        if len(sys.argv) > 1
+        else "project/superB_blackhole_spectroscopy_8Mseparation_inverse_fisheye"
+    ).resolve()
+    coord = "GeneralRFM_inverse_fisheyeN8"
     charmc = shutil.which("charmc")
     if charmc is None:
         raise RuntimeError("charmc must be on PATH to locate Charm++ headers.")

@@ -18,14 +18,18 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
-import nrpy.infrastructures.BHaH.inverse_spheroidal_fisheye as inverse_fisheye
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
+from nrpy.equations.generalrfm.fisheye import (
+    GeneralRFMFisheye,
+    GeneralRFMSpheroidalFisheye,
+)
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
 from nrpy.infrastructures import BHaH
+from nrpy.infrastructures.BHaH import inverse_fisheye
 
 
 def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
@@ -122,12 +126,14 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
         body += f"params->{key} = {value};\n"
     body += "}\n"
 
-    if getattr(rfm, "general_rfm_provider_name", "") == "inverse_spheroidal_fisheye":
+    if getattr(rfm, "general_rfm_provider_name", "") == "inverse_fisheye":
         n = rfm.general_rfm_provider_meta["num_transitions"]
         inverse_fisheye.register_CFunctions(n)
         for key in ("a", "R", "Rz", "w"):
             for j in range(1, n + 1):
                 body += f"params->inverse_fisheye_{key}{j} = commondata->inverse_fisheye_phys_{key}{j};\n"
+        for j in range(1, n + 1):
+            body += f"if (params->inverse_fisheye_Rz{j} == 0) params->inverse_fisheye_Rz{j} = params->inverse_fisheye_R{j};\n"
         body += f"inverse_fisheye_normalize__N{n}(params);\n"
 
     # Set grid_hole_radius
@@ -264,7 +270,7 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
     name = "ds_min_radial_like_dirns_single_pt"
     params = "const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min_radial_like_dirns"
     rfm = refmetric.reference_metric[CoordSystem]
-    if getattr(rfm, "general_rfm_provider_name", "") == "inverse_spheroidal_fisheye":
+    if getattr(rfm, "general_rfm_provider_name", "") == "inverse_fisheye":
         body = inverse_fisheye.spacing_body(
             rfm.general_rfm_provider_meta["num_transitions"], "ds_min_radial_like_dirns"
         )
@@ -345,7 +351,13 @@ def ds_min_single_pt_exprs(CoordSystem: str) -> Optional[List[sp.Expr]]:
     provider_name = getattr(rfm, "general_rfm_provider_name", None)
     if provider_name in ("fisheye", "spheroidal_fisheye"):
         provider = rfm.general_rfm_provider
-        if provider is None:
+        if not isinstance(
+            provider,
+            (
+                GeneralRFMFisheye,
+                GeneralRFMSpheroidalFisheye,
+            ),
+        ):
             raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
         # Coordinate-line length for a nonorthogonal fisheye metric.
         return [
@@ -402,7 +414,7 @@ def register_CFunction_ds_min_single_pt(
     name = "ds_min_single_pt"
     params = "const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min"
     rfm = refmetric.reference_metric[CoordSystem]
-    if getattr(rfm, "general_rfm_provider_name", "") == "inverse_spheroidal_fisheye":
+    if getattr(rfm, "general_rfm_provider_name", "") == "inverse_fisheye":
         body = inverse_fisheye.spacing_body(
             rfm.general_rfm_provider_meta["num_transitions"], "ds_min"
         )

@@ -125,6 +125,8 @@ def _inverse_fisheye_local_boundaries() -> str:
             points[pt].FACEX0=(dir==0)*(1-2*side);
             points[pt].FACEX1=(dir==1)*(1-2*side);
             points[pt].FACEX2=(dir==2)*(1-2*side);
+            r_and_partial_xi_partial_r_derivs(params_chare, params->xxmin0 + (i0 + chare_index[0]*n[0] - NGHOSTS + 0.5)*params->dxx0, params->xxmin1 + (i1 + chare_index[1]*n[1] - NGHOSTS + 0.5)*params->dxx1, params->xxmin2 + (i2 + chare_index[2]*n[2] - NGHOSTS + 0.5)*params->dxx2, &points[pt].r, &points[pt].partial_x0_partial_r, &points[pt].partial_x1_partial_r, &points[pt].partial_x2_partial_r);
+            r_and_partial_xi_partial_r_derivs(params_chare, params->xxmin0 + (i0 + chare_index[0]*n[0] - NGHOSTS + 0.5 + points[pt].FACEX0)*params->dxx0, params->xxmin1 + (i1 + chare_index[1]*n[1] - NGHOSTS + 0.5 + points[pt].FACEX1)*params->dxx1, params->xxmin2 + (i2 + chare_index[2]*n[2] - NGHOSTS + 0.5 + points[pt].FACEX2)*params->dxx2, &points[pt].r_int, &points[pt].partial_x0_partial_r_int, &points[pt].partial_x1_partial_r_int, &points[pt].partial_x2_partial_r_int);
             pt++;
           }
   }
@@ -384,9 +386,14 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
     }
   }
 """
-    if CoordSystem.startswith("GeneralRFM_inverse_spheroidal_fisheyeN"):
+    prefunc = ""
+    if CoordSystem.startswith("GeneralRFM_inverse_fisheyeN"):
         body = _inverse_fisheye_local_boundaries()
+        prefunc = BHaH.CurviBoundaryConditions.apply_bcs_outerradiation_and_inner.setup_Cfunction_r_and_partial_xi_partial_r_derivs(
+            CoordSystem
+        )
     cfc.register_CFunction(
+        prefunc=prefunc,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
