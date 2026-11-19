@@ -553,6 +553,7 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
 
 def setup_Cfunction_apply_bcs_pure_only(
     enable_xx_to_Cart_precompute: bool = False,
+    xx_to_Cart_in_griddata: bool = False,
 ) -> Tuple[str, str]:
     """
     Generate the prefunction string for apply_bcs_pure_only.
@@ -560,7 +561,8 @@ def setup_Cfunction_apply_bcs_pure_only(
     This requires a function that will launch the compute kernel as well
     as the compute kernel itself.
 
-    :param enable_xx_to_Cart_precompute: Read cached positions from AUXEVOL and
+    :param xx_to_Cart_in_griddata: Store cached Cartesian positions in separate griddata arrays.
+    :param enable_xx_to_Cart_precompute: Read cached Cartesian positions and
         compute boundary geometry before the evolved-gridfunction loop.
     :return: A tuple containing the prefunction and the compute kernel.
     """
@@ -577,7 +579,9 @@ def setup_Cfunction_apply_bcs_pure_only(
         "custom_f_infinity": "const REAL *",
     }
     if enable_xx_to_Cart_precompute:
-        params_dict["auxevol_gfs"] = "const REAL *restrict"
+        params_dict["xx_to_Cart" if xx_to_Cart_in_griddata else "auxevol_gfs"] = (
+            "REAL *restrict *" if xx_to_Cart_in_griddata else "const REAL *restrict"
+        )
     name = "apply_bcs_pure_only"
     cfunc_type = "static void"
     parallelization = par.parval_from_str("parallelization")
@@ -605,8 +609,12 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
 """
     if enable_xx_to_Cart_precompute:
         cart = ", ".join(
-            gri.BHaHGridFunction.access_gf(
-                f"xCart{i}", 0, 0, 0, gf_array_name="auxevol_gfs"
+            (
+                f"xCart{i}[IDX3(i0,i1,i2)]"
+                if xx_to_Cart_in_griddata
+                else gri.BHaHGridFunction.access_gf(
+                    f"xCart{i}", 0, 0, 0, gf_array_name="auxevol_gfs"
+                )
             )
             for i in range(3)
         )
@@ -664,7 +672,11 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
         "custom_f_infinity": "const REAL *",
     }
     if enable_xx_to_Cart_precompute:
-        arg_dict_host["auxevol_gfs"] = "const REAL *restrict"
+        if xx_to_Cart_in_griddata:
+            for i in range(3):
+                arg_dict_host[f"xCart{i}"] = "const REAL *restrict"
+        else:
+            arg_dict_host["auxevol_gfs"] = "const REAL *restrict"
     prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
         name,
         kernel_body,
@@ -700,6 +712,14 @@ REAL *restrict x2 = xx[2];
   }}
 """
 
+    if enable_xx_to_Cart_precompute and xx_to_Cart_in_griddata:
+        kernel_launch_body = (
+            "\n".join(
+                f"const REAL *restrict xCart{i} = xx_to_Cart[{i}];" for i in range(3)
+            )
+            + "\n"
+            + kernel_launch_body
+        )
     launch_kernel = GPUKernel(
         kernel_launch_body,
         params_dict,
@@ -724,6 +744,7 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     radiation_BC_fd_order: int = 2,
     rational_const_alias: str = "static const",
     enable_xx_to_Cart_precompute: bool = False,
+    xx_to_Cart_in_griddata: bool = False,
 ) -> None:
     """
     Register a C function to apply boundary conditions to both pure outer and inner boundary points.
@@ -732,8 +753,9 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
     :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
     :param rational_const_alias: Alias for rational constants. Default is "static const".
+    :param xx_to_Cart_in_griddata: Store cached Cartesian positions in separate griddata arrays.
     :param enable_xx_to_Cart_precompute: Read fixed Cartesian positions from
-        AUXEVOL. Requires inverse spheroidal fisheye and matching precompute.
+        the selected storage. Requires inverse spheroidal fisheye and matching precompute.
 
     :raises ValueError: If Cartesian precompute is requested for another provider
         or for CUDA.
@@ -774,7 +796,9 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
         enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
     )
     apply_bcs_pure_only_prefuncs, apply_bcs_pure_only_function_call = (
-        setup_Cfunction_apply_bcs_pure_only(enable_xx_to_Cart_precompute)
+        setup_Cfunction_apply_bcs_pure_only(
+            enable_xx_to_Cart_precompute, xx_to_Cart_in_griddata
+        )
     )
     prefunc += apply_bcs_pure_only_prefuncs
     desc = """This function is responsible for applying boundary conditions (BCs) to both pure outer and inner
@@ -790,7 +814,13 @@ applies BCs to the inner boundary points, which may map either to the grid inter
     const REAL custom_f_infinity[NUM_EVOL_GFS],
     REAL *restrict gfs, REAL *restrict rhs_gfs"""
     if enable_xx_to_Cart_precompute:
-        params += ", const REAL *restrict auxevol_gfs"
+        if xx_to_Cart_in_griddata:
+            params = params.replace(
+                "REAL *restrict xx[3],",
+                "REAL *restrict xx[3], REAL *restrict xx_to_Cart[3],",
+            )
+        else:
+            params += ", const REAL *restrict auxevol_gfs"
 
     body: str = ""
     if par.parval_from_str("parallelization") == "cuda":

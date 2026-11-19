@@ -55,13 +55,20 @@ not the optional conservative bound. Other examples retain their existing
 CFL setup and global-list boundary filtering path.
 
 The inverse-spheroidal spectroscopy example enables
-`enable_xx_to_Cart_precompute=True` for both initial-data and radiation-BC
-registration. Initial-data setup stores Cartesian positions in three fixed,
-unsynchronized AUXEVOL gridfunctions during metric precomputation. Radiation
-BCs reuse them and compute geometry outside the evolved-field loop. This
-ports the generated-project coordinate-cache optimization through the existing
-AUXEVOL allocation, PUP serialization, and cleanup lifecycle, without adding
-separate griddata pointer arrays.
+`enable_xx_to_Cart_precompute=True` for grid allocation, initial data,
+radiation boundaries, timestepping cleanup, and PUP registration.
+`numerical_grids.py` allocates `griddata.xx_to_Cart[3]` over each chare's full
+local grid, including ghosts. Initial-data setup fills these arrays while
+precomputing the reference metric. Radiation boundaries read the stored
+Cartesian positions and compute geometry outside the evolved-gridfunction loop.
+`superB_pup.py` serializes the arrays and allocates them on unpacking;
+`timestepping_chare.py` frees them during cleanup. Coordinate arrays are
+separate from AUXEVOL gridfunctions and inter-chare gridfunction exchanges.
+
+Evidence (descriptive behavior): `numerical_grids.py::register_CFunction_numerical_grids_chare`;
+`initial_data.py::register_CFunction_initial_data`;
+`superB_pup.py::register_CFunction_superB_pup_routines`;
+`timestepping_chare.py::output_timestepping_cpp`.
 
 The grid transport paths are ordinary Charm++ entry-method sends generated for
 the `Timestepping` array:

@@ -13,6 +13,7 @@ from typing import Set
 
 import nrpy.c_function as cfc
 import nrpy.reference_metric as refmetric
+from nrpy.infrastructures.BHaH.griddata_commondata import register_griddata_commondata
 
 
 def register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
@@ -126,6 +127,7 @@ for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS2; j++)
 def register_CFunction_numerical_grids_chare(
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
+    enable_xx_to_Cart_precompute: bool = False,
 ) -> None:
     """
     Register a C function to set up all numerical grids and timestep.
@@ -134,6 +136,7 @@ def register_CFunction_numerical_grids_chare(
     focusing on the usage of reference metric precomputations and curvilinear boundary
     conditions.
 
+    :param enable_xx_to_Cart_precompute: Allocate and preserve chare-local Cartesian coordinate arrays.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
     """
@@ -148,14 +151,32 @@ def register_CFunction_numerical_grids_chare(
         griddata_chare[grid].params.CoordSystem_hash = griddata[grid].params.CoordSystem_hash;
         griddata_chare[grid].params.grid_physical_size = griddata[grid].params.grid_physical_size;
     """
-    body += r"""
+    cache_malloc = ""
+    if enable_xx_to_Cart_precompute:
+        register_griddata_commondata(
+            __name__,
+            "REAL *xx_to_Cart[3]",
+            "Cartesian coordinates at every chare-local grid point, including ghosts.",
+        )
+        cache_malloc = """
+  const params_struct *restrict params_chare = &griddata_chare[grid].params;
+  const size_t ntot = (size_t)params_chare->Nxx_plus_2NGHOSTS0 * params_chare->Nxx_plus_2NGHOSTS1 * params_chare->Nxx_plus_2NGHOSTS2;
+  for (int i=0; i<3; i++)
+    BHAH_MALLOC(griddata_chare[grid].xx_to_Cart[i], sizeof(REAL) * ntot);
+"""
+    body += (
+        r"""
     // Step 1.b: Set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   numerical_grid_params_Nxx_dxx_xx_chare(commondata, &griddata[grid].params, &griddata_chare[grid].params, griddata_chare[grid].xx, chare_index);
+"""
+        + cache_malloc
+        + r"""
 }
 
 // Step 1.c: Allocate memory for and define reference-metric precomputation lookup tables
 """
+    )
     if enable_rfm_precompute:
         body += r"""
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
@@ -204,10 +225,12 @@ def register_CFunctions(
     set_of_CoordSystems: Set[str],
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
+    enable_xx_to_Cart_precompute: bool = False,
 ) -> None:
     """
     Register C functions related to coordinate systems and grid parameters.
 
+    :param enable_xx_to_Cart_precompute: Allocate and preserve chare-local Cartesian coordinate arrays.
     :param set_of_CoordSystems: Set of CoordSystems
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
@@ -219,4 +242,5 @@ def register_CFunctions(
     register_CFunction_numerical_grids_chare(
         enable_rfm_precompute=enable_rfm_precompute,
         enable_CurviBCs=enable_CurviBCs,
+        enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
     )

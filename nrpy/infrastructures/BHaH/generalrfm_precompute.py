@@ -63,13 +63,15 @@ def _unique_assignments(
 def register_CFunction_generalrfm_precompute(
     CoordSystem: str,
     enable_xx_to_Cart_precompute: bool = False,
+    xx_to_Cart_in_griddata: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register a C function that precomputes GeneralRFM quantities into AUXEVOL gridfunctions.
 
     :param CoordSystem: Coordinate system name. Must be a supported GeneralRFM
         system.
-    :param enable_xx_to_Cart_precompute: Cache Cartesian positions in AUXEVOL;
+    :param xx_to_Cart_in_griddata: Store cached Cartesian positions in separate griddata arrays.
+    :param enable_xx_to_Cart_precompute: Cache Cartesian positions in AUXEVOL or griddata arrays;
         supported only for inverse spheroidal fisheye.
     :return: `None` during the parallel-codegen registration phase; otherwise
         the current NRPy environment.
@@ -96,6 +98,7 @@ def register_CFunction_generalrfm_precompute(
             CoordSystem,
             rfm.general_rfm_provider_meta["num_transitions"],
             enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
+            xx_to_Cart_in_griddata=xx_to_Cart_in_griddata,
         )
         return pcg.NRPyEnv()
     if enable_xx_to_Cart_precompute:
@@ -209,14 +212,16 @@ for (int i2 = 0; i2 < params->Nxx_plus_2NGHOSTS2; i2++) {{
 def register_CFunctions_generalrfm_support(
     CoordSystem: str,
     enable_xx_to_Cart_precompute: bool = False,
+    xx_to_Cart_in_griddata: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register all GeneralRFM support C functions (precompute and Cart_to_xx).
 
     :param CoordSystem: Coordinate system name for which GeneralRFM support
         functions should be registered.
+    :param xx_to_Cart_in_griddata: Store cached Cartesian positions in separate griddata arrays.
     :param enable_xx_to_Cart_precompute: Cache inverse spheroidal Cartesian
-        positions in AUXEVOL for radiation boundary conditions.
+        positions for radiation boundary conditions.
     :return: `None` during the parallel-codegen registration phase; otherwise
         the current NRPy environment.
     """
@@ -226,7 +231,9 @@ def register_CFunctions_generalrfm_support(
 
     # Precompute.
     register_CFunction_generalrfm_precompute(
-        CoordSystem, enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute
+        CoordSystem,
+        enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
+        xx_to_Cart_in_griddata=xx_to_Cart_in_griddata,
     )
 
     # Cart_to_xx numeric inverse.
