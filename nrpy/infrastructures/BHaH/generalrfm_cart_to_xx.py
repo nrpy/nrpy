@@ -1,7 +1,8 @@
 """
 Register a C helper that numerically inverts GeneralRFM xx->Cart maps.
 
-Currently supports GeneralRFM_fisheyeN* via equations/generalrfm/fisheye.py.
+Supports GeneralRFM_fisheyeN* and GeneralRFM_spheroidal_fisheyeN* via
+nrpy/equations/generalrfm/fisheye.py.
 
 Author: Nishita Jadoo
         njadoo@uidaho.edu
@@ -12,8 +13,6 @@ from __future__ import annotations
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Union, cast
-
-import sympy as sp
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
@@ -46,7 +45,7 @@ def register_CFunction_generalrfm_Cart_to_xx(
     if not CoordSystem.startswith("GeneralRFM"):
         raise ValueError(f"{CoordSystem} is not a GeneralRFM coordinate system.")
     provider_name = getattr(rfm, "general_rfm_provider_name", "")
-    if provider_name != "fisheye":
+    if provider_name not in {"fisheye", "spheroidal_fisheye"}:
         raise ValueError(
             f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in generalrfm_Cart_to_xx."
         )
@@ -54,25 +53,25 @@ def register_CFunction_generalrfm_Cart_to_xx(
     if fisheye is None:
         raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
 
-    r_local = sp.Symbol("r", real=True, nonnegative=True)
-    rbar_expr, drbar_dr_expr = fisheye.radius_map_and_deriv_for_inverse(r_local)
-    asymptotic_scale_expr = fisheye.c * fisheye.a_list[-1]
-
     origin_body = r"""    xx[0] = (REAL)0.0;
     xx[1] = (REAL)0.0;
     xx[2] = (REAL)0.0;
     return 0;"""
-    success_body = r"""    const REAL inv_rCart = (REAL)1.0 / rCart;
+    failure_body = r"""      return 1;"""
+    if provider_name == "fisheye":
+        success_body = r"""    const REAL inv_rCart = (REAL)1.0 / rCart;
     xx[0] = Cart[0] * radial_seed * inv_rCart;
     xx[1] = Cart[1] * radial_seed * inv_rCart;
     xx[2] = Cart[2] * radial_seed * inv_rCart;
     return 0;"""
-    failure_body = r"""      return 1;"""
+    else:
+        success_body = r"""    xx[0] = Cart[0] / lam_xy;
+    xx[1] = Cart[1] / lam_xy;
+    xx[2] = Cart[2] / lam_z;
+    return 0;"""
+
     body = _generate_bracketed_radial_inverse_body(
-        r_local,
-        rbar_expr,
-        drbar_dr_expr,
-        asymptotic_scale_expr,
+        fisheye,
         ("Cart[0]", "Cart[1]", "Cart[2]"),
         origin_body,
         success_body,

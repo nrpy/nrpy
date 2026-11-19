@@ -14,7 +14,7 @@ Author: Nishita Jadoo
 import argparse
 import os
 import shutil
-from typing import Dict
+from typing import Dict, Optional
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
@@ -54,7 +54,7 @@ project_name = "kasner_exact_evolution"
 CoordSystem = "GeneralRFM_fisheyeN1"
 IDtype = "Kasner"
 IDCoordSystem = "Cartesian"
-num_fisheye_transitions = (
+num_fisheye_transitions: Optional[int] = (
     int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
     if CoordSystem.startswith("GeneralRFM_fisheyeN")
     else None

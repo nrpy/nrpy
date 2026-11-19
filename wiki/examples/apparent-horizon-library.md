@@ -37,6 +37,7 @@ project name from `BHaHAHA` to `BHaHAHA-<fdorder>o`, so `--fdorder 8` writes
 `restrict` as `__restrict__`, and changes the fixed radii array parameter in
 the header to an unsized array for C++ compatibility. `--no-openmp` is the
 source-backed option that disables OpenMP flags in the generated Makefile.
+`--sequential-codegen` registers C functions sequentially.
 
 The generator fixes `CoordSystem = "Spherical"`, uses `SSPRK33`, inner
 boundaries only, reference-metric precomputation, no SIMD, and
@@ -78,7 +79,7 @@ internals belong under [BHaHAHA](../infrastructures/bhah/bhahaha/index.md).
 
 ## Sources
 
-- [bhahaha.py](../../nrpy/examples/bhahaha.py) - `--fdorder`, `--outrootdir`, `--cpp`, `--no-openmp`, `project_name`, `output_CFunctions_function_prototypes_and_construct_Makefile`
+- [bhahaha.py](../../nrpy/examples/bhahaha.py) - `--fdorder`, `--outrootdir`, `--cpp`, `--no-openmp`, `--sequential-codegen`, `project_name`, `output_CFunctions_function_prototypes_and_construct_Makefile`
 - [BHaHAHA_header.h](../../nrpy/infrastructures/BHaH/BHaHAHA/BHaHAHA_header.h) - `bhahaha_params_and_data_struct`, `bhahaha_diagnostics_struct`, `NUM_EXT_INPUT_CARTESIAN_GFS`, `IDX2`, public `bah_*` prototypes
 - [error_message.py](../../nrpy/infrastructures/BHaH/BHaHAHA/error_message.py) - `error_code_msg_tuples_list`, `register_CFunction_error_message`
 - [two_blackholes_collide.py](../../nrpy/examples/two_blackholes_collide.py) - `BHaH.BHaHAHA.BHaH_implementation.register_CFunction_bhahaha_find_horizons`

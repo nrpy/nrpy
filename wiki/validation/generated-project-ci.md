@@ -5,7 +5,7 @@
 
 ## Summary
 
-`.github/workflows/main.yml`, `.github/workflows/dendrolib-canary.yml`, and `.github/workflows/sebobv2-projected-attachment.yml` configure Linux/macOS C and library builds, `sebobv1_jax` package installation, Einstein Toolkit Carpet regression testsuites, MPI Dendro BSSN/fCCZ4 checks, Charm++/superB builds and `+p2` execution, 10-input SEOBNRv5/`sebobv2` waveform comparisons, and `sebobv2` projected-attachment reference/matching checks. Workflow definitions establish configured checks rather than recorded run outcomes.
+`.github/workflows/main.yml`, `.github/workflows/dendrolib-canary.yml`, `.github/workflows/sebobv2-projected-attachment.yml`, and `.github/workflows/spheroidal_fisheye_roundtrip.yml` configure Linux/macOS C and library builds, `sebobv1_jax` package installation, Einstein Toolkit Carpet regression testsuites, MPI Dendro BSSN/fCCZ4 checks, Charm++/superB builds and `+p2` execution, 10-input SEOBNRv5/`sebobv2` waveform comparisons, `sebobv2` projected-attachment reference/matching checks, and generated BHaH spheroidal coordinate round trips. Workflow definitions establish configured checks rather than recorded run outcomes.
 
 ## Detail
 
@@ -23,8 +23,9 @@
 | `sebob-consistency-test` | Ubuntu matrix | Checks out trusted git revision; generates and compiles trusted vs current SEOBNRv5 variants | Runs 10 deterministic binary inputs per variant (`sebob_consistency_check.py`), requiring median amplitude-plus-phase RMSE `<=` perturbation baseline |
 | `sebobv2-consistency-test` | Ubuntu matrix | Generates and compiles trusted vs current `sebobv2` | Same 10-input median amplitude-plus-phase RMSE check (`sebobv2_consistency_check.py`) |
 | `projected-reference-and-matching` (`sebobv2-projected-attachment.yml`) | Ubuntu 24.04 / Python 3.12 | Static analysis + builds scalar reference and `--projected-attachment-diagnostics` `sebobv2` | Runs `sebobv2_projected_attachment_check.py` (RKF45 `10M` orbital/spin reference, `t_attach`/QNM handoff, NQC matching, phase overlap, `--baseline` scalar `stdout` byte-identity) |
+| `generated-bhah-roundtrip` (`spheroidal_fisheye_roundtrip.yml`) | Ubuntu 24.04 / Python 3.12, `float` and `double` matrix | Static analysis and BHaH N1/N8 spheroidal converter builds | Runs `spheroidal_fisheye_roundtrip_check.py` with numerical round trips, unequal xy/z maps, near-origin and difficult inversion points, and a shell of N8 Cartesian points in double precision |
 
-Evidence (CI behavior): `.github/workflows/main.yml`; `.github/workflows/dendrolib-canary.yml`; `.github/workflows/sebobv2-projected-attachment.yml`; `sebob_consistency_check.py`; `sebobv2_consistency_check.py`; `sebobv2_projected_attachment_check.py`.
+Evidence (CI behavior): `main.yml`; `dendrolib-canary.yml`; `sebobv2-projected-attachment.yml`; `spheroidal_fisheye_roundtrip.yml`; `sebob_consistency_check.py`; `sebobv2_consistency_check.py`; `sebobv2_projected_attachment_check.py`; `spheroidal_fisheye_roundtrip_check.py`.
 
 ### `sebobv1_jax` install-and-call step
 
@@ -47,10 +48,12 @@ Evidence (CI behavior): `.github/workflows/main.yml`; `.github/full_nrpy_local_c
 - [main.yml](../../.github/workflows/main.yml) - `static-analysis`, `codegen-ubuntu`, `codegen-mac`, `einsteintoolkit-validation`, `dendro-validation`, `charmpp-validation`, `sebob*-consistency-test`
 - [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml) - `dendro-validation-dendrolib-master`
 - [sebobv2-projected-attachment.yml](../../.github/workflows/sebobv2-projected-attachment.yml) - `projected-reference-and-matching`
+- [spheroidal_fisheye_roundtrip.yml](../../.github/workflows/spheroidal_fisheye_roundtrip.yml) - `generated-bhah-roundtrip`
 - [full_nrpy_local_ci.sh](../../.github/full_nrpy_local_ci.sh) - `example_scripts`, `cuda_example_scripts`
 - [sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py) - `calculate_rmse`, `process_input_set`, `__main__`
 - [sebobv2_consistency_check.py](../../nrpy/examples/tests/sebobv2_consistency_check.py) - `calculate_rmse`, `process_input_set`, `__main__`
 - [sebobv2_projected_attachment_check.py](../../nrpy/examples/tests/sebobv2_projected_attachment_check.py) - `check_handoff`, `check_matching`, `check_phase_overlap`, `main`
+- [spheroidal_fisheye_roundtrip_check.py](../../nrpy/examples/tests/spheroidal_fisheye_roundtrip_check.py) - `main`, generated BHaH N1/N8 coordinate checks
 - [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py) - `Leg.run`, `PROFILE_P`, `PROFILE_O`, `Leg.run_negatives`
 - [dendro_application_check_reference.py](../../nrpy/examples/tests/dendro_application_check_reference.py) - `trusted_dict`
 - [CMakeLists.py](../../nrpy/infrastructures/Dendro/CMakeLists.py) - `FetchContent_Declare` for Dendrolib `master`
