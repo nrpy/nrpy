@@ -37,6 +37,7 @@ project name from `BHaHAHA` to `BHaHAHA-<fdorder>o`, so `--fdorder 8` writes
 `restrict` as `__restrict__`, and changes the fixed radii array parameter in
 the header to an unsized array for C++ compatibility. `--no-openmp` is the
 source-backed option that disables OpenMP flags in the generated Makefile.
+`--sequential-codegen` registers C functions sequentially.
 
 The generator fixes `CoordSystem = "Spherical"`, uses `SSPRK33`, inner
 boundaries only, reference-metric precomputation, no SIMD, and

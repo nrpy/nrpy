@@ -12,6 +12,7 @@ import os
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
+from typing import Optional
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
@@ -76,7 +77,7 @@ CoordSystem = "SinhCylindrical"
 if CoordSystem.startswith("GeneralRFM") and not enable_rfm_precompute:
     raise ValueError("GeneralRFM requires enable_rfm_precompute=True.")
 
-num_fisheye_transitions = (
+num_fisheye_transitions: Optional[int] = (
     int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
     if CoordSystem.startswith("GeneralRFM_fisheyeN")
     else None

@@ -21,6 +21,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy import params as par
@@ -68,7 +69,7 @@ project_name = "blackhole_spectroscopy"
 CoordSystem = "SinhCylindrical"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
-num_fisheye_transitions = (
+num_fisheye_transitions: Optional[int] = (
     int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
     if CoordSystem.startswith("GeneralRFM_fisheyeN")
     else None

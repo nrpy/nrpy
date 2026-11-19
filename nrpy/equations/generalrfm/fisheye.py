@@ -2,10 +2,20 @@
 """
 General N transition fisheye raw to physical (xx to Cart) mapping and reference metric.
 
-This module implements a radially symmetric, arbitrary N transition fisheye mapping
+This module implements radial and spheroidal N transition fisheye mappings
 from raw Cartesian coordinates xx[i] to physical Cartesian coordinates Cart[i],
-together with the induced flat reference metric in the raw coordinates and its
-first and second derivatives.
+together with the induced flat reference metric and its first and second derivatives.
+Both GeneralRFMFisheye and GeneralRFMSpheroidalFisheye use FisheyeRadialMap
+for parameter registration and one-dimensional radius maps. The public builders
+are build_fisheye and build_spheroidal_fisheye.
+
+The radial provider uses fisheye_a*, fisheye_R*, fisheye_s*, and fisheye_c.
+The spheroidal provider shares fisheye_a* between two maps, with separate
+fisheye_{xy,z}_{R*,s*,c} parameters:
+    Cart = (lam_xy(r)*xx[0], lam_xy(r)*xx[1], lam_z(r)*xx[2])
+    lam_axis(r) = rbar_axis(r) / r
+The radial metric decomposition below applies to GeneralRFMFisheye; the
+spheroidal provider constructs the metric from its axis-dependent Jacobian.
 
 Key equations used by this module:
 
@@ -90,12 +100,140 @@ This produces coefficient combinations:
 scalar factors.
 """
 
-from typing import Dict, List, Tuple, cast
+from typing import Dict, List, Optional, Tuple, cast
 
 import sympy as sp
+from sympy.codegen.cfunctions import expm1, log1p
 
 import nrpy.indexedexp as ixp
 import nrpy.params as par
+
+
+class FisheyeRadialMap:
+    """
+    Store one N-transition fisheye radius map and its code parameters.
+
+    The radial provider uses one map; the spheroidal provider uses separate
+    xy and z maps with shared plateau factors. When a_list is omitted, all
+    parameter names use prefix.
+
+    >>> saved_parameters = par.glb_code_params_dict.copy()
+    >>> radial_map = FisheyeRadialMap(1, prefix="fisheye_xy")
+    >>> [str(a) for a in radial_map.a_list]
+    ['fisheye_xy_a0', 'fisheye_xy_a1']
+    >>> shared_map = FisheyeRadialMap(1, prefix="fisheye_z", a_list=radial_map.a_list)
+    >>> shared_map.a_list is radial_map.a_list
+    True
+    >>> par.glb_code_params_dict.clear()
+    >>> par.glb_code_params_dict.update(saved_parameters)
+    """
+
+    def __init__(
+        self,
+        num_transitions: int,
+        *,
+        prefix: str = "fisheye",
+        a_list: Optional[List[sp.Expr]] = None,
+    ) -> None:
+        if num_transitions < 1:
+            raise ValueError(f"num_transitions must be >= 1; got {num_transitions}.")
+
+        thismodule = __name__
+        self.num_transitions = num_transitions
+        self.prefix = prefix
+        self.a_list = (
+            a_list
+            if a_list is not None
+            else par.register_CodeParameters(
+                "REAL",
+                thismodule,
+                [f"{prefix}_a{i}" for i in range(num_transitions + 1)],
+                [1.0] * (num_transitions + 1),
+                commondata=False,
+            )
+        )
+        self.R_list = par.register_CodeParameters(
+            "REAL",
+            thismodule,
+            [f"{prefix}_R{i + 1}" for i in range(num_transitions)],
+            [float(i + 1) for i in range(num_transitions)],
+            commondata=False,
+        )
+        self.s_list = par.register_CodeParameters(
+            "REAL",
+            thismodule,
+            [f"{prefix}_s{i + 1}" for i in range(num_transitions)],
+            [0.5] * num_transitions,
+            commondata=False,
+        )
+        self.c = par.register_CodeParameter(
+            "REAL", thismodule, f"{prefix}_c", defaultvalue=1.0, commondata=False
+        )
+
+    def unscaled_and_derivs_closed_form(
+        self, r: sp.Expr
+    ) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
+        """
+        Return the unscaled radial map and its first three derivatives.
+
+        :param r: Raw radial coordinate.
+        :return: Unscaled map value and its first three derivatives.
+        """
+        return _radius_map_unscaled_and_derivs_closed_form(
+            r=r,
+            a_list=self.a_list,
+            R_list=self.R_list,
+            s_list=self.s_list,
+        )
+
+    def scaled_and_derivs_closed_form(
+        self, r: sp.Expr
+    ) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
+        """
+        Return the scaled radial map and its first three derivatives.
+
+        :param r: Raw radial coordinate.
+        :return: Scaled map value and its first three derivatives.
+        """
+        rb0, rb1, rb2, rb3 = self.unscaled_and_derivs_closed_form(r)
+        return self.c * rb0, self.c * rb1, self.c * rb2, self.c * rb3
+
+    def scaled_value_stable_and_deriv(self, r: sp.Expr) -> Tuple[sp.Expr, sp.Expr]:
+        """
+        Return the stable scaled map value and its first derivative.
+
+        :param r: Raw radial coordinate.
+        :return: Stable scaled map value and its first derivative.
+        """
+        rb0 = _radius_map_unscaled(
+            r=r,
+            a_list=self.a_list,
+            R_list=self.R_list,
+            s_list=self.s_list,
+        )
+        _, rb1, _, _ = self.unscaled_and_derivs_closed_form(r)
+        return self.c * rb0, self.c * rb1
+
+    def scaled_stable_value_and_derivs_closed_form(
+        self, r: sp.Expr
+    ) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
+        """
+        Return the stable map value with closed-form derivatives.
+
+        The stable value is needed in the spheroidal forward map, while its
+        derivatives are kept in the same closed form used by the metric.
+
+        :param r: Raw radial coordinate.
+        :return: Stable scaled map value and its first three derivatives.
+        """
+        rb0 = _radius_map_unscaled(
+            r=r,
+            a_list=self.a_list,
+            R_list=self.R_list,
+            s_list=self.s_list,
+        )
+        _, rb1, rb2, rb3 = self.unscaled_and_derivs_closed_form(r)
+        return self.c * rb0, self.c * rb1, self.c * rb2, self.c * rb3
 
 
 class GeneralRFMFisheye:
@@ -156,33 +294,12 @@ class GeneralRFMFisheye:
 
         self.num_transitions = num_transitions
 
-        # Step 1: Register fisheye CodeParameters
-        # - a0..aN, R1..RN, s1..sN, c
-        thismodule = __name__
-        self.a_list = par.register_CodeParameters(
-            "REAL",
-            thismodule,
-            [f"fisheye_a{i}" for i in range(num_transitions + 1)],
-            [1.0] * (num_transitions + 1),
-            commondata=False,
-        )
-        self.R_list = par.register_CodeParameters(
-            "REAL",
-            thismodule,
-            [f"fisheye_R{i + 1}" for i in range(num_transitions)],
-            [float(i + 1) for i in range(num_transitions)],
-            commondata=False,
-        )
-        self.s_list = par.register_CodeParameters(
-            "REAL",
-            thismodule,
-            [f"fisheye_s{i + 1}" for i in range(num_transitions)],
-            [0.5] * num_transitions,
-            commondata=False,
-        )
-        self.c = par.register_CodeParameter(
-            "REAL", thismodule, "fisheye_c", defaultvalue=1.0, commondata=False
-        )
+        # Step 1: Register the shared radial map parameters.
+        self.radial_map = FisheyeRadialMap(num_transitions)
+        self.a_list = self.radial_map.a_list
+        self.R_list = self.radial_map.R_list
+        self.s_list = self.radial_map.s_list
+        self.c = self.radial_map.c
 
         # Step 2: Define raw Cartesian coordinates and radius
         # xx[i] are raw Cartesian coordinates
@@ -200,21 +317,8 @@ class GeneralRFMFisheye:
 
         # rbar_unscaled(r) = aN*r + sum_i (a[i] - a[i+1]) * G(r; R_i, s_i)
         # and derivatives through third order: d/dr, d2/dr2, d3/dr3
-        (
-            rbar_unscaled_sym,
-            drbar_unscaled_sym,
-            d2rbar_unscaled_sym,
-            d3rbar_unscaled_sym,
-        ) = _radius_map_unscaled_and_derivs_closed_form(
-            r=r_sym, a_list=self.a_list, R_list=self.R_list, s_list=self.s_list
-        )
-
-        # rbar(r) = c * rbar_unscaled(r)
-        u = self.c * rbar_unscaled_sym
-        # p = drbar/dr, q = d2rbar/dr2, t = d3rbar/dr3
-        p = self.c * drbar_unscaled_sym
-        q = self.c * d2rbar_unscaled_sym
-        t = self.c * d3rbar_unscaled_sym
+        rbar_unscaled_sym = self.radial_map.unscaled_and_derivs_closed_form(r_sym)[0]
+        u, p, q, t = self.radial_map.scaled_and_derivs_closed_form(r_sym)
 
         # lam(r) = rbar(r) / r
         lam_sym = u / r_sym
@@ -370,12 +474,7 @@ class GeneralRFMFisheye:
         :param r: Radial coordinate.
         :return: (rbar_unscaled, drbar_unscaled, d2rbar_unscaled, d3rbar_unscaled)
         """
-        return _radius_map_unscaled_and_derivs_closed_form(
-            r=r,
-            a_list=self.a_list,
-            R_list=self.R_list,
-            s_list=self.s_list,
-        )
+        return self.radial_map.unscaled_and_derivs_closed_form(r)
 
     def radius_map_and_deriv_for_inverse(self, r: sp.Expr) -> Tuple[sp.Expr, sp.Expr]:
         """
@@ -388,14 +487,250 @@ class GeneralRFMFisheye:
         :param r: Radial coordinate.
         :return: (rbar, drbar)
         """
-        rb0 = _radius_map_unscaled(
-            r=r,
-            a_list=self.a_list,
-            R_list=self.R_list,
-            s_list=self.s_list,
+        return self.radial_map.scaled_value_stable_and_deriv(r)
+
+
+class GeneralRFMSpheroidalFisheye:
+    """
+    Axis-matched spheroidal fisheye map for binaries in the xy plane.
+
+    The map uses one fisheye radius function for the in-plane components and a
+    separate one for z:
+
+        Cart = (lambda_xy(r) x, lambda_xy(r) y, lambda_z(r) z)
+
+    where r is the raw Cartesian radius.
+    """
+
+    def __init__(self, num_transitions: int) -> None:
+        if num_transitions < 1:
+            raise ValueError(f"num_transitions must be >= 1; got {num_transitions}.")
+
+        self.num_transitions = num_transitions
+        self.xx = list(ixp.declarerank1("xx", dimension=3))
+        r2 = sum(self.xx[i] ** 2 for i in range(3))
+        self.r = sp.sqrt(r2)
+        r_sym = sp.Symbol("r_fisheye", real=True, positive=True)
+
+        self.a_list = par.register_CodeParameters(
+            "REAL",
+            __name__,
+            [f"fisheye_a{i}" for i in range(num_transitions + 1)],
+            [1.0] * (num_transitions + 1),
+            commondata=False,
         )
-        _, rb1, _, _ = self.radius_map_unscaled_and_derivs_closed_form(r)
-        return self.c * rb0, self.c * rb1
+        self.xy_map = FisheyeRadialMap(
+            num_transitions, prefix="fisheye_xy", a_list=self.a_list
+        )
+        self.z_map = FisheyeRadialMap(
+            num_transitions, prefix="fisheye_z", a_list=self.a_list
+        )
+        self.xy_R_list = self.xy_map.R_list
+        self.xy_s_list = self.xy_map.s_list
+        self.xy_c = self.xy_map.c
+        self.z_R_list = self.z_map.R_list
+        self.z_s_list = self.z_map.s_list
+        self.z_c = self.z_map.c
+
+        xy_rbar, xy_drbar, xy_d2rbar, xy_d3rbar = (
+            self.xy_map.scaled_stable_value_and_derivs_closed_form(r_sym)
+        )
+        z_rbar, z_drbar, z_d2rbar, z_d3rbar = (
+            self.z_map.scaled_stable_value_and_derivs_closed_form(r_sym)
+        )
+        sub = _rpow_xreplace_dict(r_sym=r_sym, r=self.r, r2=cast(sp.Expr, r2))
+        lam_xy = (xy_rbar / r_sym).xreplace(sub)
+        lam_z = (z_rbar / r_sym).xreplace(sub)
+        dlam_xy_over_r = ((xy_drbar * r_sym - xy_rbar) / (r_sym**3)).xreplace(sub)
+        dlam_z_over_r = ((z_drbar * r_sym - z_rbar) / (r_sym**3)).xreplace(sub)
+        d2lam_xy_over_r2 = (
+            (xy_d2rbar * r_sym**2 - 3 * xy_drbar * r_sym + 3 * xy_rbar) / (r_sym**5)
+        ).xreplace(sub)
+        d2lam_z_over_r2 = (
+            (z_d2rbar * r_sym**2 - 3 * z_drbar * r_sym + 3 * z_rbar) / (r_sym**5)
+        ).xreplace(sub)
+        d3lam_xy_over_r3 = (
+            (
+                xy_d3rbar * r_sym**3
+                - 6 * xy_d2rbar * r_sym**2
+                + 15 * xy_drbar * r_sym
+                - 15 * xy_rbar
+            )
+            / (r_sym**7)
+        ).xreplace(sub)
+        d3lam_z_over_r3 = (
+            (
+                z_d3rbar * r_sym**3
+                - 6 * z_d2rbar * r_sym**2
+                + 15 * z_drbar * r_sym
+                - 15 * z_rbar
+            )
+            / (r_sym**7)
+        ).xreplace(sub)
+
+        self.xx_to_CartU = [
+            lam_xy * self.xx[0],
+            lam_xy * self.xx[1],
+            lam_z * self.xx[2],
+        ]
+        kronecker_delta = (
+            (1, 0, 0),
+            (0, 1, 0),
+            (0, 0, 1),
+        )
+        self.dCart_dxxUD: List[List[sp.Expr]] = [
+            [sp.Integer(0) for _ in range(3)] for _ in range(3)
+        ]
+        for mu in range(3):
+            lam_mu = lam_xy if mu < 2 else lam_z
+            dlam_mu_over_r = dlam_xy_over_r if mu < 2 else dlam_z_over_r
+            for j in range(3):
+                self.dCart_dxxUD[mu][j] = (
+                    lam_mu if mu == j else sp.Integer(0)
+                ) + dlam_mu_over_r * self.xx[mu] * self.xx[j]
+
+        self.ghatDD = ixp.zerorank2(dimension=3)
+        for i in range(3):
+            for j in range(3):
+                for mu in range(3):
+                    self.ghatDD[i][j] += (
+                        self.dCart_dxxUD[mu][i] * self.dCart_dxxUD[mu][j]
+                    )
+
+        d2Cart_dxxdxxUDD = ixp.zerorank3(dimension=3)
+        for mu in range(3):
+            dlam_mu_over_r = dlam_xy_over_r if mu < 2 else dlam_z_over_r
+            d2lam_mu_over_r2 = d2lam_xy_over_r2 if mu < 2 else d2lam_z_over_r2
+            for j in range(3):
+                for k in range(3):
+                    d2Cart_dxxdxxUDD[mu][j][k] = (
+                        dlam_mu_over_r * self.xx[k] * kronecker_delta[mu][j]
+                        + d2lam_mu_over_r2 * self.xx[mu] * self.xx[j] * self.xx[k]
+                        + dlam_mu_over_r * kronecker_delta[mu][k] * self.xx[j]
+                        + dlam_mu_over_r * self.xx[mu] * kronecker_delta[j][k]
+                    )
+
+        self.ghatDDdD = ixp.zerorank3(dimension=3)
+        for i in range(3):
+            for j in range(3):
+                for k in range(3):
+                    for mu in range(3):
+                        self.ghatDDdD[i][j][k] += (
+                            d2Cart_dxxdxxUDD[mu][i][k] * self.dCart_dxxUD[mu][j]
+                            + self.dCart_dxxUD[mu][i] * d2Cart_dxxdxxUDD[mu][j][k]
+                        )
+
+        d3Cart_dxxdxxdxxUDDD = ixp.zerorank4(dimension=3)
+        for mu in range(3):
+            dlam_mu_over_r = dlam_xy_over_r if mu < 2 else dlam_z_over_r
+            d2lam_mu_over_r2 = d2lam_xy_over_r2 if mu < 2 else d2lam_z_over_r2
+            d3lam_mu_over_r3 = d3lam_xy_over_r3 if mu < 2 else d3lam_z_over_r3
+            for j in range(3):
+                for k in range(3):
+                    for l in range(3):
+                        d3Cart_dxxdxxdxxUDDD[mu][j][k][l] = (
+                            d2lam_mu_over_r2
+                            * self.xx[l]
+                            * self.xx[k]
+                            * kronecker_delta[mu][j]
+                            + dlam_mu_over_r
+                            * kronecker_delta[k][l]
+                            * kronecker_delta[mu][j]
+                            + d3lam_mu_over_r3
+                            * self.xx[mu]
+                            * self.xx[j]
+                            * self.xx[k]
+                            * self.xx[l]
+                            + d2lam_mu_over_r2
+                            * kronecker_delta[k][l]
+                            * self.xx[mu]
+                            * self.xx[j]
+                            + d2lam_mu_over_r2
+                            * self.xx[k]
+                            * kronecker_delta[mu][l]
+                            * self.xx[j]
+                            + d2lam_mu_over_r2
+                            * self.xx[k]
+                            * self.xx[mu]
+                            * kronecker_delta[j][l]
+                            + d2lam_mu_over_r2
+                            * self.xx[l]
+                            * kronecker_delta[mu][k]
+                            * self.xx[j]
+                            + dlam_mu_over_r
+                            * kronecker_delta[mu][k]
+                            * kronecker_delta[j][l]
+                            + d2lam_mu_over_r2
+                            * self.xx[l]
+                            * self.xx[mu]
+                            * kronecker_delta[j][k]
+                            + dlam_mu_over_r
+                            * kronecker_delta[mu][l]
+                            * kronecker_delta[j][k]
+                        )
+
+        self.ghatDDdDD = ixp.zerorank4(dimension=3)
+        for i in range(3):
+            for j in range(3):
+                for k in range(3):
+                    for l in range(3):
+                        for mu in range(3):
+                            self.ghatDDdDD[i][j][k][l] += (
+                                d3Cart_dxxdxxdxxUDDD[mu][i][k][l]
+                                * self.dCart_dxxUD[mu][j]
+                                + d2Cart_dxxdxxUDD[mu][i][k]
+                                * d2Cart_dxxdxxUDD[mu][j][l]
+                                + d2Cart_dxxdxxUDD[mu][i][l]
+                                * d2Cart_dxxdxxUDD[mu][j][k]
+                                + self.dCart_dxxUD[mu][i]
+                                * d3Cart_dxxdxxdxxUDDD[mu][j][k][l]
+                            )
+
+    def axis_maps_for_inverse(
+        self, r: sp.Expr
+    ) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
+        """
+        Return axis maps needed for inverse code generation.
+
+        :param r: Raw radial coordinate.
+        :return: Equatorial and axial scale factors, their radial derivatives,
+            and a conservative far-field scale.
+        """
+        xy_rbar, xy_drbar = self.xy_map.scaled_value_stable_and_deriv(r)
+        z_rbar, z_drbar = self.z_map.scaled_value_stable_and_deriv(r)
+        lam_xy = xy_rbar / r
+        lam_z = z_rbar / r
+        dlam_xy = (xy_drbar * r - xy_rbar) / (r**2)
+        dlam_z = (z_drbar * r - z_rbar) / (r**2)
+        asymptotic_scale = sp.Min(
+            self.xy_map.c * self.a_list[-1], self.z_map.c * self.a_list[-1]
+        )
+        return lam_xy, lam_z, dlam_xy, dlam_z, asymptotic_scale
+
+    def cartesian_radial_vector_in_raw_coordinates(self) -> List[sp.Expr]:
+        """
+        Return the raw-coordinate vector mapped to physical Cart by dCart/dxx.
+
+        :return: Three raw-coordinate components of the Cartesian radial vector.
+        """
+        x, y, z = self.xx
+        lam_xy, lam_z, dlam_xy, dlam_z, _ = self.axis_maps_for_inverse(self.r)
+        dlam_xy_over_r = dlam_xy / self.r
+        dlam_z_over_r = dlam_z / self.r
+        rho2 = x**2 + y**2
+        z2 = z**2
+        denom = (
+            dlam_xy_over_r * lam_z * rho2 + dlam_z_over_r * lam_xy * z2 + lam_xy * lam_z
+        )
+        u = (
+            -dlam_xy_over_r * lam_z * z2 + dlam_z_over_r * lam_xy * z2 + lam_xy * lam_z
+        ) / denom
+        v = (
+            dlam_xy_over_r * lam_z * rho2
+            - dlam_z_over_r * lam_xy * rho2
+            + lam_xy * lam_z
+        ) / denom
+        return [u * x, u * y, v * z]
 
 
 def build_fisheye(num_transitions: int) -> GeneralRFMFisheye:
@@ -406,6 +741,54 @@ def build_fisheye(num_transitions: int) -> GeneralRFMFisheye:
     :return: A newly constructed GeneralRFMFisheye instance.
     """
     return GeneralRFMFisheye(num_transitions=num_transitions)
+
+
+def build_spheroidal_fisheye(num_transitions: int) -> GeneralRFMSpheroidalFisheye:
+    """
+    Construct a spheroidal GeneralRFM fisheye instance.
+
+    :param num_transitions: Number of fisheye transitions. Must be at least 1.
+    :return: A newly constructed GeneralRFMSpheroidalFisheye instance.
+
+    Doctests:
+    >>> radial = build_fisheye(1)
+    >>> spheroidal = build_spheroidal_fisheye(1)
+    >>> substitutions = {
+    ...     radial.a_list[0]: 1.0,
+    ...     radial.a_list[1]: 2.0,
+    ...     radial.R_list[0]: 3.0,
+    ...     radial.s_list[0]: 0.7,
+    ...     radial.c: 0.9,
+    ...     spheroidal.a_list[0]: 1.0,
+    ...     spheroidal.a_list[1]: 2.0,
+    ...     spheroidal.xy_R_list[0]: 3.0,
+    ...     spheroidal.xy_s_list[0]: 0.7,
+    ...     spheroidal.xy_c: 0.9,
+    ...     spheroidal.z_R_list[0]: 3.0,
+    ...     spheroidal.z_s_list[0]: 0.7,
+    ...     spheroidal.z_c: 0.9,
+    ...     radial.xx[0]: 1.1,
+    ...     radial.xx[1]: -0.4,
+    ...     radial.xx[2]: 0.8,
+    ...     spheroidal.xx[0]: 1.1,
+    ...     spheroidal.xx[1]: -0.4,
+    ...     spheroidal.xx[2]: 0.8,
+    ... }
+    >>> spheroidal_values = [
+    ...     float(expr.evalf(subs=substitutions))
+    ...     for expr in spheroidal.xx_to_CartU
+    ... ]
+    >>> all(
+    ...     abs(
+    ...         float(radial.xx_to_CartU[i].subs(substitutions).evalf())
+    ...         - spheroidal_values[i]
+    ...     )
+    ...     < 1.0e-12
+    ...     for i in range(3)
+    ... )
+    True
+    """
+    return GeneralRFMSpheroidalFisheye(num_transitions=num_transitions)
 
 
 def _G_kernel(r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:
@@ -439,12 +822,10 @@ def _G_kernel(r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:
     scaled_min = sp.Min(r, R) / s
     scaled_max = sp.Max(r, R) / s
     tail = sp.exp(-2 * (scaled_max - scaled_min))
-    log1p = sp.Function("log1p")
-    expm1 = sp.Function("expm1")
-    logcosh_difference = 2 * scaled_min + log1p(
-        tail * expm1(-4 * scaled_min) / (sp.Integer(1) + tail)
-    )
-    return (s / (2 * sp.tanh(R / s))) * logcosh_difference
+    # Avoid dividing the leading radius by s and multiplying it back in float.
+    correction = log1p(tail * expm1(-4 * scaled_min) / (sp.Integer(1) + tail))
+    result: sp.Expr = (sp.Min(r, R) + s * correction / 2) / sp.tanh(R / s)
+    return result
 
 
 def _radius_map_unscaled(
@@ -705,5 +1086,35 @@ if __name__ == "__main__":
             os.path.abspath(__file__),
             os.getcwd(),
             f"{os.path.splitext(os.path.basename(__file__))[0]}_N{N}",
+            results_dict,
+        )
+
+    for N in (1, 2):
+        spheroidal = GeneralRFMSpheroidalFisheye(num_transitions=N)
+        # Check representative mixed derivatives independently of their stored formulas.
+        for stored, differentiated in (
+            (
+                spheroidal.dCart_dxxUD[0][1],
+                sp.diff(spheroidal.xx_to_CartU[0], spheroidal.xx[1]),
+            ),
+            (
+                spheroidal.ghatDDdD[0][1][2],
+                sp.diff(spheroidal.ghatDD[0][1], spheroidal.xx[2]),
+            ),
+            (
+                spheroidal.ghatDDdDD[0][1][2][0],
+                sp.diff(spheroidal.ghatDD[0][1], spheroidal.xx[2], spheroidal.xx[0]),
+            ),
+        ):
+            assert ve.check_zero(
+                stored - differentiated, fixed_mpfs_for_free_symbols=True
+            )
+        results_dict = ve.process_dictionary_of_expressions(
+            spheroidal.__dict__, fixed_mpfs_for_free_symbols=True
+        )
+        ve.compare_or_generate_trusted_results(
+            os.path.abspath(__file__),
+            os.getcwd(),
+            f"fisheye_spheroidal_N{N}",
             results_dict,
         )
