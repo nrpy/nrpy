@@ -177,22 +177,14 @@ class SpECTRESpinEstimateClass:
         # Metric, extrinsic curvature, and unit normal reuse the standard
         # BHaHAHA symbolic construction from the evolved and AUXEVOL fields.
         self._gammaDD = [
-            [
-                Th.gammaDD[i][j].xreplace(surface_replacements)
-                for j in range(3)
-            ]
+            [Th.gammaDD[i][j].xreplace(surface_replacements) for j in range(3)]
             for i in range(3)
         ]
         self._KDD = [
-            [
-                Th.KDD[i][j].xreplace(surface_replacements)
-                for j in range(3)
-            ]
+            [Th.KDD[i][j].xreplace(surface_replacements) for j in range(3)]
             for i in range(3)
         ]
-        self._sU = [
-            Th.sU[i].xreplace(surface_replacements) for i in range(3)
-        ]
+        self._sU = [Th.sU[i].xreplace(surface_replacements) for i in range(3)]
         self._zU = ixp.declarerank1("zU", dimension=3)
 
         # Tangent vectors e_A^i in (r, theta, phi) basis:
