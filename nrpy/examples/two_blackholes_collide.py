@@ -17,6 +17,7 @@ import argparse
 import os
 import shutil
 import subprocess
+from typing import Optional
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
@@ -79,7 +80,7 @@ if raytracing_options.enabled:
     CoordSystem = raytracing_options.coord_system
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
-num_fisheye_transitions = (
+num_fisheye_transitions: Optional[int] = (
     int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
     if CoordSystem.startswith("GeneralRFM_fisheyeN")
     else None

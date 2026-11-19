@@ -15,8 +15,8 @@ Run `python -m nrpy.examples.<module> [flags]` from the repository root ([Build 
 
 | Generator | Key CLI flags | CI check | Detail leaf |
 | --- | --- | --- | --- |
-| `bhahaha.py` | `[--fdorder N] [--outrootdir DIR] [--cpp] [--no-openmp]` | Ubuntu/macOS C static-library `make` build only | [Apparent Horizon Library](apparent-horizon-library.md) |
-| `blackhole_spectroscopy.py` | `[--cuda] [--fccz4] [--raytracing-time]` | Ubuntu/macOS default BSSN/OpenMP `make` build only | [Standalone GR/BHaH](standalone-gr-bhah.md) |
+| `bhahaha.py` | `[--fdorder N] [--outrootdir DIR] [--cpp] [--no-openmp] [--sequential-codegen]` | Ubuntu/macOS C static-library `make` build only | [Apparent Horizon Library](apparent-horizon-library.md) |
+| `blackhole_spectroscopy.py` | `[--cuda] [--fccz4] [--floating_point_precision TYPE] [--raytracing-time]` | Ubuntu/macOS default BSSN/OpenMP `make` build only | [Standalone GR/BHaH](standalone-gr-bhah.md) |
 | `carpet_baikal_thorns.py` | none | `einsteintoolkit-validation` ET build + `Baikal`/`BaikalVacuum` testsuites | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `carpet_wavetoy_thorns.py` | none | `einsteintoolkit-validation` ET build + `WaveToyNRPy` testsuite | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `carpetx_baikal_thorns.py` | none | `full_nrpy_local_ci.sh` generation only; no CI build/run | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
@@ -60,9 +60,13 @@ Evidence (CI behavior): `.github/workflows/main.yml`; `.github/workflows/dendrol
 | --- | --- | --- | --- |
 | `nrpy/examples/et_WaveToyfiles/**` | `ThornList`, `WaveToyNRPy*.par`, `test.ccl`, `uuGF.x.asc` | Checked-in ET inputs; `project/**` disposable | [ET Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `nrpy/examples/geodesic_visualizations/*.py` | Trajectory plots, lensed-image rendering, blueprint analysis | PNGs, `trajectory.txt`, and blueprint binaries are generated | [Geodesic Raytracing](geodesic-raytracing.md) |
-| `nrpy/examples/tests/*.py` | `sebob*_consistency_check.py`, `sebobv2_projected_attachment_check.py`, `dendro_application_check*.py` | Temp worktrees disposable | [Generated Project CI](../validation/generated-project-ci.md) |
+| `nrpy/examples/tests/*.py` | `sebob*.py`, `dendro_application_check*.py`, `spheroidal_fisheye_roundtrip_check.py` | Temp outputs disposable | [Generated Project CI](../validation/generated-project-ci.md) |
 | `nrpy/examples/superb_paper2/*.py` | `superB_blackhole_spectroscopy_{8Mseparation,last_orbit}.py` | Generated Charm++ `project/**` disposable | [superB Charm++ Workflows](superb-charm-workflows.md) |
 | `nrpy/examples/q1.par.lowres.toml` | Checked-in low-res Dendro BSSN/fCCZ4 TOML parameter file | Copied into generated `pars/` alongside `<stem>.toml` | [Dendro Parameters](../infrastructures/dendro/runtime-parameters.md) |
+
+`superB_blackhole_spectroscopy_8Mseparation.py` generates a radial fisheye grid by
+default. Pass `--spheroidal` to generate the spheroidal fisheye grid with
+separate xy and z transition parameters.
 
 See [SEBOBv1 JAX Workflow](../infrastructures/jax/sebobv1-jax-workflow.md) for `SEOBNRv5_aligned_spin_coefficients` and `Commondata` fields.
 
@@ -71,8 +75,9 @@ See [SEBOBv1 JAX Workflow](../infrastructures/jax/sebobv1-jax-workflow.md) for `
 - [main.yml](../../.github/workflows/main.yml) - CI build and validation matrix
 - [dendrolib-canary.yml](../../.github/workflows/dendrolib-canary.yml) - `dendro-validation-dendrolib-master`
 - [sebobv2-projected-attachment.yml](../../.github/workflows/sebobv2-projected-attachment.yml) - `projected-reference-and-matching`
+- [spheroidal_fisheye_roundtrip.yml](../../.github/workflows/spheroidal_fisheye_roundtrip.yml) - spheroidal coordinate checks
 - [full_nrpy_local_ci.sh](../../.github/full_nrpy_local_ci.sh) - manual local build and `--cuda` configuration script
-- [bhahaha.py](../../nrpy/examples/bhahaha.py) - `parser`, `project_name`
+- [bhahaha.py](../../nrpy/examples/bhahaha.py) - `parser`, `--sequential-codegen`, `project_name`
 - [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py) - `parser`, `project_name`
 - [carpet_baikal_thorns.py](../../nrpy/examples/carpet_baikal_thorns.py) - `project_name`, `thorn_names`
 - [carpet_wavetoy_thorns.py](../../nrpy/examples/carpet_wavetoy_thorns.py) - `project_name`, thorn names
@@ -121,6 +126,7 @@ See [SEBOBv1 JAX Workflow](../infrastructures/jax/sebobv1-jax-workflow.md) for `
 - [sebobv2_projected_attachment_check.py](../../nrpy/examples/tests/sebobv2_projected_attachment_check.py) - `main`
 - [dendro_application_check.py](../../nrpy/examples/tests/dendro_application_check.py) - `Leg.run`
 - [dendro_application_check_reference.py](../../nrpy/examples/tests/dendro_application_check_reference.py) - `trusted_dict`
+- [spheroidal_fisheye_roundtrip_check.py](../../nrpy/examples/tests/spheroidal_fisheye_roundtrip_check.py) - N1/N8 inverse checks
 
 ## See Also
 

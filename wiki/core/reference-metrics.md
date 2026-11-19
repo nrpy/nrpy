@@ -33,9 +33,10 @@ The module-level validation list `supported_CoordSystems` contains `Spherical`, 
 That validation list does not enumerate every name accepted by coordinate
 setup. The implementation also includes `SinhCartesianSplitOffZ`, the
 `SinhSphericalv2n*` and `SinhCylindricalv2n*` families with even exponents at least
-two, and `GeneralRFM_fisheyeN*` providers with positive transition counts.
+two, and `GeneralRFM_fisheyeN*` and `GeneralRFM_spheroidal_fisheyeN*`
+providers with positive transition counts.
 Accepting a name does not mean that the module's trusted-value loop exercises it.
-Unrecognized coordinate families raise `ValueError`. A `GeneralRFM` name that does not begin with `GeneralRFM_fisheyeN` retains placeholder provider metadata. Names beginning with that prefix must have the required numeric suffix and a positive transition count; malformed suffixes raise `ValueError`.
+Unrecognized coordinate families raise `ValueError`. A `GeneralRFM` name that does not begin with either recognized fisheye prefix retains placeholder provider metadata. Names beginning with those prefixes must have the required numeric suffix and a positive transition count; malformed suffixes raise `ValueError`.
 
 Evidence (descriptive behavior): `reference_metric.py::supported_CoordSystems`, `ReferenceMetric.__init__` (`cartesian_like`, `Sinhv2`, `general_rfm_like`), and `__main__`; corroboration: `generalrfm/fisheye.py::GeneralRFMFisheye.__init__`.
 
@@ -52,7 +53,7 @@ Evidence (descriptive behavior): `reference_metric.py::spherical_like` and `cyli
 
 `rfm_dict.__getitem__()` lazily builds reference metrics. If a requested key is missing, it strips any `_rfm_precompute` suffix, builds the base `ReferenceMetric(CoordSystem, enable_rfm_precompute=False)`, caches it under the base key, and also caches a precompute key. Non-`GeneralRFM` systems get a separate `ReferenceMetric(CoordSystem, enable_rfm_precompute=True)` under `CoordSystem + "_rfm_precompute"`; `GeneralRFM` precompute keys map to the same base object because GeneralRFM data is already gridfunction-provided.
 
-`GeneralRFM` behavior is distinct from diagonal coordinate families. `general_rfm_like()` sets neutral bounds and identity Cartesian labels by default, marks the analytic inverse map as unavailable with `nan` sentinels, stores provider metadata, and recognizes the `GeneralRFM_fisheyeN*` pattern by building a fisheye provider. For GeneralRFM systems, `ghatDD`, `ghatDDdD`, and `ghatDDdDD` are registered as `AUXEVOL` gridfunctions, rescaling factors are set to one, and derived quantities such as `ghatUU`, `detgammahat`, determinant derivatives, and `Gammahat*` are computed algebraically from those gridfunctions.
+`GeneralRFM` behavior is distinct from diagonal coordinate families. `general_rfm_like()` sets neutral bounds and identity Cartesian labels by default, marks the analytic inverse map as unavailable with `nan` sentinels, and stores provider metadata. It builds a radial provider for `GeneralRFM_fisheyeN*` or a spheroidal provider with separate xy and z radius maps for `GeneralRFM_spheroidal_fisheyeN*`. For GeneralRFM systems, `ghatDD`, `ghatDDdD`, and `ghatDDdDD` are registered as `AUXEVOL` gridfunctions, rescaling factors are set to one, and derived quantities such as `ghatUU`, `detgammahat`, determinant derivatives, and `Gammahat*` are computed algebraically from those gridfunctions.
 
 The `GeneralRFM_fisheyeN2` trusted dictionary contains three intentional NaN
 sentinels, at `Cart_to_xx_0` through `Cart_to_xx_2`, for that unavailable
@@ -77,7 +78,7 @@ In the module `__main__` validation path, doctests run first. Then every entry i
 
 ## Sources
 
-- [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py) - `GeneralRFMFisheye.__init__`
+- [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py) - `GeneralRFMFisheye.__init__`, `GeneralRFMSpheroidalFisheye.__init__`
 - [CodeParameters.py](../../nrpy/infrastructures/BHaH/CodeParameters.py) - `register_CFunctions_params_commondata_struct_set_to_default`, `write_CodeParameters_h_files`
 - [xx_tofrom_Cart.py](../../nrpy/infrastructures/BHaH/xx_tofrom_Cart.py) - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`
 - [nrpy/reference_metric.py](../../nrpy/reference_metric.py) - `ReferenceMetric`, `CoordSystem_to_register_CodeParameters`, `reference_metric`, `rfm_dict`; `supported_CoordSystems`, `unittest_CoordSystems`; `Sinhv1`, `Sinhv2`, `cartesian_like`, `spherical_like`, `spherical_wedge_like`, `prolate_spheroidal_like`, `cylindrical_like`, `general_rfm_like`; `register_pi`, `register_sqrt1_2`; `__main__` validation loop and `SinhSymTP` `check_zero` inverse check

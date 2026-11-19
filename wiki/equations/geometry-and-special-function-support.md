@@ -30,6 +30,12 @@ runtime proof.
 
 Evidence (descriptive behavior): `basis_transforms/jacobians.py::BasisTransforms.basis_transform_4tensorUU_from_Cartesian_to_time_indep_rfmbasis`.
 
+`FisheyeRadialMap` registers the parameters for one radius map and evaluates
+its value and derivatives. Both fisheye providers use this helper. The radial
+provider uses the `fisheye` parameter prefix; the spheroidal provider uses
+`fisheye_xy` and `fisheye_z` for transition centers, widths, and scales while
+explicitly sharing the `fisheye_a*` plateau factors.
+
 `GeneralRFMFisheye` builds an N-transition radial fisheye map from raw
 Cartesian coordinates `xx[i]` to physical Cartesian coordinates. It registers
 the plateau, transition-center, width, and global-scale code parameters,
@@ -44,9 +50,19 @@ undefined even for a map with a regular limit. Origin limits need separate
 handling. Transition widths and `tanh(R/s)` occur in denominators; callers
 must keep those denominators defined and choose a nonsingular radial map.
 The constructor checks the transition count, not these parameter-domain or
-invertibility conditions.
+invertibility conditions. `GeneralRFMSpheroidalFisheye` uses independent
+N-transition xy and z radius maps. It scales the raw x and y coordinates by
+the xy map and the raw z coordinate by the z map, then computes the induced
+reference metric and its first and second derivatives. Its constructor also
+requires a positive transition count.
 
-Evidence (descriptive behavior): `generalrfm/fisheye.py::GeneralRFMFisheye.__init__`; `generalrfm/fisheye.py::_G_and_derivs_closed_form`.
+The module's script validation covers spheroidal N=1 and N=2 maps in
+`fisheye_spheroidal_N1.py` and `fisheye_spheroidal_N2.py`. It checks representative
+mixed Jacobian and metric derivatives by differentiating the coordinate and
+metric expressions, then compares sampled provider expressions with the stored
+reference values.
+
+Evidence (descriptive behavior): `generalrfm/fisheye.py::GeneralRFMFisheye.__init__`; `generalrfm/fisheye.py::GeneralRFMSpheroidalFisheye.__init__`; `generalrfm/fisheye.py::_G_and_derivs_closed_form`.
 
 ### Rotations And Spin-Weighted Spherical Harmonics
 
@@ -96,9 +112,11 @@ runtime behavior, or numerical accuracy; use [Expression Validation Helpers](../
 - [jacobians_Cartesian.py](../../nrpy/equations/basis_transforms/tests/jacobians_Cartesian.py) - `trusted_dict`
 - [jacobians_Spherical.py](../../nrpy/equations/basis_transforms/tests/jacobians_Spherical.py) - `trusted_dict`
 - [jacobians_GeneralRFM_fisheyeN2.py](../../nrpy/equations/basis_transforms/tests/jacobians_GeneralRFM_fisheyeN2.py) - `trusted_dict`
-- [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py) - `GeneralRFMFisheye`, `build_fisheye`, `xx_to_CartU`, `ghatDD`, `ghatDDdD`, `ghatDDdDD`
+- [fisheye.py](../../nrpy/equations/generalrfm/fisheye.py) - `FisheyeRadialMap`, `GeneralRFMFisheye`, `GeneralRFMSpheroidalFisheye`, `build_fisheye`, `build_spheroidal_fisheye`, `xx_to_CartU`, `ghatDD`, `ghatDDdD`, `ghatDDdDD`
 - [fisheye_N1.py](../../nrpy/equations/generalrfm/tests/fisheye_N1.py) - `trusted_dict`
 - [fisheye_N2.py](../../nrpy/equations/generalrfm/tests/fisheye_N2.py) - `trusted_dict`
+- [fisheye_spheroidal_N1.py](../../nrpy/equations/generalrfm/tests/fisheye_spheroidal_N1.py) - `trusted_dict`
+- [fisheye_spheroidal_N2.py](../../nrpy/equations/generalrfm/tests/fisheye_spheroidal_N2.py) - `trusted_dict`
 - [SO3_rotations.py](../../nrpy/equations/rotation/SO3_rotations.py) - `SO3Expressions`, `apply_R_to_vector`, `apply_R_to_tensorDD`, `rodrigues_matrix_from_axis_angle`
 - [SO3_rotations.py](../../nrpy/equations/rotation/tests/SO3_rotations.py) - `trusted_dict`
 - [tensor_rotation.py](../../nrpy/equations/quaternion_rotations/tensor_rotation.py) - `rotate`
