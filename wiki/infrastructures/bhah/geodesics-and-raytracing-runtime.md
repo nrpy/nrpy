@@ -51,13 +51,19 @@ Evidence (descriptive behavior): `time_window_manager_numerical.py::time_window_
 
 ### Spatial Node Exclusion For Numerical Photons
 
-On the stored azimuthal plane selected at the start of an RKF45 attempt, the mask compares the Frobenius norm of each stored spatial metric to the median norm of the neighboring stencil nodes. If the ratio exceeds `numerical_spacetime_spatial_mask_threshold` on any selected time slice, that spatial index is excluded across the temporal stencil. Synthetic nodes use the corresponding endpoint slice for this comparison. Spatial half-width zero leaves the mask empty.
+On the stored azimuthal plane selected at the start of an RKF45 attempt, the mask compares each spatial metric's Frobenius norm with the median norm of its neighboring stencil nodes multiplied by `numerical_spacetime_spatial_mask_threshold`. A norm strictly above this product on any selected time slice excludes that spatial node across the temporal stencil. Synthetic time nodes use the corresponding endpoint slice. Spatial half-width zero leaves the mask empty.
+
+Evidence (descriptive behavior): `time_window_manager_numerical.py::time_window_manager_numerical_build_spatial_mask`.
 
 With any exclusions, the spatial interpolator forms Lagrange weights along rho within each retained row, then along z across rows. Each row needs at least two retained nodes, and the z interpolation needs at least two usable rows. The derivatives come from that same reconstruction. An empty mask selects ordinary spatial interpolation. The temporal interpolation method stays the same for either reconstruction.
 
-Single and batch integrations retain the mask through the stages and accepted-step metric evaluations. The batch integrator rebuilds the mask for delayed diagnostics from the saved accepted stencil selection or the saved plane-crossing candidate. Numerical Brent refinement uses one selection for the full crossing bracket. A change of stencil or mask between attempts can change the reconstructed metric.
+Evidence (descriptive behavior): `azimuthal_symmetry_spatial_lagrange_interpolation_masked.py::spatial_lagrange_masked_weights`.
 
-Evidence (descriptive behavior): `time_window_manager_numerical.py::time_window_manager_numerical_build_spatial_mask` and `azimuthal_symmetry_spatial_lagrange_interpolation_masked.py::spatial_lagrange_masked_weights`.
+For positive spatial half-width, the numerical batch integrator prepares outlier flags for selected time slices as it maps them and reuses flags for slices shared by consecutive mappings. Each node on the two stored azimuthal planes has a flag for each possible stencil position at that node, such as a corner, an edge, or the interior. During an attempt, the mask reads the flag for each node's stencil position and combines the exclusions across the selected slices. The single-photon integrator computes the norms and medians directly on its selected stencil.
+
+Evidence (descriptive behavior): `time_window_manager_numerical.py::time_window_manager_numerical_prepare_slice_outlier_flags`, `time_window_manager_numerical.py::time_window_manager_numerical_mmap_for_slot`, and `time_window_manager_numerical.py::time_window_manager_numerical_build_spatial_mask`.
+
+Single and batch integrations retain the mask through the stages and accepted-step metric evaluations. The batch integrator rebuilds the mask for delayed diagnostics from the saved accepted stencil selection or the saved plane-crossing candidate. Numerical Brent refinement uses one selection for the full crossing bracket. A change of stencil or mask between attempts can change the reconstructed metric.
 
 Evidence (descriptive behavior): `single_integrator_numerical.py::single_integrator_numerical`, `batch_integrator_numerical.py::batch_integrator_numerical`, and `find_plane_crossings_brent.py::plane_crossing_brent_refine_candidate`.
 
@@ -79,11 +85,21 @@ Plane side changes on accepted steps save the starting state and integration-par
 
 Evidence (descriptive behavior): `event_detection_manager_kernel.py::event_detection_manager_kernel` and `find_plane_crossings_brent.py::find_plane_crossings_brent`.
 
-If an apparent-horizon `.bin` is supplied, the numerical program validates its slice table against the spacetime data. It checks the observer state and accepted photon states. The lookup uses the nearest retained slice, with `t_start` as the time in fast light. It checks the individual horizons before common-horizon detection and the common horizon afterward. Containment is determined by comparing the photon radius from the saved surface origin with the angularly interpolated surface radius. A containing surface sets `STOP_CONDITION_INSIDE_APPARENT_HORIZON`. A refined earlier terminal plane can still supply the reported terminal event.
+If an apparent-horizon `.bin` is supplied, the numerical program validates its slice table against the spacetime data. It checks the observer state and accepted photon states using the photon coordinate time or `t_start` in fast light. A nonfinite lookup time returns `HORIZON_NOT_CHECKED`. A finite negative lookup time is set to zero before comparison with the retained slice times. A lookup before the first retained slice or after the last returns `HORIZON_NOT_CHECKED`.
+
+Evidence (descriptive behavior): `puncture_diagnostics.py::apparent_horizons_open`, `puncture_diagnostics.py::apparent_horizons_classify`, and `event_detection_manager_kernel.py::event_detection_manager_kernel`.
+
+The lookup checks the individual horizons before common-horizon detection and the common horizon afterward. For each active horizon, it subtracts the angularly interpolated surface radius from the photon radius measured from the saved surface origin. Between retained slices, it interpolates the signed radial gap and containment tolerance linearly in coordinate time. An exact slice match uses that slice alone. A horizon check with missing bracketing data is unavailable. A containing surface sets `STOP_CONDITION_INSIDE_APPARENT_HORIZON`. A refined earlier terminal plane can still supply the reported terminal event.
+
+Evidence (descriptive behavior): `puncture_diagnostics.py::apparent_horizons_classify` and `event_detection_manager_kernel.py::event_detection_manager_kernel`.
 
 The text horizon diagnostics classify the final accepted state in single-photon runs and evolution-measure stops in batch runs when binary horizon stopping is disabled.
 
-Evidence (descriptive behavior): `puncture_diagnostics.py::apparent_horizons_open`, `apparent_horizons_classify`, and `puncture_diagnostics`; corroboration: `single_integrator_numerical.py::single_integrator_numerical` and `event_detection_manager_kernel.py::event_detection_manager_kernel`.
+Evidence (descriptive behavior): `puncture_diagnostics.py::puncture_diagnostics` and `single_integrator_numerical.py::single_integrator_numerical`.
+
+When either horizon input is enabled, the numerical batch integrator writes a puncture ID byte, a horizon status byte, and a double-precision radial gap for each photon. With a combined apparent-horizon input file, it writes the saved horizon check and prints the record count. For directory diagnostics alone, it prints the fraction inside a horizon among evolution-measure stops with a containment result.
+
+Evidence (descriptive behavior): `puncture_diagnostics.py::write_puncture_diagnostics` and `batch_integrator_numerical.py::batch_integrator_numerical`.
 
 ## Sources
 
@@ -102,7 +118,7 @@ Evidence (descriptive behavior): `puncture_diagnostics.py::apparent_horizons_ope
 - [rkf45_finalize_and_control_kernel.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/rkf45_finalize_and_control_kernel.py) - rkf45_finalize_and_control_kernel
 - [event_detection_manager_kernel.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py) - event_detection_manager_kernel
 - [find_plane_crossings_brent.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/find_plane_crossings_brent.py) - find_plane_crossings_brent
-- [puncture_diagnostics.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/puncture_diagnostics.py) - puncture_diagnostics
+- [puncture_diagnostics.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/puncture_diagnostics.py) - horizon lookup, containment checks, and `write_puncture_diagnostics`
 
 ## See Also
 

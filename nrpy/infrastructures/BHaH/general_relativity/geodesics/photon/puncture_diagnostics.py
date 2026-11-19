@@ -377,7 +377,7 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
         puncture_position_t *position = puncture_nearest_position(track, time);
         puncture_surface_t *surface = puncture_load_surface(data, horizon, position);
         result.horizon_time = position->time;
-        puncture_evaluate_surface(surface, point, &result);
+        puncture_evaluate_surface(surface, point, &result, false);
         return result;
     } // END FUNCTION: check nearest snapshot containment
 
@@ -450,10 +450,11 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
     /**
      * Write ID/status bytes and a radial-gap double per photon.
      *
-     * Binary horizon checks report the latest accepted state for every ray.
-     * Directory diagnostics classify only final evolution-measure stops.
-     * Inside fractions exclude unavailable horizon checks.
-     * Records contain no structure padding between the two bytes and double.
+     * With a combined apparent-horizon input file, write each photon's latest
+     * accepted horizon classification and print the number of records written.
+     * With a diagnostics directory, classify only evolution-measure stops and
+     * report the fraction inside a horizon among those with a containment result.
+     * The puncture ID byte and horizon status byte immediately precede the double.
      *
      * @param[in,out] data Diagnostic tables and lazily loaded radial surfaces.
      * @param[in] photon_horizons Latest accepted binary horizon results, when enabled.
@@ -461,7 +462,7 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
      * @param[in] photons Final photon states in structure-of-arrays order.
      * @param[in] results Final saved termination records after terminal-plane selection.
      * @param num_rays Number of photons in this tile.
-     * @param[in] filename Combined puncture blueprint output path.
+     * @param[in] filename Binary output path for the per-photon horizon records.
      * @param fast_light Whether horizon lookup uses the fixed observer time.
      */
     static void write_puncture_diagnostics(puncture_diagnostics_t *data,
@@ -486,15 +487,14 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
                 puncture_result_t result = {PUNCTURE_UNCLASSIFIED, HORIZON_NOT_CHECKED, NAN, NAN};
                 if (photon_horizons != NULL) {
                     result = photon_horizons[ray];
-                    ++counts[result.puncture_id][result.horizon_status];
-                    ++reported_rays;
-                } else if (results[ray].termination_type == STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED) {
+                } // END IF: use saved horizon classification
+                else if (results[ray].termination_type == STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED) {
                     const double point[3] = {photons->f[num_rays+ray], photons->f[2*num_rays+ray], photons->f[3*num_rays+ray]};
                     const double time = fast_light ? commondata->t_start : results[ray].t_f;
                     result = puncture_classify_endpoint(data, time, point);
                     ++counts[result.puncture_id][result.horizon_status];
                     ++reported_rays;
-                } // END IF: evolution measure stop selected
+                } // END ELSE IF: classify evolution-measure stop
                 records[offset][0] = result.puncture_id;
                 records[offset][1] = result.horizon_status;
                 memcpy(records[offset] + 2, &result.radial_gap, sizeof(result.radial_gap));
@@ -506,8 +506,12 @@ def puncture_diagnostics(include_batch_writer: bool = True) -> str:
         if (fclose(file) != 0) {
             puncture_error(filename, "cannot close combined puncture blueprint");
         } // END IF: output close failed
+        if (photon_horizons != NULL) {
+            printf("Wrote %ld puncture records (%zu bytes each) to %s.\n", num_rays, sizeof(records[0]), filename);
+            return;
+        } // END IF: binary horizon record output
         printf("\nPUNCTURE / APPARENT-HORIZON DIAGNOSTICS (this tile)\n");
-        printf("%s: %ld\n", photon_horizons != NULL ? "Photon endpoints" : "Evolution-measure stops", reported_rays);
+        printf("Evolution-measure stops: %ld\n", reported_rays);
         if (reported_rays > 0) {
             const char *names[4] = {"unclassified", "puncture_1", "puncture_2", "merged_puncture"};
             long total_inside = 0, total_outside = 0, total_unknown = 0;
@@ -600,14 +604,18 @@ def register_apparent_horizons() -> None:
      * @param[in] surface Saved horizon radii and surface origin.
      * @param[in] point Cartesian photon position.
      * @param[in,out] result Horizon result with containment status and radial gap filled in.
-     *
-     * @note At the radial origin, the point is inside and the radial gap is undefined.
+     * @param interpolate_in_time Whether a finite gap is needed at the radial origin.
      */
     static inline void puncture_evaluate_surface(const puncture_surface_t *surface,
-                                                 const double point[3], puncture_result_t *result) {
+                                                 const double point[3], puncture_result_t *result,
+                                                 const bool interpolate_in_time) {
         const double dx = point[0]-surface->origin[0], dy = point[1]-surface->origin[1], dz = point[2]-surface->origin[2];
         const double rho = hypot(dx, dy), r = hypot(rho, dz);
         if (r <= surface->roundoff) {
+            if (interpolate_in_time) {
+                // Use the smaller polar radius where the angular direction is undefined.
+                result->radial_gap = r - fmin(surface->pole_radius[0], surface->pole_radius[1]);
+            } // END IF: radial gap for interpolation
             result->horizon_status = HORIZON_INSIDE;
             return;
         } // END IF: photon at radial origin
@@ -734,21 +742,54 @@ def register_apparent_horizons() -> None:
     } // END FUNCTION: apparent_horizons_open
 
     /**
-     * Classify a photon against the relevant saved apparent horizons.
+     * Read the radial grid of one saved apparent horizon.
+     *
+     * @param[in] record Surface descriptor followed by its radial samples.
+     * @return Surface origin, angular dimensions, and mapped radial grid.
+     */
+    static inline puncture_surface_t apparent_horizons_slice_surface(const unsigned char *record) {
+        uint32_t dims[2];
+        double values[6];
+        memcpy(dims, record + 8, sizeof(dims));
+        memcpy(values, record + 40, sizeof(values));
+        return (puncture_surface_t){
+            (int)dims[0], (int)dims[1], {values[0], values[1], values[2]}, values[3],
+            {values[4], values[5]}, (const double *)(record + AH_SURFACE_BYTES)
+        };
+    } // END FUNCTION: decode one apparent-horizon surface
+
+    /**
+     * Classify a photon using signed radial gaps interpolated linearly in coordinate time.
      *
      * @param[in] horizons Mapped horizon file and time coverage.
      * @param[in] window Retained spacetime slice times.
      * @param time Photon coordinate time or fixed geometry sampling time.
      * @param[in] point Cartesian photon position.
-     * @return Horizon ID, containment status, slice time, and signed radial gap.
+     * @return Horizon ID, containment status, evaluation time, and signed radial gap.
      */
     static inline puncture_result_t apparent_horizons_classify(
         const apparent_horizon_file_t *horizons, const NumericalTimeWindowManager *window,
         double time, const double point[3]) {
         puncture_result_t result = {PUNCTURE_UNCLASSIFIED, HORIZON_NOT_CHECKED, NAN, NAN};
+        if (!isfinite(time)) return result;
         time = fmax(time, 0.0);
-        const uint64_t index = time_window_manager_numerical_nearest_selected_slice_for_time(window, time);
-        const unsigned char *entry = horizons->bytes + AH_HEADER_BYTES + index * AH_SLICE_BYTES;
+        const uint64_t nearest = time_window_manager_numerical_nearest_selected_slice_for_time(window, time);
+        const double nearest_time = window->slice_times[nearest];
+        uint64_t lower = nearest, upper = nearest;
+        if (time < nearest_time) {
+            if (nearest == 0) return result;
+            lower -= window->time_slice_stride;
+        } // END IF: earlier lookup time
+        else if (time > nearest_time) {
+            if (nearest == time_window_manager_numerical_final_selected_slice(window)) return result;
+            upper += window->time_slice_stride;
+        } // END ELSE IF: later lookup time
+        const bool interpolate = lower != upper;
+        const double weight = interpolate
+            ? (time - window->slice_times[lower]) / (window->slice_times[upper] - window->slice_times[lower])
+            : 0.0;
+        const unsigned char *lower_entry = horizons->bytes + AH_HEADER_BYTES + lower * AH_SLICE_BYTES;
+        const unsigned char *upper_entry = horizons->bytes + AH_HEADER_BYTES + upper * AH_SLICE_BYTES;
         const bool common = time >= horizons->common_time;
         const int first = common ? 2 : 0;
         const int last = common ? 2 : 1;
@@ -757,28 +798,32 @@ def register_apparent_horizons() -> None:
         double containing_distance = INFINITY;
         puncture_result_t containing = result;
         for (int h = first; h <= last; ++h) {
-            const uint64_t offset = time_window_manager_numerical_load_u64(entry + 16 + 8*h);
-            if (!offset || time < horizons->first_time[h] || time > horizons->last_time[h]) {
+            const uint64_t lower_offset = time_window_manager_numerical_load_u64(lower_entry + 16 + 8*h);
+            const uint64_t upper_offset = time_window_manager_numerical_load_u64(upper_entry + 16 + 8*h);
+            if (!lower_offset || !upper_offset || time < horizons->first_time[h] || time > horizons->last_time[h]) {
                 missing = true;
                 continue;
-            } // END IF: required horizon shape unavailable
-            const unsigned char *record = horizons->bytes + offset;
-            uint32_t dims[2];
-            double values[9];
-            memcpy(dims, record + 8, sizeof(dims));
-            memcpy(values, record + 16, sizeof(values));
-            const puncture_surface_t surface = {
-                (int)dims[0], (int)dims[1], {values[3], values[4], values[5]}, values[6],
-                {values[7], values[8]}, (const double *)(record + AH_SURFACE_BYTES)
-            };
-            const double distance = hypot(hypot(point[0]-values[0], point[1]-values[1]), point[2]-values[2]);
-            puncture_result_t check = {(uint8_t)(h + 1), HORIZON_NOT_CHECKED, window->slice_times[index], NAN};
-            puncture_evaluate_surface(&surface, point, &check);
+            } // END IF: required horizon surface unavailable
+            const puncture_surface_t lower_surface = apparent_horizons_slice_surface(horizons->bytes + lower_offset);
+            puncture_result_t check = {(uint8_t)(h + 1), HORIZON_NOT_CHECKED, time, NAN};
+            puncture_evaluate_surface(&lower_surface, point, &check, interpolate);
+            if (interpolate) {
+                const puncture_surface_t upper_surface = apparent_horizons_slice_surface(horizons->bytes + upper_offset);
+                puncture_result_t upper_check = {check.puncture_id, HORIZON_NOT_CHECKED, time, NAN};
+                puncture_evaluate_surface(&upper_surface, point, &upper_check, true);
+                check.radial_gap += weight * (upper_check.radial_gap - check.radial_gap);
+                const double roundoff = lower_surface.roundoff + weight * (upper_surface.roundoff - lower_surface.roundoff);
+                check.horizon_status = check.radial_gap <= roundoff ? HORIZON_INSIDE : HORIZON_OUTSIDE;
+            } // END IF: interpolate signed radial gap
+            double centroid[3];
+            const uint64_t nearest_offset = nearest == lower ? lower_offset : upper_offset;
+            memcpy(centroid, horizons->bytes + nearest_offset + 16, sizeof(centroid));
+            const double distance = hypot(hypot(point[0]-centroid[0], point[1]-centroid[1]), point[2]-centroid[2]);
             if (check.horizon_status == HORIZON_INSIDE) {
                 if (distance < containing_distance) {
                     containing_distance = distance;
                     containing = check;
-                } // END IF: prefer the nearer containing horizon
+                } // END IF: nearer containing horizon
             } // END IF: photon inside horizon
             else if (distance < nearest_distance) {
                 nearest_distance = distance;

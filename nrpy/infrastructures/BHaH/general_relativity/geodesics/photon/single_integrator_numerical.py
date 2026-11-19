@@ -1766,7 +1766,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
     printf("\nFinal accepted-state apparent-horizon diagnostic:\n");
     printf("  Stop: %s (%d); photon t=%.15e; lookup t=%.15e\n",
            trajectory_stop_name, (int)*status, photon_time, lookup_time);
-    printf("  Association: %s; horizon: %s; snapshot t=%.15e; radial gap=%.15e (coordinate distance)\n",
+    printf("  Association: %s; horizon: %s; horizon t=%.15e; radial gap=%.15e (coordinate distance)\n",
            horizon_names[horizon_result.puncture_id], horizon_status_names[horizon_result.horizon_status],
            horizon_result.horizon_time, horizon_result.radial_gap);
     printf("  Wrote one final-state record to horizon_diagnostics.txt.\n");

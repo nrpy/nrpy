@@ -6,8 +6,8 @@ This module registers the C orchestrator for batched photon geodesics in a
 numerical spacetime. The generated integrator consumes a validated combined
 numerical raytracing ``.bin`` path stored on ``commondata``, initializes a
 ``NumericalTimeWindowManager``, maps numerical time windows per time slot, and
-calls ``numerical_interpolation()`` for the metric and selected forty-component
-geometry bundle. The observer metric is interpolated once at the common
+calls ``numerical_interpolation()`` for the metric and the 40 components used
+by the photon equations of motion. The observer metric is interpolated once at the common
 initial event; the numerical initializer constructs one validated observer
 tetrad per tile-batch call and passes that same tetrad to every ray in the
 batch.
@@ -356,7 +356,7 @@ def batch_integrator_numerical(
     maps combined numerical-spacetime .bin time windows through
     NumericalTimeWindowManager, interpolates the common observer metric once,
     initializes all rays from one metric-orthonormal observer tetrad,
-    interpolates the selected geometry bundle through numerical_interpolation(),
+    interpolates the metric and the components needed by the photon RHS,
     advances photons with the existing RKF45 kernels, and writes final
     blueprint results.
 
@@ -458,7 +458,7 @@ static void write_plane_crossings(
     free_device = "BHAH_FREE"
     pin_comment = "Host memory allocation: CPU RAM mapped for"
     bridge_alloc_comment = (
-        "Allocate memory arrays in Host RAM for the structural bridge payloads."
+        "Allocate photon state and integration arrays for this chunk."
     )
     scratch_alloc_comment = (
         "Allocate 1D Host scratchpad arrays for temporal data staging."
@@ -568,7 +568,7 @@ static void write_plane_crossings(
     observer_state_integration_setup = (
         """
     // The normalized interpolation wrapper reads coordinate time from this
-    // auxiliary integration-parameter bundle while f[0] remains affine data.
+    // integration-parameter array while f[0] stores the affine parameter.
     d_integration_param_bundle[0][0] = commondata->t_start;
     d_h[0][0] = commondata->initial_h;
 """
@@ -1762,7 +1762,7 @@ static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
     puncture_diagnostics_t puncture_data = puncture_load_diagnostics(
         commondata->apparent_horizon_bin_path[0] ? "" : commondata->puncture_diagnostics_dir);
 
-    // Initialize caller-owned output records before any event handler writes fields.
+    // Initialize the caller's photon output records before event detection.
     for (long int i = 0; i < num_rays; ++i) {{
         results_buffer[i] = (blueprint_data_t){{0}};
         results_buffer[i].termination_type = FAILURE_GENERIC;
@@ -1875,7 +1875,7 @@ static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
     double *d_metric_bundle[2];
     // Scratchpad carrying the common upper-only log-energy measure.
     double *d_log_energy_bundle[2];
-    // Scratchpad persisting the selected forty-component geometry bundle.
+    // Store the 40 geometry components used by the photon RHS.
     double *d_rhs_geometry_bundle[2];
     // Derivative tensor storing $\dot{{f}}^\mu$ across all 6 intermediate RKF45 stages.
     double *d_k_bundle[2];
@@ -2050,6 +2050,8 @@ static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
         slot_manager_free(&tsm);
         exit(1);
     }} // END IF: stored phi-plane count was incompatible
+    // Cache metric outlier flags for spatial stencils wider than one node.
+    numerical_window.prepare_spatial_outlier_flags = spatial_mask_width > 1;
 
     azimuthal_symmetry_spatial_lagrange_context_struct spatial_context;
     spatial_context.stored_phi_samples[0] =
@@ -2158,9 +2160,8 @@ static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
         }} // END LOOP: seed observer stencil selections
     }} // END IF: delayed metric diagnostics enabled
 
-    // Operates synchronously as the primary state array must be fully
-    // populated before pipeline dispatch. The initializer validates the
-    // metric-orthonormal tetrad and writes complete direct p^mu values.
+    // Validate the observer tetrad and fill the initial photon states with
+    // direct p^mu values before the first RKF45 attempt.
     {set_initial_conditions_call}
 
     long int num_batches = (num_rays + BUNDLE_CAPACITY - 1) / BUNDLE_CAPACITY; // Total integer calculation defining total iterative blocks required to process all photon indices.
@@ -2394,7 +2395,7 @@ static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
         }} // END IF: slot_idx still contained active photons
 
         int current = 0; // Integer index tracking the primary active CPU buffer for execution.
-        int next = 1; // Integer index tracking the secondary CPU buffer preparing the upcoming payload.
+        int next = 1; // Buffer index for the next photon chunk.
         long int active_chunks[2] = {{ 0, 0}}; // 1D array storing the total number of trajectories queued for each operational buffer.
 
         //==========================================
@@ -2409,8 +2410,8 @@ static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
 
             // 1. Pack the 9-component tensors using cache-friendly forward sweeps
             for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ iterating over the 9 tensor components of the state vectors.
-                for (int bridge_i = 0; bridge_i < active_chunks[current]; ++bridge_i) {{  // Loop iterator $bridge_i$ packing the physical state payloads into the Host-side bridge arrays.
-                    long int m_idx = chunk_buffer[current][bridge_i]; // Absolute master index $m_{{ idx}}$ mapping the active payload to the global trajectory matrix.
+                for (int bridge_i = 0; bridge_i < active_chunks[current]; ++bridge_i) {{  // Copy each photon's state into the active chunk.
+                    long int m_idx = chunk_buffer[current][bridge_i]; // Index in the full photon state array.
                     f_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx]; // Packs the coordinate state vector $f^\mu$ into the transfer bridge.
                 }} // END LOOP: for bridge_i over active_chunks[current]
             }} // END LOOP: for c_k over 9
@@ -2452,14 +2453,13 @@ static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
             for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer baseline setup of the 9 state vector components.
                 // CPU buffer copy: Duplicates the initial physical state vector $f^\mu$ to anchor the final RKF45 evaluation.
                 {memcpy_cpu("d_f_start_bundle[current] + c_k * BUNDLE_CAPACITY", "d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
-                // CPU buffer copy: Primes the temporary state vector bundle $f^\mu_{{ temp}}$ for iterative stage accumulation.
+                // Initialize the RKF45 stage state from the current photon state.
                 {memcpy_cpu("d_f_temp_bundle[current] + c_k * BUNDLE_CAPACITY", "d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
             }} // END LOOP: for c_k over 9
 {trial_spatial_center_setup_current}
 
             for (int stage = 1; stage <= 6; ++stage) {{  // Loop iterator $stage$ executing the 6 discrete stages of the RKF45 Runge-Kutta numerical solver.
-                // Interpolation step: evaluate the metric and selected geometry
-                // bundle on the active buffer.
+                // Interpolate the metric and RHS geometry for the active chunk.
                 numerical_interpolation(
                     commondata,
                     &numerical_params,
@@ -2514,7 +2514,7 @@ static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
         //==========================================
         // PHASE B: THE OVERLAP LOOP
         //==========================================
-        // Continuously alternate between buffers, packing the next payload while syncing the current.
+        // Pack the next photon chunk while processing the active chunk.
 
         while (active_chunks[current] > 0 || tsm.slot_counts[slot_idx] > 0) {{
 
@@ -2524,8 +2524,8 @@ static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
 
                 // 1. Pack the 9-component tensors using cache-friendly forward sweeps
                 for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ iterating over the 9 tensor components of the state vectors.
-                    for (int bridge_i = 0; bridge_i < active_chunks[next]; ++bridge_i) {{  // Loop iterator $bridge_i$ packing the physical state payloads into the next Host-side bridge array.
-                        long int m_idx = chunk_buffer[next][bridge_i]; // Absolute master index $m_{{ idx}}$ mapping the active payload to the global trajectory matrix.
+                    for (int bridge_i = 0; bridge_i < active_chunks[next]; ++bridge_i) {{  // Copy each photon's state into the next chunk.
+                        long int m_idx = chunk_buffer[next][bridge_i]; // Index in the full photon state array.
                         f_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx]; // Packs the coordinate state vector $f^\mu$ into the transfer bridge.
                     }} // END LOOP: for bridge_i over active_chunks[next]
                 }} // END LOOP: for c_k over 9
@@ -2542,7 +2542,7 @@ static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
                     on_pos_terminal_plane_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx]; // Packs the terminal-plane boundary flag into the transfer bridge.
                 }} // END LOOP: for bridge_i over active_chunks[next]
 
-                for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components for the upcoming payload.
+                for (int c_k = 0; c_k < 9; ++c_k) {{  // Copy the nine state components for the next chunk.
                     // CPU buffer copy: Synchronously pushes bounded state vectors $f^\mu$ to CPU scratch strictly on buffer [next] to overlap execution.
                     {memcpy_cpu("d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "f_bridge[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
                 }} // END LOOP: for c_k over 9
@@ -2564,18 +2564,16 @@ static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
                 // CPU buffer copy: Synchronously pushes chunk indices $m_{{ idx}}$ to CPU scratch strictly on buffer [next] to overlap execution.
                 {memcpy_cpu("d_chunk_buffer[next]", "chunk_buffer[next]", "sizeof(long int) * active_chunks[next]")}
 
-                for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer baseline setup of the 9 state vector components for the upcoming payload.
+                for (int c_k = 0; c_k < 9; ++c_k) {{  // Initialize the RKF45 start and stage states.
                     // CPU buffer copy: Duplicates the initial physical state vector $f^\mu$ to anchor the upcoming RKF45 evaluation.
                     {memcpy_cpu("d_f_start_bundle[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
-                    // CPU buffer copy: Primes the temporary state vector bundle $f^\mu_{{ temp}}$ for the upcoming iterative stage accumulation.
+                    // Initialize the RKF45 stage state from the current photon state.
                     {memcpy_cpu("d_f_temp_bundle[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
                 }} // END LOOP: for c_k over 9
 {trial_spatial_center_setup_next}
 
                 for (int stage = 1; stage <= 6; ++stage) {{  // Loop iterator $stage$ executing the 6 discrete stages of the upcoming RKF45 Runge-Kutta numerical solver.
-                    // Interpolation step: evaluate the metric tensor
-                    // $g_{{ \mu\nu}}$ and the selected geometry bundle
-                    // on the alternate buffer.
+                    // Interpolate the metric and RHS geometry for the next chunk.
                     numerical_interpolation(
                         commondata,
                         &numerical_params,
@@ -2627,7 +2625,7 @@ static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
             }} // END IF: next chunks available
 
             if (active_chunks[current] > 0) {{
-                // CPU memory operations are complete before payload unpacking.
+                // Finish the chunk before copying its states back to the full array.
                 {no_sync()}
 
                 // 1. Unpack 9-component tensors sequentially
@@ -2765,7 +2763,7 @@ static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
             printf(" Progress:   [%s] %5.1f%% \033[K\n", bar, percent_done); // Prints the global completion loading bar and percentage.
             printf(" Active:     %ld / %ld \033[K\n", total_active_photons, num_rays); // Prints the remaining active photon trajectories $x^\mu$.
             printf(" Slot Time:  Slot %d (t = %.1f) \033[K\n", slot_idx, current_t); // Prints the current physical temporal bin coordinate $t$.
-            printf(" Speed:      %.2e RKF45 attempts/s, %.0fs avg \033[K\n", rkf45_attempts_per_sec_avg, rkf45_speed_avg_window_sec); // Prints the smoothed pipeline execution throughput.
+            printf(" Speed:      %.2e RKF45 attempts/s, %.0fs avg \033[K\n", rkf45_attempts_per_sec_avg, rkf45_speed_avg_window_sec); // Print the mean RKF45 attempt rate.
             printf(" Rejects:    %ld (%.1f%%) \033[K\n", batch_rejections, reject_percent); // Prints the retryable rejection frequency.
             printf("             RKF45 %.1f%% | Spatial %.1f%% | Temporal %.1f%% \033[K\n", rkf45_reject_percent, spatial_reject_percent, temporal_reject_percent);
             printf("--------------------------------------------------\n"); // Prints the lower border of the diagnostic dashboard.
@@ -2779,7 +2777,7 @@ static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
             active_chunks[current] = 0; // Clears the execution queue tracker to indicate the active chunk has been fully processed.
             int temp = current; // Temporary integer scalar storing the primary buffer index for logical pointer swapping.
             current = next; // Shifts the primary execution tracker to the alternate buffer index.
-            next = temp; // Assigns the cleared buffer index back to the upcoming payload queue.
+            next = temp; // Reuse the cleared buffer for the next chunk.
         }} // END WHILE: alternate buffers process temporal slot
 
         //==========================================
@@ -2886,7 +2884,7 @@ static batch_spatial_mask_selection_struct batch_numerical_mask_selection(
             {free_pinned}(on_pos_non_terminal_plane_prev_bridge[s]); // Purges the nonterminal plane boundary flag bridge.
             {free_pinned}(on_pos_terminal_plane_prev_bridge[s]); // Purges the terminal-plane boundary flag bridge.
 
-            // Host Memory Free: Purges remaining CPU scratch operational pipeline scratchpads.
+            // Free the RKF45 work arrays for this buffer.
             {free_device}(d_f_bundle[s]); // Purges the state vector $f^\mu$ scratchpad.
             {free_device}(d_f_start_bundle[s]); // Purges the anchor state vector $f_{{start}}$ scratchpad.
             {free_device}(d_f_temp_bundle[s]); // Purges the temporary stage $f^\mu_{{temp}}$ scratchpad.

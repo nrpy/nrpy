@@ -2,8 +2,8 @@
 """
 Define C helpers for numerical-spacetime time-window mmap management.
 
-The NumericalTimeWindowManager owns the active mapped group of adjacent 3D-grid
-time slices in one trusted combined numerical-spacetime binary file. It
+The NumericalTimeWindowManager maps adjacent 3D-grid time slices from one
+combined numerical-spacetime binary file. It
 depends on shared TimeSlotManager definitions for slot time bounds, but keeps
 mmap and numerical file state out of analytic builds.
 
@@ -259,13 +259,14 @@ def time_window_manager_numerical(
     // Time slices are assumed ordered by increasing coordinate time, while
     // reverse ray tracing moves from larger t toward smaller t. The manager
     // maps one contiguous slot-derived time window so many photons can reuse
-    // the same numerical 3D-grid payloads. The mapped window is wider than
+    // the same numerical 3D-grid slices. The mapped window is wider than
     // the slot itself because it includes temporal-interpolation halo slices
     // and lower-time RKF45 lookahead.
 #include <fcntl.h>
 #include <errno.h>
 #include <limits.h>
 #include <math.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -363,19 +364,19 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
     } // END FUNCTION: resolve spatial target and stencil
 
-    // Owns the currently mapped group of adjacent 3D-grid payloads.
+    // Tracks the file mapping for adjacent 3D-grid time slices.
     typedef struct {
       int fd; // Open read-only file descriptor for the combined numerical .bin file.
       long int page_size; // Runtime page size used for mmap offset alignment.
 
-      uint64_t alignment_bytes; // Combined-file payload alignment.
+      uint64_t alignment_bytes; // Alignment of grid records in the combined file.
       uint64_t metadata_offset; // Absolute byte offset of the JSON metadata block.
       uint64_t metadata_bytes; // Length in bytes of the JSON metadata block.
       uint64_t num_time_slices; // Number of stored 3D grids.
       uint64_t slice_table_offset; // Absolute byte offset of the slice table.
       uint64_t slice_table_entry_bytes; // Fixed byte size of one slice-table entry.
-      uint64_t first_payload_offset; // Absolute byte offset of slice 0 payload.
-      uint64_t payload_bytes_total; // Total byte span of the payload region.
+      uint64_t first_payload_offset; // File byte offset of the first slice's grid records.
+      uint64_t payload_bytes_total; // Byte span of the grid records for all slices.
       uint64_t total_file_bytes; // Combined-file size recorded in the header.
       uint32_t nghosts; // Writer-side NGHOSTS stored in JSON metadata.
       uint64_t Nxx[3]; // Interior point counts stored in JSON metadata.
@@ -387,14 +388,17 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
       double cart_origin[3]; // Cartesian grid origin stored in JSON metadata.
 
       double *slice_times; // Exact physical coordinate times cached from the slice table.
-      uint64_t *slice_payload_offsets; // Per-slice payload offsets cached from the slice table.
-      uint64_t *slice_payload_bytes; // Per-slice payload byte counts cached from the slice table.
+      uint64_t *slice_payload_offsets; // File byte offsets of grid records from the slice table.
+      uint64_t *slice_payload_bytes; // Grid record byte counts from the slice table.
       uint64_t time_slice_stride; // Debugging-only stride between selected stored slices.
 
       int temporal_interp_half_width; // Centered temporal interpolation half-width n.
       int temporal_interp_num_points; // Number of temporal interpolation points, 2n + 1.
       double max_backward_dt_lookahead; // Maximum backward coordinate-time RKF45 lookahead from commondata.
       double dt_numerical_spacetime_data; // Nominal spacing for synthetic edge times.
+      double spatial_mask_threshold; // Outlier ratio from the run parameters.
+      bool prepare_spatial_outlier_flags; // Prepare both stored planes before batch interpolation.
+      uint16_t **spatial_outlier_flags; // Outlier flag arrays indexed by stored slice index.
 
       uint64_t mapped_first_slice; // First mapped slice, inclusive.
       uint64_t mapped_last_slice_exclusive; // One past the final mapped slice.
@@ -674,8 +678,8 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
      * Cache and validate the slice table fields needed for interpolation.
      *
      * @param[in,out] ntwm Numerical time-window manager.
-     * @param expected_point_record_count Required point-record count for each payload.
-     * @param expected_point_record_bytes Required point-record size for each payload.
+     * @param expected_point_record_count Required number of grid-point records per slice.
+     * @param expected_point_record_bytes Required size in bytes of one grid-point record.
      * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
      */
     static inline int time_window_manager_numerical_load_and_validate_slice_table(
@@ -752,13 +756,13 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           free(slice_payload_offsets);
           free(slice_payload_bytes);
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        } // END IF: one slice payload size disagreed
+        } // END IF: wrong slice byte count
         if (payload_offset > ntwm->total_file_bytes - payload_bytes) {
           free(slice_times);
           free(slice_payload_offsets);
           free(slice_payload_bytes);
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        } // END IF: slice payload exceeded limit
+        } // END IF: slice exceeds file bounds
         if (slice_index == 0ULL) {
           if (payload_offset != ntwm->first_payload_offset) {
             free(slice_times);
@@ -1019,6 +1023,9 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
       ntwm->temporal_interp_num_points = 0;
       ntwm->max_backward_dt_lookahead = 0.0;
       ntwm->dt_numerical_spacetime_data = 0.0;
+      ntwm->spatial_mask_threshold = 0.0;
+      ntwm->prepare_spatial_outlier_flags = false;
+      ntwm->spatial_outlier_flags = NULL;
       ntwm->mapped_first_slice = 0ULL;
       ntwm->mapped_last_slice_exclusive = 0ULL;
       ntwm->mapped_file_offset = 0ULL;
@@ -1041,13 +1048,23 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
       ntwm->mapped_base = NULL;
     } // END FUNCTION: time_window_manager_numerical_close_mmap
 
+    static inline void time_window_manager_numerical_free_outlier_flags(NumericalTimeWindowManager *ntwm) {
+      if (ntwm->spatial_outlier_flags != NULL) {
+        for (uint64_t s = 0; s < ntwm->num_time_slices; ++s)
+          free(ntwm->spatial_outlier_flags[s]);
+        free(ntwm->spatial_outlier_flags);
+        ntwm->spatial_outlier_flags = NULL;
+      } // END IF: release stored outlier flags
+    } // END FUNCTION: release outlier flag storage
+
     /**
-     * Release all resources owned by the numerical time-window manager.
+     * Unmap the slices, free the slice tables and flags, and close the file.
      *
      * @param[in,out] ntwm Numerical time-window manager.
      */
     static inline void time_window_manager_numerical_free(NumericalTimeWindowManager *ntwm) {
       time_window_manager_numerical_close_mmap(ntwm);
+      time_window_manager_numerical_free_outlier_flags(ntwm);
       if (ntwm->slice_times != NULL)
         free(ntwm->slice_times);
       if (ntwm->slice_payload_offsets != NULL)
@@ -1063,7 +1080,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
      * Copy combined-file grid metadata into a runtime params_struct.
      *
      * Only the grid fields serialized by the numerical-data writer are
-     * overwritten here. Higher-level caller-owned params metadata unrelated to
+     * overwritten here. Parameters set by the caller and unrelated to
      * the numerical dataset geometry remains untouched.
      *
      * @param[in] ntwm Initialized numerical time-window manager.
@@ -1278,6 +1295,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           (uint64_t)numerical_spacetime_time_slice_stride;
       ntwm->max_backward_dt_lookahead = max_backward_dt_lookahead;
       ntwm->dt_numerical_spacetime_data = dt_numerical_spacetime_data;
+      ntwm->spatial_mask_threshold = commondata->numerical_spacetime_spatial_mask_threshold;
       ntwm->page_size = page_size;
 
       if (time_window_manager_numerical_read_exact_at(
@@ -1375,7 +1393,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           ntwm->payload_bytes_total != ntwm->total_file_bytes - ntwm->first_payload_offset) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted payload navigation invalid
+      } // END IF: invalid grid record offsets
 
       if (time_window_manager_numerical_load_grid_metadata(ntwm) !=
           TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
@@ -1492,8 +1510,8 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
      * backward-time RKF45 lookahead stored in
      * ntwm->max_backward_dt_lookahead. The selected-slice stride scales the
      * halo in raw slice indices. The contiguous mmap can therefore include
-     * skipped raw payloads, but interpolation never dereferences them. This
-     * stride behavior is for debugging; normal runs use a stride of one.
+     * skipped slices. Interpolation reads only the slices selected by the
+     * stride. The default stride of one selects every slice.
      */
     static inline int time_window_manager_numerical_required_grid_range(
         const NumericalTimeWindowManager *ntwm,
@@ -1591,16 +1609,19 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
     } // END FUNCTION: time_window_manager_numerical_required_grid_range
 
+    static inline int time_window_manager_numerical_prepare_slice_outlier_flags(
+        NumericalTimeWindowManager *ntwm, uint64_t slice_index);
+
     /**
-     * Map exactly one slot's required contiguous time-slice payload window.
+     * Map a slot's required time slices and prepare batch outlier flags.
      *
      * @param[in,out] ntwm Numerical time-window manager.
      * @param[in] tsm Base time-slot manager.
      * @param slot_idx Slot index.
      * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
      *
-     * @pre No interpolation reader may hold pointers returned by
-     * time_window_manager_numerical_grid_ptr during this call.
+     * @pre No interpolation reader may hold pointers to mapped grid records
+     * or outlier flags during this call.
      */
     static inline int time_window_manager_numerical_mmap_for_slot(
         NumericalTimeWindowManager *ntwm,
@@ -1644,7 +1665,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           last_payload_bytes == 0ULL ||
           last_payload_offset > ntwm->total_file_bytes - last_payload_bytes) {
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: requested slot payload invalid
+      } // END IF: invalid slot file range
 
       const uint64_t requested_end =
           last_payload_offset + last_payload_bytes;
@@ -1658,26 +1679,56 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
       const size_t map_length = (size_t)map_length_u64;
 
+      const uint64_t previous_first = ntwm->mapped_first_slice;
+      const uint64_t previous_end = ntwm->mapped_last_slice_exclusive;
       time_window_manager_numerical_close_mmap(ntwm);
       void *new_mapping = mmap(NULL, map_length, PROT_READ, MAP_PRIVATE, ntwm->fd,
                                (off_t)map_offset);
-      if (new_mapping == MAP_FAILED)
+      if (new_mapping == MAP_FAILED) {
+        time_window_manager_numerical_free_outlier_flags(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: mapping failed
 
       ntwm->mapped_first_slice = first_slice;
       ntwm->mapped_last_slice_exclusive = last_slice_exclusive;
       ntwm->mapped_file_offset = map_offset;
       ntwm->mapped_length_bytes = map_length;
       ntwm->mapped_base = (const unsigned char *)new_mapping;
+
+      if (ntwm->prepare_spatial_outlier_flags) {
+        if (ntwm->spatial_outlier_flags == NULL) {
+          ntwm->spatial_outlier_flags = (uint16_t **)calloc(
+              (size_t)ntwm->num_time_slices, sizeof(*ntwm->spatial_outlier_flags));
+          if (ntwm->spatial_outlier_flags == NULL) {
+            time_window_manager_numerical_close_mmap(ntwm);
+            return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+          } // END IF: outlier flag table allocation failed
+        } // END IF: allocate the slice index table
+        for (uint64_t s = previous_first; s < previous_end; ++s) {
+          if (s < first_slice || s >= last_slice_exclusive) {
+            free(ntwm->spatial_outlier_flags[s]);
+            ntwm->spatial_outlier_flags[s] = NULL;
+          } // END IF: release unmapped slice flags
+        } // END LOOP: keep flags in the overlap
+        for (uint64_t s = first_slice; s < last_slice_exclusive; ++s) {
+          if (s % ntwm->time_slice_stride == 0ULL && ntwm->spatial_outlier_flags[s] == NULL &&
+              time_window_manager_numerical_prepare_slice_outlier_flags(ntwm, s) !=
+                  TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+            time_window_manager_numerical_close_mmap(ntwm);
+            time_window_manager_numerical_free_outlier_flags(ntwm);
+            return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+          } // END IF: slice flag preparation failed
+        } // END LOOP: prepare only new selected slices
+      } // END IF: prepare flags for batch interpolation
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
     } // END FUNCTION: time_window_manager_numerical_mmap_for_slot
 
     /**
-     * Return a pointer to one mapped 3D-grid payload.
+     * Return a pointer to one slice's mapped 3D-grid records.
      *
      * @param[in] ntwm Numerical time-window manager.
      * @param slice_index Global slice index.
-     * @return Pointer to the slice payload.
+     * @return Pointer to the slice's grid records, or NULL if unavailable.
      *
      * @pre slice_index is inside the currently mapped window.
      */
@@ -1698,14 +1749,142 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           payload_bytes == 0ULL ||
           payload_offset > UINT64_MAX - payload_bytes) {
         return NULL;
-      } // END IF: cached payload metadata invalid
+      } // END IF: invalid slice record offsets
       const uint64_t payload_relative = payload_offset - ntwm->mapped_file_offset;
       if (payload_relative > (uint64_t)ntwm->mapped_length_bytes ||
           payload_bytes > (uint64_t)ntwm->mapped_length_bytes - payload_relative) {
         return NULL;
-      } // END IF: cached payload out-of-bounds
+      } // END IF: slice exceeds mapped bytes
       return (const double *)(ntwm->mapped_base + payload_relative);
     } // END FUNCTION: time_window_manager_numerical_grid_ptr
+
+    // Stencil positions are lower edge, interior, and upper edge on each axis.
+    // A separate bit records a nonfinite norm at the node itself.
+    enum { NUMERICAL_SPATIAL_OUTLIER_INVALID_NORM = 1U << 9 };
+
+    static inline double time_window_manager_numerical_spatial_metric_norm(const double *g) {
+      const double root_two = 1.4142135623730950488;
+      return hypot(hypot(hypot(g[4], g[7]), g[9]),
+                   hypot(hypot(root_two * g[5], root_two * g[6]), root_two * g[8]));
+    } // END FUNCTION: spatial metric Frobenius norm
+
+    /**
+     * Compare a spatial metric norm with the median of its stencil neighbors.
+     *
+     * @param[in] node Address of the central norm in a row-major array.
+     * @param row_width Number of rho nodes per row.
+     * @param du_min Minimum relative rho index.
+     * @param du_max Maximum relative rho index.
+     * @param dv_min Minimum relative z index.
+     * @param dv_max Maximum relative z index.
+     * @param threshold Factor multiplying the median norm.
+     * @return True when the central norm strictly exceeds the scaled median.
+     */
+    static inline bool time_window_manager_numerical_exclude_spatial_node(
+        const double *node, ptrdiff_t row_width, int du_min, int du_max,
+        int dv_min, int dv_max, double threshold) {
+      double neighbors[8];
+      int count = 0;
+      for (int dv = dv_min; dv <= dv_max; ++dv) {
+        for (int du = du_min; du <= du_max; ++du) {
+          if (du == 0 && dv == 0) continue;
+          const double value = node[dv * row_width + du];
+          int pos = count++;
+          while (pos > 0 && neighbors[pos - 1] > value) {
+            neighbors[pos] = neighbors[pos - 1];
+            --pos;
+          } // END WHILE: insert neighboring norm
+          neighbors[pos] = value;
+        } // END LOOP: rho neighbors
+      } // END LOOP: z neighbors
+      const double median = count % 2 ? neighbors[count / 2]
+          : 0.5 * neighbors[count / 2 - 1] + 0.5 * neighbors[count / 2];
+      return *node > threshold * median;
+    } // END FUNCTION: apply spatial norm threshold
+
+    /**
+     * Compute spatial outlier flags for both stored azimuthal planes of a slice.
+     *
+     * Each flag compares the node with the neighbors it has at a corner,
+     * edge, or interior position in a spatial interpolation stencil.
+     *
+     * @param[in,out] ntwm Mapped grid and per-slice outlier flag arrays.
+     * @param slice_index Index of the stored slice in the combined file.
+     * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
+     */
+    static inline int time_window_manager_numerical_prepare_slice_outlier_flags(
+        NumericalTimeWindowManager *ntwm, uint64_t slice_index) {
+      const double *slice = time_window_manager_numerical_grid_ptr(ntwm, slice_index);
+      if (slice == NULL) return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+
+      const size_t nr = (size_t)ntwm->Nxx_plus_2NGHOSTS[0];
+      const size_t nphi = (size_t)ntwm->Nxx_plus_2NGHOSTS[1];
+      const size_t nz = (size_t)ntwm->Nxx_plus_2NGHOSTS[2];
+      const size_t plane_size = nr * nz;
+      const double threshold = ntwm->spatial_mask_threshold;
+      uint16_t *flags = (uint16_t *)calloc(2 * plane_size, sizeof(*flags));
+      double *norms = (double *)malloc(plane_size * sizeof(*norms));
+      if (flags == NULL || norms == NULL) {
+        free(flags);
+        free(norms);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: slice workspace allocation failed
+
+      for (size_t plane = 0; plane < 2; ++plane) {
+        for (size_t z = 0; z < nz; ++z) {
+          const size_t row = nr * (ntwm->nghosts + plane + nphi * z);
+          for (size_t r = 0; r < nr; ++r) {
+            const double *g = slice +
+                (row + r) * TIME_WINDOW_MANAGER_NUMERICAL_RT_POINT_RECORD_REAL_COUNT + 3;
+            norms[z * nr + r] = time_window_manager_numerical_spatial_metric_norm(g);
+          } // END LOOP: rho nodes
+        } // END LOOP: norms on one stored plane
+
+        for (size_t z = 0; z < nz; ++z) {
+          const int dz_min = z == 0 ? 0 : -1;
+          const int dz_max = z + 1 == nz ? 0 : 1;
+          for (size_t r = 0; r < nr; ++r) {
+            const double *node = norms + z * nr + r;
+            uint16_t *bits = flags + plane * plane_size + z * nr + r;
+            if (!isfinite(*node)) {
+              *bits = NUMERICAL_SPATIAL_OUTLIER_INVALID_NORM;
+              continue;
+            } // END IF: flag nonfinite metric norm
+            const int dr_min = r == 0 ? 0 : -1;
+            const int dr_max = r + 1 == nr ? 0 : 1;
+            double minimum = INFINITY;
+            for (int dz = dz_min; dz <= dz_max; ++dz) {
+              for (int dr = dr_min; dr <= dr_max; ++dr) {
+                if (dr == 0 && dz == 0) continue;
+                const double neighbor = node[dz * (ptrdiff_t)nr + dr];
+                if (neighbor < minimum) minimum = neighbor;
+              } // END LOOP: neighboring rho nodes
+            } // END LOOP: minimum over the stored neighbors
+            // Include rounding of the even-count median's two halves.
+            const double lower_bound = fmin(minimum, 0.5 * minimum + 0.5 * minimum);
+            if (*node <= threshold * lower_bound) continue;
+
+            for (int vz = 0; vz < 3; ++vz) {
+              const int lo_z = vz == 0 ? 0 : -1;
+              const int hi_z = vz == 2 ? 0 : 1;
+              if (lo_z < dz_min || hi_z > dz_max) continue;
+              for (int ur = 0; ur < 3; ++ur) {
+                const int lo_r = ur == 0 ? 0 : -1;
+                const int hi_r = ur == 2 ? 0 : 1;
+                if (lo_r < dr_min || hi_r > dr_max) continue;
+                if (time_window_manager_numerical_exclude_spatial_node(
+                        node, (ptrdiff_t)nr, lo_r, hi_r, lo_z, hi_z, threshold))
+                  *bits |= (uint16_t)(1U << (3 * vz + ur));
+              } // END LOOP: rho positions within plane
+            } // END LOOP: z positions within plane
+          } // END LOOP: assign flags to rho nodes
+        } // END LOOP: assign flags to z rows
+      } // END LOOP: prepare both azimuthal planes
+
+      free(norms);
+      ntwm->spatial_outlier_flags[slice_index] = flags;
+      return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
+    } // END FUNCTION: prepare slice outlier flags
 
     /**
      * Return a temporal interpolation stencil around one retained center.
@@ -1757,7 +1936,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           !isfinite(ntwm->dt_numerical_spacetime_data) ||
           ntwm->dt_numerical_spacetime_data <= 0.0) {
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: active exact-time window or caller-owned
+      } // END IF: incomplete temporal stencil inputs
       const int temporal_num_points = 2 * temporal_interp_half_width + 1;
       if (temporal_interp_half_width != ntwm->temporal_interp_half_width ||
           temporal_num_points != ntwm->temporal_interp_num_points) {
@@ -1859,14 +2038,18 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
 
       const int temporal_count = ntwm->temporal_interp_num_points;
       const double *slices[temporal_count + 2];
+      uint64_t indices[temporal_count + 2];
       int slice_count = 0;
       const uint64_t final_slice = time_window_manager_numerical_final_selected_slice(ntwm);
       if (sampling_time <= ntwm->slice_times[0]) {
+        indices[slice_count] = 0ULL;
         slices[slice_count++] = time_window_manager_numerical_grid_ptr(ntwm, 0ULL);
-      } else if (sampling_time >= ntwm->slice_times[final_slice]) {
+      } // END IF: first stored slice
+      else if (sampling_time >= ntwm->slice_times[final_slice]) {
+        indices[slice_count] = final_slice;
         slices[slice_count++] = time_window_manager_numerical_grid_ptr(ntwm, final_slice);
-      } else {
-        uint64_t indices[temporal_count];
+      } // END ELSE IF: final selected slice
+      else {
         REAL times[temporal_count], missing_times[temporal_count];
         int missing_count = 0;
         if (time_window_manager_numerical_stencil_for_center(
@@ -1879,10 +2062,14 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           need_first |= missing_times[k] <= ntwm->slice_times[0];
           need_final |= missing_times[k] >= ntwm->slice_times[final_slice];
         } // END LOOP: identify synthetic endpoint sources
-        if (need_first)
+        if (need_first) {
+          indices[slice_count] = 0ULL;
           slices[slice_count++] = time_window_manager_numerical_grid_ptr(ntwm, 0ULL);
-        if (need_final)
+        } // END IF: add the first stored slice
+        if (need_final) {
+          indices[slice_count] = final_slice;
           slices[slice_count++] = time_window_manager_numerical_grid_ptr(ntwm, final_slice);
+        } // END IF: add the last selected slice
       } // END ELSE: select mixed temporal stencil
 
       uint64_t points[count][count];
@@ -1897,41 +2084,44 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
       for (int s = 0; s < slice_count; ++s) {
         if (slices[s] == NULL)
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        double norms[count][count];
+        if (ntwm->spatial_outlier_flags != NULL) {
+          const size_t nr = (size_t)ntwm->Nxx_plus_2NGHOSTS[0];
+          const size_t nz = (size_t)ntwm->Nxx_plus_2NGHOSTS[2];
+          const uint16_t *plane = ntwm->spatial_outlier_flags[indices[s]] + (size_t)phi_plane * nr * nz;
+          for (int v = 0; v < count; ++v) {
+            const int z_position = v == 0 ? 0 : v == count - 1 ? 2 : 1;
+            const uint16_t *row = plane +
+                (size_t)(center->i2 + v - half_width) * nr + (size_t)(center->i0 - half_width);
+            for (int u = 0; u < count; ++u) {
+              const uint16_t bits = row[u];
+              if (bits & NUMERICAL_SPATIAL_OUTLIER_INVALID_NORM)
+                return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+              const int r_position = u == 0 ? 0 : u == count - 1 ? 2 : 1;
+              if (bits & (1U << (3 * z_position + r_position))) {
+                mask[v * count + u] = 1;
+                *has_excluded_nodes = true;
+              } // END IF: exclude this spatial node
+            } // END LOOP: rho mask entries
+          } // END LOOP: read z-row outlier flags
+          continue;
+        } // END IF: read cached slice flags
+
+        double norms[count * count];
         for (int v = 0; v < count; ++v) {
           for (int u = 0; u < count; ++u) {
             const double *g = slices[s] +
                 points[v][u] * TIME_WINDOW_MANAGER_NUMERICAL_RT_POINT_RECORD_REAL_COUNT + 3;
-            const double root_two = 1.4142135623730950488;
-            norms[v][u] = hypot(hypot(hypot(g[4], g[7]), g[9]),
-                hypot(hypot(root_two * g[5], root_two * g[6]), root_two * g[8]));
-            if (!isfinite(norms[v][u]))
+            norms[v * count + u] = time_window_manager_numerical_spatial_metric_norm(g);
+            if (!isfinite(norms[v * count + u]))
               return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
           } // END LOOP: calculate rho metric norms
         } // END LOOP: calculate z metric norms
         for (int v = 0; v < count; ++v) {
           for (int u = 0; u < count; ++u) {
-            double neighbors[8];
-            int neighbor_count = 0;
-            for (int dv = -1; dv <= 1; ++dv) {
-              for (int du = -1; du <= 1; ++du) {
-                if ((du == 0 && dv == 0) || u + du < 0 || u + du >= count ||
-                    v + dv < 0 || v + dv >= count)
-                  continue;
-                const double value = norms[v + dv][u + du];
-                int pos = neighbor_count++;
-                while (pos > 0 && neighbors[pos - 1] > value) {
-                  neighbors[pos] = neighbors[pos - 1];
-                  --pos;
-                } // END WHILE: insert neighboring norm
-                neighbors[pos] = value;
-              } // END LOOP: visit neighboring rho nodes
-            } // END LOOP: visit neighboring z rows
-            const double median = neighbor_count % 2
-                ? neighbors[neighbor_count / 2]
-                : 0.5 * neighbors[neighbor_count / 2 - 1] +
-                  0.5 * neighbors[neighbor_count / 2];
-            if (norms[v][u] > commondata->numerical_spacetime_spatial_mask_threshold * median) {
+            if (time_window_manager_numerical_exclude_spatial_node(
+                    norms + v * count + u, count, u == 0 ? 0 : -1, u == count - 1 ? 0 : 1,
+                    v == 0 ? 0 : -1, v == count - 1 ? 0 : 1,
+                    commondata->numerical_spacetime_spatial_mask_threshold)) {
               mask[v * count + u] = 1;
               *has_excluded_nodes = true;
             } // END IF: exclude unusually large metric
