@@ -75,13 +75,13 @@ directories and libraries, and emits a Makefile whose target is either an
 executable, a shared library, or a static archive. Executable builds may recurse
 into additional generated subdirectories before the final link.
 
-The generated Makefile represents each registered C-function source exactly
-once in an explicit `ADD_SOURCE` record. That record pairs the source path with
-each registered include that resolves inside the generated project at
-generation time; `SOURCES`, `OBJECTS`, and `DEPFILES` are then derived from the
-records without `find` or wildcard source discovery. A deliberate hand edit
-therefore adds or removes a source in one record, but the Makefile remains
-generated output and regeneration replaces such edits.
+The generated Makefile represents each registered C-function source and each
+additional source in one explicit `ADD_SOURCE` record. Each record pairs the
+source path with its direct headers. Registered-source headers must resolve
+inside the generated project at generation time. The records determine
+`SOURCES`, `OBJECTS`, and `DEPFILES`. The optional `MakefileExtension.targets`
+adds rules with their prerequisites and tab-indented recipes, and only
+targets marked phony join `.PHONY`.
 
 Each `ADD_SOURCE` record makes its resolved local headers immediate object
 prerequisites. The C, C++, and CUDA compile rules also use `-MMD`, `-MP`,
@@ -95,7 +95,8 @@ Generated `clean` is visible and bounded. Its one root cleanup recipe is not
 silenced, so Make prints one expanded `rm` command. That command removes the
 exact final target and root `.deps/`; `.o` and `.d` files at depths zero through
 two; and root `.txt`, `.gp`, `.dat`, `.out`, `.log`, `.avi`, `.png`, and `.bin`
-files. It then invokes each registered subproject's `clean` with silent,
+files and any paths in `MakefileExtension.clean_files`. It then invokes each
+registered subproject's `clean` with silent,
 no-directory-printing Make flags. It preserves `.par`, unrelated suffixes,
 runtime-suffix files below the root, and `.o`/`.d` files at depth three or
 deeper. Cleanup uses explicit globs rather than `find`, recursive wildcards, a

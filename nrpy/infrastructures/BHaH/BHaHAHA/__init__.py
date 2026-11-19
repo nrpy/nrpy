@@ -28,6 +28,7 @@ from . import (
     quadratic_extrapolation,
     radial_grid_cell_centered_set_up,
     rhs_eval_KO_apply,
+    spectre_spin_integrator,
     variable_wavespeed,
     xyz_center_r_minmax,
 )

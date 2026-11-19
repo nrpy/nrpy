@@ -39,14 +39,13 @@ require `dA`; `area_density` supplies `sqrtq` separately.
 
 Evidence (descriptive behavior): `general_relativity/bhahaha/SpECTRESpinEstimate.py::get_public_integrands`.
 
-The SpECTRE class expects physical metric, extrinsic curvature, and normal
-components already evaluated on the horizon surface in the spherical basis. Its
-`hh_dD[0]` and `hh_dD[1]` mean theta and phi derivatives; the other horizon
-modules use slots 1 and 2. Callers must map these indices explicitly.
-`get_gridfunction_assignments` does not generate the required derivatives:
-assign the induced metric and `X_B`, compute their angular derivatives and
-two-surface curvature, then construct and differentiate the curvature-dependent
-flux where needed, using consistent finite-difference stencils.
+The SpECTRE class obtains the physical metric, extrinsic curvature, and unit
+normal in the spherical basis from `ExpansionFunctionTheta` and evaluates them
+on the horizon by substituting `r = h(theta, phi)`. It uses `hh_dD[1]` for the
+theta derivative and `hh_dD[2]` for the phi derivative, as in the expansion
+function. The generated spin integrator assigns the induced metric and `X_B`,
+computes their angular derivatives and the two-surface curvature, then assigns
+and differentiates the curvature-dependent flux.
 
 `Salpha_and_magnitude_from_zOmega` requires area-weighted integrals of externally
 supplied, appropriately normalized modes. It returns
@@ -62,6 +61,28 @@ rfm-precompute keys where noted above, but those broader variants are not
 enumerated as source evidence here. Trusted files validate symbolic
 expressions; they do not document infrastructure generation.
 
+### Lowest-shear AKV poles
+
+The generated BHaHAHA spin integrator solves the squared Killing-residual
+eigenproblem `K z = lambda M z` with the constant mode and centered-phi Nyquist
+mode removed. It orders the three eigenpairs by increasing eigenvalue and
+normalizes each potential by `integral(z_alpha^2 dA) = A^3/(48*pi^2)`. It uses
+the lowest-shear potential `zU0` to compute the signed angular momentum
+`J0 = integral(zU0*Omega dA)/(8*pi)` and refines the maximum and minimum with
+quadratic fits to the potential and horizon radius on reflected
+`5 × 5` stencils. The fits use local Cartesian tangent coordinates and
+require the appropriate definite Hessian and a displacement within the
+local trust region. Procrustes-aligned modes seed later solves. The measured
+poles come from the lowest eigenmode of the current solve.
+The direction from the minimum to the maximum is measured in background
+Cartesian coordinates. The dimensionless vector is
+`J0` times this unit direction divided by
+`M_irr^2 + J0^2/(4*M_irr^2)`, where `M_irr^2 = A/(16*pi)`.
+Changing the sign of `zU0` reverses `J0` and swaps the poles, preserving the
+vector. At zero spin the vector vanishes and there is no physical spin axis.
+
+Evidence (descriptive behavior): [spectre_spin_integrator.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/spectre_spin_integrator.py) `bah_compute_spectre_spin_potentials` and `diagnostics_spectre_spin`.
+
 ## Sources
 
 - [ExpansionFunctionTheta.py](../../../nrpy/equations/general_relativity/bhahaha/ExpansionFunctionTheta.py) - `ExpansionFunctionThetaClass`, `ExpansionFunctionTheta`
@@ -70,6 +91,8 @@ expressions; they do not document infrastructure generation.
 - [area_Spherical.py](../../../nrpy/equations/general_relativity/bhahaha/tests/area_Spherical.py) - `trusted_dict`
 - [ExpansionFunctionTheta_Spherical.py](../../../nrpy/equations/general_relativity/bhahaha/tests/ExpansionFunctionTheta_Spherical.py) - `trusted_dict`
 - [SpECTRESpinEstimate_Spherical.py](../../../nrpy/equations/general_relativity/bhahaha/tests/SpECTRESpinEstimate_Spherical.py) - `trusted_dict`
+
+- [spectre_spin_integrator.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/spectre_spin_integrator.py) - `bah_compute_spectre_spin_potentials`, `diagnostics_spectre_spin`
 
 ## See Also
 

@@ -43,7 +43,7 @@ def register_CFunction_diagnostics() -> Union[None, pcg.NRPyEnv_type]:
         is_commondata=True,
     )
 
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "sys/time.h"]
     prefunc = r"""
 /**
  * Displays spin values based on provided circumference ratio comparisons.
@@ -69,6 +69,75 @@ static void display_spin(const char *spin_label, const double spin_from_ratio1, 
            spin_from_ratio2_label);
   } // END IF: Spin derivable from ratios
 } // END FUNCTION: display_spin
+
+/**
+ * Displays the three AKV dimensionless spin vectors.
+ *
+ * This helper function prints the dimensionless spin chi components computed by
+ * the SpECTRE spin diagnostic. If the diagnostic did not produce valid spin
+ * values, it displays "N/A".
+ *
+ * @param spin_chi_x_spectre The x component of the SpECTRE dimensionless spin chi.
+ * @param spin_chi_y_spectre The y component of the SpECTRE dimensionless spin chi.
+ * @param spin_chi_z_spectre The z component of the SpECTRE dimensionless spin chi.
+ * @param spin_chi_x_gram_matrix The x component from direct Gram-matrix correction.
+ * @param spin_chi_y_gram_matrix The y component from direct Gram-matrix correction.
+ * @param spin_chi_z_gram_matrix The z component from direct Gram-matrix correction.
+ * @param spin_chi_x_akv_poles The x component from the lowest-shear AKV pole axis.
+ * @param spin_chi_y_akv_poles The y component from the lowest-shear AKV pole axis.
+ * @param spin_chi_z_akv_poles The z component from the lowest-shear AKV pole axis.
+ */
+static void display_spectre_spin(const double spin_chi_x_spectre, const double spin_chi_y_spectre, const double spin_chi_z_spectre,
+                                 const double spin_chi_x_gram_matrix, const double spin_chi_y_gram_matrix,
+                                 const double spin_chi_z_gram_matrix, const double spin_chi_x_akv_poles,
+                                 const double spin_chi_y_akv_poles, const double spin_chi_z_akv_poles) {
+  // Spin values of BHAHAHA_DIAGNOSTIC_UNAVAILABLE indicate that the diagnostic failed.
+  if (spin_chi_x_spectre == BHAHAHA_DIAGNOSTIC_UNAVAILABLE || spin_chi_y_spectre == BHAHAHA_DIAGNOSTIC_UNAVAILABLE ||
+      spin_chi_z_spectre == BHAHAHA_DIAGNOSTIC_UNAVAILABLE) {
+    printf("#spin_chi_spectre = (    N/A    ,     N/A    ,     N/A    ) based on SpECTRE spin diagnostic.\n");
+  } // END IF: unavailable SpECTRE spin values
+  else {
+    printf("#spin_chi_spectre = (%.4g, %.4g, %.4g) based on SpECTRE spin diagnostic.\n", spin_chi_x_spectre, spin_chi_y_spectre,
+           spin_chi_z_spectre);
+  } // END ELSE: valid SpECTRE spin diagnostic values
+  if (spin_chi_x_gram_matrix == BHAHAHA_DIAGNOSTIC_UNAVAILABLE || spin_chi_y_gram_matrix == BHAHAHA_DIAGNOSTIC_UNAVAILABLE ||
+      spin_chi_z_gram_matrix == BHAHAHA_DIAGNOSTIC_UNAVAILABLE) {
+    printf("#spin_chi_gram_matrix = (    N/A    ,     N/A    ,     N/A    ) based on direct Gram-matrix correction.\n");
+  } // END IF: unavailable Gram-matrix comparison values
+  else {
+    printf("#spin_chi_gram_matrix = (%.4g, %.4g, %.4g) based on direct Gram-matrix correction.\n", spin_chi_x_gram_matrix,
+           spin_chi_y_gram_matrix, spin_chi_z_gram_matrix);
+  } // END ELSE: valid Gram-matrix comparison values
+  if (spin_chi_x_akv_poles == BHAHAHA_DIAGNOSTIC_UNAVAILABLE || spin_chi_y_akv_poles == BHAHAHA_DIAGNOSTIC_UNAVAILABLE ||
+      spin_chi_z_akv_poles == BHAHAHA_DIAGNOSTIC_UNAVAILABLE) {
+    printf("#spin_chi_akv_poles = (    N/A    ,     N/A    ,     N/A    ) based on the lowest-shear AKV pole axis.\n");
+  } else {
+    printf("#spin_chi_akv_poles = (%.4g, %.4g, %.4g) based on the lowest-shear AKV pole axis.\n", spin_chi_x_akv_poles,
+           spin_chi_y_akv_poles, spin_chi_z_akv_poles);
+  } // END ELSE: AKV-pole comparison valid
+} // END FUNCTION: display_spectre_spin
+
+/**
+ * Display the circumference-derived spin magnitude and vector that reuse the
+ * SpECTRE direction.
+ *
+ * @param spin_chi_circumference Circumference-derived dimensionless magnitude.
+ * @param spin_chi_x_circumference Dimensionless x component.
+ * @param spin_chi_y_circumference Dimensionless y component.
+ * @param spin_chi_z_circumference Dimensionless z component.
+ */
+static void display_circumference_spin(const double spin_chi_circumference, const double spin_chi_x_circumference,
+                                       const double spin_chi_y_circumference, const double spin_chi_z_circumference) {
+  if (spin_chi_circumference == BHAHAHA_DIAGNOSTIC_UNAVAILABLE ||
+      spin_chi_x_circumference == BHAHAHA_DIAGNOSTIC_UNAVAILABLE ||
+      spin_chi_y_circumference == BHAHAHA_DIAGNOSTIC_UNAVAILABLE ||
+      spin_chi_z_circumference == BHAHAHA_DIAGNOSTIC_UNAVAILABLE) {
+    printf("#spin_chi_circumference =     N/A     and vector = (    N/A    ,     N/A    ,     N/A    ) based on proper circumferences about the SpECTRE direction.\n");
+  } else {
+    printf("#spin_chi_circumference = %.4g and vector = (%.4g, %.4g, %.4g) based on proper circumferences about the SpECTRE direction.\n",
+           spin_chi_circumference, spin_chi_x_circumference, spin_chi_y_circumference, spin_chi_z_circumference);
+  } // END ELSE: circumference-derived spin is valid
+} // END FUNCTION: display_circumference_spin
 """
     desc = """Performs apparent horizon diagnostics for BHaHAHA.
 
@@ -158,6 +227,70 @@ calculations, norm evaluations, and detailed final iteration analyses.
       if (commondata->error_flag != BHAHAHA_SUCCESS)
         return;
 
+      if (commondata->bhahaha_params_and_data->enable_spectre_spin_diagnostic) {
+        bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
+        bhahaha_diags->BHAHAHA_CIRC_GENERAL_POLAR = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+        bhahaha_diags->BHAHAHA_CIRC_GENERAL_EQUATOR = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+        bhahaha_diags->BHAHAHA_CIRC_GENERAL_SPIN = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+        bhahaha_diags->spin_chi_x_circumference = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+        bhahaha_diags->spin_chi_y_circumference = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+        bhahaha_diags->spin_chi_z_circumference = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+
+        struct timeval spectre_spin_start_time, spectre_spin_end_time;
+        gettimeofday(&spectre_spin_start_time, NULL);
+        const int spin_rc = bah_diagnostics_spectre_spin(commondata, griddata);
+        gettimeofday(&spectre_spin_end_time, NULL);
+        const REAL spectre_spin_elapsed_seconds =
+            (spectre_spin_end_time.tv_sec + spectre_spin_end_time.tv_usec / 1.0e6) -
+            (spectre_spin_start_time.tv_sec + spectre_spin_start_time.tv_usec / 1.0e6);
+        if (commondata->bhahaha_params_and_data->verbosity_level > 0)
+          printf("NRPy_BHaHAHA SpECTRE spin diagnostic elapsed time (Iter %d, H%d): %.6f s\n",
+                 commondata->bhahaha_params_and_data->iteration_external_input, commondata->bhahaha_params_and_data->which_horizon,
+                 spectre_spin_elapsed_seconds);
+        if (spin_rc != BHAHAHA_SUCCESS) {
+          bhahaha_diags->spin_chi_x_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          bhahaha_diags->spin_chi_y_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          bhahaha_diags->spin_chi_z_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          bhahaha_diags->spin_chi_x_gram_matrix = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          bhahaha_diags->spin_chi_y_gram_matrix = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          bhahaha_diags->spin_chi_z_gram_matrix = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          bhahaha_diags->spin_chi_x_akv_poles = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          bhahaha_diags->spin_chi_y_akv_poles = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          bhahaha_diags->spin_chi_z_akv_poles = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          bhahaha_diags->BHAHAHA_SPIN_AXIS_X = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          bhahaha_diags->BHAHAHA_SPIN_AXIS_Y = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          bhahaha_diags->BHAHAHA_SPIN_AXIS_Z = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          if (commondata->bhahaha_params_and_data->verbosity_level > 0) {
+            fprintf(stderr, "WARNING: SpECTRE spin diagnostic failed with code %d; continuing without spin output.\n", spin_rc);
+          } // END IF: spin failure verbosity enabled
+        } // END IF: SpECTRE spin diagnostic failed
+        else {
+          const REAL spin_axis_x = bhahaha_diags->BHAHAHA_SPIN_AXIS_X;
+          const REAL spin_axis_y = bhahaha_diags->BHAHAHA_SPIN_AXIS_Y;
+          const REAL spin_axis_z = bhahaha_diags->BHAHAHA_SPIN_AXIS_Z;
+          const REAL spin_axis_norm = sqrt(spin_axis_x * spin_axis_x + spin_axis_y * spin_axis_y + spin_axis_z * spin_axis_z);
+          const int spin_axis_is_valid =
+              spin_axis_x != BHAHAHA_DIAGNOSTIC_UNAVAILABLE && spin_axis_y != BHAHAHA_DIAGNOSTIC_UNAVAILABLE &&
+              spin_axis_z != BHAHAHA_DIAGNOSTIC_UNAVAILABLE && isfinite(spin_axis_x) && isfinite(spin_axis_y) &&
+              isfinite(spin_axis_z) && isfinite(spin_axis_norm) && spin_axis_norm > 1.0e-14;
+          if (spin_axis_is_valid) {
+            const int circumference_rc = bah_diagnostics_proper_circumferences_general(commondata, griddata);
+            if (circumference_rc != BHAHAHA_SUCCESS) {
+              bhahaha_diags->BHAHAHA_CIRC_GENERAL_POLAR = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+              bhahaha_diags->BHAHAHA_CIRC_GENERAL_EQUATOR = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+              bhahaha_diags->BHAHAHA_CIRC_GENERAL_SPIN = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+              bhahaha_diags->spin_chi_x_circumference = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+              bhahaha_diags->spin_chi_y_circumference = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+              bhahaha_diags->spin_chi_z_circumference = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+              if (commondata->bhahaha_params_and_data->verbosity_level > 0)
+                fprintf(stderr,
+                        "WARNING: proper-circumference spin diagnostic failed with code %d; preserving successful SpECTRE/Gram/AKV output.\n",
+                        circumference_rc);
+            } // END IF: optional circumference diagnostic failed independently
+          } // END IF: successful SpECTRE solve supplied a usable direction
+        } // END ELSE: SpECTRE diagnostic succeeded
+      } // END IF: SpECTRE spin diagnostic enabled
+
       // Display detailed final iteration diagnostics if verbosity is enabled.
       {
         bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
@@ -218,6 +351,14 @@ calculations, norm evaluations, and detailed final iteration analyses.
           // Display spin_z based on (xz/xy, yz/xy) ratios
           display_spin("spin_z", bhahaha_diags->spin_a_z_from_xz_over_xy_prop_circumfs, bhahaha_diags->spin_a_z_from_yz_over_xy_prop_circumfs, //
                        "xz/xy", "yz/xy");
+
+          // Display AKV-based spin values
+          display_spectre_spin(bhahaha_diags->spin_chi_x_spectre, bhahaha_diags->spin_chi_y_spectre, bhahaha_diags->spin_chi_z_spectre,
+                               bhahaha_diags->spin_chi_x_gram_matrix, bhahaha_diags->spin_chi_y_gram_matrix,
+                               bhahaha_diags->spin_chi_z_gram_matrix, bhahaha_diags->spin_chi_x_akv_poles,
+                               bhahaha_diags->spin_chi_y_akv_poles, bhahaha_diags->spin_chi_z_akv_poles);
+          display_circumference_spin(bhahaha_diags->BHAHAHA_CIRC_GENERAL_SPIN, bhahaha_diags->spin_chi_x_circumference,
+                                     bhahaha_diags->spin_chi_y_circumference, bhahaha_diags->spin_chi_z_circumference);
         } // END IF: verbosity level > 0
       } // END BLOCK: compute final diagnostics and update stored horizon history
     } // END IF: final iteration
