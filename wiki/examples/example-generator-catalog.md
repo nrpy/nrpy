@@ -16,7 +16,7 @@ Run `python -m nrpy.examples.<module> [flags]` from the repository root ([Build 
 | Generator | Key CLI flags | CI check | Detail leaf |
 | --- | --- | --- | --- |
 | `bhahaha.py` | `[--fdorder N] [--outrootdir DIR] [--cpp] [--no-openmp] [--sequential-codegen]` | Ubuntu/macOS C static-library `make` build only | [Apparent Horizon Library](apparent-horizon-library.md) |
-| `blackhole_spectroscopy.py` | `[--cuda] [--fccz4] [--floating_point_precision TYPE]` | Ubuntu/macOS default BSSN/OpenMP `make` build only | [Standalone GR/BHaH](standalone-gr-bhah.md) |
+| `blackhole_spectroscopy.py` | `[--cuda] [--fccz4] [--floating_point_precision TYPE] [--raytracing-time]` | Ubuntu/macOS default BSSN/OpenMP `make` build only | [Standalone GR/BHaH](standalone-gr-bhah.md) |
 | `carpet_baikal_thorns.py` | none | `einsteintoolkit-validation` ET build + `Baikal`/`BaikalVacuum` testsuites | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `carpet_wavetoy_thorns.py` | none | `einsteintoolkit-validation` ET build + `WaveToyNRPy` testsuite | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `carpetx_baikal_thorns.py` | none | `full_nrpy_local_ci.sh` generation only; no CI build/run | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
@@ -27,11 +27,18 @@ Run `python -m nrpy.examples.<module> [flags]` from the repository root ([Build 
 | `hydro_without_hydro.py` | `[--cuda] [--floating_point_precision TYPE]` | Ubuntu/macOS OpenMP `make` build (`--cuda` in local script only) | [Matter TOV Workflows](matter-tov-workflows.md) |
 | `kasner_exact_evolution.py` | `[--floating_point_precision TYPE]` (`--cuda` rejected by `GeneralRFM`) | manual OpenMP route; not invoked in CI | [Standalone GR/BHaH](standalone-gr-bhah.md) |
 | `manga_bhah_lib.py` | none (`create_lib=True`) | commented out in `main.yml` | [Matter TOV Workflows](matter-tov-workflows.md) |
-| `mass_geodesic_integrator.py` | none (requires GSL) | manual single-ray route | [Geodesic Raytracing](geodesic-raytracing.md) |
+| `massive_single_geodesic_integrator_analytical.py` | none (requires GSL) | manual single-ray route | [Geodesic Raytracing](geodesic-raytracing.md) |
 | `nrpyelliptic_conformally_flat.py` | `[--cuda] [--floating_point_precision TYPE]` | Ubuntu/macOS OpenMP `make` build (`--cuda` in local script only) | [Elliptic Initial Data](elliptic-initial-data.md) |
 | `nrpypn_quasicircular_momenta.py` | none | Ubuntu/macOS `make` build only | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
-| `photon_geodesic_batch_integrator.py` | `[--cuda] [--outdir DIR]` | manual tiled batch route | [Geodesic Raytracing](geodesic-raytracing.md) |
-| `photon_geodesic_integrator.py` | none | manual single-ray route | [Geodesic Raytracing](geodesic-raytracing.md) |
+
+### Photon, Waveform, And Other Evolution Generators
+
+| Generator | Key CLI flags | CI check | Detail leaf |
+| --- | --- | --- | --- |
+| `photon_batch_geodesic_integrator_analytical.py` | observer geometry, `--scan-density`, optional `--cuda` | manual tiled batch route | [Geodesic Raytracing](geodesic-raytracing.md) |
+| `photon_batch_geodesic_integrator_numerical.py` | spacetime `.bin`, `--scan-density`, `--eom` | manual tiled batch | [Geodesic Raytracing](geodesic-raytracing.md) |
+| `photon_single_geodesic_integrator_analytical.py` | `--spacetime`, `--eom`, observer geometry | manual single-ray route | [Geodesic Raytracing](geodesic-raytracing.md) |
+| `photon_single_geodesic_integrator_numerical.py` | spacetime `.bin`, observer geometry, `--eom` | manual single-ray | [Geodesic Raytracing](geodesic-raytracing.md) |
 | `sebobv1_jax.py` | none | Ubuntu/macOS `pip install .` + 1 scalar call ([`sebobv1_jax` step](../validation/generated-project-ci.md#sebobv1_jax-install-and-call-step)) | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
 | `sebobv2.py` | `[--projected-attachment-diagnostics]` (GSL; `use_projected_attachment` in `.par`) | Ubuntu/macOS build + `sebobv2` & projected-attachment CI | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
 | `seobnrv5_aligned_spin_inspiral.py` | `[-seobnrv5_{bob,nrnqc_bob,nrpy}] [-{calibration_no_spin,calibration_spin,nrpy_calibrated}]` | Ubuntu/macOS; `sebob-consistency-test` | [Waveform JAX PN](waveform-jax-pn-generators.md) |
@@ -40,7 +47,7 @@ Run `python -m nrpy.examples.<module> [flags]` from the repository root ([Build 
 | `superB_nrpyelliptic_conformally_flat.py` | `[--floating_point_precision TYPE]` | `charmpp-validation` Charm++ build only | [superB Charm++ Workflows](superb-charm-workflows.md) |
 | `superB_two_blackholes_collide.py` | none (links BHaHAHA) | `charmpp-validation` build + `charmrun +p2` exit check | [superB Charm++ Workflows](superb-charm-workflows.md) |
 | `tovola_neutron_star.py` | none (ignores `--cuda` in local script) | Ubuntu/macOS C `make` build only | [Matter TOV Workflows](matter-tov-workflows.md) |
-| `two_blackholes_collide.py` | `[--cuda] [--floating_point_precision TYPE] [--raytracing-outputs]` | Ubuntu/macOS OpenMP `make` build (`--cuda` in local script only) | [Standalone GR/BHaH](standalone-gr-bhah.md) |
+| `two_blackholes_collide.py` | `[--cuda] [--floating_point_precision TYPE] [--raytracing-time]` | Ubuntu/macOS OpenMP `make` build (`--cuda` in local script only) | [Standalone GR/BHaH](standalone-gr-bhah.md) |
 | `wave_equation_cartesian.py` | none | Ubuntu/macOS `make` build only | [Wave Equation Generators](wave-equation-generators.md) |
 | `wave_equation_curvilinear.py` | `[--cuda] [--floating_point_precision P] [--disable_intrinsics] [--disable_rfm_precompute]` | Ubuntu/macOS OpenMP `make` build | [Wave Equation Generators](wave-equation-generators.md) |
 | `wave_equation_multicoordinates.py` | `[--cuda] [--floating_point_precision P] [--disable_intrinsics] [--disable_rfm_precompute]` | Ubuntu/macOS OpenMP `make` build | [Wave Equation Generators](wave-equation-generators.md) |
@@ -52,7 +59,7 @@ Evidence (CI behavior): `.github/workflows/main.yml`; `.github/workflows/dendrol
 | Companion group | Checked-in files | Generated-output boundary | Detail leaf |
 | --- | --- | --- | --- |
 | `nrpy/examples/et_WaveToyfiles/**` | `ThornList`, `WaveToyNRPy*.par`, `test.ccl`, `uuGF.x.asc` | Checked-in ET inputs; `project/**` disposable | [ET Thorn Generators](einstein-toolkit-thorn-generators.md) |
-| `nrpy/examples/geodesic_visualizations/*.py` | `visualize_{trajectory,lensed_image}.py`, `render_lensed_image.py`, `blueprint_*.py` | PNGs, `trajectory.txt`, ZIPs disposable | [Geodesic Raytracing](geodesic-raytracing.md) |
+| `nrpy/examples/geodesic_visualizations/*.py` | Trajectory plots, lensed-image rendering, blueprint analysis | PNGs, `trajectory.txt`, and blueprint binaries are generated | [Geodesic Raytracing](geodesic-raytracing.md) |
 | `nrpy/examples/tests/*.py` | `sebob*.py`, `dendro_application_check*.py`, `spheroidal_fisheye_roundtrip_check.py` | Temp outputs disposable | [Generated Project CI](../validation/generated-project-ci.md) |
 | `nrpy/examples/superb_paper2/*.py` | `superB_blackhole_spectroscopy_{8Mseparation,last_orbit}.py` | Generated Charm++ `project/**` disposable | [superB Charm++ Workflows](superb-charm-workflows.md) |
 | `nrpy/examples/q1.par.lowres.toml` | Checked-in low-res Dendro BSSN/fCCZ4 TOML parameter file | Copied into generated `pars/` alongside `<stem>.toml` | [Dendro Parameters](../infrastructures/dendro/runtime-parameters.md) |
@@ -82,14 +89,16 @@ See [SEBOBv1 JAX Workflow](../infrastructures/jax/sebobv1-jax-workflow.md) for `
 - [hydro_without_hydro.py](../../nrpy/examples/hydro_without_hydro.py) - `parser`, `project_name`
 - [kasner_exact_evolution.py](../../nrpy/examples/kasner_exact_evolution.py) - `parser`, `project_name`
 - [manga_bhah_lib.py](../../nrpy/examples/manga_bhah_lib.py) - `project_name`, `create_lib=True`
-- [mass_geodesic_integrator.py](../../nrpy/examples/mass_geodesic_integrator.py) - `project_name`
+- [massive_single_geodesic_integrator_analytical.py](../../nrpy/examples/massive_single_geodesic_integrator_analytical.py) - `project_name`
 - [nrpyelliptic_conformally_flat.py](../../nrpy/examples/nrpyelliptic_conformally_flat.py) - `parser`, `project_name`
 - [nrpypn_quasicircular_momenta.py](../../nrpy/examples/nrpypn_quasicircular_momenta.py) - `project_name`
-- [photon_geodesic_batch_integrator.py](../../nrpy/examples/photon_geodesic_batch_integrator.py) - `--outdir`, `--cuda`
-- [photon_geodesic_integrator.py](../../nrpy/examples/photon_geodesic_integrator.py) - `project_name`
+- [photon_batch_geodesic_integrator_analytical.py](../../nrpy/examples/photon_batch_geodesic_integrator_analytical.py) - `--outdir`, `--cuda`
+- [photon_single_geodesic_integrator_analytical.py](../../nrpy/examples/photon_single_geodesic_integrator_analytical.py) - `project_name`
 - [sebobv1_jax.py](../../nrpy/examples/sebobv1_jax.py) - `project_name`
 - [sebobv2.py](../../nrpy/examples/sebobv2.py) - `--projected-attachment-diagnostics`, `project_name`
 - [seobnrv5_aligned_spin_inspiral.py](../../nrpy/examples/seobnrv5_aligned_spin_inspiral.py) - `argparse`, `project_name`
+- [photon_single_geodesic_integrator_numerical.py](../../nrpy/examples/photon_single_geodesic_integrator_numerical.py) - numerical photon generation options
+- [photon_batch_geodesic_integrator_numerical.py](../../nrpy/examples/photon_batch_geodesic_integrator_numerical.py) - numerical photon generation options
 - [spinning_blackhole.py](../../nrpy/examples/spinning_blackhole.py) - `parser`, `project_name`
 - [superB_blackhole_spectroscopy.py](../../nrpy/examples/superB_blackhole_spectroscopy.py) - `parser`, `project_name`
 - [superB_nrpyelliptic_conformally_flat.py](../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `parser`, `project_name`

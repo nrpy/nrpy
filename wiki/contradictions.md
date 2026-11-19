@@ -8,7 +8,7 @@ Active source discrepancies and unreconciled drift are tracked below. Recording 
 
 - Follow [KB Rules](SCHEMA.md#contradiction-rules): keep only `contested` and `stale` claims in `## Register`, paired with `### CONTR-XXXX` subsections and inline markers (`Claim status: contested; contradiction: CONTR-0001.` or `stale`) on every affected leaf.
 - Look up one entry with `rg -n -F '| CONTR-0014 |' wiki/contradictions.md` and read its `### CONTR-XXXX` subsection.
-- Retire resolved entries in the resolving commit once affected leaves are reconciled and all `#contr-*` links are removed. Retired IDs: CONTR-0002, CONTR-0004, CONTR-0005, CONTR-0006, CONTR-0007, CONTR-0008 to CONTR-0011, CONTR-0013.
+- Retire resolved entries in the resolving commit once affected leaves are reconciled and all `#contr-*` links are removed. Retired IDs: CONTR-0002, CONTR-0004, CONTR-0005, CONTR-0006, CONTR-0007, CONTR-0008 to CONTR-0011, CONTR-0013, CONTR-0023.
 
 ## Register
 
@@ -26,7 +26,6 @@ Active source discrepancies and unreconciled drift are tracked below. Recording 
 | CONTR-0020 | contested | [GRHD](equations/grhd.md); [Ringdown](equations/seobnr/precessing-rotations-and-ringdown.md) | Shifted coordinate-bound quotients have singular denominators affecting `omega_prec`. |
 | CONTR-0021 | contested | [Wave Equation](equations/wave-equation.md) | Wave constructors guard only `uu` and check `glb_params_dict` for `CodeParameter`s. |
 | CONTR-0022 | contested | [Metric/Matter](equations/general-relativity/metric-conversions-and-matter.md) | Zero-velocity `LorentzBoost` divides by `0/0` instead of returning identity. |
-| CONTR-0023 | contested | [Geodesics](infrastructures/bhah/geodesics-and-raytracing-runtime.md) | Azimuthal geodesic interpolation rotates reflected Cartesian records by `+/-pi`. |
 
 ### CONTR-0001
 
@@ -123,11 +122,3 @@ Evidence (descriptive behavior): `WaveEquation_RHSs.py::WaveEquation_RHSs.__init
 - Resolution check: evaluate `LorentzBoost` and its inverse at `vU = [0, 0, 0]`, requiring finite `4x4` identity matrices while preserving subluminal nonzero cases.
 
 Evidence (descriptive behavior): `nrpy/equations/general_relativity/LorentzBoost.py::LorentzBoost._compute_LorentzMatrix` (trusted samples test nonzero boost only).
-
-### CONTR-0023
-
-- Competing sources & authority: `azimuthal_symmetry_spatial_lagrange_interpolation.py` docstring claiming reflected nodes need rotation to the reference plane versus `output_raytracing_data.py` storing Cartesian-basis tensor components at each node's own position. Emitted C code decides; `geodesics-and-raytracing-runtime.md` stays `confirmed`.
-- Recheck trigger: edits to `azimuthal_symmetry_spatial_lagrange_interpolation.py` reflection/rotation logic or `output_raytracing_data.py` basis conventions.
-- Resolution check: on `Spherical` data (`Nphi = 2`), interpolate a nonconstant `z`-axisymmetric Cartesian `g4DD` and `Gamma4UDD` across `theta in {0, pi}` or `r = 0` and verify interior convergence order.
-
-Evidence (descriptive behavior): `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/azimuthal_symmetry_spatial_lagrange_interpolation.py::register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation`; corroboration: `output_raytracing_data.py`.

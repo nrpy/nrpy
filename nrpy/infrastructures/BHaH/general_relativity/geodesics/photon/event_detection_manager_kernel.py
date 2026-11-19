@@ -1,13 +1,6 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py
 """
-Provides the C driver for geometric event detection.
-
-This module generates the CUDA or OpenMP function that detects crossings of the
-observer window and source emission plane. For each photon it reads the current and
-two preceding integration states, checks the momentum and escape-radius bounds, and
-then tests both planes. Interpolation determines the affine parameter and state at a
-crossing. The function writes each accepted intersection to that photon's result
-entry and shifts the state history for the next RKF45 step.
+Record accepted photon steps that cross either configured plane.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -16,319 +9,269 @@ Author: Dalton J. Moone
 import nrpy.c_function as cfc
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.puncture_diagnostics import (
+    register_apparent_horizons,
+)
 
 
-def event_detection_manager_kernel() -> None:
-    """Register the CUDA or OpenMP function for geometric event detection."""
+def event_detection_manager_kernel(
+    normalized_eom: bool = False, analytical: bool = False
+) -> None:
+    """
+    Register accepted-step plane crossings and physical photon stops.
+
+    :param normalized_eom: Whether coordinate time is the integration parameter.
+    :param analytical: Whether analytic geometry has no numerical time window.
+    """
     par.register_CodeParameters(
-        "REAL",
+        "bool",
         __name__,
-        ["p_t_max"],
-        [1e5],
+        ["non_terminal_plane_enabled", "terminal_plane_enabled"],
+        [False, False],
         commondata=True,
         add_to_parfile=True,
+        descriptions=[
+            "Enable nonterminal-plane crossing detection.",
+            "Enable terminal-plane crossing detection.",
+        ],
     )
-
-    parallelization = par.parval_from_str("parallelization")
-    cd_access = parallel_utils.get_commondata_access(parallelization)
-
-    find_event_c_code = cfc.CFunction_dict["find_event_time_and_state"].full_function
-    window_c_code = cfc.CFunction_dict["handle_window_plane_intersection"].full_function
-    source_c_code = cfc.CFunction_dict["handle_source_plane_intersection"].full_function
-
-    arg_dict_cuda = {
-        "d_f_bundle": "const double *restrict",
-        "d_f_prev_bundle": "double *restrict",
-        "d_f_pre_prev_bundle": "double *restrict",
-        "d_affine": "const double *restrict",
-        "d_affine_prev": "double *restrict",
-        "d_affine_pre_prev": "double *restrict",
-        "d_results_buffer": "blueprint_data_t *restrict",
-        "d_status_bundle": "termination_type_t *restrict",
-        "d_on_pos_window_prev": "bool *restrict",
-        "d_on_pos_source_prev": "bool *restrict",
-        "d_window_event_found": "bool *restrict",
-        "d_source_event_found": "bool *restrict",
-        "d_chunk_buffer": "const long int *restrict",
-        "chunk_size": "const int",
-    }
-
-    arg_dict_host = {
-        "d_f_bundle": "const double *restrict",
-        "d_f_prev_bundle": "double *restrict",
-        "d_f_pre_prev_bundle": "double *restrict",
-        "d_affine": "const double *restrict",
-        "d_affine_prev": "double *restrict",
-        "d_affine_pre_prev": "double *restrict",
-        "d_results_buffer": "blueprint_data_t *restrict",
-        "d_status_bundle": "termination_type_t *restrict",
-        "d_on_pos_window_prev": "bool *restrict",
-        "d_on_pos_source_prev": "bool *restrict",
-        "d_window_event_found": "bool *restrict",
-        "d_source_event_found": "bool *restrict",
-        "d_chunk_buffer": "const long int *restrict",
-        "chunk_size": "const int",
-    }
-
-    # OpenMP receives commondata through an explicit function argument.
-    if parallelization != "cuda":
-        arg_dict_cuda["commondata"] = "const commondata_struct *restrict"
-        arg_dict_host["commondata"] = "const commondata_struct *restrict"
-
-    escape_statement = "return;" if parallelization == "cuda" else "continue;"
-
-    # Select the CUDA or OpenMP arguments and loop directives.
-    commondata_arg = "" if parallelization == "cuda" else ", commondata"
-    pragma_unroll = "#pragma unroll" if parallelization == "cuda" else ""
-
-    if parallelization == "cuda":
-        loop_preamble = """
-    //==========================================
-    // CUDA THREAD IDENTIFICATION
-    //==========================================
-    // Thread ID maps to a unique photon index $i$ within the photon chunk.
-    const int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= chunk_size) return;
-    """
-        loop_postamble = ""
-    else:
-        loop_preamble = """
-    //==========================================
-    // OPENMP PARALLEL LOOP
-    //==========================================
-    // Distribute photon rays across available CPU threads for parallel evaluation.
+    coordinate_time = (
+        "d_integration_param_after[i]" if normalized_eom else "d_f_bundle[IDX_F(0, i)]"
+    )
+    horizon_params = ""
+    horizon_check = ""
+    horizon_desc = ""
+    if not analytical:
+        register_apparent_horizons()
+        horizon_params = (
+            ", const apparent_horizon_file_t *horizons, "
+            "const NumericalTimeWindowManager *numerical_window, "
+            "puncture_result_t *photon_horizons, const bool fast_light"
+        )
+        horizon_desc = """
+        @param[in] horizons Apparent-horizon mapping, with an empty mapping disabling the check.
+        @param[in] numerical_window Retained numerical spacetime slice times.
+        @param[in,out] photon_horizons Latest horizon classification indexed by photon.
+        @param fast_light Whether to classify at the fixed geometry sampling time.
+"""
+        horizon_check = r"""
+        if (horizons->bytes != NULL) {
+            const double point[3] = {x, y, z};
+            const double lookup_time = fast_light ? commondata->t_start : coordinate_time;
+            photon_horizons[photon_index] =
+                apparent_horizons_classify(horizons, numerical_window, lookup_time, point);
+            if (photon_horizons[photon_index].horizon_status == HORIZON_INSIDE)
+                d_status_bundle[i] = STOP_CONDITION_INSIDE_APPARENT_HORIZON;
+        } // END IF: apparent horizon checking enabled
+"""
+    body = r"""
+    #define IDX_F(component, ray) ((component) * BUNDLE_CAPACITY + (ray))
+    (void)stream_idx;
     #pragma omp parallel for
-    for(long int i = 0; i < chunk_size; i++) {
-    """
-        loop_postamble = "    } // END LOOP: for i over chunk_size rays"
+    for (long int i = 0; i < chunk_size; ++i) {
+        // Only an accepted RKF45 step has a new state and crossing interval.
+        if (d_status_bundle[i] != ACTIVE) continue;
+        const long int photon_index = d_chunk_buffer[i];
+        photon_plane_crossing_candidates_t *crossings =
+            &plane_crossing_candidates[photon_index];
+        const double x = d_f_bundle[IDX_F(1, i)];
+        const double y = d_f_bundle[IDX_F(2, i)];
+        const double z = d_f_bundle[IDX_F(3, i)];
 
-    core_math = rf"""
-    // Ray index $m_{{idx}}$ selecting this photon's result entry.
-    const long int master_idx = d_chunk_buffer[i];
+        const double coordinate_time = @COORDINATE_TIME@;
+        @HORIZON_CHECK@
 
-    //==========================================
-    // MACROS
-    //==========================================
-    // IDX_F maps a component to the flattened state array using SoA layout.
-    // Memory Striding strictly uses BUNDLE_CAPACITY, preventing bounds failure on remainders.
-    #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
+        // Retain plane crossing candidates on the accepted stopping step.
+        if (commondata->non_terminal_plane_enabled &&
+            !crossings->non_terminal_candidate.recorded) {
+            const double nx = commondata->non_terminal_plane_normal_x;
+            const double ny = commondata->non_terminal_plane_normal_y;
+            const double nz = commondata->non_terminal_plane_normal_z;
+            const double normal_sq = nx * nx + ny * ny + nz * nz;
+            if (!isfinite(normal_sq) || normal_sq <= 1.0e-28) {
+                if (d_status_bundle[i] == ACTIVE) d_status_bundle[i] = FAILURE_GENERIC;
+                continue;
+            } // END IF: nonterminal plane normal invalid
+            const double signed_distance =
+                (x - commondata->non_terminal_plane_center_x) * nx +
+                (y - commondata->non_terminal_plane_center_y) * ny +
+                (z - commondata->non_terminal_plane_center_z) * nz;
+            if (!isfinite(signed_distance)) {
+                if (d_status_bundle[i] == ACTIVE) d_status_bundle[i] = FAILURE_GENERIC;
+                continue;
+            } // END IF: nonterminal plane distance nonfinite
+            const bool side = signed_distance > 0.0;
+            if (side != d_on_pos_non_terminal_plane_prev[i]) {
+                photon_plane_crossing_candidate_t *candidate =
+                    &crossings->non_terminal_candidate;
+                for (int component = 0; component < 9; ++component) {
+                    candidate->state_before[component] =
+                        d_f_start_bundle[IDX_F(component, i)];
+                } // END LOOP: component saves nonterminal anchor
+                candidate->parameter_before = d_integration_param_before[i];
+                candidate->parameter_after = d_integration_param_after[i];
+                candidate->recorded = true;
+            } // END IF: record nonterminal crossing step
+            d_on_pos_non_terminal_plane_prev[i] = side;
+        } // END IF: detect enabled nonterminal crossing
 
-    //==========================================
-    // TEMPORAL EXPLOSION CHECK
-    //==========================================
-    // Read $p_t$ before loading the remaining state components.
-    const double p_t = ReadCUDA(&d_f_bundle[IDX_F(4, i)]);
+        if (commondata->terminal_plane_enabled &&
+            !crossings->additional_terminal_crossing_detected) {
+            const double nx = commondata->terminal_plane_normal_x;
+            const double ny = commondata->terminal_plane_normal_y;
+            const double nz = commondata->terminal_plane_normal_z;
+            const double normal_sq = nx * nx + ny * ny + nz * nz;
+            if (!isfinite(normal_sq) || normal_sq <= 1.0e-28) {
+                if (d_status_bundle[i] == ACTIVE) d_status_bundle[i] = FAILURE_GENERIC;
+                continue;
+            } // END IF: terminal plane normal invalid
+            const double signed_distance =
+                (x - commondata->terminal_plane_center_x) * nx +
+                (y - commondata->terminal_plane_center_y) * ny +
+                (z - commondata->terminal_plane_center_z) * nz;
+            if (!isfinite(signed_distance)) {
+                if (d_status_bundle[i] == ACTIVE) d_status_bundle[i] = FAILURE_GENERIC;
+                continue;
+            } // END IF: terminal plane distance nonfinite
+            const bool side = signed_distance > 0.0;
+            if (side != d_on_pos_terminal_plane_prev[i]) {
+                photon_plane_crossing_candidate_t *candidate = NULL;
+                if (crossings->terminal_candidate_count == 0) {
+                    candidate = &crossings->terminal_candidate_1;
+                } // END IF: select first terminal candidate
+                else if (crossings->terminal_candidate_count == 1) {
+                    candidate = &crossings->terminal_candidate_2;
+                } // END ELSE IF: select second terminal candidate
+                else if (crossings->terminal_candidate_count == 2) {
+                    candidate = &crossings->terminal_candidate_3;
+                } // END ELSE IF: select third terminal candidate
+                else {
+                    crossings->additional_terminal_crossing_detected = true;
+                } // END ELSE: terminal crossing capacity exceeded
+                if (candidate != NULL) {
+                    for (int component = 0; component < 9; ++component) {
+                        candidate->state_before[component] =
+                            d_f_start_bundle[IDX_F(component, i)];
+                    } // END LOOP: component saves terminal anchor
+                    candidate->parameter_before = d_integration_param_before[i];
+                    candidate->parameter_after = d_integration_param_after[i];
+                    candidate->recorded = true;
+                    ++crossings->terminal_candidate_count;
+                } // END IF: save available terminal candidate
+            } // END IF: record terminal crossing step
+            d_on_pos_terminal_plane_prev[i] = side;
+        } // END IF: detect enabled terminal crossing
 
-    if (AbsCUDA(p_t) > {cd_access}p_t_max) {{
-        d_status_bundle[i] = FAILURE_PT_TOO_BIG; // Flags the ray as a failure to halt integration.
-        {escape_statement}
-    }} // END IF: temporal explosion limit exceeded
-
-    // Terminated photons cleanly bypass the geometric evaluation logic.
-    if (d_status_bundle[i] != ACTIVE) {escape_statement}
-
-    //==========================================
-    // LOAD LOCAL STATE
-    //==========================================
-    // Copy the current and two preceding states into local arrays.
-    double f_local[9], f_p_local[9], f_p_p_local[9]; // Local arrays holding the state vector $f^\mu$ and its history.
-    {pragma_unroll}
-    for (int c = 0; c < 9; c++) {{ // Loops over the $9$ tensor components.
-        f_local[c] = ReadCUDA(&d_f_bundle[IDX_F(c, i)]); // Copy the current state $f^\mu_n$.
-        f_p_local[c] = ReadCUDA(&d_f_prev_bundle[IDX_F(c, i)]); // Copy the preceding state $f^\mu_{{n-1}}$.
-        f_p_p_local[c] = ReadCUDA(&d_f_pre_prev_bundle[IDX_F(c, i)]); // Copy the state $f^\mu_{{n-2}}$.
-    }} // END LOOP: for c over 9 tensor components
-
-    // Read the affine parameter at the current and two preceding RKF45 steps.
-    const double lam_local = ReadCUDA(&d_affine[i]); // Current affine parameter $\lambda_n$.
-    const double lam_p_local = ReadCUDA(&d_affine_prev[i]); // Preceding affine parameter $\lambda_{{n-1}}$.
-    const double lam_p_p_local = ReadCUDA(&d_affine_pre_prev[i]); // Affine parameter $\lambda_{{n-2}}$.
-
-    const double x = f_local[1]; // Extracts the local Cartesian coordinate $x$.
-    const double y = f_local[2]; // Extracts the local Cartesian coordinate $y$.
-    const double z = f_local[3]; // Extracts the local Cartesian coordinate $z$.
-
-    //==========================================
-    // CELESTIAL ESCAPE CHECK
-    //==========================================
-    // Evaluates if the photon has exceeded the coordinate escape radius $r_{{escape}}$.
-    const double r_sq = x*x + y*y + z*z; // Computes the squared radial distance $r^2$ from the origin.
-    if (r_sq > ({cd_access}r_escape * {cd_access}r_escape)) {{
-        d_status_bundle[i] = TERMINATION_TYPE_CELESTIAL_SPHERE; // Marks the ray as escaped.
-        {escape_statement}
-    }} // END IF: celestial escape radius exceeded
-
-    //==========================================
-    // EVENT DETECTION & TERMINATION CHECKS
-    //==========================================
-    // Evaluate physical plane intersections from the local state arrays.
-
-    // Window plane logic is guarded to lock the intersection coordinates permanently.
-    if (!d_window_event_found[i]) {{
-        //==========================================
-        // GLOBAL WINDOW PLANE RECONSTRUCTION
-        //==========================================
-
-        double w_normal[3]; // 3D geometric unit normal vector $n_i$ of the global observer window.
-        w_normal[0] = {cd_access}original_window_center_x - {cd_access}camera_pos_x; // Computes the $x$ component of the global window normal.
-        w_normal[1] = {cd_access}original_window_center_y - {cd_access}camera_pos_y; // Computes the $y$ component of the global window normal.
-        w_normal[2] = {cd_access}original_window_center_z - {cd_access}camera_pos_z; // Computes the $z$ component of the global window normal.
-
-        const double mag_inv = 1.0 / SqrtCUDA(w_normal[0]*w_normal[0] + w_normal[1]*w_normal[1] + w_normal[2]*w_normal[2]); // Computes the inverse magnitude $1/|n|$ for normalization.
-        w_normal[0] *= mag_inv; // Normalizes the $x$ component.
-        w_normal[1] *= mag_inv; // Normalizes the $y$ component.
-        w_normal[2] *= mag_inv; // Normalizes the $z$ component.
-
-        // Calculates orthogonal distance $d_w$ from the origin to the global window plane.
-        const double w_dist = {cd_access}original_window_center_x*w_normal[0] + {cd_access}original_window_center_y*w_normal[1] + {cd_access}original_window_center_z*w_normal[2];
-
-        // Evaluates the global plane equation $E_w$ for the photon's current spatial position.
-        const double w_val = x*w_normal[0] + y*w_normal[1] + z*w_normal[2] - w_dist;
-
-        const bool on_pos_win_curr = (w_val > 1e-10); // Checks if the photon is on the positive side of the global window.
-        const bool on_pos_win_prev = d_on_pos_window_prev[i]; // Retrieves the previous integration step's window side evaluation.
-
-        if (on_pos_win_curr != on_pos_win_prev) {{ // Triggers intersection event if the physical plane was crossed.
-            double f_int[9];  // Reconstructed $9$-component state vector $f^\mu$ at the intersection.
-            double lam_event; // Interpolated affine parameter $\lambda$ of the exact boundary crossing.
-            find_event_time_and_state(f_local, f_p_local, f_p_p_local, lam_local, lam_p_local, lam_p_p_local, w_normal, w_dist, &lam_event, f_int); // Calculates the exact mathematical boundary crossing state.
-
-            // Write the intersection to the result entry for ray $master_idx$.
-            // handle_window_plane_intersection maps the spatial coordinates to local window coordinates.
-            // Window plane function call to pass commondata conditionally.
-            if (handle_window_plane_intersection(f_int, lam_event, &d_results_buffer[master_idx]{commondata_arg})) {{
-                d_window_event_found[i] = true;
-            }} // END IF: handle_window_plane_intersection succeeded
-        }} // END IF: physical window plane was crossed
-        d_on_pos_window_prev[i] = on_pos_win_curr; // Updates the window evaluation history for the next step.
-    }} // END IF: window event not found
-
-    // Source plane logic is guarded to lock the intersection coordinates permanently.
-    if (!d_source_event_found[i]) {{
-        const double s_normal[3] = {{{cd_access}source_plane_normal_x, {cd_access}source_plane_normal_y, {cd_access}source_plane_normal_z}}; // 3D geometric unit normal vector $n_i$ of the source plane.
-        const double s_dist = {cd_access}source_plane_center_x*s_normal[0] + {cd_access}source_plane_center_y*s_normal[1] + {cd_access}source_plane_center_z*s_normal[2]; // Calculates orthogonal distance $d_s$ to the source plane.
-        const double s_val = x*s_normal[0] + y*s_normal[1] + z*s_normal[2] - s_dist; // Evaluates the plane equation $E_s$ for the current position.
-
-        const bool on_pos_src_curr = (s_val > 1e-10); // Checks if the photon is on the positive side of the source.
-        const bool on_pos_src_prev = d_on_pos_source_prev[i]; // Retrieves the previous integration step's source side evaluation.
-
-        if (on_pos_src_curr != on_pos_src_prev) {{ // Triggers intersection event if the plane was crossed.
-            double f_int[9];  // Reconstructed $9$-component state vector $f^\mu$ at the intersection.
-            double lam_event; // Interpolated affine parameter $\lambda$ of the exact boundary crossing.
-            find_event_time_and_state(f_local, f_p_local, f_p_p_local, lam_local, lam_p_local, lam_p_p_local, s_normal, s_dist, &lam_event, f_int); // Calculates the exact mathematical boundary crossing state.
-            // Write the intersection to the result entry for ray $master_idx$.
-            if (handle_source_plane_intersection(f_int, lam_event, &d_results_buffer[master_idx]{commondata_arg})) {{
-                d_status_bundle[i] = TERMINATION_TYPE_SOURCE_PLANE; // Marks the ray as terminated upon striking the source plane.
-                d_source_event_found[i] = true; // Locks the source intersection to prevent future overwrites.
-            }} // END IF: handle_source_plane_intersection succeeded
-        }} // END IF: physical source plane was crossed
-        d_on_pos_source_prev[i] = on_pos_src_curr; // Updates the source evaluation history for the next step.
-    }} // END IF: source event not found
-
-    //==========================================
-    // HISTORY SHIFT
-    //==========================================
-    // Memory arrays are updated only for active trajectories to stage the next RKF45 step.
-    if (d_status_bundle[i] == ACTIVE) {{
-        WriteCUDA(&d_affine_pre_prev[i], lam_p_local); // Shifts the previous affine parameter $\lambda_{{n-1}}$ to the pre-previous slot $\lambda_{{n-2}}$.
-        WriteCUDA(&d_affine_prev[i], lam_local); // Shifts the current affine parameter $\lambda_n$ to the previous slot $\lambda_{{n-1}}$.
-        {pragma_unroll}
-        for (int c = 0; c < 9; c++) {{ // Loops over the $9$ tensor components to shift the history.
-            WriteCUDA(&d_f_pre_prev_bundle[IDX_F(c, i)], f_p_local[c]); // Shifts the previous state $f^\mu_{{n-1}}$ to the pre-previous slot $f^\mu_{{n-2}}$.
-            WriteCUDA(&d_f_prev_bundle[IDX_F(c, i)], f_local[c]); // Shifts the current state $f^\mu_{{n}}$ to the previous slot $f^\mu_{{n-1}}$.
-        }} // END LOOP: for c over 9 tensor components to shift the history
-    }} // END IF: trajectory is active
-
+        const double log_energy_measure = d_log_energy_bundle[i];
+        if (d_status_bundle[i] == ACTIVE && log_energy_measure > commondata->evolution_measure_max) {
+            d_status_bundle[i] = STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED;
+        } // END IF: photon energy limit exceeded
+        const double radius_squared = x * x + y * y + z * z;
+        if (radius_squared > commondata->r_escape * commondata->r_escape &&
+            d_status_bundle[i] == ACTIVE) {
+            d_status_bundle[i] = STOP_CONDITION_COORD_RADIUS_EXCEEDED;
+        } // END IF: photon escape radius exceeded
+        if (d_status_bundle[i] == ACTIVE &&
+            (!isfinite(coordinate_time) ||
+             coordinate_time < commondata->slot_manager_t_min ||
+             coordinate_time >= commondata->t_start + 1.0e-5)) {
+            d_status_bundle[i] = STOP_CONDITION_T_MAX_EXCEEDED;
+        } // END IF: photon coordinate time invalid
+    } // END LOOP: i processes accepted photon steps
     #undef IDX_F
-    """
-
-    kernel_body = f"{loop_preamble}\n{core_math}\n{loop_postamble}"
-
-    launch_dict = {
-        "threads_per_block": ["256", "1", "1"],
-        "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
-        "stream": "stream_idx",
-    }
-
-    prefunc_kernel, body = parallel_utils.generate_kernel_and_launch_code(
-        kernel_name="event_detection_manager_kernel",
-        kernel_body=kernel_body,
-        arg_dict_cuda=arg_dict_cuda,
-        arg_dict_host=arg_dict_host,
-        parallelization=parallelization,
-        launch_dict=launch_dict,
-        cfunc_decorators="__global__" if parallelization == "cuda" else "",
-        thread_tiling_macro_suffix="RKF45",
+""".replace("@COORDINATE_TIME@", coordinate_time).replace(
+        "@HORIZON_CHECK@", horizon_check
     )
+    if analytical:
+        body = body.replace(
+            "(!isfinite(coordinate_time) ||\n"
+            "             coordinate_time < commondata->slot_manager_t_min ||\n"
+            "             coordinate_time >= commondata->t_start + 1.0e-5)",
+            "!isfinite(coordinate_time)",
+        ).replace("STOP_CONDITION_T_MAX_EXCEEDED;", "FAILURE_GENERIC;")
 
-    prefunc = "\n\n".join(
-        [find_event_c_code, window_c_code, source_c_code, prefunc_kernel]
-    )
-
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    if parallelization == "cuda":
-        includes.append("cuda_intrinsics.h")
-        includes.append("BHaH_device_defines.h")
-
-    desc = r""" Detect observer-window and source-plane crossings for a photon chunk.
-
-    @param commondata Pointer to detection geometry shared by all rays.
-    @param d_f_bundle SoA pointer to the state array for step $f^\mu_{n}$.
-    @param d_f_prev_bundle SoA pointer to the state array for step $f^\mu_{n-1}$.
-    @param d_f_pre_prev_bundle SoA pointer to the state array for step $f^\mu_{n-2}$.
-    @param d_affine Pointer to the current affine parameter $\lambda_n$.
-    @param d_affine_prev Pointer to the history affine parameter $\lambda_{n-1}$.
-    @param d_affine_pre_prev Pointer to the history affine parameter $\lambda_{n-2}$.
-    @param d_results_buffer Flat array of photon-intersection results $b_i$.
-    @param d_status_bundle Pointer to the array of termination statuses.
-    @param d_on_pos_window_prev Array tracking the window plane side.
-    @param d_on_pos_source_prev Array tracking the source plane side.
-    @param d_window_event_found Array tracking if a window intersection has been locked.
-    @param d_source_event_found Array tracking if a source intersection has been locked.
-    @param d_chunk_buffer Array containing the absolute master mapping indices $m_{idx}$.
-    @param chunk_size The number of active rays in the current ray chunk.
-    @param stream_idx Work-array index; CUDA uses the corresponding stream."""
-    cfunc_type = "void"
-    name = "event_detection_manager_kernel"
-    params = (
-        "const commondata_struct *restrict commondata, "
-        "const double *restrict d_f_bundle, "
-        "double *restrict d_f_prev_bundle, "
-        "double *restrict d_f_pre_prev_bundle, "
-        "const double *restrict d_affine, "
-        "double *restrict d_affine_prev, "
-        "double *restrict d_affine_pre_prev, "
-        "blueprint_data_t *restrict d_results_buffer, "
-        "termination_type_t *restrict d_status_bundle, "
-        "bool *restrict d_on_pos_window_prev, "
-        "bool *restrict d_on_pos_source_prev, "
-        "bool *restrict d_window_event_found, "
-        "bool *restrict d_source_event_found, "
-        "const long int *restrict d_chunk_buffer, "
-        "const int chunk_size,"
-        "const int stream_idx"
-    )
-    include_CodeParameters_h = False
+    includes = ["BHaH_defines.h"]
+    prefunc = ""
+    if analytical and par.parval_from_str("parallelization") == "cuda":
+        kernel_body = body.replace(
+            "(void)stream_idx;\n    #pragma omp parallel for\n"
+            "    for (long int i = 0; i < chunk_size; ++i) {",
+            "const long int i = blockIdx.x * blockDim.x + threadIdx.x;\n"
+            "    if (i >= chunk_size) return;",
+        ).replace("continue;", "return;")
+        kernel_body = kernel_body.replace(
+            "    } // END LOOP: i processes accepted photon steps\n    #undef IDX_F",
+            "    #undef IDX_F",
+        ).replace("commondata->", "d_commondata.")
+        cuda_args = {
+            "d_f_bundle": "const double *restrict",
+            "d_f_start_bundle": "const double *restrict",
+            "d_log_energy_bundle": "const double *restrict",
+            "d_integration_param_before": "const double *restrict",
+            "d_integration_param_after": "const double *restrict",
+            "d_status_bundle": "termination_type_t *restrict",
+            "d_on_pos_non_terminal_plane_prev": "bool *restrict",
+            "d_on_pos_terminal_plane_prev": "bool *restrict",
+            "plane_crossing_candidates": "photon_plane_crossing_candidates_t *restrict",
+            "d_chunk_buffer": "const long int *restrict",
+            "chunk_size": "const int",
+        }
+        prefunc, body = parallel_utils.generate_kernel_and_launch_code(
+            kernel_name="event_detection_manager_kernel",
+            kernel_body=kernel_body,
+            arg_dict_cuda=cuda_args,
+            arg_dict_host=cuda_args,
+            parallelization="cuda",
+            launch_dict={
+                "threads_per_block": ["256", "1", "1"],
+                "blocks_per_grid": ["(chunk_size + 255) / 256", "1", "1"],
+                "stream": "stream_idx",
+            },
+            cfunc_decorators="__global__",
+        )
+        includes.extend(["BHaH_device_defines.h", "cuda_intrinsics.h"])
 
     cfc.register_CFunction(
-        prefunc=prefunc,
         includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
-        include_CodeParameters_h=include_CodeParameters_h,
+        prefunc=prefunc,
+        desc="""Record accepted crossing steps and apply photon stop conditions.
+
+        State arrays use nine components with stride BUNDLE_CAPACITY.
+        Integration parameters are affine parameters for direct evolution and
+        coordinate times for normalized evolution. Rejected steps are skipped.
+        CUDA uses the common parameters already stored in d_commondata.
+
+        @param[in] commondata Plane geometry, stop thresholds, and numerical time limits; unused by the CUDA host launcher.
+        @param[in] d_f_bundle Accepted photon states in component-major chunk storage.
+        @param[in] d_f_start_bundle Photon states at the start of each accepted RKF45 step.
+        @param[in] d_log_energy_bundle Logarithmic photon energy measures at the accepted states.
+        @param[in] d_integration_param_before Integration parameters before each accepted step.
+        @param[in] d_integration_param_after Integration parameters after each accepted step.
+        @param[in,out] d_status_bundle Chunk termination statuses; only ACTIVE entries are processed.
+        @param[in,out] d_on_pos_non_terminal_plane_prev Saved nonterminal plane sides, updated when the plane is checked.
+        @param[in,out] d_on_pos_terminal_plane_prev Saved terminal plane sides, updated when the plane is checked.
+        @param[in,out] plane_crossing_candidates Global photon crossing records, updated with accepted crossing steps.
+        @param[in] d_chunk_buffer Mapping from chunk entries to global photon indices.
+        @param chunk_size Number of photon entries in the chunk.
+        @param stream_idx CUDA launch stream index; unused by OpenMP.
+        """ + horizon_desc,
+        cfunc_type="void",
+        name="event_detection_manager_kernel",
+        params=(
+            "const commondata_struct *restrict commondata, "
+            "const double *restrict d_f_bundle, "
+            "const double *restrict d_f_start_bundle, "
+            "const double *restrict d_log_energy_bundle, "
+            "const double *restrict d_integration_param_before, "
+            "const double *restrict d_integration_param_after, "
+            "termination_type_t *restrict d_status_bundle, "
+            "bool *restrict d_on_pos_non_terminal_plane_prev, "
+            "bool *restrict d_on_pos_terminal_plane_prev, "
+            "photon_plane_crossing_candidates_t *restrict plane_crossing_candidates, "
+            "const long int *restrict d_chunk_buffer, "
+            "const int chunk_size, "
+            "const int stream_idx" + horizon_params
+        ),
+        include_CodeParameters_h=False,
         body=body,
     )
-
-
-if __name__ == "__main__":
-    import doctest
-    import sys
-
-    results = doctest.testmod()
-    if results.failed > 0:
-        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-        sys.exit(1)
-    else:
-        print(f"Doctest passed: All {results.attempted} test(s) passed")

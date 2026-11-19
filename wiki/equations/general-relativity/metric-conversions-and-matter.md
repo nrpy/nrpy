@@ -15,9 +15,17 @@ NRPy's metric-conversion modules translate between ADM spatial quantities, refer
 
 `g4munu_conversions.py` exposes stateless functions: `ADM_to_g4DD` and `ADM_to_g4UU` form `g_(mu nu)` and `g^(mu nu)` from `gammaDD`, `betaU`, and `alpha` (Mewes et al. Eqs. (5)-(6) and matrix inversion); `BSSN_to_g4DD` and `BSSN_to_g4UU` delegate through `BSSN_to_ADM`; `g4DD_to_ADM` extracts `(gammaDD, alpha, betaU)` (round-trip checked against `ADM_to_g4DD` in its doctest, while `tests/g4munu_conversions.py` samples forward and inverse formulas separately); and `g4DD_to_BSSN` returns `(hDD, cf, vetU, alpha)` via `ADM_to_BSSN` with dummy `KDD`/`BU`.
 
-`BSSN_to_g4Christoffel` builds `g4DD`, `g4UU`, `g4DD_dD`, ADM-evolved spatial time derivative `gammaDDd0`, and `Gamma4UDD`, leaving coordinate-time gauge derivatives `alpha_d0` and `vetU_d0` as free symbols that callers must supply.
+`BSSN_to_g4Christoffel` builds the four-metric, its inverse and derivatives,
+and the four-Christoffel symbols. It subtracts the residual trace of
+`AbarDD` before reconstructing `KDD` and obtains `gammaDDd0` from ADM
+evolution. Callers supply the coordinate-time derivatives `alpha_d0` and
+`vetU_d0` of the lapse and rescaled shift. The static variants
+`g4DD_dD_static` and `Gamma4UDD_static` keep spatial metric derivatives
+and set coordinate-time metric derivatives to zero.
 
-Evidence (scientific/interface requirement): [Mewes et al.](https://arxiv.org/pdf/2002.06225v2) Eqs. (5)-(7), (10); `ADM_to_BSSN.py`; `BSSN_to_ADM.py`; `general_relativity/g4munu_conversions.py`; `BSSN_to_g4Christoffel.py`.
+Evidence (scientific/interface requirement): `ADM_to_BSSN.py`, `BSSN_to_ADM.py`, and `general_relativity/g4munu_conversions.py`. The metric conventions follow Mewes et al., Eqs. (5)–(7) and (10).
+
+Evidence (descriptive behavior): `BSSN_to_g4Christoffel.py::BSSN_to_g4Christoffel`.
 
 ### Stress-Energy Projections (`T4munu`) And `LorentzBoost`
 

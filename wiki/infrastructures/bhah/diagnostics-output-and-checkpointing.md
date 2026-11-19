@@ -1,6 +1,6 @@
 # Diagnostics Output And Checkpointing
 
-> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed.
+> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. · Status: confirmed
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -26,11 +26,7 @@ serialized point indices before reallocating and restoring `y_n_gfs`.
 `register_all_diagnostics` stages helper headers, validates optional
 raytracing-data export, registers the top-level `_register_CFunction_diagnostics`
 driver, and then registers per-coordinate nearest-diagnostic and volume-element
-helpers. Raytracing export is deliberately narrow: it rejects CUDA generation,
-requires `enable_rfm_precompute=True`, requires
-`enable_RbarDD_gridfunctions=True`, allows exactly one coordinate system, and
-currently supports only `Cartesian` and `Spherical`; the generated exporter also
-aborts unless `commondata->NUMGRIDS == 1`.
+helpers. See [Raytracing Export](#raytracing-export-and-progress-indicator) for the exporter requirements.
 
 `diagnostics()` is called once per timestep. Its cadence test is time-based:
 `fabs(round(time / diagnostics_output_every) * diagnostics_output_every - time)
@@ -117,21 +113,25 @@ Evidence (descriptive behavior): `BHaH/general_relativity/diagnostics_volume_int
 
 ### Raytracing Export And Progress Indicator
 
-Raytracing output is an optional diagnostics-side stage-1 export.
-`output_raytracing_data` writes a time-stamped binary stage-1 slice file through a
-unique temporary sibling and installs it with `link()` so an existing final file
-is not overwritten. Before writing point records it refreshes same-slice
-Ricci/RHS data with `Ricci_eval(...)` and `rhs_eval(...)`, then evaluates final
-Cartesian coordinates, the ten unique covariant four-metric components, and the
-forty unique four-Christoffel components at interior logical-grid points. The
-header records binary64, little-endian, format-version, coordinate-system,
-conformal-factor convention, logical-grid extents, offsets, component names,
-and that ghost zones are excluded. `combine_raytracing_time_slices.py` is the
-stage-2 containerizer: it strictly parses and validates stage-1 files, sorts
-them by physical simulation time, validates compatibility and unique times,
-optionally records coordinate-table and axisymmetry metadata, then atomically
-writes a read-only combined container. It copies stage-1 point records; it does
-not recompute metrics, Christoffels, transforms, or a true spatial index.
+Raytracing export uses OpenMP and one active grid. Each point record contains
+Cartesian coordinates and ten independent covariant four-metric components.
+`g4DD_d0` adds ten metric time derivatives and `GammaUDD` adds forty
+four-Christoffel components. The `all` mode writes all three slice families.
+The two derivative modes and `all` require reference-metric precomputation
+and the separately registered Ricci evaluation and evolution RHS. The
+exporter refreshes those quantities at the output time. If
+`--raytracing-static-christoffels` is selected, the final scheduled
+`GammaUDD` output uses zero coordinate-time metric derivatives.
+
+The exporter evaluates tensors on interior points, extrapolates outer ghost
+records, and then copies mapped inner ghost records using `bcstruct`.
+Records include ghost zones. Output uses binary64 data in a little-endian
+file. The exporter writes a temporary sibling before installing a completed
+slice through `link()`, preserving an existing output file.
+`combine_raytracing_time_slices.py` checks compatibility and sorts slices
+by physical time before copying the records into the combined `.bin` file.
+
+Evidence (descriptive behavior): `output_raytracing_data.py::register_CFunction_output_raytracing_data`; corroboration: `BHaH/diagnostics/diagnostics.py::register_all_diagnostics` and `combine_raytracing_time_slices.py`.
 
 `progress_indicator` registers `start_wallclock_time` and
 `output_progress_every`. Generated C initializes the wall-clock reference at

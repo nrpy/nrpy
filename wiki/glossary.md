@@ -10,6 +10,7 @@ Use these spellings when routing, citing, or writing leaves. Terms link to their
 
 | Term | Meaning |
 | --- | --- |
+| fixed-time geometry sampling | Photon interpolation at `t_start` with evolving photon time. See [Fast Light](infrastructures/bhah/geodesics-and-raytracing-runtime.md#fixed-time-geometry-sampling). |
 | NRPy | Python/SymPy symbolic code-generation package for numerical relativity and relativistic astrophysics; see [Architecture Overview](architecture/overview.md). |
 | SymPy | Python symbolic algebra package used to build expressions before code emission; see [Architecture Overview](architecture/overview.md). |
 | generated C | C emitted by NRPy codegen and infrastructure modules rather than handwritten source; see [Generated Output Boundaries](architecture/generated-output-boundaries.md). |

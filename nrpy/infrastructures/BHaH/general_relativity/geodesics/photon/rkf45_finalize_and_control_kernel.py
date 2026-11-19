@@ -1,39 +1,55 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/rkf45_finalize_and_control_kernel.py
 r"""
-Defines the CUDA or OpenMP function and host-side driver for RKF45 finalization.
+Defines the native kernel and host-side orchestrator for the RKF45 Finalize step.
 
-This module provides the parallel function that calculates the final
+This module provides the computational kernel responsible for calculating the final
 5th-order solution, estimating the local truncation error, and executing the adaptive
 step-size controller logic. The kernel bounds local memory usage by calculating the
-5th-order candidate and error component-by-component for all nine state-vector components. The
+5th-order candidate and error component-by-component for all 9 tensor components. The
 L1 momentum floor is calculated using the initial state to prevent redundant reads
 during the main loop, while scalar loads map directly to local memory. It calculates
 physical state updates using exact double-precision coefficients, explicitly checking
 for numerical singularities to reject corrupted trajectory steps. Additionally,
 truncation errors are calculated directly via coefficient deltas to avoid catastrophic
 floating-point cancellation against the anchor state. Upon step acceptance, the kernel
-commits the updated state, advances the affine parameter, resets the retry counter,
-and sets the ray status to active; otherwise, it increments the retries and sets a
-rejected or failure status.
+commits the updated state, advances the integration-parameter tracker, resets
+the retry counter, and sets the ray status to active; otherwise, it increments
+the retries and sets a rejected or failure status. Geodesic evolution
+tracks affine parameter, while normalized evolution tracks coordinate time and
+uses its log-energy tolerance in the embedded error norm.
+
+An independent counter records consecutive attempted minimum-size steps,
+including accepted steps and retryable interpolation failures. Host integrators
+apply its limit after the accepted-state physical stopping checks. A larger
+attempted step resets the count; a zero limit disables counting.
 
 When requested by `enable_numerical_time_window_step_cap`, the generated kernel
-also caps accepted next-step sizes using `rkf45_max_delta_t` so backward
-numerical-spacetime ray tracing remains inside the mapped time window.
-The companion numerical time-window manager registers
-`rkf45_max_delta_t` because it also uses that runtime parameter when
-building the required mmap slice window.
+also applies an accepted-state, slot-relative next-step cap using
+`rkf45_max_delta_t` as backward lookahead so numerical-spacetime ray tracing
+uses the mapped numerical time window. A shared helper also bounds the initial
+step, accepted next-step proposals, and retries using the runtime temporal
+stencil limit independently of `rkf45_h_max`. Normalized evolution bounds
+coordinate-time travel directly; direct evolution predicts that travel using
+the accepted `p^0` and a factor of 0.9. Neither cap increases a step above a
+safe limit to satisfy `rkf45_h_min`; incompatible limits report `FAILURE_GENERIC`.
+This time window is distinct from the geometric `non_terminal_plane` event surface
+handled by the photon event-detection kernels.
+The numerical photon example registers the companion time-window manager before
+registering this kernel, so that the shared `rkf45_max_delta_t` parameter exists
+when the accepted-step cap is emitted.
 
-Together, the time-window manager and this kernel enforce one shared requirement:
+Together, the time-window manager and this kernel enforce the mapped-time-window
+requirement for RKF45:
 the manager maps enough lower-time numerical data for one photon slot assuming
 the next accepted RKF45 step will not move farther backward in coordinate time
 than the promised lookahead, and this kernel makes that assumption true by
-limiting the next accepted affine-parameter step when necessary.
+limiting the next accepted integration-parameter step when necessary.
 
 For the full mapped-window reasoning, including why the lower side of the
 window carries extra backward-time lookahead while the upper side only needs
 the centered interpolation halo, see
 `time_window_manager_numerical_required_grid_range()` and
-`time_window_manager_numerical_stencil_for_time()` in the companion
+`time_window_manager_numerical_stencil_for_center()` in the companion
 `time_window_manager_numerical` helper.
 
 Author: Dalton J. Moone
@@ -45,23 +61,46 @@ from typing import List, Union
 import nrpy.c_function as cfc
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
+from nrpy.infrastructures.BHaH import BHaH_defines_h
 
 
 def rkf45_finalize_and_control_kernel(
     enable_numerical_time_window_step_cap: bool = False,
+    normalized_eom: bool = False,
+    enable_rkf45_trial_debug: bool = False,
+    retry_interpolation_failures: bool = False,
+    enable_metric_gradient_tolerances: bool = False,
 ) -> None:
     r"""
-    Generate the CUDA or OpenMP function for RKF45 finalization and error control.
+    Global kernel for RKF45 finalization and error control.
 
     The kernel computes the 4th and 5th order solutions, calculates the error
     norm, and updates the photon's status (ACTIVE/REJECTED) and step size $h$
-    in the state, status, and step-size arrays.
+    in global memory.
 
     :param enable_numerical_time_window_step_cap: Whether to cap accepted RKF45
         step sizes so numerical-spacetime interpolation remains inside the
-        currently mapped time window. When enabled, this registration also
-        ensures the numerical time-window helper registers the shared
-        slot-lattice and lookahead CodeParameters first.
+        currently mapped time window. The caller must register the numerical
+        time-window manager separately before enabling this option.
+    :param normalized_eom: Whether the nine-component state uses normalized
+        photon variables with coordinate time as its integration parameter.
+    :param enable_rkf45_trial_debug: Whether to emit per-trial RKF45 diagnostics
+        through an additional output pointer. Disabled by default so existing
+        callers keep the current generated interface.
+    :param retry_interpolation_failures: Whether spatial and temporal
+        interpolation failures count as rejected RKF45 trials. Enabled by the
+        numerical single- and batch-photon integrators; disabled by default.
+    :param enable_metric_gradient_tolerances: Whether to accept each photon's
+        maximum metric derivative over the trial stages and scale its absolute
+        and relative tolerances. The caller validates finite ``L_sense >= 0``
+        and ``0 < tol_scale_min <= 1`` before integration. A minimum scale of
+        one or zero sensing length leaves the base tolerances unchanged.
+
+    With both metric-gradient scaling and trial debugging enabled, diagnostics
+    report the gradient maximum, dimensionless ``q``, tolerance multiplier,
+    and effective absolute and relative tolerances used by the error norm.
+    Disabled scaling reports a multiplier of one and uncomputed gradients as
+    NaN. Interpolation failures report these unused quantities as NaN.
 
     Doctests:
     >>> import nrpy.c_function as cfc
@@ -81,33 +120,278 @@ def rkf45_finalize_and_control_kernel(
     True
     >>> "rkf45_checked_floor_to_long(slot_position, &slot_idx)" in generated
     True
+    >>> "const bool error_is_zero = (err_norm == 0.0);" in generated
+    True
+    >>> "pow(err_norm, -0.2)" in generated
+    True
+    >>> "double h_new = error_is_zero ? commondata->rkf45_h_max" in generated
+    True
+    >>> cfc.CFunction_dict.clear()
+    >>> with tempfile.TemporaryDirectory(dir=os.getcwd()) as temp_dir:
+    ...     old_cache_home = os.environ.get("XDG_CACHE_HOME")
+    ...     _ = os.environ.__setitem__("XDG_CACHE_HOME", temp_dir)
+    ...     rkf45_finalize_and_control_kernel()
+    ...     generated = cfc.CFunction_dict["rkf45_finalize_and_control"].full_function
+    ...     if old_cache_home is None:
+    ...         _ = os.environ.pop("XDG_CACHE_HOME", None)
+    ...     else:
+    ...         _ = os.environ.__setitem__("XDG_CACHE_HOME", old_cache_home)
+    >>> "rkf45_checked_floor_to_long" not in generated
+    True
+    >>> "FAILURE_SPATIAL_INTERPOLATION" in generated
+    True
+    >>> "FAILURE_TEMPORAL_INTERPOLATION" in generated
+    True
+    >>> cfc.CFunction_dict.clear()
+    >>> with tempfile.TemporaryDirectory(dir=os.getcwd()) as temp_dir:
+    ...     old_cache_home = os.environ.get("XDG_CACHE_HOME")
+    ...     _ = os.environ.__setitem__("XDG_CACHE_HOME", temp_dir)
+    ...     rkf45_finalize_and_control_kernel(
+    ...         enable_numerical_time_window_step_cap=True, normalized_eom=True
+    ...     )
+    ...     generated = cfc.CFunction_dict["rkf45_finalize_and_control"].full_function
+    ...     if old_cache_home is None:
+    ...         _ = os.environ.pop("XDG_CACHE_HOME", None)
+    ...     else:
+    ...         _ = os.environ.__setitem__("XDG_CACHE_HOME", old_cache_home)
+    >>> "rkf45_log_energy_tolerance" in generated
+    True
+    >>> "rkf45_constraint_tolerance" not in generated
+    True
+    >>> "const bool error_is_zero = (err_norm == 0.0);" in generated
+    True
+    >>> "pow(err_norm, -0.2)" in generated
+    True
+    >>> "double h_new_abs = error_is_zero ? commondata->rkf45_h_max" in generated
+    True
+    >>> "1e-15" not in generated
+    True
+    >>> "h_new_abs > commondata->rkf45_max_delta_t" not in generated
+    True
+    >>> "const double allowed_delta_t" in generated
+    True
+    >>> cfc.CFunction_dict.clear()
+    >>> with tempfile.TemporaryDirectory(dir=os.getcwd()) as temp_dir:
+    ...     old_cache_home = os.environ.get("XDG_CACHE_HOME")
+    ...     _ = os.environ.__setitem__("XDG_CACHE_HOME", temp_dir)
+    ...     rkf45_finalize_and_control_kernel(enable_rkf45_trial_debug=True)
+    ...     generated = cfc.CFunction_dict["rkf45_finalize_and_control"].full_function
+    ...     if old_cache_home is None:
+    ...         _ = os.environ.pop("XDG_CACHE_HOME", None)
+    ...     else:
+    ...         _ = os.environ.__setitem__("XDG_CACHE_HOME", old_cache_home)
+    >>> "rkf45_trial_diagnostic_t *restrict d_trial_debug" in generated
+    True
+    >>> "d_trial_debug[i].err_norm" in generated
+    True
+    >>> counter_update = (
+    ...     "const int min_step_limit = commondata->rkf45_max_consecutive_min_steps; "
+    ...     "int min_steps = 0; "
+    ...     "if (min_step_limit > 0 && fabs(ReadCUDA(&d_h[i])) <= commondata->rkf45_h_min) { "
+    ...     "min_steps = ReadCUDA(&d_consecutive_min_steps[i]); "
+    ...     "if (min_steps < min_step_limit) { ++min_steps; } "
+    ...     "} "
+    ...     "WriteCUDA(&d_consecutive_min_steps[i], min_steps);"
+    ... )
+    >>> import re
+    >>> code_without_comments = re.sub(r"//[^\n]*", "", generated)
+    >>> assert "".join(counter_update.split()) in "".join(code_without_comments.split())
+    >>> assert generated.index("WriteCUDA(&d_consecutive_min_steps[i], min_steps)") < generated.index("const termination_type_t incoming_status")
+    >>> limit = par.glb_code_params_dict["rkf45_max_consecutive_min_steps"]
+    >>> (limit.cparam_type, limit.defaultvalue, limit.commondata, limit.add_to_parfile)
+    ('int', 100, True, True)
+    >>> from unittest.mock import patch
+    >>> saved_parallelization = par.parval_from_str("parallelization")
+    >>> with tempfile.TemporaryDirectory() as cache_dir, patch.dict(os.environ, {"XDG_CACHE_HOME": cache_dir}):
+    ...     for mode in ("openmp", "cuda"):
+    ...         par.set_parval_from_str("parallelization", mode)
+    ...         for normalized in (False, True):
+    ...             cfc.CFunction_dict.clear()
+    ...             rkf45_finalize_and_control_kernel(
+    ...                 normalized_eom=normalized, retry_interpolation_failures=True
+    ...             )
+    ...             code = cfc.CFunction_dict["rkf45_finalize_and_control"].full_function
+    ...             code = re.sub(r"//[^\n]*", "", code).replace("d_commondata.", "commondata->")
+    ...             assert "".join(counter_update.split()) in "".join(code.split())
+    ...             assert code.index("WriteCUDA(&d_consecutive_min_steps[i], min_steps)") < code.index("const termination_type_t incoming_status")
+    >>> par.set_parval_from_str("parallelization", saved_parallelization)
+    >>> cfc.CFunction_dict.clear()
+    >>> with tempfile.TemporaryDirectory() as cache_dir, patch.dict(os.environ, {"XDG_CACHE_HOME": cache_dir}):
+    ...     rkf45_finalize_and_control_kernel(enable_metric_gradient_tolerances=True)
+    ...     scaled = cfc.CFunction_dict["rkf45_finalize_and_control"]
+    >>> "const double *restrict d_trial_gradient_max" in scaled.params
+    True
+    >>> [(par.glb_code_params_dict[name].cparam_type,
+    ...   par.glb_code_params_dict[name].defaultvalue,
+    ...   par.glb_code_params_dict[name].commondata,
+    ...   par.glb_code_params_dict[name].add_to_parfile)
+    ...  for name in ("L_sense", "tol_scale_min")]
+    [('REAL', 1.0, True, True), ('REAL', 1.0, True, True)]
+    >>> cfc.CFunction_dict.clear()
+    >>> with tempfile.TemporaryDirectory() as cache_dir, patch.dict(os.environ, {"XDG_CACHE_HOME": cache_dir}):
+    ...     rkf45_finalize_and_control_kernel()
+    ...     unscaled = cfc.CFunction_dict["rkf45_finalize_and_control"]
+    >>> "d_trial_gradient_max" not in unscaled.full_function
+    True
+    >>> _ = par.glb_extras_dict.get("BHaH_defines", {}).pop("rkf45_trial_debug", None)
+    >>> cfc.CFunction_dict.clear()
+    >>> with tempfile.TemporaryDirectory() as cache_dir, patch.dict(os.environ, {"XDG_CACHE_HOME": cache_dir}):
+    ...     rkf45_finalize_and_control_kernel(
+    ...         enable_metric_gradient_tolerances=True, enable_rkf45_trial_debug=True
+    ...     )
+    >>> diagnostic_fields = set(re.findall(
+    ...     r"double (\w+);", par.glb_extras_dict["BHaH_defines"]["rkf45_trial_debug"]
+    ... ))
+    >>> {"trial_gradient_max", "q", "tol_scale", "atol_effective", "rtol_effective"} <= diagnostic_fields
+    True
     """
-    if (
-        enable_numerical_time_window_step_cap
-        and "time_window_manager_numerical"
-        not in (par.glb_extras_dict.get("BHaH_defines", {}))
-    ):
-        # Import lazily to avoid a package-level circular import between the
-        # photon and interpolation aggregation modules.
-        from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.time_window_manager_numerical import (  # pylint: disable=import-outside-toplevel
-            time_window_manager_numerical,
-        )
-
-        time_window_manager_numerical()
-
     real_param_names: List[str] = [
         "rkf45_error_tolerance",
         "rkf45_absolute_error_tolerance",
         "rkf45_h_min",
         "rkf45_h_max",
+        "evolution_measure_max",
     ]
-    real_param_defaults: List[Union[str, int, float]] = [1e-8, 1e-8, 1e-10, 10.0]
-    # The accepted-step cap is emitted only for numerical-spacetime builds.
-    # The companion time_window_manager_numerical() helper registers
-    # the shared lookahead and slot-lattice CodeParameters before this kernel
-    # uses them.
-    real_param_names.extend(["rkf45_safety_factor", "numerical_initial_h"])
-    real_param_defaults.extend([0.9, 1.0])
+    real_param_defaults: List[Union[str, int, float]] = [
+        1e-8,
+        1e-8,
+        1e-10,
+        10.0,
+        1.0e3,
+    ]
+    if enable_rkf45_trial_debug:
+        trial_debug_initialization = r"""
+    int limiting_component = -1;
+    double limiting_delta_5_minus_4 = 0.0;
+    double limiting_error_absolute = 0.0;
+    double limiting_scale = 0.0;
+    double limiting_error_normalized = 0.0;
+"""
+        trial_debug_candidate_check = r"""
+        const bool candidate_nonfinite =
+            isnan(f_5th_val) || isinf(f_5th_val);
+        if (candidate_nonfinite) {
+            err_norm = 1e30;
+        } // END IF: nonfinite fifth-order candidate
+"""
+        trial_debug_error_update = r"""
+            if (candidate_nonfinite) {
+                limiting_component = comp;
+                limiting_delta_5_minus_4 = delta_5_minus_4;
+                limiting_error_absolute = err_abs;
+                limiting_scale = scale;
+                limiting_error_normalized = 1e30;
+            } // END IF: nonfinite candidate controls error
+
+            if (isnan(current_err) || isinf(current_err)) {
+                err_norm = 1e30;
+                limiting_component = comp;
+                limiting_delta_5_minus_4 = delta_5_minus_4;
+                limiting_error_absolute = err_abs;
+                limiting_scale = scale;
+                limiting_error_normalized = current_err;
+            } else if (current_err > err_norm) {
+                err_norm = current_err;
+                limiting_component = comp;
+                limiting_delta_5_minus_4 = delta_5_minus_4;
+                limiting_error_absolute = err_abs;
+                limiting_scale = scale;
+                limiting_error_normalized = current_err;
+            } // END ELSE: finite component error comparison
+"""
+        trial_debug_error_delta = r"""
+        const double delta_5_minus_4 =
+            MulCUDA(h_local, err_val);
+        const double err_abs = AbsCUDA(delta_5_minus_4);
+"""
+        excluded_nonfinite_condition = (
+            "comp == 0 || comp == 8" if normalized_eom else "comp == 8"
+        )
+        trial_debug_excluded_nonfinite_update = rf"""
+        if (candidate_nonfinite && ({excluded_nonfinite_condition})) {{
+            limiting_component = comp;
+            limiting_delta_5_minus_4 = delta_5_minus_4;
+            limiting_error_absolute = err_abs;
+            limiting_scale = 0.0;
+            limiting_error_normalized = 1e30;
+        }} // END IF: excluded nonfinite component controls error
+"""
+        trial_debug_h_capture = "    const double h_error_controller = h_new;\n"
+        trial_debug_output = r"""
+    WriteCUDA(&d_trial_debug[i].err_norm, err_norm);
+    WriteCUDA(
+        &d_trial_debug[i].h_error_controller, h_error_controller);
+    WriteCUDA(
+        &d_trial_debug[i].limiting_component, limiting_component);
+    WriteCUDA(
+        &d_trial_debug[i].limiting_delta_5_minus_4,
+        limiting_delta_5_minus_4);
+    WriteCUDA(
+        &d_trial_debug[i].limiting_error_absolute,
+        limiting_error_absolute);
+    WriteCUDA(&d_trial_debug[i].limiting_scale, limiting_scale);
+    WriteCUDA(
+        &d_trial_debug[i].limiting_error_normalized,
+        limiting_error_normalized);
+"""
+        interpolation_failure_debug_output = r"""
+        WriteCUDA(&d_trial_debug[i].err_norm, NAN);
+        WriteCUDA(&d_trial_debug[i].h_error_controller, NAN);
+        WriteCUDA(&d_trial_debug[i].limiting_component, -1);
+        WriteCUDA(&d_trial_debug[i].limiting_delta_5_minus_4, NAN);
+        WriteCUDA(&d_trial_debug[i].limiting_error_absolute, NAN);
+        WriteCUDA(&d_trial_debug[i].limiting_scale, NAN);
+        WriteCUDA(&d_trial_debug[i].limiting_error_normalized, NAN);
+"""
+    else:
+        trial_debug_initialization = ""
+        trial_debug_candidate_check = r"""
+        if (isnan(f_5th_val) || isinf(f_5th_val)) {
+            err_norm = 1e30;
+        } // END IF: numerical singularities check
+"""
+        trial_debug_error_delta = r"""
+        const double err_abs = AbsCUDA(MulCUDA(h_local, err_val));
+"""
+        trial_debug_excluded_nonfinite_update = ""
+        trial_debug_error_update = r"""
+            if (isnan(current_err) || isinf(current_err)) {
+                err_norm = 1e30;
+            } else {
+                err_norm = fmax(err_norm, current_err);
+            } // END ELSE: normalized-error accumulation
+"""
+        trial_debug_h_capture = ""
+        trial_debug_output = ""
+        interpolation_failure_debug_output = ""
+
+    gradient_debug_unavailable = ""
+    if enable_metric_gradient_tolerances and enable_rkf45_trial_debug:
+        gradient_debug_unavailable = (
+            "\n".join(
+                f"        WriteCUDA(&d_trial_debug[i].{field}, NAN);"
+                for field in (
+                    "trial_gradient_max",
+                    "q",
+                    "tol_scale",
+                    "atol_effective",
+                    "rtol_effective",
+                )
+            )
+            + "\n"
+        )
+        interpolation_failure_debug_output += gradient_debug_unavailable
+        trial_debug_output += r"""
+    WriteCUDA(&d_trial_debug[i].trial_gradient_max, trial_gradient_max);
+    WriteCUDA(&d_trial_debug[i].q, q);
+    WriteCUDA(&d_trial_debug[i].tol_scale, tol_scale);
+    WriteCUDA(&d_trial_debug[i].atol_effective, atol);
+    WriteCUDA(&d_trial_debug[i].rtol_effective, rtol);
+"""
+
+    if normalized_eom:
+        real_param_names.append("rkf45_log_energy_tolerance")
+        real_param_defaults.append(1e-8)
     par.register_CodeParameters(
         "REAL",
         __name__,
@@ -116,13 +400,66 @@ def rkf45_finalize_and_control_kernel(
         commondata=True,
         add_to_parfile=True,
     )
+    if enable_metric_gradient_tolerances:
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            ["L_sense", "tol_scale_min"],
+            [1.0, 1.0],
+            commondata=True,
+            add_to_parfile=True,
+            descriptions=[
+                "Length multiplying the maximum Cartesian metric derivative; zero disables tolerance scaling.",
+                "Minimum multiplier for absolute and relative RKF45 tolerances; one disables scaling.",
+            ],
+        )
     par.register_CodeParameter(
         "int", __name__, "rkf45_max_retries", 10, commondata=True, add_to_parfile=True
+    )
+    par.register_CodeParameter(
+        "int",
+        __name__,
+        "rkf45_max_consecutive_min_steps",
+        100,
+        commondata=True,
+        add_to_parfile=True,
     )
 
     parallelization = par.parval_from_str("parallelization")
     cd_access = parallel_utils.get_commondata_access(parallelization)
     pragma_unroll = "#pragma unroll" if parallelization == "cuda" else ""
+
+    if enable_rkf45_trial_debug:
+        trial_debug_struct = r"""
+    typedef struct {
+      double err_norm;
+      double h_error_controller;
+      int limiting_component;
+      double limiting_delta_5_minus_4;
+      double limiting_error_absolute;
+      double limiting_scale;
+      double limiting_error_normalized;
+    } rkf45_trial_diagnostic_t; // END STRUCT: RKF45 trial diagnostics
+    """
+        if enable_metric_gradient_tolerances:
+            trial_debug_struct = trial_debug_struct.replace(
+                "      double err_norm;",
+                "      double trial_gradient_max;\n"
+                "      double q;\n"
+                "      double tol_scale;\n"
+                "      double atol_effective;\n"
+                "      double rtol_effective;\n"
+                "      double err_norm;",
+            )
+        if enable_numerical_time_window_step_cap:
+            trial_debug_struct = trial_debug_struct.replace(
+                "      double h_error_controller;",
+                "      double h_error_controller;\n      double h_before_temporal_cap;",
+            )
+        if "rkf45_trial_debug" not in par.glb_extras_dict.get("BHaH_defines", {}):
+            BHaH_defines_h.register_BHaH_defines(
+                "rkf45_trial_debug", trial_debug_struct
+            )
 
     arg_dict_cuda = {
         "d_f_persistent": "double *restrict",
@@ -130,9 +467,9 @@ def rkf45_finalize_and_control_kernel(
         "d_k_bundle": "const double *restrict",
         "d_h": "double *restrict",
         "d_status": "termination_type_t *restrict",
-        "d_affine": "double *restrict",
+        "d_integration_param": "double *restrict",
         "d_retries": "int *restrict",
-        "chunk_size": "const long int",
+        "d_consecutive_min_steps": "int *restrict",
     }
 
     arg_dict_host = {
@@ -141,10 +478,18 @@ def rkf45_finalize_and_control_kernel(
         "d_k_bundle": "const double *restrict",
         "d_h": "double *restrict",
         "d_status": "termination_type_t *restrict",
-        "d_affine": "double *restrict",
+        "d_integration_param": "double *restrict",
         "d_retries": "int *restrict",
-        "chunk_size": "const long int",
+        "d_consecutive_min_steps": "int *restrict",
     }
+    if enable_rkf45_trial_debug:
+        arg_dict_cuda["d_trial_debug"] = "rkf45_trial_diagnostic_t *restrict"
+        arg_dict_host["d_trial_debug"] = "rkf45_trial_diagnostic_t *restrict"
+    if enable_metric_gradient_tolerances:
+        arg_dict_cuda["d_trial_gradient_max"] = "const double *restrict"
+        arg_dict_host["d_trial_gradient_max"] = "const double *restrict"
+    arg_dict_cuda["chunk_size"] = "const long int"
+    arg_dict_host["chunk_size"] = "const long int"
     # Pass commondata explicitly when not using CUDA's global memory
     if parallelization != "cuda":
         arg_dict_cuda["commondata"] = "const commondata_struct *restrict"
@@ -165,7 +510,7 @@ def rkf45_finalize_and_control_kernel(
     else:
         loop_preamble = """
     //==========================================
-    // OPENMP PARALLEL LOOP
+    // OPENMP LOOP ARCHITECTURE
     //==========================================
     // Distribute photon rays across available CPU threads for parallel evaluation.
     #pragma omp parallel for
@@ -173,21 +518,185 @@ def rkf45_finalize_and_control_kernel(
         """
         loop_postamble = "    } // END LOOP: for i over chunk_size rays"
 
-    prefunc = r"""
+    escape_statement = "return;" if parallelization == "cuda" else "continue;"
+
+    if retry_interpolation_failures:
+        interpolation_failure_debug_retry_output = (
+            r"""
+        WriteCUDA(&d_trial_debug[i].err_norm, NAN);
+        WriteCUDA(
+            &d_trial_debug[i].h_error_controller, h_retry);
+        WriteCUDA(&d_trial_debug[i].limiting_component, -1);
+        WriteCUDA(&d_trial_debug[i].limiting_delta_5_minus_4, NAN);
+        WriteCUDA(&d_trial_debug[i].limiting_error_absolute, NAN);
+        WriteCUDA(&d_trial_debug[i].limiting_scale, NAN);
+        WriteCUDA(&d_trial_debug[i].limiting_error_normalized, NAN);
+"""
+            if enable_rkf45_trial_debug
+            else ""
+        )
+        interpolation_failure_debug_retry_output += gradient_debug_unavailable
+        interpolation_failure_handling = rf"""
+    // Interpolation failures reject this trial without evaluating its NaN
+    // stage derivatives or changing the last accepted state.
+    const termination_type_t incoming_status = d_status[i];
+    if (incoming_status == FAILURE_SPATIAL_INTERPOLATION ||
+        incoming_status == FAILURE_TEMPORAL_INTERPOLATION) {{
+        const double h_local = ReadCUDA(&d_h[i]);
+        const int new_retries = ReadCUDA(&d_retries[i]) + 1;
+        WriteCUDA(&d_retries[i], new_retries);
+
+        const double h_sign = (h_local < 0.0) ? -1.0 : 1.0;
+        const double h_retry_abs =
+            fmax(0.5 * fabs(h_local), {cd_access}rkf45_h_min);
+        double h_retry = h_sign * h_retry_abs;
+        if (new_retries <= {cd_access}rkf45_max_retries) {{
+            WriteCUDA(&d_status[i], REJECTED);
+        }} // END IF: interpolation failure remains retryable
+        // On the retry-limit trial, retain the spatial or temporal
+        // interpolation-failure status as the terminal cause.
+{interpolation_failure_debug_retry_output}
+        @TEMPORAL_CAP_DIAGNOSTIC@@INTERPOLATION_TEMPORAL_CAP@
+        WriteCUDA(&d_h[i], h_retry);
+        {escape_statement}
+    }} // END IF: interpolation failure
+"""
+    else:
+        interpolation_failure_handling = rf"""
+    // Interpolation failures terminate only their owning photon. Preserve the
+    // last accepted state and the owning interpolation-failure classification.
+    const termination_type_t incoming_status = d_status[i];
+    if (incoming_status == FAILURE_SPATIAL_INTERPOLATION ||
+        incoming_status == FAILURE_TEMPORAL_INTERPOLATION) {{
+{interpolation_failure_debug_output}
+        {escape_statement}
+    }} // END IF: interpolation failure already established
+"""
+
+    if enable_numerical_time_window_step_cap:
+        numerical_step_cap = r"""
+    /**
+     * Bound a numerical-photon step using its runtime temporal stencil.
+     *
+     * @param[in] commondata Runtime step limits.
+     * @param proposed_h Proposed signed integration-parameter step.
+     * @param p0 Current accepted direct p^0; unused for normalized EOM.
+     * @param[in,out] status Photon status, set on incompatible step limits.
+     * @return Signed bounded step.
+     */
+    static inline double rkf45_cap_numerical_step(
+        const commondata_struct *commondata,
+        const double proposed_h,
+        const double p0,
+        termination_type_t *status) {
+      double limit = commondata->rkf45_h_max;
+      const double temporal_limit =
+          commondata->numerical_spacetime_temporal_max_delta_t;
+      if (!isfinite(proposed_h) || proposed_h == 0.0 ||
+          !isfinite(limit) || limit <= 0.0 ||
+          !isfinite(temporal_limit) || temporal_limit < 0.0) {
+        *status = FAILURE_GENERIC;
+        return proposed_h;
+      } // END IF: numerical step parameters invalid
+      @P0_UNUSED@
+      if (temporal_limit > 0.0) {
+        @TEMPORAL_LIMIT@
+      } // END IF: finite temporal-stencil span enabled
+      const double bounded_h = copysign(fmin(fabs(proposed_h), limit), proposed_h);
+      if (fabs(bounded_h) < commondata->rkf45_h_min) {
+        *status = FAILURE_GENERIC;
+        return bounded_h;
+      } // END IF: cap below minimum step
+      return bounded_h;
+    } // END FUNCTION: numerical step cap
+"""
+        numerical_step_cap = numerical_step_cap.replace(
+            "@P0_UNUSED@", "(void)p0;" if normalized_eom else ""
+        ).replace(
+            "@TEMPORAL_LIMIT@",
+            (
+                "limit = fmin(limit, temporal_limit);"
+                if normalized_eom
+                else """if (!isfinite(p0) || p0 == 0.0) {
+          *status = FAILURE_GENERIC;
+          return proposed_h;
+        } // END IF: invalid direct photon momentum
+        limit = fmin(limit, 0.9 * temporal_limit / fabs(p0));"""
+            ),
+        )
+        BHaH_defines_h.register_BHaH_defines(
+            "rkf45_numerical_step_cap", numerical_step_cap
+        )
+
+    interpolation_failure_handling = interpolation_failure_handling.replace(
+        "@TEMPORAL_CAP_DIAGNOSTIC@",
+        (
+            "WriteCUDA(&d_trial_debug[i].h_before_temporal_cap, h_retry);\n        "
+            if enable_numerical_time_window_step_cap and enable_rkf45_trial_debug
+            else ""
+        ),
+    ).replace(
+        "@INTERPOLATION_TEMPORAL_CAP@",
+        (
+            """h_retry = rkf45_cap_numerical_step(
+            commondata, h_retry, ReadCUDA(&d_f_start[4 * BUNDLE_CAPACITY + i]),
+            &d_status[i]);"""
+            if enable_numerical_time_window_step_cap
+            else ""
+        ),
+    )
+
+    prefunc = (
+        r"""
 static inline int rkf45_checked_floor_to_long(
     const double value,
     long int *out) {
   if (out == NULL || !isfinite(value) ||
       value < (double)LONG_MIN || value > (double)LONG_MAX) {
     return 1;
-  } // END IF: floor() source value was not representable as long int
+  } // END IF: floor() source invalid
   *out = (long int)floor(value);
   return 0;
 } // END FUNCTION: rkf45_checked_floor_to_long
 """
+        if enable_numerical_time_window_step_cap
+        else ""
+    )
 
     accepted_time_window_step_cap = ""
-    if enable_numerical_time_window_step_cap:
+    if enable_numerical_time_window_step_cap and normalized_eom:
+        accepted_time_window_step_cap = rf"""
+        //==========================================
+        // NUMERICAL TIME-WINDOW ACCEPTED-STEP CAP
+        //==========================================
+        {{
+            const double t_accepted = ReadCUDA(&d_integration_param[i]);
+            const double slot_position =
+                (t_accepted - {cd_access}slot_manager_t_min) /
+                {cd_access}slot_manager_delta_t;
+            long int slot_idx = 0L;
+
+            if (rkf45_checked_floor_to_long(slot_position, &slot_idx) != 0) {{
+                h_new_abs = {cd_access}rkf45_h_min;
+                h_new = h_sign * h_new_abs;
+                WriteCUDA(&d_status[i], FAILURE_GENERIC);
+            }} else {{
+                const double slot_lower =
+                    {cd_access}slot_manager_t_min +
+                    (double)slot_idx * {cd_access}slot_manager_delta_t;
+                const double delta_to_lower_slot_edge =
+                    fmax(0.0, t_accepted - slot_lower);
+                const double allowed_delta_t =
+                    delta_to_lower_slot_edge + {cd_access}rkf45_max_delta_t;
+
+                if (allowed_delta_t > 0.0 && h_new_abs > allowed_delta_t) {{
+                    h_new_abs = allowed_delta_t;
+                    h_new = h_sign * h_new_abs;
+                }} // END IF: next coordinate-time step exceeded mapped-window
+            }} // END ELSE: slot position representable
+        }} // END BLOCK: normalized accepted-step time-window cap
+"""
+    elif enable_numerical_time_window_step_cap:
         accepted_time_window_step_cap = rf"""
         //==========================================
         // NUMERICAL TIME-WINDOW ACCEPTED-STEP CAP
@@ -198,9 +707,9 @@ static inline int rkf45_checked_floor_to_long(
         // current slot plus rkf45_max_delta_t of extra lookahead. Convert that
         // allowed coordinate-time motion into an affine-parameter cap using
         // the accepted fifth-order estimate of p^0 = dt/dlambda.
-        // For the full cross-file requirement, see
+        // For the mapped-time-window requirement, see
         // time_window_manager_numerical_required_grid_range() and
-        // time_window_manager_numerical_stencil_for_time() in the companion
+        // time_window_manager_numerical_stencil_for_center() in the companion
         // time_window_manager_numerical helper.
         {{
             const double t_accepted = f_5th_cache[0];
@@ -216,7 +725,7 @@ static inline int rkf45_checked_floor_to_long(
 
             if (rkf45_checked_floor_to_long(slot_position, &slot_idx) != 0) {{
                 h_new = {cd_access}rkf45_h_min;
-                WriteCUDA(&d_status[i], TERMINATION_TYPE_FAILURE);
+                WriteCUDA(&d_status[i], FAILURE_GENERIC);
             }} else {{
                 const double slot_lower =
                     {cd_access}slot_manager_t_min +
@@ -243,40 +752,154 @@ static inline int rkf45_checked_floor_to_long(
                         // numerical time window that the companion manager
                         // promised to keep available.
                         h_new = time_window_h_cap;
-                        WriteCUDA(&d_status[i], TERMINATION_TYPE_FAILURE);
+                        WriteCUDA(&d_status[i], FAILURE_GENERIC);
                     }} else {{
                         h_new = fmin(h_new, time_window_h_cap);
                         h_new = fmax(h_new, {cd_access}rkf45_h_min);
-                    }} // END ELSE: time-window cap remained compatible with h_min
-                }} // END IF: accepted temporal derivative supports a finite cap
-            }} // END ELSE: slot position was representable as long int
+                    }} // END ELSE: time-window cap compatible
+                }} // END IF: positive derivative and cap
+            }} // END ELSE: slot position representable
         }} // END BLOCK: numerical time-window accepted-step cap
 """
 
+    if normalized_eom:
+        tolerance_load = rf"""
+    const double log_energy_tol =
+        {cd_access}rkf45_log_energy_tolerance;
+"""
+        error_normalization = r"""
+        (void)p_L1;
+        if (comp > 0 && comp < 8) {
+            const double state_mag = fmax(AbsCUDA(f_n), AbsCUDA(f_5th_val));
+            double scale = 0.0;
+
+            if (comp <= 3) {
+                scale = AddCUDA(atol, MulCUDA(rtol, state_mag));
+            } else if (comp == 4) {
+                scale = log_energy_tol;
+            } else {
+                scale = AddCUDA(atol, MulCUDA(rtol, fmax(1.0, state_mag)));
+            } // END ELSE: normalized-state tolerance selection
+
+            const double current_err = DivCUDA(err_abs, scale);
+{trial_debug_error_update}
+        } // END IF: exclude integration and normal-observer slots
+"""
+        adaptive_step_control = rf"""
+    const double h_sign = (h_local < 0.0) ? -1.0 : 1.0;
+    double h_new_abs =
+        error_is_zero
+            ? {cd_access}rkf45_h_max
+            : MulCUDA(safety, MulCUDA(AbsCUDA(h_local), factor));
+    h_new_abs = fmax(h_new_abs, {cd_access}rkf45_h_min);
+    h_new_abs = fmin(h_new_abs, {cd_access}rkf45_h_max);
+    double h_new = h_sign * h_new_abs;
+"""
+        integration_parameter_update = r"""
+        // Normalized evolution advances coordinate time by the accepted step.
+        const double old_integration_param = ReadCUDA(&d_integration_param[i]);
+        WriteCUDA(
+            &d_integration_param[i], AddCUDA(old_integration_param, h_local));
+"""
+    else:
+        tolerance_load = ""
+        error_normalization = r"""
+        if (comp < 8) {
+            double scale = 0.0;
+
+            if (comp == 0) {
+                scale = atol;
+            } else if (comp <= 3) {
+                scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n)));
+            } else if (comp == 4) {
+                scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n)));
+            } else {
+                scale = AddCUDA(atol, MulCUDA(rtol, p_L1));
+            } // END ELSE: geodesic tolerance selection
+
+            const double current_err = DivCUDA(err_abs, scale);
+{trial_debug_error_update}
+        } // END IF: exclude path-length component
+"""
+        adaptive_step_control = rf"""
+    double h_new =
+        error_is_zero
+            ? {cd_access}rkf45_h_max
+            : MulCUDA(safety, MulCUDA(h_local, factor));
+    h_new = fmax(h_new, {cd_access}rkf45_h_min);
+    h_new = fmin(h_new, {cd_access}rkf45_h_max);
+"""
+        integration_parameter_update = r"""
+        // Geodesic evolution advances affine parameter by the accepted step.
+        const double old_integration_param = ReadCUDA(&d_integration_param[i]);
+        WriteCUDA(
+            &d_integration_param[i], AddCUDA(old_integration_param, h_local));
+"""
+
+    error_normalization = error_normalization.replace(
+        "{trial_debug_error_update}", trial_debug_error_update
+    )
+
+    tolerance_parameters = rf"""
+    const double rtol = {cd_access}rkf45_error_tolerance; // Relative tolerance bounds.
+    const double atol = {cd_access}rkf45_absolute_error_tolerance; // Absolute tolerance bounds.
+"""
+    if enable_metric_gradient_tolerances:
+        tolerance_parameters = rf"""
+    double rtol = {cd_access}rkf45_error_tolerance;
+    double atol = {cd_access}rkf45_absolute_error_tolerance;
+    double trial_gradient_max = NAN;
+    double q = NAN;
+    double tol_scale = 1.0;
+    if ({cd_access}tol_scale_min < 1.0 && {cd_access}L_sense > 0.0) {{
+        trial_gradient_max = ReadCUDA(&d_trial_gradient_max[i]);
+        q = MulCUDA({cd_access}L_sense, trial_gradient_max);
+        tol_scale = fmax({cd_access}tol_scale_min, 1.0 / (1.0 + q));
+        rtol = MulCUDA(rtol, tol_scale);
+        atol = MulCUDA(atol, tol_scale);
+    }} // END IF: metric-gradient tolerance scaling enabled
+"""
+
+    tolerance_parameters = tolerance_parameters.lstrip("\n")
+
     core_math = rf"""
+    // Count the attempted magnitude before any retry or next-step update.
+    const int min_step_limit = {cd_access}rkf45_max_consecutive_min_steps;
+    int min_steps = 0;
+    if (min_step_limit > 0 && fabs(ReadCUDA(&d_h[i])) <= {cd_access}rkf45_h_min) {{
+        min_steps = ReadCUDA(&d_consecutive_min_steps[i]);
+        if (min_steps < min_step_limit) {{
+            ++min_steps;
+        }} // END IF: count below minimum-step limit
+    }} // END IF: attempted minimum step
+    WriteCUDA(&d_consecutive_min_steps[i], min_steps);
+
+{interpolation_failure_handling}
+
     //==========================================
-    // MACRO DEFINITIONS FOR ARRAY ACCESS
+    // MACRO DEFINITIONS FOR BUNDLE ACCESS
     //==========================================
-    // IDX_F maps a component to the flattened state array using SoA layout.
+    // IDX_F maps a component to the flattened state bundle using SoA layout.
     #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
-    // IDX_K maps a component to the flattened derivative array.
+    // IDX_K maps a component to the flattened derivative bundle.
     #define IDX_K(s, c, ray_id) ((s) * 9 * BUNDLE_CAPACITY + (c) * BUNDLE_CAPACITY + (ray_id))
 
     //==========================================
     // PARAMETER LOAD
     //==========================================
-    // Load tolerances from the parameter structure and current values from state arrays.
-    const double rtol = {cd_access}rkf45_error_tolerance; // Relative tolerance bounds.
-    const double atol = {cd_access}rkf45_absolute_error_tolerance; // Absolute tolerance bounds.
+    // Load tolerances and state variables from global memory and constant memory structs.
+{tolerance_parameters}
+{tolerance_load}
     double h_local = ReadCUDA(&d_h[i]); // Local step size $h$.
     const int retries = ReadCUDA(&d_retries[i]); // Current count of failed adaptation attempts.
 
     //==========================================
     // COMPUTE & CACHE LOOP
     //==========================================
-    // Compute the fifth-order candidate and error one component at a time.
-    double f_5th_cache[9]; // Local array for the evaluated fifth-order state $f^{{\mu}}$.
+    // We compute the 5th order candidate and error component-by-component to bound register usage.
+    double f_5th_cache[9]; // Thread-local register cache for the evaluated 5th-order state $f^{{\mu}}$.
     double err_norm = 0.0; // Accumulator for the maximum normalized truncation error norm $L_\infty$.
+{trial_debug_initialization}
 
     //==========================================
     // L1 MOMENTUM FLOOR
@@ -294,8 +917,8 @@ static inline int rkf45_checked_floor_to_long(
         //==========================================
         // BASE STATE AND DERIVATIVE COMPONENT LOAD
         //==========================================
-        // Load the current state component and its RKF45 derivatives.
-        const double f_n = ReadCUDA(&d_f_start[IDX_F(comp, i)]);     // Base state component $f_n$.
+        // Scalar loads mapped directly to registers for the current tensor component.
+        const double f_n = ReadCUDA(&d_f_start[IDX_F(comp, i)]);     // Base state tensor component $f_n$.
         const double k0  = ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]); // Stage 0 derivative vector $k_0$.
         // Stage 1 (k1) is mathematically zeroed out in RKF45, so it is skipped.
         const double k2  = ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]); // Stage 2 derivative vector $k_2$.
@@ -306,7 +929,7 @@ static inline int rkf45_checked_floor_to_long(
         //==========================================
         // 5TH ORDER CANDIDATE EVALUATION & STATE CORRUPTION SAFEGUARD
         //==========================================
-        // Evaluate the fifth-order candidate state $f^\mu_{{n+1}}$ from the RKF45 coefficients.
+        // Evaluates the physical state update $f^\mu_{{n+1}}$ utilizing exact double-precision Runge-Kutta coefficients to catch non-linear tensor interactions near event horizons before memory persistence.
         double update = MulCUDA(16.0 / 135.0, k0); // Intermediate accumulator for the 5th order step update.
         update = FusedMulAddCUDA(6656.0 / 12825.0, k2, update); // Accumulates the stage 2 derivative vector $k_2$.
         update = FusedMulAddCUDA(28561.0 / 56430.0, k3, update); // Accumulates the stage 3 derivative vector $k_3$.
@@ -314,12 +937,10 @@ static inline int rkf45_checked_floor_to_long(
         update = FusedMulAddCUDA(2.0 / 55.0, k5, update); // Accumulates the stage 5 derivative vector $k_5$.
 
         const double f_5th_val = FusedMulAddCUDA(h_local, update, f_n); // The 5th order candidate state $f^\mu_{{n+1}}$.
-        f_5th_cache[comp] = f_5th_val; // Store the evaluated component in the local candidate array.
+        f_5th_cache[comp] = f_5th_val; // Caches the evaluated component to thread-local registers.
 
         // Evaluates the physical state for numerical singularities to guarantee the rejection of corrupted trajectory steps.
-        if (isnan(f_5th_val) || isinf(f_5th_val)) {{
-            err_norm = 1e30; // Forces an artificially massive error norm $L_\infty$ to guarantee step rejection.
-        }} // END IF: numerical singularities check
+{trial_debug_candidate_check}
 
         //==========================================
         // TRUNCATION ERROR EVALUATION
@@ -331,70 +952,45 @@ static inline int rkf45_checked_floor_to_long(
         err_val = FusedMulAddCUDA(1.0 / 50.0, k4, err_val); // Accumulates the stage 4 error coefficient delta.
         err_val = FusedMulAddCUDA(2.0 / 55.0, k5, err_val); // Accumulates the stage 5 error coefficient delta.
 
-        const double err_abs = AbsCUDA(MulCUDA(h_local, err_val)); // The absolute magnitude of the local truncation error.
+{trial_debug_error_delta}
+{trial_debug_excluded_nonfinite_update}
 
         //==========================================
         // ERROR NORMALIZATION & L-INFINITY NORM
         //==========================================
-        // Evaluates the normalized error for each tensor component to dictate the RKF45 adaptive step size $h$.
-        if (comp < 8) {{ // Excludes the distance traveled (index 8) from the error check.
-            double scale = 0.0; // The bounded tolerance scale limit for the current tensor component.
-
-            if (comp == 0) {{
-                // Coordinate Time $t$: Applies pure absolute tolerance to prevent secular drift.
-                scale = atol; // Applies pure absolute tolerance bounds.
-            }} else if (comp <= 3) {{
-                // Spatial Position $x^i$: Mixed tolerance scaling bounds spatial position variation.
-                scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n))); // Mixed tolerance scaling bounds positional variation.
-            }} else if (comp == 4) {{
-                // Temporal Momentum $p_t$: Mixed tolerance scaling enforces energy conservation bounds.
-                scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n))); // Mixed tolerance scaling bounds temporal momentum variation.
-            }} else {{
-                // Spatial Momentum $p_i$: Mixed tolerance bounded by the $L_1$ momentum floor.
-                scale = AddCUDA(atol, MulCUDA(rtol, p_L1)); // Mixed tolerance scaling bounds spatial momentum variation.
-            }} // END ELSE: spatial momentum tolerance bounds
-
-            double current_err = DivCUDA(err_abs, scale); // The normalized error for the specific tensor component.
-
-            // Evaluates the calculated error norm for numerical singularities to guard against IEEE-754 fmax behavior.
-            if (isnan(current_err) || isinf(current_err)) {{
-                err_norm = 1e30; // Forces an artificially massive error norm $L_\infty$ to guarantee step rejection.
-            }} else {{
-                err_norm = fmax(err_norm, current_err); // Accumulates the maximum normalized error equivalent to the $L_\infty$ norm.
-            }} // END ELSE: error norm accumulation
-        }} // END IF: exclude distance traveled from error check
-    }} // END LOOP: for comp over 9 tensor components
+{error_normalization}
+    }} // END LOOP: for comp over 9 tensor
 
     //==========================================
     // UNIFIED ADAPTIVE CONTROL LOGIC
     //==========================================
     // Evaluates the mathematically optimal adaptive step size $h$ for subsequent integration.
-    double safety = {cd_access}rkf45_safety_factor; // Safety factor for step-size scaling.
-    double factor = (err_norm > 1e-15) ? pow(DivCUDA(1.0, err_norm), 0.2) : 2.0; // Growth or shrink factor for the adaptive step $h$.
+    const double safety = 0.9; // Fixed RKF45 damping factor for next-step scaling.
+    const bool error_is_zero = (err_norm == 0.0);
+    const double factor = error_is_zero ? 1.0 : pow(err_norm, -0.2); // Growth or shrink factor for the adaptive step $h$.
 
-    double h_new = MulCUDA(safety, MulCUDA(h_local, factor)); // The candidate new step size $h$.
-    h_new = fmax(h_new, {cd_access}rkf45_h_min); // Enforces the minimum step size $h_{{min}}$ bound.
-    h_new = fmin(h_new, {cd_access}rkf45_h_max); // Enforces the maximum step size $h_{{max}}$ bound.
+{adaptive_step_control}
+{trial_debug_h_capture}
 
     if (err_norm <= 1.0) {{
         //==========================================
         // ACCEPTED STEP MEMORY COMMIT
         //==========================================
-        // Copy the accepted local candidate into the persistent state array.
+        // Commits the local register cache to persistent global memory.
         {pragma_unroll}
         for (int comp = 0; comp < 9; ++comp) {{
             WriteCUDA(&d_f_persistent[IDX_F(comp, i)], f_5th_cache[comp]); // Commits the cached state component to persistent memory.
-        }} // END LOOP: for comp over 9 tensor components to commit state
+        }} // END LOOP: for comp over 9 tensor
 
-        // Update Affine Parameter $\lambda$.
-        const double old_affine = ReadCUDA(&d_affine[i]); // Previous affine parameter $\lambda$.
-        WriteCUDA(&d_affine[i], AddCUDA(old_affine, h_local)); // Commits the updated affine parameter $\lambda$ to memory.
+        // Advance the affine-parameter or coordinate-time tracker.
+{integration_parameter_update}
 
         // Reset Retries & Set Status.
         WriteCUDA(&d_retries[i], 0); // Resets the retry counter to zero for the active ray.
         WriteCUDA(&d_status[i], ACTIVE); // Updates the ray status flag to active.
 
 {accepted_time_window_step_cap}
+@TEMPORAL_CAP_DIAGNOSTIC@@ACCEPTED_TEMPORAL_CAP@
         // Commit the newly adapted step size $h$ to memory.
         WriteCUDA(&d_h[i], h_new); // Commits the newly adapted step size $h$ to memory.
     }} // END IF: err_norm <= 1.0
@@ -413,9 +1009,11 @@ static inline int rkf45_checked_floor_to_long(
             WriteCUDA(&d_status[i], REJECTED); // Updates the ray status flag to a recoverable rejection.
         }} // END ELSE: recoverable rejection status
 
+@TEMPORAL_CAP_DIAGNOSTIC@@REJECTED_TEMPORAL_CAP@
         // Commit the scaled retry step size $h$ to memory without overwriting persistent state vectors.
         WriteCUDA(&d_h[i], h_new); // Commits the scaled retry step size $h$ to memory.
     }} // END ELSE: rejected step handling
+{trial_debug_output}
 
     //==========================================
     // MACRO CLEANUP
@@ -425,6 +1023,33 @@ static inline int rkf45_checked_floor_to_long(
     #undef IDX_K
     """
 
+    core_math = core_math.replace(
+        "@ACCEPTED_TEMPORAL_CAP@",
+        (
+            """        h_new = rkf45_cap_numerical_step(
+            commondata, h_new, f_5th_cache[4], &d_status[i]);"""
+            if enable_numerical_time_window_step_cap
+            else ""
+        ),
+    ).replace(
+        "@REJECTED_TEMPORAL_CAP@",
+        (
+            """        h_new = rkf45_cap_numerical_step(
+            commondata, h_new, ReadCUDA(&d_f_start[IDX_F(4, i)]),
+            &d_status[i]);"""
+            if enable_numerical_time_window_step_cap
+            else ""
+        ),
+    )
+
+    temporal_cap_diagnostic = (
+        "WriteCUDA(&d_trial_debug[i].h_before_temporal_cap, @STEP@);\n        "
+        if enable_numerical_time_window_step_cap and enable_rkf45_trial_debug
+        else ""
+    )
+    core_math = core_math.replace(
+        "@TEMPORAL_CAP_DIAGNOSTIC@", temporal_cap_diagnostic.replace("@STEP@", "h_new")
+    )
     kernel_body = f"{loop_preamble}\n{core_math}\n{loop_postamble}"
 
     launch_dict = {
@@ -448,18 +1073,30 @@ static inline int rkf45_checked_floor_to_long(
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
 
-    desc = r""" Finalizes the RKF45 step, checks errors, and updates state/stepsize.
+    trial_debug_desc = (
+        "    @param[out] d_trial_debug Optional per-ray trial diagnostic output.\n"
+        if enable_rkf45_trial_debug
+        else ""
+    )
+    gradient_desc = (
+        "    @param[in] d_trial_gradient_max Maximum absolute metric derivative over all trial stages.\n"
+        if enable_metric_gradient_tolerances
+        else ""
+    )
+    desc = rf""" Finalizes the RKF45 step, checks errors, and updates state/stepsize.
 
-    @param commondata Pointer to numerical tolerances shared by all rays.
-    @param d_f_persistent Pointer to the persistent state $f^{\mu}$ (updated on acceptance).
-    @param d_f_start Pointer to the base state $f^{\mu}$ (read-only).
-    @param d_k_bundle Pointer to all 6 derivative vectors $k_n$.
-    @param d_h Pointer to the step size $h$.
-    @param d_status Pointer to the ray status flag.
-    @param d_affine Pointer to the affine parameter $\lambda$.
-    @param d_retries Pointer to the retry counter.
-    @param chunk_size The number of rays in the current chunk.
-    @param stream_idx Work-array index; CUDA uses the corresponding stream.
+    @param[in] commondata Global integration and numerical-spacetime parameters.
+    @param[in,out] d_f_persistent Persistent nine-component state, updated on acceptance.
+    @param[in] d_f_start Base nine-component state, read-only.
+    @param[in] d_k_bundle Six derivative vectors $k_n$.
+    @param[in,out] d_h Step size $h$, updated after acceptance or rejection.
+    @param[in,out] d_status Ray status flag, updated on terminal failure.
+    @param[in,out] d_integration_param Affine-parameter or coordinate-time tracker.
+    @param[in,out] d_retries Retry counter, updated on rejected steps.
+    @param[in,out] d_consecutive_min_steps Consecutive minimum-size attempts; zero when disabled.
+{trial_debug_desc}{gradient_desc}
+    @param chunk_size The number of rays in the current bundle.
+    @param stream_idx CUDA stream identifier when CUDA is enabled.
 
     @note When numerical-spacetime support requests the optional accepted-step
     cap, this routine becomes the runtime enforcement layer for the
@@ -470,6 +1107,16 @@ static inline int rkf45_checked_floor_to_long(
 
     name = "rkf45_finalize_and_control"
 
+    trial_debug_param = (
+        "rkf45_trial_diagnostic_t *restrict d_trial_debug, "
+        if enable_rkf45_trial_debug
+        else ""
+    )
+    gradient_param = (
+        "const double *restrict d_trial_gradient_max, "
+        if enable_metric_gradient_tolerances
+        else ""
+    )
     params = (
         "const commondata_struct *restrict commondata, "
         "double *restrict d_f_persistent, "
@@ -477,10 +1124,13 @@ static inline int rkf45_checked_floor_to_long(
         "const double *restrict d_k_bundle, "
         "double *restrict d_h, "
         "termination_type_t *restrict d_status, "
-        "double *restrict d_affine, "
+        "double *restrict d_integration_param, "
         "int *restrict d_retries, "
-        "const long int chunk_size, "
-        "const int stream_idx"
+        "int *restrict d_consecutive_min_steps, "
+        + trial_debug_param
+        + gradient_param
+        + "const long int chunk_size, "
+        + "const int stream_idx"
     )
 
     include_CodeParameters_h = False
