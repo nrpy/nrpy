@@ -54,21 +54,12 @@ remain included. The example uses the ordinary `cfl_limited_timestep` scan,
 not the optional conservative bound. Other examples retain their existing
 CFL setup and global-list boundary filtering path.
 
-The inverse-spheroidal spectroscopy example enables
-`enable_xx_to_Cart_precompute=True` for grid allocation, initial data,
-radiation boundaries, timestepping cleanup, and PUP registration.
-`numerical_grids.py` allocates `griddata.xx_to_Cart[3]` over each chare's full
-local grid, including ghosts. Initial-data setup fills these arrays while
-precomputing the reference metric. Radiation boundaries read the radius and radial-derivative coefficients stored
-in the boundary structs during setup, without recomputing them during evolution.
-`superB_pup.py` serializes the arrays and allocates them on unpacking;
-`timestepping_chare.py` frees them during cleanup. Coordinate arrays are
-separate from AUXEVOL gridfunctions and inter-chare gridfunction exchanges.
+The inverse-spheroidal spectroscopy example precomputes the reference metric
+in AUXEVOL gridfunctions. Radiation boundaries read the radius and radial
+derivatives stored in each `outerpt_bc_struct` during boundary setup.
 
-Evidence (descriptive behavior): `numerical_grids.py::register_CFunction_numerical_grids_chare`;
-`initial_data.py::register_CFunction_initial_data`;
-`superB_pup.py::register_CFunction_superB_pup_routines`;
-`timestepping_chare.py::output_timestepping_cpp`.
+Evidence (descriptive behavior): `initial_data.py::register_CFunction_initial_data`;
+`CurviBoundaryConditions.py::CurviBoundaryConditions_register_C_functions`.
 
 The grid transport paths are ordinary Charm++ entry-method sends generated for
 the `Timestepping` array:

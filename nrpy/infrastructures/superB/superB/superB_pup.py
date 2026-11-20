@@ -52,13 +52,11 @@ def generate_pup_serialization_lines_for_CodeParams(
 
 def register_CFunction_superB_pup_routines(
     MoL_method: str = "RK4",
-    enable_xx_to_Cart_precompute: bool = False,
 ) -> None:
     """
     Register the C function "superB_pup_routines", which is a collection of Pack-Unpack (PUP) routines for various structs.
     These routines are used for checkpointing and load balancing in Charm++.
 
-    :param enable_xx_to_Cart_precompute: Allocate and preserve chare-local Cartesian coordinate arrays.
     :param MoL_method: The Method of Lines (MoL) method to be used (default is "RK4").
 
     DocTests:
@@ -623,14 +621,6 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const commondata_struct
   PUParray(p, gd.xx[1], gd.params.Nxx_plus_2NGHOSTS1);
   PUParray(p, gd.xx[2], gd.params.Nxx_plus_2NGHOSTS2);
 
-"""
-    if enable_xx_to_Cart_precompute:
-        prefunc += """
-  const size_t ntot = (size_t)gd.params.Nxx_plus_2NGHOSTS0 * gd.params.Nxx_plus_2NGHOSTS1 * gd.params.Nxx_plus_2NGHOSTS2;
-  for (int i=0; i<3; i++) {
-    if (p.isUnpacking()) gd.xx_to_Cart[i] = (REAL *restrict)malloc(sizeof(REAL) * ntot);
-    PUParray(p, gd.xx_to_Cart[i], ntot);
-  }
 """
     prefunc += """
   pup_diagnostic_struct(p, gd.diagnosticstruct, gd.params);

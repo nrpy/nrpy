@@ -61,17 +61,12 @@ def _unique_assignments(
 
 def register_CFunction_generalrfm_precompute(
     CoordSystem: str,
-    enable_xx_to_Cart_precompute: bool = False,
-    xx_to_Cart_in_griddata: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register a C function that precomputes GeneralRFM quantities into AUXEVOL gridfunctions.
 
     :param CoordSystem: Coordinate system name. Must be a supported GeneralRFM
         system.
-    :param xx_to_Cart_in_griddata: Store cached Cartesian positions in separate griddata arrays.
-    :param enable_xx_to_Cart_precompute: Cache Cartesian positions in AUXEVOL or griddata arrays;
-        supported only for inverse spheroidal fisheye.
     :return: `None` during the parallel-codegen registration phase; otherwise
         the current NRPy environment.
     :raises ValueError: If CUDA parallelization is requested, if CoordSystem is
@@ -96,12 +91,8 @@ def register_CFunction_generalrfm_precompute(
         inverse_fisheye.register_precompute(
             CoordSystem,
             rfm.general_rfm_provider_meta["num_transitions"],
-            enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
-            xx_to_Cart_in_griddata=xx_to_Cart_in_griddata,
         )
         return pcg.NRPyEnv()
-    if enable_xx_to_Cart_precompute:
-        raise ValueError("Cartesian precompute requires inverse spheroidal fisheye.")
     if provider_name not in {"fisheye", "spheroidal_fisheye"}:
         raise ValueError(
             f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in generalrfm_precompute."
@@ -210,17 +201,12 @@ for (int i2 = 0; i2 < params->Nxx_plus_2NGHOSTS2; i2++) {{
 
 def register_CFunctions_generalrfm_support(
     CoordSystem: str,
-    enable_xx_to_Cart_precompute: bool = False,
-    xx_to_Cart_in_griddata: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register all GeneralRFM support C functions (precompute and Cart_to_xx).
 
     :param CoordSystem: Coordinate system name for which GeneralRFM support
         functions should be registered.
-    :param xx_to_Cart_in_griddata: Store cached Cartesian positions in separate griddata arrays.
-    :param enable_xx_to_Cart_precompute: Cache inverse spheroidal Cartesian
-        positions for radiation boundary conditions.
     :return: `None` during the parallel-codegen registration phase; otherwise
         the current NRPy environment.
     """
@@ -229,11 +215,7 @@ def register_CFunctions_generalrfm_support(
         return None
 
     # Precompute.
-    register_CFunction_generalrfm_precompute(
-        CoordSystem,
-        enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
-        xx_to_Cart_in_griddata=xx_to_Cart_in_griddata,
-    )
+    register_CFunction_generalrfm_precompute(CoordSystem)
 
     # Cart_to_xx numeric inverse.
     generalrfm_cart_to_xx.register_CFunction_generalrfm_Cart_to_xx(CoordSystem)

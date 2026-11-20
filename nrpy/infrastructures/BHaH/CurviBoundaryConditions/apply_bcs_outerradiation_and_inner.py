@@ -76,7 +76,6 @@ def _radiation_r_and_partials_exprs(CoordSystem: str) -> List[sp.Expr]:
 def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
     CoordSystem: str,
     cfunc_decorators: str = "",
-    enable_xx_to_Cart_precompute: bool = False,
 ) -> str:
     """
     Generate C code to compute the radial coordinate r(x0, x1, x2) and its derivatives.
@@ -88,8 +87,6 @@ def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
 
     :param CoordSystem: The coordinate system for which to compute r and its derivatives.
     :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
-    :param enable_xx_to_Cart_precompute: Evaluate geometry from cached Cartesian
-        positions instead of solving the coordinate map at each boundary call.
     :return: A string containing the generated C code for the function.
     """
     desc = "Compute r(xx0,xx1,xx2) and partial_r x^i."
@@ -104,9 +101,7 @@ def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
     rfm = refmetric.reference_metric[CoordSystem]
     if getattr(rfm, "general_rfm_provider_name", "") == "inverse_fisheye":
         n = rfm.general_rfm_provider_meta["num_transitions"]
-        position = "const REAL x[3]={xCart[0]-params->Cart_originx, xCart[1]-params->Cart_originy, xCart[2]-params->Cart_originz};"
-        if not enable_xx_to_Cart_precompute:
-            position = f"""const REAL q[3]={{xx0,xx1,xx2}};
+        position = f"""const REAL q[3]={{xx0,xx1,xx2}};
 REAL x[3];
 if (inverse_fisheye_solve__N{n}(params,q,x)) {{ fprintf(stderr,"Inverse fisheye boundary solve failed.\\n"); exit(1); }}"""
         return cfc.CFunction(
@@ -114,11 +109,7 @@ if (inverse_fisheye_solve__N{n}(params,q,x)) {{ fprintf(stderr,"Inverse fisheye 
             desc=desc,
             cfunc_type=cfunc_type,
             name=name,
-            params=(
-                "const params_struct *restrict params, const REAL xCart[3], REAL *r, REAL *partial_x0_partial_r, REAL *partial_x1_partial_r, REAL *partial_x2_partial_r"
-                if enable_xx_to_Cart_precompute
-                else params
-            ),
+            params=params,
             include_CodeParameters_h=False,
             body=f"""
 {position}
@@ -696,8 +687,6 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     cfunc_decorators: str = "",
     radiation_BC_fd_order: int = 2,
     rational_const_alias: str = "static const",
-    enable_xx_to_Cart_precompute: bool = False,
-    xx_to_Cart_in_griddata: bool = False,
 ) -> None:
     """
     Register a C function to apply boundary conditions to both pure outer and inner boundary points.
@@ -706,12 +695,6 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
     :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
     :param rational_const_alias: Alias for rational constants. Default is "static const".
-    :param xx_to_Cart_in_griddata: Store cached Cartesian positions in separate griddata arrays.
-    :param enable_xx_to_Cart_precompute: Preserve the Cartesian-cache argument
-        for callers with precomputed coordinates. Radiation uses bcstruct geometry.
-
-    :raises ValueError: If Cartesian precompute is requested for another provider
-        or for CUDA.
 
     Doctests:
     >>> from nrpy.helpers.generic import validate_strings
@@ -733,13 +716,6 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     Setting up reference_metric[Cartesian]...
     Setting up reference_metric[SinhCylindricalv2n2]...
     """
-    if enable_xx_to_Cart_precompute and (
-        not CoordSystem.startswith("GeneralRFM_inverse_fisheyeN")
-        or par.parval_from_str("parallelization") == "cuda"
-    ):
-        raise ValueError(
-            "Cached radiation geometry requires inverse spheroidal fisheye on the CPU."
-        )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     prefunc = setup_Cfunction_radiation_bcs(
         CoordSystem=CoordSystem,
@@ -763,15 +739,6 @@ applies BCs to the inner boundary points, which may map either to the grid inter
     const REAL custom_wavespeed[NUM_EVOL_GFS],
     const REAL custom_f_infinity[NUM_EVOL_GFS],
     REAL *restrict gfs, REAL *restrict rhs_gfs"""
-    if enable_xx_to_Cart_precompute:
-        if xx_to_Cart_in_griddata:
-            params = params.replace(
-                "REAL *restrict xx[3],",
-                "REAL *restrict xx[3], REAL *restrict xx_to_Cart[3],",
-            )
-        else:
-            params += ", const REAL *restrict auxevol_gfs"
-
     body: str = ""
     if par.parval_from_str("parallelization") == "cuda":
         body = r"""

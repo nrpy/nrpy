@@ -774,12 +774,10 @@ def output_timestepping_cpp(
     enable_charm_checkpointing: bool = False,
     enable_BHaHAHA: bool = False,
     post_params_struct_set_to_default: str = "",
-    enable_xx_to_Cart_precompute: bool = False,
 ) -> None:
     """
     Generate timestepping.cpp.
 
-    :param enable_xx_to_Cart_precompute: Allocate and preserve chare-local Cartesian coordinate arrays.
     :param project_dir: Directory where the project C code is output.
     :param Butcher_dict: Dictionary containing Butcher tableau for the MoL method.
     :param MoL_method: Method of Lines (MoL) method name.
@@ -941,10 +939,6 @@ Timestepping::~Timestepping() {
     for(int ng=0;ng<NGHOSTS*3;ng++) {
      free(griddata_chare[grid].bcstruct.pure_outer_bc_array[ng]);
     }"""
-    if enable_xx_to_Cart_precompute:
-        file_output_str += """
-    for(int i=0;i<3;i++) free(griddata_chare[grid].xx_to_Cart[i]);
-"""
     file_output_str += r"""
     for(int i=0;i<3;i++) {
       free(griddata_chare[grid].xx[i]);
@@ -2179,12 +2173,10 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     enable_BHaHAHA: bool = False,
     post_params_struct_set_to_default: str = "",
     enable_distributed_cfl: bool = False,
-    enable_xx_to_Cart_precompute: bool = False,
 ) -> None:
     """
     Output timestepping h, cpp, and ci files and register C functions.
 
-    :param enable_xx_to_Cart_precompute: Allocate and preserve chare-local Cartesian coordinate arrays.
     :param project_dir: Directory where the project C code is output
     :param MoL_method: Method of Lines (MoL) method name, default is "RK4".
     :param enable_rfm_precompute: Enable RFM precompute, default is False.
@@ -2230,7 +2222,6 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         enable_charm_checkpointing=enable_charm_checkpointing,
         enable_BHaHAHA=enable_BHaHAHA,
         post_params_struct_set_to_default=post_params_struct_set_to_default,
-        enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
     )
 
     output_timestepping_ci(

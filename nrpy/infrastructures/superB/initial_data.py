@@ -108,7 +108,6 @@ def register_CFunction_initial_data(
     free_ID_persist_struct_str: str = "",
     enable_T4munu: bool = False,
     enable_conformal_projection: bool = False,
-    enable_xx_to_Cart_precompute: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions for converting ADM initial data to BSSN variables and applying boundary conditions.
@@ -130,8 +129,6 @@ def register_CFunction_initial_data(
     :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
     :param enable_conformal_projection: Apply the determinant and Abar-trace
         projection after checkpoint recovery and final boundary handling.
-    :param enable_xx_to_Cart_precompute: Cache inverse spheroidal Cartesian
-        positions alongside the reference metric before initializing the fields.
 
     :raises ValueError: If ``set_of_CoordSystems`` is empty.
     :return: None if in registration phase, else the updated NRPy environment.
@@ -175,11 +172,7 @@ def register_CFunction_initial_data(
             enable_T4munu=enable_T4munu,
         )
         if coord.startswith("GeneralRFM"):
-            BHaH.generalrfm_precompute.register_CFunctions_generalrfm_support(
-                coord,
-                enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
-                xx_to_Cart_in_griddata=enable_xx_to_Cart_precompute,
-            )
+            BHaH.generalrfm_precompute.register_CFunctions_generalrfm_support(coord)
 
     desc = "Set initial data."
     cfunc_type = "void"
@@ -224,11 +217,6 @@ switch (initial_data_part) {
     if any(coord.startswith("GeneralRFM") for coord in coord_systems_to_register):
         body += """      generalrfm_precompute(commondata, params, (const REAL *restrict *)griddata[grid].xx, griddata[grid].gridfuncs.auxevol_gfs);
 """
-    if enable_xx_to_Cart_precompute:
-        body = body.replace(
-            "(const REAL *restrict *)griddata[grid].xx, griddata[grid].gridfuncs.auxevol_gfs",
-            "griddata[grid].xx, griddata[grid].xx_to_Cart, griddata[grid].gridfuncs.auxevol_gfs",
-        )
     body += f"""initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params,
 griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_persist, {IDtype}, initial_data_part);
     }}"""

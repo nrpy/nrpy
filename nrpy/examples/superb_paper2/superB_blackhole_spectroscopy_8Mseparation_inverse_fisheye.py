@@ -215,7 +215,6 @@ initial_data.register_CFunction_initial_data(
     IDCoordSystem=IDCoordSystem,
     set_of_CoordSystems=set_of_CoordSystems,
     enable_checkpointing=False,
-    enable_xx_to_Cart_precompute=True,
     ID_persist_struct_str=ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
@@ -324,7 +323,6 @@ BHaH.numerical_grids_and_timestep.register_CFunctions(
 BHaH.numerical_grids_and_timestep.register_CFunction_cfl_limited_timestep()
 BHaH.numerical_grids_and_timestep.register_CFunction_ds_min_single_pt(CoordSystem)
 superB.numerical_grids.register_CFunctions(
-    enable_xx_to_Cart_precompute=True,
     set_of_CoordSystems={CoordSystem},
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
@@ -333,7 +331,6 @@ superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems={CoordSystem},
     radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
-    enable_xx_to_Cart_precompute=True,
 )
 
 rhs_string = ""
@@ -350,7 +347,7 @@ if separate_Ricci_and_BSSN_RHS:
 if outer_bcs_type == "radiation":
     rhs_string += r"""
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
-apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx, griddata[grid].xx_to_Cart,
+apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
                                    gridfunctions_wavespeed, gridfunctions_f_infinity,
                                    RK_INPUT_GFS, RK_OUTPUT_GFS);"""
 else:
@@ -491,7 +488,6 @@ if enable_CAHD:
 """
 
 timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
-    enable_xx_to_Cart_precompute=True,
     # Global boundary storage is unused, but must be safe to free and checkpoint.
     post_params_struct_set_to_default="""
 for (int grid=0; grid<MAXNUMGRIDS; grid++)
@@ -509,7 +505,6 @@ for (int grid=0; grid<MAXNUMGRIDS; grid++)
 )
 
 superB.superB.superB_pup.register_CFunction_superB_pup_routines(
-    enable_xx_to_Cart_precompute=True,
     MoL_method=MoL_method,
 )
 copy_files(

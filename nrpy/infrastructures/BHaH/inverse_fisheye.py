@@ -1,10 +1,9 @@
 """
 Generate BHaH spherical or spheroidal inverse fisheye maps, normalization, and metric jets.
 
-Geometry helpers use patch-local physical coordinates. The optional Cartesian
-cache includes the patch origin; coordinate wrappers own rotations. The metric
-uses inverse-function derivatives through third order, so its two derivatives
-are with respect to computational coordinates.
+Geometry helpers use patch-local physical coordinates; coordinate wrappers own
+rotations. The metric uses inverse-function derivatives through third order,
+so its two derivatives are with respect to computational coordinates.
 
 Scale evaluation requests derivative order 0 for coordinate maps, 1 for
 Jacobians, and 3 for metric jets. Unrequested derivative arrays are untouched
@@ -299,17 +298,12 @@ if (!(isfinite(params->zmax) && params->zmax > 0 && isfinite(params->inverse_fis
 def register_precompute(
     CoordSystem: str,
     num_transitions: int,
-    enable_xx_to_Cart_precompute: bool = False,
-    xx_to_Cart_in_griddata: bool = False,
 ) -> None:
     """
     Register the grid loop storing the metric and two computational derivatives.
 
     :param CoordSystem: Selected inverse spheroidal coordinate system.
     :param num_transitions: Number of physical transitions.
-    :param xx_to_Cart_in_griddata: Store cached Cartesian positions in separate griddata arrays.
-    :param enable_xx_to_Cart_precompute: Store physical Cartesian positions,
-        including the patch origin, in AUXEVOL or separate griddata arrays.
     """
     register_CFunctions(num_transitions)
     suffix = f"__N{num_transitions}"
@@ -339,25 +333,12 @@ def register_precompute(
                         (f"ghatDDdDD{i}{j}{k}{l}", f"ddg[{i}][{j}][{k}][{l}]")
                     )
     assignments.append(("detgammahat", "detK*detK"))
-    if enable_xx_to_Cart_precompute and not xx_to_Cart_in_griddata:
-        if "xCart0" not in gri.glb_gridfcs_dict:
-            gri.register_gridfunctions_for_single_rankN(
-                "xCart", rank=1, group="AUXEVOL", sync_gf_in_superB=False
-            )
-        for i, axis in enumerate("xyz"):
-            assignments.append((f"xCart{i}", f"x[{i}]+params->Cart_origin{axis}"))
     stores = ""
     for name, value in assignments:
         access = gri.BHaHGridFunction.access_gf(
             name, 0, 0, 0, gf_array_name="auxevol_gfs"
         )
         stores += f"{access} = {value};\n"
-    cache_stores = ""
-    if enable_xx_to_Cart_precompute and xx_to_Cart_in_griddata:
-        for i, axis in enumerate("xyz"):
-            cache_stores += (
-                f"xx_to_Cart[{i}][IDX3(i0,i1,i2)] = x[{i}]+params->Cart_origin{axis};\n"
-            )
     body = f"""
 const int Nxx_plus_2NGHOSTS0=params->Nxx_plus_2NGHOSTS0;
 const int Nxx_plus_2NGHOSTS1=params->Nxx_plus_2NGHOSTS1;
@@ -370,7 +351,6 @@ for (int i2=0; i2<Nxx_plus_2NGHOSTS2; i2++)
       if (inverse_fisheye_solve{suffix}(params, q, x)) {{
         fprintf(stderr, "Inverse fisheye precompute solve failed.\\n"); exit(1);
       }}
-      {cache_stores}
       inverse_fisheye_geometry{suffix}(params, x, true, J, K, g, dg, ddg);
       const REAL detK=K[0][0]*(K[1][1]*K[2][2]-K[1][2]*K[2][1])
                     -K[0][1]*(K[1][0]*K[2][2]-K[1][2]*K[2][0])
@@ -384,15 +364,7 @@ for (int i2=0; i2<Nxx_plus_2NGHOSTS2; i2++)
         cfunc_type="void",
         name="generalrfm_precompute",
         CoordSystem_for_wrapper_func=CoordSystem,
-        params=(
-            "const commondata_struct *restrict commondata, const params_struct *restrict params, "
-            + (
-                "REAL *restrict xx[3], REAL *restrict xx_to_Cart[3], "
-                if enable_xx_to_Cart_precompute and xx_to_Cart_in_griddata
-                else "const REAL *restrict xx[3], "
-            )
-            + "REAL *restrict auxevol_gfs"
-        ),
+        params="const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL *restrict xx[3], REAL *restrict auxevol_gfs",
         include_CodeParameters_h=False,
         body=body,
     )

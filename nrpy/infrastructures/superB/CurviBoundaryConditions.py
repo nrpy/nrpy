@@ -410,7 +410,6 @@ def CurviBoundaryConditions_register_C_functions(
     radiation_BC_fd_order: int = 2,
     set_parity_on_aux: bool = False,
     enable_RK3_accumulation: bool = False,
-    enable_xx_to_Cart_precompute: bool = False,
 ) -> None:
     """
     Register various C functions responsible for handling boundary conditions.
@@ -419,8 +418,6 @@ def CurviBoundaryConditions_register_C_functions(
     :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
     :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
     :param enable_RK3_accumulation: Register radiation BCs for the fused second RK3 stage.
-    :param enable_xx_to_Cart_precompute: Use inverse spheroidal Cartesian
-        positions cached in griddata.xx_to_Cart for radiation boundary conditions.
     """
     for CoordSystem in set_of_CoordSystems:
         # Register C function to set up the boundary condition struct.
@@ -432,8 +429,6 @@ def CurviBoundaryConditions_register_C_functions(
         BHaH.CurviBoundaryConditions.apply_bcs_outerradiation_and_inner.register_CFunction_apply_bcs_outerradiation_and_inner(
             CoordSystem=CoordSystem,
             radiation_BC_fd_order=radiation_BC_fd_order,
-            enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
-            xx_to_Cart_in_griddata=enable_xx_to_Cart_precompute,
         )
         if enable_RK3_accumulation:
             BHaH.CurviBoundaryConditions.apply_bcs_outerradiation_and_inner.register_CFunction_apply_bcs_outerradiation_and_inner_accumulate(
