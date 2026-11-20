@@ -13,7 +13,7 @@ scale derivatives.
 Author: OpenAI
 """
 
-from typing import List, Set
+from typing import List, Set, Tuple, cast
 
 import sympy as sp
 
@@ -58,59 +58,83 @@ def register_CFunctions(num_transitions: int) -> None:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     calc_type = "DOUBLE" if par.parval_from_str("fp_type") == "float" else "REAL"
     radius = sp.Symbol("rho", real=True, nonnegative=True)
-    body = f"""
-{calc_type} lam = ({calc_type})params->inverse_fisheye_c / params->inverse_fisheye_a{num_transitions};
-{calc_type} grad[3] = {{0}}, hess[3][3] = {{{{0}}}}, third[3][3][3] = {{{{{{0}}}}}};
-"""
-    for layer in range(num_transitions):
-        coeffs = model.kernel_coefficients(radius, layer)
-        j = layer + 1
-        codes: List[str] = []
-        for order, expr in enumerate(coeffs):
-            codes.append(
-                ccg.c_codegen(
-                    expr,
-                    f"f{order}",
-                    fp_type=(
-                        "double"
-                        if calc_type == "DOUBLE"
-                        else par.parval_from_str("fp_type")
-                    ),
-                    fp_type_alias=calc_type,
-                    include_braces=False,
-                    verbose=False,
-                )
-            )
-        previous = (
-            "1" if layer == 0 else f"({calc_type})1/params->inverse_fisheye_a{layer}"
+    coeffs = model.kernel_coefficients(radius, 0)
+    R_symbol, w_symbol = model.R_list[0], model.w_list[0]
+    generic_R, generic_w = sp.Symbol("R", positive=True), sp.Symbol("w", positive=True)
+    replacements = {R_symbol: generic_R, w_symbol: generic_w}
+    branch_bodies: List[str] = []
+    branch_conditions: List[str] = []
+    # Keep each kernel expression inside its Taylor, interior, or exterior C branch.
+    for branch in range(3):
+        condition = cast(Tuple[sp.Expr, sp.Expr], coeffs[0].args[branch])[1]
+        branch_conditions.append(sp.ccode(condition.xreplace(replacements)))
+        expressions = [
+            cast(Tuple[sp.Expr, sp.Expr], coeff.args[branch])[0].xreplace(replacements)
+            for coeff in coeffs
+        ]
+        options = {
+            "fp_type": (
+                "double" if calc_type == "DOUBLE" else par.parval_from_str("fp_type")
+            ),
+            "fp_type_alias": calc_type,
+            "include_braces": False,
+            "verbose": False,
+        }
+        value_code = ccg.c_codegen(expressions[0], "f[0]", **options)
+        gradient_code = ccg.c_codegen(expressions[1], "f[1]", **options)
+        metric_code = ccg.c_codegen(expressions[2:], ["f[2]", "f[3]"], **options)
+        branch_bodies.append(
+            f"{value_code}\n"
+            f"if (derivative_order >= 1) {{\n{gradient_code}\n"
+            f"if (derivative_order == 3) {{\n{metric_code}\n}}\n}}"
         )
-        body += f"""
-{{
-  const {calc_type} inverse_fisheye_R{j} = params->inverse_fisheye_R{j};
-  const {calc_type} inverse_fisheye_w{j} = params->inverse_fisheye_w{j};
-  const {calc_type} axis_ratio = inverse_fisheye_R{j}/params->inverse_fisheye_Rz{j};
+    prefunc = f"""
+static inline void inverse_fisheye_layer{suffix}(
+    const {calc_type} R, const {calc_type} w, const {calc_type} rho,
+    const int derivative_order, {calc_type} f[4]) {{
+  if ({branch_conditions[0]}) {{
+    {branch_bodies[0]}
+  }} else if ({branch_conditions[1]}) {{
+    {branch_bodies[1]}
+  }} else {{
+    {branch_bodies[2]}
+  }}
+}}
+"""
+    arrays = {
+        key: ", ".join(
+            f"params->inverse_fisheye_{key}{j}" for j in range(1, num_transitions + 1)
+        )
+        for key in ("a", "R", "Rz", "w")
+    }
+    body = f"""
+const {calc_type} a[{num_transitions}] = {{{arrays['a']}}};
+const {calc_type} R[{num_transitions}] = {{{arrays['R']}}};
+const {calc_type} Rz[{num_transitions}] = {{{arrays['Rz']}}};
+const {calc_type} w[{num_transitions}] = {{{arrays['w']}}};
+{calc_type} lam = ({calc_type})params->inverse_fisheye_c / a[{num_transitions - 1}];
+{calc_type} grad[3] = {{0}}, hess[3][3] = {{{{0}}}}, third[3][3][3] = {{{{{{0}}}}}};
+{calc_type} previous_inverse_a = 1;
+for (int layer=0; layer<{num_transitions}; layer++) {{
+  const {calc_type} inverse_a = ({calc_type})1/a[layer];
+  const {calc_type} delta = ({calc_type})params->inverse_fisheye_c*(previous_inverse_a-inverse_a);
+  previous_inverse_a = inverse_a;
+  if (delta == 0) continue;
+  const {calc_type} axis_ratio = R[layer]/Rz[layer];
   const {calc_type} b[3] = {{1, 1, axis_ratio*axis_ratio}};
   const {calc_type} h[3] = {{x[0], x[1], b[2]*x[2]}};
   const {calc_type} rho = sqrt(({calc_type})x[0]*x[0]+({calc_type})x[1]*x[1]+b[2]*x[2]*x[2]);
-  const {calc_type} delta = ({calc_type})params->inverse_fisheye_c*({previous}-({calc_type})1/params->inverse_fisheye_a{j});
-  if (delta != 0) {{
-    {calc_type} f0;
-    {{ {codes[0]} }}
-    lam += delta*f0;
-    if (derivative_order >= 1) {{
-      {calc_type} f1;
-      {{ {codes[1]} }}
-      for (int i=0; i<3; i++) grad[i] += delta*2*f1*h[i];
-      if (derivative_order == 3) {{
-        {calc_type} f2, f3;
-        {{ {codes[2]} }}
-        {{ {codes[3]} }}
-        for (int i=0; i<3; i++) for (int k=0; k<3; k++) {{
-          hess[i][k] += delta*(4*f2*h[i]*h[k]+2*f1*b[i]*(i==k));
-          for (int l=0; l<3; l++)
-            third[i][k][l] += delta*(8*f3*h[i]*h[k]*h[l]
-              +4*f2*((i==k)*b[i]*h[l]+(i==l)*b[i]*h[k]+(k==l)*b[k]*h[i]));
-        }}
+  {calc_type} f[4];
+  inverse_fisheye_layer{suffix}(R[layer], w[layer], rho, derivative_order, f);
+  lam += delta*f[0];
+  if (derivative_order >= 1) {{
+    for (int i=0; i<3; i++) grad[i] += delta*2*f[1]*h[i];
+    if (derivative_order == 3) {{
+      for (int i=0; i<3; i++) for (int k=0; k<3; k++) {{
+        hess[i][k] += delta*(4*f[2]*h[i]*h[k]+2*f[1]*b[i]*(i==k));
+        for (int l=0; l<3; l++)
+          third[i][k][l] += delta*(8*f[3]*h[i]*h[k]*h[l]
+            +4*f[2]*((i==k)*b[i]*h[l]+(i==l)*b[i]*h[k]+(k==l)*b[k]*h[i]));
       }}
     }}
   }}
@@ -132,6 +156,7 @@ if (derivative_order == 3)
         name="inverse_fisheye_scale" + suffix,
         params="const params_struct *restrict params, const REAL x[3], const int derivative_order, REAL *lambda, REAL v[3], REAL W[3][3], REAL U[3][3][3]",
         include_CodeParameters_h=False,
+        prefunc=prefunc,
         body=body,
     )
 
