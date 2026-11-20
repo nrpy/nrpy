@@ -29,7 +29,6 @@ import sympy.codegen.ast as sp_ast
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.finite_difference as fin  # NRPy: Finite-difference module
-import nrpy.grid as gri
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par  # NRPy: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
@@ -431,7 +430,6 @@ def setup_Cfunction_radiation_bcs(
     radiation_BC_fd_order: int = -1,
     rational_const_alias: str = "static const",
     rhs_is_scalar: bool = False,
-    enable_xx_to_Cart_precompute: bool = False,
 ) -> str:
     """
     Generate C code to apply radiation boundary conditions in a given coordinate system.
@@ -441,8 +439,6 @@ def setup_Cfunction_radiation_bcs(
     :param radiation_BC_fd_order: Finite differencing order to use. Default is -1.
     :param rational_const_alias: Alias for rational constants. Default is "static const".
     :param rhs_is_scalar: Receive the neighboring RHS as a scalar instead of reading an RHS array.
-    :param enable_xx_to_Cart_precompute: Receive geometry computed once per
-        boundary point from cached Cartesian positions.
     :return: A string containing the generated C code for the function.
     """
     includes: List[str] = []
@@ -465,12 +461,6 @@ def setup_Cfunction_radiation_bcs(
                 radiation_BC_fd_order=radiation_BC_fd_order,
                 rational_const_alias=rational_const_alias,
             )
-    if enable_xx_to_Cart_precompute:
-        prefunc += setup_Cfunction_r_and_partial_xi_partial_r_derivs(
-            CoordSystem=CoordSystem,
-            cfunc_decorators=cfunc_decorators,
-            enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
-        )
     prefunc += setup_Cfunction_compute_partial_r_f(
         CoordSystem=CoordSystem,
         cfunc_decorators=cfunc_decorators,
@@ -560,19 +550,13 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
     return cf.full_function
 
 
-def setup_Cfunction_apply_bcs_pure_only(
-    enable_xx_to_Cart_precompute: bool = False,
-    xx_to_Cart_in_griddata: bool = False,
-) -> Tuple[str, str]:
+def setup_Cfunction_apply_bcs_pure_only() -> Tuple[str, str]:
     """
     Generate the prefunction string for apply_bcs_pure_only.
 
     This requires a function that will launch the compute kernel as well
     as the compute kernel itself.
 
-    :param xx_to_Cart_in_griddata: Store cached Cartesian positions in separate griddata arrays.
-    :param enable_xx_to_Cart_precompute: Read cached Cartesian positions and
-        compute boundary geometry before the evolved-gridfunction loop.
     :return: A tuple containing the prefunction and the compute kernel.
     """
     # Header details for function that will launch the GPU kernel
@@ -587,10 +571,6 @@ def setup_Cfunction_apply_bcs_pure_only(
         "custom_wavespeed": "const REAL *",
         "custom_f_infinity": "const REAL *",
     }
-    if enable_xx_to_Cart_precompute:
-        params_dict["xx_to_Cart" if xx_to_Cart_in_griddata else "auxevol_gfs"] = (
-            "REAL *restrict *" if xx_to_Cart_in_griddata else "const REAL *restrict"
-        )
     name = "apply_bcs_pure_only"
     cfunc_type = "static void"
     parallelization = par.parval_from_str("parallelization")
@@ -616,30 +596,8 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
     const int idx3 = IDX3(i0,i1,i2);
     REAL* xx[3] = {x0, x1, x2};
 """
-    if enable_xx_to_Cart_precompute:
-        cart = ", ".join(
-            (
-                f"xCart{i}[IDX3(i0,i1,i2)]"
-                if xx_to_Cart_in_griddata
-                else gri.BHaHGridFunction.access_gf(
-                    f"xCart{i}", 0, 0, 0, gf_array_name="auxevol_gfs"
-                )
-            )
-            for i in range(3)
-        )
-        cart_int = (
-            cart.replace("i0", "i0_int").replace("i1", "i1_int").replace("i2", "i2_int")
-        )
-        kernel_body += f"""
-    const int i0_int=i0+FACEX0, i1_int=i1+FACEX1, i2_int=i2+FACEX2;
-    const REAL xCart[3]={{{cart}}}, xCart_int[3]={{{cart_int}}};
-    REAL r, partial_x0_partial_r, partial_x1_partial_r, partial_x2_partial_r;
-    REAL r_int, partial_x0_partial_r_int, partial_x1_partial_r_int, partial_x2_partial_r_int;
-    r_and_partial_xi_partial_r_derivs(params, xCart, &r, &partial_x0_partial_r, &partial_x1_partial_r, &partial_x2_partial_r);
-    r_and_partial_xi_partial_r_derivs(params, xCart_int, &r_int, &partial_x0_partial_r_int, &partial_x1_partial_r_int, &partial_x2_partial_r_int);
-"""
-    else:
-        kernel_body += """    const REAL r = pure_outer_bc_array[idx2d].r;
+    # Fixed-map geometry is computed for both points during boundary setup.
+    kernel_body += """    const REAL r = pure_outer_bc_array[idx2d].r;
     const REAL partial_x0_partial_r = pure_outer_bc_array[idx2d].partial_x0_partial_r;
     const REAL partial_x1_partial_r = pure_outer_bc_array[idx2d].partial_x1_partial_r;
     const REAL partial_x2_partial_r = pure_outer_bc_array[idx2d].partial_x2_partial_r;
@@ -680,12 +638,6 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
         "custom_wavespeed": "const REAL *",
         "custom_f_infinity": "const REAL *",
     }
-    if enable_xx_to_Cart_precompute:
-        if xx_to_Cart_in_griddata:
-            for i in range(3):
-                arg_dict_host[f"xCart{i}"] = "const REAL *restrict"
-        else:
-            arg_dict_host["auxevol_gfs"] = "const REAL *restrict"
     prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
         name,
         kernel_body,
@@ -721,14 +673,6 @@ REAL *restrict x2 = xx[2];
   }}
 """
 
-    if enable_xx_to_Cart_precompute and xx_to_Cart_in_griddata:
-        kernel_launch_body = (
-            "\n".join(
-                f"const REAL *restrict xCart{i} = xx_to_Cart[{i}];" for i in range(3)
-            )
-            + "\n"
-            + kernel_launch_body
-        )
     launch_kernel = GPUKernel(
         kernel_launch_body,
         params_dict,
@@ -763,8 +707,8 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
     :param rational_const_alias: Alias for rational constants. Default is "static const".
     :param xx_to_Cart_in_griddata: Store cached Cartesian positions in separate griddata arrays.
-    :param enable_xx_to_Cart_precompute: Read fixed Cartesian positions from
-        the selected storage. Requires inverse spheroidal fisheye and matching precompute.
+    :param enable_xx_to_Cart_precompute: Preserve the Cartesian-cache argument
+        for callers with precomputed coordinates. Radiation uses bcstruct geometry.
 
     :raises ValueError: If Cartesian precompute is requested for another provider
         or for CUDA.
@@ -802,12 +746,9 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
         cfunc_decorators=cfunc_decorators,
         radiation_BC_fd_order=radiation_BC_fd_order,
         rational_const_alias=rational_const_alias,
-        enable_xx_to_Cart_precompute=enable_xx_to_Cart_precompute,
     )
     apply_bcs_pure_only_prefuncs, apply_bcs_pure_only_function_call = (
-        setup_Cfunction_apply_bcs_pure_only(
-            enable_xx_to_Cart_precompute, xx_to_Cart_in_griddata
-        )
+        setup_Cfunction_apply_bcs_pure_only()
     )
     prefunc += apply_bcs_pure_only_prefuncs
     desc = """This function is responsible for applying boundary conditions (BCs) to both pure outer and inner

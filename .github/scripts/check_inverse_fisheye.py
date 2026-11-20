@@ -612,6 +612,8 @@ int main(int argc, const char *argv[]) {
     expected[i]=actual[i]=0.1+0.003*(i%97);
   }
   reference_boundary(&commondata,params,&bc,xx,speed,infinity,gfs,expected);
+  // Boundary application must use setup geometry, not the Cartesian cache.
+  for(int i=0;i<NUM_AUXEVOL_GFS*count;i++) auxevol_gfs[i]=NAN;
   apply_bcs_outerradiation_and_inner(&commondata,params,&bc,xx,speed,infinity,gfs,actual,auxevol_gfs);
   REAL error=0;
   for(int i=0;i<NUM_EVOL_GFS*count;i++) {
@@ -619,7 +621,7 @@ int main(int argc, const char *argv[]) {
     error=fmax(error,fabs(expected[i]-actual[i]));
   }
   assert(error<1e-10);
-  printf("PASS cached coordinates including ghosts and translated origin; boundary RHS max error %.3e\n",error);
+  printf("PASS cached coordinates including ghosts and translated origin; poisoned cache ignored; boundary RHS max error %.3e\n",error);
   for(int j=0;j<3;j++) free(xx[j]);
   for(int j=0;j<3*NGHOSTS;j++) free(bc.pure_outer_bc_array[j]);
   free(bc.inner_bc_array); free(auxevol_gfs); free(griddata);

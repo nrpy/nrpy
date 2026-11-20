@@ -59,8 +59,8 @@ The inverse-spheroidal spectroscopy example enables
 radiation boundaries, timestepping cleanup, and PUP registration.
 `numerical_grids.py` allocates `griddata.xx_to_Cart[3]` over each chare's full
 local grid, including ghosts. Initial-data setup fills these arrays while
-precomputing the reference metric. Radiation boundaries read the stored
-Cartesian positions and compute geometry outside the evolved-gridfunction loop.
+precomputing the reference metric. Radiation boundaries read the radius and radial-derivative coefficients stored
+in the boundary structs during setup, without recomputing them during evolution.
 `superB_pup.py` serializes the arrays and allocates them on unpacking;
 `timestepping_chare.py` frees them during cleanup. Coordinate arrays are
 separate from AUXEVOL gridfunctions and inter-chare gridfunction exchanges.
