@@ -56,62 +56,74 @@ def register_CFunctions(num_transitions: int) -> None:
                 commondata=True,
             )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    calc_type = "DOUBLE" if par.parval_from_str("fp_type") == "float" else "REAL"
     radius = sp.Symbol("rho", real=True, nonnegative=True)
     body = f"""
-*lambda = params->inverse_fisheye_c / params->inverse_fisheye_a{num_transitions};
-for (int i=0; i<3; i++) {{
-  if (derivative_order >= 1) v[i] = 0;
-  if (derivative_order == 3) for (int j=0; j<3; j++) {{
-    W[i][j] = 0;
-    for (int k=0; k<3; k++) U[i][j][k] = 0;
-  }}
-}}
+{calc_type} lam = ({calc_type})params->inverse_fisheye_c / params->inverse_fisheye_a{num_transitions};
+{calc_type} grad[3] = {{0}}, hess[3][3] = {{{{0}}}}, third[3][3][3] = {{{{{{0}}}}}};
 """
     for layer in range(num_transitions):
         coeffs = model.kernel_coefficients(radius, layer)
-        substitutions = {
-            sym: sp.Symbol(f"params->{sym}")
-            for expr in coeffs
-            for sym in expr.free_symbols
-            if sym != radius
-        }
-        coeffs = [expr.xreplace(substitutions) for expr in coeffs]
+        j = layer + 1
         codes: List[str] = []
         for order, expr in enumerate(coeffs):
             codes.append(
-                ccg.c_codegen(expr, f"f{order}", include_braces=False, verbose=False)
+                ccg.c_codegen(
+                    expr,
+                    f"f{order}",
+                    fp_type=(
+                        "double"
+                        if calc_type == "DOUBLE"
+                        else par.parval_from_str("fp_type")
+                    ),
+                    fp_type_alias=calc_type,
+                    include_braces=False,
+                    verbose=False,
+                )
             )
-        j = layer + 1
-        previous = "1" if layer == 0 else f"1/params->inverse_fisheye_a{layer}"
+        previous = (
+            "1" if layer == 0 else f"({calc_type})1/params->inverse_fisheye_a{layer}"
+        )
         body += f"""
 {{
-  const REAL axis_ratio = params->inverse_fisheye_R{j}/params->inverse_fisheye_Rz{j};
-  const REAL b[3] = {{1, 1, axis_ratio*axis_ratio}};
-  const REAL h[3] = {{x[0], x[1], b[2]*x[2]}};
-  const REAL rho = sqrt(x[0]*x[0]+x[1]*x[1]+b[2]*x[2]*x[2]);
-  const REAL delta = params->inverse_fisheye_c*({previous}-1/params->inverse_fisheye_a{j});
+  const {calc_type} inverse_fisheye_R{j} = params->inverse_fisheye_R{j};
+  const {calc_type} inverse_fisheye_w{j} = params->inverse_fisheye_w{j};
+  const {calc_type} axis_ratio = inverse_fisheye_R{j}/params->inverse_fisheye_Rz{j};
+  const {calc_type} b[3] = {{1, 1, axis_ratio*axis_ratio}};
+  const {calc_type} h[3] = {{x[0], x[1], b[2]*x[2]}};
+  const {calc_type} rho = sqrt(({calc_type})x[0]*x[0]+({calc_type})x[1]*x[1]+b[2]*x[2]*x[2]);
+  const {calc_type} delta = ({calc_type})params->inverse_fisheye_c*({previous}-({calc_type})1/params->inverse_fisheye_a{j});
   if (delta != 0) {{
-    REAL f0;
+    {calc_type} f0;
     {{ {codes[0]} }}
-    *lambda += delta*f0;
+    lam += delta*f0;
     if (derivative_order >= 1) {{
-      REAL f1;
+      {calc_type} f1;
       {{ {codes[1]} }}
-      for (int i=0; i<3; i++) v[i] += delta*2*f1*h[i];
+      for (int i=0; i<3; i++) grad[i] += delta*2*f1*h[i];
       if (derivative_order == 3) {{
-        REAL f2, f3;
+        {calc_type} f2, f3;
         {{ {codes[2]} }}
         {{ {codes[3]} }}
         for (int i=0; i<3; i++) for (int k=0; k<3; k++) {{
-          W[i][k] += delta*(4*f2*h[i]*h[k]+2*f1*b[i]*(i==k));
+          hess[i][k] += delta*(4*f2*h[i]*h[k]+2*f1*b[i]*(i==k));
           for (int l=0; l<3; l++)
-            U[i][k][l] += delta*(8*f3*h[i]*h[k]*h[l]
+            third[i][k][l] += delta*(8*f3*h[i]*h[k]*h[l]
               +4*f2*((i==k)*b[i]*h[l]+(i==l)*b[i]*h[k]+(k==l)*b[k]*h[i]));
         }}
       }}
     }}
   }}
 }}
+"""
+    body += """
+*lambda = lam;
+if (derivative_order >= 1) for (int i=0; i<3; i++) v[i] = grad[i];
+if (derivative_order == 3)
+  for (int i=0; i<3; i++) for (int j=0; j<3; j++) {
+    W[i][j] = hess[i][j];
+    for (int k=0; k<3; k++) U[i][j][k] = third[i][j][k];
+  }
 """
     cfc.register_CFunction(
         includes=includes,

@@ -117,8 +117,9 @@ For a single layer, write s = w/2, t = tanh(R/s), and:
 
     tp = tanh((rho+R)/s),    tm = tanh((rho-R)/s)
     G1 = dG/drho       = (tp-tm)/(2*t)
-    G2 = d2G/drho2     = (tm**2-tp**2)/(2*s*t)
-    G3 = d3G/drho3     = ((1-tm**2)*tm-(1-tp**2)*tp)/(s**2*t)
+    S(u) = sech(u)**2 = 4*exp(-2*abs(u))/(1+exp(-2*abs(u)))**2
+    G2 = d2G/drho2     = (S((rho+R)/s)-S((rho-R)/s))/(2*s*t)
+    G3 = d3G/drho3     = (S((rho-R)/s)*tm-S((rho+R)/s)*tp)/(s**2*t)
 
 The imported _G_kernel evaluates G without overflowing cosh or subtracting
 nearly equal log-cosh values. For rho >= 0 and R, s > 0, define:
@@ -139,13 +140,25 @@ kernel_coefficients returns f0, f1, f2, f3, where Q = rho**2 and:
     f2 = (rho**2*G2-3*rho*G1+3*G)/(4*rho**5)
     f3 = (rho**3*G3-6*rho**2*G2+15*rho*G1-15*G)/(8*rho**7)
 
-For rho < s/20, use the even Taylor polynomial through rho**12 and its Q
-derivatives. The tanh derivative polynomials satisfy:
+For rho below min(2*s, max(7*s/20, R/4)), use the even Taylor polynomial
+through rho**24 and its Q derivatives. With y(u)=exp(-2*u), the tanh
+derivatives have the form:
 
-    P0(t) = t,    P_{m+1}(t) = (1-t**2)*dP_m(t)/dt
-    f0 = 1 + sum_{k=1..6} P_{2k}(t)/(t*(2*k+1)!) * (rho/s)**(2*k)
-         + O((rho/s)**14)
-    fk(0) = k!*P_{2k}(t)/(t*(2*k+1)!*s**(2*k)),    k = 0, 1, 2, 3
+    d^n tanh(u)/du^n = y*A_n(y)/(1+y)**(n+1)
+    A_1(y) = 4
+    A_{n+1}(y) = -2*((1-n*y)*A_n(y)+y*(1+y)*dA_n(y)/dy)
+
+For even n, A_n(y) contains (1-y). Dividing it out cancels the tanh(R/s)
+denominator analytically, so no small sech**2 factor is formed by subtraction.
+
+Between the Taylor cutoff and R, compute G-rho and G1-1 before forming
+f1, f2, and f3. With z=exp(-2*R/s), a=exp(-2*(R+rho)/s), and
+b=exp(-2*(R-rho)/s):
+
+    G-rho = (2*rho*z+s*(1+z)*(log1p(a)-log1p(b))/2)/(1-z)
+    G1-1 = (2*z-(1+z)*(a/(1+a)+b/(1+b)))/(1-z)
+
+These differences retain derivatives when G rounds to rho and G1 rounds to 1.
 
 Cartesian scale derivatives consumed by BHaH
 
@@ -248,11 +261,25 @@ True
 Traceback (most recent call last):
 ...
 ValueError: num_transitions must be a positive integer.
+>>> import math
+>>> import mpmath as mp
+>>> rho = sp.Symbol("rho", real=True, nonnegative=True)
+>>> f3 = model.kernel_coefficients(rho, 0)[3]
+>>> evaluated = sp.lambdify((rho, model.R_list[0], model.w_list[0]), f3,
+...                         [{"log1p": math.log1p, "expm1": math.expm1}, "math"])
+>>> mp.mp.dps = 70
+>>> def reference(q):
+...     r = mp.sqrt(q)
+...     return mp.mpf('.25') * mp.log(mp.cosh(4 * (r + 5)) / mp.cosh(4 * (r - 5))) / (2 * mp.tanh(20) * r)
+>>> expected = mp.diff(reference, mp.mpf('.25'), 3)
+>>> abs((mp.mpf(evaluated(.5, 5, .5)) - expected) / expected) < mp.mpf('1e-12')
+True
 """
 
 from typing import List, Tuple, cast
 
 import sympy as sp
+from sympy.codegen.cfunctions import log1p
 from sympy.printing.c import C99CodePrinter
 
 import nrpy.indexedexp as ixp
@@ -260,8 +287,7 @@ import nrpy.params as par
 from nrpy.equations.generalrfm.fisheye import _G_kernel
 
 
-# SymPy does not provide typing metadata for its Function base class.
-class InverseFisheyeComponent(sp.Function):  # type: ignore[misc]
+class InverseFisheyeComponent(sp.Function):
     """
     Represent a numerically evaluated map or Jacobian component in generated C.
 
@@ -399,9 +425,9 @@ class GeneralRFMInverseFisheye:
         Return G(rho)/rho and three derivatives with respect to rho squared.
 
         A Taylor branch handles the removable origin singularity and cancellation
-        in derivatives. The other branch uses a stable log-cosh difference and
-        tanh derivatives, avoiding overflowing cosh evaluations. The Taylor
-        polynomial includes powers through rho**12.
+        in derivatives. Below the transition center, the outer branch computes
+        G-rho and G1-1 directly; beyond it, the branch uses a stable log-cosh
+        difference. The Taylor polynomial includes powers through rho**24.
 
         :param radius: Nonnegative ellipsoidal radius symbol.
         :param layer: Zero-based transition index.
@@ -409,24 +435,47 @@ class GeneralRFMInverseFisheye:
         """
         R, w = self.R_list[layer], self.w_list[layer]
         s = w / 2
-        t = sp.Symbol("t", real=True)
+        y = sp.Symbol("y", positive=True)
+        z = sp.exp(-2 * R / s)
         th = sp.tanh(R / s)
-        polynomial = t
-        series = sp.Integer(1)
-        for order in range(1, 13):
-            polynomial = sp.diff(polynomial, t) * (1 - t * t)
+        # d^n tanh(u)/du^n = y*A_n(y)/(1+y)^(n+1), y=exp(-2*u).
+        # For even n, A_n is divisible by (1-y), which cancels tanh(u).
+        polynomial = sp.Poly(4, y)
+        coefficients = [sp.Integer(1)]
+        for order in range(1, 25):
             if order % 2 == 0:
-                series += (
-                    polynomial.xreplace({t: th})
-                    * (radius / s) ** order
-                    / (th * sp.factorial(order + 1))
+                quotient = polynomial.exquo(sp.Poly(1 - y, y))
+                normalized = quotient.set_domain(sp.QQ).mul_ground(
+                    1 / sp.factorial(order + 1)
                 )
+                coefficients.append(
+                    z
+                    * sp.horner(normalized.as_expr(), y).xreplace({y: z})
+                    / (1 + z) ** order
+                )
+            polynomial = -2 * (
+                sp.Poly(1 - order * y, y) * polynomial
+                + sp.Poly(y * (1 + y), y) * polynomial.diff()
+            )
         # Stable value; unlike differentiating Min/Max this keeps derivatives smooth.
         G = _G_kernel(radius, R, s)
         tp, tm = sp.tanh((radius + R) / s), sp.tanh((radius - R) / s)
         G1 = (tp - tm) / (2 * th)
-        G2 = (tm * tm - tp * tp) / (2 * s * th)
-        G3 = ((1 - tm * tm) * tm - (1 - tp * tp) * tp) / (s * s * th)
+
+        def sech_squared(argument: sp.Expr) -> sp.Expr:
+            e = sp.exp(-2 * sp.Abs(argument))
+            return cast(sp.Expr, 4 * e / (1 + e) ** 2)
+
+        sp_ = sech_squared((radius + R) / s)
+        sm = sech_squared((radius - R) / s)
+        G2 = (sp_ - sm) / (2 * s * th)
+        G3 = (sm * tm - sp_ * tp) / (s * s * th)
+        a = sp.exp(-2 * (R + radius) / s)
+        b = sp.exp(-2 * (R - radius) / s)
+        G_minus_radius = (2 * radius * z + s * (1 + z) * (log1p(a) - log1p(b)) / 2) / (
+            1 - z
+        )
+        G1_minus_one = (2 * z - (1 + z) * (a / (1 + a) + b / (1 + b))) / (1 - z)
         exact = [
             G / radius,
             (radius * G1 - G) / (2 * radius**3),
@@ -434,14 +483,40 @@ class GeneralRFMInverseFisheye:
             (radius**3 * G3 - 6 * radius**2 * G2 + 15 * radius * G1 - 15 * G)
             / (8 * radius**7),
         ]
+        inside = [
+            1 + G_minus_radius / radius,
+            (radius * G1_minus_one - G_minus_radius) / (2 * radius**3),
+            (radius**2 * G2 - 3 * radius * G1_minus_one + 3 * G_minus_radius)
+            / (4 * radius**5),
+            (
+                radius**3 * G3
+                - 6 * radius**2 * G2
+                + 15 * radius * G1_minus_one
+                - 15 * G_minus_radius
+            )
+            / (8 * radius**7),
+        ]
+        cutoff = sp.Min(2 * s, sp.Max(7 * s / 20, R / 4))
+        q = sp.Symbol("q", nonnegative=True)
         result: List[sp.Expr] = []
         for order in range(4):
+            series = sp.Integer(0)
+            for index in reversed(range(order, len(coefficients))):
+                coefficient = (
+                    coefficients[index]
+                    * sp.factorial(index)
+                    / sp.factorial(index - order)
+                    / s ** (2 * order)
+                )
+                series = series * q + coefficient
+            series = series.xreplace({q: (radius / s) ** 2})
             result.append(
                 sp.Piecewise(
-                    (series, radius < s / sp.Integer(20)), (exact[order], True)
+                    (series, radius < cutoff),
+                    (inside[order], radius < R),
+                    (exact[order], True),
                 )
             )
-            series = sp.expand(sp.diff(series, radius) / (2 * radius))
         return result
 
 
