@@ -621,6 +621,8 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const commondata_struct
   PUParray(p, gd.xx[1], gd.params.Nxx_plus_2NGHOSTS1);
   PUParray(p, gd.xx[2], gd.params.Nxx_plus_2NGHOSTS2);
 
+"""
+    prefunc += """
   pup_diagnostic_struct(p, gd.diagnosticstruct, gd.params);
 
   pup_bc_struct(p, gd.bcstruct);

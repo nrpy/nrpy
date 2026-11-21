@@ -1,8 +1,7 @@
 """
-Register a C helper that numerically inverts GeneralRFM xx->Cart maps.
+Register a C helper for GeneralRFM physical-to-computational conversion.
 
-Supports GeneralRFM_fisheyeN* and GeneralRFM_spheroidal_fisheyeN* via
-nrpy/equations/generalrfm/fisheye.py.
+Supports forward fisheye and inverse spheroidal fisheye GeneralRFM providers.
 
 Author: Nishita Jadoo
         njadoo@uidaho.edu
@@ -18,6 +17,7 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
+from nrpy.infrastructures.BHaH import inverse_fisheye
 from nrpy.infrastructures.BHaH.xx_tofrom_Cart import (
     _generate_bracketed_radial_inverse_body,
 )
@@ -27,7 +27,7 @@ def register_CFunction_generalrfm_Cart_to_xx(
     CoordSystem: str,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register a C function to numerically invert the GeneralRFM map Cart -> xx.
+    Register a C function for the GeneralRFM map Cart -> xx.
 
     :param CoordSystem: GeneralRFM coordinate system name.
     :raises ValueError: If CoordSystem is not GeneralRFM, its provider is
@@ -45,6 +45,25 @@ def register_CFunction_generalrfm_Cart_to_xx(
     if not CoordSystem.startswith("GeneralRFM"):
         raise ValueError(f"{CoordSystem} is not a GeneralRFM coordinate system.")
     provider_name = getattr(rfm, "general_rfm_provider_name", "")
+    if provider_name == "inverse_fisheye":
+        n = rfm.general_rfm_provider_meta["num_transitions"]
+        inverse_fisheye.register_CFunctions(n)
+        body = f"""
+REAL lambda;
+inverse_fisheye_scale__N{n}(params, Cart, 0, &lambda, NULL, NULL, NULL);
+for (int i=0; i<3; i++) xx[i]=lambda*Cart[i];
+return 0;
+"""
+        cfc.register_CFunction(
+            includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
+            desc=f"Evaluate the explicit physical-to-computational map for {CoordSystem}.",
+            cfunc_type="int",
+            name=f"generalrfm_Cart_to_xx__{CoordSystem}",
+            params="const params_struct *restrict params, const REAL Cart[3], REAL xx[3]",
+            include_CodeParameters_h=False,
+            body=body,
+        )
+        return pcg.NRPyEnv()
     if provider_name not in {"fisheye", "spheroidal_fisheye"}:
         raise ValueError(
             f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in generalrfm_Cart_to_xx."

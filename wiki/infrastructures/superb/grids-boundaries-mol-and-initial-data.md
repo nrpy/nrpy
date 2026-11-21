@@ -38,6 +38,29 @@ Subdomain ownership is arithmetic rather than a stored chare communication map.
 global source and destination indices to target chares and local indices on
 demand.
 
+For `GeneralRFM_inverse_fisheyeN*`, the map is injective with
+Cartesian topology, so there are no inner coordinate boundaries.
+`bcstruct_chare_set_up` directly intersects each global outer face with the
+chare's ownership box, preserving ghost-layer order and face directions.
+It needs neither Cartesian inversion nor a global boundary array. The
+8M-separation inverse-spheroidal example disables global boundary construction,
+initializes its unused global boundary struct to zero for cleanup/PUP, and
+disables the global CFL scan. With `enable_distributed_cfl=True`, each
+`Timestepping` chare scans its local grid, including ghosts, at the start of
+`start()`. A Charm++ minimum reduction supplies the same sampled timestep to
+all chares before horizon/interpolation services or evolution begin. Internal
+ghost overlap repeats samples but does not change the minimum; outer ghosts
+remain included. The example uses the ordinary `cfl_limited_timestep` scan,
+not the optional conservative bound. Other examples retain their existing
+CFL setup and global-list boundary filtering path.
+
+The inverse-spheroidal spectroscopy example precomputes the reference metric
+in AUXEVOL gridfunctions. Radiation boundaries read the radius and radial
+derivatives stored in each `outerpt_bc_struct` during boundary setup.
+
+Evidence (descriptive behavior): `initial_data.py::register_CFunction_initial_data`;
+`CurviBoundaryConditions.py::CurviBoundaryConditions_register_C_functions`.
+
 The grid transport paths are ordinary Charm++ entry-method sends generated for
 the `Timestepping` array:
 

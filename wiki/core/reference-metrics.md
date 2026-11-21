@@ -55,6 +55,14 @@ Evidence (descriptive behavior): `reference_metric.py::spherical_like` and `cyli
 
 `GeneralRFM` behavior is distinct from diagonal coordinate families. `general_rfm_like()` sets neutral bounds and identity Cartesian labels by default, marks the analytic inverse map as unavailable with `nan` sentinels, and stores provider metadata. It builds a radial provider for `GeneralRFM_fisheyeN*` or a spheroidal provider with separate xy and z radius maps for `GeneralRFM_spheroidal_fisheyeN*`. For GeneralRFM systems, `ghatDD`, `ghatDDdD`, and `ghatDDdDD` are registered as `AUXEVOL` gridfunctions, rescaling factors are set to one, and derived quantities such as `ghatUU`, `detgammahat`, determinant derivatives, and `Gammahat*` are computed algebraically from those gridfunctions.
 
+The additional family `GeneralRFM_inverse_fisheyeN*` accepts any
+positive integer layer count. Its physical-to-computational map is explicit;
+the computational-to-physical map and Jacobians use numerical component calls
+in generated BHaH C. It shares the GeneralRFM AUXEVOL metric contract. This
+family is selectable by name but is not added to the legacy
+`supported_CoordSystems` sampled-oracle list; its dedicated numerical workflow
+covers N=1 and N=2.
+
 The `GeneralRFM_fisheyeN2` trusted dictionary contains three intentional NaN
 sentinels, at `Cart_to_xx_0` through `Cart_to_xx_2`, for that unavailable
 analytic inverse map. Trusted comparison accepts them only when the computed

@@ -2,8 +2,7 @@
 """
 Generate C functions that precompute GeneralRFM quantities into AUXEVOL gridfunctions.
 
-Supports GeneralRFM_fisheyeN* and GeneralRFM_spheroidal_fisheyeN* via
-nrpy/equations/generalrfm/fisheye.py.
+Supports forward fisheye and inverse spheroidal fisheye GeneralRFM providers.
 
 Design:
   * For GeneralRFM, ghat and derivatives are treated as fixed AUXEVOL gridfunctions.
@@ -33,7 +32,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-from nrpy.infrastructures.BHaH import generalrfm_cart_to_xx
+from nrpy.infrastructures.BHaH import generalrfm_cart_to_xx, inverse_fisheye
 
 
 def _access_auxevol_gf(
@@ -88,6 +87,12 @@ def register_CFunction_generalrfm_precompute(
     if not CoordSystem.startswith("GeneralRFM"):
         raise ValueError(f"{CoordSystem} is not a GeneralRFM coordinate system.")
     provider_name = getattr(rfm, "general_rfm_provider_name", "")
+    if provider_name == "inverse_fisheye":
+        inverse_fisheye.register_precompute(
+            CoordSystem,
+            rfm.general_rfm_provider_meta["num_transitions"],
+        )
+        return pcg.NRPyEnv()
     if provider_name not in {"fisheye", "spheroidal_fisheye"}:
         raise ValueError(
             f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in generalrfm_precompute."
