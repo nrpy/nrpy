@@ -5,18 +5,13 @@
 
 ## Summary
 
-The aligned-spin Hamiltonian page owns the conservative Effective-One-Body
-dynamics implemented for SEOBNRv5 aligned-spin binaries. The source builds
-symbolic expressions for the tortoise map, effective and real Hamiltonian
-pieces, Hamiltonian derivatives, circular-orbit derivatives, and frequency-like
-quantities used by the waveform and orbital-evolution consumers.
-
-Scope is the source's current SEOBNRv5 aligned-spin implementation. The
-unversioned SEOBNRv5HM paper landing page is model background for quasi-circular,
-spinning, nonprecessing binary black holes; it does not define or decide this
-page's intended contract until an immutable publication locator is
-audited. This page does not generalize the expressions to eccentric, precessing,
-or matter systems.
+The SEOBNRv5 aligned-spin Hamiltonian modules implement conservative
+Effective-One-Body dynamics for quasi-circular, spinning, nonprecessing binary
+black holes, building symbolic expressions for the tortoise map, effective and
+real Hamiltonian pieces, Hamiltonian derivatives, circular-orbit derivatives,
+and orbital frequencies without generalizing to eccentric, precessing, or matter
+systems. The unversioned SEOBNRv5HM paper landing page provides model background
+only until an immutable publication locator is registered.
 
 ## Detail
 
@@ -32,17 +27,7 @@ integration and initial-data construction. Public non-circular derivative
 outputs are `dHreal_dr`, `dHreal_dprstar`, `dHreal_dpphi`, `dHreal_dr_dr`,
 `dHreal_dr_dpphi`, `dQalign_dprstar`, and `dHoddbar_dr`.
 
-Claim evidence:
-- Claim: `SEOBNRv5_aligned_spin_Hamiltonian_quantities`'s public
-  non-circular derivative outputs are exactly `dHreal_dr`, `dHreal_dprstar`,
-  `dHreal_dpphi`, `dHreal_dr_dr`, `dHreal_dr_dpphi`, `dQalign_dprstar`, and
-  `dHoddbar_dr`; its public circular derivative outputs are exactly
-  `dHreal_dr_circ`, `dHreal_dpphi_circ`, `dHreal_dr_dr_circ`,
-  `dHreal_dr_dpphi_circ`, and `dHreal_dpphi_dpphi_circ`; the class does not
-  expose a separate `r_dot` member.
-- Role: descriptive behavior
-- Deciding authority: [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py), `SEOBNRv5_aligned_spin_Hamiltonian_quantities.__init__`
-- Corroboration: [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_Hamiltonian.py), `trusted_dict`, pins the exact key set produced by the module's own default-constructor evaluation
+Evidence (descriptive behavior): `seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py::SEOBNRv5_aligned_spin_Hamiltonian_quantities.__init__`; corroboration: `seobnr/tests/SEOBNRv5_aligned_spin_Hamiltonian.py::trusted_dict`, pins the exact key set produced by the module's own default-constructor evaluation.
 
 Circular counterparts are formed by substituting `prstar = 0` before
 differentiating, with outputs `dHreal_dr_circ`, `dHreal_dpphi_circ`,
@@ -54,28 +39,16 @@ the input orbital frequency subtracted from `dHreal_dpphi_circ`, form the
 residual of the circular-orbit root solve, and the three second derivatives are
 the entries of its Jacobian.
 
-Claim evidence:
-- Claim: `SEOBNRv5_aligned_spin_Hamiltonian_quantities`'s circular first
-  Hamiltonian derivatives (`dHreal_dr_circ`, `dHreal_dpphi_circ`) are divided
-  by `nu`, and each circular second derivative differentiates one of those
-  already-normalized first derivatives without a second division by `nu`.
-- Role: descriptive behavior
-- Deciding authority: [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py), `SEOBNRv5_aligned_spin_Hamiltonian_quantities.__init__`
-- Corroboration: [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_Hamiltonian.py), `trusted_dict`, pins the sampled circular-derivative outputs against the module's own default-constructor evaluation
+Evidence (descriptive behavior): `seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py::SEOBNRv5_aligned_spin_Hamiltonian_quantities.__init__`; corroboration: `seobnr/tests/SEOBNRv5_aligned_spin_Hamiltonian.py::trusted_dict`.
 
 Every first derivative of `Hreal` is divided by `nu`. The non-circular second
 derivatives `dHreal_dr_dr` and `dHreal_dr_dpphi` differentiate the normalized
 `dHreal_dr` and divide by `nu` again, so they carry `1/nu**2` where the circular
 second derivatives carry `1/nu`; at `prstar = 0`, `dHreal_dr_dr` equals
 `dHreal_dr_dr_circ / nu`. The BHaH radial-momentum initial condition uses only
-their ratio, in which the extra factor cancels; see [SEOBNR BOB Generated
-Library](../../infrastructures/bhah/seobnr-bob-generated-library.md).
+their ratio, in which the extra factor cancels; see [SEOBNR BOB Generated Library](../../infrastructures/bhah/seobnr-bob-generated-library.md).
 
-Claim evidence:
-- Claim: `SEOBNRv5_aligned_spin_Hamiltonian_quantities` divides `dHreal_dr_dr` and `dHreal_dr_dpphi` by `nu` twice, so they carry `1/nu**2`, while its circular second derivatives carry `1/nu`; at `prstar = 0`, `dHreal_dr_dr` equals `dHreal_dr_dr_circ / nu`.
-- Role: descriptive behavior
-- Deciding authority: [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py), `SEOBNRv5_aligned_spin_Hamiltonian_quantities.__init__`
-- Corroboration: none available; the trusted values fix the sampled numbers but do not separate the normalization factor
+Evidence (descriptive behavior): `seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py::SEOBNRv5_aligned_spin_Hamiltonian_quantities.__init__`.
 
 Validation is module-local. Running the Hamiltonian source as a script executes
 doctests, processes the class `__dict__` through the trusted-expression helper,
@@ -89,13 +62,11 @@ runtime-accuracy result.
 ## Sources
 
 - [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py) - `SEOBNRv5_aligned_spin_Hamiltonian_quantities`
-- [validate_expressions.py](../../../nrpy/validate_expressions/validate_expressions.py) - `process_dictionary_of_expressions`, `compare_or_generate_trusted_results`
 - [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_Hamiltonian.py) - `trusted_dict`
 - [SEOBNRv5HM paper landing page](https://arxiv.org/abs/2303.18039) - background orientation only; aligned-spin model equations have no exact revision mapping here
 
 ## See Also
 
-- [SEOBNR And BOB](index.md)
-- [Aligned-Spin Calibration And Remnant](aligned-spin-calibration-and-remnant.md)
-- [Aligned-Spin Waveforms](aligned-spin-waveforms.md)
-- [Trusted Expression Pipeline](../trusted-expression-pipeline.md)
+- See also: [Aligned-Spin Calibration And Remnant](aligned-spin-calibration-and-remnant.md)
+- See also: [Aligned-Spin Waveforms](aligned-spin-waveforms.md)
+- Validated by: [Expression Validation Helpers](../../validation/expression-validation-helpers.md)

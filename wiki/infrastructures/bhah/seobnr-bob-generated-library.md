@@ -15,7 +15,9 @@ dynamics and waveform samples.
 
 ## Detail
 
-The aligned-spin SEOBNRv5 example registers a compact waveform pipeline. Its
+### Initial Conditions And Post-Adiabatic/ODE Dynamics
+
+The aligned-spin SEOBNRv5 example registers a compact waveform generation sequence. Its
 generated `main` initializes `commondata`, parses parfile and command-line
 inputs, computes coefficients, solves conservative and dissipative initial
 conditions, integrates dynamics, generates inspiral waveform samples, applies
@@ -36,15 +38,10 @@ provide reusable GSL wrappers used later by post-adiabatic and NQC stages.
 The radial-momentum condition used by the dissipative initial conditions forms
 `dLdr = -dHreal_dr_dr / dHreal_dr_dpphi` from locally evaluated values of the
 aligned-spin Hamiltonian's non-circular second derivatives. Both carry
-`1/nu**2` (see [Aligned-Spin
-Hamiltonian](../../equations/seobnr/aligned-spin-hamiltonian.md)), so that
+`1/nu**2` (see [Aligned-Spin Hamiltonian](../../equations/seobnr/aligned-spin-hamiltonian.md)), so that
 normalization cancels in the ratio.
 
-Claim evidence:
-- Claim: `SEOBNRv5_aligned_spin_radial_momentum_condition` computes `dLdr = -dHreal_dr_dr / dHreal_dr_dpphi` from local values of the aligned-spin Hamiltonian's `dHreal_dr_dr` and `dHreal_dr_dpphi`, so a normalization factor common to both, such as their `1/nu**2`, cancels in `dLdr`.
-- Role: descriptive behavior
-- Deciding authority: [SEOBNRv5_aligned_spin_radial_momentum_condition.py](../../../nrpy/infrastructures/BHaH/seobnr/initial_conditions/SEOBNRv5_aligned_spin_radial_momentum_condition.py), `register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition`
-- Corroboration: none available; no trusted file or generated-project check isolates this generated expression
+Evidence (descriptive behavior): `BHaH/seobnr/initial_conditions/SEOBNRv5_aligned_spin_radial_momentum_condition.py::register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition`.
 
 Dynamics generation is split into equation kernels and integration managers.
 `register_CFunction_SEOBNRv5_aligned_spin_pa_integration` first sets the final
@@ -56,16 +53,7 @@ at the conservative `r` and `pphi`, then calls
 `SEOBNRv5_aligned_spin_ode_integration` on the resulting initial conditions in
 `commondata` and returns without a post-adiabatic stage or time offset.
 
-Claim evidence:
-- Claim: When `commondata->r` (`initial_r`) satisfies `initial_r <= final_r`,
-  `SEOBNRv5_aligned_spin_pa_integration` calls
-  `SEOBNRv5_aligned_spin_initial_conditions_dissipative` to set
-  `commondata->prstar` at the conservative `r` and `pphi` before calling
-  `SEOBNRv5_aligned_spin_ode_integration`, and returns without a
-  post-adiabatic stage or time offset.
-- Role: descriptive behavior
-- Deciding authority: [SEOBNRv5_aligned_spin_pa_integration.py](../../../nrpy/infrastructures/BHaH/seobnr/dynamics/SEOBNRv5_aligned_spin_pa_integration.py), `register_CFunction_SEOBNRv5_aligned_spin_pa_integration`
-- Corroboration: `none available` - this generated-C control-flow branch has no module-local trusted-expression or generated-project numerical check that isolates it; verification requires inspecting the generated `SEOBNRv5_aligned_spin_pa_integration` source directly
+Evidence (descriptive behavior): `BHaH/seobnr/dynamics/SEOBNRv5_aligned_spin_pa_integration.py::register_CFunction_SEOBNRv5_aligned_spin_pa_integration`.
 
 Otherwise it builds a radial grid,
 solves alternating post-adiabatic `pphi` and `prstar` updates with one-dimensional
@@ -76,6 +64,8 @@ and stores augmented quantities in `commondata->dynamics_low`,
 uses `gsl_odeiv2_step_rk8pd`, adaptive control, and
 `SEOBNRv5_aligned_spin_right_hand_sides`; it tracks merger-side stop conditions,
 splits coarse and fine dynamics, and refines peak times through spline helpers.
+
+### Inspiral Modes, Resampling, And IMR/NQC Assembly
 
 The inspiral waveform layer consumes stored dynamics rather than re-integrating.
 `register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics` allocates
@@ -104,17 +94,7 @@ defaults `c_21 = c_43 = c_55 = 0`. The odd inspiral modes stay in
 `waveform_low` and `waveform_fine`; `waveform_IMR` holds only `(2,2)`, so its
 other mode slots are not evidence about the odd modes.
 
-Claim evidence:
-- Claim: At exact `chiA = 0`, `fabs(delta) <= 1e-14` (the equal-mass branch
-  of the odd-mode factors) makes the three `K = |h| / |rho|` divisions `0/0`.
-  `register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients`
-  bypasses them throughout `fabs(chiA) < 1e-14` and leaves
-  `commondata->c_21`, `commondata->c_43`, and `commondata->c_55` at their
-  registered zero defaults because the selected equal-mass factors do not use
-  those coefficients.
-- Role: descriptive behavior
-- Deciding authority: [SEOBNRv5_aligned_spin_special_amplitude_coefficients.py](../../../nrpy/infrastructures/BHaH/seobnr/inspiral_waveform/SEOBNRv5_aligned_spin_special_amplitude_coefficients.py), `register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients`
-- Corroboration: `none available` - this generated-C control-flow branch has no module-local trusted-expression or generated-project numerical check that isolates it; verification requires inspecting the generated `SEOBNRv5_aligned_spin_special_amplitude_coefficients` source directly
+Evidence (descriptive behavior): `BHaH/seobnr/inspiral_waveform/SEOBNRv5_aligned_spin_special_amplitude_coefficients.py::register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients`.
 
 Merger and IMR assembly sit above the inspiral arrays. Both
 `SEOBNRv5_aligned_spin_IMR_waveform` and `SEBOBv2_IMR_waveform` convert the
@@ -132,16 +112,7 @@ ringdown samples follow at `t_match + (i + 1) dT`, so `waveform_IMR` keeps the
 requested spacing. The inspiral part of `waveform_IMR` copies samples
 `0..idx_match` only.
 
-Claim evidence:
-- Claim: `SEOBNRv5_aligned_spin_IMR_waveform` and `SEBOBv2_IMR_waveform`
-  resample the `(2,2)` inspiral strain at `t_first + i dT` for
-  `i < floor((t_last - t_first) / dT) + 1`, where `dT` is the input `dt` in
-  geometric units; a final sample that rounding places after `t_last` is set to
-  `t_last`. Ringdown samples follow at `t_match + (i + 1) dT`. Uniform spacing
-  holds only up to floating-point roundoff.
-- Role: descriptive behavior
-- Deciding authority: [SEOBNRv5_aligned_spin_interpolate_modes.py](../../../nrpy/infrastructures/BHaH/seobnr/inspiral_waveform/SEOBNRv5_aligned_spin_interpolate_modes.py), `register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes`; [SEOBNRv5_aligned_spin_IMR_waveform.py](../../../nrpy/infrastructures/BHaH/seobnr/SEOBNRv5_aligned_spin_IMR_waveform.py), `register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform`; [SEBOBv2_IMR_waveform.py](../../../nrpy/infrastructures/BHaH/seobnr/SEBOBv2_IMR_waveform.py), `register_CFunction_SEBOBv2_IMR_waveform`
-- Corroboration: `none available` - the SEOB and SEBOBv2 consistency checks compare waveform amplitude and phase against the trusted revision but do not check sample times; verification requires inspecting the generated sources directly
+Evidence (descriptive behavior): `BHaH/seobnr/inspiral_waveform/SEOBNRv5_aligned_spin_interpolate_modes.py::register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes`; `BHaH/seobnr/SEOBNRv5_aligned_spin_IMR_waveform.py::register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform`.
 
 Although the final resampled sample is never copied into the inspiral part of
 `waveform_IMR`, it still enters the ringdown. When `idx_match` is the
@@ -161,18 +132,7 @@ is intended behavior. When a generated `main` calls `commondata_io` (the
 examples' `output_commondata` option), the final sample is also written to
 `commondata.bin` with the rest of `waveform_inspiral`.
 
-Claim evidence:
-- Claim: `SEOBNRv5_aligned_spin_IMR_waveform` and `SEBOBv2_IMR_waveform` read
-  the final resampled inspiral sample when `idx_match` is the second-to-last
-  sample: the BOB ringdown branch sets `phase_match` from its unwrapped phase,
-  and the aligned-spin routine also sets the ringdown phase sign from the
-  difference between it and the sample at `idx_match`. The native SEOBNRv5
-  merger-ringdown branch of `SEOBNRv5_aligned_spin_IMR_waveform` includes it
-  in the attachment spline when `idx_match >= n - 5`. Neither routine copies
-  it into the inspiral part of `waveform_IMR`.
-- Role: descriptive behavior
-- Deciding authority: [SEOBNRv5_aligned_spin_IMR_waveform.py](../../../nrpy/infrastructures/BHaH/seobnr/SEOBNRv5_aligned_spin_IMR_waveform.py), `register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform`; [SEBOBv2_IMR_waveform.py](../../../nrpy/infrastructures/BHaH/seobnr/SEBOBv2_IMR_waveform.py), `register_CFunction_SEBOBv2_IMR_waveform`
-- Corroboration: `none available` - the SEOB and SEBOBv2 consistency checks compare the whole waveform's amplitude and phase and do not isolate the ringdown phase offset or the attachment spline; verification requires inspecting the generated sources directly
+Evidence (descriptive behavior): `BHaH/seobnr/SEOBNRv5_aligned_spin_IMR_waveform.py::register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform`; `BHaH/seobnr/SEBOBv2_IMR_waveform.py::register_CFunction_SEBOBv2_IMR_waveform`.
 
 After resampling, the aligned-spin routine allocates ringdown arrays, then
 selects either native
@@ -184,14 +144,26 @@ The BOBv2 helper evaluates amplitude and wrapped phase at requested times,
 unwraps phase with `SEOBNRv5_aligned_spin_unwrap`, and zero-references the
 phase at the first ringdown sample.
 
+### Projected-Spin Attachment And NQC Corrections
+
 NQC correction functions solve attachment systems and mutate the inspiral
-waveform arrays before IMR assembly. `SEBOBv2_NQC_corrections` allocates basis,
-radius, frequency, amplitude, and phase arrays; locates the ISCO/attachment
-time; configures BOB peak data; builds cropped spline systems around the
-attachment point; solves amplitude and phase correction systems with GSL
-matrices; and applies the corrections to low and fine waveform samples.
+waveform arrays before IMR assembly. When parfile `bool` `use_projected_attachment`
+(registered by `SEOBNRv5_quasi_precessing_spin_coefficients.py`, default `False`)
+is enabled in `sebobv2`, `SEOBNRv5_projected_attachment_reference` runs immediately
+after `SEOBNRv5_aligned_spin_pa_integration` (before special-amplitude coefficients
+and NQC) to record the `10M` orbital and PN spin reference state in `commondata`—continuing
+the initialized EOB equations and PN spins backward when the trajectory starts
+inside `10M`. `SEBOBv2_NQC_corrections` allocates basis, radius, frequency,
+amplitude, and phase arrays; locates the ISCO/attachment time; configures BOB peak
+data (using the projected reference when active); builds cropped spline systems
+around the attachment point; solves amplitude and phase correction systems with
+GSL matrices; and applies the corrections to low and fine waveform samples.
 The aligned-spin and higher-mode BOB NQC modules follow the same infrastructure
 role for other approximant choices.
+
+Evidence (descriptive behavior): `BHaH/seobnr/SEOBNRv5_quasi_precessing_spin_coefficients.py`; `BHaH/seobnr/SEOBNRv5_projected_attachment_reference.py`; `BHaH/seobnr/nqc_corrections/SEBOBv2_NQC_corrections.py`.
+
+### Precessing Rotations And Project Build
 
 Precessing support is present as generated library helpers, not a complete
 native precessing IMR replacement in these examples. `SEOBNRv5_coprecessing_angles`
@@ -201,20 +173,25 @@ observer polarizations using the registered mode arrays. Shared rotation and
 spin-weighted spherical-harmonic support live in BHaH helper modules and are
 cited when those generated functions are assembled.
 
-Project assembly is explicit. `sebobv2.py` writes commondata-only
-`set_CodeParameters*.h` parameter-access headers, registers
-`commondata_struct_set_to_default`, emits the parfile/parser with waveform
-command-line inputs, copies `spline_struct.h`, adds GSL and complex-number
+Project assembly is explicit. `sebobv2.py` (which also accepts
+`--projected-attachment-diagnostics` to emit `NRPY_REFERENCE`, `NRPY_SPINS`,
+`NRPY_ATTACH`, `NRPY_FINE`, `NRPY_NQC`, `NRPY_CORRECTED`, and `NRPY_IMR`
+`stderr` records) writes commondata-only `set_CodeParameters*.h` parameter-access
+headers, registers `commondata_struct_set_to_default`, emits the parfile/parser
+with the 6 scalar CLI inputs, copies `spline_struct.h`, adds GSL and complex-number
 includes to `BHaH_defines.h`, defines SEOBNR array index macros and mode
 constants, registers the generated `main`, and constructs a Makefile with
-`gsl-config --cflags` and `gsl-config --libs`. CI then builds current and
-trusted SEOB/SEBOB executables and compares waveform outputs through the SEOB
-consistency scripts.
+`gsl-config --cflags` and `gsl-config --libs`. CI builds current and trusted
+SEOB/SEBOB executables for 10-input consistency checks and runs
+`sebobv2_projected_attachment_check.py` against `--projected-attachment-diagnostics`
+builds.
 
 ## Sources
 
 - [seobnrv5_aligned_spin_inspiral.py](../../../nrpy/examples/seobnrv5_aligned_spin_inspiral.py) - `register_CFunction_main_c`, `SEOBNRv5_aligned_spin_IMR_waveform`
-- [sebobv2.py](../../../nrpy/examples/sebobv2.py) - `register_CFunction_main_c`, `SEBOBv2_IMR_waveform`, `supplemental_defines_dict`
+- [sebobv2.py](../../../nrpy/examples/sebobv2.py) - `--projected-attachment-diagnostics`, `register_CFunction_main_c`, `SEBOBv2_IMR_waveform`, `supplemental_defines_dict`
+- [SEOBNRv5_quasi_precessing_spin_coefficients.py](../../../nrpy/infrastructures/BHaH/seobnr/SEOBNRv5_quasi_precessing_spin_coefficients.py) - `register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients` (`use_projected_attachment`)
+- [SEOBNRv5_projected_attachment_reference.py](../../../nrpy/infrastructures/BHaH/seobnr/SEOBNRv5_projected_attachment_reference.py) - `register_CFunction_SEOBNRv5_projected_attachment_reference`
 - [SEOBNRv5_aligned_spin_initial_conditions_conservative.py](../../../nrpy/infrastructures/BHaH/seobnr/initial_conditions/SEOBNRv5_aligned_spin_initial_conditions_conservative.py) - `register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative`
 - [SEOBNRv5_aligned_spin_radial_momentum_condition.py](../../../nrpy/infrastructures/BHaH/seobnr/initial_conditions/SEOBNRv5_aligned_spin_radial_momentum_condition.py) - `register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition`
 - [root_finding_1d.py](../../../nrpy/infrastructures/BHaH/seobnr/utils/root_finding_1d.py) - `register_CFunction_root_finding_1d`
@@ -232,10 +209,10 @@ consistency scripts.
 - [SEOBNRv5_coprecessing_rotations.py](../../../nrpy/infrastructures/BHaH/seobnr/SEOBNRv5_coprecessing_rotations.py) - `register_CFunction_SEOBNRv5_coprecessing_rotations`
 - [spin_weight_minus2_spherical_harmonics.py](../../../nrpy/infrastructures/BHaH/special_functions/spin_weight_minus2_spherical_harmonics.py) - `register_CFunction_spin_weight_minus2_sph_harmonics`, `spin_weight_minus2_sph_harmonics`
 - [spline_struct.h](../../../nrpy/infrastructures/BHaH/seobnr/spline_struct.h) - `spline_data`
+- [sebobv2_projected_attachment_check.py](../../../nrpy/examples/tests/sebobv2_projected_attachment_check.py) - `check_handoff`, `check_matching`, `check_phase_overlap`, `main`
 
 ## See Also
 
-- [BHaH](index.md)
-- [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md)
-- [SEOBNR And BOB](../../equations/seobnr/index.md)
-- [Generated Project CI](../../validation/generated-project-ci.md)
+- See also: [Project Assembly, main.c, And Makefile Emission](lifecycle-and-project-assembly.md)
+- Depends on: [SEOBNR And BOB](../../equations/seobnr/index.md)
+- Validated by: [Generated Project CI](../../validation/generated-project-ci.md)

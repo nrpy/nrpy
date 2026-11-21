@@ -1,11 +1,11 @@
 # Apparent Horizon Library
 
-> Route BHaHAHA library generation and keep horizon-enabled examples linked to, not owners of, the apparent-horizon internals. · Status: confirmed
+> Route BHaHAHA library generation and keep horizon-enabled examples linked to, rather than redefining, apparent-horizon solver internals. · Status: confirmed
 > Up: [Examples](index.md)
 
 ## Summary
 
-`python -m nrpy.examples.bhahaha` is the owning example leaf for generating the
+`python -m nrpy.examples.bhahaha` is the primary example leaf for generating the
 BHaHAHA apparent-horizon library. It builds the BHaHAHA C function registry,
 writes a library project under the requested output root, emits the public
 `BHaHAHA.h` header, and creates a static archive target named from the
@@ -18,7 +18,7 @@ establish horizon-finding accuracy, and workflow YAML is not latest-pass proof.
 
 Horizon-enabled evolution examples call this generator as a dependency, then
 register BHaH-facing horizon orchestration in their own generated applications.
-They do not own BHaHAHA's public ABI, interpolation stages, relaxation loop, or
+They do not define BHaHAHA's public C header or ABI, interpolation stages, relaxation loop, or
 diagnostic vocabulary.
 
 ## Detail
@@ -37,6 +37,7 @@ project name from `BHaHAHA` to `BHaHAHA-<fdorder>o`, so `--fdorder 8` writes
 `restrict` as `__restrict__`, and changes the fixed radii array parameter in
 the header to an unsized array for C++ compatibility. `--no-openmp` is the
 source-backed option that disables OpenMP flags in the generated Makefile.
+`--sequential-codegen` registers C functions sequentially.
 
 The generator fixes `CoordSystem = "Spherical"`, uses `SSPRK33`, inner
 boundaries only, reference-metric precomputation, no SIMD, and
@@ -55,14 +56,14 @@ build in the generated BHaHAHA directory and start linking guidance from
 
 `BHaHAHA.h` is assembled from the checked-in header template plus generator
 additions. It defines `REAL` when absent, declares the 12 Cartesian ADM input
-gridfunction slots, provides `IDX2(itheta, iphi)` for flattened horizon-surface
+gridfunction slots, provides `IDX2(itheta, iphi)` for flattened horizon surface
 storage, and appends `BHAHAHA_NGHOSTS` from half the finite-difference order.
 It also appends `bhahaha_error_codes` from `error_code_msg_tuples_list` and the
 public `bah_error_message()` prototype. The public header documents the caller
 input struct, diagnostics struct, poisoning helpers, radial-grid setup,
 center/radius helper, `bah_find_horizon()`, and diagnostic-file output entry
-point; full field-level ownership stays in
-[BHaHAHA Public API And Input Contract](../infrastructures/bhah/bhahaha-public-api-and-input-contract.md).
+point; full field-level definitions stay in
+[BHaHAHA Public API And Inputs](../infrastructures/bhah/bhahaha/bhahaha-public-api-and-input-contract.md).
 
 The horizon-enabled BHaH examples relate to this library by composition.
 `two_blackholes_collide.py`, `blackhole_spectroscopy.py`,
@@ -72,13 +73,13 @@ applications that use or mirror apparent-horizon support. The standalone BHaH
 black-hole examples run `bhahaha.py` into their project directory, link the
 matching `BHaHAHA` or `BHaHAHA-<fdorder>o` archive, include `BHaHAHA.h`, and
 register `bhahaha_find_horizons` with a source-specific horizon count. Their
-initial-data, gauge, diagnostics, checkpointing, Psi4, and runtime ownership
-belongs in [Standalone GR/BHaH](standalone-gr-bhah.md), while BHaHAHA solver
-internals belong under [BHaHAHA Horizon Runtime](../infrastructures/bhah/bhahaha-horizon-runtime.md).
+initial-data, gauge, diagnostics, checkpointing, Psi4, and runtime configuration
+belong in [Standalone GR/BHaH](standalone-gr-bhah.md), while BHaHAHA solver
+internals belong under [BHaHAHA](../infrastructures/bhah/bhahaha/index.md).
 
 ## Sources
 
-- [bhahaha.py](../../nrpy/examples/bhahaha.py) - `--fdorder`, `--outrootdir`, `--cpp`, `--no-openmp`, `project_name`, `output_CFunctions_function_prototypes_and_construct_Makefile`
+- [bhahaha.py](../../nrpy/examples/bhahaha.py) - `--fdorder`, `--outrootdir`, `--cpp`, `--no-openmp`, `--sequential-codegen`, `project_name`, `output_CFunctions_function_prototypes_and_construct_Makefile`
 - [BHaHAHA_header.h](../../nrpy/infrastructures/BHaH/BHaHAHA/BHaHAHA_header.h) - `bhahaha_params_and_data_struct`, `bhahaha_diagnostics_struct`, `NUM_EXT_INPUT_CARTESIAN_GFS`, `IDX2`, public `bah_*` prototypes
 - [error_message.py](../../nrpy/infrastructures/BHaH/BHaHAHA/error_message.py) - `error_code_msg_tuples_list`, `register_CFunction_error_message`
 - [two_blackholes_collide.py](../../nrpy/examples/two_blackholes_collide.py) - `BHaH.BHaHAHA.BHaH_implementation.register_CFunction_bhahaha_find_horizons`
@@ -89,8 +90,6 @@ internals belong under [BHaHAHA Horizon Runtime](../infrastructures/bhah/bhahaha
 
 ## See Also
 
-- [Examples](index.md)
-- [Standalone GR/BHaH](standalone-gr-bhah.md)
-- [BHaHAHA Horizon Runtime](../infrastructures/bhah/bhahaha-horizon-runtime.md)
-- [BHaHAHA Public API And Input Contract](../infrastructures/bhah/bhahaha-public-api-and-input-contract.md)
-- [BHaHAHA Grid, Interpolation, And Boundaries](../infrastructures/bhah/bhahaha-grid-interpolation-and-boundaries.md)
+- Depends on: [BHaHAHA](../infrastructures/bhah/bhahaha/index.md)
+- Depends on: [BHaHAHA Public API And Inputs](../infrastructures/bhah/bhahaha/bhahaha-public-api-and-input-contract.md)
+- Depends on: [BHaHAHA Grid, Interpolation, And Boundaries](../infrastructures/bhah/bhahaha/bhahaha-grid-interpolation-and-boundaries.md)

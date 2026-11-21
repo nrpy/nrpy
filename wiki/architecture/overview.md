@@ -1,36 +1,41 @@
 # Overview
 
-> Map the NRPy project shape from symbolic source to generated artifacts. · Status: confirmed
+> Map NRPy's repository layout, packaging metadata, and symbolic-to-generated-project flow. · Status: confirmed
 > Up: [Architecture](index.md)
 
 ## Summary
 
-NRPy is a Python/SymPy symbolic code generation toolkit for numerical relativity and relativistic astrophysics. Its runnable example generators assemble symbolic equations, infrastructure code generation, and helper utilities into generated projects such as standalone BHaH applications, Einstein Toolkit thorns, Charm++ projects, and JAX/Python workflows.
+NRPy is a Python/SymPy symbolic code-generation library (`nrpy`) for numerical relativity and relativistic astrophysics. Runnable scripts in `nrpy/examples/` combine symbolic equations (`nrpy/equations/`), shared symbolic/loop utilities (`nrpy/helpers/`), C/Python code generation (`c_codegen`, `py_codegen`), function registries (`CFunction_dict`, `PyFunction_dict`), and target backends (`nrpy/infrastructures/`) to emit complete solver projects or Cactus thorns under `project/`.
 
 ## Detail
 
-The repository is organized around generators rather than handwritten end-user executables. `nrpy/examples` contains runnable project entry points. Those examples pull symbolic physics from `nrpy/equations`, backend-specific project assembly from `nrpy/infrastructures`, and shared support from `nrpy/helpers`.
+### Repository Layout And Packaging Metadata
 
-The top-level flow is: choose or write an example generator, assemble symbolic expressions and C functions, select an infrastructure target, then emit a project under a generated-output location such as `project/<name>/`. BHaH is the standalone application infrastructure and is the closest public path to single-patch BH@H numerical relativity workflows. ETLegacy and CarpetX produce Einstein Toolkit thorns, `superB` produces Charm++-based projects, the Dendro examples produce standalone CMake and MPI applications built against Dendrolib, and SEBOB/JAX workflows cover compact-object and Python/JAX project generation.
+`nrpy/examples/` holds runnable project generators rather than handwritten C/C++ solver binaries:
+- `BHaH` emits standalone C/CUDA executables or libraries (`project/<name>/`), `ETLegacy` and `CarpetX` emit Einstein Toolkit Cactus thorns, `superB` emits Charm++ chare projects, `Dendro` emits standalone MPI octree CMake applications ([Dendro](../infrastructures/dendro/index.md)), and `JAX` emits installable Python/JAX packages ([Generated Backend Comparison](../generated-backend-comparison.md)).
+- In `setup.py`, `nrpy` reads runtime dependencies from `requirements.txt`, extracts the first `version = ...` line from `nrpy/release.txt` via `get_nrpy_version()` (raising if absent; `release.txt` itself is not added to `package_data`), assigns non-test `*.h` headers to their nearest Python subpackage via `discover_header_package_data()`, and includes `nrpy/py.typed`.
+- `CITATION.md` lists the general SENR/NRPy+ paper alongside project papers for `NRPyElliptic`, GPU/CUDA relaxation, `superB`, `BHaHAHA`, `GRoovy`, and `SEOBNR`/`SEBOB` waveform generators.
 
-Claim evidence:
-- Claim: `dendro_bssn.py` and `dendro_fccz4.py` generate standalone `Dendro_NRPy_BSSN` and `Dendro_NRPy_fCCZ4` CMake and MPI applications that are built against Dendrolib.
-- Role: descriptive behavior
-- Deciding authority: [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py), `main`
-- Corroboration: [main.yml](../../.github/workflows/main.yml), `dendro-validation`, which generates, builds, and runs both applications
+### Symbolic-To-Project Generation Sequence
 
-Packaging metadata presents the same identity: the installable package is named `nrpy`, describes itself as Python/SymPy symbolic code generation for numerical relativity and relativistic astrophysics, and reads runtime requirements from `requirements.txt`. During setup, `get_nrpy_version()` reads the first `version = ...` entry from `nrpy/release.txt` and raises if none exists. `discover_header_package_data()` assigns checked-in non-test `*.h` files to their nearest Python package, and setup explicitly adds `nrpy/py.typed` to package data. `release.txt` is a setup-time version input; this configuration does not explicitly add it to installed package data.
+A standalone generator (such as `nrpy/examples/wave_equation_cartesian.py`) executes four steps:
+1. **Configuration**: Set `Infrastructure` (e.g., `"BHaH"`), `project_name`, finite-difference order, and floating-point type (`REAL`), and clear `project/<project_name>/` before registering functions.
+2. **Symbolic expressions to C (`ccg.c_codegen`)**: Construct SymPy scalar or indexed expressions from `nrpy/equations/`, then lower them to C assignments via `ccg.c_codegen` (`CCodeGen` controls CSE, `enable_fd_codegen`, `enable_simd`, floating-point type aliases, and gridfunction array reads, often wrapped in `BHaH.simple_loop.simple_loop`).
+3. **Function registration (`cfc.register_CFunction`)**: Store each `CFunction` (subdirectory, includes, `prefunc`, Doxygen description, `cfunc_type`, `name`, `params`, `body`, `postfunc`) in `cfc.CFunction_dict`, rejecting duplicate names. `CFunction.generate_full_function` assembles includes, Doxygen header, prototype, optional `set_CodeParameters.h`, and body.
+4. **Backend project assembly**: Register timestepping (MoL), boundary conditions, and diagnostics; write `CodeParameter` headers, default `.par`/`.toml` files, and `BHaH_defines.h`; register `main.c` (`BHaH.main_c.register_CFunction_main_c` verifies required kernels exist before emitting CLI parsing, grid/timestep setup, allocation, initial data, evolution/diagnostics, and cleanup); copy SIMD/CUDA headers when enabled; and emit `BHaH_function_prototypes.h` plus the `Makefile` or `CMakeLists.txt`.
 
 ## Sources
 
-- [README.md](../../README.md) - `# NRPy`, `## Project Families and Example Generators`, `## Repository Map`
-- [setup.py](../../setup.py) - `setup(...)`, `discover_header_package_data`
-- [dendro_bssn.py](../../nrpy/examples/dendro_bssn.py) and [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - the standalone Dendro application generators.
-- [main.yml](../../.github/workflows/main.yml) - `dendro-validation`.
+- [README.md](../../README.md) - `# NRPy`, `## Project Families and Example Generators`, `## Repository Map`, `## What Gets Generated?`
+- [CITATION.md](../../CITATION.md) - general NRPy and project-specific paper citations
+- [setup.py](../../setup.py) - `get_nrpy_version`, `discover_header_package_data`, `setup(...)`
+- [wave_equation_cartesian.py](../../nrpy/examples/wave_equation_cartesian.py) - `project_name`, `register_CFunction_rhs_eval`, `BHaH.main_c.register_CFunction_main_c`
+- [c_function.py](../../nrpy/c_function.py) - `CFunction`, `CFunction_dict`, `register_CFunction`
+- [c_codegen.py](../../nrpy/c_codegen.py) - `CCodeGen`, `c_codegen`
+- [main_c.py](../../nrpy/infrastructures/BHaH/main_c.py) - `register_CFunction_main_c`
 
 ## See Also
 
-- Parent: [Architecture](index.md)
-- See also: [Build And Run](build-and-run.md)
-- See also: [Symbolic Codegen Lifecycle](symbolic-codegen-lifecycle.md)
 - Depends on: [Generated Output Boundaries](generated-output-boundaries.md)
+- See also: [Build And Run](build-and-run.md)
+- See also: [CFunction Registry](../core/c-function-registry.md)

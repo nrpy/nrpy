@@ -20,7 +20,6 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
@@ -256,21 +255,9 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
     name = "ds_min_radial_like_dirns_single_pt"
     params = "const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min_radial_like_dirns"
     rfm = refmetric.reference_metric[CoordSystem]
-    dxx = sp.symbols("dxx0 dxx1 dxx2", real=True)
     body = "MAYBE_UNUSED REAL ds0=1e38, ds1=1e38, ds2=1e38;\n"
-    ds_expr_list: List[sp.Expr] = []
-    ds_str_list: List[str] = []
-    if CoordSystem.startswith("GeneralRFM_fisheyeN"):
-        num_transitions = int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
-        fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
-        # For fisheye GeneralRFM (generally non-orthogonal), this function still
-        # examines the three coordinate directions at each point as required.
-        for dirn in rfm.radial_like_dirns:
-            ds_expr_list += [
-                sp.sqrt(sp.Abs(fisheye.ghatDD[dirn][dirn])) * sp.Abs(dxx[dirn])
-            ]
-            ds_str_list += [f"ds{dirn}"]
-    elif CoordSystem.startswith("GeneralRFM"):
+    ds_exprs = ds_min_single_pt_exprs(CoordSystem)
+    if ds_exprs is None:
         body += (
             f'fprintf(stderr, "ERROR in {name}__rfm__{CoordSystem}: ds_min for non-fisheye GeneralRFM is not yet supported.\\n");\n'
             "exit(1);\n"
@@ -286,10 +273,8 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
             body=body,
         )
         return
-    else:
-        for dirn in rfm.radial_like_dirns:
-            ds_expr_list += [sp.Abs(rfm.scalefactor_orthog[dirn] * dxx[dirn])]
-            ds_str_list += [f"ds{dirn}"]
+    ds_expr_list = [ds_exprs[dirn] for dirn in rfm.radial_like_dirns]
+    ds_str_list = [f"ds{dirn}" for dirn in rfm.radial_like_dirns]
     param_symbols, _ = get_params_commondata_symbols_from_expr_list(ds_expr_list)
     params_definitions = (
         generate_definition_header(
@@ -325,21 +310,25 @@ def ds_min_single_pt_exprs(CoordSystem: str) -> Optional[List[sp.Expr]]:
 
     :return: The three spacing expressions, or None for an unsupported
         non-fisheye GeneralRFM coordinate system.
+    :raises ValueError: If a fisheye GeneralRFM provider is unavailable.
     """
     if CoordSystem.startswith("GeneralRFM") and not CoordSystem.startswith(
-        "GeneralRFM_fisheyeN"
+        ("GeneralRFM_fisheyeN", "GeneralRFM_spheroidal_fisheyeN")
     ):
         return None
     rfm = refmetric.reference_metric[CoordSystem]
     dxx = sp.symbols("dxx0 dxx1 dxx2", real=True)
-    if CoordSystem.startswith("GeneralRFM_fisheyeN"):
-        num_transitions = int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
-        fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
-        # GeneralRFM fisheye coordinates are generally nonorthogonal. Measuring
-        # each coordinate-line tangent therefore uses sqrt(|ghat_ii|) dxx_i.
+    provider_name = getattr(rfm, "general_rfm_provider_name", None)
+    if provider_name in ("fisheye", "spheroidal_fisheye"):
+        provider = rfm.general_rfm_provider
+        if provider is None:
+            raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
+        # Coordinate-line length for a nonorthogonal fisheye metric.
         return [
-            sp.sqrt(sp.Abs(fisheye.ghatDD[i][i])) * sp.Abs(dxx[i]) for i in range(3)
+            sp.sqrt(sp.Abs(provider.ghatDD[i][i])) * sp.Abs(dxx[i]) for i in range(3)
         ]
+    if CoordSystem.startswith("GeneralRFM"):
+        return None
     return [sp.Abs(rfm.scalefactor_orthog[i] * dxx[i]) for i in range(3)]
 
 
@@ -354,19 +343,23 @@ def register_CFunction_ds_min_single_pt(
     :param CoordSystem: The coordinate system of the numerical grid.
 
     Doctests:
-    >>> from nrpy.helpers.generic import validate_strings
+    >>> from nrpy.helpers.generic import validate_strings, clang_format
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> from nrpy.reference_metric import unittest_CoordSystems
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> name = "ds_min_single_pt"
+    >>> sympy_1_15 = tuple(int(v) for v in sp.__version__.split(".")[:2]) >= (1, 15)
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    for CoordSystem in unittest_CoordSystems:
     ...       cfc.CFunction_dict.clear()
     ...       register_CFunction_ds_min_single_pt(CoordSystem)
-    ...       generated_str = cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function
+    ...       generated_str = clang_format(cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function)
     ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
+    ...       # Curvilinear scale factors must be checked with either SymPy printer.
+    ...       if sympy_1_15 and CoordSystem != "Cartesian":
+    ...          validation_desc += "__sympy_1_15"
     ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     Setting up reference_metric[SinhSymTP]...
     Setting up reference_metric[HoleySinhSpherical]...

@@ -14,6 +14,8 @@ strings, updates gridfunctions, advances `commondata->time`, and increments
 
 ## Detail
 
+### Butcher Tables, Stage Allocations, And Step Driver
+
 `MoLtimestepping/register_all.py` is the one-stop registration entrypoint. It
 registers commondata CodeParameters `nn_0`, `nn`, `CFL_FACTOR`, `dt`, `t_0`,
 `time`, and `t_final`; checks that the selected parallelization is supported;
@@ -22,7 +24,7 @@ optionally registers `MoL_step_forward_in_time()`; adds
 `MoL_gridfunctions_struct gridfuncs` to `griddata_struct`; and registers MoL's
 `BHaH_defines.h` contribution.
 
-`rk_butcher_table_dictionary.py` owns the available explicit integrators. Its
+`rk_butcher_table_dictionary.py` defines the available explicit integrators. Its
 `generate_Butcher_tables()` dictionary includes Euler, several RK2/RK3 methods,
 SSP methods, classic `RK4`, Dormand-Prince and other high-order tables, adaptive
 embedded tables, and optional Adams-Bashforth generation. `validate()` checks
@@ -63,6 +65,8 @@ registration flags `enable_rfm_precompute`, `enable_curviBCs`, and
 `enable_intrinsics` determine whether generated aliases include `rfmstruct`,
 `bcstruct`, and SIMD/CUDA intrinsic headers and update loops.
 
+### RK3 Accumulation Kernels And Substep Code Generation
+
 `RK3 Ralston` and `RK3 Heun` require `rhs_accumulation_string` in addition
 to the ordinary RHS hook. Only the BSSN and fCCZ4 generator in `rhs_eval.py`
 supplies it, so registering either method for another equation set stops at
@@ -78,11 +82,7 @@ coefficients, use three evolved-field arrays including `y_n_gfs`, and evaluate
 the RHS three times. The post-RHS hook must prepare or project only the next
 input stage or final state, and never the running sum.
 
-Claim evidence:
-- Claim: Diagonal RK3 requires the accumulation hook above, preserves the original Ralston and Heun coefficients, and uses three evolved arrays and three RHS evaluations when its hooks follow the stated input and projection requirements.
-- Role: descriptive behavior
-- Deciding authority: [MoL_step_forward_in_time.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/MoL_step_forward_in_time.py), `register_CFunction_MoL_step_forward_in_time`; [rk_butcher_table_dictionary.py](../../../nrpy/infrastructures/BHaH/MoLtimestepping/rk_butcher_table_dictionary.py), `generate_Butcher_tables` and `intermediate_stage_gf_names_list`.
-- Corroboration: the `register_CFunction_MoL_step_forward_in_time` doctests compare the emitted CUDA driver text for both methods with stored references and check the missing-hook error. They do not execute the schedule, and no numerical comparison against a dense Runge-Kutta tableau is maintained.
+Evidence (descriptive behavior): `BHaH/MoLtimestepping/MoL_step_forward_in_time.py::register_CFunction_MoL_step_forward_in_time`; `BHaH/MoLtimestepping/rk_butcher_table_dictionary.py::generate_Butcher_tables` and `intermediate_stage_gf_names_list`.
 
 `general_relativity/rhs_eval.py::MoL_rhs_strings()` builds matching ordinary
 and accumulated BSSN/fCCZ4 calls.
@@ -96,11 +96,7 @@ stores only interior lanes, and an output with a zero coefficient remains
 unchanged. Ricci and other pre-RHS calculations must leave both live output
 arrays unchanged.
 
-Claim evidence:
-- Claim: The separate RHS and boundary registration flags enable the matching accumulated calls; the RHS reads a fixed stage, adds only to interior output lanes, and leaves an output with a zero multiplier unchanged.
-- Role: descriptive behavior
-- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `MoL_rhs_strings` and `register_CFunction_rhs_eval`; [boundary register_all.py](../../../nrpy/infrastructures/BHaH/CurviBoundaryConditions/register_all.py), `register_C_functions`.
-- Corroboration: none available. The `MoL_rhs_strings` doctest checks only the unsupported-option error, and no test executes the accumulated RHS kernel.
+Evidence (descriptive behavior): `BHaH/general_relativity/rhs_eval.py::MoL_rhs_strings` and `register_CFunction_rhs_eval`; `BHaH/CurviBoundaryConditions/register_all.py::register_C_functions`.
 
 For radiation, preparation subtracts each old boundary-source contribution
 in reverse dependency order; completion adds the updated source and radiation
@@ -108,11 +104,7 @@ term in forward order. With distinct arrays and a fixed input stage, this
 preserves the original ghost values plus their weighted RHS increments
 without another complete evolved array.
 
-Claim evidence:
-- Claim: Accumulated radiation and inner boundaries preserve arbitrary old output values plus the weighted boundary RHS by reversing source subtraction during preparation and restoring sources and radiation terms in forward order during completion.
-- Role: descriptive behavior
-- Deciding authority: [apply_bcs_outerradiation_and_inner.py](../../../nrpy/infrastructures/BHaH/CurviBoundaryConditions/apply_bcs_outerradiation_and_inner.py), `register_CFunction_apply_bcs_outerradiation_and_inner_accumulate`.
-- Corroboration: the `register_CFunction_apply_bcs_outerradiation_and_inner_accumulate` doctests compare the complete emitted CPU and CUDA source for the Cartesian case with stored references. Source comparison does not execute the boundary update on a CPU or GPU, and no test compares it with the ordinary radiation RHS.
+Evidence (descriptive behavior): `BHaH/CurviBoundaryConditions/apply_bcs_outerradiation_and_inner.py::register_CFunction_apply_bcs_outerradiation_and_inner_accumulate`.
 
 `rk_substep.py` provides the low-level RK code generator. `RKFunction` turns
 symbolic RK left-hand and right-hand sides into a launchable update function,
@@ -146,6 +138,5 @@ regrids where `dt` can change. It then increments `commondata->nn`.
 
 ## See Also
 
-- [BHaH](index.md)
-- [Grids, Coordinates, Reference Metrics, And Boundaries](grids-coordinates-reference-metrics-and-boundaries.md)
-- [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md)
+- See also: [Curvilinear Boundaries And Stencils](curvilinear-boundaries-and-stencils.md)
+- See also: [Project Assembly, main.c, And Makefile Emission](lifecycle-and-project-assembly.md)

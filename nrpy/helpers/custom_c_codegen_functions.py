@@ -30,7 +30,7 @@ def _fits_c_int(b: sp.Basic) -> bool:
     :param b: Argument of the absolute value.
     :return: True if the C function abs() can take b without narrowing.
     """
-    return isinstance(b, sp.Integer) and abs(b) < 2**31
+    return isinstance(b, sp.Integer) and abs(int(b)) < 2**31
 
 
 custom_functions_for_SymPy_ccode = {

@@ -136,21 +136,20 @@ if __name__ == "__main__":
     z = sp.symbols("z", real=True)
     z_star = sp.sympify(0.125)
 
-    exprs_dict["min_noif_exp"] = min_noif(y, z).subs(sp.Function("nrpyAbs"), sp.sin)
-    exprs_dict["max_noif_exp"] = max_noif(z, y).subs(sp.Function("nrpyAbs"), sp.cos)
+    nrpyAbs = sp.Function("nrpyAbs")
+    nrpyAbs_to_sin: Dict[Any, Any] = {nrpyAbs: sp.sin}
+    nrpyAbs_to_cos: Dict[Any, Any] = {nrpyAbs: sp.cos}
+    nrpyAbs_to_exp: Dict[Any, Any] = {nrpyAbs: sp.exp}
 
-    exprs_dict["coord_leq_bound_exp"] = coord_leq_bound(y, y_star).subs(
-        sp.Function("nrpyAbs"), sp.exp
-    )
-    exprs_dict["coord_geq_bound_exp"] = coord_geq_bound(z, z_star).subs(
-        sp.Function("nrpyAbs"), sp.sin
-    )
+    exprs_dict["min_noif_exp"] = min_noif(y, z).subs(nrpyAbs_to_sin)
+    exprs_dict["max_noif_exp"] = max_noif(z, y).subs(nrpyAbs_to_cos)
 
-    exprs_dict["coord_less_bound_exp"] = coord_less_bound(z, y).subs(
-        sp.Function("nrpyAbs"), sp.cos
-    )
+    exprs_dict["coord_leq_bound_exp"] = coord_leq_bound(y, y_star).subs(nrpyAbs_to_exp)
+    exprs_dict["coord_geq_bound_exp"] = coord_geq_bound(z, z_star).subs(nrpyAbs_to_sin)
+
+    exprs_dict["coord_less_bound_exp"] = coord_less_bound(z, y).subs(nrpyAbs_to_cos)
     exprs_dict["coord_greater_bound_exp"] = coord_greater_bound(y, z_star).subs(
-        sp.Function("nrpyAbs"), sp.sin
+        nrpyAbs_to_sin
     )
 
     results_dict = ve.process_dictionary_of_expressions(

@@ -1,243 +1,50 @@
 # C And Embedded C Style
 
-> C/H formatting, Doxygen, embedded-C string, and generated-C body rules. · Status: provisional
+> Handwritten C/CUDA/H layout, `clang-format` control of embedded C strings, `// END ...` closing-brace comments, and Doxygen rules. · Status: provisional
 > Up: [Architecture](index.md)
 
 ## Summary
 
-New or modified handwritten C/CUDA/H follows the project indentation, naming,
-brace, header-guard, and documentation conventions. For C/CUDA/H strings stored
-or assembled in Python generators, existing `clang_format`/`clang-format`
-normalization exclusively owns final layout. Raw generator-string cosmetics
-for indentation, tabs, spacing, alignment, wrapping, and brace layout must never
-be reviewed, enforced, or repaired. Mandatory semantic C/C++ `//` line-comment
-`END` marker presence, correct construct keyword, colon separator, and accurate
-meaningful high-signal description of at most five words remain enforced for
-generated code; the sole exception to the word limit is the loop footer emitted
-by the canonical `nrpy/helpers/loop.py`. No
-generated-identifier naming style is reviewed or enforced.
-Generated semantics, interfaces, documentation content and syntax,
-compiler behavior, and runtime behavior remain in scope.
-
-This leaf records contributor rules, not a claim that every handwritten or
-generated legacy C fragment already conforms. Existing exceptions are evidence
-about current source, not automatic precedent for new code.
+Handwritten C/CUDA/H follows 2-space indentation, `snake_case` functions/structs (`_struct` suffix), `UPPER_SNAKE_CASE` macros/enums, `#ifndef` header guards, and Doxygen comments. For C/CUDA/H strings assembled in Python generators, `clang_format()`/`clang-format` controls whitespace and brace layout exclusively—raw generator-string cosmetics and generated-identifier naming styles are never reviewed or repaired—while semantic `// END <CONSTRUCT>: <desc>` comments (`<= 5` words except `nrpy/helpers/loop.py` footers), Doxygen accuracy, and compiler/runtime behavior remain enforced.
 
 ## Detail
 
-### Baseline Handwritten C/CUDA/H Style
+### Handwritten C/CUDA/H Layout, Includes, And Header Guards
 
-These baseline layout and naming rules apply only to handwritten C/CUDA/H. Use
-2 spaces and no tabs. Keep function, variable, and struct names in
-snake_case; structs use a `_struct` suffix. Macros and enum values use
-UPPER_SNAKE_CASE. Place opening braces on the same line for functions, control
-structures, and struct definitions.
+Handwritten C/CUDA/H uses 2 spaces (no tabs), `~100`-character lines, K&R same-line opening braces, no braces around single-statement control bodies, `//` inline comments (`//==========================` struct section dividers), declarations at first use with `const`/`restrict`, `static inline` header helpers with return type and name on one line, parenthesized macro parameters, and `#if defined(...)` / `#elif defined(...)` / `#endif` conditionals. Standard-library `#include` directives precede quoted project headers, with ISA headers behind `#if defined(__AVX512F__)`.
 
-Handwritten header guards use traditional `#ifndef` and `#define` pairs with
-UPPER_SNAKE_CASE names. Both simple names such as `BHAHAHA_HEADER_H` and legacy
-double-underscore forms such as `__SIMD_INTRINSICS_H__` appear in the codebase.
-Generated headers must preserve their intended inclusion behavior. In particular,
-BHaH's `set_CodeParameters*.h` files contain local declarations and are deliberately
-unguarded: different generated functions can include the same file within their
-own scopes. Adding an include guard would suppress declarations after the first
-inclusion in a translation unit.
+Handwritten headers use `#ifndef`/`#define` `UPPER_SNAKE_CASE` guards (e.g., `BHAHAHA_HEADER_H`; legacy `__SIMD_INTRINSICS_H__` also appears). By contrast, BHaH's generated `set_CodeParameters*.h` fragments are intentionally unguarded local declarations included inside multiple function scopes (`BHaH/CodeParameters.py::write_CodeParameters_h_files`).
 
-Claim evidence:
-- Claim: BHaH's generated `set_CodeParameters*.h` files are unguarded declaration fragments that may be included in multiple function scopes; a conventional include guard would suppress later declarations.
-- Role: descriptive behavior
-- Deciding authority: [CodeParameters.py](../../nrpy/infrastructures/BHaH/CodeParameters.py), `write_CodeParameters_h_files`
-- Corroboration: [c_function.py](../../nrpy/c_function.py), `CFunction.generate_full_function`, inserts the parameter-file include within generated functions.
+Evidence (descriptive behavior): `coding_style.md` (`## C/H Coding Style`); `BHaH/CodeParameters.py::write_CodeParameters_h_files`; `c_function.py::CFunction.generate_full_function`.
 
-Put standard library includes first, then project headers in quotes, with
-platform-specific headers behind conditional compilation such as
-`#if defined(__AVX512F__)`.
+### Embedded C Strings In Python And `// END ...` Comments
 
-Function-like macros parenthesize arguments and macro parameter uses.
-Conditional compilation should use `#if defined(...)`, `#elif defined(...)`,
-and `#endif`. Header-defined helper functions use `static inline`; keep return
-type and function name on one line, and use `const` and `restrict` qualifiers
-where they describe actual use.
+Use `r"""..."""` for embedded C (`rf"""...{var}..."""` with doubled `{{`/`}}` and Python-3.7-compatible local variables only when interpolating), appending conditional blocks in execution order via `body += ...`. Never review, enforce, or write Python helpers for raw embedded-C indentation, wrapping, or brace cosmetics, and never enforce naming styles on generated C identifiers.
 
-Declare variables at first use, prefer `const` for immutable values, use
-`restrict` for performance-sensitive pointers, and group declarations when that
-improves scanability. C line length is about 100 characters, while Python line
-wrapping is left to Black.
+Every non-trivial closing brace requires a `// END <KEYWORD>: <description>` comment (`FUNCTION`, `LOOP`, `WHILE`, `DO-WHILE` after `;`, `IF`, `ELSE IF`, `ELSE`, `SWITCH`, `OMP PARALLEL`, `OMP CRITICAL`, or anonymous-scope `BLOCK`) with a domain-specific description of **at most 5 words**:
+- **Loop-footer exception**: `nrpy/helpers/loop.py` emits `} // END LOOP: for <idx> over [<low>, <high>)` with literal bound expressions exceeding 5 words across all backends; hand-assembled markers around `c_codegen` output still obey the 5-word cap.
+- **C++ namespace guard**: C++ namespace closers (emitted in Dendro) wrap their `// END NAMESPACE: ...` comment inside `// clang-format off` / `// clang-format on` so `FixNamespaceComments` does not strip `END` and `:`.
+- **Short handwritten block exception**: handwritten multi-statement blocks `< 5` lines with visible opening braces may omit `// END ...` (one-statement braced blocks remain disallowed).
 
-### Embedded C In Python
+Evidence (normative rule): `coding_style.md` (`#### Embedded C Code String Conventions`, `### 10. End-Curly-Brace Comments`); `nrpy/helpers/loop.py`.
 
-Use `r"""..."""` for embedded C bodies so backslashes are literal. Use
-`rf"""...{var}..."""` only when interpolation is needed, double literal C
-braces as `{{` and `}}`, and keep interpolation Python-3.7-compatible by moving
-complex expressions to preceding locals.
+### Doxygen Comments, `desc=`, And Common Generated C Idioms
 
-For C, CUDA, and header text stored or assembled in Python generators, raw
-tabulation or tabs, indentation,
-dedentation or reindentation, spacing or alignment, wrapping, brace placement or
-layout cosmetics must never be reviewed, enforced, or repaired. Final generated
-layout belongs exclusively to the
-existing `clang_format`/`clang-format` normalization. If an emission path lacks
-final normalization, do not compensate with raw-string cosmetics or helpers.
-This exemption does not cover `// END ...` closing-brace comments: handwritten
-C/CUDA/H must follow the full rules below, and Python-generated C/CUDA/H must
-follow the semantic marker subset below.
+Functions exceeding `~10` lines require Doxygen comments (placed on header declarations when split across `.h`/`.c`): open with `/**` and close with ` */` on separate lines, lead with the brief line (no `@brief`), separate brief/extended numbered steps from tags with blank ` *` lines, and order tags `@param` / `@param[in]` (`const *`) / `@param[out]` / `@param[in,out]` (1 line each, no dash after name) -> `@return` (omitted for `void`; enumerate error codes) -> blank ` *` -> `@note` / `@warning` / `@pre`. `register_CFunction(desc=...)` strings omit `/** ... */` delimiters (added by `CFunction`) and use `"""..."""` unless interpolation requires `rf"""..."""`.
 
-When Python options conditionally include C body sections, build the body in
-execution order with `body += ...`. Prefer top-to-bottom construction that
-matches generated C execution. Do not add a Python function, method, lambda,
-wrapper, utility, transform, postprocessor, or other special routine whose
-purpose is to format generated C/CUDA/H strings cosmetically by hand.
+Recurring C idioms across generated projects: `#ifndef REAL` / `#ifndef M_PI` / `#ifdef STANDALONE`, `#pragma GCC optimize("unroll-loops")` + `reset_options`, `MAYBE_UNUSED`, `BHAH_MALLOC`/`BHAH_FREE` with immediate null checks (preferring single large allocations, or `malloc`/`free` and stack VLAs where established), OpenMP `LOOP_OMP` / `parallel for` / `collapse(2)` / `critical`, and `#pragma omp simd` / `simd_intrinsics.h`.
 
-Do not review or enforce any casing, prefix, suffix, `snake_case`, or other
-naming style for generated identifiers. Exact current API, registry, prototype,
-compiler, collision-avoidance, and semantic requirements remain enforceable.
-This exemption is formatting-only: raw/rf string and doubled-brace validity,
-interpolation correctness, semantic execution order, Doxygen and interface
-content accuracy, syntax, compiler behavior, and runtime behavior remain in
-scope. Generated `#include` behavior remains an interface/compiler concern, not
-a layout exception.
-
-Claim evidence:
-- Claim: Existing clang-format normalization exclusively owns indentation, tabs, spacing, alignment, wrapping, and brace layout for C/CUDA/H strings stored or assembled in Python generators; those raw cosmetics must never be reviewed, enforced, or repaired, Python-only cosmetic formatting routines are prohibited, and no generated-identifier naming style is reviewed or enforced, while mandatory generated semantic C/C++ `//` line-comment `END` marker presence, correct construct keyword, colon separator, accurate meaningful high-signal description of at most five words -- excepting only the loop footer emitted by canonical `nrpy/helpers/loop.py`, whose substituted bound expressions exceed the limit identically across every infrastructure -- and a `// clang-format off` / `// clang-format on` guard around any C++ namespace closer NRPy generates or ships into a host project, without which `FixNamespaceComments` strips the marker, and exact API, registry, prototype, semantic, interface, documentation, syntax, compiler, collision, and runtime requirements remain enforceable.
-- Role: normative rule
-- Deciding authority: `coding_style.md` - `#### Embedded C Code String Conventions`, `## C/H Coding Style`, `### 10. End-Curly-Brace Comments`
-- Corroboration: [loop.py](../../nrpy/helpers/loop.py), whose `loop1D` footer substitutes the loop bounds and so exceeds the word limit identically for every calling infrastructure; Dendro template owners directly assert their namespace-marker guards; otherwise none available, and the frozen historical style source conflicts where it applies handwritten layout rules to generated strings.
-
-### End-Curly-Brace Comments
-
-For Python-generated C/CUDA/H, review and enforce only this semantic marker
-subset for every closing brace that ends a non-trivial block: an `END` marker
-must be carried by a C/C++ `//` line comment, use the correct
-syntactic-construct keyword, include a colon separator, and carry an accurate,
-meaningful, high-signal description of at most five words. Do not review or
-enforce its exact whitespace, alignment, wrapping, placement, or brace shape.
-
-A C++ namespace closer that NRPy generates or ships into a host project carries
-its marker inside a `// clang-format off` / `// clang-format on` guard, because
-clang-format's `FixNamespaceComments` otherwise rewrites the marker to
-`} // namespace ns` -- neither the `END` keyword nor the colon survives. The
-option is on in NRPy's own
-formatter options and in the host project a generated solver is emitted into, so
-the guard is what keeps the marker in the file a reader receives. Dendro is the
-only infrastructure that emits C++ namespaces today.
-
-One exception applies to the word limit. `nrpy/helpers/loop.py` builds every
-generated loop's closing marker as
-`} // END LOOP: for <index> over [<lower>, <upper>)`, substituting the loop's
-own bound expressions, so a real interior loop's description runs past five
-words -- `for i0 over [NGHOSTS, Nxx_plus_2NGHOSTS0 - NGHOSTS)` in BHaH,
-`for i0 over [static_cast<int>(padding), static_cast<int>(nx - padding))` in
-Dendro. Because the shape is identical for every infrastructure that calls the
-canonical emitter, and the literal bounds are higher-signal than a paraphrase,
-the style guide exempts that emitter's footers. Nothing else is exempt: markers
-a builder hand-assembles around `c_codegen` output stay within the limit.
-
-For new handwritten C/CUDA/H, every closing brace that ends a non-trivial block
-must carry an informative `// END ...` comment. The keyword is all caps,
-followed by a colon and a concise description. Use the syntactic construct as
-the keyword, keep the description to at most five words, and preserve its
-highest-signal semantic context:
-
-- `} // END FUNCTION: compute_spin`
-- `} // END LOOP: for h over all horizons`
-- `} // END WHILE: refining spin until convergence`
-- `} // END IF: destination-point allocation failed`
-- `} // END ELSE IF: num_resolutions_multigrid > 0`
-- `} // END ELSE: not enable_BBH_mode`
-- `} // END SWITCH: select inner-boundary gridfunctions`
-- `} // END OMP PARALLEL: reduce per-thread diagnostics`
-- `} // END OMP CRITICAL: update shared centroid diagnostics`
-- `} // END BLOCK: Cartesian-to-grid conversion`
-
-For handwritten `do...while`, put the comment after the semicolon:
-`} while (condition); // END DO-WHILE: brief description`.
-
-`END BLOCK` is for anonymous scoping blocks only. Do not use generic labels
-when the real purpose can be stated. Prefer domain descriptions such as `theta
-points on the horizon surface` over low-signal text such as `grid index`.
-For handwritten C/CUDA/H only, do not add braces around one-statement
-control-flow bodies in new code. Write the single statement directly under the
-control-flow header instead.
-
-For handwritten multi-statement blocks only, the end comment may be omitted
-when the body has fewer than five lines and the opening brace is visible without
-scrolling. This exception does not permit one-statement braced blocks.
-
-Claim evidence:
-- Claim: Handwritten multi-statement blocks may omit the end comment only when the body has fewer than five lines and the opening brace is visible without scrolling; one-statement braced blocks remain prohibited.
-- Role: normative rule
-- Deciding authority: [coding_style.md](../../coding_style.md), `### 10. End-Curly-Brace Comments`
-- Corroboration: none available; the current style guide defines this exception.
-
-### Doxygen And `desc=` Text
-
-Documentation-content requirements apply to handwritten and generated
-functions. Every C function whose body exceeds roughly 10 lines requires
-accurate Doxygen documentation; shorter functions may omit it if the name and
-signature are self-documenting. The raw placement, blank-line, alignment, and
-wrapping rules below apply only to handwritten C/CUDA/H. If a handwritten
-function is declared in a header and defined in a `.c` file, document the
-declaration; otherwise document the definition.
-
-Doxygen comments start with `/**` on its own line and close with ` */` on its
-own line. The first content line is the brief description; do not use `@brief`.
-Insert a blank ` *` line after the brief, and after any extended description,
-before tags. For complex functions, prefer a numbered step list over dense
-prose; avoid extended descriptions near the 10-line threshold unless the logic
-is genuinely non-obvious.
-
-Tag order is `@param`, then `@return`, then a blank ` *` line before
-`@note`, `@warning`, or `@pre`. Keep `@param` descriptions to one line and do
-not put a dash after the parameter name. `const` pointer parameters are
-`@param[in]`; non-`const` pointer parameters use `@param[out]` or
-`@param[in,out]`; pass-by-value parameters use plain `@param`. Omit `@return`
-for `void` functions. For integer error-code returns, enumerate outcomes or
-name the enum values. Use standalone `@warning` tags for correctness hazards,
-not inline warnings inside parameter descriptions.
-
-`desc=` strings passed to `register_CFunction()` must provide accurate interface
-content and valid Doxygen tag syntax, but their raw blank lines, indentation,
-alignment, and wrapping are not enforced. The framework emits the `/**` and
-` */` delimiters, so the string itself must not include them. Multiline `desc`
-strings use triple double quotes whenever possible, with raw f-triple-quoted
-strings only when interpolation is required.
-
-### Common C Patterns
-
-In handwritten C/CUDA/H, struct fields are grouped by purpose with visible
-`//==========================` section separators, and inline or block comments
-inside functions use `//` rather than `/* */`, except for Doxygen comments.
-
-Common generated-code patterns include:
-
-- `#ifndef REAL` / `#define REAL double` type flexibility.
-- `#ifndef M_PI` portability guards.
-- `#ifdef STANDALONE` self-contained test programs.
-- `#pragma GCC optimize("unroll-loops")` before performance-critical functions
-  and `#pragma GCC reset_options` after them.
-- `MAYBE_UNUSED` for variables unused on some code paths.
-- `BHAH_MALLOC(ptr, size)` and `BHAH_FREE(ptr)` for tracked allocation, with
-  immediate null checks and error returns.
-- Standard `malloc()` and `free()` for simple cases.
-- Single large heap allocations preferred over many small allocations.
-- VLAs for stack-allocated temporary buffers where used by existing C.
-- OpenMP patterns such as `#pragma omp parallel for`, reductions,
-  `collapse(2)`, `critical`, and generated `LOOP_OMP(...)` loops.
-- SIMD patterns such as `sum_lagrange_x0_simd()`, `#pragma omp simd`, and
-  `simd_intrinsics.h` copied to projects when needed.
+Evidence (normative rule): `coding_style.md` (`## C/H Coding Style`, `#### Embedded C Code String Conventions`).
 
 ## Sources
 
+- [coding_style.md](../../coding_style.md) - `## C/H Coding Style`, `#### Embedded C Code String Conventions`, `### 10. End-Curly-Brace Comments`
 - [CodeParameters.py](../../nrpy/infrastructures/BHaH/CodeParameters.py) - `write_CodeParameters_h_files`
 - [c_function.py](../../nrpy/c_function.py) - `CFunction.generate_full_function`
-
-- [coding_style.md](../../coding_style.md) - `#### Embedded C Code String Conventions`, `## C/H Coding Style`, `### 10. End-Curly-Brace Comments`, `## Style Comparison Summary`; current authority for formatter ownership and generated naming scope
-- [original-agents.md](../../raw/source-docs/original-agents.md) - historical `## C/H Style`; current `coding_style.md` decides conflicts
-- [original-agents.md](../../raw/source-docs/original-agents.md) - historical `### Embedded C in Python Strings`, `### C Function Registration from Python`; current `coding_style.md` decides conflicts
-- [original-agents.md](../../raw/source-docs/original-agents.md) - historical `### Preprocessor / Comment Patterns`, `## Additional Project Rules`, `## Quick Reference`
+- [loop.py](../../nrpy/helpers/loop.py) - `loop1D` closing-brace comment format
 
 ## See Also
 
-- Parent: [Architecture](index.md)
 - Depends on: [Python Coding Style](python-coding-style.md)
 - Depends on: [Contribution Style And Static Analysis](contribution-style-and-static-analysis.md)
 - See also: [Infrastructure Code Style](../infrastructures/infrastructure-code-style.md)

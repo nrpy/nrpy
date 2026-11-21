@@ -37,6 +37,36 @@ from nrpy.helpers.parallelization.gpu_kernel import GPUKernel
 from nrpy.validate_expressions.validate_expressions import check_zero
 
 
+def _radiation_r_and_partials_exprs(CoordSystem: str) -> List[sp.Expr]:
+    """
+    Build r and partial_r x^i expressions for radiation BCs.
+
+    For spheroidal GeneralRFM fisheye, use provider-specific closed forms
+    instead of the generic inverse spherical Jacobian column.
+
+    :param CoordSystem: Coordinate system used by the radiation boundary.
+    :return: Physical radius followed by its three Cartesian-direction
+        derivative factors.
+    """
+    rfm = refmetric.reference_metric[CoordSystem]
+    provider = getattr(rfm, "general_rfm_provider", None)
+    provider_kind = getattr(rfm, "general_rfm_provider_name", None)
+
+    if provider is not None and provider_kind == "spheroidal_fisheye":
+        raw_x, raw_y, raw_z = rfm.xx
+        lam_xy, lam_z, _, _, _ = provider.axis_maps_for_inverse(provider.r)
+        phys_r = sp.sqrt(lam_xy**2 * (raw_x**2 + raw_y**2) + lam_z**2 * raw_z**2)
+        radial_vector = provider.cartesian_radial_vector_in_raw_coordinates()
+        return [phys_r] + [component / phys_r for component in radial_vector]
+
+    return [
+        rfm.xxSph[0],
+        rfm.Jac_dUrfm_dDSphUD[0][0],
+        rfm.Jac_dUrfm_dDSphUD[1][0],
+        rfm.Jac_dUrfm_dDSphUD[2][0],
+    ]
+
+
 ###############################
 ## RADIATION (NewRad-like) BOUNDARY CONDITIONS.
 ##  Functions are fully documented in nrpytutorial's
@@ -66,14 +96,10 @@ def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
     )
     body = ""
 
-    rfm = refmetric.reference_metric[CoordSystem]
-    # sp.simplify(expr) is too slow here for SinhCylindrical
-    expr_list = [
-        rfm.xxSph[0],
-        rfm.Jac_dUrfm_dDSphUD[0][0],
-        rfm.Jac_dUrfm_dDSphUD[1][0],
-        rfm.Jac_dUrfm_dDSphUD[2][0],
-    ]
+    # sp.simplify(expr) is too slow here for SinhCylindrical, and for
+    # spheroidal GeneralRFM fisheye the generic inverse spherical Jacobian
+    # column is far more complicated than needed.
+    expr_list = _radiation_r_and_partials_exprs(CoordSystem)
     unique_symbols = []
     for expr in expr_list:
         sub_list = get_unique_expression_symbols_as_strings(
@@ -293,7 +319,7 @@ REAL *restrict xx[3], const REAL *restrict gfs,
 const int which_gf, const int dest_i0,const int dest_i1,const int dest_i2,
 const int FACEi0,const int FACEi1,const int FACEi2,
 const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL partial_x2_partial_r"""
-    rfm = refmetric.reference_metric[CoordSystem]
+    partials_exprs = _radiation_r_and_partials_exprs(CoordSystem)
 
     if parallelization == "cuda" and "device" not in cfunc_decorators:
         cfunc_decorators += " __device__"
@@ -329,7 +355,7 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
 """
     for i in range(3):
         si = str(i)
-        if check_zero(rfm.Jac_dUrfm_dDSphUD[i][0], fixed_mpfs_for_free_symbols=True):
+        if check_zero(partials_exprs[i + 1], fixed_mpfs_for_free_symbols=True):
             body += f"  const REAL partial_x{si}_f=0.0;\n"
         else:
             body += (
@@ -378,14 +404,12 @@ def setup_Cfunction_radiation_bcs(
     includes: List[str] = []
     prefunc = ""
     parallelization = par.parval_from_str("parallelization")
-    rfm = refmetric.reference_metric[CoordSystem]
+    partials_exprs = _radiation_r_and_partials_exprs(CoordSystem)
     if parallelization == "cuda" and "device" not in cfunc_decorators:
         cfunc_decorators += " __device__"
     for i in range(3):
         # Do not generate FD1_arbitrary_upwind_xj_dirn() if the symbolic expression for dxj/dr == 0!
-        if not check_zero(
-            rfm.Jac_dUrfm_dDSphUD[i][0], fixed_mpfs_for_free_symbols=True
-        ):
+        if not check_zero(partials_exprs[i + 1], fixed_mpfs_for_free_symbols=True):
             prefunc += setup_Cfunction_FD1_arbitrary_upwind(
                 dirn=i,
                 cfunc_decorators=cfunc_decorators,

@@ -1,4 +1,4 @@
-# Project Generation Lifecycle
+# JAX Project Layout And Module Emission
 
 > Explain how the JAX project generator turns registered `PyFunction` objects into a generated Python package. · Status: confirmed
 > Up: [JAX](index.md)
@@ -13,9 +13,11 @@ metadata and a minimal import smoke test. In the current `sebobv1_jax` route,
 the resolved `project_dir` basename and package name both equal
 `sebobv1_jax`. The generated `project/<name>/` tree is an output product, not
 source evidence for KB claims, unless maintainers deliberately freeze and
-register a generated artifact.
+register a generated file.
 
 ## Detail
+
+### Registry Consumption, Input Validation, And Package Emission
 
 The input side is the `PyFunction` registry. `register_PyFunction()` stores
 each generated Python function in `PyFunction_dict` by name, and each
@@ -24,7 +26,7 @@ text, decorators, function name, parameters, body, optional post-function text,
 and the generated `full_function` string. The JAX project generator consumes
 that registry rather than discovering Python functions from generated files.
 
-`output_PyFunction_files_and_construct_project()` runs the lifecycle in a fixed
+`output_PyFunction_files_and_construct_project()` runs these steps in a fixed
 order. It resolves `project_dir` to a `Path`, calls `_validate_inputs()`,
 creates the project directory, delegates source emission to
 `_generate_python_files_and_init()`, and finally calls
@@ -50,6 +52,8 @@ subdirectory functions, direct package functions, and `Commondata`; the
 generated `__all__` is currently written only when direct imports exist and then
 contains those direct imports plus `Commondata`.
 
+### Packaging Metadata, SEBOBv1 Route, And CI Coverage
+
 `_generate_project_metadata()` emits the rest of the generated Python project:
 `pyproject.toml`, `setup.cfg`, `requirements.txt`, `README.md`, `.gitignore`,
 `tests/__init__.py`, and `tests/test_basic.py`. Treat this metadata as current
@@ -70,20 +74,17 @@ install the generated package with `pip install .` and call
 takes the place of the C examples' `make` build; it checks no returned value and
 does not run the generated `tests/test_basic.py`.
 
-Claim evidence:
-- Claim: Both `codegen-ubuntu` and `codegen-mac` generate `sebobv1_jax`, run `pip install .` in the generated project, import `SEOBNRv5_aligned_spin_coefficients`, call it once without a JAX transformation such as `jax.jit`, with the Python-scalar inputs `(1.5, 0.3, -0.2, 0.02, 2.4627455127717882e-05, 50.0)`, and print the returned `Commondata`. The step fails only if generation, installation, import, or the call raises; it asserts no returned field or value and does not run the generated pytest, a float32 input, a traced function, or an accelerator.
-- Role: CI behavior
-- Deciding authority: [main.yml](../../../.github/workflows/main.yml), jobs `codegen-ubuntu` and `codegen-mac`
-- Corroboration: `none available`; no other configured file restates these job commands
+[Generated Project CI](../../validation/generated-project-ci.md#sebobv1_jax-install-and-call-step)
+gives the exact configured `sebobv1_jax` CI step and its evidence.
 
 Generated files under `project/<name>/`, including generated JAX package files,
 are products of handwritten generators. Cite the source generator, registry,
 example, README, and CI workflow for behavior rather than citing transient
-generated project output. Printing of JAX expressions belongs to
-[Python Codegen](../../core/python-codegen.md), which documents `py_codegen()`,
-and [CSE And Printer Support](../../core/helpers/cse-and-printer-support.md),
-which documents `NRPyJaxPrinter`; this page only documents how the
-already-registered Python functions are assembled into a package.
+generated project output. SymPy-to-JAX expression printing lives in
+[Python Codegen](../../core/python-codegen.md) (`py_codegen()`) and
+[CSE And Printer Support](../../core/helpers/cse-and-printer-support.md)
+(`NRPyJaxPrinter`); `jax_project_generator.py` writes already-registered
+`PyFunction` modules into a Python package.
 
 ## Sources
 
@@ -95,8 +96,6 @@ already-registered Python functions are assembled into a package.
 
 ## See Also
 
-- [JAX](index.md)
-- [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)
-- [Generated Project CI](../../validation/generated-project-ci.md)
-- [Python Function Registry](../../core/python-function-registry.md)
-- [CSE And Printer Support](../../core/helpers/cse-and-printer-support.md)
+- Validated by: [Generated Project CI](../../validation/generated-project-ci.md)
+- Depends on: [Python Function Registry](../../core/python-function-registry.md)
+- Depends on: [CSE And Printer Support](../../core/helpers/cse-and-printer-support.md)

@@ -103,15 +103,15 @@ class FCCZ4Constraints:
                         )
 
         self.RbarZ4DD = ixp.zerorank2()
-        self.RbarZ4 = sp.sympify(0)
+        self.RbarZ4: sp.Expr = sp.sympify(0)
         for i in range(3):
             for j in range(3):
                 self.RbarZ4DD[i][j] = Bq.RbarDD[i][j] + self.RbarZ4DD_delta[i][j]
                 self.RbarZ4 += Bq.gammabarUU[i][j] * self.RbarZ4DD[i][j]
 
-        gradphi_squared = sp.sympify(0)
-        laplacianphi = sp.sympify(0)
-        Abar_squared = sp.sympify(0)
+        gradphi_squared: sp.Expr = sp.sympify(0)
+        laplacianphi: sp.Expr = sp.sympify(0)
+        Abar_squared: sp.Expr = sp.sympify(0)
         for i in range(3):
             for j in range(3):
                 gradphi_squared += (

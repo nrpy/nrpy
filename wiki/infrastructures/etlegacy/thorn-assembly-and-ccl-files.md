@@ -9,7 +9,7 @@ ETLegacy writes Cactus thorn control files, build metadata, and registered C
 sources as generated output. Treat emitted `interface.ccl`, `param.ccl`,
 `schedule.ccl`, `src/make.code.defn`, and `src/*.c` files as products of the
 Python generators, not as source evidence for KB claims. Cite generator modules,
-the `CFunction` registry contract, and generated-output boundary pages instead.
+the `CFunction` registry interface, and generated-output boundary pages instead.
 
 ## Detail
 
@@ -88,7 +88,6 @@ platform, GPU, or restart behavior.
 
 ## See Also
 
-- [ETLegacy](index.md)
-- [Code Parameters, Includes, And Loops](code-parameters-includes-and-loops.md)
-- [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)
-- [C Function Registry](../../core/c-function-registry.md)
+- See also: [Code Parameters, Includes, And Loops](code-parameters-includes-and-loops.md)
+- See also: [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)
+- Depends on: [C Function Registry](../../core/c-function-registry.md)

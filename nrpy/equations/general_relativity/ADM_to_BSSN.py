@@ -122,7 +122,7 @@ class ADM_to_BSSN:
         # \bar{gamma}_{ij} = (\frac{\bar{gamma}}{gamma})^{1/3}*gamma_{ij}.
         # K = gamma^{ij} K_{ij}, and
         # \bar{A}_{ij} &= (\frac{\bar{gamma}}{gamma})^{1/3}*(K_{ij} - \frac{1}{3}*gamma_{ij}*K)
-        self.trK = sp.sympify(0)
+        self.trK: sp.Expr = sp.sympify(0)
         for i in range(3):
             for j in range(3):
                 self.trK += gammaUU[i][j] * KDD[i][j]

@@ -171,7 +171,7 @@ class GeodesicEquations:
         Gamma4UDD = ixp.declarerank3("conn_Gamma4UDD", dimension=4, symmetry="sym12")
         vel_rhs = ixp.zerorank1(dimension=4)
         for alpha in range(4):
-            sum_term = sp.sympify(0)
+            sum_term: sp.Expr = sp.sympify(0)
             # Exploit symmetry by summing over the upper triangle of (mu, nu)
             for mu in range(4):
                 for nu in range(mu, 4):
@@ -299,7 +299,7 @@ class GeodesicEquations:
         Gamma4UDD = ixp.declarerank3("conn_Gamma4UDD", dimension=4, symmetry="sym12")
         mom_rhs = ixp.zerorank1(dimension=4)
         for alpha in range(4):
-            sum_term = sp.sympify(0)
+            sum_term: sp.Expr = sp.sympify(0)
             # Exploit symmetry by summing over the upper triangle of (mu, nu)
             for mu in range(4):
                 for nu in range(mu, 4):
@@ -404,7 +404,7 @@ class GeodesicEquations:
         # Generic metric g_mu_nu
         g4DD = ixp.declarerank2("metric_g4DD", symmetry="sym01", dimension=4)
 
-        constraint = sp.sympify(0)
+        constraint: sp.Expr = sp.sympify(0)
 
         # Loop over indices, exploiting g_{mu,nu} = g_{nu,mu} symmetry
         for mu in range(4):
@@ -608,7 +608,7 @@ class GeodesicEquations:
         target_g4DD = ixp.zerorank2(dimension=4)
         for mu in range(4):
             for nu in range(mu, 4):
-                term = sp.sympify(0)
+                term: sp.Expr = sp.sympify(0)
 
                 # Step 2: Contract the source-basis metric with one inverse
                 #         Jacobian factor for each covariant index:
@@ -676,7 +676,7 @@ class GeodesicEquations:
         for alpha in range(4):
             for mu in range(4):
                 for nu in range(mu, 4):
-                    term = sp.sympify(0)
+                    term: sp.Expr = sp.sympify(0)
 
                     # Step 2.a: Add the tensorial pullback term
                     #           J^alpha_a K^b_mu K^c_nu Gamma^a_bc.
@@ -1095,10 +1095,11 @@ if __name__ == "__main__":
     for gamma_alpha in range(4):
         for gamma_mu in range(4):
             for gamma_nu in range(4):
-                cylindrical_flat_gamma[gamma_alpha][gamma_mu][gamma_nu] = (
+                cylindrical_flat_gamma[gamma_alpha][gamma_mu][gamma_nu] = cast(
+                    sp.Expr,
                     cylindrical_flat_gamma[gamma_alpha][gamma_mu][gamma_nu].xreplace(
                         metric_recipe_values
-                    )
+                    ),
                 )
 
     # Step 2.c: Feed the numerically evaluated cylindrical Christoffels into
@@ -1116,9 +1117,12 @@ if __name__ == "__main__":
     for check_alpha in range(4):
         for check_mu in range(4):
             for check_nu in range(check_mu, 4):
-                transformed_diff = transformed_recipe[check_alpha][check_mu][
-                    check_nu
-                ].xreplace(transform_values)
+                transformed_diff = cast(
+                    sp.Expr,
+                    transformed_recipe[check_alpha][check_mu][check_nu].xreplace(
+                        transform_values
+                    ),
+                )
                 if not ve.check_zero(
                     transformed_diff,
                     fixed_mpfs_for_free_symbols=True,
@@ -1229,8 +1233,11 @@ if __name__ == "__main__":
     for check_mu in range(4):
         for check_nu in range(check_mu, 4):
             spherical_g4_diff = sp.simplify(
-                spherical_recipe_g4DD[check_mu][check_nu].xreplace(
-                    spherical_numeric_values
+                cast(
+                    sp.Expr,
+                    spherical_recipe_g4DD[check_mu][check_nu].xreplace(
+                        spherical_numeric_values
+                    ),
                 )
                 - spherical_expected_g4DD[check_mu][check_nu]
             )

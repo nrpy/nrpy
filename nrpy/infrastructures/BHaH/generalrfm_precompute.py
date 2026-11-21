@@ -2,7 +2,8 @@
 """
 Generate C functions that precompute GeneralRFM quantities into AUXEVOL gridfunctions.
 
-Currently supports GeneralRFM_fisheyeN* via equations/generalrfm/fisheye.py.
+Supports GeneralRFM_fisheyeN* and GeneralRFM_spheroidal_fisheyeN* via
+nrpy/equations/generalrfm/fisheye.py.
 
 Design:
   * For GeneralRFM, ghat and derivatives are treated as fixed AUXEVOL gridfunctions.
@@ -87,7 +88,7 @@ def register_CFunction_generalrfm_precompute(
     if not CoordSystem.startswith("GeneralRFM"):
         raise ValueError(f"{CoordSystem} is not a GeneralRFM coordinate system.")
     provider_name = getattr(rfm, "general_rfm_provider_name", "")
-    if provider_name != "fisheye":
+    if provider_name not in {"fisheye", "spheroidal_fisheye"}:
         raise ValueError(
             f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in generalrfm_precompute."
         )
@@ -174,9 +175,9 @@ for (int i2 = 0; i2 < params->Nxx_plus_2NGHOSTS2; i2++) {{
       const REAL xx1 = xx[1][i1];
       const REAL xx2 = xx[2][i2];
 {ccode}
-    }} // END LOOP: for i0 over all x0 points including ghost zones
-  }} // END LOOP: for i1 over all x1 points including ghost zones
-}} // END LOOP: for i2 over all x2 points including ghost zones
+    }} // END LOOP: for i0 including ghost points
+  }} // END LOOP: for i1 including ghost points
+}} // END LOOP: for i2 including ghost points
 """
 
     name = "generalrfm_precompute"

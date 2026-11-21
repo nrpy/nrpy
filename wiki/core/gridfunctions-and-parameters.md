@@ -5,7 +5,7 @@
 
 ## Summary
 
-Gridfunctions and parameters are the main bridge between symbolic expressions and generated infrastructure data. `nrpy.grid` registers symbolic gridfunction names and infrastructure-specific metadata. `nrpy.params` stores Python-side `NRPyParameter` values and C-side `CodeParameter` symbols. BHaH grid/common data registration records declarations that later become members of generated `griddata_struct` and `commondata_struct` support code.
+Gridfunctions and parameters connect symbolic SymPy expressions to generated C, C++, and Python data structures. `nrpy.grid` registers symbolic gridfunction names and infrastructure-specific metadata. `nrpy.params` stores Python-side `NRPyParameter` values and C-side `CodeParameter` symbols. BHaH grid/common data registration records declarations that later become members of generated `griddata_struct` and `commondata_struct` support code.
 
 ## Detail
 
@@ -29,17 +29,13 @@ A `CodeParameter` whose `cparam_type` is `#define` is treated as a C-preprocesso
 
 The intended array `CodeParameter` spellings are `REAL[N]` and `int[N]`. `_parse_array_spec()` recognizes strings beginning with `REAL` or `int`, containing `[`, ending in `]`, and having bracket contents accepted by `int()`. It does not require an exact base-type name or a positive size: for example, `integer[2]` and `REAL[-1]` enter the array branch. This helper is not a complete C-type validator. Array parameters must use `add_to_set_CodeParameters_h=False`. If the default value is a list, its length must equal `N`; if the default is scalar, construction uses Python list repetition `[defaultvalue] * N`. A positive size produces that many entries; a zero or negative size silently produces an empty list. `adjust_CodeParam_default("name[i]", value)` updates one indexed default in an existing list-valued array parameter, and `adjust_CodeParam_default("name", value, new_cparam_type)` updates the whole default and optionally the C type.
 
-Claim evidence:
-- Claim: `_parse_array_spec()` uses prefix and integer parsing checks, without validating an exact C base type or a positive array size; scalar defaults use list repetition, which yields an empty list for nonpositive sizes.
-- Role: descriptive behavior
-- Deciding authority: [params.py](../../nrpy/params.py), `_parse_array_spec` and `CodeParameter._process_parameter_type`
-- Corroboration: none available; the parsing conditions are defined in this module and no separate test establishes stricter validation.
+Evidence (descriptive behavior): `params.py::_parse_array_spec` and `CodeParameter._process_parameter_type`.
 
 ### Batch Versus Single Registration
 
 `register_CodeParameter()` accepts one simple string name and returns one symbol. Direct `CodeParameter` construction and this single-name wrapper insert into `glb_code_params_dict` only if the name is absent. `register_CodeParameters()` requires a non-empty list of names, broadcasts a scalar `defaultvalues` input to all names, validates list lengths for defaults and descriptions, rejects a non-empty scalar description string, and returns one symbol per name. When `add_to_glb_code_params_dict=True`, the batch helper explicitly assigns each newly built object into `glb_code_params_dict`, so it overwrites an existing global entry.
 
-### GridFunction Base Contract
+### GridFunction Base Class Fields And Validation
 
 `GridFunction` is the base object for registered gridfunctions. It stores name, group, description, rank, dimension, C type, asymptotic value `f_infinity`, characteristic `wavespeed`, and whether the name is a basename. If `is_basename=True`, the basename must be a non-empty string and must not end in a digit; this keeps scalar basenames distinct from component names such as `betU2` or `gDD12`.
 
@@ -51,15 +47,13 @@ Claim evidence:
 
 `get_parity_type()` returns parity code `0` for rank-0 scalars. For rank-1 components, it reads the final component digit and returns component index plus one. For rank-2 components, it reads the final two component digits and consults fixed lookup tables for dimension 3 or dimension 4. Dimension is consulted only for rank-two lookup; scalar and vector cases ignore it. `set_parity_types()` looks up each requested name in `glb_gridfcs_dict`, computes the parity code, and raises when a code cannot be determined or the result length differs from the input length, including missing gridfunctions. It does not provide general dimension validation.
 
-Claim evidence:
-- Claim: Parity lookup checks dimension-specific tables for rank two only; scalar and vector parity computation does not validate dimension.
-- Role: descriptive behavior
-- Deciding authority: [grid.py](../../nrpy/grid.py), `GridFunction.get_parity_type` and `GridFunction.set_parity_types`
-- Corroboration: none available; the defining method's doctests exercise ordinary scalar, vector, and tensor cases but do not establish general dimension validation.
+Evidence (descriptive behavior): `grid.py::GridFunction.get_parity_type` and `GridFunction.set_parity_types`.
 
 ### BHaH Access
 
-`BHaHGridFunction` accepts groups `EVOL`, `AUXEVOL`, `DIAG`, `AUX`, and `SCRATCH`, uses C type `REAL`, and maps default arrays by group: `EVOL` to `in_gfs`, `AUXEVOL` to `auxevol_gfs`, `DIAG` to `diagnostic_gfs`, `AUX` to `aux_gfs`, and `SCRATCH` to `scratch_gfs`. `SCRATCH` gridfunctions are intermediates produced and consumed within one right-hand-side evaluation: they receive `NUM_SCRATCH_GFS` and `<NAME>GF` indices like the other groups but no allocation, and the caller supplies storage that is dead across that window; only that caller can check capacity, so it guards it itself (the BSSN example stores them in the Method of Lines buffer that `rhs_eval` overwrites later in the same substep and emits `#if NUM_SCRATCH_GFS > NUM_EVOL_GFS #error`). Memory access has spelling `array[IDX4(<NAME>GF, i0+offset, i1+offset, i2+offset)]`, for example `in_gfs[IDX4(ABCGF, i0+1, i1+2, i2+3)]`; `enable_simd=True` wraps it as `ReadSIMD(&...)`. If `sync_gf_in_superB` is not supplied, it defaults to `True` for `EVOL` and `AUX`. `gridfunction_defines()` emits group `#define` blocks and, for evolved gridfunctions, `gridfunctions_f_infinity` and `gridfunctions_wavespeed` arrays.
+`BHaHGridFunction` accepts groups `EVOL`, `AUXEVOL`, `DIAG`, `AUX`, and `SCRATCH`, uses C type `REAL`, and maps default arrays by group: `EVOL` to `in_gfs`, `AUXEVOL` to `auxevol_gfs`, `DIAG` to `diagnostic_gfs`, `AUX` to `aux_gfs`, and `SCRATCH` to `scratch_gfs`.
+`SCRATCH` gridfunctions are intermediates produced and consumed within one right-hand-side evaluation: they receive `NUM_SCRATCH_GFS` and `<NAME>GF` indices like the other groups without separate allocation, and the caller supplies dead storage and capacity guards (for example, storing `hDDdD` in the Method of Lines buffer overwritten later in the same substep and emitting `#if NUM_SCRATCH_GFS > NUM_EVOL_GFS #error`).
+Memory access has spelling `array[IDX4(<NAME>GF, i0+offset, i1+offset, i2+offset)]`, for example `in_gfs[IDX4(ABCGF, i0+1, i1+2, i2+3)]`; `enable_simd=True` wraps it as `ReadSIMD(&...)`. If `sync_gf_in_superB` is not supplied, it defaults to `True` for `EVOL` and `AUX`. `gridfunction_defines()` emits group `#define` blocks and, for evolved gridfunctions, `gridfunctions_f_infinity` and `gridfunctions_wavespeed` arrays.
 
 ### ETLegacy Access
 
@@ -82,23 +76,16 @@ Rank helpers such as `register_gridfunctions_for_single_rank1()`, `register_grid
 
 For BHaH generated structs, `register_griddata_commondata()` stores `GridCommonData` declarations under `par.glb_extras_dict["griddata_struct"]` or `par.glb_extras_dict["commondata_struct"]`, depending on whether the data is grid-local or common across grids.
 
-Generation-time parallel codegen snapshots and merges the parameter, code-parameter, C-function, Python-function, gridfunction, and extras dictionaries. Use [Parallel Codegen Orchestration](helpers/parallel-codegen-orchestration.md) for that multiprocessing merge contract; this page owns the objects and registries being merged.
-
-Split into separate parameter and gridfunction leaves is deferred unless this leaf becomes hard to scan.
+Generation-time parallel codegen snapshots and merges the parameter, code-parameter, C-function, Python-function, gridfunction, and extras dictionaries; see [Parallel Codegen Orchestration](helpers/parallel-codegen-orchestration.md).
 
 ## Sources
 
-- [nrpy/params.py](../../nrpy/params.py) - `NRPyParameter`, `CodeParameter`, `_parse_array_spec`, `register_param`, `parval_from_str`, `set_parval_from_str`, `register_CodeParameters`, `register_CodeParameter`, `adjust_CodeParam_default`, `glb_params_dict`, `glb_code_params_dict`, `glb_extras_dict`
-- [nrpy/params.py](../../nrpy/params.py) - `parse_cparam_type`, the public parser BHaH and superB both call
+- [nrpy/params.py](../../nrpy/params.py) - `NRPyParameter`, `CodeParameter`, `_parse_array_spec`, `register_param`, `parval_from_str`, `set_parval_from_str`, `register_CodeParameters`, `register_CodeParameter`, `adjust_CodeParam_default`, `glb_params_dict`, `glb_code_params_dict`, `glb_extras_dict`; `parse_cparam_type`, the public parser BHaH and superB both call
 - [nrpy/grid.py](../../nrpy/grid.py) - `GridFunction`, `BHaHGridFunction`, `ETLegacyGridFunction`, `CarpetXGridFunction`, `DendroGridFunction`, `gridfunction_lists`, `get_parity_type`, `set_parity_types`, `define_gfs_group`, `gridfunction_defines`, `register_gridfunctions`, `register_gridfunctions_for_single_rankN`, `glb_gridfcs_dict`, `GF_CLASS_MAP`
 - [nrpy/infrastructures/BHaH/griddata_commondata.py](../../nrpy/infrastructures/BHaH/griddata_commondata.py) - `GridCommonData`, `register_griddata_commondata`
 
 ## See Also
 
-- Parent: [Core APIs](index.md)
 - Depends on: [Indexed Expressions](indexed-expressions.md)
 - Depends on: [Symbolic Expression Utilities](helpers/symbolic-expression-utilities.md)
 - See also: [C Codegen](c-codegen.md)
-- See also: [Finite Difference](finite-difference.md)
-- See also: [Reference Metrics](reference-metrics.md)
-- See also: [Parallel Codegen Orchestration](helpers/parallel-codegen-orchestration.md)

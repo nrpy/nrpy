@@ -13,9 +13,7 @@ import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.params as par
 from nrpy.equations.rotation.SO3_rotations import SO3Expressions
-from nrpy.helpers.generic import validate_strings
 
 
 def register_CFunction_so3_axis_angle_to_R() -> None:
@@ -112,11 +110,21 @@ if __name__ == "__main__":
     import doctest
     import sys
 
+    import nrpy.params as par
+    from nrpy.helpers.generic import clang_format, validate_strings
+
     cfc.CFunction_dict.clear()
     par.set_parval_from_str("parallelization", "openmp")
     register_CFunction_so3_axis_angle_to_R()
-    generated_str = cfc.CFunction_dict["so3_axis_angle_to_R"].full_function
-    validate_strings(generated_str, "so3_axis_angle_to_R__openmp", file_ext="c")
+    generated_str = clang_format(
+        cfc.CFunction_dict["so3_axis_angle_to_R"].full_function
+    )
+    # SymPy 1.15 changes term ordering; compare the complete function in both cases.
+    sympy_1_15 = tuple(int(v) for v in sp.__version__.split(".")[:2]) >= (1, 15)
+    validation_desc = "so3_axis_angle_to_R__openmp"
+    if sympy_1_15:
+        validation_desc += "__sympy_1_15"
+    validate_strings(generated_str, validation_desc, file_ext="c")
 
     results = doctest.testmod()
     if results.failed > 0:

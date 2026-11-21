@@ -5,11 +5,12 @@
 
 ## Summary
 
-This page owns the ETLegacy CFunction registration layer for the heavy BSSN
-runtime kernels. Symbolic BSSN equation construction stays with
-[BSSN Family](../../equations/general-relativity/bssn-family.md), and common
-trusted-value mechanics stay with
-[Trusted Expression Pipeline](../../equations/trusted-expression-pipeline.md).
+The `ETLegacy/general_relativity/` registrars emit `CFunction` kernels for BSSN
+Ricci evaluation, evolved RHSs, and diagnostic constraints; symbolic BSSN
+equations live in
+[BSSN Family](../../equations/general-relativity/bssn-family.md), and shared
+`trusted_dict` comparison utilities live in
+[Expression Validation Helpers](../../validation/expression-validation-helpers.md).
 
 `register_CFunction_Ricci_eval()` emits the Ricci tensor auxiliary kernel and
 schedules it before the BSSN RHS kernel. `register_CFunction_rhs_eval()` emits
@@ -19,6 +20,8 @@ conformal connection diagnostics in `MoL_PseudoEvolution`, including scalar
 momentum and Lambda-constraint magnitudes.
 
 ## Detail
+
+### Ricci And BSSN RHS Kernel Registration
 
 `register_CFunction_Ricci_eval()` preserves the caller's finite-difference
 order, sets the local `fd_order` for parallel codegen, selects
@@ -50,15 +53,11 @@ SIMD functions read those discovered parameters through
 CFunction parameter metadata. Non-SIMD RHS code additionally defines scalar
 inverse grid spacings and `UPWIND_ALG`.
 
-This pipeline does not branch on `PI`, thorn name, or T4munu state. Matter
+Parameter discovery does not branch on `PI`, thorn name, or T4munu state. Matter
 expressions incidentally contribute `PI` because their source terms reference
 the registered non-commondata `PI` CodeParameter; vacuum expressions do not.
 
-Claim evidence:
-- Claim: ETLegacy BSSN RHS and constraint registrations discover non-commondata CodeParameters from final expressions, use that list for current-thorn metadata and SIMD parameter declarations, use Cactus parameter macros for scalar declarations, and contain no `PI`-, thorn-name-, or T4munu-specific parameter-selection branch.
-- Role: descriptive behavior
-- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
-- Corroboration: [expression_utils.py](../../../nrpy/helpers/expression_utils.py), `get_params_commondata_symbols_from_expr_list`; [CodeParameters.py](../../../nrpy/infrastructures/ETLegacy/CodeParameters.py), `read_CodeParameters`
+Evidence (descriptive behavior): `ETLegacy/general_relativity/rhs_eval.py::register_CFunction_rhs_eval`; `ETLegacy/general_relativity/BSSN_constraints.py::register_CFunction_BSSN_constraints`; corroboration: `expression_utils.py::get_params_commondata_symbols_from_expr_list`.
 
 Reference-metric precompute is threaded through the BSSN and reference-metric
 lookup keys. Kreiss-Oliger
@@ -74,11 +73,7 @@ prefactor, and adds a conformal-factor-adjusted Hamiltonian-damping term to
 `cf_rhs`. SSL registers `SSL_h` and `SSL_sigma`, computes a time-dependent
 Gaussian prefactor, and modifies `alpha_rhs`.
 
-Claim evidence:
-- Claim: With `enable_KreissOliger_dissipation`, ETLegacy `register_CFunction_rhs_eval` adds `_dKOD` dissipation to every non-gauge RHS and to each gauge RHS entry (`alpha_rhs`, `vet_rhsU`, `bet_rhsU`) that is not exactly the SymPy zero before dissipation is added; `BSSN_gauge_RHSs` returns that zero for a `Frozen` lapse, a `Frozen` shift and its driver, and the driver of the first-order shift options, so those fields receive no dissipation, while the evolved `B^i` of `NonAdvectingGammaDriving` and of the second-order drivers is dissipated.
-- Role: descriptive behavior
-- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`
-- Corroboration: the `rhs_eval` trusted dictionaries listed in Sources, which sample only `OnePlusLog` with second-order shift drivers, where every gauge RHS entry is nonzero; no trusted file samples a zero gauge RHS entry
+Evidence (descriptive behavior): `ETLegacy/general_relativity/rhs_eval.py::register_CFunction_rhs_eval`; `equations/general_relativity/BSSN_gauge_RHSs.py::BSSN_gauge_RHSs`; corroboration: the `rhs_eval` trusted dictionaries listed in Sources; no trusted file samples a zero gauge RHS entry.
 
 After option handling, `register_CFunction_rhs_eval()` maps RHS expression
 names onto ETLegacy RHS gridfunction names and constructs the upwind control
@@ -96,6 +91,8 @@ and lists `diss_strength` otherwise, even if
 only when enabled. The expression-derived non-commondata parameters described
 above are appended to that manual metadata list.
 
+### Constraints Kernel And RHS Trusted Validation
+
 `register_CFunction_BSSN_constraints()` emits the diagnostic constraints
 kernel. It selects `BSSN_constraints` with optional reference-metric precompute
 and T4munu suffixes, outputs `H`, `MU0`, `MU1`, `MU2`,
@@ -107,20 +104,16 @@ finite-difference order and places `<thorn>_BSSN_constraints` in
 `MoL_PseudoEvolution`, reading BSSN state and optional T4munu gridfunctions and
 writing `aux_variables`.
 
-Claim evidence:
-- Claim: ETLegacy `register_CFunction_BSSN_constraints` writes `H`, `MU0` through `MU2`, `M = sqrt(BSSNconstraints.Msquared)`, and `LAMBDA_CONSTRAINT = BSSNconstraints.LambdaConstraintMagnitude` to auxiliary gridfunctions.
-- Role: descriptive behavior
-- Deciding authority: [BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
-- Corroboration: [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [interface_ccl.py](../../../nrpy/infrastructures/ETLegacy/interface_ccl.py), `construct_interface_ccl`
+Evidence (descriptive behavior): `ETLegacy/general_relativity/BSSN_constraints.py::register_CFunction_BSSN_constraints`; corroboration: `equations/general_relativity/BSSN_constraints.py::BSSNconstraints.__init__`; `ETLegacy/interface_ccl.py::construct_interface_ccl`.
 
 The Ricci, RHS, and constraints kernels register `construct_FD_functions_prefunc()` unchanged;
 the finite-difference helpers carry no inlining attribute (the former `NO_INLINE`
 rewrite to `CCTK_ATTRIBUTE_NOINLINE`, a workaround for a GCC 10 compile hang, was
 removed together with the macro).
 
-RHS validation remains part of this page because `rhs_eval.py` validates the
-ETLegacy-specific assembled RHS dictionary after ETLegacy option handling and
-before final C code emission. With `validate_expressions=True`, the module
+`ETLegacy/general_relativity/rhs_eval.py` validates the ETLegacy-assembled RHS
+dictionary after gauge, Kreiss-Oliger, CAHD, and SSL option handling and before
+final C code emission. With `validate_expressions=True`, the module
 passes `local_BSSN_RHSs_varname_to_expr_dict` through
 `process_dictionary_of_expressions(..., fixed_mpfs_for_free_symbols=True)`.
 With `return_validation_dict=True`, it returns that processed dictionary.
@@ -143,6 +136,9 @@ KO-enabled cases span both `T4munu` states with improvements disabled.
 - [rhs_eval.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/rhs_eval.py) - `register_CFunction_rhs_eval`, `validate_expressions`, `__main__`
 - [Ricci_eval.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/Ricci_eval.py) - `register_CFunction_Ricci_eval`
 - [BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py) - `register_CFunction_BSSN_constraints`
+- [equations BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py) - `BSSN_gauge_RHSs`
+- [equations BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py) - `BSSNconstraints.__init__`
+- [interface_ccl.py](../../../nrpy/infrastructures/ETLegacy/interface_ccl.py) - `construct_interface_ccl`
 - [CodeParameters.py](../../../nrpy/infrastructures/ETLegacy/CodeParameters.py) - `read_CodeParameters`
 - [expression_utils.py](../../../nrpy/helpers/expression_utils.py) - `get_params_commondata_symbols_from_expr_list`
 - [rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsFalse.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsFalse.py) - `trusted_dict`
@@ -154,11 +150,6 @@ KO-enabled cases span both `T4munu` states with improvements disabled.
 
 ## See Also
 
-- [ETLegacy](index.md)
-- [MoL, Boundaries, Symmetry, And RHS Initialization](mol-boundaries-symmetry-and-rhs-initialization.md)
-- [GR ADM/BSSN, Slicing, And Matter Coupling](gr-adm-bssn-slicing-and-matter-coupling.md)
 - Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)
 - Depends on: [Symbolic Expression Utilities](../../core/helpers/symbolic-expression-utilities.md)
-- [Trusted Expression Pipeline](../../equations/trusted-expression-pipeline.md)
-- [Finite Difference](../../core/finite-difference.md)
-- Contrasts with: [CarpetX GR BSSN RHS, Ricci, Constraints, And Validation](../carpetx/gr-bssn-rhs-ricci-constraints-and-validation.md)
+- Depends on: [Finite Difference](../../core/finite-difference.md)

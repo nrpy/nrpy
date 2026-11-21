@@ -57,7 +57,7 @@ class BSSN_to_ADM:
         #         derivatives in terms of BSSN quantities.
         self.gammaDD = ixp.zerorank2()
 
-        exp4phi = sp.sympify(0)
+        exp4phi: sp.Expr = sp.sympify(0)
         if EvolvedConformalFactor_cf == "phi":
             exp4phi = sp.exp(4 * cf)
         elif EvolvedConformalFactor_cf == "chi":

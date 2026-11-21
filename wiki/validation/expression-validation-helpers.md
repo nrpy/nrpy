@@ -1,172 +1,56 @@
 # Expression Validation Helpers
 
-> Numerical SymPy-expression validation helpers for equality, zero checks, and trusted dictionaries. · Status: confirmed
+> High-precision `mpmath` evaluation helpers for SymPy equality checks, zero tests, and `tests/*.py` trusted dictionaries. · Status: confirmed
 > Up: [Validation](index.md)
 
 ## Summary
 
-`nrpy/validate_expressions/validate_expressions.py` validates SymPy expressions
-by evaluating them at high precision with `mpmath`. This is high-precision
-numerical spot validation, not a formal symbolic proof, runtime test, generated
-project test, or general scientific-accuracy guarantee. The same helpers support
-equality assertions, zero checks, trusted dictionary generation, and trusted
-dictionary comparison under the limits below.
+`nrpy/validate_expressions/validate_expressions.py` evaluates SymPy expressions in `mpmath` (`precision = 30`, relative tolerance `10 ** (-4.0 / 5.0 * precision)`) for equality assertions (`assert_equal`), zero tests (`check_zero`), and `tests/<basename>.py` `trusted_dict` regression across NRPy's equation and reference-metric modules.
 
 ## Detail
 
-Prefer an exact analytic, symbolic, or semantic invariant when practical. When
-sampled regression fits the contract, follow the caller safeguards in [Test
-Oracles And Safe Updates](test-oracles-and-safe-updates.md); this page retains
-the current helper mechanics, behavioral claims, and limits.
+### Equation Caller Procedure
 
-The module uses `precision = 30` as the standard decimal precision. Relative
-comparison tolerance is `10 ** (-4.0 / 5.0 * precision)` where the helper uses
-the module constant, or `10 ** (-4.0 / 5.0 * mp.dps)` where it uses the current
-`mpmath` decimal precision.
+Prefer exact analytic or symbolic identities when practical ([Test Oracles And Safe Updates](test-oracles-and-safe-updates.md#expression-oracle-selection)). When sampled numerical regression is appropriate (used across GR, GRHD, GRMHD, wave, elliptic, TOV, SEOBNR/BOB, and geometry modules; `quaternion_rotations/tensor_rotation.py` is a doctest-only exception):
 
-The same module contains doctests for `assert_equal()`, `check_zero()`, and
-exact-zero conversion, and its `__main__` block runs them. No separate dedicated
-test module is checked in under `nrpy/validate_expressions/`; broader equation
-modules exercise these helpers through their own trusted-result paths.
+1. Build a dictionary with stable descriptive keys from module attributes or expression names.
+2. Call `process_dictionary_of_expressions(..., fixed_mpfs_for_free_symbols=True)` explicitly (`fixed_mpfs_for_free_symbols` defaults to `False`, which draws non-repeatable random samples). The processor sorts items, flattens nested tensor lists to `<name>_<flat_index>`, skips keys containing `funcform`, and **silently overwrites** colliding processed names (e.g., `{"v": [sp.Integer(1)], "v_0": sp.Integer(2)}` keeps only `v_0 = 2`), so callers must choose collision-free names.
+3. Call `compare_or_generate_trusted_results(os.path.abspath(__file__), os.getcwd(), basename, results_dict)` to compare against or initialize `tests/<basename>.py`.
 
-`assert_equal()` accepts either dictionaries or single expressions. Non-dict
-inputs are `sympify`-wrapped into one-entry dictionaries keyed by `""`, both
-sides are processed with fixed `mpf` substitutions, and values at each common
-processed key are compared by relative error. Type hints cover scalar SymPy
-expressions and NRPy tensor ranks 1 through 4; recursive runtime validation
-requires every leaf to be a SymPy expression, and unsupported leaves raise
-`TypeError`. Dictionary inputs must have identical raw key sets and list nesting;
-extra, missing, renamed, or differently shaped entries raise
-`AssertionError` before value comparison. Among entries retained for numerical
-processing, a scalar name that would collide with a flattened tensor-leaf name
-also raises. Keys containing `funcform` participate in raw key, nesting, and
-leaf validation but are intentionally omitted from numerical comparison and
-processed-name collision checks. There is no positional dictionary mode.
+Evidence (descriptive behavior): `validate_expressions.py::process_dictionary_of_expressions` and `convert_free_symbols_set_to_mpf_dict`; corroboration: `WaveEquation_RHSs.py::__main__` (`fixed_mpfs_for_free_symbols=True`).
 
-For finite values, a mismatch prints the failing key and error bound, then
-raises `AssertionError`; a passing check prints `Assertion Passed!` unless
-messages are suppressed. Non-finite components are handled before subtraction:
-matching NaNs in the same real or imaginary component and same-signed
-infinities compare equal, while one-sided NaNs, finite-versus-non-finite values,
-opposite infinities, or different finite companion components fail.
+### Equality Assertions And Zero Checks
 
-Claim evidence:
-- Claim: `assert_equal()` type-checks scalar expressions and NRPy tensor ranks 1 through 4, requires SymPy-expression leaves at runtime, supports recursive list validation, rejects non-identical raw key sets and different list nesting, rejects flattened-name collisions among numerically processed entries, omits structurally valid `funcform` keys from numerical comparison and collision checks, and explicitly distinguishes matching from mismatched non-finite components.
-- Role: descriptive behavior
-- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `assert_equal` and `_nonfinite_values_match`
-- Corroboration: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`, exercises direct dictionary comparison across scalar, vector, and matrix expression values; filter and error-path tests remain colocated with the deciding helper
+`assert_equal()` accepts two dictionaries or two SymPy expressions (wrapping non-dict inputs into `{ "": sp.sympify(x) }`), evaluates both with fixed `mpf` substitutions, and checks relative error at every processed key. Type annotations cover scalar SymPy expressions and tensor ranks `1`–`4`; non-SymPy leaves raise `TypeError`. Dictionary inputs require identical raw key sets and list nesting (`AssertionError` on mismatch or flattened-name collisions among numerical entries); keys containing `funcform` still undergo key, nesting, and SymPy-leaf checks while skipping numerical evaluation and collision checks. Matching `NaN` real/imaginary parts and same-signed infinities compare equal (`_nonfinite_values_match`), whereas one-sided `NaN`, finite-vs-infinite, or opposite-sign infinities fail.
 
-`check_zero()` sends one expression through `convert_one_expression_to_mpfmpc()`
-and returns whether the final numerical result is exactly `mp.mpf("0.0")`.
-That exact-zero comparison happens after the conversion helper has applied its
-near-zero retry behavior. Regression calls with free symbols must pass
-`fixed_mpfs_for_free_symbols=True`; symbol-free results remain numerical
-evaluations, not formal identity proofs.
+Evidence (descriptive behavior): `validate_expressions.py::assert_equal` and `_nonfinite_values_match`; corroboration: `nrpylatex/test_parse_BSSN.py::test_example_BSSN`.
 
-Free-symbol substitution has two modes. Fixed mode seeds Python `random` per
-symbol with
-`random.seed(int(hashlib.md5(str(var).encode()).hexdigest(), 16 + hex_offset))`.
-Here `hex_offset` changes the integer base argument passed to `int(...)`; it
-does not change the MD5 string or the symbol string being hashed. Non-fixed
-mode uses ordinary random values. Symbols named `PI` or `M_PI` are assigned
-`mp.pi`; symbols named `SQRT1_2` or `M_SQRT1_2` are assigned `1 / sqrt(2)`.
-Fixed mode is repeatable only under documented current runtime assumptions; it
-does not guarantee bitwise stability across Python, SymPy, mpmath, platform, or
-codegen versions.
+`check_zero()` evaluates one expression through `convert_one_expression_to_mpfmpc()` (including its doubled-precision retry) and checks exact equality with `mp.mpf("0.0")`; callers with free symbols must pass `fixed_mpfs_for_free_symbols=True`.
 
-Single-expression conversion first sets `mp.dps = precision` and returns
-`mpf(0.0)` immediately for exact SymPy zero. Otherwise it runs
-`sp.cse(expr, order="none")`, collects free symbols from the reduced expression
-and common subexpressions, injects `mpf` values with `xreplace`, and evaluates
-common-subexpression replacements at the current `mp.dps`. The reduced
-expression is converted to `mpf` first. If that raises `TypeError`, an
-`sp.nan` result takes the diagnostic print path, positive and negative SymPy
-infinities convert explicitly to their `mpmath` counterparts, and other
-non-real results are split into real and imaginary components before each
-finite, NaN, or infinity component is converted and combined as `mpc`. The
-colocated doctests check that both signed SymPy infinities return `mpf('+inf')`
-and `mpf('-inf')`; the explicit fallback supplies those values whenever the
-initial `mpf` conversion raises `TypeError`.
+### Substitution Seeding, CSE Evaluation, And Doubled-Precision Retry
 
-Claim evidence:
-- Claim: `inject_mpfs_into_cse_expression()` first attempts `mpf` conversion; when that raises `TypeError`, SymPy NaN uses the diagnostic fallback, signed SymPy infinities use the explicit signed-infinity fallback, and other non-real fallback values are converted component by component before constructing an `mpc` value.
-- Role: descriptive behavior
-- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `inject_mpfs_into_cse_expression`
-- Corroboration: none available; direct signed-infinity and `assert_equal()` doctests are colocated with the deciding helper, and no separate source exercises every conversion branch
+In fixed mode, `convert_free_symbols_set_to_mpf_dict` seeds `random.seed(int(hashlib.md5(str(var).encode()).hexdigest(), 16 + hex_offset))` per symbol (`hex_offset` shifts the integer conversion base, not the MD5 digest), assigning `mp.pi` to `PI`/`M_PI` and `1/sqrt(2)` to `SQRT1_2`/`M_SQRT1_2` (repeatable only within matching Python/SymPy/`mpmath` versions).
 
-Near-zero handling is a retry, not symbolic simplification. If a nonzero result
-has magnitude below `10 ** (-4.0 / 5.0 * mp.dps)`, the helper clears SymPy's
-process-wide cache and reruns the same common-subexpression form at twice the
-standard precision, then clears the cache again. The first clear makes SymPy
-recompute results built from the sampled inputs, such as products, powers, and
-`exp`, at the higher precision; without it, inputs that compare equal at both
-precisions would reuse the first evaluation's results and reproduce its
-residue. The second clear keeps later evaluations at the standard precision
-from reusing the doubled-precision results. The retry does not
-forward `hex_offset`; in non-fixed mode it also draws new random substitutions.
-It therefore need not evaluate the same numerical point. The helper collapses
-the result to `mp.mpf("0.0")` only if the higher-precision result is still below
-the tolerance at that higher `mp.dps`; otherwise it keeps the original nonzero
-value and restores `mp.dps` to `precision`.
+`convert_one_expression_to_mpfmpc` returns `mpf(0.0)` immediately for exact SymPy `0`; otherwise `inject_mpfs_into_cse_expression` runs `sp.cse(expr, order="none")`, substitutes `mpf` symbols via `xreplace`, and attempts `mpf` conversion—falling back on `TypeError` to diagnostic `sp.nan` handling, explicit `mpf("+inf")`/`mpf("-inf")`, or component-wise `mpc` construction. If `0 < |result| < 10 ** (-4.0 / 5.0 * mp.dps)`, `convert_one_expression_to_mpfmpc` clears SymPy's process-wide cache, re-evaluates at `2 * precision` (without forwarding `hex_offset`), clears the cache again so later standard-precision calls do not reuse `2 * precision` values, collapses results below the doubled-precision tolerance to `mp.mpf("0.0")`, and restores `mp.dps = precision`.
 
-Claim evidence:
-- Claim: `convert_one_expression_to_mpfmpc` clears SymPy's process-wide cache before and after the doubled-precision retry, so results cached during the first evaluation are recomputed at the higher precision instead of reproducing the first evaluation's residue, and later standard-precision evaluations do not reuse doubled-precision results.
-- Role: descriptive behavior
-- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `convert_one_expression_to_mpfmpc`
-- Corroboration: [reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py), `trusted_dict` entry `Jac_dUrfm_dDSphUD_8`, an analytically zero Jacobian entry stored as `0.0`
+Evidence (descriptive behavior): `validate_expressions.py::inject_mpfs_into_cse_expression` and `convert_one_expression_to_mpfmpc`; corroboration: `nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py::trusted_dict` (`Jac_dUrfm_dDSphUD_8 == 0.0`).
 
-`process_dictionary_of_expressions()` sorts dictionary items, skips keys
-containing `funcform`, converts scalar SymPy expressions directly, and flattens
-tensor lists recursively. Flattened tensor entries are named
-`<lhs>_<flat_index>` before conversion to `mpf` or `mpc`.
+### Trusted-File Generation And Comparison
 
-Trusted output is caller-relative. `output_trusted()` derives a sibling
-`tests/<trusted_file_basename>.py` path from `Path(os_path_abspath)` relative to
-`os_getcwd`, writes only the `mpmath` imports needed by the generated values,
-defines `trusted_dict`, formats the file with Black, and creates the `tests/`
-directory if needed. `compare_or_generate_trusted_results()` writes that file
-when missing and compares against it when present.
+`output_trusted()` writes `tests/<trusted_file_basename>.py` relative to caller path and `os_getcwd`, emitting required `mpmath` imports and `trusted_dict` formatted with Black; missing-file creation initializes a candidate file rather than validating correctness (use the two-process update workflow in [Test Oracles And Safe Updates](test-oracles-and-safe-updates.md)). `compare_against_trusted()` imports `trusted_dict`, checks length equality first (printing missing keys on mismatch), looks up each key in `results_dict` (`KeyError` if renamed at equal length), checks relative error on finite entries, and raises `ValueError` on finite/non-finite or mismatched non-finite components.
 
-Missing-file generation creates a baseline; it does not independently establish
-that baseline as scientifically correct or count as a successful comparison.
-Candidate review and acceptance follow the isolated two-process procedure in
-[Test Oracles And Safe Updates](test-oracles-and-safe-updates.md). Existing-file
-comparison checks regression against stored numbers only under the chosen
-substitutions and tolerance.
-
-Trusted comparison imports the caller-relative module path with `importlib`
-and expects a `trusted_dict`. It first checks dictionary lengths; when the
-lengths differ, it reports the missing key set and tells maintainers how to
-regenerate a trusted file. When lengths match, it iterates trusted keys and
-compares each value against `results_dict[key]`; a changed key with unchanged
-count surfaces as `KeyError`. Finite values use relative error. Non-finite
-values use the same component-aware rule as `assert_equal()`: intentional NaN
-sentinels or same-signed infinities pass only when both sides match, and a
-computed NaN against a finite trusted value, or a finite result against a
-trusted NaN, raises `ValueError`.
-
-Claim evidence:
-- Claim: `compare_against_trusted()` uses relative error for finite values, accepts matching NaN components and same-signed infinities, and raises `ValueError` for finite/non-finite or differently structured non-finite mismatches.
-- Role: descriptive behavior
-- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `compare_against_trusted` and `_nonfinite_values_match`
-- Corroboration: [reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py), `trusted_dict`, supplies three intentional trusted NaN sentinels exercised by the reference-metric owner run
-
-All expression checks sample numerical substitutions rather than proving an
-identity over a domain. A sampled point can miss a discrepancy or encounter a
-singularity/branch-sensitive case. The helpers do not exercise generated C/CUDA,
-time evolution, boundary conditions, executable output, or convergence.
+Evidence (descriptive behavior): `validate_expressions.py::compare_against_trusted` and `_nonfinite_values_match`; corroboration: `nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py::trusted_dict` (`NaN` sentinels).
 
 ## Sources
 
-- [nrpy/validate_expressions/validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `precision`, `assert_equal`, `check_zero`
-- [nrpy/validate_expressions/validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `convert_free_symbols_set_to_mpf_dict`, `convert_one_expression_to_mpfmpc`, `inject_mpfs_into_cse_expression`
-- [nrpy/validate_expressions/validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `process_dictionary_of_expressions`, `output_trusted`, `compare_against_trusted`, `compare_or_generate_trusted_results`
-- [reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py) - `trusted_dict` entry `Jac_dUrfm_dDSphUD_8`
+- [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `precision`, `assert_equal`, `check_zero`, `convert_free_symbols_set_to_mpf_dict`, `convert_one_expression_to_mpfmpc`, `inject_mpfs_into_cse_expression`, `process_dictionary_of_expressions`, `output_trusted`, `compare_against_trusted`, `compare_or_generate_trusted_results`, `_nonfinite_values_match`
+- [reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py) - `trusted_dict`
+- [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py) - `test_example_BSSN`
+- [WaveEquation_RHSs.py](../../nrpy/equations/wave_equation/WaveEquation_RHSs.py) - `__main__`
+- [tensor_rotation.py](../../nrpy/equations/quaternion_rotations/tensor_rotation.py) - `rotate` doctests
 
 ## See Also
 
-- Parent: [Validation](index.md)
 - Depends on: [Test Oracles And Safe Updates](test-oracles-and-safe-updates.md)
-- See also: [Trusted Expression Pipeline](../equations/trusted-expression-pipeline.md)
+- Depends on: [Code Test Policy](code-test-policy.md)
 - Validated by: [Static Analysis](static-analysis.md)
-- See also: [Reference Metrics](../core/reference-metrics.md)

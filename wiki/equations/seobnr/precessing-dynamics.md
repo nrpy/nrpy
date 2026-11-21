@@ -7,8 +7,8 @@
 
 The precessing-dynamics SEOBNR modules build symbolic expressions for two
 adjacent parts of the precessing binary-black-hole model. The quasi-precessing
-Hamiltonian module owns conservative EOB quantities, Hamiltonian derivatives,
-and circular-orbit derivatives. The spin-evolution module owns the
+Hamiltonian module constructs conservative EOB quantities, Hamiltonian derivatives,
+and circular-orbit derivatives. The spin-evolution module constructs the
 post-Newtonian right-hand sides for the spin vectors, Newtonian orbital-plane
 unit vector, orbital angular momentum, and orbital frequency.
 
@@ -22,6 +22,8 @@ the version-pinned arXiv:2303.18143v2; the Hamiltonian module has no exact
 paper-revision mapping here, so audit a specific revision before asserting one.
 
 ## Detail
+
+### Quasi-Precessing Spin Hamiltonian And Derivatives
 
 `SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities` declares masses,
 canonical variables `r`, `phi`, `prstar`, and `pphi`, vector spin components,
@@ -40,30 +42,20 @@ substituting `prstar = 0`: `dHreal_dr_circ`, `dHreal_dpphi_circ`,
 `dHreal_dpphi_dpphi_circ`. As in the aligned-spin Hamiltonian, the circular first
 derivatives are divided by `nu`, and each circular second derivative
 differentiates a normalized first derivative without a second division by `nu`.
-These outputs are the symbolic interface for ODE
-integration, circular initial-data solves, and waveform or flux consumers that
+These outputs supply the symbolic expressions for ODE
+integration, circular initial-data solves, and waveform or flux modules that
 need instantaneous Hamiltonian derivatives.
 
-Claim evidence:
-- Claim: `SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities`'s circular
-  first Hamiltonian derivatives (`dHreal_dr_circ`, `dHreal_dpphi_circ`) are
-  divided by `nu`, and each circular second derivative differentiates one of
-  those already-normalized first derivatives without a second division by
-  `nu`.
-- Role: descriptive behavior
-- Deciding authority: [SEOBNRv5_quasi_precessing_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py), `SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities.__init__`
-- Corroboration: [SEOBNRv5_quasi_precessing_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py), `trusted_dict`, pins the sampled circular-derivative outputs against the module's own default-constructor evaluation
+Evidence (descriptive behavior): `seobnr/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py::SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities.__init__`.
 
 As in the aligned-spin Hamiltonian, the non-circular second derivatives
 `dHreal_dr_dr` and `dHreal_dr_dpphi` differentiate the normalized `dHreal_dr`
 and divide by `nu` again, so they carry `1/nu**2` where the circular second
 derivatives carry `1/nu`.
 
-Claim evidence:
-- Claim: `SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities` divides `dHreal_dr_dr` and `dHreal_dr_dpphi` by `nu` twice, so they carry `1/nu**2`, while its circular second derivatives carry `1/nu`.
-- Role: descriptive behavior
-- Deciding authority: [SEOBNRv5_quasi_precessing_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py), `SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities.__init__`
-- Corroboration: none available; the trusted values fix the sampled numbers but do not separate the normalization factor
+Evidence (descriptive behavior): `seobnr/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py::SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities.__init__`.
+
+### Post-Newtonian Spin And Orbital Evolution Equations
 
 `SEOBNRv5_spin_evolution_equations` declares masses, orbital frequency
 `omega`, spin-vector components, and the Newtonian angular-momentum unit vector
@@ -92,11 +84,7 @@ spin1-spin2 terms of Eq. (71c) give
 which is Eq. (72) of the paper. Integrating these right-hand sides therefore
 does not keep `|ln| = 1` unless the integration renormalizes `ln`.
 
-Claim evidence:
-- Claim: `SEOBNRv5_spin_evolution_equations` implements Eqs. (65), (66), (69), and (71a)-(71d) of arXiv:2303.18143v2 for black holes, omitting the terms proportional to `Ctilde_1ES2`, and stores `L/(M mu)` and `omega_dot = 3 v^2 v_dot`; its `ln_dot` has the component parallel to a unit `ln` given by Eq. (72), so these right-hand sides do not preserve `|ln| = 1`.
-- Role: descriptive behavior
-- Deciding authority: [SEOBNRv5_spin_evolution_equations.py](../../../nrpy/equations/seobnr/SEOBNRv5_spin_evolution_equations.py), `SEOBNRv5_spin_evolution_equations`
-- Corroboration: [Khalil et al., arXiv:2303.18143v2](https://arxiv.org/pdf/2303.18143v2), Eqs. (65), (66), (69), (71), and (72), and the paragraph before Eq. (72)
+Evidence (descriptive behavior): `seobnr/SEOBNRv5_spin_evolution_equations.py::SEOBNRv5_spin_evolution_equations`; corroboration: `arXiv:2303.18143v2`, Eqs. (65), (66), (69), (71), and (72), and the paragraph before Eq. (72).
 
 Both modules validate by running doctests, processing an instantiated object's
 `__dict__` with `process_dictionary_of_expressions`, and comparing the
@@ -121,8 +109,6 @@ generated implementation, or establish waveform accuracy.
 
 ## See Also
 
-- [SEOBNR And BOB](index.md)
-- [Aligned-Spin Hamiltonian](aligned-spin-hamiltonian.md)
-- [Precessing Rotations And Ringdown](precessing-rotations-and-ringdown.md)
-- [BOB Waveforms](bob-waveforms.md)
-- [Trusted Expression Pipeline](../trusted-expression-pipeline.md)
+- See also: [Aligned-Spin Hamiltonian](aligned-spin-hamiltonian.md)
+- See also: [Precessing Rotations And Ringdown](precessing-rotations-and-ringdown.md)
+- Validated by: [Expression Validation Helpers](../../validation/expression-validation-helpers.md)

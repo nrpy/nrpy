@@ -1,6 +1,6 @@
 ---
 name: borda
-description: Use when explicitly asked for a Borda panel, "use borda", "run borda", or N independent agents that rank each other's reports, with the top-ranked agent writing a best-of version that all agents revise until they accept. Takes a task, an agent count, and a final filename, and asks for whatever is missing. Do not activate merely to mention, audit, or edit this skill.
+description: Use when explicitly asked for a Borda panel, "use borda", "run borda", or N independent agents that rank each other's reports, with the top-ranked agent writing a best-of version that all agents revise until they accept. Requires a task, an agent count, and a final filename. The filename may be inferred; the skill imposes no naming restrictions. Ask for a missing task or agent count. Do not activate merely to mention, audit, or edit this skill.
 ---
 
 # Borda Panel
@@ -12,7 +12,7 @@ that draft in rounds, and the lead revises it, until every agent accepts it.
 Example requests:
 `use borda, 4 agents: check wiki/core for stale claims -> core_stale_claims.md`, or
 "use borda: three agents review my unpushed gridding patches for errors, gaps, and
-ambiguities and rank each other's reports; final list in ga_issues_final.md".
+ambiguities and rank each other's reports".
 
 The task must end in one document. A task that changes code runs as proposed patches
 written in that document; no one edits other files. The agent messages below are written
@@ -34,21 +34,26 @@ agents can then read earlier files, so say so in the final report.
 
 ## Inputs
 
-Three values are required. Take them from the request and the conversation.
+Three values are required before launching the panel. Take them from the request and
+the conversation; infer the output filename when it is not supplied.
 
 - **TASK**: what each agent does, including its subject (files, directories, commits,
   question). Keep the user's wording, including stance words such as "skeptically".
 - **N**: number of agents, at least 2. With 2, each agent can rank only one report, which
   earns no points, so root also ranks both reports (Phase 2) and its ranking picks the
   lead. N=1 is not a panel.
-- **OUTPUT**: filename of the final result, written in the current directory.
+- **OUTPUT**: filename of the final result. A filename must be resolved even when the
+  user does not specify one.
 
-The request may spell out the whole recipe in the user's own words. Pull out TASK, N, and
-OUTPUT. If it describes a variation of a phase below (a different stance, who takes
-part), follow it; otherwise use the phases as written. A request that names two
-different final filenames (`x_final.md` in one place, `y_final.md` in another) is
-ambiguous: ask, and offer the name that looks like a typo's correction as the
-recommended option.
+Use the user's output path if supplied; otherwise infer a suitable filename and choose an
+unused path in the current directory compatible with applicable repository rules.
+The skill imposes no restrictions on the name itself: no required or forbidden words,
+prefixes, suffixes, extensions, or naming patterns. State the resolved path and proceed
+without asking the user to supply a filename.
+
+The request may spell out the whole recipe in the user's own words. Resolve TASK, N,
+and OUTPUT. If it describes a variation of a phase below (a
+different stance, who takes part), follow it; otherwise use the phases as written.
 
 If the subject is described rather than named (for example "the unpushed patches to the
 gridding algorithm"), resolve it yourself before launching, such as `git log @{u}..HEAD`
@@ -56,27 +61,27 @@ and `git diff @{u}..HEAD`, so every agent gets the same exact commit range and f
 Ask if more than one reading is plausible (several branches, no upstream, uncommitted
 changes that may or may not count).
 
-Never default silently; this follows the Borda clause in `AGENTS.md`.
-Ask for each value that is missing or ambiguous in one message, as multiple-choice
+Never default TASK or N silently; this follows the Borda clause in `AGENTS.md`.
+Ask for either that is missing or ambiguous in one message, as multiple-choice
 questions if your tools offer them, with your best guess of what the user meant listed
 first and marked recommended, plus one or two alternatives. Typical guesses: the file or
-topic discussed most recently for the TASK subject, 4 for N, and `<subject>_panel.md` for
-OUTPUT. Also ask if `./OUTPUT` already exists (overwrite, or another name), if N is below
-2 (recommend 2), if the request names both this skill and dialectic or trialectic (which
-governs), and, for a Markdown OUTPUT at the repository root, if its name would fail
-`_check_root_artifacts` in `tools/kb_lint.py` (read the function; it rejects names with a
-segment such as audit, scan, report, log, latest, token, or rank, and plan or task unless
-the whole name is a coordination name). When nothing is missing, ask nothing. If you
-would ask anything above and no one can be asked (`codex exec`, `claude -p`), print the
-resolved plan with the recommended values and stop.
+topic discussed most recently for the TASK subject, and 4 for N. Also ask if N is below
+2 (recommend 2), or if the request names both this skill and dialectic or trialectic
+(which governs). When nothing is missing, ask nothing. If you would ask anything above
+and no one can be asked (`codex exec`, `claude -p`), print the resolved plan with the
+recommended values and stop.
 
-State the plan in one line: TASK, N, OUTPUT as an absolute path under the current
-directory (`./OUTPUT` below means that path), and the cost: at least 3N+1 agent turns (N
-reports, N rankings, 1 merge, N round-1 reviews; each further round adds at most N+1) and
-N(N-1) report checks in Phase 2, plus root's own ranking when N=2. Then start, and print
-one progress line after each phase and each round.
+State the plan in one line: TASK, N, OUTPUT as an absolute path (`./OUTPUT` below means
+that path), and the cost: at least 3N+1 agent turns (N reports, N rankings, 1 merge,
+N round-1 reviews; each further round adds at most N+1) and N(N-1) report checks in
+Phase 2, plus root's own ranking when N=2. Then start, and print one progress line after
+each phase and each round.
 
 ## Setup
+
+Names for the temporary directory and its contents below are examples.
+Choose them freely, record the actual paths in the brief, and substitute those paths
+consistently throughout the run.
 
 Create the run directory with `RUN=$(mktemp -d /tmp/borda.XXXXXX); echo "$RUN"`. Shell
 variables may not persist between commands, so write the literal path in every later
@@ -98,10 +103,8 @@ Write `$RUN/brief.md` holding:
 Every agent, and any replacement, reads it. Agents write only into `$RUN`; you alone write
 `./OUTPUT`.
 
-Some hosts refuse an agent's write of a file named like a report (Claude Code refuses
-`report_*.md` and `findings_*.md`, so each agent's own file is `answer_i.md`). Each message
-below therefore tells the agent: if the write is refused, return the complete text as the
-final message. Root saves that text unedited as the expected file: copy it with a script
+Each message below tells the agent: if a file write is refused, return the complete text
+as the final message. Root saves that text unedited as the expected file: copy it with a script
 from the file where the host keeps each agent's final message (never print it into your
 context), or else write it with your write tool and say in the final report that root
 re-emitted it. Before each phase, check that every expected file exists and is nonempty.
@@ -266,13 +269,14 @@ the authorization already resolved for this exact destination:
 
 Verify either successful operation with `cmp "$RUN/draft.md" "./OUTPUT"`. On a failed
 write or comparison, retain the draft and report the destination's actual state;
-do not claim delivery. If OUTPUT is at the repository root, run
-`python tools/kb_lint.py`. If it names the file, ask the user for another name and apply
-the same destination checks and creation/authorized-replacement choice to that name.
-After verifying the new copy, remove the rejected copy only if you created it and it
-remains unchanged; if it replaced an existing file, restore the saved original instead.
-Preserve any intervening edits and report a conflict rather than removing or restoring
-over them. Rerun the checker. Report to the user:
+do not claim delivery. Run required repository checks, including
+`python tools/kb_lint.py` if OUTPUT is at the repository root. If a check rejects the
+output path, remove the rejected copy only if you created it and it remains unchanged;
+if it replaced an existing file, restore the saved original instead. Preserve any
+intervening edits and report a conflict rather than removing or restoring over them.
+If the user specified that path, preserve the draft and report the exact rule preventing
+delivery. Otherwise choose another allowed path and repeat the destination checks,
+write, comparison, and repository checks. Report to the user:
 
 - the output path and its headline conclusions;
 - the Borda totals, the lead, and any tie-break; when N=2, that root's ranking alone

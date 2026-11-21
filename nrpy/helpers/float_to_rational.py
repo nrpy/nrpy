@@ -9,7 +9,7 @@ Authors: Siddharth Mahesh
 """
 
 # Step P1: Import needed modules:
-from typing import Union, cast
+from typing import Union
 
 import sympy as sp
 
@@ -48,7 +48,7 @@ def f2r(
         mantissa = f"{mantissa}."
 
     # Append zpad zeros after the decimal point; they do not change the value.
-    return cast(sp.Rational, sp.Rational(mantissa + "0" * zpad + e + exponent))
+    return sp.Rational(mantissa + "0" * zpad + e + exponent)
 
 
 if __name__ == "__main__":

@@ -195,8 +195,8 @@ class BSSN_to_g4Christoffel:
         self.DalphaU = ixp.zerorank1()
         self.DbetaUD = ixp.zerorank2()
         self.KbetaD = ixp.zerorank1()
-        self.Kbetabeta = sp.sympify(0)
-        self.betaDalpha = sp.sympify(0)
+        self.Kbetabeta: sp.Expr = sp.sympify(0)
+        self.betaDalpha: sp.Expr = sp.sympify(0)
         for i in range(3):
             self.betaDalpha += self.betaU[i] * self.alpha_dD[i]
             for j in range(3):
@@ -221,8 +221,8 @@ class BSSN_to_g4Christoffel:
             ) / self.alpha
             self.Gamma4UDD[0][i + 1][0] = self.Gamma4UDD[0][0][i + 1]
 
-            betaD_Db = sp.sympify(0)
-            KUDbeta = sp.sympify(0)
+            betaD_Db: sp.Expr = sp.sympify(0)
+            KUDbeta: sp.Expr = sp.sympify(0)
             for j in range(3):
                 betaD_Db += self.betaU[j] * self.DbetaUD[i][j]
                 KUDbeta += self.KUD[i][j] * self.betaU[j]

@@ -192,7 +192,7 @@ class ExpansionFunctionThetaClass:
                 unnormalized_sU[i] += self.gammaUU[i][j] * F_dD[j]
 
         # Step 5: Compute the normalization factor lambda = (gamma^{ij} partial_i F partial_j F)^{1/2}
-        lambda_squared = sp.sympify(0)
+        lambda_squared: sp.Expr = sp.sympify(0)
         for i in range(3):
             for j in range(3):
                 #                 gamma^{ij}    partial_i F partial_j F
@@ -228,7 +228,7 @@ class ExpansionFunctionThetaClass:
         # Step 8: Compute the divergence of the unit normal vector partial_i s^i
         # partial_i s^i = (1 / lambda) (partial_j F partial_i gamma^{ij} + gamma^{ij} partial_i partial_j F) - (1/ lambda^2) partial_i lambda gamma^{ij} partial_j F
         #                  PREFACTOR 1   ^^^ FIRST PARENTHETICAL TERM ^^^   ^^ SECOND PARENTHETICAL TERM ^^^     PREFACTOR 2  ^^^^^^^ TERM AFTER PARENTHETICAL ^^^^^^
-        partial_i_si_parenthetical_term = sp.sympify(0)
+        partial_i_si_parenthetical_term: sp.Expr = sp.sympify(0)
         # FIRST PARENTHETICAL TERM
         for i in range(3):
             for j in range(3):
@@ -243,7 +243,7 @@ class ExpansionFunctionThetaClass:
         #                             (1 / lambda)
         partial_i_si_parenthetical_term /= lamb
 
-        partial_i_si_term_after_parenthetical = sp.sympify(0)
+        partial_i_si_term_after_parenthetical: sp.Expr = sp.sympify(0)
         # TERM AFTER PARENTHETICAL
         for i in range(3):
             for j in range(3):
@@ -262,7 +262,7 @@ class ExpansionFunctionThetaClass:
 
         # Step 9: Compute the covariant divergence of s^i
         # D_i s^i = 1/(2 detgamma) s^i partial_i detgamma + partial_i s^i
-        self.covariant_divergence_of_s_i = sp.sympify(0)
+        self.covariant_divergence_of_s_i: sp.Expr = sp.sympify(0)
         for i in range(3):
             self.covariant_divergence_of_s_i += self.sU[i] * self.detgamma_dD[i]
         self.covariant_divergence_of_s_i *= 1 / (2 * self.detgamma)

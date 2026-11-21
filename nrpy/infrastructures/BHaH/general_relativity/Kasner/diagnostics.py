@@ -310,7 +310,7 @@ def register_CFunction_diagnostic_gfs_set(
         )
     expr_list.append(cast(sp.Expr, exact_adm2bssn.cf))
     lhs_list.append("diagnostic_gfs[grid][IDX4(DIAG_EXACT_WGF, i0, i1, i2)]")
-    expr_list.append(cast(sp.Expr, exact_adm2bssn.trK))
+    expr_list.append(exact_adm2bssn.trK)
     lhs_list.append("diagnostic_gfs[grid][IDX4(DIAG_EXACT_TRKGF, i0, i1, i2)]")
     for i, j, suffix in sym01_components:
         expr_list.append(exact_hDD[i][j])
