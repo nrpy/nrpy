@@ -80,6 +80,8 @@ class ConditionalFileUpdater:
         :param exception_value: Exception value if an exception was raised within the context.
         :param traceback: Traceback object if an exception was raised within the context.
         """
+        if exception_type is not None:
+            return
         print(f"Checking {self.fname}...", end="")
         new_content = self.fd.getvalue()
         if self.do_format:

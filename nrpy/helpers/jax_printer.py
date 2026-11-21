@@ -10,6 +10,8 @@ Author: Siddharth Mahesh
         sm0193 **at** mix **dot* wvu **dot* edu
 """
 
+import math
+from itertools import groupby
 from typing import TYPE_CHECKING, Any, Dict, Tuple, Union, cast
 
 import sympy as sp
@@ -178,10 +180,14 @@ class NRPyJaxPrinter(Printer):
         Print a rational number, as a float if its numerator or denominator does not fit in a signed 32-bit integer.
         :param expr: Rational number to print.
         :return: String representation of the rational number.
+        :raises ValueError: If the rational number exceeds the range of a double-precision float.
         """
         if abs(expr.p) < INT32_BOUND and expr.q < INT32_BOUND:
             return super()._print_Rational(expr)
-        return repr(float(expr))
+        value = float(expr)
+        if math.isinf(value):
+            raise ValueError("Rational exceeds the range of a double-precision float.")
+        return repr(value)
 
     def _print_nested(self, func: str, args: Tuple[sp.Basic, ...]) -> str:
         """
@@ -247,7 +253,11 @@ class NRPyJaxPrinter(Printer):
 
             # Use a placeholder + string replacement to avoid SymPy rewriting back into the
             # original ArrayElementwiseApplyFunc (or similar array-expression nodes).
-            placeholder = sp.Symbol("__AEAF_PH__")
+            # The placeholder must differ from every parameter name in the body.
+            ph_name = "__AEAF_PH__"
+            while any(ph_name == str(sym) for sym in body.free_symbols):
+                ph_name += "_"
+            placeholder = sp.Symbol(ph_name)
             scalar_body = body.xreplace({var: placeholder})
 
             # Ensure strict string typing for mypy (Base _print returns Any)
@@ -255,7 +265,16 @@ class NRPyJaxPrinter(Printer):
             ph_str = str(self._print(placeholder))
 
             # Parenthesize the injected array to preserve operator precedence.
-            return body_str.replace(ph_str, f"({arr_str})")
+            # Replace only the whole identifier, not a longer name containing it.
+            tokens = (
+                "".join(chars)
+                for _, chars in groupby(
+                    body_str, lambda char: char.isalnum() or char == "_"
+                )
+            )
+            return "".join(
+                f"({arr_str})" if token == ph_str else token for token in tokens
+            )
 
         # Non-Lambda case: print as a callable applied to the array.
         # Parentheses ensure correct precedence if `func` prints as an expression.

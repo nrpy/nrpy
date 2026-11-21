@@ -171,11 +171,12 @@ __global__ static void rk_substep_4_gpu(const size_t streamid, REAL *restrict k1
     const REAL_CUDA_ARRAY RK_Rational_9_56 = ConstCUDA(dblRK_Rational_9_56);
 
     const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(
-        k2_gfsL, MulCUDA(dt, FusedMulSubCUDA(RK_Rational_1_49, SqrtCUDA(21), RK_Rational_1_7)),
+        k2_gfsL, MulCUDA(dt, FusedMulSubCUDA(RK_Rational_1_49, ConstCUDA(4.58257569495584), RK_Rational_1_7)),
         FusedMulAddCUDA(
-            k3_gfsL, MulCUDA(dt, NegFusedMulAddCUDA(RK_Rational_6_49, SqrtCUDA(21), RK_Rational_6_7)),
-            FusedMulAddCUDA(k4_gfsL, MulCUDA(dt, FusedMulSubCUDA(RK_Rational_3_392, SqrtCUDA(21), RK_Rational_9_56)),
-                            FusedMulAddCUDA(k1_gfsL, MulCUDA(dt, FusedMulSubCUDA(RK_Rational_9_392, SqrtCUDA(21), RK_Rational_3_56)), y_n_gfsL))));
+            k3_gfsL, MulCUDA(dt, NegFusedMulAddCUDA(RK_Rational_6_49, ConstCUDA(4.58257569495584), RK_Rational_6_7)),
+            FusedMulAddCUDA(
+                k4_gfsL, MulCUDA(dt, FusedMulSubCUDA(RK_Rational_3_392, ConstCUDA(4.58257569495584), RK_Rational_9_56)),
+                FusedMulAddCUDA(k1_gfsL, MulCUDA(dt, FusedMulSubCUDA(RK_Rational_9_392, ConstCUDA(4.58257569495584), RK_Rational_3_56)), y_n_gfsL))));
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
   }
 } // END FUNCTION: rk_substep_4_gpu
@@ -246,13 +247,13 @@ __global__ static void rk_substep_5_gpu(const size_t streamid, REAL *restrict k1
     static constexpr double dblRK_Rational_9_280 = 9.0 / 280.0;
     const REAL_CUDA_ARRAY RK_Rational_9_280 = ConstCUDA(dblRK_Rational_9_280);
 
-    const REAL_CUDA_ARRAY tmp1 = MulCUDA(_NegativeOne_, SqrtCUDA(21));
+    const REAL_CUDA_ARRAY tmp1 = MulCUDA(_NegativeOne_, ConstCUDA(4.58257569495584));
     const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(
         k2_gfsL, MulCUDA(dt, FusedMulSubCUDA(RK_Rational_1_49, tmp1, RK_Rational_1_7)),
         FusedMulAddCUDA(
-            k4_gfsL, MulCUDA(dt, FusedMulAddCUDA(RK_Rational_363_1960, SqrtCUDA(21), RK_Rational_9_280)),
+            k4_gfsL, MulCUDA(dt, FusedMulAddCUDA(RK_Rational_363_1960, ConstCUDA(4.58257569495584), RK_Rational_9_280)),
             FusedMulAddCUDA(
-                k5_gfsL, MulCUDA(dt, FusedMulAddCUDA(RK_Rational_1_5, SqrtCUDA(21), RK_Rational_6_5)),
+                k5_gfsL, MulCUDA(dt, FusedMulAddCUDA(RK_Rational_1_5, ConstCUDA(4.58257569495584), RK_Rational_6_5)),
                 FusedMulAddCUDA(MulCUDA(RK_Rational_8_49, k3_gfsL), MulCUDA(tmp1, dt),
                                 FusedMulAddCUDA(k1_gfsL, MulCUDA(dt, FusedMulSubCUDA(RK_Rational_51_392, tmp1, RK_Rational_33_56)), y_n_gfsL)))));
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
@@ -330,12 +331,12 @@ __global__ static void rk_substep_6_gpu(const size_t streamid, REAL *restrict k1
     static constexpr double dblRK_Rational_7_18 = 7.0 / 18.0;
     const REAL_CUDA_ARRAY RK_Rational_7_18 = ConstCUDA(dblRK_Rational_7_18);
 
-    const REAL_CUDA_ARRAY tmp1 = MulCUDA(_NegativeOne_, SqrtCUDA(21));
+    const REAL_CUDA_ARRAY tmp1 = MulCUDA(_NegativeOne_, ConstCUDA(4.58257569495584));
     const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(
         k4_gfsL, MulCUDA(dt, FusedMulAddCUDA(RK_Rational_21_20, tmp1, RK_Rational_7_10)),
         FusedMulAddCUDA(
-            k1_gfsL, MulCUDA(dt, FusedMulAddCUDA(RK_Rational_7_12, SqrtCUDA(21), RK_Rational_11_6)),
-            FusedMulAddCUDA(k3_gfsL, MulCUDA(dt, FusedMulSubCUDA(RK_Rational_14_9, SqrtCUDA(21), RK_Rational_10_9)),
+            k1_gfsL, MulCUDA(dt, FusedMulAddCUDA(RK_Rational_7_12, ConstCUDA(4.58257569495584), RK_Rational_11_6)),
+            FusedMulAddCUDA(k3_gfsL, MulCUDA(dt, FusedMulSubCUDA(RK_Rational_14_9, ConstCUDA(4.58257569495584), RK_Rational_10_9)),
                             FusedMulAddCUDA(k5_gfsL, MulCUDA(dt, FusedMulSubCUDA(RK_Rational_7_10, tmp1, RK_Rational_343_90)),
                                             FusedMulAddCUDA(k6_gfsL, MulCUDA(dt, FusedMulAddCUDA(RK_Rational_7_18, tmp1, RK_Rational_49_18)),
                                                             FusedMulAddCUDA(RK_Rational_2_3, MulCUDA(k2_gfsL, dt), y_n_gfsL))))));

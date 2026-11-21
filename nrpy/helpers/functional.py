@@ -6,7 +6,8 @@ Author: Ken Sible
         ksible *at* outlook *dot* com
 """
 
-from typing import Any, Callable, Generator, Iterable, List, Optional, Tuple, Union
+import itertools
+from typing import Any, Callable, Generator, Iterable, List, Optional, Tuple
 
 
 def pipe(x: Any, *f: Callable[..., Any]) -> Any:
@@ -123,13 +124,13 @@ def uniquify(iterable: Iterable[Any]) -> List[Any]:
 
 
 def product(
-    *iterable: Union[Iterable[Any], Tuple[Iterable[Any], ...]], **kwargs: Any
+    *iterable: Iterable[Any], repeat: int = 1  # pylint: disable=redefined-outer-name
 ) -> Generator[Tuple[Any, ...], None, None]:
     """
     Return the Cartesian product of several iterables.
 
     :param iterable: A sequence of iterables.
-    :param kwargs: An optional keyword argument 'repeat' to specify a repetition of a single iterable.
+    :param repeat: Number of times the sequence of iterables is repeated.
     :yield: A generator that yields tuples, each containing one element from each input iterable.
 
     Doctests:
@@ -145,15 +146,7 @@ def product(
     b: 1
     b: 2
     """
-    if "repeat" in kwargs:
-        if kwargs["repeat"] > 1 and len(iterable) == 1:
-            iterable = kwargs["repeat"] * iterable
-
-    def f(A: List[List[Any]], B: List[List[Any]]) -> List[List[Any]]:
-        return [list(flatten([x] + [y])) for x in A for y in B]
-
-    for prod in reduce(f, iterable):
-        yield tuple(prod)
+    yield from itertools.product(*iterable, repeat=repeat)
 
 
 if __name__ == "__main__":

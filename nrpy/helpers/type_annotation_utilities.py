@@ -8,7 +8,7 @@ Author: Steven R. Brandt
 
 import inspect
 from json import dumps
-from typing import Any, Tuple, cast
+from typing import Any, Tuple, cast, get_type_hints
 
 try:
     from typing import Literal  # Python 3.8+
@@ -105,7 +105,18 @@ def validate_literal_arguments() -> None:
     if "self" in calling_frame.f_locals:
         # Is it a member function?
         calling_self_ref = calling_frame.f_locals["self"]
-        calling_func = getattr(calling_self_ref, calling_func_name)
+        # The executing function may belong to a base class of self's class.
+        calling_func = next(
+            (
+                func
+                for cls in inspect.getmro(type(calling_self_ref))
+                for func in [vars(cls).get(calling_func_name)]
+                if getattr(func, "__code__", None) is calling_frame.f_code
+            ),
+            None,
+        )
+        if calling_func is None:
+            calling_func = getattr(calling_self_ref, calling_func_name)
         # full_name = calling_self_ref.__class__.__name__ + "." + calling_func_name
     else:
         # Is it a regular function? If so, is it locally defined?
@@ -117,11 +128,19 @@ def validate_literal_arguments() -> None:
             calling_func = calling_frame.f_globals[calling_func_name]
         # full_name = calling_func_name
     signature = inspect.signature(calling_func)
+    try:
+        # Evaluates quoted annotations such as 'Literal["a", "b"]'.
+        type_hints = get_type_hints(calling_func)
+    except Exception:  # pylint: disable=broad-except
+        # An annotation that cannot be resolved here is checked as written.
+        type_hints = {}
     checked_pars = []
     for parameter_name in signature.parameters:
         if parameter_name == "self":
             continue
         parameter_annotation = signature.parameters[parameter_name].annotation
+        if isinstance(parameter_annotation, str):
+            parameter_annotation = type_hints.get(parameter_name, parameter_annotation)
         if parameter_annotation is None:
             continue
         if not is_type_literal(parameter_annotation):

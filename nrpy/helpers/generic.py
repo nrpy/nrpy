@@ -59,9 +59,11 @@ def clang_format(c_code_str: str) -> str:
     """
     clang_format_options = par.parval_from_str("clang_format_options")  # always a str
 
-    # Returned cached output if inputs are exactly the same
+    # Returned cached output if inputs are exactly the same.
+    # A style read from a .clang-format file depends on the directory, so it is not cached.
     unique_id = __name__ + c_code_str + clang_format_options
-    if is_cached(unique_id):
+    use_cache = "file" not in clang_format_options
+    if use_cache and is_cached(unique_id):
         return cast(str, read_cached(unique_id))
 
     # Build the command. Since options is a STRING, pass it as ONE argv element
@@ -81,7 +83,8 @@ def clang_format(c_code_str: str) -> str:
 
             if process.returncode == 0:
                 formatted = stdout.decode("utf-8", errors="replace")
-                write_cached(unique_id, formatted)
+                if use_cache:
+                    write_cached(unique_id, formatted)
                 return formatted
 
             err = stderr.decode("utf-8", errors="replace").strip()
