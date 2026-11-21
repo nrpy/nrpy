@@ -49,11 +49,10 @@ def register_CFunction_generalrfm_Cart_to_xx(
         n = rfm.general_rfm_provider_meta["num_transitions"]
         inverse_fisheye.register_CFunctions(n)
         body = f"""
-if (!isfinite(Cart[0]) || !isfinite(Cart[1]) || !isfinite(Cart[2])) return 1;
 REAL lambda;
 inverse_fisheye_scale__N{n}(params, Cart, 0, &lambda, NULL, NULL, NULL);
 for (int i=0; i<3; i++) xx[i]=lambda*Cart[i];
-return !(isfinite(xx[0]) && isfinite(xx[1]) && isfinite(xx[2]));
+return 0;
 """
         cfc.register_CFunction(
             includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],

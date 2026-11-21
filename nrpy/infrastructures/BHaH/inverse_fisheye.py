@@ -162,11 +162,10 @@ if (derivative_order == 3)
 
     body = f"""
 const REAL qnorm = hypot(hypot(q[0], q[1]), q[2]);
-if (!isfinite(qnorm) || !(params->inverse_fisheye_c > 0)) return 1;
+if (!(params->inverse_fisheye_c > 0)) return 1;
 if (qnorm == 0) {{ x[0]=x[1]=x[2]=0; return 0; }}
 const REAL n[3] = {{q[0]/qnorm, q[1]/qnorm, q[2]/qnorm}};
 REAL lo=0, hi=qnorm*params->inverse_fisheye_a{num_transitions}/params->inverse_fisheye_c;
-if (!isfinite(hi) || hi <= 0) return 1;
 // lambda >= c/aN gives an analytic upper bracket, for every ray.
 const REAL tol = (sizeof(REAL)==sizeof(float)) ? 2e-6 : 2e-14;
 for (int iteration=0; iteration<100; iteration++) {{
