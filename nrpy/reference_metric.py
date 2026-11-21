@@ -18,7 +18,6 @@ import sympy as sp
 import nrpy.grid as gri
 import nrpy.indexedexp as ixp
 import nrpy.params as par
-from nrpy.equations.generalrfm.fisheye import GeneralRFMFisheye
 from nrpy.equations.generalrfm.inverse_fisheye import (
     GeneralRFMInverseFisheye,
     InverseFisheyeComponent,

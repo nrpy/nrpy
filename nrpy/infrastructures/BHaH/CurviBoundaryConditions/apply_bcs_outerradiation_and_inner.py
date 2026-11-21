@@ -73,10 +73,7 @@ def _radiation_r_and_partials_exprs(CoordSystem: str) -> List[sp.Expr]:
 ##   Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb,
 ##   as well as below, in desc= and body=.
 # r_and_partial_xi_partial_r_derivs(): Compute r(x0,x1,x2) and dx^i / dr
-def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
-    CoordSystem: str,
-    cfunc_decorators: str = "",
-) -> str:
+def setup_Cfunction_r_and_partial_xi_partial_r_derivs(CoordSystem: str) -> str:
     """
     Generate C code to compute the radial coordinate r(x0, x1, x2) and its derivatives.
 
@@ -86,7 +83,6 @@ def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
     it unconditionally takes a params_struct.
 
     :param CoordSystem: The coordinate system for which to compute r and its derivatives.
-    :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
     :return: A string containing the generated C code for the function.
     """
     desc = "Compute r(xx0,xx1,xx2) and partial_r x^i."
