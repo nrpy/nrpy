@@ -6,6 +6,7 @@ Authors: Zachariah Etienne, Kenneth Sible, Steven Brandt
 """
 
 # Step 1: Load needed modules
+import itertools
 import string
 from typing import Any, List, NoReturn, Optional, Tuple, Union, cast
 
@@ -390,7 +391,7 @@ def symmetrize_rank2(
     """
     for sym in _parse_symmetry_tokens(2, symmetry):
         sign = 1 if sym[:3] == "sym" else -1
-        for i, j in func.product(range(dimension), repeat=2):
+        for i, j in itertools.product(range(dimension), repeat=2):
             if sym[-2:] == "01":
                 assert isinstance(indexedexp, list) and isinstance(indexedexp[0], list)
                 if j < i:
@@ -434,7 +435,7 @@ def symmetrize_rank3(
         symmetry_list[k] for n in range(len(symmetry_list), 0, -1) for k in range(n)
     ):
         sign = 1 if sym[:3] == "sym" else -1
-        for i, j, k in func.product(range(dimension), repeat=3):
+        for i, j, k in itertools.product(range(dimension), repeat=3):
             if sym[-2:] == "01":
                 if j < i:
                     indexedexp[i][j][k] = sign * indexedexp[j][i][k]
@@ -486,7 +487,7 @@ def symmetrize_rank4(
         symmetry_list[k] for n in range(len(symmetry_list), 0, -1) for k in range(n)
     ):
         sign = 1 if sym[:3] == "sym" else -1
-        for i, j, k, l in func.product(range(dimension), repeat=4):
+        for i, j, k, l in itertools.product(range(dimension), repeat=4):
             if sym[-2:] == "01":
                 if j < i:
                     indexedexp[i][j][k][l] = sign * indexedexp[j][i][k][l]

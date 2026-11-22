@@ -20,7 +20,19 @@ Authors: Zachariah B. Etienne
          sdtootle **at** gmail **dot* com
 """
 
+from typing import NoReturn
+
 import sympy as sp
+
+
+def _no_complex_form(*args: object) -> NoReturn:
+    """
+    Reject Max and Min, whose C functions fmax and fmin take no double complex arguments.
+
+    :param args: Arguments that SymPy's C printer passes.
+    :raises ValueError: Always.
+    """
+    raise ValueError("Max and Min have no double complex C function.")
 
 
 def _fits_c_int(b: sp.Basic) -> bool:
@@ -137,6 +149,13 @@ custom_functions_for_SymPy_ccode = {
         "nrpyAbs": "cabs",
         "fabs": "cabs",
         "Abs": "cabs",
+        "re": "creal",
+        "im": "cimag",
+        "conjugate": "conj",
+        "arg": "carg",
+        # fmax and fmin would discard the imaginary part
+        "Max": [(lambda *args: True, _no_complex_form)],
+        "Min": [(lambda *args: True, _no_complex_form)],
         # unary transcendentals -> force complex variants
         "sin": "csin",
         "cos": "ccos",

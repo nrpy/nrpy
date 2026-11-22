@@ -17,6 +17,7 @@ import nrpy.params as par
 from nrpy.helpers.cse_preprocess_postprocess import (  # NRPy: CSE preprocessing and postprocessing
     cse_postprocess,
     cse_preprocess,
+    is_generated_constant_name,
     sort_cse_output_deterministically,
 )
 from nrpy.helpers.custom_c_codegen_functions import custom_functions_for_SymPy_ccode
@@ -125,7 +126,7 @@ class CCodeGen:
         :param enforce_c_parameters_must_be_defined: Boolean to enforce parameter definitions.
         :param enable_fd_functions: Boolean to enable finite difference functions.
         :param mem_alloc_style: Memory allocation style.
-        :param upwind_control_vec: Upwind control vector as a symbol or list of symbols.
+        :param upwind_control_vec: Upwind control vector: a list of SymPy expressions, or sp.Symbol("unset") for none.
         :param ko_fd_order: ``None`` or a non-Boolean positive even integer
             used only as the base order for ``dKOD``.  The KO construction
             adds two to this value.  This option is incompatible with
@@ -136,8 +137,8 @@ class CCodeGen:
         :param stored_first_derivatives: Registered first-derivative gridfunctions valid for this kernel; the caller supplies current values and required halos.
 
         :raises ValueError: If 'fp_type' is not recognized as a valid floating-point type.
-        :raises ValueError: If SIMD optimizations are enabled but the floating-point type is not 'double'.
-        :raises ValueError: If 'upwind_control_vec' is not a sympy Symbol or a list of sympy Symbols.
+        :raises ValueError: If SIMD optimizations are enabled but CSE is disabled or the floating-point type is not 'double'.
+        :raises ValueError: If 'upwind_control_vec' is neither sp.Symbol("unset") nor a list of sympy expressions.
         :raises ValueError: If 'fd_order' is not an even, positive integer.
         :raises ValueError: If ``ko_fd_order`` is neither ``None`` nor a
             non-Boolean positive even integer.
@@ -215,6 +216,8 @@ class CCodeGen:
         # Set fp_type and fp_type_alias
         Infrastructure = par.parval_from_str("Infrastructure")
         if self.enable_simd:
+            if not self.enable_cse:
+                raise ValueError("SIMD output requires enable_cse=True.")
             if self.fp_type != "double":
                 raise ValueError(
                     "SIMD output currently only supports double precision. Sorry!"
@@ -257,16 +260,12 @@ class CCodeGen:
                 )
                 self.enable_cse_preprocess = False
 
-        if (
-            not isinstance(self.upwind_control_vec, sp.Symbol)
-            and str(self.upwind_control_vec) == "unset"
-        ):
-            if not isinstance(self.upwind_control_vec, list) or not isinstance(
-                self.upwind_control_vec[0], sp.Symbol
-            ):
-                raise ValueError(
-                    "When specifying upwind_control_vec, it must be a list of sympy expressions"
-                )
+        if not isinstance(
+            self.upwind_control_vec, list
+        ) and self.upwind_control_vec != sp.Symbol("unset"):
+            raise ValueError(
+                "When specifying upwind_control_vec, it must be a list of sympy expressions"
+            )
 
         if self.fd_order % 2 != 0 or self.fd_order <= 0:
             raise ValueError(
@@ -515,7 +514,7 @@ def c_codegen(
     if isinstance(output_varname_str, tuple):
         raise TypeError("output_varname_str cannot be a tuple")
     CCGParams = CCodeGen(**kwargs)
-    if CCGParams.enable_fd_codegen:
+    if CCGParams.automatically_read_gf_data_from_memory:
         fin.FDFunctions_dict.clear()
 
     # Step 1: Initialize
@@ -548,9 +547,34 @@ def c_codegen(
 
     # Step 3: Process code generation for reading/writing gridfunctions and evaluating finite differences
     if CCGParams.automatically_read_gf_data_from_memory or CCGParams.enable_fd_codegen:
+        if (
+            not CCGParams.enable_cse
+            or CCGParams.cse_varprefix
+            or CCGParams.SCALAR_TMP_varnames
+            or CCGParams.postproc_substitution_dict
+        ):
+            raise ValueError(
+                "Gridfunction reads and finite differences support neither enable_cse=False, "
+                "cse_varprefix, SCALAR_TMP_varnames, nor postproc_substitution_dict."
+            )
         free_symbols_list: List[sp.Basic] = []
         for expr in sympyexpr_list:
             free_symbols_list.extend(expr.free_symbols)
+        for sym in free_symbols_list:
+            # These names are declared by the finite-difference code below.
+            name = str(sym)
+            if name.startswith(
+                (
+                    "__RHS_exp_",
+                    "UpwindAlgInput",
+                    "UpwindControlVectorU",
+                    "tmp_upwind_Integer_",
+                    "upwind_Integer_",
+                )
+            ) or (name.startswith("Upwind") and name[6:].isdecimal()):
+                raise ValueError(
+                    f"Input symbol {name} has the name of a variable generated for finite differences."
+                )
         list_of_deriv_vars = fin.extract_list_of_deriv_var_strings_from_sympyexpr_list(
             free_symbols_list, sp.Symbol("unset")
         )
@@ -590,8 +614,17 @@ def c_codegen(
             fp_type=CCGParams.fp_type,
             fp_type_alias=CCGParams.fp_type_alias,
             rational_const_alias=CCGParams.rational_const_alias,
+            cse_sorting=CCGParams.cse_sorting,
+            enable_cse_preprocess=CCGParams.enable_cse_preprocess,
+            simd_find_more_subs=CCGParams.simd_find_more_subs,
+            simd_find_more_FMAsFMSs=CCGParams.simd_find_more_FMAsFMSs,
+            simd_debug=CCGParams.simd_debug,
         )
-        return order_statements_for_register_pressure(fd_kernel_body)
+        return (
+            CCGParams.prestring
+            + order_statements_for_register_pressure(fd_kernel_body)
+            + CCGParams.poststring
+        )
 
     # Step 4: If CCGParams.verbose, then output the original SymPy
     #         expression(s) in code comments prior to actual C code
@@ -599,7 +632,7 @@ def c_codegen(
         plural = "s" if len(output_varname_str) > 1 else ""
         commentblock += f"/*\n *  Original SymPy expression{plural}:\n"
 
-        expressions = "\n".join(
+        expressions = "\n ".join(
             (
                 f'*  "[{varname} = {expr}]"'
                 if len(output_varname_str) > 1
@@ -638,7 +671,20 @@ def c_codegen(
         simd_const_values = []
 
         varprefix = CCGParams.cse_varprefix
+        # Temporaries and generated constants must not take a name that output_varname_str already uses.
+        reserved_names = {
+            name
+            for out in output_varname_str
+            for name in "".join(
+                char if char.isalnum() or char == "_" else " " for char in out
+            ).split()
+        }
         if CCGParams.enable_cse_preprocess or CCGParams.enable_simd:
+            for name in reserved_names:
+                if is_generated_constant_name(name, varprefix):
+                    raise ValueError(
+                        f"Output name {name} has the name of a constant generated by cse_preprocess."
+                    )
             if not CCGParams.symbol_to_Rational_dict:
                 # If enable_cse_preprocess == True, then perform partial factorization
                 # If enable_simd == True, then declare _NegativeOne_ in preprocessing
@@ -691,24 +737,12 @@ def c_codegen(
                 CCGParams.SCALAR_TMP_varnames
                 and var_name in CCGParams.SCALAR_TMP_varnames
             ):
-                if output_varname_str[idx] != var_name:
-                    raise ValueError(
-                        f"Error: where set, CCGParams.SCALAR_TMP_varnames[{idx}] must equal output_varname_str[{idx}]"
-                    )
                 tmp_sympy_expr = CCGParams.SCALAR_TMP_sympyexprs[idx]
                 sympyexprs_SCALAR_TMPs_are_sp_Eq.append(sp.Eq(tmp_sympy_expr, expr))
             else:
                 varnames_excluding_SCALAR_TMPs.append(var_name)
                 sympyexprs_SCALAR_TMPs_are_sp_Eq.append(expr)
 
-        # Temporaries must not take a name that output_varname_str already uses.
-        reserved_names = {
-            name
-            for out in output_varname_str
-            for name in "".join(
-                char if char.isalnum() or char == "_" else " " for char in out
-            ).split()
-        }
         cse_symbols = (
             sym
             for sym in sp.numbered_symbols(CCGParams.cse_varprefix + "tmp")
@@ -1299,13 +1333,13 @@ def gridfunction_management_and_FD_codegen(
     )
     if has_reads_or_helpers:
         NRPy_FD__Number_of_Steps += 1
-    if not isinstance(CCGParams.upwind_control_vec, str) and len(upwind_directions) > 0:
+    if len(upwind_directions) > 0:
         NRPy_FD__Number_of_Steps += 1
 
     Coutput = ""
 
-    # Copy kwargs
-    kwargs_FDPart1 = kwargs.copy()
+    # Copy kwargs; the caller places the generated statements, so no braces or comment blocks.
+    kwargs_FDPart1 = {**kwargs, "include_braces": False, "verbose": False}
     if has_reads_or_helpers:
         Coutput += f"""/*\n * NRPy-Generated GF Access/FD Code, Step {NRPy_FD_StepNumber} of {NRPy_FD__Number_of_Steps}:
  * Read gridfunction(s) from main memory and compute FD stencils as needed.\n */
@@ -1316,8 +1350,6 @@ def gridfunction_management_and_FD_codegen(
         kwargs_FDPart1.update(
             {
                 "cse_varprefix": "FDPart1",
-                "verbose": False,
-                "include_braces": False,
                 "enable_cse_preprocess": False,
                 "simd_find_more_subs": False,
                 "automatically_read_gf_data_from_memory": False,
@@ -1372,81 +1404,80 @@ def gridfunction_management_and_FD_codegen(
             )
 
     # Step 5.b.ii: Implement control-vector upwinding algorithm.
-    if not isinstance(CCGParams.upwind_control_vec, str):
-        if len(upwind_directions) > 0:
-            Coutput += f"""\n/*\n * NRPy-Generated GF Access/FD Code, Step {NRPy_FD_StepNumber} of {NRPy_FD__Number_of_Steps}:
+    if len(upwind_directions) > 0:
+        Coutput += f"""\n/*\n * NRPy-Generated GF Access/FD Code, Step {NRPy_FD_StepNumber} of {NRPy_FD__Number_of_Steps}:
  * Implement upwinding algorithm.\n */
 """
-            NRPy_FD_StepNumber += 1
-            if CCGParams.enable_simd:
-                for n in ["0", "1"]:
-                    Coutput += f"""MAYBE_UNUSED const double tmp_upwind_Integer_{n} = {n}.000000000000000000000000000000000;\n
+        NRPy_FD_StepNumber += 1
+        if CCGParams.enable_simd:
+            for n in ["0", "1"]:
+                Coutput += f"""MAYBE_UNUSED const double tmp_upwind_Integer_{n} = {n}.000000000000000000000000000000000;\n
 MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Integer_{n});
 """
-            for dirn in upwind_directions:
-                Coutput += f"const {CCGParams.fp_type_alias} Upwind{dirn} = UPWIND_ALG(UpwindControlVectorU{dirn});\n"
+        for dirn in upwind_directions:
+            Coutput += f"const {CCGParams.fp_type_alias} Upwind{dirn} = UPWIND_ALG(UpwindControlVectorU{dirn});\n"
 
-        upwindU = [cast(sp.Expr, sp.sympify(0)) for _ in range(3)]
-        # Populate upwindU with symbolic expressions based on direction
-        for direction in upwind_directions:
-            upwindU[direction] = cast(sp.Expr, sp.sympify(f"Upwind{direction}"))
+    upwindU = [cast(sp.Expr, sp.sympify(0)) for _ in range(3)]
+    # Populate upwindU with symbolic expressions based on direction
+    for direction in upwind_directions:
+        upwindU[direction] = cast(sp.Expr, sp.sympify(f"Upwind{direction}"))
 
-        upwind_expr_list, var_list = [], []
+    upwind_expr_list, var_list = [], []
 
-        # Iterate over the list of derivative variables
-        for i, deriv_var_symb in enumerate(list_of_deriv_vars):
-            deriv_var = str(deriv_var_symb)
-            operator = list_of_deriv_operators[i]
+    # Iterate over the list of derivative variables
+    for i, deriv_var_symb in enumerate(list_of_deriv_vars):
+        deriv_var = str(deriv_var_symb)
+        operator = list_of_deriv_operators[i]
 
-            # Check if the operator is a 5-length string and contains "dupD"
-            if len(operator) == 5 and "dupD" in operator:
-                var_dupD = cast(sp.Expr, sp.sympify(f"UpwindAlgInput{deriv_var}"))
-                var_ddnD = cast(
-                    sp.Expr,
-                    sp.sympify(f"UpwindAlgInput{deriv_var.replace('_dupD', '_ddnD')}"),
+        # Check if the operator is a 5-length string and contains "dupD"
+        if len(operator) == 5 and "dupD" in operator:
+            var_dupD = cast(sp.Expr, sp.sympify(f"UpwindAlgInput{deriv_var}"))
+            var_ddnD = cast(
+                sp.Expr,
+                sp.sympify(f"UpwindAlgInput{deriv_var.replace('_dupD', '_ddnD')}"),
+            )
+
+            # Extract direction for upwind operation
+            upwind_direction = int(operator[-1])
+
+            # Substitute ddn = dup - A*raw_KO into the existing selector:
+            # U*(dup - ddn) + ddn = dup + (U - 1)*A*raw_KO.
+            # Thus U=1 selects dup and U=0 selects ddn without evaluating
+            # its stencil separately; raw_KO remains available to the RHS.
+            if deriv_var in upwind_ko_symbols:
+                upwind_expr = (
+                    var_dupD
+                    + (upwindU[upwind_direction] - 1)
+                    * upwind_ko_factor
+                    * upwind_ko_symbols[deriv_var]
+                )
+            else:
+                upwind_expr = (
+                    upwindU[upwind_direction] * (var_dupD - var_ddnD) + var_ddnD
                 )
 
-                # Extract direction for upwind operation
-                upwind_direction = int(operator[-1])
+            # Update expression and variable lists
+            upwind_expr_list.append(upwind_expr)
+            var_list.append(f"const {CCGParams.fp_type_alias} {deriv_var}")
 
-                # Substitute ddn = dup - A*raw_KO into the existing selector:
-                # U*(dup - ddn) + ddn = dup + (U - 1)*A*raw_KO.
-                # Thus U=1 selects dup and U=0 selects ddn without evaluating
-                # its stencil separately; raw_KO remains available to the RHS.
-                if deriv_var in upwind_ko_symbols:
-                    upwind_expr = (
-                        var_dupD
-                        + (upwindU[upwind_direction] - 1)
-                        * upwind_ko_factor
-                        * upwind_ko_symbols[deriv_var]
-                    )
-                else:
-                    upwind_expr = (
-                        upwindU[upwind_direction] * (var_dupD - var_ddnD) + var_ddnD
-                    )
-
-                # Update expression and variable lists
-                upwind_expr_list.append(upwind_expr)
-                var_list.append(f"const {CCGParams.fp_type_alias} {deriv_var}")
-
-        # Copy kwargs
-        kwargs_FDPart2 = kwargs_FDPart1.copy()
-        kwargs_FDPart2["symbol_to_Rational_dict"] = {}
-        # We choose the CSE temporary variable prefix "FDPart2" for the finite difference coefficients:
-        kwargs_FDPart2.update(
-            {
-                "enable_cse_preprocess": CCGParams.enable_cse_preprocess,
-                "simd_find_more_subs": CCGParams.simd_find_more_subs,
-                "enable_GoldenKernels": CCGParams.enable_GoldenKernels,
-                "simd_clean_NegativeOnes_after_processing": False,
-                "cse_varprefix": "FDPart2",
-            }
-        )
-        Coutput += c_codegen(
-            upwind_expr_list,
-            var_list,
-            **kwargs_FDPart2,
-        )
+    # Copy kwargs
+    kwargs_FDPart2 = kwargs_FDPart1.copy()
+    kwargs_FDPart2["symbol_to_Rational_dict"] = {}
+    # We choose the CSE temporary variable prefix "FDPart2" for the finite difference coefficients:
+    kwargs_FDPart2.update(
+        {
+            "enable_cse_preprocess": CCGParams.enable_cse_preprocess,
+            "simd_find_more_subs": CCGParams.simd_find_more_subs,
+            "enable_GoldenKernels": CCGParams.enable_GoldenKernels,
+            "simd_clean_NegativeOnes_after_processing": False,
+            "cse_varprefix": "FDPart2",
+        }
+    )
+    Coutput += c_codegen(
+        upwind_expr_list,
+        var_list,
+        **kwargs_FDPart2,
+    )
 
     # Step 5.c.i: Add input RHS & LHS expressions from
     #             sympyexpr_list[]

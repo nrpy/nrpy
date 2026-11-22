@@ -5,7 +5,7 @@
 
 ## Summary
 
-These helpers inspect and transform SymPy expressions without defining the equations or public code-generation interfaces. `ExprTree` supplies mutable expression nodes. `expression_utils` collects free-symbol names and emits parameter aliases. `f2r` constructs rationals from decimal strings, including scientific notation. `functional.py` supplies composition and iterable utilities, with `product` equal to `itertools.product`.
+These helpers inspect and transform SymPy expressions without defining the equations or public code-generation interfaces. `ExprTree` supplies mutable expression nodes. `expression_utils` collects free-symbol names and emits parameter aliases. `f2r` constructs rationals from decimal strings, including scientific notation. `functional.py` supplies composition and iterable utilities.
 
 ## Detail
 
@@ -13,7 +13,7 @@ These helpers inspect and transform SymPy expressions without defining the equat
 
 Evidence (descriptive behavior): `expr_tree.py::ExprTree.build`; `expr_tree.py::ExprTree.reconstruct`.
 
-`_get_free_symbol_names_cached()` traverses expression arguments with an object-id memo and unions their symbol names. A node with `bound_symbols`, such as `Integral`, `Lambda`, or `Subs`, and a `Derivative` take their names from SymPy's `free_symbols` for that node, less the excluded names, so the result keeps `x` for `Integral(x, (x, 0, x))`, where `x` is free in the upper limit. `get_unique_expression_symbols_as_strings()` sorts the resulting names after exclusions. Parameter grouping through `get_params_commondata_symbols_from_expr_list()` uses the same names.
+`_get_free_symbol_names_cached()` traverses expression arguments with an object-id memo and unions their symbol names. A node with `bound_symbols`, such as `Integral`, `Lambda`, or `Subs`, and a `Derivative`, `Limit`, or `MatrixSymbol` take their names from SymPy's `free_symbols` for that node, less the excluded names, so the result keeps `x` for `Integral(x, (x, 0, x))`, where `x` is free in the upper limit. `get_unique_expression_symbols_as_strings()` sorts the resulting names after exclusions. Parameter grouping through `get_params_commondata_symbols_from_expr_list()` uses the same names.
 
 Evidence (descriptive behavior): `expression_utils.py::_get_free_symbol_names_cached`.
 
@@ -21,20 +21,18 @@ Evidence (descriptive behavior): `expression_utils.py::_get_free_symbol_names_ca
 
 `generate_definition_header()` emits one definition line per requested symbol by default, using `const REAL <name> = <var_access><name>;`. When `enable_intrinsics=True`, it emits a scalar `NOSIMD<name>` alias and a `REAL_SIMD_ARRAY` alias through `ConstSIMD(...)`. The helper only builds the definition text; the calling codegen or infrastructure module places that text into generated functions.
 
-`f2r()` converts its input to a lower-case string, splits off any exponent at `e`, adds a decimal point to the mantissa if none is present, appends `zpad` zeros to the mantissa only, and passes the mantissa, zeros, and exponent to `sympy.Rational`. The decimal value is preserved for fixed-point and scientific notation alike: with `zpad=1`, `1e-7` gives `1/10000000` and `1.2e-7` gives `3/25000000`. Padding does not recover precision already lost in a float.
+`f2r()` passes the string form of its input to `sympy.Rational`, which keeps the decimal value for fixed-point and scientific notation alike: `1e-7` gives `1/10000000` and `1.2e-7` gives `3/25000000`. It does not recover precision already lost in a float.
 
 Evidence (descriptive behavior): `float_to_rational.py::f2r`.
 
-`functional.py` provides composition and iterable helpers. `pipe()` applies functions in sequence; `repeat()` applies one function repeatedly; `chain()` and `flatten()` flatten iterable content; `reduce()` combines values; and `uniquify()` preserves first occurrences. `product(*iterable, repeat=1)` yields the tuples of `itertools.product(*iterable, repeat=repeat)`: iterable-valued elements stay whole, one-shot iterators are consumed once, and `repeat=0` yields a single empty tuple.
-
-Evidence (descriptive behavior): `functional.py::product`.
+`functional.py` provides composition and iterable helpers. `pipe()` applies functions in sequence; `repeat()` applies one function repeatedly; `chain()` and `flatten()` flatten iterable content; `reduce()` combines values; and `uniquify()` preserves first occurrences.
 
 ## Sources
 
 - [nrpy/helpers/expr_tree.py](../../../nrpy/helpers/expr_tree.py) - `ExprTree`, `ExprTree.Node`, `build`, `preorder`, `postorder`, `reconstruct`
 - [nrpy/helpers/expression_utils.py](../../../nrpy/helpers/expression_utils.py) - `_get_free_symbol_names_cached`, `get_unique_expression_symbols_as_strings`, `get_params_commondata_symbols_from_expr_list`, `generate_definition_header`
 - [nrpy/helpers/float_to_rational.py](../../../nrpy/helpers/float_to_rational.py) - `f2r`
-- [nrpy/helpers/functional.py](../../../nrpy/helpers/functional.py) - `pipe`, `repeat`, `chain`, `flatten`, `reduce`, `uniquify`, `product`
+- [nrpy/helpers/functional.py](../../../nrpy/helpers/functional.py) - `pipe`, `repeat`, `chain`, `flatten`, `reduce`, `uniquify`
 
 ## See Also
 

@@ -10,6 +10,7 @@ Authors: Ken Sible
          zachetie *at* gmail *dot** com
 """
 
+import math
 from typing import Any, Dict, Optional, Union, cast
 
 import sympy as sp
@@ -29,24 +30,14 @@ def AbsSIMD_check(a: sp.Symbol) -> Any:
     return sp.Abs(a)
 
 
-def ConstSIMD_check(a: sp.Basic) -> sp.Float:
+def ConstSIMD_check(a: sp.Basic) -> sp.Basic:
     """
-    Convert a sympy Basic type to a Float with 34 digits of precision.
+    Return the broadcast constant; debug mode passes the exact value it replaced.
 
-    :param a: The sympy Basic expression to be converted.
-    :return: A floating-point number with 34 digits of precision.
+    :param a: The constant.
+    :return: The same constant.
     """
-    return sp.Float(a, 34)
-
-
-def nrpyAbsSIMD_check(a: sp.Symbol) -> Any:
-    """
-    Check that nrpyAbsSIMD(a) evaluates to sympy's Abs(a).
-
-    :param a: The symbol to be evaluated.
-    :return: The absolute value of symbol `a`.
-    """
-    return sp.Abs(a)
+    return a
 
 
 def AddSIMD_check(a: sp.Symbol, b: sp.Symbol) -> Any:
@@ -234,7 +225,6 @@ def _debug_eval_namespace(expr: sp.Basic) -> Dict[str, Any]:
         {
             "AbsSIMD_check": AbsSIMD_check,
             "ConstSIMD_check": ConstSIMD_check,
-            "nrpyAbsSIMD_check": nrpyAbsSIMD_check,
             "AddSIMD_check": AddSIMD_check,
             "SubSIMD_check": SubSIMD_check,
             "MulSIMD_check": MulSIMD_check,
@@ -278,7 +268,8 @@ def expr_convert_to_simd_intrins(
     :return: A transformed SymPy expression using SIMD intrinsics.
 
     :raises ValueError: If debug mode is enabled and the transformed expression differs from the original,
-        indicating a potential issue with the conversion process.
+        indicating a potential issue with the conversion process, if a real constant exceeds the range
+        of a double, or if the expression contains a Piecewise, which has no SIMD form.
 
     Doctests:
     >>> from sympy.abc import a, b, c, d
@@ -382,6 +373,18 @@ def expr_convert_to_simd_intrins(
     SinSIMD = sp.Function("SinSIMD")
     CosSIMD = sp.Function("CosSIMD")
 
+    # Exact value of each C double literal emitted below, for debug mode.
+    literal_values: Dict[sp.Symbol, sp.Basic] = {}
+
+    def double_literal(value: sp.Basic) -> sp.Symbol:
+        # Return a real number as a symbol spelled as a C double literal.
+        number = float(cast(sp.Expr, value))
+        if math.isinf(number):
+            raise ValueError(f"{value} exceeds the range of a double.")
+        literal = sp.Symbol(repr(number))
+        literal_values[literal] = value
+        return literal
+
     # Step 0: Broadcast real numbers that cse_preprocess leaves as scalars (Float,
     #         pi, sqrt(2), ...) with ConstSIMD, spelled as a C double literal.
     #   Note: Step 0 skips the exponent of each power that is neither skipped nor
@@ -393,7 +396,7 @@ def expr_convert_to_simd_intrins(
         if id(subtree) in exponent_nodes:
             continue
         if subexpr.is_number and subexpr.is_real and not subexpr.is_Rational:
-            subtree.expr = ConstSIMD(sp.Symbol(repr(float(cast(sp.Expr, subexpr)))))
+            subtree.expr = ConstSIMD(double_literal(subexpr))
             tree.build(subtree)
         elif subexpr.func == sp.Pow:
             exponent_nodes[id(subtree.children[1])] = subtree.children[1]
@@ -409,6 +412,8 @@ def expr_convert_to_simd_intrins(
     for subtree in tree.preorder():
         func = subtree.expr.func
         args = subtree.expr.args
+        if func == sp.Piecewise:
+            raise ValueError("Piecewise expressions have no SIMD form.")
         if func == sp.Abs or func.__name__ == "nrpyAbs":
             subtree.expr = AbsSIMD(args[0])
         elif func == sp.exp:
@@ -423,10 +428,11 @@ def expr_convert_to_simd_intrins(
             subtree.expr = SignSIMD(args[0])
     tree.reconstruct()
 
-    def unity() -> sp.Symbol:
+    def unity() -> sp.Basic:
         # Return the symbol for 1, registering it in symbol_to_Rational_dict if needed.
-        one = sp.Symbol(prefix + "_Integer_1")
-        if sp.S.One not in map_rat_to_sym:
+        one = map_rat_to_sym.get(sp.S.One)
+        if one is None:
+            one = sp.Symbol(prefix + "_Integer_1")
             symbol_to_Rational_dict[one], map_rat_to_sym[sp.S.One] = sp.S.One, one
         return one
 
@@ -480,14 +486,15 @@ def expr_convert_to_simd_intrins(
                 subtree.expr = IntegerPowSIMD(args[0], int(exponent))
                 tree.build(subtree)
             else:
-                if args[1].is_number and args[1].is_real:
-                    # Print the exponent as a C double, not as an integer division.
-                    subtree.expr = PowSIMD(
-                        args[0], sp.Symbol(repr(float(cast(sp.Expr, args[1]))))
-                    )
-                    tree.build(subtree)
-                else:
-                    subtree.expr = PowSIMD(*args)
+                # Print a real base or exponent as a C double, not as an integer division.
+                base_and_exponent = [
+                    (double_literal(arg) if arg.is_number and arg.is_real else arg)
+                    for arg in args
+                ]
+                if base_and_exponent[0] != args[0]:
+                    base_and_exponent[0] = ConstSIMD(base_and_exponent[0])
+                subtree.expr = PowSIMD(*base_and_exponent)
+                tree.build(subtree)
     tree.reconstruct()
 
     # Step 2: Replace subtraction expressions.
@@ -524,7 +531,11 @@ def expr_convert_to_simd_intrins(
                 args_list = [arg for n, arg in enumerate(args_list) if n not in (i, k)]
                 if len(args_list) > 0:
                     # FIX: Cast args_list to List[Expr]
-                    subexpr = sp.Add(subexpr, *[cast(sp.Expr, a) for a in args_list])
+                    summands = [subexpr, *[cast(sp.Expr, a) for a in args_list]]
+                    subexpr = sp.Add(*summands)
+                    # Keep repeated summands apart; merging them gives a scalar coefficient.
+                    if subexpr.func != sp.Add or len(subexpr.args) != len(summands):
+                        subexpr = sp.Add(*summands, evaluate=False)
                 subtree.expr = subexpr
                 tree.build(subtree)
             except StopIteration:
@@ -594,7 +605,7 @@ def expr_convert_to_simd_intrins(
             # AddSIMD(a, AddSIMD(MulSIMD(b,c), MulSIMD(d,e))) >> FusedMulAddSIMD(b, c, FusedMulAddSIMD(d,e,a))
             # Validate:
             # x = a + b*c + d*e
-            # c_codegen(x,"x", params="enable_simd=True,SIMD_debug=True")
+            # c_codegen(x, "x", enable_simd=True, simd_debug=True)
             if (
                 func == AddSIMD
                 and args[1].func == AddSIMD
@@ -612,7 +623,7 @@ def expr_convert_to_simd_intrins(
             # b*c + d*e + a -> FMA(b,c,FMA(d,e,a))
             # Validate:
             # x = b*c + d*e + a
-            # c_codegen(x,"x", params="enable_simd=True,SIMD_debug=True")
+            # c_codegen(x, "x", enable_simd=True, simd_debug=True)
             # AddSIMD(AddSIMD(MulSIMD(b,c), MulSIMD(d,e)),a) >> FusedMulAddSIMD(b, c, FusedMulAddSIMD(d,e,a))
             elif (
                 func == AddSIMD
@@ -671,7 +682,7 @@ def expr_convert_to_simd_intrins(
             # (b*c - d*e) + a -> AddSIMD(a, FusedMulSubSIMD(b, c, MulSIMD(d, e))) >> FusedMulSubSIMD(b, c, FusedMulSubSIMD(d,e,a))
             # Validate:
             # x = (b*c - d*e) + a
-            # c_codegen(x,"x", params="enable_simd=True,SIMD_debug=True")
+            # c_codegen(x, "x", enable_simd=True, simd_debug=True)
             if (
                 func == AddSIMD
                 and args[1].func == FusedMulSubSIMD
@@ -688,7 +699,7 @@ def expr_convert_to_simd_intrins(
             # b*c - (a - d*e) -> SubSIMD(FusedMulAddSIMD(b, c, MulSIMD(d, e)), a) >> FMA(b,c,FMS(d,e,a))
             # Validate:
             # x = b * c - (a - d * e)
-            # c_codegen(x, "x", params="enable_simd=True,SIMD_debug=True")
+            # c_codegen(x, "x", enable_simd=True, simd_debug=True)
             elif (
                 func == SubSIMD
                 and args[0].func == FusedMulAddSIMD
@@ -705,7 +716,7 @@ def expr_convert_to_simd_intrins(
             # (b*c - d*e) - a -> SubSIMD(FusedMulSubSIMD(b, c, MulSIMD(d, e)), a) >> FMS(b,c,FMA(d,e,a))
             # Validate:
             # x = (b*c - d*e) - a
-            # c_codegen(x,"x", params="enable_simd=True,SIMD_debug=True")
+            # c_codegen(x, "x", enable_simd=True, simd_debug=True)
             elif (
                 func == SubSIMD
                 and args[0].func == FusedMulSubSIMD
@@ -860,15 +871,25 @@ def expr_convert_to_simd_intrins(
     expr = tree.reconstruct()
 
     if debug:
+        # Evaluate each double literal as the exact value it replaced.
+        placeholders = {
+            literal: sp.Symbol(f"_literal_{k}")
+            for k, literal in enumerate(literal_values)
+        }
+        expr_with_placeholders = expr.xreplace(placeholders)
         # pylint: disable=W0123
         expr_check = eval(
-            str(expr).replace("SIMD", "SIMD_check"),
+            str(expr_with_placeholders).replace("SIMD", "SIMD_check"),
             {"__builtins__": {}},
-            _debug_eval_namespace(expr),
+            _debug_eval_namespace(expr_with_placeholders),
         )
-        expr_check = expr_check.xreplace(symbol_to_Rational_dict)
+        expr_check = expr_check.xreplace(
+            {placeholders[k]: v for k, v in literal_values.items()}
+        ).xreplace(symbol_to_Rational_dict)
 
-        expr_orig_check = expr_orig.xreplace(symbol_to_Rational_dict)
+        expr_orig_check = expr_orig.xreplace(symbol_to_Rational_dict).replace(
+            sp.Function("nrpyAbs"), sp.Abs
+        )
         expr_diff = expr_check - expr_orig_check
         # The eval(str(srepr())) below normalizes the expression,
         # fixing a cancellation issue in SymPy ~0.7.4.

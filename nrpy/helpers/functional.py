@@ -6,8 +6,7 @@ Author: Ken Sible
         ksible *at* outlook *dot* com
 """
 
-import itertools
-from typing import Any, Callable, Generator, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Generator, Iterable, List, Optional
 
 
 def pipe(x: Any, *f: Callable[..., Any]) -> Any:
@@ -121,32 +120,6 @@ def uniquify(iterable: Iterable[Any]) -> List[Any]:
     [1, 2, 3, 4, 5]
     """
     return list(reduce(lambda l, x: l if x in l else l + [x], iterable, []))
-
-
-def product(
-    *iterable: Iterable[Any], repeat: int = 1  # pylint: disable=redefined-outer-name
-) -> Generator[Tuple[Any, ...], None, None]:
-    """
-    Return the Cartesian product of several iterables.
-
-    :param iterable: A sequence of iterables.
-    :param repeat: Number of times the sequence of iterables is repeated.
-    :yield: A generator that yields tuples, each containing one element from each input iterable.
-
-    Doctests:
-    >>> list(product(['a', 'b'], [1, 2, 3]))
-    [('a', 1), ('a', 2), ('a', 3), ('b', 1), ('b', 2), ('b', 3)]
-    >>> list(product([1, 2, 3], repeat=2))
-    [(1, 1), (1, 2), (1, 3), (2, 1), (2, 2), (2, 3), (3, 1), (3, 2), (3, 3)]
-    >>> for i, j in product(['a', 'b'], range(1, 3)):
-    ...     print('%s: %d' % (i, j))
-    ...
-    a: 1
-    a: 2
-    b: 1
-    b: 2
-    """
-    yield from itertools.product(*iterable, repeat=repeat)
 
 
 if __name__ == "__main__":

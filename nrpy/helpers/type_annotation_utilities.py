@@ -132,7 +132,7 @@ def validate_literal_arguments() -> None:
         # Evaluates quoted annotations such as 'Literal["a", "b"]'.
         type_hints = get_type_hints(calling_func)
     except Exception:  # pylint: disable=broad-except
-        # An annotation that cannot be resolved here is checked as written.
+        # If any annotation cannot be resolved here, quoted annotations are skipped.
         type_hints = {}
     checked_pars = []
     for parameter_name in signature.parameters:

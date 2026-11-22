@@ -20,10 +20,10 @@ def _get_free_symbol_names_cached(
     Return free-symbol names for `expr` using a memoized DAG traversal.
 
     This preserves SymPy's `free_symbols` semantics. Objects that bind or
-    differentiate symbols, like `Integral`, `Lambda`, `Subs`, and `Derivative`,
-    take their free symbols from SymPy itself, while the union over arguments
-    for all other objects avoids repeated whole-tree traversals for large shared
-    expression graphs.
+    differentiate symbols, like `Integral`, `Lambda`, `Subs`, `Derivative`, and
+    `Limit`, and a `MatrixSymbol`, take their free symbols from SymPy itself,
+    while the union over arguments for all other objects avoids repeated
+    whole-tree traversals for large shared expression graphs.
 
     :param expr: SymPy expression or subexpression to inspect.
     :param exclude: Symbol names to exclude from the result.
@@ -58,7 +58,9 @@ def _get_free_symbol_names_cached(
             memo[node_id] = frozenset(names)
             continue
 
-        if getattr(node, "bound_symbols", ()) or isinstance(node, sp.Derivative):
+        if getattr(node, "bound_symbols", ()) or isinstance(
+            node, (sp.Derivative, sp.Limit, sp.MatrixSymbol)
+        ):
             memo[node_id] = frozenset(
                 cast(str, getattr(sym, "name", str(sym))) for sym in node.free_symbols
             ).difference(exclude)

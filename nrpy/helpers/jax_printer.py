@@ -170,10 +170,16 @@ class NRPyJaxPrinter(Printer):
         Print an integer, as a float if it does not fit in a signed 32-bit integer.
         :param expr: Integer to print.
         :return: String representation of the integer.
+        :raises ValueError: If the integer exceeds the range of a double-precision float.
         """
         if abs(expr.p) < INT32_BOUND:
             return super()._print_Integer(expr)
-        return repr(float(expr.p))
+        try:
+            return repr(float(expr.p))
+        except OverflowError as exc:
+            raise ValueError(
+                "Integer exceeds the range of a double-precision float."
+            ) from exc
 
     def _print_Rational(self, expr: sp.Rational) -> str:
         """

@@ -108,7 +108,15 @@ class GPUKernel:
 
         self.CFunction: cfc.CFunction
         self.desc: str = f"Kernel: {self.name}.\n" + comments
-        self.launch_dict = launch_dict
+        # Copy launch_dict and its lists; padding below must not change the caller's dictionary.
+        self.launch_dict = (
+            None
+            if launch_dict is None
+            else {
+                key: list(value) if isinstance(value, list) else value
+                for key, value in launch_dict.items()
+            }
+        )
         self.launch_block: str = ""
         self.launch_settings: str = ""
         self.thread_tiling_macro_suffix = thread_tiling_macro_suffix
