@@ -34,9 +34,17 @@ def is_generated_constant_name(name: str, prefix: str) -> bool:
     (True, True)
     >>> is_generated_constant_name("_Integer_x", ""), is_generated_constant_name("tmp0", "")
     (False, False)
+    >>> is_generated_constant_name("dbl_Integer_2", "dbl"), is_generated_constant_name("dbldbl_Integer_2", "dbl")
+    (True, True)
+    >>> is_generated_constant_name("_Integer_2", "dbl")
+    False
     """
-    name = name[3:] if name.startswith("dbl") else name
-    suffix = name[len(prefix) + 1 :] if name.startswith(prefix + "_") else ""
+    if name.startswith(prefix + "_"):
+        suffix = name[len(prefix) + 1 :]
+    elif name.startswith("dbl" + prefix + "_"):
+        suffix = name[len(prefix) + 4 :]
+    else:
+        return False
     fields = suffix.split("_")
     return (
         suffix == "NegativeOne_"

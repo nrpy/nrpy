@@ -9,7 +9,7 @@
 
 ## Detail
 
-### `CCodeGen` Options And Scalar CSE Emission
+### `CCodeGen` Options And Floating-Point Aliases
 
 `CCodeGen` stores the option matrix used by `c_codegen()`: formatting (`prestring`, `poststring`, `include_braces`, `enable_clang_format`, and the `clang_format_options` parameter), floating-point type and alias, verbose comments, CSE switches and sorting, optional CSE preprocessing, SIMD rewrite flags, GoldenKernels mode, scalar temporaries, postprocessing substitution suffixes, finite-difference flags, memory layout style, upwind control vector, rational-constant handling, and the accepted `enforce_c_parameters_must_be_defined` flag. It also reads `finite_difference::fd_order` and rejects non-positive or odd finite-difference orders.
 
@@ -25,6 +25,8 @@ Floating-point aliases are infrastructure-aware. Without SIMD, raw `NRPy` code u
 Evidence (descriptive behavior): `c_codegen.py::CCodeGen.__init__`; corroboration: `Dendro/general_relativity/Ricci_eval.py::register_CFunction_Ricci_eval`, explicitly supplies the scalar type.
 
 GoldenKernels is a convenience mode layered on the normal options. `enable_GoldenKernels` sets `enable_cse_preprocess` (default false), `simd_find_more_subs` (default false), and `simd_find_more_FMAsFMSs` (default true) to true, even when the caller passed false.
+
+### Scalar CSE Emission And Generated Constant Names
 
 `c_codegen()` accepts one SymPy expression or a list of expressions, paired with one output variable name or a list. It rejects tuple inputs, checks expression/name length agreement, and can emit verbose comments containing the original symbolic expressions. The non-FD path either prints direct assignments when `enable_cse` is false or runs SymPy CSE when it is true. With `enable_cse_preprocess` or `enable_simd`, an output name spelled like a generated constant raises `ValueError`; [CSE And Printer Support](helpers/cse-and-printer-support.md) defines the generated names and how temporaries avoid output and input names.
 
@@ -88,7 +90,7 @@ Import `CCodeGen` and `c_codegen` from `nrpy.c_codegen`. The empty package initi
 ## Sources
 
 - [Dendro Ricci_eval.py](../../nrpy/infrastructures/Dendro/general_relativity/Ricci_eval.py) - `register_CFunction_Ricci_eval`
-- [cse_preprocess_postprocess.py](../../nrpy/helpers/cse_preprocess_postprocess.py) - `cse_preprocess`, `sort_cse_output_deterministically`
+- [cse_preprocess_postprocess.py](../../nrpy/helpers/cse_preprocess_postprocess.py) - `cse_preprocess`, `is_generated_constant_name`, `sort_cse_output_deterministically`
 - [nrpy/c_codegen.py](../../nrpy/c_codegen.py) - `CCodeGen`, `c_codegen`, `apply_substitution_dict`, `nrpyAbs`, `gridfunction_management_and_FD_codegen`
 - [nrpy/finite_difference.py](../../nrpy/finite_difference.py) - `compute_fdcoeffs_fdstencl`, `read_gfs_from_memory`, `FDFunction`
 - [nrpy/__init__.py](../../nrpy/__init__.py) - empty package initializer; no core-codegen re-exports

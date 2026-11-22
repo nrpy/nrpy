@@ -12,7 +12,6 @@ from typing import Any, List, NoReturn, Optional, Tuple, Union, cast
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
-import nrpy.helpers.functional as func  # NRPy: Python toolkit for functional programming
 import nrpy.params as par
 
 # Used to specify axes of symmetry so that derivatives across these axes get set to zero
@@ -226,6 +225,7 @@ def declare_indexedexp(
                         are not correctly specified, or if 'idx_expr_basename' is invalid.
 
     Doctest 1: convert a symmetric rank-2 tensor to a 1D list & find the number of unique indices.
+    >>> import nrpy.helpers.functional as func
     >>> ixp = declare_indexedexp('M', rank=2, dimension=3, symmetry='sym01')
     >>> assert func.pipe(ixp, lambda x: func.repeat(func.flatten, x, 1), set, len) == 6
 
