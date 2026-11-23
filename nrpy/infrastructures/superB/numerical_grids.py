@@ -61,14 +61,11 @@ if (Nchare2 > 1 && params->Nxx2 / Nchare2 < NGHOSTS) {
     for dirn in range(3):
         body += f"params_chare->Nxx{dirn} = params->Nxx{dirn}/Nchare{dirn};\n"
     body += rf"""
-const REAL grid_physical_size = params_chare->grid_physical_size;
 snprintf(params_chare->CoordSystemName, 100, "{CoordSystem}");
 
 params_chare->Nxx_plus_2NGHOSTS0 = params_chare->Nxx0 + 2*NGHOSTS;
 params_chare->Nxx_plus_2NGHOSTS1 = params_chare->Nxx1 + 2*NGHOSTS;
 params_chare->Nxx_plus_2NGHOSTS2 = params_chare->Nxx2 + 2*NGHOSTS;
-
-// Set grid size to grid_physical_size (set above, based on params->grid_physical_size):
 """
     rfm = refmetric.reference_metric[CoordSystem]
     if getattr(rfm, "general_rfm_provider_name", "") == "inverse_fisheye":
@@ -78,6 +75,8 @@ params_chare->Nxx_plus_2NGHOSTS2 = params_chare->Nxx2 + 2*NGHOSTS;
             for key in ("a", "R", "Rz", "w"):
                 map_param = f"inverse_fisheye_{key}{j}"
                 body += f"params_chare->{map_param} = params->{map_param};\n"
+    if rfm.grid_physical_size_dict:
+        body += "const REAL grid_physical_size = params_chare->grid_physical_size;\n"
     for key, value in rfm.grid_physical_size_dict.items():
         body += f"params_chare->{key} = {value};\n"
 

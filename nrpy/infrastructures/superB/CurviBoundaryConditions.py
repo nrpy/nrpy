@@ -329,8 +329,8 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
   // This Cartesian-topology map has no inner coordinate boundaries.
   // Intersect each global face with this chare's ownership box; never build
   // or scan the global boundary list. Preserve ghost-layer and face ordering.
-  *bcstruct_chare = (bc_struct){0};
-  *nonlocalinnerbcstruct = (nonlocalinnerbc_struct){0};
+  *bcstruct_chare = bc_struct{};
+  *nonlocalinnerbcstruct = nonlocalinnerbc_struct{};
   const int nc[3] = {commondata->Nchare0, commondata->Nchare1, commondata->Nchare2};
   const int n[3] = {params_chare->Nxx0, params_chare->Nxx1, params_chare->Nxx2};
   const int nt[3] = {params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, params->Nxx_plus_2NGHOSTS2};

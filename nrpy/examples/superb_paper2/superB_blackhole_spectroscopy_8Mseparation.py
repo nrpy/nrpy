@@ -622,7 +622,8 @@ superB.main_chare.output_commondata_object_h_and_main_h_cpp_ci(
     enable_BHaHAHA=enable_BHaHAHA,
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(
-    enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_CurviBCs=not inverse_fisheye,
 )
 
 post_non_y_n_auxevol_mallocs = ""
@@ -634,10 +635,7 @@ if enable_CAHD:
 """
 
 if inverse_fisheye:
-    post_params_struct_set_to_default = """
-for (int grid=0; grid<MAXNUMGRIDS; grid++)
-  griddata[grid].bcstruct = (bc_struct){0};
-"""
+    post_params_struct_set_to_default = ""
 else:
     post_params_hook = (
         phys_params_to_fisheye.build_spheroidal_post_params_struct_set_to_default_hook
