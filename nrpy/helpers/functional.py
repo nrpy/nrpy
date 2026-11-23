@@ -6,7 +6,7 @@ Author: Ken Sible
         ksible *at* outlook *dot* com
 """
 
-from typing import Any, Callable, Generator, Iterable, List, Optional, Tuple, Union
+from typing import Any, Callable, Generator, Iterable, List, Optional
 
 
 def pipe(x: Any, *f: Callable[..., Any]) -> Any:
@@ -120,40 +120,6 @@ def uniquify(iterable: Iterable[Any]) -> List[Any]:
     [1, 2, 3, 4, 5]
     """
     return list(reduce(lambda l, x: l if x in l else l + [x], iterable, []))
-
-
-def product(
-    *iterable: Union[Iterable[Any], Tuple[Iterable[Any], ...]], **kwargs: Any
-) -> Generator[Tuple[Any, ...], None, None]:
-    """
-    Return the Cartesian product of several iterables.
-
-    :param iterable: A sequence of iterables.
-    :param kwargs: An optional keyword argument 'repeat' to specify a repetition of a single iterable.
-    :yield: A generator that yields tuples, each containing one element from each input iterable.
-
-    Doctests:
-    >>> list(product(['a', 'b'], [1, 2, 3]))
-    [('a', 1), ('a', 2), ('a', 3), ('b', 1), ('b', 2), ('b', 3)]
-    >>> list(product([1, 2, 3], repeat=2))
-    [(1, 1), (1, 2), (1, 3), (2, 1), (2, 2), (2, 3), (3, 1), (3, 2), (3, 3)]
-    >>> for i, j in product(['a', 'b'], range(1, 3)):
-    ...     print('%s: %d' % (i, j))
-    ...
-    a: 1
-    a: 2
-    b: 1
-    b: 2
-    """
-    if "repeat" in kwargs:
-        if kwargs["repeat"] > 1 and len(iterable) == 1:
-            iterable = kwargs["repeat"] * iterable
-
-    def f(A: List[List[Any]], B: List[List[Any]]) -> List[List[Any]]:
-        return [list(flatten([x] + [y])) for x in A for y in B]
-
-    for prod in reduce(f, iterable):
-        yield tuple(prod)
 
 
 if __name__ == "__main__":

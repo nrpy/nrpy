@@ -14,10 +14,7 @@ from typing import Union
 import sympy as sp
 
 
-def f2r(
-    input_float: Union[float, str],
-    zpad: int = 60,
-) -> sp.Rational:
+def f2r(input_float: Union[float, str]) -> sp.Rational:
     """
     Convert a float-like number to a high-precision sympy.Rational number.
 
@@ -26,8 +23,7 @@ def f2r(
     conditions derived from the BOB model, where tiny float errors can leak
     into symbolic solves and generated C code.
 
-    :param input_float: Float-like input. Accepts float, mpmath.mpf or string.
-    :param zpad: Number of zeros to append after the decimal point (default is 60).
+    :param input_float: Float or decimal string; its decimal string form is converted.
     :return: A sympy Rational number with high precision.
 
     Doctests:
@@ -35,17 +31,12 @@ def f2r(
     1/10
     >>> f2r(1.5)
     3/2
-    >>> f2r("2.0",zpad=2)
+    >>> f2r("2.0")
     2
+    >>> f2r("1.2e-7")
+    3/25000000
     """
-    float_as_string = str(input_float)
-
-    # Ensure the string has a decimal point
-    if "." not in float_as_string:
-        float_as_string = f"{float_as_string}."
-
-    # Append zpad zeros after the decimal point to increase precision.
-    return sp.Rational(float_as_string + "0" * zpad)
+    return sp.Rational(str(input_float))
 
 
 if __name__ == "__main__":

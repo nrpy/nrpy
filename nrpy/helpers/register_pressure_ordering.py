@@ -40,7 +40,7 @@ def order_statements_for_register_pressure(body: str) -> str:
     definitions in greedy free-most-first list-schedule order, then stores in their original order.
     Ties break toward the original order, so the result is deterministic. The body is returned
     unchanged when it contains anything other than single-assignment `const` definitions and
-    stores, or when a load follows a store (the load might read what the store wrote).
+    stores, or when a definition follows a store (the definition might read what the store wrote).
 
     :param body: Kernel body produced by c_codegen() with enable_fd_codegen=True.
     :return: The reordered body, or the input when it cannot be scheduled safely.
@@ -96,7 +96,7 @@ def order_statements_for_register_pressure(body: str) -> str:
 
     Bodies the scheduler does not understand come back unchanged: braces or preprocessor lines, a
     statement without its semicolon, a non-`const` assignment, a left-hand side that is not just
-    specifiers and a name, a call statement, a redefinition, or a load after a store:
+    specifiers and a name, a call statement, a redefinition, or a definition after a store:
 
     >>> unchanged = [
     ...     "{ const REAL a = 1.0; }",
@@ -149,7 +149,7 @@ def order_statements_for_register_pressure(body: str) -> str:
     #         definition that reads memory), a definition (any other `const` definition) or a
     #         store, and record the defined names it reads. Anything else, including a
     #         non-`const` assignment or a left-hand side that is not just specifiers and a name,
-    #         leaves the body unchanged, as does a redefinition or a load after a store.
+    #         leaves the body unchanged, as does a redefinition or a definition after a store.
     kinds: List[str] = []
     names: List[str] = []
     operands: List[List[str]] = []
@@ -211,7 +211,7 @@ def order_statements_for_register_pressure(body: str) -> str:
             seen_store = True
         elif kind == "constant" and not all(op in constant_names for op in ops):
             kind = "definition"
-        if not kind or (name and name in defined) or (kind == "load" and seen_store):
+        if not kind or (name and name in defined) or (name and seen_store):
             return body
         kinds.append(kind)
         names.append(name)

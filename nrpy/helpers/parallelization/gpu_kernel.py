@@ -108,13 +108,21 @@ class GPUKernel:
 
         self.CFunction: cfc.CFunction
         self.desc: str = f"Kernel: {self.name}.\n" + comments
-        self.launch_dict = launch_dict
+        # Copy launch_dict and its lists; padding below must not change the caller's dictionary.
+        self.launch_dict = (
+            None
+            if launch_dict is None
+            else {
+                key: list(value) if isinstance(value, list) else value
+                for key, value in launch_dict.items()
+            }
+        )
         self.launch_block: str = ""
         self.launch_settings: str = ""
         self.thread_tiling_macro_suffix = thread_tiling_macro_suffix
         self.threads_per_block: List[str] = []
 
-        if self.decorators == "__global__" and launch_dict is None:
+        if "__global__" in self.decorators and launch_dict is None:
             raise ValueError(f"Error: {self.decorators} requires a launch_dict")
 
         if self.launch_dict is not None:
@@ -239,11 +247,9 @@ dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);"""
 
         :return: The C function call as a string.
         """
-        c_function_call: str = f"{self.name}{self.launch_settings}("
-
-        for p in self.params_dict:
-            c_function_call += f"{p}, "
-        c_function_call = c_function_call[:-2] + ");\n"
+        c_function_call: str = (
+            f"{self.name}{self.launch_settings}({', '.join(self.params_dict)});\n"
+        )
 
         if self.cuda_check_error:
             msg = f"{self.name} failure"

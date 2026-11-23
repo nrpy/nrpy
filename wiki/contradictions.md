@@ -8,7 +8,7 @@ Active source discrepancies and unreconciled drift are tracked below. Recording 
 
 - Follow [KB Rules](SCHEMA.md#contradiction-rules): keep only `contested` and `stale` claims in `## Register`, paired with `### CONTR-XXXX` subsections and inline markers (`Claim status: contested; contradiction: CONTR-0001.` or `stale`) on every affected leaf.
 - Look up one entry with `rg -n -F '| CONTR-0014 |' wiki/contradictions.md` and read its `### CONTR-XXXX` subsection.
-- Retire resolved entries in the resolving commit once affected leaves are reconciled and all `#contr-*` links are removed. Retired IDs: CONTR-0002, CONTR-0004, CONTR-0005, CONTR-0006, CONTR-0007, CONTR-0008 to CONTR-0011, CONTR-0013.
+- Retire resolved entries in the resolving commit once affected leaves are reconciled and all `#contr-*` links are removed. Retired IDs: CONTR-0002, CONTR-0004, CONTR-0005, CONTR-0006, CONTR-0007, CONTR-0008 to CONTR-0011, CONTR-0013, CONTR-0016, CONTR-0017, CONTR-0018.
 
 ## Register
 
@@ -17,12 +17,9 @@ Active source discrepancies and unreconciled drift are tracked below. Recording 
 | CONTR-0001 | stale | [Assembly](infrastructures/bhah/lifecycle-and-project-assembly.md); [TOV](examples/matter-tov-workflows.md) | `manga_bhah_lib.py` prints `./bhah_lib`/`.par` while building only `libbhah_lib`. |
 | CONTR-0003 | stale | [Static Analysis](validation/static-analysis.md) | `coding_style.md` states tiered Pylint rules; configs/wrappers enforce blanket floors. |
 | CONTR-0012 | contested | [Python Codegen](core/python-codegen.md); [C Codegen](core/c-codegen.md) | Nonempty `postproc_substitution_dict` raises `TypeError` on tuple CSE entries. |
-| CONTR-0014 | contested | [CSE/Printer](core/helpers/cse-and-printer-support.md); [C Codegen](core/c-codegen.md) | CSE sort keeps input order on ties, and `_Integer_*`/`tmp*` names can capture inputs. |
-| CONTR-0015 | contested | [SIMD](core/helpers/simd-and-intrinsic-support.md) | `expr_convert_to_simd_intrins` omits `_Integer_1` or emits missing `Pow`/`Cbrt`/`Log`/`Sign`. |
-| CONTR-0016 | contested | [Expression Utils](core/helpers/symbolic-expression-utilities.md) | `_get_free_symbol_names_cached` drops free occurrences matching bound variable names. |
-| CONTR-0017 | contested | [Expression Utils](core/helpers/symbolic-expression-utilities.md) | `f2r` appends zeros after scientific-notation exponents, corrupting values. |
-| CONTR-0018 | contested | [Expression Utils](core/helpers/symbolic-expression-utilities.md) | `product` flattens iterables, exhausts iterators, and mishandles scalars/`repeat=0`. |
-| CONTR-0019 | contested | [Loop/Device](core/helpers/loop-kernel-and-device-helpers.md) | `GPUKernel` corrupts empty-arg calls, ignores `cfunc_type`, and can omit `streamid`. |
+| CONTR-0014 | contested | [CSE/Printer](core/helpers/cse-and-printer-support.md); [C Codegen](core/c-codegen.md) | CSE sort keeps input order when commutative-valued structural keys tie. |
+| CONTR-0015 | contested | [SIMD](core/helpers/simd-and-intrinsic-support.md) | `expr_convert_to_simd_intrins` emits `Pow`/`Cbrt`/`Log`/`Sign` absent from `simd_intrinsics.h`. |
+| CONTR-0019 | contested | [Loop/Device](core/helpers/loop-kernel-and-device-helpers.md) | CUDA wrapper ignores `cfunc_type` and can leave `d_params[streamid].` without `streamid`. |
 | CONTR-0020 | contested | [GRHD](equations/grhd.md); [Ringdown](equations/seobnr/precessing-rotations-and-ringdown.md) | Shifted coordinate-bound quotients have singular denominators affecting `omega_prec`. |
 | CONTR-0021 | contested | [Wave Equation](equations/wave-equation.md) | Wave constructors guard only `uu` and check `glb_params_dict` for `CodeParameter`s. |
 | CONTR-0022 | contested | [Metric/Matter](equations/general-relativity/metric-conversions-and-matter.md) | Zero-velocity `LorentzBoost` divides by `0/0` instead of returning identity. |
@@ -54,51 +51,27 @@ Evidence (descriptive behavior): `nrpy/py_codegen.py::py_codegen` and `nrpy/c_co
 
 ### CONTR-0014
 
-- Competing sources & authority: `nrpy/helpers/cse_preprocess_postprocess.py` determinism/equivalence docstrings versus `cse_preprocess` and `sort_cse_output_deterministically`. Implementation decides; both affected leaves are `contested`.
-- Recheck trigger: edits to `cse_preprocess` or `sort_cse_output_deterministically`.
-- Resolution check: permute replacements for `x**y` and `y**x` requiring identical output, and test `2*x + _Integer_2` and `([(a0, x**3)], [a0 + tmp0])` requiring preserved expressions or explicit collision rejection.
+- Competing sources & authority: `nrpy/helpers/cse_preprocess_postprocess.py` determinism docstring versus `sort_cse_output_deterministically`, whose structural key sorts arguments of commutative-valued expressions such as powers (`x**y` and `y**x`) so ties keep input order. Implementation decides; both affected leaves are `contested`.
+- Recheck trigger: edits to `sort_cse_output_deterministically`.
+- Resolution check: permute replacements for `x**y` and `y**x` and require identical ordered output.
 
-Evidence (descriptive behavior): `nrpy/helpers/cse_preprocess_postprocess.py::cse_preprocess` and `sort_cse_output_deterministically`.
+Evidence (descriptive behavior): `nrpy/helpers/cse_preprocess_postprocess.py::sort_cse_output_deterministically`.
 
 ### CONTR-0015
 
-- Competing sources & authority: `nrpy/helpers/simd.py` (`expr_convert_to_simd_intrins`) versus `nrpy/helpers/simd_intrinsics.h` macro definitions. Implementation decides; the SIMD leaf is `contested`.
+- Competing sources & authority: `nrpy/helpers/simd.py` (`expr_convert_to_simd_intrins`) emitting `PowSIMD`, `CbrtSIMD`, `LogSIMD`, and `SignSIMD` versus `nrpy/helpers/simd_intrinsics.h` defining none of them. Implementation decides; the SIMD leaf is `contested`.
 - Recheck trigger: edits to `expr_convert_to_simd_intrins` or `simd_intrinsics.h`.
-- Resolution check: verify `_Integer_1` declaration for negative half-powers and compile emitted `Pow`/`Cbrt`/`Log`/`Sign` intrinsics with `simd_intrinsics.h`.
+- Resolution check: compile emitted `PowSIMD`, `CbrtSIMD`, `LogSIMD`, and `SignSIMD` intrinsics with `simd_intrinsics.h` (or reject unsupported forms explicitly).
 
 Evidence (descriptive behavior): `nrpy/helpers/simd.py::expr_convert_to_simd_intrins`; corroboration: `nrpy/helpers/simd_intrinsics.h`.
 
-### CONTR-0016
-
-- Competing sources & authority: `nrpy/helpers/expression_utils.py` SymPy `free_symbols` equivalence docstring versus `_get_free_symbol_names_cached` and `get_params_commondata_symbols_from_expr_list`. Implementation decides; leaf is `contested`.
-- Recheck trigger: edits to `_get_free_symbol_names_cached` or parameter extraction helpers.
-- Resolution check: compare extracted names against `expr.free_symbols` on `Integral(x, (x, 0, x))`, `Lambda`, and `Subs`, verifying registered free parameter names are retained.
-
-Evidence (descriptive behavior): `nrpy/helpers/expression_utils.py::_get_free_symbol_names_cached` and `get_params_commondata_symbols_from_expr_list`.
-
-### CONTR-0017
-
-- Competing sources & authority: `nrpy/helpers/float_to_rational.py` high-precision conversion docstring versus `f2r` string zero-padding on scientific notation. Implementation decides; leaf is `contested`.
-- Recheck trigger: edits to `f2r`.
-- Resolution check: require equal rationals for scientific (`1e-7`, `1.2e-7`) and fixed-point decimal strings across padding widths.
-
-Evidence (descriptive behavior): `nrpy/helpers/float_to_rational.py::f2r`.
-
-### CONTR-0018
-
-- Competing sources & authority: `nrpy/helpers/functional.py` Cartesian-product docstring versus `product` recursive flattening/iteration. Implementation decides; leaf is `contested`.
-- Recheck trigger: edits to `functional.py::product`.
-- Resolution check: match `itertools.product` behavior (or reject invalid scalar inputs) across one-shot iterators, tuple-valued elements, single integers, and `repeat=0`.
-
-Evidence (descriptive behavior): `nrpy/helpers/functional.py::product`.
-
 ### CONTR-0019
 
-- Competing sources & authority: `nrpy/helpers/parallelization/utilities.py` wrapper docs versus `nrpy/helpers/parallelization/gpu_kernel.py` (`GPUKernel.__init__`, `GPUKernel.c_function_call`). Implementation decides; leaf is `contested`.
-- Recheck trigger: edits to `GPUKernel` or `generate_kernel_and_launch_code`.
-- Resolution check: generate and compile an empty-argument host call, a non-`void` CUDA kernel, and custom CUDA launch settings reading parameters, verifying valid call syntax, `cfunc_type`, and declared `streamid`.
+- Competing sources & authority: `nrpy/helpers/parallelization/utilities.py` wrapper docs versus `generate_kernel_and_launch_code` and `nrpy/helpers/parallelization/gpu_kernel.py` (`GPUKernel.__init__`): the CUDA path ignores `cfunc_type`, and custom launch settings without a `"stream"` entry can leave rewritten `d_params[streamid].` accesses without a declared `streamid`. Implementation decides; leaf is `contested`.
+- Recheck trigger: edits to `GPUKernel.__init__` or `generate_kernel_and_launch_code`.
+- Resolution check: generate and compile a non-`void` CUDA kernel and a custom CUDA launch without a `"stream"` entry reading parameters, verifying `cfunc_type` and declared `streamid`.
 
-Evidence (descriptive behavior): `nrpy/helpers/parallelization/gpu_kernel.py::GPUKernel.__init__` and `GPUKernel.c_function_call`; corroboration: `utilities.py::generate_kernel_and_launch_code`.
+Evidence (descriptive behavior): `nrpy/helpers/parallelization/utilities.py::generate_kernel_and_launch_code`; corroboration: `nrpy/helpers/parallelization/gpu_kernel.py::GPUKernel.__init__`.
 
 ### CONTR-0020
 
