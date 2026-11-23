@@ -86,7 +86,8 @@ def register_CFunctions(num_transitions: int) -> None:
         branch_bodies.append(
             f"{value_code}\n"
             f"if (derivative_order >= 1) {{\n{gradient_code}\n"
-            f"if (derivative_order == 3) {{\n{metric_code}\n}}\n}}"
+            f"if (derivative_order == 3) {{\n{metric_code}\n}} // END IF: third-order kernel derivatives\n"
+            "} // END IF: requested kernel derivatives"
         )
     prefunc = f"""
 static inline void inverse_fisheye_layer{suffix}(
@@ -94,12 +95,14 @@ static inline void inverse_fisheye_layer{suffix}(
     const int derivative_order, {calc_type} f[4]) {{
   if ({branch_conditions[0]}) {{
     {branch_bodies[0]}
-  }} else if ({branch_conditions[1]}) {{
+  }} // END IF: Taylor radius branch
+  else if ({branch_conditions[1]}) {{
     {branch_bodies[1]}
-  }} else {{
+  }} // END ELSE IF: interior radius branch
+  else {{
     {branch_bodies[2]}
-  }}
-}}
+  }} // END ELSE: exterior radius branch
+}} // END FUNCTION: inverse_fisheye_layer{suffix}
 """
     arrays = {
         key: ", ".join(
@@ -135,10 +138,10 @@ for (int layer=0; layer<{num_transitions}; layer++) {{
         for (int l=0; l<3; l++)
           third[i][k][l] += delta*(8*f[3]*h[i]*h[k]*h[l]
             +4*f[2]*((i==k)*b[i]*h[l]+(i==l)*b[i]*h[k]+(k==l)*b[k]*h[i]));
-      }}
-    }}
-  }}
-}}
+      }} // END LOOP: for i,k over Hessian
+    }} // END IF: third-order metric jet
+  }} // END IF: requested scale gradient
+}} // END LOOP: for layer over transitions
 """
     body += """
 *lambda = lam;
@@ -147,7 +150,7 @@ if (derivative_order == 3)
   for (int i=0; i<3; i++) for (int j=0; j<3; j++) {
     W[i][j] = hess[i][j];
     for (int k=0; k<3; k++) U[i][j][k] = third[i][j][k];
-  }
+  } // END LOOP: for i,j over Hessian
 """
     cfc.register_CFunction(
         includes=includes,
@@ -177,7 +180,7 @@ for (int iteration=0; iteration<100; iteration++) {{
   if (!isfinite(residual)) return 1;
   if (fabs(residual) <= tol*qnorm) return 0;
   if (residual > 0) hi=r; else lo=r;
-}}
+}} // END LOOP: for iteration over bracket
 return 1;
 """
     cfc.register_CFunction(
@@ -215,7 +218,7 @@ for (int a=0; a<3; a++) for (int i=0; i<3; i++) for (int j=0; j<3; j++) for (int
     T[a][i][j][k]-=K[a][b]*F2[b][c][d]*(H[c][i][j]*K[d][k]+H[c][i][k]*K[d][j]+H[c][j][k]*K[d][i]);
     for (int e=0; e<3; e++)
       T[a][i][j][k]-=K[a][b]*F3[b][c][d][e]*K[c][i]*K[d][j]*K[e][k];
-  }}
+  }} // END LOOP: for d over inverse jets
 for (int i=0; i<3; i++) for (int j=0; j<3; j++) {{
   g[i][j]=0;
   for (int a=0; a<3; a++) g[i][j]+=K[a][i]*K[a][j];
@@ -226,9 +229,9 @@ for (int i=0; i<3; i++) for (int j=0; j<3; j++) {{
       ddg[i][j][k][l]=0;
       for (int a=0; a<3; a++) ddg[i][j][k][l]+=T[a][i][k][l]*K[a][j]
         +H[a][i][k]*H[a][j][l]+H[a][i][l]*H[a][j][k]+K[a][i]*T[a][j][k][l];
-    }}
-  }}
-}}
+    }} // END LOOP: for l over metric derivatives
+  }} // END LOOP: for k over metric derivatives
+}} // END LOOP: for i,j over metric
 """
     cfc.register_CFunction(
         includes=includes,
@@ -269,7 +272,7 @@ if (!same) {{
   for (int k=0; k<{key_count}; k++) saved_key[k]=key[k];
   valid=true;
   jacobian_valid=false;
-}}
+}} // END IF: refresh component cache
 if (kind==0) return x[i];
 if (!jacobian_valid) {{
   REAL g[3][3], dg[3][3][3], ddg[3][3][3][3];
@@ -392,7 +395,7 @@ for (int i2=0; i2<Nxx_plus_2NGHOSTS2; i2++)
                     -K[0][1]*(K[1][0]*K[2][2]-K[1][2]*K[2][0])
                     +K[0][2]*(K[1][0]*K[2][1]-K[1][1]*K[2][0]);
       {stores}
-    }}
+    }} // END LOOP: for i0 over grid points
 """
     cfc.register_CFunction(
         includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
@@ -473,10 +476,13 @@ const REAL k = params->inverse_fisheye_R{j}/params->inverse_fisheye_Rz{j};
 norm += ({previous}-1/params->inverse_fisheye_a{j})*(k+1/k)/2;
 }}
 """
-        body += "bound = params->inverse_fisheye_c*norm;\nbreak;\n}\n"
+        body += (
+            "bound = params->inverse_fisheye_c*norm;\nbreak;\n"
+            "} // END BLOCK: inverse-fisheye CFL case\n"
+        )
     body += r"""
 default: fprintf(stderr, "Unsupported coordinate system in inverse fisheye CFL bound.\n"); exit(1);
-}
+} // END SWITCH: select coordinate bound
 const REAL ds = NRPYMIN(fabs(params->dxx0), NRPYMIN(fabs(params->dxx1), fabs(params->dxx2)))/bound;
 commondata->dt = NRPYMIN(commondata->dt, commondata->CFL_FACTOR*ds);
 """

@@ -110,9 +110,9 @@ def _inverse_fisheye_local_boundaries() -> str:
         bounds[side][d][0]=lo-offset;
         bounds[side][d][1]=hi-offset;
         size *= NRPYMAX(0,hi-lo);
-      }
+      } // END LOOP: for d over axes
       count += size;
-    }
+    } // END LOOP: for side over faces
     bcstruct_chare->bc_info.num_pure_outer_boundary_points[gz][dir]=count;
     outerpt_bc_struct *points = count ? (outerpt_bc_struct *)malloc(sizeof(outerpt_bc_struct)*count) : NULL;
     bcstruct_chare->pure_outer_bc_array[3*gz+dir]=points;
@@ -128,8 +128,8 @@ def _inverse_fisheye_local_boundaries() -> str:
             r_and_partial_xi_partial_r_derivs(params_chare, params->xxmin0 + (i0 + chare_index[0]*n[0] - NGHOSTS + 0.5)*params->dxx0, params->xxmin1 + (i1 + chare_index[1]*n[1] - NGHOSTS + 0.5)*params->dxx1, params->xxmin2 + (i2 + chare_index[2]*n[2] - NGHOSTS + 0.5)*params->dxx2, &points[pt].r, &points[pt].partial_x0_partial_r, &points[pt].partial_x1_partial_r, &points[pt].partial_x2_partial_r);
             r_and_partial_xi_partial_r_derivs(params_chare, params->xxmin0 + (i0 + chare_index[0]*n[0] - NGHOSTS + 0.5 + points[pt].FACEX0)*params->dxx0, params->xxmin1 + (i1 + chare_index[1]*n[1] - NGHOSTS + 0.5 + points[pt].FACEX1)*params->dxx1, params->xxmin2 + (i2 + chare_index[2]*n[2] - NGHOSTS + 0.5 + points[pt].FACEX2)*params->dxx2, &points[pt].r_int, &points[pt].partial_x0_partial_r_int, &points[pt].partial_x1_partial_r_int, &points[pt].partial_x2_partial_r_int);
             pt++;
-          }
-  }
+          } // END LOOP: for i0 over face points
+  } // END LOOP: for gz,dir over outer faces
 """
 
 
