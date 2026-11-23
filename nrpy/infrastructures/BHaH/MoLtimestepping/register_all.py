@@ -37,6 +37,7 @@ def register_CFunctions(
     enable_intrinsics: bool = False,
     register_MoL_step_forward_in_time: bool = True,
     rational_const_alias: str = "const",
+    bhahaha: bool = False,
     rhs_accumulation_string: str = "",
 ) -> None:
     r"""
@@ -51,6 +52,7 @@ def register_CFunctions(
     :param enable_intrinsics: A flag to specify if hardware instructions should be used.
     :param register_MoL_step_forward_in_time: Whether to register the MoL step-forward function. Default is True.
     :param rational_const_alias: Overload const specifier for rational definitions
+    :param bhahaha: Boolean that determines bhahaha unique code
     :param rhs_accumulation_string: Second-stage RHS evaluation for diagonal RK3,
         accumulating into RK_STAGE_GFS and RK_ACCUM_GFS with multipliers
         RK_STAGE_DT and RK_ACCUM_DT while keeping RK_INPUT_GFS unchanged.
@@ -142,10 +144,10 @@ def register_CFunctions(
 
     # Step 1: Build all memory alloc and free:
     BHaH.MoLtimestepping.MoL_malloc_intermediate_stage_gfs.register_CFunction_MoL_malloc_intermediate_stage_gfs(
-        Butcher_dict, MoL_method
+        Butcher_dict, MoL_method, bhahaha=bhahaha
     )
     BHaH.MoLtimestepping.MoL_free_intermediate_stage_gfs.register_CFunction_MoL_free_intermediate_levels(
-        Butcher_dict, MoL_method
+        Butcher_dict, MoL_method, bhahaha=bhahaha
     )
 
     # Step 2: Possibly register the main stepping function:
@@ -160,6 +162,7 @@ def register_CFunctions(
             enable_curviBCs=enable_curviBCs,
             enable_intrinsics=enable_intrinsics,
             rational_const_alias=rational_const_alias,
+            bhahaha=bhahaha,
             rhs_accumulation_string=rhs_accumulation_string,
         )
 

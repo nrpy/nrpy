@@ -62,7 +62,9 @@ def register_CFunction_interpolation_1d_radial_spokes_on_3d_src_grid(
 #define SRC_IDX4(g, i, j, k) ((i) + src_Nxx_plus_2NGHOSTS0 * ((j) + src_Nxx_plus_2NGHOSTS1 * ((k) + src_Nxx_plus_2NGHOSTS2 * (g))))
 #define DST_IDX3(i, j, k) ((i) + dst_Nxx_plus_2NGHOSTS0 * ((j) + dst_Nxx_plus_2NGHOSTS1 * (k)))
 
-#pragma GCC optimize("unroll-loops")"""
+#ifndef __CUDACC__
+#pragma GCC optimize("unroll-loops")
+#endif"""
     desc = r"""
 Perform 1D radial Lagrange interpolation along the radial spokes of a 3D
 spherical grid. It computes the interpolated values using Lagrange polynomials.
@@ -78,11 +80,16 @@ spherical grid. It computes the interpolated values using Lagrange polynomials.
 - Assumes that the source grid has uniform grid spacing in r, theta, and phi.
 - The interpolation destination is radial index i = NGHOSTS.
 """
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "interpolation_1d_radial_spokes_on_3d_src_grid"
-    params = """const params_struct *restrict params, const commondata_struct *restrict commondata,
+    params = """const params_struct *restrict params, commondata_struct *restrict commondata,
                 const REAL *restrict dst_radii_aka_src_h_gf, REAL *restrict dst_interp_gfs"""
 
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     body = r"""
   // Define the interpolation order based on the number of ghost zones.
   const int INTERP_ORDER = (2 * NinterpGHOSTS + 1); // Interpolation order corresponds to the number of points in the stencil per dimension.
@@ -103,8 +110,8 @@ spherical grid. It computes the interpolated values using Lagrange polynomials.
   // Source grid coordinates for r, theta, and phi.
   const REAL *interp_src_r_theta_phi[3] = {commondata->interp_src_r_theta_phi[0], commondata->interp_src_r_theta_phi[1],
                                            commondata->interp_src_r_theta_phi[2]};
-  const REAL xxmin_incl_ghosts0 = interp_src_r_theta_phi[0][0];
 
+  const REAL xxmin_incl_ghosts0 = interp_src_r_theta_phi[0][0];
   // Precompute (1/(src_dr))^(INTERP_ORDER-1) normalization factor.
   const REAL src_invdxx0 = commondata->interp_src_invdxx0;
   const REAL src_invdxx0_INTERP_ORDERm1 = pow(commondata->interp_src_invdxx0, (INTERP_ORDER - 1));
@@ -113,24 +120,38 @@ spherical grid. It computes the interpolated values using Lagrange polynomials.
   const REAL *interp_src_gfs = commondata->interp_src_gfs;
 
   // Perform sanity checks to ensure all required pointers are valid.
-  if (interp_src_r_theta_phi[0] == NULL || interp_src_gfs == NULL || dst_radii_aka_src_h_gf == NULL || dst_interp_gfs == NULL)
-    return INTERP1D_NULL_PTRS; // Return error if any pointer is NULL.
+  if (interp_src_r_theta_phi[0] == NULL || interp_src_gfs == NULL || dst_radii_aka_src_h_gf == NULL || dst_interp_gfs == NULL) {
+    #ifdef __CUDACC__
+    bhahaha_gpu_set_error(&commondata->error_flag, INTERP1D_NULL_PTRS);
+    #else
+    commondata->error_flag = INTERP1D_NULL_PTRS;
+    #endif
+    return; // Return error if any pointer is NULL.
+  }
 
   // Ensure that the interpolation order does not exceed the source grid size.
-  if (INTERP_ORDER > commondata->interp_src_Nxx0 + 2 * NinterpGHOSTS)
-    return INTERP1D_INTERP_ORDER_GT_NXX_PLUS_2NINTERPGHOSTS0; // Return error if interpolation order is too high.
+  if (INTERP_ORDER > commondata->interp_src_Nxx0 + 2 * NinterpGHOSTS) {
+    #ifdef __CUDACC__
+    bhahaha_gpu_set_error(&commondata->error_flag, INTERP1D_INTERP_ORDER_GT_NXX_PLUS_2NINTERPGHOSTS0);
+    #else
+    commondata->error_flag = INTERP1D_INTERP_ORDER_GT_NXX_PLUS_2NINTERPGHOSTS0;
+    #endif
+    return; // Return error if interpolation order is too high.
+  }
 
-  // Initialize the error flag to track any interpolation issues.
-  int error_flag = BHAHAHA_SUCCESS;
-
-  // Precompute 1/denom coefficients for interpolation.
+  #ifdef __CUDACC__ 
+  extern __shared__ REAL s[];
+  REAL *inv_denom = &s[0];
+  if (threadIdx.x == 0)
+    compute_inv_denom(INTERP_ORDER, inv_denom);
+  __syncthreads();
+  #else
   REAL inv_denom[INTERP_ORDER];
   compute_inv_denom(INTERP_ORDER, inv_denom);
+  #endif
 
-  // Parallelize the outer loops using OpenMP for better performance.
-#pragma omp parallel for
-  for (int iphi = NGHOSTS; iphi < dst_Nxx2 + NGHOSTS; iphi++) {         // Iterate over phi indices, ignoring ghost zones.
-    for (int itheta = NGHOSTS; itheta < dst_Nxx1 + NGHOSTS; itheta++) { // Iterate over theta indices, ignoring ghost zones.
+  // Iterate over theta and phi indices, ignoring ghost zones.
+  PARALLEL_2D_LOOP(itheta, NGHOSTS, dst_Nxx1+NGHOSTS, iphi, NGHOSTS, dst_Nxx2+NGHOSTS) { 
       // Perform interpolation only at radial index i = NGHOSTS.
       const REAL r_dst = dst_radii_aka_src_h_gf[DST_IDX3(NGHOSTS, itheta, iphi)];
       // Calculate the central index for the stencil in the radial direction.
@@ -141,8 +162,8 @@ spherical grid. It computes the interpolated values using Lagrange polynomials.
 
       {
         // Ensure the stencil is within valid grid bounds.
-        if ((idx_center0 - NinterpGHOSTS < 0) || (idx_center0 + NinterpGHOSTS >= src_Nxx_plus_2NGHOSTS0)) {
-#ifdef DEBUG
+        if (( idx_center0 - NinterpGHOSTS < 0) || (idx_center0 + NinterpGHOSTS >= src_Nxx_plus_2NGHOSTS0)) {
+#if defined(DEBUG) && !defined(__CUDACC__)
           // Provide detailed error messages in debug mode for easier troubleshooting.
           fprintf(stderr, "ERROR: Interpolation stencil exceeds grid boundaries for r_dst = %.6f. itheta, iphi = %d %d.\n", r_dst, itheta, iphi);
           fprintf(stderr, "Grid bounds along radial direction: [0, %d], idx_center = %d, stencil indices: [%d, %d]\n", src_Nxx_plus_2NGHOSTS0 - 1,
@@ -151,43 +172,68 @@ spherical grid. It computes the interpolated values using Lagrange polynomials.
 #endif // DEBUG
 #pragma omp critical
           {
-            error_flag = INTERP1D_HORIZON_TOO_LARGE; // Set error flag if stencil is out of bounds.
-            if (idx_center0 - NinterpGHOSTS < 0)
-              error_flag = INTERP1D_HORIZON_TOO_SMALL; // Adjust error flag if stencil is too small.
+            if (idx_center0 - NinterpGHOSTS < 0) {
+#ifdef __CUDACC__
+              bhahaha_gpu_set_error(&commondata->error_flag, INTERP1D_HORIZON_TOO_SMALL);
+#else
+              commondata->error_flag = INTERP1D_HORIZON_TOO_SMALL; // Adjust error flag if stencil is too small.
+#endif
+            } else {
+#ifdef __CUDACC__
+              bhahaha_gpu_set_error(&commondata->error_flag, INTERP1D_HORIZON_TOO_LARGE);
+#else
+              commondata->error_flag = INTERP1D_HORIZON_TOO_LARGE; // Set error flag if stencil is out of bounds.
+#endif
+            }
           }
-          continue; // Skip further work for this iteration.
+          #ifndef __CUDACC__
+          continue; // Skip further work for this iteration
+          #endif
         } // END IF: stencil in bounds
-
-#ifdef DEBUG
+        
+#if defined(DEBUG) && !defined(__CUDACC__)
         // Verify that the central index is the closest grid point to the destination radius.
         if (fabs(interp_src_r_theta_phi[0][idx_center0] - r_dst) > commondata->interp_src_dxx0 * 0.5) {
           fprintf(stderr, "ERROR: Radial center index too far from destination point!\n");
-        } // END IF: central index is properly centered
+        } // END IF: central index is properly centered.
 #endif // DEBUG
       } // END BLOCK: sanity checks for stencil bounds and center index
 
-      // Step 1: Precompute all differences between destination radius and source grid points within the stencil.
-      REAL diffs_x0[INTERP_ORDER];
-      compute_diffs_xi(INTERP_ORDER, r_dst, &interp_src_r_theta_phi[0][base_idx_x0], diffs_x0);
+      #ifdef __CUDACC__
+      //If all sanity checks are pass, perform the final interpolation
+      if (commondata->error_flag == BHAHAHA_SUCCESS) {
+      #endif
+        // Step 1: Precompute all differences between destination radius and source grid points within the stencil.
+        REAL diffs_x0[INTERP_ORDER];
+        compute_diffs_xi(INTERP_ORDER, r_dst, &interp_src_r_theta_phi[0][base_idx_x0], diffs_x0);
 
-      // Step 2: Compute Lagrange basis coefficients for the radial direction.
-      REAL lagrange_basis_coeffs_x0[INTERP_ORDER];
-      compute_lagrange_basis_coeffs_xi(INTERP_ORDER, inv_denom, diffs_x0, lagrange_basis_coeffs_x0);
+        // Step 2: Compute Lagrange basis coefficients for the radial direction.
+        REAL lagrange_basis_coeffs_x0[INTERP_ORDER];
+        compute_lagrange_basis_coeffs_xi(INTERP_ORDER, inv_denom, diffs_x0, lagrange_basis_coeffs_x0);
 
-      // Step 3: Perform the 1D Lagrange interpolation along the radial direction.
-      for (int gf = 0; gf < NUM_INTERP_SRC_GFS; gf++) {
-        dst_interp_gfs[DST_IDX4(gf, NGHOSTS, itheta, iphi)] =
-            sum_lagrange_x0_simd(INTERP_ORDER, &interp_src_gfs[SRC_IDX4(gf, base_idx_x0, itheta, iphi)], lagrange_basis_coeffs_x0) *
-            src_invdxx0_INTERP_ORDERm1;
-      } // END LOOP: for which_gf over grid functions
-    } // END LOOP: for itheta over theta
-  } // END LOOP: for iphi over phi
-
-  return error_flag; // Return the status of the interpolation process.
+        // Step 3: Perform the 1D Lagrange interpolation along the radial direction.
+        for (int gf = 0; gf < NUM_INTERP_SRC_GFS; gf++) {
+          dst_interp_gfs[DST_IDX4(gf, NGHOSTS, itheta, iphi)] =
+              sum_lagrange_x0_simd(INTERP_ORDER, &interp_src_gfs[SRC_IDX4(gf, base_idx_x0, itheta, iphi)], lagrange_basis_coeffs_x0) *
+              src_invdxx0_INTERP_ORDERm1;
+        } // END LOOP: for which_gf over grid functions.
+      #ifdef __CUDACC__
+      } // END IF: final interpolation
+      #endif
+  } // End LOOP: (itheta, iphi) over (theta, phi)
+  END_PARALLEL_2D_LOOP; 
 """
     postfunc = r"""#pragma GCC reset_options // Reset compiler optimizations after the function
 
 #ifdef STANDALONE
+
+#ifdef __CUDACC__
+__global__
+#endif
+void bah_interpolation_1d_radial_spokes_on_3d_src_grid_kernel(const params_struct *restrict params, commondata_struct *restrict commondata,
+                                                        const REAL *restrict dst_radii_aka_src_h_gf, REAL *restrict dst_interp_gfs) {
+  bah_interpolation_1d_radial_spokes_on_3d_src_grid(params, commondata, dst_radii_aka_src_h_gf, dst_interp_gfs);
+}
 
 #include <omp.h>
 
@@ -275,8 +321,13 @@ int initialize_src_gf(const int src_Nxx_plus_2NGHOSTS[3], REAL *src_r_theta_phi[
  */
 int main() {
   int return_code = EXIT_SUCCESS;
+  const int INTERP_ORDER = (2 * NinterpGHOSTS + 1);
   REAL *src_r_theta_phi[3] = {NULL, NULL, NULL};
   REAL *src_gf = NULL, *dst_radii = NULL, *dst_interp_gfs = NULL;
+#ifdef __CUDACC__
+  REAL *d_src_r_theta_phi[3] = {NULL, NULL, NULL};
+  REAL *d_src_gf = NULL, *d_dst_radii = NULL, *d_dst_interp_gfs = NULL;
+#endif
   int N_r_arr[NUM_RESOLUTIONS] = {16, 32, 64};
   REAL h_arr[NUM_RESOLUTIONS], error_L2_norm[NUM_RESOLUTIONS];
   const int N_theta = 32, N_phi = 64;
@@ -316,12 +367,27 @@ int main() {
     commondata_struct commondata = {.interp_src_Nxx0 = N_r,
                                     .interp_src_Nxx_plus_2NGHOSTS0 = src_Nxx_plus_2NGHOSTS[0],
                                     .interp_src_Nxx_plus_2NGHOSTS1 = src_Nxx_plus_2NGHOSTS[1],
-                                    .interp_src_Nxx_plus_2NGHOSTS2 = src_Nxx_plus_2NGHOSTS[2],
-                                    .interp_src_invdxx0 = 1.0 / src_dxx[0],
-                                    .interp_src_dxx0 = src_dxx[0],
-                                    .interp_src_gfs = src_gf};
-    for (int i = 0; i < 3; i++)
+                                    .interp_src_Nxx_plus_2NGHOSTS2 = src_Nxx_plus_2NGHOSTS[2]};
+    commondata.interp_src_invdxx0 = 1.0 / src_dxx[0];
+    commondata.interp_src_dxx0 = src_dxx[0];
+#ifdef __CUDACC__
+    CUDA_MALLOC(d_src_gf, sizeof(REAL) * NUM_INTERP_SRC_GFS * total_src_pts);
+    CUDA_COPY_TO(d_src_gf,src_gf, sizeof(REAL) * NUM_INTERP_SRC_GFS * total_src_pts);
+    commondata.interp_src_gfs = d_src_gf;
+#else
+    commondata.interp_src_gfs = src_gf;
+#endif
+
+    for (int i = 0; i < 3; i++) {
+#ifdef __CUDACC__
+      CUDA_MALLOC(d_src_r_theta_phi[i], sizeof(REAL) * src_Nxx_plus_2NGHOSTS[i]);
+      CUDA_COPY_TO(d_src_r_theta_phi[i], src_r_theta_phi[i], sizeof(REAL) * src_Nxx_plus_2NGHOSTS[i]);
+      commondata.interp_src_gfs = d_src_gf;
+      commondata.interp_src_r_theta_phi[i] = d_src_r_theta_phi[i];
+#else
       commondata.interp_src_r_theta_phi[i] = src_r_theta_phi[i];
+#endif
+    }
 
     const size_t total_dst_pts = (size_t)params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS1 * params.Nxx_plus_2NGHOSTS2;
     dst_radii = (REAL *)malloc(sizeof(REAL) * total_dst_pts);
@@ -331,6 +397,10 @@ int main() {
       return_code = EXIT_FAILURE;
       goto cleanup;
     }
+#ifdef __CUDACC__
+    CUDA_MALLOC(d_dst_radii, sizeof(REAL) * total_dst_pts);
+    CUDA_MALLOC(d_dst_interp_gfs, sizeof(REAL) * NUM_INTERP_SRC_GFS * total_dst_pts);
+#endif
 
     const REAL r_min_safe = src_r_theta_phi[0][NinterpGHOSTS] + 1e-6;
     const REAL r_max_safe = src_r_theta_phi[0][src_Nxx_plus_2NGHOSTS[0] - NinterpGHOSTS - 1] - 1e-6;
@@ -347,11 +417,42 @@ int main() {
 #endif
     int error_code = BHAHAHA_SUCCESS;
     const int NUM_TIMES = 90000;
+
+#ifdef __CUDACC__
+    CUDA_COPY_TO(d_dst_radii, dst_radii, sizeof(REAL) * total_dst_pts);
+    CUDA_COPY_TO(d_dst_interp_gfs, dst_interp_gfs, sizeof(REAL) * NUM_INTERP_SRC_GFS * total_dst_pts);
+    commondata_struct *d_commondata = NULL;
+    params_struct *d_params = NULL;
+    CUDA_MALLOC(d_commondata, sizeof(commondata_struct));
+    CUDA_MALLOC(d_params, sizeof(params_struct));
+    CUDA_COPY_TO(d_commondata, &commondata, sizeof(commondata_struct));
+    CUDA_COPY_TO(d_params, &params, sizeof(params_struct));
+#endif
+
     for (int n = 0; n < NUM_TIMES; n++) {
-      error_code = bah_interpolation_1d_radial_spokes_on_3d_src_grid(&params, &commondata, dst_radii, dst_interp_gfs);
+#ifdef __CUDACC__
+      void *Args[] = {&d_params, &d_commondata, &d_dst_radii, &d_dst_interp_gfs};
+      int dev = 0;
+      cudaDeviceProp deviceProp;
+      cudaGetDeviceProperties(&deviceProp, dev);
+      int gridDim = deviceProp.multiProcessorCount;
+      cudaLaunchCooperativeKernel((void *)bah_interpolation_1d_radial_spokes_on_3d_src_grid_kernel, gridDim, THREADSPERBLOCK, Args);
+      cudaDeviceSynchronize();
+      
+#else
+      bah_interpolation_1d_radial_spokes_on_3d_src_grid_kernel(&params, &commondata, dst_radii, dst_interp_gfs);
+#endif
+      int error_code = commondata.error_flag;
       if (error_code != BHAHAHA_SUCCESS)
         break;
     }
+#ifdef __CUDACC__
+    CUDA_COPY_FROM(&commondata, d_commondata, sizeof(commondata_struct));
+    CUDA_COPY_FROM(&params, d_params, sizeof(params_struct));
+    CUDA_COPY_FROM(dst_radii, d_dst_radii, sizeof(REAL) * total_dst_pts);
+    CUDA_COPY_FROM(dst_interp_gfs, d_dst_interp_gfs, sizeof(REAL) * NUM_INTERP_SRC_GFS * total_dst_pts);
+#endif
+ 
 #ifdef _OPENMP
     double end_time = omp_get_wtime();
 #endif
@@ -402,7 +503,6 @@ int main() {
     dst_interp_gfs = NULL;
   }
 
-  const int INTERP_ORDER = (2 * NinterpGHOSTS + 1);
   printf("\n--- Convergence Results ---\n");
   for (int res = 1; res < NUM_RESOLUTIONS; res++) {
     REAL observed_order = log(error_L2_norm[res - 1] / error_L2_norm[res]) / log(h_arr[res - 1] / h_arr[res]);
@@ -420,6 +520,15 @@ cleanup:
   free(src_gf);
   free(dst_radii);
   free(dst_interp_gfs);
+
+#ifdef __CUDACC__
+  for (int i = 0; i < 3; i++)
+    CUDA_FREE(d_src_r_theta_phi[i]);
+  CUDA_FREE(d_src_gf);
+  CUDA_FREE(d_dst_radii);
+  CUDA_FREE(d_dst_interp_gfs);
+#endif
+
   return return_code;
 } // END FUNCTION: main
 
@@ -434,6 +543,7 @@ cleanup:
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
         postfunc=postfunc,
     )

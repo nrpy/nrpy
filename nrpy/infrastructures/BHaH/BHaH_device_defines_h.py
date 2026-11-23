@@ -65,6 +65,47 @@ _CUDA_HELPERS_BLOCK = r"""
 
 #define BHAH_MEMCPY_HOST_TO_DEVICE(dest_ptr, src_ptr, sz) cudaMemcpy(dest_ptr, src_ptr, sz, cudaMemcpyHostToDevice);
 
+/* Device-side helper: record the first error and its payload. */
+__device__ static inline
+int bhahaha_gpu_set_error(int *error_flag, int code)
+{
+  /* First error wins: change code from 0 to 'code' atomically. */
+  return atomicCAS(error_flag, 0, code);
+}
+
+#ifndef CUDART_VERSION
+#error CUDART_VERSION Undefined!
+#elif (CUDART_VERSION < 9000)
+#error BHaHAHA requires CUDA 9.0
+#elif (CUDART_VERSION < 12020)
+#define CUDA_ONE_THREAD(call_group) if (blockIdx.x*blockDim.x + threadIdx.x == 0) {
+#define END_CUDA_ONE_THREAD }
+#elif (CUDART_VERSION >= 12020)
+#define CUDA_ONE_THREAD(call_group) cooperative_groups::invoke_one((call_group), [&]() {
+#define END_CUDA_ONE_THREAD });
+#else
+#error  urecognized CUDART_VERSION
+#endif
+
+#define THREADSPERBLOCK 64
+#define COOPERATIVE_KERNEL_NO_SHARED_MEMORY(kernel_name, kernel_args)                                                                               \
+    cudaLaunchCooperativeKernel((void*)(kernel_name), gridDim, THREADSPERBLOCK, (kernel_args));                                                            \
+    cudaCheckErrors(cudaKernel, "(kernel_name)");
+
+#define COOPERATIVE_KERNEL_SHARED_MEMORY(kernel_name, kernel_args, kernel_threads_per_block, kernel_sharesize)                                                                \
+    cudaLaunchCooperativeKernel((void*)(kernel_name), gridDim, (kernel_threads_per_block), (kernel_args), (kernel_sharesize));                           \
+    cudaCheckErrors(cudaKernel, "(kernel_name)");
+
+#define GET_COOPERATIVE_KERNEL(_1, _2, _3, NAME, ...) NAME
+#define COOPERATIVE_KERNEL(kernel_name, ...)                          \
+  do {                                                                \
+    int dev = 0;                                                      \
+    cudaDeviceProp deviceProp;                                        \
+    cudaGetDeviceProperties(&deviceProp, dev);                        \
+    int gridDim = deviceProp.multiProcessorCount;                     \
+    GET_COOPERATIVE_KERNEL(__VA_ARGS__, COOPERATIVE_KERNEL_SHARED_MEMORY, 0, COOPERATIVE_KERNEL_NO_SHARED_MEMORY)(kernel_name, __VA_ARGS__)            \
+    cudaDeviceSynchronize();                                          \
+  } while (0); 
 """
 # endregion
 

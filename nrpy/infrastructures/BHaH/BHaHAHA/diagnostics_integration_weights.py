@@ -37,6 +37,11 @@ the highest possible order of integration based on divisibility of Nxx1 and Nxx2
     cfunc_type = "void"
     name = "diagnostics_integration_weights"
     params = "int Nxx1, int Nxx2, const REAL *restrict *weights, int *restrict weight_stencil_size"
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__host__ __device__
+#endif
+"""
     body = r"""
 // Define weights for different orders
 static const REAL weights_2nd_order[1] = {1.0};
@@ -67,6 +72,7 @@ if (Nxx1 % 8 == 0 && Nxx2 % 8 == 0) {
         cfunc_type=cfunc_type,
         name=name,
         params=params,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )
 

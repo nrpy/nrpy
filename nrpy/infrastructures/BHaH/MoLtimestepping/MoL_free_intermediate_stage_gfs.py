@@ -20,6 +20,7 @@ from nrpy.infrastructures import BHaH
 def register_CFunction_MoL_free_intermediate_levels(
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
+    bhahaha: bool = False,
 ) -> None:
     """
     Construct and register a C function that frees intermediate-level (k_i) storage for the chosen Method of Lines scheme.
@@ -33,6 +34,8 @@ def register_CFunction_MoL_free_intermediate_levels(
                          number of intermediate stages.
     :param MoL_method: Name of the Method of Lines scheme whose intermediate arrays should
                        be freed (for example, "RK4", "RK3", or "RK2").
+    :param bhahaha: Boolean that determines bhahaha unique code
+     
 
     Doctests:
     TBD
@@ -65,6 +68,8 @@ def register_CFunction_MoL_free_intermediate_levels(
     )
     body = ""
     free_macro = "BHAH_FREE_DEVICE" if parallelization == "cuda" else "BHAH_FREE"
+    if bhahaha:
+        free_macro = "FREE"
     for gridfunctions in intermediate_stage_gfs_gridfunctions_list:
         body += f"{free_macro}(gridfuncs->{gridfunctions});\n"
 

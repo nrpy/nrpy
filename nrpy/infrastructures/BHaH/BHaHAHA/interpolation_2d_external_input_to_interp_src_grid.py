@@ -30,13 +30,15 @@ def register_CFunction_interpolation_2d_external_input_to_interp_src_grid() -> (
     includes = ["BHaH_defines.h", "interpolation_lagrange_uniform.h"]
 
     prefunc = """
-#define DEBUG
+//#define DEBUG
 #define INTERP_ORDER (2 * NinterpGHOSTS + 1) // Interpolation order (== number of points in stencil, in each dimension).
 #define DST_IDX4(g, i, j, k) ((i) + dst_Nxx_plus_2NGHOSTS0 * ((j) + dst_Nxx_plus_2NGHOSTS1 * ((k) + dst_Nxx_plus_2NGHOSTS2 * (g))))
 #define SRC_IDX4(g, i, j, k) ((i) + src_Nxx_plus_2NGHOSTS0 * ((j) + src_Nxx_plus_2NGHOSTS1 * ((k) + src_Nxx_plus_2NGHOSTS2 * (g))))
 // #define STANDALONE
 
-#pragma GCC optimize("unroll-loops")"""
+#ifndef __CUDACC__
+#pragma GCC optimize("unroll-loops")
+#endif"""
     desc = r"""
 Interpolates data from the source grid (external input) to the destination grid (interp_src) using 2D Lagrange interpolation.
 
@@ -52,16 +54,21 @@ Notes:
 - The stencil size for interpolation is defined by the INTERP_ORDER macro.
 - The destination and src grid radial points overlap.
 """
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "interpolation_2d_external_input_to_interp_src_grid"
     params = "commondata_struct *restrict commondata"
 
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     body = r"""
   // UNPACK PARAMETERS:
   // src = external_input
   // dst = interp_src
-  const REAL src_dxx1 = commondata->external_input_dxx1;
-  const REAL src_dxx2 = commondata->external_input_dxx2;
+  MAYBE_UNUSED const REAL src_dxx1 = commondata->external_input_dxx1;
+  MAYBE_UNUSED const REAL src_dxx2 = commondata->external_input_dxx2;
   const REAL src_invdxx1 = commondata->external_input_invdxx1;
   const REAL src_invdxx2 = commondata->external_input_invdxx2;
   const int src_Nxx_plus_2NGHOSTS0 = commondata->external_input_Nxx_plus_2NGHOSTS0;
@@ -86,10 +93,24 @@ Notes:
   // Perform debug checks if DEBUG is defined
   if (src_r_theta_phi[1] == NULL || src_r_theta_phi[2] == NULL || commondata->external_input_gfs == NULL ||
       commondata->interp_src_r_theta_phi[1] == NULL || commondata->interp_src_r_theta_phi[2] == NULL || commondata->interp_src_gfs == NULL)
-    return INTERP2D_EXT_TO_INTERPSRC_NULL_PTRS;
+    {
+#ifdef __CUDACC__
+    bhahaha_gpu_set_error(&commondata->error_flag, INTERP2D_EXT_TO_INTERPSRC_NULL_PTRS);
+#else
+    commondata->error_flag = INTERP2D_EXT_TO_INTERPSRC_NULL_PTRS;
+#endif
+    return;
+    }
 
   if (INTERP_ORDER > commondata->external_input_Nxx1 + 2 * NinterpGHOSTS || INTERP_ORDER > commondata->external_input_Nxx2 + 2 * NinterpGHOSTS)
-    return INTERP2D_EXT_TO_INTERPSRC_INTERP_ORDER_GT_NXX_PLUS_2NINTERPGHOSTS12;
+    {
+#ifdef __CUDACC__
+    bhahaha_gpu_set_error(&commondata->error_flag, INTERP2D_EXT_TO_INTERPSRC_INTERP_ORDER_GT_NXX_PLUS_2NINTERPGHOSTS12);
+#else
+    commondata->error_flag = INTERP2D_EXT_TO_INTERPSRC_INTERP_ORDER_GT_NXX_PLUS_2NINTERPGHOSTS12;
+#endif
+    return;
+    }
 
   // Precompute inverse denominators for Lagrange interpolation coefficients to optimize performance.
   REAL inv_denom[INTERP_ORDER];
@@ -98,15 +119,19 @@ Notes:
   // Perform interpolation for each destination angular point (theta, phi)
   const REAL xxmin_incl_ghosts1 = src_r_theta_phi[1][0];
   const REAL xxmin_incl_ghosts2 = src_r_theta_phi[2][0];
-  int error_flag = BHAHAHA_SUCCESS;
   int i0_min_shift = 0;
   if (commondata->bhahaha_params_and_data->r_min_external_input == 0)
     i0_min_shift = NGHOSTS;
+#ifdef __CUDACC__
+  PARALLEL_LOOP(ir, i0_min_shift, dst_Nxx_plus_2NGHOSTS0, itheta, NGHOSTS, dst_Nxx1 + NGHOSTS, iphi, NGHOSTS, dst_Nxx2 + NGHOSTS) {
+    const REAL phi_dst = commondata->interp_src_r_theta_phi[2][iphi];
+#else
 #pragma omp parallel for
   for (int ir = i0_min_shift; ir < dst_Nxx_plus_2NGHOSTS0; ir++) {
     for (int iphi = NGHOSTS; iphi < dst_Nxx2 + NGHOSTS; iphi++) { // Ignore ghost zones; these can be handled separately.
       const REAL phi_dst = commondata->interp_src_r_theta_phi[2][iphi];
       for (int itheta = NGHOSTS; itheta < dst_Nxx1 + NGHOSTS; itheta++) {
+#endif
         const REAL theta_dst = commondata->interp_src_r_theta_phi[1][itheta];
 
         // printf("destination: (%e, %e, %e)\n", commondata->interp_src_r_theta_phi[0][ir], commondata->interp_src_r_theta_phi[1][itheta],
@@ -120,7 +145,7 @@ Notes:
           // Ensure the stencil is within valid grid bounds
           if ((idx_center_th - NinterpGHOSTS < 0) || (idx_center_th + NinterpGHOSTS >= src_Nxx_plus_2NGHOSTS1) ||
               (idx_center_ph - NinterpGHOSTS < 0) || (idx_center_ph + NinterpGHOSTS >= src_Nxx_plus_2NGHOSTS2)) {
-#ifdef DEBUG
+#if defined(DEBUG) && !defined(__CUDACC__)
             fprintf(stderr, "ERROR: Interpolation stencil exceeds grid boundaries. %d %d %d %d\n", (idx_center_th - NinterpGHOSTS < 0),
                     (idx_center_th + NinterpGHOSTS >= src_Nxx_plus_2NGHOSTS1), (idx_center_ph - NinterpGHOSTS < 0),
                     (idx_center_ph + NinterpGHOSTS >= src_Nxx_plus_2NGHOSTS2));
@@ -131,14 +156,18 @@ Notes:
                     idx_center_ph - NinterpGHOSTS, idx_center_ph + NinterpGHOSTS);
             fprintf(stderr, "Ensure that the destination point is within grid bounds or adjust the interpolation stencil.\n");
 #endif // DEBUG
+#ifdef __CUDACC__
+            bhahaha_gpu_set_error(&commondata->error_flag, INTERP2D_EXT_TO_INTERPSRC_HORIZON_OUT_OF_BOUNDS);
+#else
 #pragma omp critical
-            {
-              error_flag = INTERP2D_EXT_TO_INTERPSRC_HORIZON_OUT_OF_BOUNDS;
-            }
+            commondata->error_flag = INTERP2D_EXT_TO_INTERPSRC_HORIZON_OUT_OF_BOUNDS;
+#endif
+#ifndef __CUDACC__
             continue; // Skip further work for this iteration
+#endif
           } // END IF: stencil in bounds
 
-#ifdef DEBUG
+#if defined(DEBUG) && !defined(__CUDACC__)
           // Verify that the central index is the closest grid point to the destination radius
           const REAL TOLERANCE = 1e-13; // The TOLERANCE is needed, as we often interpolate to points exactly midway between src points.
           if (fabs(src_r_theta_phi[1][idx_center_th] - theta_dst) > src_dxx1 * (0.5 + TOLERANCE)) {
@@ -152,55 +181,76 @@ Notes:
 #endif // DEBUG
         } // END BLOCK: theta/phi stencil bounds and center-index sanity checks
 
-        const int base_idx_th = idx_center_th - NinterpGHOSTS;
-        const int base_idx_ph = idx_center_ph - NinterpGHOSTS;
+#ifdef __CUDACC__
+        if (commondata->error_flag == BHAHAHA_SUCCESS) {
+#endif
+          const int base_idx_th = idx_center_th - NinterpGHOSTS;
+          const int base_idx_ph = idx_center_ph - NinterpGHOSTS;
 
-        // Step 1: Precompute all differences
-        REAL diffs_th[INTERP_ORDER], diffs_ph[INTERP_ORDER];
-        compute_diffs_xi(INTERP_ORDER, theta_dst, &src_r_theta_phi[1][base_idx_th], diffs_th);
-        compute_diffs_xi(INTERP_ORDER, phi_dst, &src_r_theta_phi[2][base_idx_ph], diffs_ph);
+          // Step 1: Precompute all differences
+          REAL diffs_th[INTERP_ORDER], diffs_ph[INTERP_ORDER];
+          compute_diffs_xi(INTERP_ORDER, theta_dst, &src_r_theta_phi[1][base_idx_th], diffs_th);
+          compute_diffs_xi(INTERP_ORDER, phi_dst, &src_r_theta_phi[2][base_idx_ph], diffs_ph);
 
-        // Step 2: Precompute combined Lagrange coefficients to reduce computations
-        REAL lagrange_basis_coeffs_th[INTERP_ORDER], lagrange_basis_coeffs_ph[INTERP_ORDER];
-        compute_lagrange_basis_coeffs_xi(INTERP_ORDER, inv_denom, diffs_th, lagrange_basis_coeffs_th);
-        compute_lagrange_basis_coeffs_xi(INTERP_ORDER, inv_denom, diffs_ph, lagrange_basis_coeffs_ph);
-        REAL coeff_2d[INTERP_ORDER][INTERP_ORDER];
-        for (int iph = 0; iph < INTERP_ORDER; iph++) {
-          const REAL coeff_ph_i = lagrange_basis_coeffs_ph[iph];
-          for (int ith = 0; ith < INTERP_ORDER; ith++) {
-            coeff_2d[iph][ith] = coeff_ph_i * lagrange_basis_coeffs_th[ith];
-          } // END LOOP: for ith over theta stencil
-        } // END LOOP: for iph over phi stencil
+          // Step 2: Precompute combined Lagrange coefficients to reduce computations
+          REAL lagrange_basis_coeffs_th[INTERP_ORDER], lagrange_basis_coeffs_ph[INTERP_ORDER];
+          compute_lagrange_basis_coeffs_xi(INTERP_ORDER, inv_denom, diffs_th, lagrange_basis_coeffs_th);
+          compute_lagrange_basis_coeffs_xi(INTERP_ORDER, inv_denom, diffs_ph, lagrange_basis_coeffs_ph);
+          REAL coeff_2d[INTERP_ORDER][INTERP_ORDER];
+          for (int iph = 0; iph < INTERP_ORDER; iph++) {
+            const REAL coeff_ph_i = lagrange_basis_coeffs_ph[iph];
+            for (int ith = 0; ith < INTERP_ORDER; ith++) {
+              coeff_2d[iph][ith] = coeff_ph_i * lagrange_basis_coeffs_th[ith];
+            } // END LOOP: ith over theta stencil
+          } // END LOOP: iph over phi stencil
 
-        // Step 3: Perform the 2D Lagrange interpolation, optimizing memory accesses and enabling vectorization
-        REAL sum[NUM_EXT_INPUT_CONFORMAL_GFS];
-        for (int gf = 0; gf < NUM_EXT_INPUT_CONFORMAL_GFS; gf++) {
-          sum[gf] = 0.0;
-        } // END LOOP: for which_gf over grid functions
-        for (int iph = 0; iph < INTERP_ORDER; iph++) {
-          const int idx_ph = base_idx_ph + iph;
-          for (int ith = 0; ith < INTERP_ORDER; ith++) {
-            const int idx_th = base_idx_th + ith;
-            const REAL coeff = coeff_2d[iph][ith];
+          // Step 3: Perform the 2D Lagrange interpolation, optimizing memory accesses and enabling vectorization
+          REAL sum[NUM_EXT_INPUT_CONFORMAL_GFS];
+          for (int gf = 0; gf < NUM_EXT_INPUT_CONFORMAL_GFS; gf++) {
+            sum[gf] = 0.0;
+          } // END LOOP: for gf over grid functions
+          for (int iph = 0; iph < INTERP_ORDER; iph++) {
+            const int idx_ph = base_idx_ph + iph;
+            for (int ith = 0; ith < INTERP_ORDER; ith++) {
+              const int idx_th = base_idx_th + ith;
+              const REAL coeff = coeff_2d[iph][ith];
+#ifndef __CUDACC__
 #pragma omp simd
-            for (int gf = 0; gf < NUM_EXT_INPUT_CONFORMAL_GFS; gf++) {
-              sum[gf] += src_gfs[SRC_IDX4(gf, ir, idx_th, idx_ph)] * coeff;
-            } // END LOOP: for which_gf over source gridfunctions
-          } // END LOOP: for ith over theta stencil
-        } // END LOOP: for iph over phi stencil
-        for (int gf = 0; gf < NUM_EXT_INPUT_CONFORMAL_GFS; gf++) {
-          dst_gfs[DST_IDX4(gf, ir, itheta, iphi)] = sum[gf] * src_invdxx12_INTERP_ORDERm1;
-        } // END LOOP: for which_gf over destination gridfunctions
-      } // END LOOP: for itheta over destination theta
-    } // END LOOP: for iphi over destination phi
-  } // END LOOP: for ir over radial shells
-  return error_flag;
+#endif
+              for (int gf = 0; gf < NUM_EXT_INPUT_CONFORMAL_GFS; gf++) {
+                sum[gf] += src_gfs[SRC_IDX4(gf, ir, idx_th, idx_ph)] * coeff;
+              } // END LOOP: for gf over source gridfunctions
+            } // END LOOP for ith over theta stencil
+          } // END LOOP for iph over phi stencil
+          for (int gf = 0; gf < NUM_EXT_INPUT_CONFORMAL_GFS; gf++) {
+            dst_gfs[DST_IDX4(gf, ir, itheta, iphi)] = sum[gf] * src_invdxx12_INTERP_ORDERm1;
+          } // END LOOP: for gf over destination gridfunctions
+#ifdef __CUDACC__
+        } // END IF: passed sanity checks 
+#endif 
+  #ifndef __CUDACC__
+      } // END LOOP: itheta over destination theta
+    } // END LOOP: iphi over destination phi
+  } // END LOOP: ir over radial shells
+  #else
+  } // END LOOP: (ir, itheta, iphi) over (radial shells, destination theta, destination phi)
+  END_PARALLEL_LOOP;
+  #endif
+
+  return;
 """
     postfunc = r"""
 #pragma GCC reset_options // Reset compiler optimizations after the function
 
 #ifdef STANDALONE
 #include <omp.h>
+
+#ifdef __CUDACC__
+__global__
+#endif
+void bah_interpolation_2d_external_input_to_interp_src_grid_kernel(commondata_struct *restrict commondata) {
+  bah_interpolation_2d_external_input_to_interp_src_grid(commondata);
+}
 
 #define RADIAL_EXTENT 1.0
 #define NUM_RESOLUTIONS 3
@@ -321,10 +371,18 @@ int main() {
   // Source grid data (re-allocated each loop)
   REAL *src_r_theta_phi[3] = {NULL, NULL, NULL};
   REAL *src_gf = NULL;
+#ifdef __CUDACC__
+  REAL *d_src_r_theta_phi[3] = {NULL, NULL, NULL};
+  REAL *d_src_gf = NULL;
+#endif
 
   // Destination grid data (allocated once)
   REAL *dst_r_theta_phi[3] = {NULL, NULL, NULL};
   REAL *dst_gfs = NULL;
+#ifdef __CUDACC__
+  REAL *d_dst_r_theta_phi[3] = {NULL, NULL, NULL};
+  REAL *d_dst_gfs = NULL;
+#endif
 
   const int N_r = 64;
   const int Ntheta_src_arr[NUM_RESOLUTIONS] = {16, 32, 64};
@@ -338,6 +396,7 @@ int main() {
   const int dst_Nxx_plus_2NGHOSTS0 = N_r + 2 * NGHOSTS;
   const int dst_Nxx_plus_2NGHOSTS1 = Ntheta_dst + 2 * NGHOSTS;
   const int dst_Nxx_plus_2NGHOSTS2 = Nphi_dst + 2 * NGHOSTS;
+  const size_t total_dst_pts = (size_t)dst_Nxx_plus_2NGHOSTS0 * dst_Nxx_plus_2NGHOSTS1 * dst_Nxx_plus_2NGHOSTS2;
   const int dst_Nxx_plus_2NGHOSTS[3] = {dst_Nxx_plus_2NGHOSTS0, dst_Nxx_plus_2NGHOSTS1, dst_Nxx_plus_2NGHOSTS2};
   REAL dst_dxx[3];
   if (initialize_coordinates(N_r, Ntheta_dst, Nphi_dst, dst_r_theta_phi, dst_dxx, dst_Nxx_plus_2NGHOSTS) != 0) {
@@ -346,7 +405,6 @@ int main() {
     goto cleanup;
   } // END IF: destination coordinate initialization failed
 
-  const size_t total_dst_pts = (size_t)dst_Nxx_plus_2NGHOSTS0 * dst_Nxx_plus_2NGHOSTS1 * dst_Nxx_plus_2NGHOSTS2;
   dst_gfs = (REAL *)malloc(sizeof(REAL) * NUM_EXT_INPUT_CONFORMAL_GFS * total_dst_pts);
   if (dst_gfs == NULL) {
     fprintf(stderr, "Memory allocation failed for destination grid functions.\n");
@@ -381,34 +439,73 @@ int main() {
 
     // Use designated initializers for commondata_struct
     commondata_struct commondata = {
-        .bhahaha_params_and_data = malloc(sizeof(bhahaha_params_and_data_struct)),
-        .external_input_dxx1 = src_dxx[1],
-        .external_input_dxx2 = src_dxx[2],
-        .external_input_invdxx1 = 1.0 / src_dxx[1],
-        .external_input_invdxx2 = 1.0 / src_dxx[2],
-        .external_input_Nxx1 = Ntheta_src,
-        .external_input_Nxx2 = Nphi_src,
-        .external_input_Nxx_plus_2NGHOSTS0 = src_Nxx_plus_2NGHOSTS[0],
-        .external_input_Nxx_plus_2NGHOSTS1 = src_Nxx_plus_2NGHOSTS[1],
-        .external_input_Nxx_plus_2NGHOSTS2 = src_Nxx_plus_2NGHOSTS[2],
-        .external_input_gfs = src_gf,
-        .interp_src_Nxx1 = Ntheta_dst,
-        .interp_src_Nxx2 = Nphi_dst,
-        .interp_src_Nxx_plus_2NGHOSTS0 = dst_Nxx_plus_2NGHOSTS[0],
-        .interp_src_Nxx_plus_2NGHOSTS1 = dst_Nxx_plus_2NGHOSTS[1],
-        .interp_src_Nxx_plus_2NGHOSTS2 = dst_Nxx_plus_2NGHOSTS[2],
-        .interp_src_gfs = dst_gfs,
-    };
+        .bhahaha_params_and_data = malloc(sizeof(bhahaha_params_and_data_struct))};
+    commondata.external_input_dxx1 = src_dxx[1];
+    commondata.external_input_dxx2 = src_dxx[2];
+    commondata.external_input_invdxx1 = 1.0 / src_dxx[1];
+    commondata.external_input_invdxx2 = 1.0 / src_dxx[2];
+    commondata.external_input_Nxx1 = Ntheta_src;
+    commondata.external_input_Nxx2 = Nphi_src;
+    commondata.external_input_Nxx_plus_2NGHOSTS0 = src_Nxx_plus_2NGHOSTS[0];
+    commondata.external_input_Nxx_plus_2NGHOSTS1 = src_Nxx_plus_2NGHOSTS[1];
+    commondata.external_input_Nxx_plus_2NGHOSTS2 = src_Nxx_plus_2NGHOSTS[2];
+    commondata.interp_src_Nxx1 = Ntheta_dst;
+    commondata.interp_src_Nxx2 = Nphi_dst;
+    commondata.interp_src_Nxx_plus_2NGHOSTS0 = dst_Nxx_plus_2NGHOSTS[0];
+    commondata.interp_src_Nxx_plus_2NGHOSTS1 = dst_Nxx_plus_2NGHOSTS[1];
+    commondata.interp_src_Nxx_plus_2NGHOSTS2 = dst_Nxx_plus_2NGHOSTS[2];
+
+#ifdef __CUDACC__  
+    CUDA_MALLOC(d_src_gf, sizeof(REAL) * NUM_EXT_INPUT_CONFORMAL_GFS * total_src_pts);
+    CUDA_MALLOC(d_dst_gfs, sizeof(REAL) * NUM_EXT_INPUT_CONFORMAL_GFS * total_dst_pts);
+    CUDA_COPY_TO(d_src_gf, src_gf, sizeof(REAL) * NUM_EXT_INPUT_CONFORMAL_GFS * total_src_pts);
+    CUDA_COPY_TO(d_dst_gfs, dst_gfs, sizeof(REAL) * NUM_EXT_INPUT_CONFORMAL_GFS * total_dst_pts);
+    commondata.external_input_gfs = d_src_gf;
+    commondata.interp_src_gfs = d_dst_gfs;
+#else
+    commondata.external_input_gfs = src_gf;
+    commondata.interp_src_gfs = dst_gfs;
+#endif
+
     commondata.bhahaha_params_and_data->r_min_external_input = 0.0;
     for (int i = 0; i < 3; i++) {
+#ifdef __CUDACC__
+      CUDA_MALLOC(d_src_r_theta_phi[i], sizeof(REAL) * dst_Nxx_plus_2NGHOSTS[i]);
+      CUDA_COPY_TO(d_src_r_theta_phi[i], src_r_theta_phi[i], sizeof(REAL) * dst_Nxx_plus_2NGHOSTS[i]);
+      CUDA_MALLOC(d_dst_r_theta_phi[i], sizeof(REAL) * dst_Nxx_plus_2NGHOSTS[i]);
+      CUDA_COPY_TO(d_dst_r_theta_phi[i], dst_r_theta_phi[i], sizeof(REAL) * dst_Nxx_plus_2NGHOSTS[i]);
+      commondata.external_input_r_theta_phi[i] = d_src_r_theta_phi[i];
+      commondata.interp_src_r_theta_phi[i] = d_dst_r_theta_phi[i];
+#else      
       commondata.external_input_r_theta_phi[i] = src_r_theta_phi[i];
       commondata.interp_src_r_theta_phi[i] = dst_r_theta_phi[i];
+#endif
     } // END LOOP: for i over coordinate pointers in commondata
 
 #ifdef _OPENMP
     double start_time = omp_get_wtime();
 #endif
-    int error_code = bah_interpolation_2d_external_input_to_interp_src_grid(&commondata);
+#ifdef __CUDACC__
+    commondata_struct *d_commondata = NULL;
+    CUDA_MALLOC(d_commondata, sizeof(commondata_struct));
+    CUDA_COPY_TO(d_commondata, &commondata, sizeof(commondata_struct));
+    void *Args[] = {&d_commondata}; 
+    int dev = 0;
+    cudaDeviceProp deviceProp;
+    cudaGetDeviceProperties(&deviceProp, dev);
+    int gridDim = deviceProp.multiProcessorCount;
+    cudaLaunchCooperativeKernel((void *)bah_interpolation_2d_external_input_to_interp_src_grid_kernel, gridDim, THREADSPERBLOCK, Args);
+    cudaDeviceSynchronize();
+    CUDA_COPY_FROM(&commondata, d_commondata, sizeof(commondata_struct));
+    CUDA_FREE(d_commondata);
+    CUDA_COPY_FROM(dst_gfs, d_dst_gfs, sizeof(REAL) * NUM_EXT_INPUT_CONFORMAL_GFS * total_dst_pts);
+    for (int i = 0; i < 3; i++) {
+      CUDA_COPY_FROM(dst_r_theta_phi[i], d_dst_r_theta_phi[i], sizeof(REAL) * dst_Nxx_plus_2NGHOSTS[i]);
+    }
+#else
+    bah_interpolation_2d_external_input_to_interp_src_grid(&commondata);
+#endif
+    int error_code = commondata.error_flag;
 #ifdef _OPENMP
     double end_time = omp_get_wtime();
 #endif
@@ -480,6 +577,14 @@ cleanup:
   free(src_gf);
   free(dst_gfs);
 
+#ifdef __CUDACC__
+  for (int i = 0; i < 3; i++) {
+    CUDA_FREE(d_src_r_theta_phi[i]);
+    CUDA_FREE(d_dst_r_theta_phi[i]);
+  }
+  CUDA_FREE(d_src_gf);
+  CUDA_FREE(d_dst_gfs);
+#endif
   return return_code;
 } // END FUNCTION: main
 #endif // STANDALONE
@@ -493,6 +598,7 @@ cleanup:
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
         postfunc=postfunc,
     )
