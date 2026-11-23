@@ -23,7 +23,22 @@ Each relaxation iteration runs radial-spoke metric interpolation, computes `dt =
 
 ### Diagnostics, Output Files, And Memory Cleanup
 
-`bah_diagnostics` refreshes radial-spoke data and calls `bah_diagnostics_area_centroid_and_Theta_norms` (horizon area, centroid, `L2`/`L_inf` `Theta` norms, grid-relative radii, `Theta_eval_points_counter`, and `FIND_HORIZON_HORIZON_TOO_SMALL` if `r_min < 3 * dr`). On convergence at the finest level, `find_horizon` shifts `prev_horizon_m1/m2/m3`, updates `m1/m2/m3` center/radius/time history, and runs `bah_diagnostics_min_max_mean_radii_wrt_centroid` plus `bah_diagnostics_proper_circumferences` (`xy`/`xz`/`yz` circumferences and spin ratios; `bah_diagnostics_proper_circumferences_general` handles arbitrary spin axes). `bah_diagnostics_file_output` appends to `BHaHAHA_diagnostics.ah%d.gp` and writes Cartesian horizon coordinates to `h.t%07d.ah%d.gp`.
+`bah_diagnostics` refreshes radial-spoke data and calls `bah_diagnostics_area_centroid_and_Theta_norms` (horizon area, centroid, `L2`/`L_inf` `Theta` norms, grid-relative radii, `Theta_eval_points_counter`, and `FIND_HORIZON_HORIZON_TOO_SMALL` if `r_min < 3 * dr`). On convergence at the finest level, `find_horizon` shifts `prev_horizon_m1/m2/m3`, updates `m1/m2/m3` center/radius/time history, and runs `bah_diagnostics_min_max_mean_radii_wrt_centroid` plus `bah_diagnostics_proper_circumferences` (`xy`/`xz`/`yz` circumferences and spin ratios; `bah_diagnostics_proper_circumferences_general` handles arbitrary spin axes).
+
+If `bah_enable_spectre_spin_diagnostic` is enabled, one three-mode AKV solve
+supplies the SpECTRE-style and Gram-matrix vectors and the lowest-shear
+AKV-pole vector. A shared solve or integration failure leaves all three
+vectors unavailable. A pole-fit failure leaves the AKV-pole vector
+unavailable and preserves the other two vectors. The generalized
+proper-circumference calculation uses the SpECTRE direction to obtain a
+separate spin magnitude and vector.
+
+`bah_diagnostics_file_output` appends to `BHaHAHA_diagnostics.ah%d.gp`. A new
+file labels all 34 columns. Columns 22–24 contain the SpECTRE-style components,
+25–27 the Gram-matrix components, 28–30 the lowest-shear AKV-pole components,
+and 31–34 the circumference-ratio magnitude followed by its three components.
+The writer emits `NaN` for unavailable spin values, retains any existing
+header, and writes the Cartesian horizon coordinates to `h.t%07d.ah%d.gp`.
 
 `free_all_but_external_input_gfs` frees per-level evolved/source grids, `rfmstruct`, `bcstruct`, MoL buffers, and `h_p`; `find_horizon` then frees `external_input_gfs`. `bhahaha_find_horizons` frees `input_metric_data` per solve and `prev_horizon_m1/m2/m3` via `free_bhahaha_horizon_shape_data_all_horizons` at shutdown.
 
@@ -45,6 +60,9 @@ Each relaxation iteration runs radial-spoke metric interpolation, computes `dt =
 - [diagnostics_proper_circumferences_general.py](../../../../nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_proper_circumferences_general.py) - `register_CFunction_diagnostics_proper_circumferences_general`
 - [diagnostics_integration_weights.py](../../../../nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_integration_weights.py) - `register_CFunction_diagnostics_integration_weights`
 - [diagnostics_file_output.py](../../../../nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_file_output.py) - `register_CFunction_diagnostics_file_output`
+
+- [spectre_spin_integrator.py](../../../../nrpy/infrastructures/BHaH/BHaHAHA/spectre_spin_integrator.py) - `bah_compute_spectre_spin_potentials`, `diagnostics_spectre_spin`
+- [BHaHAHA_header.h](../../../../nrpy/infrastructures/BHaH/BHaHAHA/BHaHAHA_header.h) - `bhahaha_diagnostics_struct`, `bah_initialize_diagnostics_struct`
 
 ## See Also
 

@@ -134,6 +134,7 @@ static inline int is_nan(double x) {
 
   CHECK_AND_PRINT_INT(params->verbosity_level, "verbosity_level", error_flag);
   CHECK_AND_PRINT_INT(params->enable_eta_varying_alg_for_precision_common_horizon, "enable_eta_varying_alg_for_precision_common_horizon", error_flag);
+  CHECK_AND_PRINT_INT(params->enable_spectre_spin_diagnostic, "enable_spectre_spin_diagnostic", error_flag);
 
   if (error_flag) {
     fprintf(stderr, "poisoning_check_inputs: Poisoned inputs detected. Exiting.\n");

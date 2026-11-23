@@ -47,12 +47,21 @@ boundary, RHS, KO, and BHaH define/header functions, then removes
 `__rfm__Spherical` wrapper suffixes so the library exports plain `bah_`
 functions.
 
+Before Makefile generation, the generator validates and copies its frozen,
+symbol-prefixed PRIMME tree. One explicit `.c` inventory supplies typed
+additional source records to the Makefile generator. Their object files join
+the generated C object files in the static archive. The same extension
+declares the phony `linkcheck` target and adds its two output files to
+`make clean`.
+
 The Makefile helper is called with `exec_or_library_name = "lib<project_name>"`,
 `lib_function_prefix = "bah_"`, `create_lib = True`, and `static_lib = True`.
 The resulting generated project is therefore a static library workflow, not a
 standalone evolution executable. The final generator message tells users to
 build in the generated BHaHAHA directory and start linking guidance from
 `BHaHAHA.h`.
+
+Evidence (descriptive behavior): [bhahaha.py](../../nrpy/examples/bhahaha.py) `akv_primme_c_sources` and `akv_makefile_extension`, and [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) `MakefileExtension` and `_construct_makefile_content`.
 
 `BHaHAHA.h` is assembled from the checked-in header template plus generator
 additions. It defines `REAL` when absent, declares the 12 Cartesian ADM input
@@ -79,7 +88,8 @@ internals belong under [BHaHAHA](../infrastructures/bhah/bhahaha/index.md).
 
 ## Sources
 
-- [bhahaha.py](../../nrpy/examples/bhahaha.py) - `--fdorder`, `--outrootdir`, `--cpp`, `--no-openmp`, `--sequential-codegen`, `project_name`, `output_CFunctions_function_prototypes_and_construct_Makefile`
+- [bhahaha.py](../../nrpy/examples/bhahaha.py) - `--fdorder`, `--outrootdir`, `--cpp`, `--no-openmp`, `project_name`, `output_CFunctions_function_prototypes_and_construct_Makefile`
+- [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `MakefileExtension`, `MakefileTarget`, `output_CFunctions_function_prototypes_and_construct_Makefile`
 - [BHaHAHA_header.h](../../nrpy/infrastructures/BHaH/BHaHAHA/BHaHAHA_header.h) - `bhahaha_params_and_data_struct`, `bhahaha_diagnostics_struct`, `NUM_EXT_INPUT_CARTESIAN_GFS`, `IDX2`, public `bah_*` prototypes
 - [error_message.py](../../nrpy/infrastructures/BHaH/BHaHAHA/error_message.py) - `error_code_msg_tuples_list`, `register_CFunction_error_message`
 - [two_blackholes_collide.py](../../nrpy/examples/two_blackholes_collide.py) - `BHaH.BHaHAHA.BHaH_implementation.register_CFunction_bhahaha_find_horizons`
