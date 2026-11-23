@@ -393,11 +393,7 @@ class GeneralRFMInverseFisheye:
         scale: sp.Expr = 1 / self.a_list[-1]
         for j, (R, Rz, w) in enumerate(zip(self.R_list, self.Rz_list, self.w_list)):
             rho = sp.sqrt(Cart[0] ** 2 + Cart[1] ** 2 + (R / Rz) ** 2 * Cart[2] ** 2)
-            kernel = (
-                w
-                * sp.log(sp.cosh(2 * (rho + R) / w) / sp.cosh(2 * (rho - R) / w))
-                / (4 * sp.tanh(2 * R / w))
-            )
+            kernel = _G_kernel(rho, R, w / 2)
             ratio = sp.Piecewise((sp.Integer(1), sp.Eq(rho, 0)), (kernel / rho, True))
             scale += (1 / self.a_list[j] - 1 / self.a_list[j + 1]) * ratio
         return scale
