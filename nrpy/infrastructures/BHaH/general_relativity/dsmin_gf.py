@@ -72,17 +72,18 @@ def register_CFunction_dsmin_auxevol_gridfunction(
                 )
             if parallelization == "cuda":
                 raise ValueError("Inverse spheroidal fisheye does not support CUDA.")
-            loop_body = (
-                f"ds_min_single_pt__rfm__{CoordSystem}(params, xx0, xx1, xx2, "
-                "&auxevol_gfs[IDX4(DSMINGF, i0, i1, i2)]);"
+            loop_body = BHaH.inverse_fisheye.spacing_body(
+                int(rfm.general_rfm_provider_meta["num_transitions"]),
+                "&auxevol_gfs[IDX4(DSMINGF, i0, i1, i2)]",
             )
             cfc.register_CFunction(
                 includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
                 desc=desc,
                 name=name,
                 params=params,
-                include_CodeParameters_h=True,
-                body=BHaH.simple_loop.simple_loop(
+                include_CodeParameters_h=False,
+                body=parallel_utils.get_loop_parameters(parallelization)
+                + BHaH.simple_loop.simple_loop(
                     loop_body=loop_body,
                     loop_region="all points",
                     read_xxs=True,
