@@ -97,9 +97,9 @@ def setup_Cfunction_r_and_partial_xi_partial_r_derivs(CoordSystem: str) -> str:
     rfm = refmetric.reference_metric[CoordSystem]
     if getattr(rfm, "general_rfm_provider_name", "") == "inverse_fisheye":
         n = rfm.general_rfm_provider_meta["num_transitions"]
-        position = f"""const REAL q[3]={{xx0,xx1,xx2}};
+        position = rf"""const REAL q[3]={{xx0,xx1,xx2}};
 REAL x[3];
-if (inverse_fisheye_solve__N{n}(params,q,x)) {{ fprintf(stderr,"Inverse fisheye boundary solve failed.\\n"); exit(1); }}"""
+if (inverse_fisheye_solve__N{n}(params,q,x)) {{ fprintf(stderr,"Inverse fisheye boundary solve failed.\n"); exit(1); }}"""
         return cfc.CFunction(
             includes=[],
             desc=desc,
@@ -107,7 +107,7 @@ if (inverse_fisheye_solve__N{n}(params,q,x)) {{ fprintf(stderr,"Inverse fisheye 
             name=name,
             params=params,
             include_CodeParameters_h=False,
-            body=f"""
+            body=rf"""
 {position}
 REAL J[3][3], K[3][3], g[3][3], dg[3][3][3], ddg[3][3][3][3];
 inverse_fisheye_geometry__N{n}(params, x, false, J, K, g, dg, ddg);

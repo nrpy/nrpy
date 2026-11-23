@@ -237,7 +237,8 @@ at every point, with the origin covered by continuity. The bound may choose
 a smaller timestep than the sampled spacing rule; it does not replace a
 stability analysis of the evolution scheme.
 
-Author: OpenAI
+Author: Nishita Jadoo
+        njadoo **at** uidaho **dot* edu
 
 Doctests:
 >>> model = GeneralRFMInverseFisheye(1)

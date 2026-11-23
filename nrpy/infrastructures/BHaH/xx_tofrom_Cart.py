@@ -1013,10 +1013,10 @@ def register_CFunction_xx_to_Cart(
     # Step 2: Prepare SymPy expressions for C code generation.
     if is_inverse_fisheye:
         n = rfm.general_rfm_provider_meta["num_transitions"]
-        body = f"""
+        body = rf"""
 REAL physical[3];
 if (inverse_fisheye_solve__N{n}(params, xx, physical)) {{
-  fprintf(stderr, "Inverse spheroidal fisheye coordinate solve failed.\\n"); exit(1);
+  fprintf(stderr, "Inverse spheroidal fisheye coordinate solve failed.\n"); exit(1);
 }}
 xCart[0]=physical[0]+params->Cart_originx;
 xCart[1]=physical[1]+params->Cart_originy;

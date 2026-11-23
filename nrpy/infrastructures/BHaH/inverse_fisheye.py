@@ -10,7 +10,8 @@ Jacobians, and 3 for metric jets. Unrequested derivative arrays are untouched
 and may be NULL. Jacobian-only calls do not evaluate the second or third
 scale derivatives.
 
-Author: OpenAI
+Author: Nishita Jadoo
+        njadoo **at** uidaho **dot* edu
 """
 
 from typing import List, Set, Tuple, cast
@@ -89,7 +90,7 @@ def register_CFunctions(num_transitions: int) -> None:
             f"if (derivative_order == 3) {{\n{metric_code}\n}} // END IF: third-order kernel derivatives\n"
             "} // END IF: requested kernel derivatives"
         )
-    prefunc = f"""
+    prefunc = rf"""
 static inline void inverse_fisheye_layer{suffix}(
     const {calc_type} R, const {calc_type} w, const {calc_type} rho,
     const int derivative_order, {calc_type} f[4]) {{
@@ -110,7 +111,7 @@ static inline void inverse_fisheye_layer{suffix}(
         )
         for key in ("a", "R", "Rz", "w")
     }
-    body = f"""
+    body = rf"""
 const {calc_type} a[{num_transitions}] = {{{arrays['a']}}};
 const {calc_type} R[{num_transitions}] = {{{arrays['R']}}};
 const {calc_type} Rz[{num_transitions}] = {{{arrays['Rz']}}};
@@ -143,7 +144,7 @@ for (int layer=0; layer<{num_transitions}; layer++) {{
   }} // END IF: requested scale gradient
 }} // END LOOP: for layer over transitions
 """
-    body += """
+    body += r"""
 *lambda = lam;
 if (derivative_order >= 1) for (int i=0; i<3; i++) v[i] = grad[i];
 if (derivative_order == 3)
@@ -163,7 +164,7 @@ if (derivative_order == 3)
         body=body,
     )
 
-    body = f"""
+    body = rf"""
 const REAL qnorm = hypot(hypot(q[0], q[1]), q[2]);
 if (!(params->inverse_fisheye_c > 0)) return 1;
 if (qnorm == 0) {{ x[0]=x[1]=x[2]=0; return 0; }}
@@ -193,7 +194,7 @@ return 1;
         body=body,
     )
 
-    body = f"""
+    body = rf"""
 REAL lambda, v[3], W[3][3], U[3][3][3];
 inverse_fisheye_scale{suffix}(params, x, derivatives ? 3 : 1, &lambda, v, W, U);
 const REAL radial=lambda+x[0]*v[0]+x[1]*v[1]+x[2]*v[2];
@@ -252,7 +253,7 @@ for (int i=0; i<3; i++) for (int j=0; j<3; j++) {{
         for key in ("a", "R", "Rz", "w")
     ]
     key_count = len(cache_keys)
-    body = f"""
+    body = rf"""
 #ifdef __cplusplus
 #define INVERSE_FISHEYE_THREAD_LOCAL thread_local
 #else
@@ -267,7 +268,7 @@ for (int k=0; k<{key_count}; k++) if (key[k]!=saved_key[k]) same=false;
 if (!same) {{
   const REAL q[3]={{q0,q1,q2}};
   if (inverse_fisheye_solve{suffix}(params, q, x)) {{
-    fprintf(stderr, "Inverse spheroidal fisheye solve failed.\\n"); exit(1);
+    fprintf(stderr, "Inverse spheroidal fisheye solve failed.\n"); exit(1);
   }}
   for (int k=0; k<{key_count}; k++) saved_key[k]=key[k];
   valid=true;
@@ -291,23 +292,23 @@ return (kind==1) ? K[i][j] : J[i][j];
         body=body,
     )
 
-    checks = """
+    checks = r"""
 if (!(isfinite(params->grid_physical_size) && params->grid_physical_size > 0)) {
-  fprintf(stderr, "Inverse fisheye requires positive finite physical extent.\\n"); exit(1);
+  fprintf(stderr, "Inverse fisheye requires positive finite physical extent.\n"); exit(1);
 }
 """
     for layer in range(num_transitions):
         j = layer + 1
         prev = "1" if layer == 0 else f"params->inverse_fisheye_a{layer}"
-        checks += f"""
+        checks += rf"""
 if (!(isfinite(params->inverse_fisheye_a{j}) && params->inverse_fisheye_a{j} >= {prev}
    && isfinite(params->inverse_fisheye_R{j}) && params->inverse_fisheye_R{j} > 0
    && isfinite(params->inverse_fisheye_Rz{j}) && params->inverse_fisheye_Rz{j} > 0
    && isfinite(params->inverse_fisheye_w{j}) && params->inverse_fisheye_w{j} > 0)) {{
-  fprintf(stderr, "Invalid inverse fisheye physical parameters at layer {j}.\\n"); exit(1);
+  fprintf(stderr, "Invalid inverse fisheye physical parameters at layer {j}.\n"); exit(1);
 }}
 """
-    body = checks + f"""
+    body = checks + rf"""
 const REAL L=params->grid_physical_size;
 const REAL equator[3]={{L,0,0}}, pole[3]={{0,0,L}};
 REAL e, p;
@@ -320,7 +321,7 @@ params->xmax=params->ymax=L;
 params->zmax=L*p/e;
 params->zmin=-params->zmax;
 if (!(isfinite(params->zmax) && params->zmax > 0 && isfinite(params->inverse_fisheye_c))) {{
-  fprintf(stderr, "Inverse fisheye normalization failed.\\n"); exit(1);
+  fprintf(stderr, "Inverse fisheye normalization failed.\n"); exit(1);
 }}
 """
     cfc.register_CFunction(
@@ -378,7 +379,7 @@ def register_precompute(
             name, 0, 0, 0, gf_array_name="auxevol_gfs"
         )
         stores += f"{access} = {value};\n"
-    body = f"""
+    body = rf"""
 const int Nxx_plus_2NGHOSTS0=params->Nxx_plus_2NGHOSTS0;
 const int Nxx_plus_2NGHOSTS1=params->Nxx_plus_2NGHOSTS1;
 const int Nxx_plus_2NGHOSTS2=params->Nxx_plus_2NGHOSTS2;
@@ -388,7 +389,7 @@ for (int i2=0; i2<Nxx_plus_2NGHOSTS2; i2++)
       const REAL q[3]={{xx[0][i0],xx[1][i1],xx[2][i2]}};
       REAL x[3], J[3][3], K[3][3], g[3][3], dg[3][3][3], ddg[3][3][3][3];
       if (inverse_fisheye_solve{suffix}(params, q, x)) {{
-        fprintf(stderr, "Inverse fisheye precompute solve failed.\\n"); exit(1);
+        fprintf(stderr, "Inverse fisheye precompute solve failed.\n"); exit(1);
       }}
       inverse_fisheye_geometry{suffix}(params, x, true, J, K, g, dg, ddg);
       const REAL detK=K[0][0]*(K[1][1]*K[2][2]-K[1][2]*K[2][1])
@@ -419,11 +420,11 @@ def spacing_body(num_transitions: int, output: str) -> str:
     """
     register_CFunctions(num_transitions)
     suffix = f"__N{num_transitions}"
-    return f"""
+    return rf"""
 const REAL q[3]={{xx0,xx1,xx2}};
 REAL x[3], J[3][3], K[3][3], g[3][3], dg[3][3][3], ddg[3][3][3][3];
 if (inverse_fisheye_solve{suffix}(params, q, x)) {{
-  fprintf(stderr, "Inverse fisheye spacing solve failed.\\n"); exit(1);
+  fprintf(stderr, "Inverse fisheye spacing solve failed.\n"); exit(1);
 }}
 inverse_fisheye_geometry{suffix}(params, x, false, J, K, g, dg, ddg);
 const REAL d[3]={{params->dxx0,params->dxx1,params->dxx2}};
@@ -471,7 +472,7 @@ def register_CFunction_cfl_limited_timestep(set_of_CoordSystems: Set[str]) -> No
         )
         for j in range(1, n + 1):
             previous = "1" if j == 1 else f"1/params->inverse_fisheye_a{j-1}"
-            body += f"""{{
+            body += rf"""{{
 const REAL k = params->inverse_fisheye_R{j}/params->inverse_fisheye_Rz{j};
 norm += ({previous}-1/params->inverse_fisheye_a{j})*(k+1/k)/2;
 }}
