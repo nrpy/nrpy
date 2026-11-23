@@ -1,8 +1,8 @@
 """
 Generate BHaH spherical or spheroidal inverse fisheye maps, normalization, and metric jets.
 
-Geometry helpers use patch-local physical coordinates; coordinate wrappers own
-rotations. The metric uses inverse-function derivatives through third order,
+Geometry helpers use patch-local physical coordinates; coordinate wrappers apply
+patch rotations. The metric uses inverse-function derivatives through third order,
 so its two derivatives are with respect to computational coordinates.
 
 Scale evaluation requests derivative order 0 for coordinate maps, 1 for
@@ -243,7 +243,7 @@ for (int i=0; i<3; i++) for (int j=0; j<3; j++) {{
         body=body,
     )
 
-    # Bounded thread-local cache: generic symbolic consumers request distinct
+    # Bounded thread-local cache: coordinate expressions request distinct
     # components at the same point. Key every map parameter, not a params pointer,
     # so switching chares or changing parameters cannot reuse stale geometry.
     cache_keys = ["q0", "q1", "q2", "params->inverse_fisheye_c"] + [
@@ -283,7 +283,7 @@ return (kind==1) ? K[i][j] : J[i][j];
 """
     cfc.register_CFunction(
         includes=includes,
-        desc="Evaluate symbolic map/Jacobian components for generic BHaH consumers.",
+        desc="Evaluate map and Jacobian components for generated BHaH C.",
         cfunc_type="REAL",
         name="inverse_fisheye_component" + suffix,
         params="const params_struct *restrict params, const REAL q0, const REAL q1, const REAL q2, const int kind, const int i, const int j",
@@ -346,7 +346,7 @@ def register_precompute(
     """
     register_CFunctions(num_transitions)
     suffix = f"__N{num_transitions}"
-    # ReferenceMetric owns the covariant metric registrations.
+    # ReferenceMetric registers the covariant metric gridfunctions.
     if "ghatUU00" not in gri.glb_gridfcs_dict:
         gri.register_gridfunctions_for_single_rankN(
             "ghatUU", rank=2, symmetry="sym01", group="AUXEVOL"

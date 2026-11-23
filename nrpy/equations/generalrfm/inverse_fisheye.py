@@ -8,7 +8,7 @@ Unlike the forward fisheye provider, this construction specifies computational
 coordinates explicitly in terms of physical coordinates. It is not generally
 the inverse of the forward fisheye map with unchanged parameter values.
 
-Key equations used by this module and its BHaH geometry consumer:
+Key equations used by this module and the generated BHaH geometry functions:
 
 Coordinates and parameters
 
@@ -179,7 +179,7 @@ There is no sum in the definition of h_j,i. Then:
 
 Jacobians and induced reference metric
 
-The following tensors are assembled by the BHaH infrastructure consumer,
+The following tensors are assembled by the generated BHaH geometry functions,
 not stored as symbolic metric arrays by this class. Their components refer
 to the computational basis, evaluated at the recovered physical position.
 

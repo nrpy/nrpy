@@ -58,8 +58,7 @@ The inverse-spheroidal spectroscopy example precomputes the reference metric
 in AUXEVOL gridfunctions. Radiation boundaries read the radius and radial
 derivatives stored in each `outerpt_bc_struct` during boundary setup.
 
-Evidence (descriptive behavior): `initial_data.py::register_CFunction_initial_data`;
-`CurviBoundaryConditions.py::CurviBoundaryConditions_register_C_functions`.
+Evidence (descriptive behavior): `initial_data.py::register_CFunction_initial_data`; `CurviBoundaryConditions.py::CurviBoundaryConditions_register_C_functions`.
 
 The grid transport paths are ordinary Charm++ entry-method sends generated for
 the `Timestepping` array:

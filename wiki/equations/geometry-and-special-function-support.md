@@ -64,22 +64,29 @@ reference values.
 
 Evidence (descriptive behavior): `generalrfm/fisheye.py::GeneralRFMFisheye.__init__`; `generalrfm/fisheye.py::GeneralRFMSpheroidalFisheye.__init__`; `generalrfm/fisheye.py::_G_and_derivs_closed_form`.
 
-### Rotations And Spin-Weighted Spherical Harmonics
+### Inverse Fisheye Coordinate Map
 
-`GeneralRFMInverseFisheye` implements the independently specified
-inverse spheroidal map: physical Cartesian positions map explicitly to
-computational positions. The physical equatorial centers `inverse_fisheye_Rj`,
-polar centers `inverse_fisheye_Rzj`, widths `inverse_fisheye_wj`, and spacing
-factors `inverse_fisheye_aj` describe each layer, with `a0=1`. The widths retain
-the factors of two in the supplied equations. Equal equatorial and polar
-centers recover the spherical inverse map. `normalization(L)` returns the
-scale and polar computational extent, fixing both physical axis extents to L.
-`kernel_coefficients` supplies the radial kernel and its first three derivatives
-with respect to squared ellipsoidal radius, using a regular origin series and
-stable log-cosh evaluation. `InverseFisheyeComponent` represents numerical
-forward-map and Jacobian evaluations for BHaH code generation; it does not
-claim a closed-form inverse. See the BHaH grids page for initialization and
-runtime support.
+`GeneralRFMInverseFisheye` specifies computational coordinates explicitly from
+physical Cartesian coordinates. Equatorial centers `inverse_fisheye_Rj`, polar
+centers `inverse_fisheye_Rzj`, widths `inverse_fisheye_wj`, and spacing factors
+`inverse_fisheye_aj` define each transition. Equal equatorial and polar centers
+give the spherical map; distinct centers give the spheroidal map within the same
+`GeneralRFM_inverse_fisheyeN*` coordinate family. `normalization(L)` returns
+the scale and polar computational extent for equal physical axis extents.
+`kernel_coefficients` evaluates the radial kernel and its first three
+derivatives with respect to squared ellipsoidal radius using an origin series
+and a stable log-cosh expression. `InverseFisheyeComponent` represents the
+numerical computational-to-physical map and its Jacobians in generated BHaH C.
+
+The physical parameter `inverse_fisheye_phys_Rj` sets the equatorial center
+and `inverse_fisheye_phys_Rzj` sets the polar center for layer `j`. During grid
+initialization, a zero polar center selects the equatorial center, giving the
+spherical map with default polar centers. See [BHaH grids and reference metrics](../infrastructures/bhah/grids-coordinates-and-reference-metrics.md)
+for normalization, metric precomputation, and coordinate conversion.
+
+Evidence (descriptive behavior): `generalrfm/inverse_fisheye.py::GeneralRFMInverseFisheye`; `BHaH/inverse_fisheye.py::register_CFunctions`; `numerical_grids_and_timestep.py::register_CFunction_numerical_grid_params_Nxx_dxx_xx`.
+
+### Rotations And Spin-Weighted Spherical Harmonics
 
 `SO3Expressions` stores symbolic matrix-rotation expressions used by equation
 validation and by the generated BHaH SO(3) helper layer. Its helpers build a
@@ -121,26 +128,11 @@ All trusted dictionaries named here compare deterministic sampled numerical
 values. They do not establish formal identities, generated-code builds,
 runtime behavior, or numerical accuracy; use [Expression Validation Helpers](../validation/expression-validation-helpers.md) for that boundary.
 
-### Inverse Fisheye Shapes
-
-`GeneralRFMInverseFisheye` defines computational coordinates explicitly from
-physical Cartesian coordinates. Equal equatorial and polar transition centers
-produce a spherical map. Different physical polar centers produce the
-spheroidal option using the same map and coordinate family
-`GeneralRFM_inverse_fisheyeN*`.
-
-In generated parameter files, `inverse_fisheye_phys_Rj` selects the equatorial
-center and `inverse_fisheye_phys_Rzj` selects the polar center for layer `j`.
-A zero polar center requests the equatorial center during grid initialization,
-so leaving polar centers at their defaults gives the spherical map.
-
-Evidence (descriptive behavior): `inverse_fisheye.py::GeneralRFMInverseFisheye`; `numerical_grids_and_timestep.py::register_CFunction_numerical_grid_params_Nxx_dxx_xx`.
-
 ## Sources
 
-- [numerical_grids_and_timestep.py](../../nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py) - inverse fisheye physical parameter initialization
-
 - [inverse_fisheye.py](../../nrpy/equations/generalrfm/inverse_fisheye.py) - `GeneralRFMInverseFisheye`, `InverseFisheyeComponent`
+- [BHaH inverse_fisheye.py](../../nrpy/infrastructures/BHaH/inverse_fisheye.py) - physical layer parameters and generated map functions
+- [numerical_grids_and_timestep.py](../../nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py) - inverse fisheye physical parameter initialization
 
 - [jacobians.py](../../nrpy/equations/basis_transforms/jacobians.py) - `BasisTransforms`, `basis_transforms`, `basis_transform_vectorU_from_rfmbasis_to_Cartesian`, `basis_transform_4tensorUU_from_Cartesian_to_time_indep_rfmbasis`
 - [jacobians_Cartesian.py](../../nrpy/equations/basis_transforms/tests/jacobians_Cartesian.py) - `trusted_dict`

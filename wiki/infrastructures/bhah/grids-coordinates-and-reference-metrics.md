@@ -14,7 +14,7 @@ BHaH grid initialization registers per-grid coordinate parameters, allocates cel
 `numerical_grids_and_timestep.py::register_CFunctions` registers per-grid parameters `Nxx*`, `Nxx_plus_2NGHOSTS*`, `xxmin*`, `xxmax*`, `dxx*`, `invdxx*`, `convergence_factor`, `CoordSystem_hash`, `grid_idx`, and `gridname`. `numerical_grid_params_Nxx_dxx_xx()` initializes default `Nxx` from `Nxx_dict`, applies optional runtime `Nx[]` overrides, multiplies counts by `commondata->convergence_factor` except along symmetry axes with `Nxx == 2`, evaluates `xxmin*`/`xxmax*` from reference-metric parameters, computes `dxx*` and `invdxx*`, and allocates cell-centered `xx[3]` arrays (allocating device `xx` and copying `d_params` on CUDA).
 
 `numerical_grids_and_timestep()` handles `"independent grid(s)"` directly (setting `gridname`, `CoordSystem_hash`, `grid_physical_size`, per-coordinate initializers, `NUMGRIDS`, `grid_idx`, and initial `nn`, `nn_0`, `t_0`, `time`) and delegates `"multipatch"` to `multipatch_grids_set_up()`.
-When CFL calculation is enabled, `cfl_limited_timestep()` sets `commondata->dt = min(commondata->dt, ds_min * commondata->CFL_FACTOR)` across active grids by evaluating `ds_min_single_pt()` from reference-metric scale factors on standard coordinate systems or from the fisheye metric diagonal on radial and spheroidal `GeneralRFM` fisheye providers (other `GeneralRFM` providers report `ds_min` unsupported). Multipatch setups (`gridding_approach == "multipatch"`) also register `ds_min_single_pt()` alongside `ds_min_radial_like_dirns_single_pt()` (`register_CFunction_ds_min_radial_like_dirns_single_pt`), which evaluates minimum spacing across `rfm.radial_like_dirns` (non-angular coordinate axes: `[0]` spherical/wedge, `[0, 1]` SymTP/prolate-spheroidal, `[0, 2]` cylindrical, `[0, 1, 2]` Cartesian and supported `GeneralRFM` fisheye providers) for regrid and masking support.
+When CFL calculation is enabled, `cfl_limited_timestep()` sets `commondata->dt = min(commondata->dt, ds_min * commondata->CFL_FACTOR)` across active grids by evaluating `ds_min_single_pt()` from reference-metric scale factors on standard coordinate systems, from the metric diagonal on forward `GeneralRFM` fisheye providers, or from inverse-map coordinate-line spacing on `GeneralRFM_inverse_fisheyeN*`. Multipatch setups (`gridding_approach == "multipatch"`) also register `ds_min_single_pt()` alongside `ds_min_radial_like_dirns_single_pt()` (`register_CFunction_ds_min_radial_like_dirns_single_pt`), which evaluates minimum spacing across `rfm.radial_like_dirns` (non-angular coordinate axes: `[0]` spherical/wedge, `[0, 1]` SymTP/prolate-spheroidal, `[0, 2]` cylindrical, `[0, 1, 2]` Cartesian and supported `GeneralRFM` fisheye providers) for regrid and masking support.
 
 Evidence (descriptive behavior): `numerical_grids_and_timestep.py::register_CFunctions`; `numerical_grids_and_timestep.py::register_CFunction_cfl_limited_timestep`; `numerical_grids_and_timestep.py::register_CFunction_ds_min_radial_like_dirns_single_pt`.
 
@@ -25,6 +25,18 @@ Standard non-`GeneralRFM` precompute (`rfm_precompute.py`) identifies coordinate
 For `GeneralRFM_fisheyeN*` and `GeneralRFM_spheroidal_fisheyeN*`, `generalrfm_precompute.py` stores `ghatDD`, `ghatUU`, `detgammahat`, `ghatDDdD`, and `ghatDDdDD` in `AUXEVOL` gridfunctions, rejecting CUDA and unsupported providers. `generalrfm_cart_to_xx.py` registers a coordinate-specialized `generalrfm_Cart_to_xx` solver returning nonzero on non-convergence. The radial provider inverts one physical radius; the spheroidal provider solves for one raw radius and recovers the xy and z raw coordinates with separate scale factors. `fisheye/phys_params_to_fisheye.py` registers physical fisheye `CodeParameter` entries in `commondata_struct` and emits post-`params_struct_set_to_default()` conversion hooks. The radial conversion computes `fisheye_a*`, `fisheye_R*`, `fisheye_s*`, and `fisheye_c`; the spheroidal conversion computes separate `fisheye_xy_*` and `fisheye_z_*` parameters.
 
 Evidence (descriptive behavior): `rfm_precompute.py::ReferenceMetricPrecompute`; `generalrfm_precompute.py`; `generalrfm_cart_to_xx.py`; `fisheye/phys_params_to_fisheye.py`.
+
+For `GeneralRFM_inverse_fisheyeN*`, grid initialization copies physical layer
+parameters into `params_struct`, substitutes the equatorial center when a polar
+center is zero, and normalizes the coordinate scale. `generalrfm_precompute.py`
+stores the reference metric and its first two derivatives in `AUXEVOL`.
+
+Evidence (descriptive behavior): `numerical_grids_and_timestep.py::register_CFunction_numerical_grid_params_Nxx_dxx_xx`; `generalrfm_precompute.py::register_CFunction_generalrfm_precompute`.
+
+`generalrfm_cart_to_xx.py` evaluates the explicit physical-to-computational map;
+the computational-to-physical map uses a numerical inverse along each ray.
+
+Evidence (descriptive behavior): `generalrfm_cart_to_xx.py::register_CFunction_generalrfm_Cart_to_xx`; `inverse_fisheye.py::register_CFunctions`.
 
 ### Coordinate Converters And Hash Dispatch Wrappers
 
@@ -44,6 +56,7 @@ Evidence (generated evidence): `xx_tofrom_Cart.py::register_CFunction_xx_to_Cart
 - [rfm_precompute.py](../../../nrpy/infrastructures/BHaH/rfm_precompute.py) - `ReferenceMetricPrecompute`, `register_CFunctions_rfm_precompute`
 - [generalrfm_precompute.py](../../../nrpy/infrastructures/BHaH/generalrfm_precompute.py) - `register_CFunction_generalrfm_precompute`, `register_CFunctions_generalrfm_support`
 - [generalrfm_cart_to_xx.py](../../../nrpy/infrastructures/BHaH/generalrfm_cart_to_xx.py) - `register_CFunction_generalrfm_Cart_to_xx`
+- [inverse_fisheye.py](../../../nrpy/infrastructures/BHaH/inverse_fisheye.py) - `register_CFunctions`, `register_precompute`, `spacing_body`
 - [phys_params_to_fisheye.py](../../../nrpy/infrastructures/BHaH/fisheye/phys_params_to_fisheye.py) - radial and spheroidal physical-parameter conversion functions and post-default hooks
 - [xx_tofrom_Cart.py](../../../nrpy/infrastructures/BHaH/xx_tofrom_Cart.py) - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, `register_CFunction_xx_to_Cart`, `_run_generalrfm_fisheye_inverse_roundtrip_check`
 - [rfm_wrapper_functions.py](../../../nrpy/infrastructures/BHaH/rfm_wrapper_functions.py) - `get_CoordSystem_hash`, `register_CFunctions_CoordSystem_wrapper_funcs`
