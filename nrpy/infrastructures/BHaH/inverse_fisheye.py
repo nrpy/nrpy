@@ -21,10 +21,12 @@ import sympy as sp
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
+import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
 from nrpy.equations.generalrfm.inverse_fisheye import (
     GeneralRFMInverseFisheye,
 )
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunctions(num_transitions: int) -> None:
@@ -379,24 +381,31 @@ def register_precompute(
             name, 0, 0, 0, gf_array_name="auxevol_gfs"
         )
         stores += f"{access} = {value};\n"
-    body = rf"""
-const int Nxx_plus_2NGHOSTS0=params->Nxx_plus_2NGHOSTS0;
-const int Nxx_plus_2NGHOSTS1=params->Nxx_plus_2NGHOSTS1;
-const int Nxx_plus_2NGHOSTS2=params->Nxx_plus_2NGHOSTS2;
-for (int i2=0; i2<Nxx_plus_2NGHOSTS2; i2++)
-  for (int i1=0; i1<params->Nxx_plus_2NGHOSTS1; i1++)
-    for (int i0=0; i0<params->Nxx_plus_2NGHOSTS0; i0++) {{
-      const REAL q[3]={{xx[0][i0],xx[1][i1],xx[2][i2]}};
-      REAL x[3], J[3][3], K[3][3], g[3][3], dg[3][3][3], ddg[3][3][3][3];
-      if (inverse_fisheye_solve{suffix}(params, q, x)) {{
-        fprintf(stderr, "Inverse fisheye precompute solve failed.\n"); exit(1);
-      }}
-      inverse_fisheye_geometry{suffix}(params, x, true, J, K, g, dg, ddg);
-      const REAL detK=K[0][0]*(K[1][1]*K[2][2]-K[1][2]*K[2][1])
-                    -K[0][1]*(K[1][0]*K[2][2]-K[1][2]*K[2][0])
-                    +K[0][2]*(K[1][0]*K[2][1]-K[1][1]*K[2][0]);
-      {stores}
-    }} // END LOOP: for i0 over grid points
+    loop_body = rf"""
+const REAL q[3]={{xx0,xx1,xx2}};
+REAL x[3], J[3][3], K[3][3], g[3][3], dg[3][3][3], ddg[3][3][3][3];
+if (inverse_fisheye_solve{suffix}(params, q, x)) {{
+  solve_failed = 1;
+}} else {{
+  inverse_fisheye_geometry{suffix}(params, x, true, J, K, g, dg, ddg);
+  const REAL detK=K[0][0]*(K[1][1]*K[2][2]-K[1][2]*K[2][1])
+                -K[0][1]*(K[1][0]*K[2][2]-K[1][2]*K[2][0])
+                +K[0][2]*(K[1][0]*K[2][1]-K[1][1]*K[2][0]);
+  {stores}
+}} // END IF: inverse fisheye solve succeeded
+"""
+    body = parallel_utils.get_loop_parameters("openmp") + "int solve_failed = 0;\n"
+    body += BHaH.simple_loop.simple_loop(
+        loop_body=loop_body,
+        loop_region="all points",
+        read_xxs=True,
+        OMP_custom_pragma="#pragma omp parallel for reduction(|:solve_failed)",
+    )
+    body += r"""
+if (solve_failed) {
+  fprintf(stderr, "Inverse fisheye precompute solve failed.\n");
+  exit(1);
+} // END IF: inverse fisheye solve failed
 """
     cfc.register_CFunction(
         includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
