@@ -389,7 +389,7 @@ class GeneralRFMInverseFisheye:
         :param Cart: Physical Cartesian position relative to the patch center.
         :return: Scale with its analytic value at the origin.
         """
-        scale = 1 / self.a_list[-1]
+        scale: sp.Expr = 1 / self.a_list[-1]
         for j, (R, Rz, w) in enumerate(zip(self.R_list, self.Rz_list, self.w_list)):
             rho = sp.sqrt(Cart[0] ** 2 + Cart[1] ** 2 + (R / Rz) ** 2 * Cart[2] ** 2)
             kernel = (
@@ -399,7 +399,7 @@ class GeneralRFMInverseFisheye:
             )
             ratio = sp.Piecewise((sp.Integer(1), sp.Eq(rho, 0)), (kernel / rho, True))
             scale += (1 / self.a_list[j] - 1 / self.a_list[j + 1]) * ratio
-        return cast(sp.Expr, scale)
+        return scale
 
     def normalization(self, physical_extent: sp.Expr) -> Tuple[sp.Expr, sp.Expr]:
         """
@@ -465,7 +465,8 @@ class GeneralRFMInverseFisheye:
 
         def sech_squared(argument: sp.Expr) -> sp.Expr:
             e = sp.exp(-2 * sp.Abs(argument))
-            return cast(sp.Expr, 4 * e / (1 + e) ** 2)
+            value: sp.Expr = 4 * e / (1 + e) ** 2
+            return value
 
         sp_ = sech_squared((radius + R) / s)
         sm = sech_squared((radius - R) / s)
@@ -501,7 +502,7 @@ class GeneralRFMInverseFisheye:
         q = sp.Symbol("q", nonnegative=True)
         result: List[sp.Expr] = []
         for order in range(4):
-            series = sp.Integer(0)
+            series: sp.Expr = sp.Integer(0)
             for index in reversed(range(order, len(coefficients))):
                 coefficient = (
                     coefficients[index]
