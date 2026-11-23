@@ -86,12 +86,13 @@ def register_CFunctions(num_transitions: int) -> None:
         value_code = ccg.c_codegen(expressions[0], "f[0]", **options)
         gradient_code = ccg.c_codegen(expressions[1], "f[1]", **options)
         metric_code = ccg.c_codegen(expressions[2:], ["f[2]", "f[3]"], **options)
-        branch_bodies.append(
-            f"{value_code}\n"
-            f"if (derivative_order >= 1) {{\n{gradient_code}\n"
-            f"if (derivative_order == 3) {{\n{metric_code}\n}} // END IF: third-order kernel derivatives\n"
-            "} // END IF: requested kernel derivatives"
-        )
+        branch_bodies.append(rf"""{value_code}
+if (derivative_order >= 1) {{
+{gradient_code}
+if (derivative_order == 3) {{
+{metric_code}
+}} // END IF: third-order kernel derivatives
+}} // END IF: requested kernel derivatives""")
     prefunc = rf"""
 static inline void inverse_fisheye_layer{suffix}(
     const {calc_type} R, const {calc_type} w, const {calc_type} rho,
@@ -470,15 +471,17 @@ def register_CFunction_cfl_limited_timestep(set_of_CoordSystems: Set[str]) -> No
     :param set_of_CoordSystems: Inverse spheroidal coordinate systems in the project.
     :raises ValueError: If a coordinate system is not inverse spheroidal fisheye.
     """
-    body = "REAL bound;\nswitch (params->CoordSystem_hash) {\n"
+    body = r"""REAL bound;
+switch (params->CoordSystem_hash) {
+"""
     prefix = "GeneralRFM_inverse_fisheyeN"
     for coord in sorted(set_of_CoordSystems):
         if not coord.startswith(prefix) or not coord[len(prefix) :].isdigit():
             raise ValueError("Analytic CFL bound requires inverse spheroidal fisheye.")
         n = int(coord[len(prefix) :])
-        body += (
-            f"case {coord.upper()}: {{\nREAL norm = 1/params->inverse_fisheye_a{n};\n"
-        )
+        body += rf"""case {coord.upper()}: {{
+REAL norm = 1/params->inverse_fisheye_a{n};
+"""
         for j in range(1, n + 1):
             previous = "1" if j == 1 else f"1/params->inverse_fisheye_a{j-1}"
             body += rf"""{{
@@ -486,10 +489,10 @@ const REAL k = params->inverse_fisheye_R{j}/params->inverse_fisheye_Rz{j};
 norm += ({previous}-1/params->inverse_fisheye_a{j})*(k+1/k)/2;
 }}
 """
-        body += (
-            "bound = params->inverse_fisheye_c*norm;\nbreak;\n"
-            "} // END BLOCK: inverse-fisheye CFL case\n"
-        )
+        body += r"""bound = params->inverse_fisheye_c*norm;
+break;
+} // END BLOCK: inverse-fisheye CFL case
+"""
     body += r"""
 default: fprintf(stderr, "Unsupported coordinate system in inverse fisheye CFL bound.\n"); exit(1);
 } // END SWITCH: select coordinate bound

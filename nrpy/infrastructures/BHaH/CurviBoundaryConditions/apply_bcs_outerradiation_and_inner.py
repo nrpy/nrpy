@@ -574,6 +574,7 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
 #pragma omp parallel for
     for (int idx2d = 0; idx2d < num_pure_outer_boundary_points; idx2d++) {
 """
+    # Fixed-map geometry is computed for both points during boundary setup.
     kernel_body += """const short i0 = pure_outer_bc_array[idx2d].i0;
     const short i1 = pure_outer_bc_array[idx2d].i1;
     const short i2 = pure_outer_bc_array[idx2d].i2;
@@ -582,9 +583,7 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
     const short FACEX2 = pure_outer_bc_array[idx2d].FACEX2;
     const int idx3 = IDX3(i0,i1,i2);
     REAL* xx[3] = {x0, x1, x2};
-"""
-    # Fixed-map geometry is computed for both points during boundary setup.
-    kernel_body += """    const REAL r = pure_outer_bc_array[idx2d].r;
+    const REAL r = pure_outer_bc_array[idx2d].r;
     const REAL partial_x0_partial_r = pure_outer_bc_array[idx2d].partial_x0_partial_r;
     const REAL partial_x1_partial_r = pure_outer_bc_array[idx2d].partial_x1_partial_r;
     const REAL partial_x2_partial_r = pure_outer_bc_array[idx2d].partial_x2_partial_r;
@@ -592,8 +591,7 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
     const REAL partial_x0_partial_r_int = pure_outer_bc_array[idx2d].partial_x0_partial_r_int;
     const REAL partial_x1_partial_r_int = pure_outer_bc_array[idx2d].partial_x1_partial_r_int;
     const REAL partial_x2_partial_r_int = pure_outer_bc_array[idx2d].partial_x2_partial_r_int;
-"""
-    kernel_body += """    for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+    for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
         // *** Apply radiation BCs to all outer boundary points. ***
         rhs_gfs[IDX4pt(which_gf, idx3)] = radiation_bcs(params, xx, gfs, rhs_gfs, which_gf,
                                                         custom_wavespeed[which_gf], custom_f_infinity[which_gf],
