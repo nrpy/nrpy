@@ -288,7 +288,8 @@ import nrpy.params as par
 from nrpy.equations.generalrfm.fisheye import _G_kernel
 
 
-class InverseFisheyeComponent(sp.Function):
+# SymPy 1.14 lacks py.typed; unused-ignore supports typed SymPy releases.
+class InverseFisheyeComponent(sp.Function):  # type: ignore[misc, unused-ignore]
     """
     Represent a numerically evaluated map or Jacobian component in generated C.
 
