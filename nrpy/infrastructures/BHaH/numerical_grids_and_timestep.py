@@ -835,7 +835,13 @@ def register_CFunctions(
         instead of scanning the grid; requires inverse spheroidal fisheye coordinates.
 
     :return: None if in registration phase, else the updated NRPy environment.
+    :raises ValueError: If the analytic CFL bound is requested with CFL setup disabled.
     """
+    if use_inverse_fisheye_cfl_bound and not enable_set_cfl_timestep:
+        raise ValueError(
+            "The analytic CFL bound requires enable_set_cfl_timestep=True."
+        )
+
     # Parallel codegen support.
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -876,7 +882,9 @@ def register_CFunctions(
         enable_masks=enable_masks,
     )
 
-    if gridding_approach == "multipatch" or enable_set_cfl_timestep:
+    if gridding_approach == "multipatch" or (
+        enable_set_cfl_timestep and not use_inverse_fisheye_cfl_bound
+    ):
         for CoordSystem in set_of_CoordSystems:
             register_CFunction_ds_min_single_pt(CoordSystem)
     if gridding_approach == "multipatch":

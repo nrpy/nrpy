@@ -23,6 +23,7 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
+import nrpy.reference_metric as refmetric
 from nrpy.equations.generalrfm.inverse_fisheye import (
     GeneralRFMInverseFisheye,
 )
@@ -521,18 +522,22 @@ def register_CFunction_cfl_limited_timestep(set_of_CoordSystems: Set[str]) -> No
     not establish stability beyond the existing CFL rule.
 
     :param set_of_CoordSystems: Inverse spheroidal coordinate systems in the project.
-    :raises ValueError: If a coordinate system is not inverse spheroidal fisheye.
+    :raises ValueError: If CUDA or a coordinate system other than inverse
+        spheroidal fisheye with at least one transition is requested.
     """
-    body = r"""REAL bound;
-switch (params->CoordSystem_hash) {
-"""
-    prefix = "GeneralRFM_inverse_fisheyeN"
+    if par.parval_from_str("parallelization") == "cuda":
+        raise ValueError("Inverse spheroidal fisheye does not support CUDA.")
+    coordinate_layers = []
     for coord in sorted(set_of_CoordSystems):
-        if not coord.startswith(prefix) or not coord[len(prefix) :].isdigit():
+        rfm = refmetric.reference_metric[coord]
+        if getattr(rfm, "general_rfm_provider_name", "") != "inverse_fisheye":
             raise ValueError("Analytic CFL bound requires inverse spheroidal fisheye.")
-        n = int(coord[len(prefix) :])
-        body += rf"""case {coord.upper()}: {{
-REAL norm = 1/params->inverse_fisheye_a{n};
+        n = int(rfm.general_rfm_provider_meta["num_transitions"])
+        if n < 1:
+            raise ValueError("Analytic CFL bound requires at least one transition.")
+        coordinate_layers.append((coord, n))
+    for coord, n in coordinate_layers:
+        body = rf"""REAL norm = 1/params->inverse_fisheye_a{n};
 """
         for j in range(1, n + 1):
             previous = "1" if j == 1 else f"1/params->inverse_fisheye_a{j-1}"
@@ -541,22 +546,17 @@ const REAL k = params->inverse_fisheye_R{j}/params->inverse_fisheye_Rz{j};
 norm += ({previous}-1/params->inverse_fisheye_a{j})*(k+1/k)/2;
 }}
 """
-        body += r"""bound = params->inverse_fisheye_c*norm;
-break;
-} // END BLOCK: inverse-fisheye CFL case
-"""
-    body += r"""
-default: fprintf(stderr, "Unsupported coordinate system in inverse fisheye CFL bound.\n"); exit(1);
-} // END SWITCH: select coordinate bound
+        body += r"""const REAL bound = params->inverse_fisheye_c*norm;
 const REAL ds = NRPYMIN(fabs(params->dxx0), NRPYMIN(fabs(params->dxx1), fabs(params->dxx2)))/bound;
 commondata->dt = NRPYMIN(commondata->dt, commondata->CFL_FACTOR*ds);
 """
-    cfc.register_CFunction(
-        includes=["BHaH_defines.h"],
-        desc="Conservative inverse-fisheye CFL bound, without global grid traversal.",
-        cfunc_type="void",
-        name="cfl_limited_timestep",
-        params="commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3]",
-        include_CodeParameters_h=False,
-        body=body,
-    )
+        cfc.register_CFunction(
+            includes=["BHaH_defines.h"],
+            desc="Conservative inverse-fisheye CFL bound, without global grid traversal.",
+            cfunc_type="void",
+            name="cfl_limited_timestep",
+            params="commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3]",
+            include_CodeParameters_h=False,
+            CoordSystem_for_wrapper_func=coord,
+            body=body,
+        )
