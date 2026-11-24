@@ -27,8 +27,10 @@ For `GeneralRFM_fisheyeN*` and `GeneralRFM_spheroidal_fisheyeN*`, `generalrfm_pr
 Evidence (descriptive behavior): `rfm_precompute.py::ReferenceMetricPrecompute`; `generalrfm_precompute.py`; `generalrfm_cart_to_xx.py`; `fisheye/phys_params_to_fisheye.py`.
 
 For `GeneralRFM_inverse_fisheyeN*`, grid initialization copies physical layer
-parameters into `params_struct`, substitutes the equatorial center when a polar
-center is zero, and normalizes the coordinate scale. `generalrfm_precompute.py`
+parameters into `params_struct`. `inverse_fisheye_phys_Rj` sets the equatorial
+center and `inverse_fisheye_phys_Rzj` sets the polar center; a zero polar center
+selects the equatorial center, giving the spherical map with default polar
+centers. Grid initialization normalizes the coordinate scale. `generalrfm_precompute.py`
 stores the reference metric and its first two derivatives in `AUXEVOL`.
 
 Evidence (descriptive behavior): `numerical_grids_and_timestep.py::register_CFunction_numerical_grid_params_Nxx_dxx_xx`; `generalrfm_precompute.py::register_CFunction_generalrfm_precompute`.
