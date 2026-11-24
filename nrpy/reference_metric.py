@@ -198,17 +198,18 @@ class ReferenceMetric:
         ) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]]]:
             if getattr(self, "general_rfm_provider_name", "") == "inverse_fisheye":
                 n = self.general_rfm_provider_meta["num_transitions"]
+                # Calling this SymPy Function subclass returns an Expr.
                 return (
                     [
                         [
-                            InverseFisheyeComponent(n, 1, i, j, *self.xx)
+                            cast(sp.Expr, InverseFisheyeComponent(n, 1, i, j, *self.xx))
                             for j in range(3)
                         ]
                         for i in range(3)
                     ],
                     [
                         [
-                            InverseFisheyeComponent(n, 2, i, j, *self.xx)
+                            cast(sp.Expr, InverseFisheyeComponent(n, 2, i, j, *self.xx))
                             for j in range(3)
                         ]
                         for i in range(3)
@@ -1969,7 +1970,9 @@ class ReferenceMetric:
             self.general_rfm_provider = inverse_provider
             self.general_rfm_provider_meta = {"num_transitions": n}
             for i in range(3):
-                self.xx_to_Cart[i] = InverseFisheyeComponent(n, 0, i, 0, *self.xx)
+                self.xx_to_Cart[i] = cast(
+                    sp.Expr, InverseFisheyeComponent(n, 0, i, 0, *self.xx)
+                )
                 self.Cart_to_xx[i] = inverse_provider.Cart_to_xxU[i].xreplace(
                     dict(
                         zip(inverse_provider.Cart, [self.Cartx, self.Carty, self.Cartz])
