@@ -403,13 +403,25 @@ def register_precompute(
     """
     register_CFunctions(num_transitions)
     suffix = f"__N{num_transitions}"
-    # ReferenceMetric registers the covariant metric gridfunctions.
+    # ReferenceMetric may be cached after the gridfunction registry is cleared.
+    if "ghatDD00" not in gri.glb_gridfcs_dict:
+        gri.register_gridfunctions_for_single_rankN(
+            "ghatDD", rank=2, symmetry="sym01", group="AUXEVOL"
+        )
     if "ghatUU00" not in gri.glb_gridfcs_dict:
         gri.register_gridfunctions_for_single_rankN(
             "ghatUU", rank=2, symmetry="sym01", group="AUXEVOL"
         )
     if "detgammahat" not in gri.glb_gridfcs_dict:
         gri.register_gridfunctions(["detgammahat"], group="AUXEVOL")
+    if "ghatDDdD000" not in gri.glb_gridfcs_dict:
+        gri.register_gridfunctions_for_single_rankN(
+            "ghatDDdD", rank=3, symmetry="sym01", group="AUXEVOL"
+        )
+    if "ghatDDdDD0000" not in gri.glb_gridfcs_dict:
+        gri.register_gridfunctions_for_single_rankN(
+            "ghatDDdDD", rank=4, symmetry="sym01_sym23", group="AUXEVOL"
+        )
     assignments = []
     for i in range(3):
         for j in range(i, 3):
