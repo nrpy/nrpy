@@ -446,7 +446,7 @@ if (inverse_fisheye_solve{suffix}(params, q, x)) {{
                 -K[0][1]*(K[1][0]*K[2][2]-K[1][2]*K[2][0])
                 +K[0][2]*(K[1][0]*K[2][1]-K[1][1]*K[2][0]);
   {stores}
-}} // END IF: inverse fisheye solve succeeded
+}} // END ELSE: inverse fisheye solve succeeded
 """
     body = parallel_utils.get_loop_parameters("openmp") + "int solve_failed = 0;\n"
     body += BHaH.simple_loop.simple_loop(
