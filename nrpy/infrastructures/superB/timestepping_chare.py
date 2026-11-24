@@ -1467,6 +1467,7 @@ def output_timestepping_ci(
     nrpyelliptic_project: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_BHaHAHA: bool = False,
+    enable_distributed_cfl: bool = False,
 ) -> None:
     """
     Generate timestepping.ci.
@@ -1483,6 +1484,8 @@ def output_timestepping_ci(
                     diagnostics and NRPyElliptic-specific behavior).
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
+    :param enable_distributed_cfl: Scan chare-local grids and reduce the minimum timestep
+        before starting services or evolution. Disable CFL setup in the global grid generator.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -1503,7 +1506,29 @@ def output_timestepping_ci(
     entry void ready_2d_xy(Ck::IO::FileReadyMsg *m);
     entry void ready_2d_yz(Ck::IO::FileReadyMsg *m);
     // Step 5: MAIN SIMULATION LOOP
-    entry void start() {
+"""
+    if enable_distributed_cfl:
+        file_output_str += "    entry void receive_cfl_timestep(CkReductionMsg *msg);\n"
+    file_output_str += "    entry void start() {\n"
+    if enable_distributed_cfl:
+        file_output_str += r"""
+      serial {
+        // The union of local grids (including ghosts) covers the global scan.
+        // Repeated internal ghost points cannot change a minimum reduction.
+        commondata.dt = 1e30;
+        for (int grid = 0; grid < commondata.NUMGRIDS; grid++)
+          cfl_limited_timestep(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx);
+        static_assert(sizeof(REAL) <= sizeof(double), "CFL reduction requires float or double REAL");
+        const double local_dt = commondata.dt;
+        contribute(sizeof(double), &local_dt, CkReduction::min_double,
+                   CkCallback(CkIndex_Timestepping::receive_cfl_timestep(nullptr), thisProxy));
+      }
+      when receive_cfl_timestep(CkReductionMsg *msg) {
+        serial {
+          commondata.dt = *static_cast<const double *>(msg->getData());
+          delete msg;
+        }
+      }
 """
 
     if enable_BHaHAHA:
@@ -2147,6 +2172,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     enable_charm_checkpointing: bool = False,
     enable_BHaHAHA: bool = False,
     post_params_struct_set_to_default: str = "",
+    enable_distributed_cfl: bool = False,
 ) -> None:
     """
     Output timestepping h, cpp, and ci files and register C functions.
@@ -2164,6 +2190,8 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     :param post_params_struct_set_to_default: Function calls after params_struct_set_to_default, default is an empty string.
+    :param enable_distributed_cfl: Scan chare-local grids and reduce the minimum timestep
+        before starting services or evolution. Disable CFL setup in the global grid generator.
     """
     # For NRPy elliptic: register parameter wavespeed at outer boundary
     if nrpyelliptic_project:
@@ -2208,6 +2236,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         Butcher_dict=Butcher_dict,
         enable_charm_checkpointing=enable_charm_checkpointing,
         enable_BHaHAHA=enable_BHaHAHA,
+        enable_distributed_cfl=enable_distributed_cfl,
     )
 
     register_CFunction_timestepping_malloc(

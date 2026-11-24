@@ -54,15 +54,27 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument(
+grid_options = parser.add_mutually_exclusive_group()
+grid_options.add_argument(
     "--spheroidal", action="store_true", help="Generate the spheroidal fisheye grid."
 )
-spheroidal = parser.parse_args().spheroidal
+grid_options.add_argument(
+    "--inverse-fisheye",
+    action="store_true",
+    help="Generate the inverse spheroidal fisheye grid.",
+)
+args = parser.parse_args()
+spheroidal = args.spheroidal
+inverse_fisheye = args.inverse_fisheye
 project_name = "superB_blackhole_spectroscopy_8Mseparation"
 if spheroidal:
     project_name += "_spheroidal_fisheye"
+if inverse_fisheye:
+    project_name += "_inverse_fisheye"
 CoordSystem = (
-    "GeneralRFM_spheroidal_fisheyeN8" if spheroidal else "GeneralRFM_fisheyeN8"
+    "GeneralRFM_inverse_fisheyeN8"
+    if inverse_fisheye
+    else ("GeneralRFM_spheroidal_fisheyeN8" if spheroidal else "GeneralRFM_fisheyeN8")
 )
 set_of_CoordSystems = {CoordSystem}
 IDtype = "TP_Interp"
@@ -102,7 +114,11 @@ if enable_psi4:
     list_of_psi4_extraction_radii = [60.0, 90.0, 120.0, 150.0]
     num_psi4_extraction_radii = len(list_of_psi4_extraction_radii)
 Nxx_dict = {
-    CoordSystem: [1392, 1392, 1152 if spheroidal else 1392],
+    CoordSystem: [
+        1392,
+        1392,
+        1104 if inverse_fisheye else 1152 if spheroidal else 1392,
+    ],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_x_posn = +4.0
@@ -119,6 +135,42 @@ fisheye_param_defaults: Dict[str, float] = {
     "fisheye_phys_a7": 128.0,
     "fisheye_phys_a8": 256.0,
     "fisheye_phys_L": grid_physical_size,
+}
+# Inverse-map centers and widths are physical values in units of M.
+# Layers 1 and 2 are oblate; each polar width follows w_z = w*Rz/R.
+inverse_fisheye_param_defaults: Dict[str, float] = {
+    "inverse_fisheye_phys_a1": 2.0,
+    "inverse_fisheye_phys_R1": 4.640939,
+    "inverse_fisheye_phys_Rz1": 1.5,
+    "inverse_fisheye_phys_w1": 0.887533,
+    "inverse_fisheye_phys_a2": 4.0,
+    "inverse_fisheye_phys_R2": 5.330480,
+    "inverse_fisheye_phys_Rz2": 2.5,
+    "inverse_fisheye_phys_w2": 1.107081,
+    "inverse_fisheye_phys_a3": 8.0,
+    "inverse_fisheye_phys_R3": 8.717449,
+    "inverse_fisheye_phys_Rz3": 8.717449,
+    "inverse_fisheye_phys_w3": 1.903712,
+    "inverse_fisheye_phys_a4": 16.0,
+    "inverse_fisheye_phys_R4": 15.437891,
+    "inverse_fisheye_phys_Rz4": 15.437891,
+    "inverse_fisheye_phys_w4": 3.802808,
+    "inverse_fisheye_phys_a5": 32.0,
+    "inverse_fisheye_phys_R5": 32.381844,
+    "inverse_fisheye_phys_Rz5": 32.381844,
+    "inverse_fisheye_phys_w5": 11.451039,
+    "inverse_fisheye_phys_a6": 64.0,
+    "inverse_fisheye_phys_R6": 57.301167,
+    "inverse_fisheye_phys_Rz6": 57.301167,
+    "inverse_fisheye_phys_w6": 19.198400,
+    "inverse_fisheye_phys_a7": 128.0,
+    "inverse_fisheye_phys_R7": 109.597767,
+    "inverse_fisheye_phys_Rz7": 109.597767,
+    "inverse_fisheye_phys_w7": 38.894618,
+    "inverse_fisheye_phys_a8": 256.0,
+    "inverse_fisheye_phys_R8": 196.835023,
+    "inverse_fisheye_phys_Rz8": 196.835023,
+    "inverse_fisheye_phys_w8": 74.894080,
 }
 if spheroidal:
     fisheye_param_defaults.update(
@@ -402,7 +454,7 @@ if spheroidal:
     phys_params_to_fisheye.register_CFunction_spheroidal_fisheye_params_from_physical_N(
         num_transitions=num_fisheye_transitions
     )
-else:
+elif not inverse_fisheye:
     phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
         num_transitions=num_fisheye_transitions
     )
@@ -414,8 +466,12 @@ BHaH.numerical_grids_and_timestep.register_CFunctions(
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_CurviBCs=True,
+    enable_CurviBCs=not inverse_fisheye,
+    enable_set_cfl_timestep=not inverse_fisheye,
 )
+if inverse_fisheye:
+    BHaH.numerical_grids_and_timestep.register_CFunction_cfl_limited_timestep()
+    BHaH.numerical_grids_and_timestep.register_CFunction_ds_min_single_pt(CoordSystem)
 superB.numerical_grids.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
     enable_rfm_precompute=enable_rfm_precompute,
@@ -471,7 +527,9 @@ BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 # Reset CodeParameter defaults according to variables set above.
 # Coord system parameters
-for parname, value in fisheye_param_defaults.items():
+for parname, value in (
+    inverse_fisheye_param_defaults if inverse_fisheye else fisheye_param_defaults
+).items():
     par.adjust_CodeParam_default(parname, value)
 
 par.adjust_CodeParam_default("t_final", t_final)
@@ -564,7 +622,8 @@ superB.main_chare.output_commondata_object_h_and_main_h_cpp_ci(
     enable_BHaHAHA=enable_BHaHAHA,
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(
-    enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_CurviBCs=not inverse_fisheye,
 )
 
 post_non_y_n_auxevol_mallocs = ""
@@ -575,23 +634,25 @@ if enable_CAHD:
       griddata_chare[grid].gridfuncs.auxevol_gfs);
 """
 
-post_params_hook = (
-    phys_params_to_fisheye.build_spheroidal_post_params_struct_set_to_default_hook
-    if spheroidal
-    else phys_params_to_fisheye.build_post_params_struct_set_to_default_hook
-)
+if inverse_fisheye:
+    post_params_struct_set_to_default = ""
+else:
+    post_params_hook = (
+        phys_params_to_fisheye.build_spheroidal_post_params_struct_set_to_default_hook
+        if spheroidal
+        else phys_params_to_fisheye.build_post_params_struct_set_to_default_hook
+    )
+    post_params_struct_set_to_default = post_params_hook(
+        num_transitions=num_fisheye_transitions,
+        compute_griddata="griddata",
+    ) + post_params_hook(
+        num_transitions=num_fisheye_transitions,
+        compute_griddata="griddata_chare",
+    )
 
 timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
-    post_params_struct_set_to_default=(
-        post_params_hook(
-            num_transitions=num_fisheye_transitions,
-            compute_griddata="griddata",
-        )
-        + post_params_hook(
-            num_transitions=num_fisheye_transitions,
-            compute_griddata="griddata_chare",
-        )
-    ),
+    post_params_struct_set_to_default=post_params_struct_set_to_default,
+    enable_distributed_cfl=inverse_fisheye,
     project_dir=project_dir,
     MoL_method=MoL_method,
     post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,

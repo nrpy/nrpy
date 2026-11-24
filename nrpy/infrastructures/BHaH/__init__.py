@@ -15,6 +15,7 @@ from . import (
     generalrfm_cart_to_xx,
     generalrfm_precompute,
     griddata_commondata,
+    inverse_fisheye,
     main_c,
     nrpyelliptic,
     numerical_grids_and_timestep,

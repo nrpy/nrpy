@@ -588,11 +588,18 @@ def generate_bssn_to_adm_codegen(CoordSystem: str) -> str:
     rfm_aDD = ixp.declarerank2("rfm_aDD", symmetry="sym01")
     rfm_hDD = ixp.declarerank2("rfm_hDD", symmetry="sym01")
     ghatDD = rfm.ghatDD
+    is_inverse_fisheye = False
     if CoordSystem.startswith("GeneralRFM"):
         provider = getattr(rfm, "general_rfm_provider", None)
         if provider is None:
             raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
-        ghatDD = provider.ghatDD
+        is_inverse_fisheye = rfm.general_rfm_provider_name == "inverse_fisheye"
+        if is_inverse_fisheye:
+            # The inverse-fisheye reference metric is flat: in Cartesian
+            # coordinates it is delta_ij. Add it after transforming rfm_hDD.
+            ghatDD = ixp.zerorank2()
+        else:
+            ghatDD = provider.ghatDD
     rfm_gammabarDD = ixp.zerorank2()
     rfm_AbarDD = ixp.zerorank2()
     for i in range(3):
@@ -604,6 +611,9 @@ def generate_bssn_to_adm_codegen(CoordSystem: str) -> str:
             rfm_gammabarDD
         )
     )
+    if is_inverse_fisheye:
+        for i in range(3):
+            Cart_gammabarDD[i][i] += sp.Integer(1)
     Cart_AbarDD = basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
         rfm_AbarDD
     )

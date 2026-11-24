@@ -81,6 +81,37 @@ dispatches type-specific `receiv_nonlocalinnerbc_data_*` entry methods, and
 `process_nonlocalinnerbc` calls `apply_bcs_inner_only_nonlocal` on the received
 buffers.
 
+### Inverse Fisheye Chare Boundaries And Distributed CFL
+
+For `GeneralRFM_inverse_fisheyeN*`, the map is injective with
+Cartesian topology, so there are no inner coordinate boundaries.
+`bcstruct_chare_set_up` directly intersects each global outer face with the
+chare's ownership box, preserving ghost-layer order and face directions.
+It needs neither Cartesian inversion nor a global boundary array. The
+8M-separation inverse-spheroidal example disables global boundary construction
+and deallocation. Its global `griddata[grid].bcstruct` remains uninitialized;
+`pup_griddata` serializes only `params` and `xx[0..2]`. The chare-local
+`bcstruct_chare` and `nonlocalinnerbcstruct` are value-initialized to zero.
+
+Evidence (descriptive behavior): `superB_blackhole_spectroscopy_8Mseparation.py`; `timestepping_chare.py::output_timestepping_cpp`; `superB_pup.py::register_CFunction_superB_pup_routines`; `CurviBoundaryConditions.py::register_CFunction_bcstruct_chare_set_up`.
+
+The example disables the global CFL scan. With `enable_distributed_cfl=True`, each
+`Timestepping` chare scans its local grid, including ghosts, at the start of
+`start()`. A Charm++ minimum reduction supplies the same sampled timestep to
+all chares before horizon/interpolation services or evolution begin. Internal
+ghost overlap repeats samples but does not change the minimum; outer ghosts
+remain included. The example uses the ordinary `cfl_limited_timestep` scan,
+not the optional conservative bound. Other examples retain their existing
+CFL setup and global-list boundary filtering path.
+
+Evidence (descriptive behavior): `superB_blackhole_spectroscopy_8Mseparation.py`; `timestepping_chare.py::output_timestepping_ci`; `numerical_grids.py::register_CFunction_numerical_grids_chare`.
+
+The inverse-spheroidal spectroscopy example precomputes the reference metric
+in AUXEVOL gridfunctions. Radiation boundaries read the radius and radial
+derivatives stored in each `outerpt_bc_struct` during boundary setup.
+
+Evidence (descriptive behavior): `inverse_fisheye.py::register_precompute`; `CurviBoundaryConditions.py::register_CFunction_bcstruct_chare_set_up`; `apply_bcs_outerradiation_and_inner.py::register_CFunction_apply_bcs_outerradiation_and_inner`.
+
 ### Method Of Lines Phases, Initial Data, And NRPyElliptic Hooks
 
 The superB MoL generator splits each RK substep into explicit phases:
@@ -156,7 +187,11 @@ direct message-buffer checks, or distributed runtime outcomes.
 - [CurviBoundaryConditions.py](../../../nrpy/infrastructures/superB/CurviBoundaryConditions.py) - `register_CFunction_apply_bcs_inner_only_nonlocal`, `register_CFunction_bcstruct_chare_set_up`, `CurviBoundaryConditions_register_C_functions`
 - [MoL.py](../../../nrpy/infrastructures/superB/MoL.py) - `register_CFunctions`, `register_CFunction_MoL_step_forward_in_time`, `generate_rhs_output_exprs`, `generate_post_rhs_output_list`, `register_CFunction_MoL_sync_data_defines`
 - [initial_data.py](../../../nrpy/infrastructures/superB/initial_data.py) - `register_CFunction_initial_data`, `register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`
-- [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py) - `generate_mol_step_forward_code`, `generate_send_neighbor_data_code`, `generate_process_ghost_code`, `generate_send_nonlocalinnerbc_data_code`, `generate_process_nonlocalinnerbc_code`, `output_timestepping_h_cpp_ci_register_CFunctions`
+- [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py) - `generate_mol_step_forward_code`, `generate_send_neighbor_data_code`, `generate_process_ghost_code`, `generate_send_nonlocalinnerbc_data_code`, `generate_process_nonlocalinnerbc_code`, `output_timestepping_cpp`, `output_timestepping_h_cpp_ci_register_CFunctions`
+- [superB_pup.py](../../../nrpy/infrastructures/superB/superB/superB_pup.py) - `register_CFunction_superB_pup_routines`, `pup_griddata`
+- [superB_blackhole_spectroscopy_8Mseparation.py](../../../nrpy/examples/superb_paper2/superB_blackhole_spectroscopy_8Mseparation.py) - inverse-fisheye boundary and CFL registration
+- [inverse_fisheye.py](../../../nrpy/infrastructures/BHaH/inverse_fisheye.py) - `register_precompute`
+- [apply_bcs_outerradiation_and_inner.py](../../../nrpy/infrastructures/BHaH/CurviBoundaryConditions/apply_bcs_outerradiation_and_inner.py) - `register_CFunction_apply_bcs_outerradiation_and_inner`
 - [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py) - `post_non_y_n_auxevol_mallocs`, `dsmin_auxevol_gridfunction`
 - [superB_nrpyelliptic_conformally_flat.py](../../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `post_MoL_step_forward_in_time`, `rhs_string`, `register_CFunction_residual_H_compute_all_points`, `register_CFunction_stop_conditions_check`
 - [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py) - opt-in conformal projection in initial-data and Method of Lines registration

@@ -14,6 +14,7 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
+import nrpy.reference_metric as refmetric
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
@@ -34,7 +35,7 @@ def register_CFunction_dsmin_auxevol_gridfunction(
 
     :return: None if in registration phase, else the updated NRPy environment.
 
-    :raises ValueError: If a non-fisheye GeneralRFM coordinate system is requested.
+    :raises ValueError: If a non-fisheye GeneralRFM coordinate system or inverse fisheye on CUDA is requested.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -63,6 +64,34 @@ def register_CFunction_dsmin_auxevol_gridfunction(
         }
 
         expr_list = ds_min_single_pt_exprs(CoordSystem)
+        if expr_list is None and CoordSystem.startswith("GeneralRFM_inverse_fisheyeN"):
+            rfm = refmetric.reference_metric[CoordSystem]
+            if getattr(rfm, "general_rfm_provider_name", "") != "inverse_fisheye":
+                raise ValueError(
+                    f"GeneralRFM provider object missing for {CoordSystem}."
+                )
+            if parallelization == "cuda":
+                raise ValueError("Inverse spheroidal fisheye does not support CUDA.")
+            loop_body = BHaH.inverse_fisheye.spacing_body(
+                int(rfm.general_rfm_provider_meta["num_transitions"]),
+                "&auxevol_gfs[IDX4(DSMINGF, i0, i1, i2)]",
+            )
+            cfc.register_CFunction(
+                includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
+                desc=desc,
+                name=name,
+                params=params,
+                include_CodeParameters_h=False,
+                body=parallel_utils.get_loop_parameters(parallelization)
+                + BHaH.simple_loop.simple_loop(
+                    loop_body=loop_body,
+                    loop_region="all points",
+                    read_xxs=True,
+                ),
+                CoordSystem_for_wrapper_func=CoordSystem,
+            )
+            continue
+
         if expr_list is None:
             raise ValueError(
                 "ds_min for non-fisheye GeneralRFM coordinate system "

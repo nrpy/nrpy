@@ -323,7 +323,68 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
     }
   }
 """
+    prefunc = ""
+    if CoordSystem.startswith("GeneralRFM_inverse_fisheyeN"):
+        body = r"""
+  // This Cartesian-topology map has no inner coordinate boundaries.
+  // Intersect each global face with this chare's ownership box; never build
+  // or scan the global boundary list. Preserve ghost-layer and face ordering.
+  *bcstruct_chare = bc_struct{};
+  *nonlocalinnerbcstruct = nonlocalinnerbc_struct{};
+  const int nc[3] = {commondata->Nchare0, commondata->Nchare1, commondata->Nchare2};
+  const int n[3] = {params_chare->Nxx0, params_chare->Nxx1, params_chare->Nxx2};
+  const int nt[3] = {params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, params->Nxx_plus_2NGHOSTS2};
+  const int num_chares = nc[0]*nc[1]*nc[2];
+  // PUP serializes these lookup arrays even when there are no inner boundaries.
+  nonlocalinnerbcstruct->idx3chare_to_src_chare_id = (int *)malloc(sizeof(int)*num_chares);
+  nonlocalinnerbcstruct->idx3chare_to_dst_chare_id = (int *)malloc(sizeof(int)*num_chares);
+  for (int c=0; c<num_chares; c++) {
+    nonlocalinnerbcstruct->idx3chare_to_src_chare_id[c] = -1;
+    nonlocalinnerbcstruct->idx3chare_to_dst_chare_id[c] = -1;
+  }
+  for (int gz=0; gz<NGHOSTS; gz++) for (int dir=0; dir<3; dir++) {
+    int bounds[2][3][2], count=0;
+    for (int side=0; side<2; side++) {
+      int size=1;
+      for (int d=0; d<3; d++) {
+        int lo=NGHOSTS-gz-(d<dir), hi=nt[d]-NGHOSTS+gz+(d<dir);
+        if (d==dir) {
+          lo = side ? nt[d]-NGHOSTS+gz : NGHOSTS-1-gz;
+          hi = lo+1;
+        }
+        const int offset=chare_index[d]*n[d];
+        const int owned_lo = chare_index[d]==0 ? 0 : offset+NGHOSTS;
+        const int owned_hi = chare_index[d]==nc[d]-1 ? nt[d] : offset+n[d]+NGHOSTS;
+        lo=NRPYMAX(lo,owned_lo); hi=NRPYMIN(hi,owned_hi);
+        bounds[side][d][0]=lo-offset;
+        bounds[side][d][1]=hi-offset;
+        size *= NRPYMAX(0,hi-lo);
+      } // END LOOP: for d over axes
+      count += size;
+    } // END LOOP: for side over faces
+    bcstruct_chare->bc_info.num_pure_outer_boundary_points[gz][dir]=count;
+    outerpt_bc_struct *points = count ? (outerpt_bc_struct *)malloc(sizeof(outerpt_bc_struct)*count) : NULL;
+    bcstruct_chare->pure_outer_bc_array[3*gz+dir]=points;
+    int pt=0;
+    for (int side=0; side<2; side++)
+      for (int i2=bounds[side][2][0]; i2<bounds[side][2][1]; i2++)
+        for (int i1=bounds[side][1][0]; i1<bounds[side][1][1]; i1++)
+          for (int i0=bounds[side][0][0]; i0<bounds[side][0][1]; i0++) {
+            points[pt].i0=i0; points[pt].i1=i1; points[pt].i2=i2;
+            points[pt].FACEX0=(dir==0)*(1-2*side);
+            points[pt].FACEX1=(dir==1)*(1-2*side);
+            points[pt].FACEX2=(dir==2)*(1-2*side);
+            r_and_partial_xi_partial_r_derivs(params_chare, params->xxmin0 + (i0 + chare_index[0]*n[0] - NGHOSTS + 0.5)*params->dxx0, params->xxmin1 + (i1 + chare_index[1]*n[1] - NGHOSTS + 0.5)*params->dxx1, params->xxmin2 + (i2 + chare_index[2]*n[2] - NGHOSTS + 0.5)*params->dxx2, &points[pt].r, &points[pt].partial_x0_partial_r, &points[pt].partial_x1_partial_r, &points[pt].partial_x2_partial_r);
+            r_and_partial_xi_partial_r_derivs(params_chare, params->xxmin0 + (i0 + chare_index[0]*n[0] - NGHOSTS + 0.5 + points[pt].FACEX0)*params->dxx0, params->xxmin1 + (i1 + chare_index[1]*n[1] - NGHOSTS + 0.5 + points[pt].FACEX1)*params->dxx1, params->xxmin2 + (i2 + chare_index[2]*n[2] - NGHOSTS + 0.5 + points[pt].FACEX2)*params->dxx2, &points[pt].r_int, &points[pt].partial_x0_partial_r_int, &points[pt].partial_x1_partial_r_int, &points[pt].partial_x2_partial_r_int);
+            pt++;
+          } // END LOOP: for i0 over face points
+  } // END LOOP: for gz,dir over outer faces
+"""
+        prefunc = BHaH.CurviBoundaryConditions.apply_bcs_outerradiation_and_inner.setup_Cfunction_r_and_partial_xi_partial_r_derivs(
+            CoordSystem
+        )
     cfc.register_CFunction(
+        prefunc=prefunc,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,

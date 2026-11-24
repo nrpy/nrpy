@@ -64,6 +64,26 @@ reference values.
 
 Evidence (descriptive behavior): `generalrfm/fisheye.py::GeneralRFMFisheye.__init__`; `generalrfm/fisheye.py::GeneralRFMSpheroidalFisheye.__init__`; `generalrfm/fisheye.py::_G_and_derivs_closed_form`.
 
+### Inverse Fisheye Coordinate Map
+
+`GeneralRFMInverseFisheye` specifies computational coordinates explicitly from
+physical Cartesian coordinates. Equatorial centers `inverse_fisheye_Rj`, polar
+centers `inverse_fisheye_Rzj`, widths `inverse_fisheye_wj`, and spacing factors
+`inverse_fisheye_aj` define each transition. Equal equatorial and polar centers
+give the spherical map; distinct centers give the spheroidal map within the same
+`GeneralRFM_inverse_fisheyeN*` coordinate family. `normalization(L)` returns
+the scale and polar computational extent for equal physical axis extents.
+`kernel_coefficients` evaluates the radial kernel and its first three
+derivatives with respect to squared ellipsoidal radius using an origin series
+and a stable log-cosh expression. `InverseFisheyeComponent` represents the
+numerical computational-to-physical map and its Jacobians in generated BHaH C.
+
+See [BHaH grids and reference metrics](../infrastructures/bhah/grids-coordinates-and-reference-metrics.md)
+for physical parameter initialization, normalization, metric precomputation,
+and coordinate conversion.
+
+Evidence (descriptive behavior): `generalrfm/inverse_fisheye.py::GeneralRFMInverseFisheye`; `generalrfm/inverse_fisheye.py::InverseFisheyeComponent`.
+
 ### Rotations And Spin-Weighted Spherical Harmonics
 
 `SO3Expressions` stores symbolic matrix-rotation expressions used by equation
@@ -108,6 +128,7 @@ runtime behavior, or numerical accuracy; use [Expression Validation Helpers](../
 
 ## Sources
 
+- [inverse_fisheye.py](../../nrpy/equations/generalrfm/inverse_fisheye.py) - `GeneralRFMInverseFisheye`, `InverseFisheyeComponent`
 - [jacobians.py](../../nrpy/equations/basis_transforms/jacobians.py) - `BasisTransforms`, `basis_transforms`, `basis_transform_vectorU_from_rfmbasis_to_Cartesian`, `basis_transform_4tensorUU_from_Cartesian_to_time_indep_rfmbasis`
 - [jacobians_Cartesian.py](../../nrpy/equations/basis_transforms/tests/jacobians_Cartesian.py) - `trusted_dict`
 - [jacobians_Spherical.py](../../nrpy/equations/basis_transforms/tests/jacobians_Spherical.py) - `trusted_dict`

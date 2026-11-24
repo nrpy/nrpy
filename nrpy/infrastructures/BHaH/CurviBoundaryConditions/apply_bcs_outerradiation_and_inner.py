@@ -73,9 +73,7 @@ def _radiation_r_and_partials_exprs(CoordSystem: str) -> List[sp.Expr]:
 ##   Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb,
 ##   as well as below, in desc= and body=.
 # r_and_partial_xi_partial_r_derivs(): Compute r(x0,x1,x2) and dx^i / dr
-def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
-    CoordSystem: str,
-) -> str:
+def setup_Cfunction_r_and_partial_xi_partial_r_derivs(CoordSystem: str) -> str:
     """
     Generate C code to compute the radial coordinate r(x0, x1, x2) and its derivatives.
 
@@ -96,6 +94,29 @@ def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
     )
     body = ""
 
+    rfm = refmetric.reference_metric[CoordSystem]
+    if getattr(rfm, "general_rfm_provider_name", "") == "inverse_fisheye":
+        n = rfm.general_rfm_provider_meta["num_transitions"]
+        position = rf"""const REAL q[3]={{xx0,xx1,xx2}};
+REAL x[3];
+if (inverse_fisheye_solve__N{n}(params,q,x)) {{ fprintf(stderr,"Inverse fisheye boundary solve failed.\n"); exit(1); }}"""
+        return cfc.CFunction(
+            includes=[],
+            desc=desc,
+            cfunc_type=cfunc_type,
+            name=name,
+            params=params,
+            include_CodeParameters_h=False,
+            body=rf"""
+{position}
+REAL J[3][3], K[3][3], g[3][3], dg[3][3][3], ddg[3][3][3][3];
+inverse_fisheye_geometry__N{n}(params, x, false, J, K, g, dg, ddg);
+*r = sqrt(x[0]*x[0]+x[1]*x[1]+x[2]*x[2]);
+*partial_x0_partial_r = (J[0][0]*x[0]+J[0][1]*x[1]+J[0][2]*x[2])/(*r);
+*partial_x1_partial_r = (J[1][0]*x[0]+J[1][1]*x[1]+J[1][2]*x[2])/(*r);
+*partial_x2_partial_r = (J[2][0]*x[0]+J[2][1]*x[1]+J[2][2]*x[2])/(*r);
+""",
+        ).full_function
     # sp.simplify(expr) is too slow here for SinhCylindrical, and for
     # spheroidal GeneralRFM fisheye the generic inverse spherical Jacobian
     # column is far more complicated than needed.
@@ -355,7 +376,13 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
 """
     for i in range(3):
         si = str(i)
-        if check_zero(partials_exprs[i + 1], fixed_mpfs_for_free_symbols=True):
+        # The implicit spheroidal map has radial dependence in all three directions;
+        # its numerical component calls cannot be evaluated by check_zero.
+        if getattr(
+            refmetric.reference_metric[CoordSystem], "general_rfm_provider_name", ""
+        ) != "inverse_fisheye" and check_zero(
+            partials_exprs[i + 1], fixed_mpfs_for_free_symbols=True
+        ):
             body += f"  const REAL partial_x{si}_f=0.0;\n"
         else:
             body += (
@@ -409,14 +436,18 @@ def setup_Cfunction_radiation_bcs(
         cfunc_decorators += " __device__"
     for i in range(3):
         # Do not generate FD1_arbitrary_upwind_xj_dirn() if the symbolic expression for dxj/dr == 0!
-        if not check_zero(partials_exprs[i + 1], fixed_mpfs_for_free_symbols=True):
+        # Keep all three radial contributions for the implicit spheroidal map.
+        if getattr(
+            refmetric.reference_metric[CoordSystem], "general_rfm_provider_name", ""
+        ) == "inverse_fisheye" or not check_zero(
+            partials_exprs[i + 1], fixed_mpfs_for_free_symbols=True
+        ):
             prefunc += setup_Cfunction_FD1_arbitrary_upwind(
                 dirn=i,
                 cfunc_decorators=cfunc_decorators,
                 radiation_BC_fd_order=radiation_BC_fd_order,
                 rational_const_alias=rational_const_alias,
             )
-
     prefunc += setup_Cfunction_compute_partial_r_f(
         CoordSystem=CoordSystem,
         cfunc_decorators=cfunc_decorators,
@@ -474,7 +505,10 @@ const REAL rinv = 1.0 / r;
 const REAL partial_t_f_outgoing_wave = -c * (partial_r_f + (f - f_infinity) * rinv);
 
 return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
-""".replace("params,", "streamid," if parallelization == "cuda" else "params,")
+"""
+    body = body.replace(
+        "params,", "streamid," if parallelization == "cuda" else "params,"
+    )
 
     if rhs_is_scalar:
         params = params.replace("REAL *restrict gfs_rhss", "const REAL partial_t_f_int")
@@ -540,6 +574,7 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
 #pragma omp parallel for
     for (int idx2d = 0; idx2d < num_pure_outer_boundary_points; idx2d++) {
 """
+    # Fixed-map geometry is computed for both points during boundary setup.
     kernel_body += """const short i0 = pure_outer_bc_array[idx2d].i0;
     const short i1 = pure_outer_bc_array[idx2d].i1;
     const short i2 = pure_outer_bc_array[idx2d].i2;
@@ -565,9 +600,10 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
                                                         r_int, partial_x0_partial_r_int, partial_x1_partial_r_int, partial_x2_partial_r_int);
     }
   }
-""".replace("params,", "streamid," if parallelization == "cuda" else "params,").replace(
-        "custom_", "d_gridfunctions_" if parallelization == "cuda" else "custom_"
-    )
+"""
+    kernel_body = kernel_body.replace(
+        "params,", "streamid," if parallelization == "cuda" else "params,"
+    ).replace("custom_", "d_gridfunctions_" if parallelization == "cuda" else "custom_")
     comments = "Apply BCs to pure points."
     # Prepare the argument dicts
     arg_dict_cuda = {
@@ -697,7 +733,6 @@ applies BCs to the inner boundary points, which may map either to the grid inter
     const REAL custom_wavespeed[NUM_EVOL_GFS],
     const REAL custom_f_infinity[NUM_EVOL_GFS],
     REAL *restrict gfs, REAL *restrict rhs_gfs"""
-
     body: str = ""
     if par.parval_from_str("parallelization") == "cuda":
         body = r"""
