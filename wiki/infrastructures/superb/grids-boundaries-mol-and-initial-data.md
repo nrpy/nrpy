@@ -38,35 +38,6 @@ Subdomain ownership is arithmetic rather than a stored chare communication map.
 global source and destination indices to target chares and local indices on
 demand.
 
-For `GeneralRFM_inverse_fisheyeN*`, the map is injective with
-Cartesian topology, so there are no inner coordinate boundaries.
-`bcstruct_chare_set_up` directly intersects each global outer face with the
-chare's ownership box, preserving ghost-layer order and face directions.
-It needs neither Cartesian inversion nor a global boundary array. The
-8M-separation inverse-spheroidal example disables global boundary construction
-and deallocation. Its global `griddata[grid].bcstruct` remains uninitialized;
-`pup_griddata` serializes only `params` and `xx[0..2]`. The chare-local
-`bcstruct_chare` and `nonlocalinnerbcstruct` are value-initialized to zero.
-
-Evidence (descriptive behavior): `superB_blackhole_spectroscopy_8Mseparation.py`; `timestepping_chare.py::output_timestepping_cpp`; `superB_pup.py::register_CFunction_superB_pup_routines`; `CurviBoundaryConditions.py::register_CFunction_bcstruct_chare_set_up`.
-
-The example disables the global CFL scan. With `enable_distributed_cfl=True`, each
-`Timestepping` chare scans its local grid, including ghosts, at the start of
-`start()`. A Charm++ minimum reduction supplies the same sampled timestep to
-all chares before horizon/interpolation services or evolution begin. Internal
-ghost overlap repeats samples but does not change the minimum; outer ghosts
-remain included. The example uses the ordinary `cfl_limited_timestep` scan,
-not the optional conservative bound. Other examples retain their existing
-CFL setup and global-list boundary filtering path.
-
-Evidence (descriptive behavior): `superB_blackhole_spectroscopy_8Mseparation.py`; `timestepping_chare.py::output_timestepping_ci`; `numerical_grids.py::register_CFunction_numerical_grids_chare`.
-
-The inverse-spheroidal spectroscopy example precomputes the reference metric
-in AUXEVOL gridfunctions. Radiation boundaries read the radius and radial
-derivatives stored in each `outerpt_bc_struct` during boundary setup.
-
-Evidence (descriptive behavior): `inverse_fisheye.py::register_precompute`; `CurviBoundaryConditions.py::register_CFunction_bcstruct_chare_set_up`; `apply_bcs_outerradiation_and_inner.py::register_CFunction_apply_bcs_outerradiation_and_inner`.
-
 The grid transport paths are ordinary Charm++ entry-method sends generated for
 the `Timestepping` array:
 
@@ -109,6 +80,37 @@ chares cache the points they must later send. During evolution,
 dispatches type-specific `receiv_nonlocalinnerbc_data_*` entry methods, and
 `process_nonlocalinnerbc` calls `apply_bcs_inner_only_nonlocal` on the received
 buffers.
+
+### Inverse Fisheye Chare Boundaries And Distributed CFL
+
+For `GeneralRFM_inverse_fisheyeN*`, the map is injective with
+Cartesian topology, so there are no inner coordinate boundaries.
+`bcstruct_chare_set_up` directly intersects each global outer face with the
+chare's ownership box, preserving ghost-layer order and face directions.
+It needs neither Cartesian inversion nor a global boundary array. The
+8M-separation inverse-spheroidal example disables global boundary construction
+and deallocation. Its global `griddata[grid].bcstruct` remains uninitialized;
+`pup_griddata` serializes only `params` and `xx[0..2]`. The chare-local
+`bcstruct_chare` and `nonlocalinnerbcstruct` are value-initialized to zero.
+
+Evidence (descriptive behavior): `superB_blackhole_spectroscopy_8Mseparation.py`; `timestepping_chare.py::output_timestepping_cpp`; `superB_pup.py::register_CFunction_superB_pup_routines`; `CurviBoundaryConditions.py::register_CFunction_bcstruct_chare_set_up`.
+
+The example disables the global CFL scan. With `enable_distributed_cfl=True`, each
+`Timestepping` chare scans its local grid, including ghosts, at the start of
+`start()`. A Charm++ minimum reduction supplies the same sampled timestep to
+all chares before horizon/interpolation services or evolution begin. Internal
+ghost overlap repeats samples but does not change the minimum; outer ghosts
+remain included. The example uses the ordinary `cfl_limited_timestep` scan,
+not the optional conservative bound. Other examples retain their existing
+CFL setup and global-list boundary filtering path.
+
+Evidence (descriptive behavior): `superB_blackhole_spectroscopy_8Mseparation.py`; `timestepping_chare.py::output_timestepping_ci`; `numerical_grids.py::register_CFunction_numerical_grids_chare`.
+
+The inverse-spheroidal spectroscopy example precomputes the reference metric
+in AUXEVOL gridfunctions. Radiation boundaries read the radius and radial
+derivatives stored in each `outerpt_bc_struct` during boundary setup.
+
+Evidence (descriptive behavior): `inverse_fisheye.py::register_precompute`; `CurviBoundaryConditions.py::register_CFunction_bcstruct_chare_set_up`; `apply_bcs_outerradiation_and_inner.py::register_CFunction_apply_bcs_outerradiation_and_inner`.
 
 ### Method Of Lines Phases, Initial Data, And NRPyElliptic Hooks
 
