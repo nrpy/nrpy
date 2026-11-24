@@ -418,28 +418,21 @@ class GeneralRFMInverseFisheye:
         polar = self.scale_unscaled([zero, zero, physical_extent])
         return 1 / equatorial, physical_extent * polar / equatorial
 
-    def kernel_coefficients(self, radius: sp.Symbol, layer: int) -> List[sp.Expr]:
+    def kernel_taylor_coefficients(self, layer: int) -> List[sp.Expr]:
         """
-        Return G(rho)/rho and three derivatives with respect to rho squared.
+        Return coefficients of the even Taylor series for G(rho)/rho.
 
-        A Taylor branch handles the removable origin singularity and cancellation
-        in derivatives. Below the transition center, the outer branch computes
-        G-rho and G1-1 directly; beyond it, the branch uses a stable log-cosh
-        difference. The Taylor polynomial includes powers through rho**24.
-
-        :param radius: Nonnegative ellipsoidal radius symbol.
         :param layer: Zero-based transition index.
-        :return: Four coefficients for assembling Cartesian scale derivatives.
+        :return: Coefficients of powers of (rho/s)**2 through order 12.
         """
         R, w = self.R_list[layer], self.w_list[layer]
         s = w / 2
         y = sp.Symbol("y", positive=True)
         z = sp.exp(-2 * R / s)
-        th = sp.tanh(R / s)
         # d^n tanh(u)/du^n = y*A_n(y)/(1+y)^(n+1), y=exp(-2*u).
         # For even n, A_n is divisible by (1-y), which cancels tanh(u).
         polynomial = sp.Poly(4, y)
-        coefficients = [sp.Integer(1)]
+        coefficients: List[sp.Expr] = [sp.Integer(1)]
         for order in range(1, 25):
             if order % 2 == 0:
                 quotient = polynomial.exquo(sp.Poly(1 - y, y))
@@ -455,6 +448,26 @@ class GeneralRFMInverseFisheye:
                 sp.Poly(1 - order * y, y) * polynomial
                 + sp.Poly(y * (1 + y), y) * polynomial.diff()
             )
+        return coefficients
+
+    def kernel_coefficients(self, radius: sp.Symbol, layer: int) -> List[sp.Expr]:
+        """
+        Return G(rho)/rho and three derivatives with respect to rho squared.
+
+        A Taylor branch handles the removable origin singularity and cancellation
+        in derivatives. Below the transition center, the outer branch computes
+        G-rho and G1-1 directly; beyond it, the branch uses a stable log-cosh
+        difference. The Taylor polynomial includes powers through rho**24.
+
+        :param radius: Nonnegative ellipsoidal radius symbol.
+        :param layer: Zero-based transition index.
+        :return: Four coefficients for assembling Cartesian scale derivatives.
+        """
+        R, w = self.R_list[layer], self.w_list[layer]
+        s = w / 2
+        z = sp.exp(-2 * R / s)
+        th = sp.tanh(R / s)
+        coefficients = self.kernel_taylor_coefficients(layer)
         # Stable value; unlike differentiating Min/Max this keeps derivatives smooth.
         G = _G_kernel(radius, R, s)
         tp, tm = sp.tanh((radius + R) / s), sp.tanh((radius - R) / s)

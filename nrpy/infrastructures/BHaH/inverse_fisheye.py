@@ -67,32 +67,84 @@ def register_CFunctions(num_transitions: int) -> None:
     replacements = {R_symbol: generic_R, w_symbol: generic_w}
     branch_bodies: List[str] = []
     branch_conditions: List[str] = []
+    options = {
+        "fp_type": (
+            "double" if calc_type == "DOUBLE" else par.parval_from_str("fp_type")
+        ),
+        "fp_type_alias": calc_type,
+        "include_braces": False,
+        "verbose": False,
+    }
+    z_symbol = sp.Symbol("z", positive=True)
+    taylor_lines = [
+        f"const {calc_type} s = w/2, inv_s2 = 1/(s*s), q = rho*rho*inv_s2;",
+        ccg.c_codegen(
+            sp.exp(-4 * generic_R / generic_w), f"const {calc_type} z", **options
+        ),
+        f"const {calc_type} inv_p2 = 1/((1+z)*(1+z));",
+        f"{calc_type} coefficient[13];",
+        "coefficient[0] = 1;",
+        f"{calc_type} inv_p2_power = inv_p2;",
+    ]
+    for k, coefficient in enumerate(model.kernel_taylor_coefficients(0)[1:], 1):
+        expression = coefficient.xreplace(replacements).xreplace(
+            {sp.exp(-4 * generic_R / generic_w): z_symbol}
+        )
+        numerator = sp.cancel(expression * (1 + z_symbol) ** (2 * k) / z_symbol)
+        taylor_lines.append(
+            ccg.c_codegen(
+                z_symbol * sp.horner(numerator, z_symbol) * sp.Symbol("inv_p2_power"),
+                f"coefficient[{k}]",
+                enable_cse=False,
+                **options,
+            )
+        )
+        taylor_lines.append("inv_p2_power *= inv_p2;")
+    for order in range(4):
+        if order == 1:
+            taylor_lines.append("if (derivative_order >= 1) {")
+        elif order == 2:
+            taylor_lines.append("if (derivative_order == 3) {")
+        factor = int(sp.factorial(12) / sp.factorial(12 - order))
+        taylor_lines.append(f"f[{order}] = coefficient[12]*{factor};")
+        for k in range(11, order - 1, -1):
+            factor = int(sp.factorial(k) / sp.factorial(k - order))
+            taylor_lines.append(
+                f"f[{order}] = f[{order}]*q + coefficient[{k}]*{factor};"
+            )
+        if order:
+            taylor_lines.append(f"f[{order}] *= " + "*".join(["inv_s2"] * order) + ";")
+    taylor_lines.extend(
+        [
+            "} // END IF: third-order Taylor derivatives",
+            "} // END IF: requested Taylor derivatives",
+        ]
+    )
     # Keep each kernel expression inside its Taylor, interior, or exterior C branch.
     for branch in range(3):
         condition = cast(Tuple[sp.Expr, sp.Expr], coeffs[0].args[branch])[1]
         branch_conditions.append(sp.ccode(condition.xreplace(replacements)))
+        if branch == 0:
+            branch_bodies.append("\n".join(taylor_lines))
+            continue
         expressions = [
             cast(Tuple[sp.Expr, sp.Expr], coeff.args[branch])[0].xreplace(replacements)
             for coeff in coeffs
         ]
-        options = {
-            "fp_type": (
-                "double" if calc_type == "DOUBLE" else par.parval_from_str("fp_type")
-            ),
-            "fp_type_alias": calc_type,
-            "include_braces": False,
-            "verbose": False,
-        }
         value_code = ccg.c_codegen(expressions[0], "f[0]", **options)
-        gradient_code = ccg.c_codegen(expressions[1], "f[1]", **options)
-        metric_code = ccg.c_codegen(expressions[2:], ["f[2]", "f[3]"], **options)
-        branch_bodies.append(rf"""{value_code}
-if (derivative_order >= 1) {{
+        gradient_code = ccg.c_codegen(expressions[:2], ["f[0]", "f[1]"], **options)
+        metric_code = ccg.c_codegen(
+            expressions, [f"f[{i}]" for i in range(4)], **options
+        )
+        branch_bodies.append(rf"""if (derivative_order == 0) {{
+{value_code}
+}} // END IF: value-only kernel
+else if (derivative_order == 1) {{
 {gradient_code}
-if (derivative_order == 3) {{
+}} // END ELSE IF: first-order kernel
+else {{
 {metric_code}
-}} // END IF: third-order kernel derivatives
-}} // END IF: requested kernel derivatives""")
+}} // END ELSE: third-order kernel""")
     prefunc = rf"""
 static inline void inverse_fisheye_layer{suffix}(
     const {calc_type} R, const {calc_type} w, const {calc_type} rho,
